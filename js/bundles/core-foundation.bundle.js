@@ -12614,6 +12614,7 @@
             this.app = null;
             this.globalRef = global;
             this.globalBindingsInstalled = false;
+            this.browseFilterMutationRevision = 0;
 
             this.state = {
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
@@ -12709,7 +12710,7 @@
                     this.setFilteredExams(value, { syncApp: false });
                     break;
                 case 'ui.browseFilter':
-                    this.setBrowseFilter(value, { syncApp: false });
+                    this.setBrowseFilter(value, { syncApp: false, trackMutation: false });
                     break;
                 case 'exam.currentCategory':
                     this.setBrowseFilter({
@@ -12761,7 +12762,14 @@
             return this.state.browseFilter;
         }
 
+        getBrowseFilterMutationRevision() {
+            return this.browseFilterMutationRevision;
+        }
+
         setBrowseFilter(filter, options = {}) {
+            if (options.trackMutation !== false) {
+                this.browseFilterMutationRevision += 1;
+            }
             this.state.browseFilter = normalizeFilter(filter);
             if (options.syncApp !== false) {
                 this.applyToApp();
@@ -13006,6 +13014,9 @@
             };
             globalRef.getBrowseFilterState = function getBrowseFilterState() {
                 return service.getBrowseFilter();
+            };
+            globalRef.getBrowseFilterMutationRevision = function getBrowseFilterMutationRevision() {
+                return service.getBrowseFilterMutationRevision();
             };
             globalRef.setBrowseFilterState = function setBrowseFilterState(category, type) {
                 return service.setBrowseFilter({ category, type });
@@ -14126,12 +14137,12 @@
             }
             try { global.updateOverview && global.updateOverview(index); } catch (_) { }
             refreshListeningAvailabilityUI(index);
-            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
-                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
-            }
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+            }
             return loadTime;
         }
 
@@ -14599,6 +14610,9 @@
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
+            }
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
             }
 
             if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {

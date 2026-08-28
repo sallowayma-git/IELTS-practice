@@ -6,6 +6,7 @@
 class ExamSystemApp {
     constructor() {
         this.currentView = 'overview';
+        this._navigationIntentGeneration = 0;
         this.components = {};
         this.isInitialized = false;
 
@@ -620,8 +621,20 @@ class ExamSystemApp {
             this.navigateToView(initialView);
         },
         navigateToView(viewName) {
+            const navigationIntentGeneration = ++this._navigationIntentGeneration;
+            let sharedNavigationIntentGeneration = null;
+            if (typeof window.__markAppNavigationIntent === 'function') {
+                sharedNavigationIntentGeneration = window.__markAppNavigationIntent();
+            }
+            if (sharedNavigationIntentGeneration == null
+                && typeof window.__getAppNavigationIntentGeneration === 'function') {
+                sharedNavigationIntentGeneration = window.__getAppNavigationIntentGeneration();
+            }
+            if (viewName !== 'browse' && window.__pendingBrowseFilter) {
+                delete window.__pendingBrowseFilter;
+            }
             if (this.currentView === viewName) {
-                return;
+                return { navigationIntentGeneration, sharedNavigationIntentGeneration };
             }
             document.querySelectorAll('.view').forEach((view) => {
                 view.classList.remove('active');
@@ -640,27 +653,143 @@ class ExamSystemApp {
                 const url = new URL(window.location);
                 url.searchParams.set('view', viewName);
                 window.history.replaceState({}, '', url);
-                this.onViewActivated(viewName);
+                this.onViewActivated(
+                    viewName,
+                    navigationIntentGeneration,
+                    sharedNavigationIntentGeneration
+                );
             }
+            return { navigationIntentGeneration, sharedNavigationIntentGeneration };
         },
-        onViewActivated(viewName) {
+        onViewActivated(
+            viewName,
+            navigationIntentGeneration = this._navigationIntentGeneration,
+            sharedNavigationIntentGeneration = (typeof window.__getAppNavigationIntentGeneration === 'function'
+                ? window.__getAppNavigationIntentGeneration()
+                : null)
+        ) {
             switch (viewName) {
                 case 'overview':
                     this.refreshOverviewData();
                     break;
                 case 'browse':
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                        const { category, type, filterMode, path } = window.__pendingBrowseFilter;
-                        Promise.resolve(
-                            typeof window.initializeBrowseView === 'function'
-                                ? window.initializeBrowseView({ skipLoad: true })
-                                : null
-                        ).then(() => window.applyBrowseFilter(category, type, filterMode, path))
+                        const pendingFilter = window.__pendingBrowseFilter;
+                        const { category, type, filterMode, path } = pendingFilter;
+                        const hasInitializer = typeof window.initializeBrowseView === 'function';
+                        const appEntry = window.AppEntry || null;
+                        const consumerNavigationGeneration = sharedNavigationIntentGeneration != null
+                            ? sharedNavigationIntentGeneration
+                            : (typeof window.__getAppNavigationIntentGeneration === 'function'
+                                ? window.__getAppNavigationIntentGeneration()
+                                : null);
+                        const pendingFilterConsumer = appEntry
+                            && typeof appEntry.beginBrowsePendingFilterConsumer === 'function'
+                            ? appEntry.beginBrowsePendingFilterConsumer(
+                                pendingFilter,
+                                consumerNavigationGeneration
+                            )
+                            : null;
+                        const initialization = hasInitializer
+                            ? window.initializeBrowseView({ skipLoad: true })
+                            : null;
+                        const initializationRequestId = hasInitializer
+                            && typeof window.__getBrowseResultsRequestId === 'function'
+                            ? window.__getBrowseResultsRequestId()
+                            : null;
+                        const retainedInitializationRequestId = initializationRequestId != null
+                            && typeof window.__retainBrowseUserResultsRequest === 'function'
+                            ? window.__retainBrowseUserResultsRequest(initializationRequestId)
+                            : null;
+                        let pendingFilterOutcome = 'retryable-failure';
+                        const ownsPendingFilterConsumer = () => !pendingFilterConsumer
+                            || !appEntry
+                            || typeof appEntry.isBrowsePendingFilterConsumerCurrent !== 'function'
+                            || appEntry.isBrowsePendingFilterConsumerCurrent(pendingFilterConsumer);
+                        const pendingFilterIntentIsCurrent = () => {
+                            const activeView = typeof document.querySelector === 'function'
+                                ? document.querySelector('.view.active')
+                                : null;
+                            const sharedIntentIsCurrent = !pendingFilterConsumer
+                                || !appEntry
+                                || typeof appEntry.isBrowsePendingFilterIntentCurrent !== 'function'
+                                || appEntry.isBrowsePendingFilterIntentCurrent(pendingFilterConsumer);
+                            return sharedIntentIsCurrent
+                                && window.__pendingBrowseFilter === pendingFilter
+                                && navigationIntentGeneration === this._navigationIntentGeneration
+                                && this.currentView === 'browse'
+                                && (!activeView || activeView.id === 'browse-view')
+                                && (sharedNavigationIntentGeneration == null
+                                    || typeof window.__getAppNavigationIntentGeneration !== 'function'
+                                    || window.__getAppNavigationIntentGeneration()
+                                        === sharedNavigationIntentGeneration);
+                        };
+                        const pendingFilterAttemptIsCurrent = () => ownsPendingFilterConsumer()
+                            && pendingFilterIntentIsCurrent()
+                            && (initializationRequestId == null
+                                || typeof window.__isBrowseResultsRequestCurrent !== 'function'
+                                || window.__isBrowseResultsRequestCurrent(initializationRequestId));
+                        const currentConsumerWasSuperseded = () => ownsPendingFilterConsumer()
+                            && (!pendingFilterIntentIsCurrent()
+                                || (initializationRequestId != null
+                                    && typeof window.__isBrowseResultsRequestCurrent === 'function'
+                                    && !window.__isBrowseResultsRequestCurrent(
+                                        initializationRequestId
+                                    )));
+                        Promise.resolve(initialization).then((initializationResult) => {
+                            if (hasInitializer
+                                && (initializationResult === null
+                                    || initializationResult === false)) {
+                                return false;
+                            }
+                            if (!pendingFilterAttemptIsCurrent()) {
+                                if (currentConsumerWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
+                                return false;
+                            }
+                            const filterArgs = [category, type, filterMode, path];
+                            if (initializationRequestId != null || sharedNavigationIntentGeneration != null) {
+                                filterArgs.push(initializationRequestId);
+                            }
+                            if (sharedNavigationIntentGeneration != null) {
+                                filterArgs.push(sharedNavigationIntentGeneration);
+                            }
+                            return window.applyBrowseFilter(...filterArgs);
+                        })
+                            .then((result) => {
+                                // Legacy filter implementations resolve without a
+                                // value after applying; null/false mean it did not
+                                // reach an authoritative commit.
+                                if (result !== false && result !== null) {
+                                    pendingFilterOutcome = 'applied';
+                                    return true;
+                                }
+                                if (currentConsumerWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
+                                return false;
+                            })
                             .catch((error) => {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
-                                delete window.__pendingBrowseFilter;
+                                const ownsCurrentConsumer = ownsPendingFilterConsumer();
+                                if (ownsCurrentConsumer
+                                    && pendingFilterOutcome !== 'applied'
+                                    && currentConsumerWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
+                                if (ownsCurrentConsumer
+                                    && window.__pendingBrowseFilter === pendingFilter
+                                    && (pendingFilterOutcome === 'applied'
+                                        || pendingFilterOutcome === 'superseded')) {
+                                    delete window.__pendingBrowseFilter;
+                                }
+                                if (retainedInitializationRequestId != null
+                                    && typeof window.__endBrowseUserResultsRequest === 'function') {
+                                    window.__endBrowseUserResultsRequest(retainedInitializationRequestId);
+                                }
                             });
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
@@ -921,7 +1050,21 @@ class ExamSystemApp {
                 if (navBtn) {
                     const view = navBtn.dataset.view;
                     if (view) {
-                        this.navigateToView(view);
+                        const browseViewAlreadyActive = view === 'browse'
+                            && e.__browseNavigationHandled === true
+                            && document.getElementById('browse-view')?.classList.contains('active');
+                        if (browseViewAlreadyActive) {
+                            // The main-nav controller already activated and refreshed Browse.
+                            // Keep app state/URL in sync without starting a second render.
+                            this.currentView = view;
+                            try {
+                                const url = new URL(window.location);
+                                url.searchParams.set('view', view);
+                                window.history.replaceState({}, '', url);
+                            } catch (_) { }
+                        } else {
+                            this.navigateToView(view);
+                        }
                     }
                 }
                 const backBtn = e.target.closest('.btn-back');

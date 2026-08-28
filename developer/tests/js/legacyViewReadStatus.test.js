@@ -80,7 +80,53 @@ function it(name, fn) {
     }
 }
 
+describe('LegacyExamListView.render commit contract', () => {
+    it('fails closed when its container is unavailable', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+
+        assert.strictEqual(view.render([]), false);
+    });
+
+    it('reports success only after committing the empty state', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const container = {};
+        let emptyStateCommits = 0;
+        view._getContainer = () => container;
+        view._getLoadingIndicator = () => null;
+        view._renderEmptyState = (target) => {
+            assert.strictEqual(target, container);
+            emptyStateCommits += 1;
+        };
+        view._hideLoading = () => {};
+
+        assert.strictEqual(view.render([]), true);
+        assert.strictEqual(emptyStateCommits, 1);
+    });
+});
+
 describe('LegacyExamListView._getCompletionStatus', () => {
+    it('keeps a prepared completion map invisible until commit', () => {
+        const { windowStub, LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const exam = { id: 'staged-reading', title: 'Staged Reading' };
+        const prepared = windowStub.prepareBrowseCompletionIndex([{
+            examId: 'staged-reading',
+            title: 'Staged Reading',
+            percentage: 77,
+            date: '2026-08-23T00:00:00.000Z'
+        }]);
+
+        assert.strictEqual(
+            view._getCompletionStatus(exam),
+            null,
+            'preparation alone must not replace the accepted completion map'
+        );
+        assert.strictEqual(windowStub.commitBrowseCompletionIndex(prepared), true);
+        assert.strictEqual(view._getCompletionStatus(exam).percentage, 77);
+    });
+
     it('reads score and timestamp from matching suite child entries', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();
         const view = new LegacyExamListView();

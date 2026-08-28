@@ -808,7 +808,7 @@
     /**
      * 加载并渲染题库列表
      */
-    function loadExamList(examIndex = []) {
+    function loadExamList(examIndex = [], options = {}) {
         console.log('[ExamActions] loadExamList called');
 
         if (typeof global.setupBrowseControls === 'function') {
@@ -831,12 +831,21 @@
                     global.browseController.initialize('type-filter-buttons', examIndex);
                 }
                 if (global.browseController.currentMode !== global.__browseFilterMode) {
-                    global.browseController.setMode(global.__browseFilterMode, examIndex);
+                    return global.browseController.setMode(
+                        global.__browseFilterMode,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 } else {
                     const activeFilter = global.browseController.activeFilter || 'all';
-                    global.browseController.applyFilter(activeFilter, examIndex);
+                    return global.browseController.applyFilter(
+                        activeFilter,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 }
-                return;
             } catch (error) {
                 console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
             }
@@ -902,17 +911,20 @@
             ? 'reading-memorize'
             : (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
 
-        // 6. 更新状态并渲染
+        // 6. 先证明 DOM commit，再发布对应的筛选状态。
+        const displayed = displayExams(examsToShow, {
+            selectionMode,
+            customSuiteDraft,
+            commitReceipt: options.commitReceipt
+        });
+        if (displayed !== true) {
+            return false;
+        }
         if (global.appStateService) {
             global.appStateService.setFilteredExams(examsToShow);
         } else if (typeof global.setFilteredExamsState === 'function') {
             global.setFilteredExamsState(examsToShow);
         }
-
-        displayExams(examsToShow, {
-            selectionMode,
-            customSuiteDraft
-        });
         refreshCustomSuiteSelectionPortal();
 
         // 7. 触发渲染后钩子
@@ -923,50 +935,593 @@
         return examsToShow;
     }
 
-    /**
-     * 重置浏览视图
-     */
-    function resetBrowseViewToAll() {
-        clearReadingMemorizeBrowseMode();
-        // 1. 清除频率模式标记（关键修复）
-        if (typeof global.__browseFilterMode !== 'undefined') {
+    let browseResetInteractionId = 0;
+
+    function isBrowseResetCurrent(
+        interactionId,
+        renderRequestId,
+        navigationIntentGeneration = null
+    ) {
+        if (interactionId !== browseResetInteractionId) {
+            return false;
+        }
+        if (navigationIntentGeneration != null
+            && typeof global.__getAppNavigationIntentGeneration === 'function') {
+            try {
+                if (global.__getAppNavigationIntentGeneration() !== navigationIntentGeneration) {
+                    return false;
+                }
+            } catch (_) {
+                return false;
+            }
+        }
+        if (typeof document !== 'undefined'
+            && typeof document.querySelector === 'function') {
+            const activeView = document.querySelector('.view.active');
+            if (activeView && activeView.id !== 'browse-view') {
+                return false;
+            }
+        }
+        return renderRequestId == null
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function'
+            || global.__isBrowseResultsRequestCurrent(renderRequestId);
+    }
+
+    function clearBrowseSearchUI() {
+        if (global.browseStateManager && typeof global.browseStateManager.clearSearchState === 'function') {
+            global.browseStateManager.clearSearchState();
+            return;
+        }
+        const searchInput = document.getElementById('exam-search-input')
+            || document.querySelector('.search-input');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        const clearButton = document.getElementById('search-clear-btn');
+        if (clearButton) {
+            clearButton.hidden = true;
+        }
+    }
+
+    function setBrowseFrequencyFilter(value) {
+        const activeFilter = normalizeBrowseFrequencyFilter(value);
+        global.__browseFrequencyFilter = activeFilter;
+        try {
+            const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+            if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+                frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+                    const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
+                    if (button.classList && typeof button.classList.toggle === 'function') {
+                        button.classList.toggle('active', active);
+                    }
+                    if (typeof button.setAttribute === 'function') {
+                        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn('[ExamActions] 同步题库频率筛选 UI 失败:', error);
+        }
+        return activeFilter;
+    }
+
+    function resetBrowseFunctionalStateToAll() {
+        try {
             global.__browseFilterMode = 'default';
-        }
-        if (typeof global.__browsePath !== 'undefined') {
             global.__browsePath = null;
+            setBrowseFrequencyFilter('all');
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库功能状态失败:', error);
+            return false;
         }
 
-        // 2. 重置 browseController 到默认模式
-        if (global.browseController) {
-            global.browseController.clearPendingBrowseAutoScroll();
+        const controller = global.browseController;
+        if (controller) {
+            try {
+                controller.currentMode = 'default';
+                controller.activeFilter = 'all';
+            } catch (error) {
+                console.warn('[ExamActions] 重置题库控制器状态失败:', error);
+            }
+        }
 
-            // 恢复默认模式（消除频率模式）
-            if (typeof global.browseController.resetToDefault === 'function') {
-                global.browseController.resetToDefault();
+        try {
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'all');
+            } else if (controller && typeof controller.setBrowseFilterState === 'function') {
+                controller.setBrowseFilterState('all', 'all');
             } else {
-                // 降级：手动重置
-                global.browseController.currentMode = 'default';
-                global.browseController.activeFilter = 'all';
+                console.warn('[ExamActions] 缺少题库分类状态适配器');
+                return false;
             }
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库分类状态失败:', error);
+            return false;
+        }
+        return true;
+    }
 
-            const currentCategory = global.browseController.getCurrentCategory();
-            const currentType = global.browseController.getCurrentExamType();
+    const browseFilterStateOwner = {
+        setFrequencyFilter: setBrowseFrequencyFilter,
+        resetToAll: resetBrowseFunctionalStateToAll,
+        resetForActivation: resetBrowseFunctionalStateForActivation
+    };
 
-            if (currentCategory === 'all' && currentType === 'all') {
-                if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
-                loadExamList();
-                return;
-            }
-
-            global.browseController.setBrowseFilterState('all', 'all');
-        } else {
-            // 降级
-            if (typeof global.clearPendingBrowseAutoScroll === 'function') global.clearPendingBrowseAutoScroll();
-            if (typeof global.setBrowseFilterState === 'function') global.setBrowseFilterState('all', 'all');
+    function resetBrowseFilterStateToAll(examIndex) {
+        if (!browseFilterStateOwner.resetToAll()) {
+            return false;
         }
 
-        if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
-        loadExamList();
+        const controller = global.browseController;
+        if (controller && Array.isArray(examIndex)
+            && typeof controller.renderFilterButtons === 'function') {
+            controller.renderFilterButtons(examIndex);
+        }
+
+        const typeContainer = document.getElementById('type-filter-buttons');
+        if (typeContainer && typeof typeContainer.querySelectorAll === 'function') {
+            typeContainer.querySelectorAll('.shui-segmented-btn').forEach((button) => {
+                const filterId = button.dataset && (button.dataset.filterId || button.dataset.filterType);
+                const active = filterId === 'all';
+                if (button.classList && typeof button.classList.toggle === 'function') {
+                    button.classList.toggle('active', active);
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                }
+            });
+        }
+        return true;
+    }
+
+    function syncBrowseFilterUI(examIndex) {
+        resetBrowseFilterStateToAll(examIndex);
+    }
+
+    async function prepareBrowseReset(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        if (!isCurrent()) {
+            return false;
+        }
+        const pending = [];
+        const manager = global.browseStateManager;
+        if (manager && manager.ready && typeof manager.ready.then === 'function') {
+            pending.push(Promise.resolve(manager.ready).catch((error) => {
+                console.warn('[ExamActions] 等待浏览状态恢复失败:', error);
+            }));
+        }
+        if (typeof global.setupBrowseControls === 'function') {
+            pending.push(Promise.resolve().then(() => global.setupBrowseControls({ isCurrent })).catch((error) => {
+                console.warn('[ExamActions] 初始化浏览筛选控件失败:', error);
+            }));
+        }
+        if (pending.length > 0) {
+            const results = await Promise.all(pending);
+            if (results.some((result) => result === false)) {
+                return false;
+            }
+        }
+        return isCurrent();
+    }
+
+    async function persistBrowseFrequencyReset() {
+        const preferences = global.AppData && global.AppData.preferences;
+        if (!preferences || typeof preferences.patchBrowse !== 'function') {
+            return false;
+        }
+        try {
+            await preferences.patchBrowse({
+                frequencyFilter: 'all',
+                filter: { category: 'all', type: 'all' }
+            });
+            return true;
+        } catch (error) {
+            console.warn('[ExamActions] 持久化浏览频率重置失败:', error);
+            return false;
+        }
+    }
+
+    function isAllBrowseFilter(filter) {
+        return !!filter && filter.category === 'all' && filter.type === 'all';
+    }
+
+    function isBrowseManagerReset(manager) {
+        if (!manager) {
+            return true;
+        }
+        const state = manager.state || {};
+        const filters = state.filters || {};
+        return manager.currentFilter === 'all'
+            && state.currentCategory == null
+            && state.currentFrequency == null
+            && (filters.frequency == null || filters.frequency === 'all')
+            && (state.searchQuery == null || state.searchQuery === '');
+    }
+
+    function isPersistedBrowseReset(browse, requireStateManager) {
+        if (!browse || !isAllBrowseFilter(browse.lastFilter)
+            || !isAllBrowseFilter(browse.filter)
+            || browse.frequencyFilter !== 'all') {
+            return false;
+        }
+        if (!requireStateManager) {
+            return true;
+        }
+        const manager = browse.stateManager;
+        const state = manager && manager.state;
+        const filters = state && state.filters;
+        return !!manager && manager.currentFilter === 'all'
+            && state.currentCategory == null
+            && state.currentFrequency == null
+            && !!filters && filters.frequency === 'all'
+            && state.searchQuery === '';
+    }
+
+    function beginBrowseResetPersistence() {
+        const pending = [persistBrowseFrequencyReset()];
+        if (typeof global.flushBrowsePreferenceWrites === 'function') {
+            pending.push(Promise.resolve().then(() => global.flushBrowsePreferenceWrites()).catch((error) => {
+                console.warn('[ExamActions] 等待浏览筛选偏好写入失败:', error);
+            }));
+        }
+        return Promise.all(pending);
+    }
+
+    function applyBrowseResetState(examIndex) {
+        clearReadingMemorizeBrowseMode();
+        const filterResetSucceeded = resetBrowseFilterStateToAll(examIndex);
+
+        if (global.browseStateManager && typeof global.browseStateManager.resetToAllExams === 'function') {
+            global.browseStateManager.resetToAllExams();
+        } else {
+            clearBrowseSearchUI();
+        }
+
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('题库列表');
+        }
+        return filterResetSucceeded;
+    }
+
+    function ensureBrowseStateManagerForReset() {
+        if (global.browseStateManager) {
+            return global.browseStateManager;
+        }
+        if (typeof global.BrowseStateManager !== 'function') {
+            return null;
+        }
+        try {
+            return new global.BrowseStateManager();
+        } catch (error) {
+            console.warn('[ExamActions] 初始化题库状态管理器失败:', error);
+            return null;
+        }
+    }
+
+    async function resetBrowseFunctionalStateForActivation(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        try {
+            if (!isCurrent()) {
+                return false;
+            }
+            const manager = ensureBrowseStateManagerForReset();
+            if (manager && manager.ready && typeof manager.ready.then === 'function') {
+                await manager.ready;
+                if (!isCurrent()) {
+                    return false;
+                }
+            }
+            if (typeof global.setupBrowseControls === 'function') {
+                const controlsReady = await global.setupBrowseControls({ isCurrent });
+                if (controlsReady === false || !isCurrent()) {
+                    return false;
+                }
+            }
+            if (!isCurrent() || !applyBrowseResetState(null)) {
+                return false;
+            }
+
+            if (typeof global.saveBrowseViewPreferences !== 'function'
+                || typeof global.flushBrowsePreferenceWrites !== 'function'
+                || !isCurrent()) {
+                return false;
+            }
+            global.saveBrowseViewPreferences({
+                lastFilter: { category: 'all', type: 'all' }
+            });
+            const committedBrowsePreferences = await global.flushBrowsePreferenceWrites();
+            if (!isCurrent()
+                || !committedBrowsePreferences
+                || !isAllBrowseFilter(committedBrowsePreferences.lastFilter)) {
+                return false;
+            }
+            if (manager && typeof manager.persistState === 'function') {
+                if (!isCurrent()) {
+                    return false;
+                }
+                await manager.persistState();
+                if (!isCurrent()) {
+                    return false;
+                }
+            }
+            if (!isCurrent()
+                || !await persistBrowseFrequencyReset()
+                || !isCurrent()
+                || !isBrowseManagerReset(manager)) {
+                return false;
+            }
+            const preferences = global.AppData && global.AppData.preferences;
+            if (!preferences || typeof preferences.getBrowse !== 'function') {
+                return false;
+            }
+            const persistedBrowse = await preferences.getBrowse();
+            return isCurrent() && isPersistedBrowseReset(
+                persistedBrowse,
+                !!(manager && typeof manager.persistState === 'function')
+            );
+        } catch (error) {
+            console.warn('[ExamActions] 激活前重置题库状态失败:', error);
+            return false;
+        }
+    }
+
+    function getBrowseResetIndexSnapshot(resetIntent) {
+        if (typeof global.__getBrowseResetIndexSnapshot !== 'function') {
+            return null;
+        }
+        try {
+            const snapshot = global.__getBrowseResetIndexSnapshot(resetIntent);
+            if (!snapshot || !Array.isArray(snapshot.index)) {
+                return null;
+            }
+            return {
+                index: snapshot.index,
+                version: Number(snapshot.version) || 0
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function closeBrowseResetIntent(resetIntent, consumedSnapshotVersion) {
+        if (typeof global.__closeBrowseResetIntent !== 'function') {
+            return null;
+        }
+        try {
+            const finalization = global.__closeBrowseResetIntent(
+                resetIntent,
+                consumedSnapshotVersion
+            );
+            if (!finalization || !finalization.snapshot
+                || !Array.isArray(finalization.snapshot.index)) {
+                return null;
+            }
+            return {
+                index: finalization.snapshot.index,
+                version: Number(finalization.snapshot.version) || 0
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    /**
+     * 重置浏览视图。先等待浏览状态恢复，再解析活动题库快照并一次性更新
+     * UI/状态，避免恢复期间的题库切换被较早快照覆盖。
+     */
+    async function performBrowseViewResetToAll(resetIntent) {
+        try {
+        const interactionId = ++browseResetInteractionId;
+        const navigationIntentGeneration = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration()
+            : null;
+        if (global.__pendingBrowseFilter) {
+            delete global.__pendingBrowseFilter;
+        }
+        const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
+            ? global.__beginBrowseResultsRequest()
+            : null;
+        if (typeof global.__setBrowseResetResultsRequest === 'function') {
+            global.__setBrowseResetResultsRequest(resetIntent, renderRequestId);
+        }
+
+        if (global.browseController) {
+            if (typeof global.browseController.filterInteractionId === 'number') {
+                global.browseController.filterInteractionId += 1;
+            }
+            if (typeof global.browseController.clearPendingBrowseAutoScroll === 'function') {
+                global.browseController.clearPendingBrowseAutoScroll();
+            }
+        } else if (typeof global.clearPendingBrowseAutoScroll === 'function') {
+            global.clearPendingBrowseAutoScroll();
+        }
+
+        const isCurrent = () => isBrowseResetCurrent(
+            interactionId,
+            renderRequestId,
+            navigationIntentGeneration
+        );
+        if (!await prepareBrowseReset({ isCurrent }) || !isCurrent()) {
+            return false;
+        }
+
+        let resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+        let examIndex = resetIndexSnapshot ? resetIndexSnapshot.index : null;
+        let resetIndexSnapshotVersion = resetIndexSnapshot ? resetIndexSnapshot.version : 0;
+        if (!resetIndexSnapshot) {
+            const resolver = typeof global.resolveActiveLibraryIndex === 'function'
+                ? global.resolveActiveLibraryIndex
+                : global.resolveActiveExamIndex;
+            examIndex = typeof resolver === 'function'
+                ? await Promise.resolve().then(() => resolver.call(global)).then((resolved) => (
+                    Array.isArray(resolved) ? resolved : null
+                )).catch((error) => {
+                    console.warn('[ExamActions] 重置浏览视图时无法预取活动题库:', error);
+                    return null;
+                })
+                : null;
+            resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+            if (resetIndexSnapshot) {
+                examIndex = resetIndexSnapshot.index;
+                resetIndexSnapshotVersion = resetIndexSnapshot.version;
+            }
+        }
+
+        if (!isCurrent()) {
+            return false;
+        }
+
+        applyBrowseResetState(examIndex);
+
+        const globalLoader = global.loadExamList;
+        if (typeof globalLoader === 'function' && globalLoader !== loadExamList) {
+            const persistencePromise = beginBrowseResetPersistence();
+            try {
+                let result;
+                let persistenceComplete = false;
+                while (true) {
+                    // 空索引也交由适配器自行解析；绝不把 [] 当作重置结果渲染。
+                    const indexOverride = Array.isArray(examIndex) && examIndex.length > 0
+                        ? examIndex
+                        : null;
+                    result = await Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
+                    if (!isCurrent()) {
+                        await persistencePromise;
+                        return false;
+                    }
+                    if ((!Array.isArray(examIndex) || examIndex.length === 0)
+                        && Array.isArray(result)) {
+                        syncBrowseFilterUI(result);
+                    }
+                    resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+                    if (resetIndexSnapshot
+                        && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                        examIndex = resetIndexSnapshot.index;
+                        resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                        syncBrowseFilterUI(examIndex);
+                        continue;
+                    }
+                    if (!persistenceComplete) {
+                        await persistencePromise;
+                        persistenceComplete = true;
+                        if (!isCurrent()) {
+                            return false;
+                        }
+                        resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+                        if (resetIndexSnapshot
+                            && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                            examIndex = resetIndexSnapshot.index;
+                            resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                            syncBrowseFilterUI(examIndex);
+                            continue;
+                        }
+                    }
+                    resetIndexSnapshot = closeBrowseResetIntent(
+                        resetIntent,
+                        resetIndexSnapshotVersion
+                    );
+                    if (resetIndexSnapshot
+                        && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                        examIndex = resetIndexSnapshot.index;
+                        resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                        syncBrowseFilterUI(examIndex);
+                        continue;
+                    }
+                    return result;
+                }
+            } catch (error) {
+                console.warn('[ExamActions] 重置浏览视图加载失败:', error);
+                await persistencePromise;
+                return false;
+            }
+        }
+
+        if (Array.isArray(examIndex) && examIndex.length > 0) {
+            let result = loadExamList(examIndex);
+            await beginBrowseResetPersistence();
+            if (!isCurrent()) {
+                return false;
+            }
+            resetIndexSnapshot = closeBrowseResetIntent(
+                resetIntent,
+                resetIndexSnapshotVersion
+            );
+            if (resetIndexSnapshot && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                examIndex = resetIndexSnapshot.index;
+                resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                if (examIndex.length > 0) {
+                    syncBrowseFilterUI(examIndex);
+                    result = loadExamList(examIndex);
+                } else {
+                    result = false;
+                }
+                closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
+            }
+            return result;
+        }
+
+        await beginBrowseResetPersistence();
+        if (!isCurrent()) {
+            return false;
+        }
+        closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
+        console.warn('[ExamActions] 全局题库加载适配器不可用，已跳过空数组渲染');
+        return false;
+        } finally {
+            if (typeof global.__endBrowseResetIntent === 'function') {
+                global.__endBrowseResetIntent(resetIntent);
+            }
+        }
+    }
+
+    async function resetBrowseViewToAll() {
+        var resetIntent = arguments.length > 0 ? arguments[arguments.length - 1] : null;
+        if (typeof global.__isBrowseResetIntentCurrent === 'function'
+            && !global.__isBrowseResetIntentCurrent(resetIntent)
+            && typeof global.__beginBrowseResetIntent === 'function') {
+            resetIntent = global.__beginBrowseResetIntent();
+        }
+        const functionalResetRecovery = global.AppEntry
+            && typeof global.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
+            ? global.AppEntry.captureBrowseFunctionalResetRecovery()
+            : null;
+        let functionalResetRecoverySucceeded = false;
+        try {
+            const resetPromise = performBrowseViewResetToAll(resetIntent);
+            const foregroundResultsRequestId = typeof global.__getBrowseResultsRequestId === 'function'
+                ? global.__getBrowseResultsRequestId()
+                : null;
+            if (functionalResetRecovery
+                && global.AppEntry
+                && typeof global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest === 'function') {
+                global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest(
+                    functionalResetRecovery,
+                    foregroundResultsRequestId
+                );
+            }
+            const result = await resetPromise;
+            functionalResetRecoverySucceeded = result !== false;
+            return result;
+        } catch (error) {
+            console.warn('[ExamActions] 重置浏览视图失败:', error);
+            return false;
+        } finally {
+            if (functionalResetRecovery
+                && global.AppEntry
+                && typeof global.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
+                global.AppEntry.completeBrowseFunctionalResetRecovery(
+                    functionalResetRecovery,
+                    functionalResetRecoverySucceeded
+                );
+            }
+            if (typeof global.__endBrowseResetIntent === 'function') {
+                global.__endBrowseResetIntent(resetIntent);
+            }
+        }
     }
 
     /**
@@ -999,19 +1554,25 @@
         }
 
         if (view) {
-            view.render(renderExams, {
+            const committed = view.render(renderExams, {
                 loadingSelector: '#browse-view .loading',
                 selectionMode: effectiveOptions.selectionMode || '',
                 customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
+            if (committed !== true) {
+                return false;
+            }
             setupExamActionHandlers();
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         // 2. 降级：直接 DOM 操作 (从 main.js 迁移)
         const container = document.getElementById('exam-list-container');
         if (!container) {
-            return;
+            return false;
         }
 
         while (container.firstChild) {
@@ -1027,7 +1588,10 @@
         const normalizedExams = Array.isArray(renderExams) ? renderExams : [];
         if (normalizedExams.length === 0) {
             renderEmptyState(container);
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         const list = document.createElement('div');
@@ -1041,6 +1605,10 @@
 
         container.appendChild(list);
         setupExamActionHandlers();
+        if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+            global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+        }
+        return true;
     }
 
     /**
@@ -1387,8 +1955,7 @@
         if (!container) {
             return false;
         }
-        displayExams(exams, options);
-        return true;
+        return displayExams(exams, options) === true;
     }
 
     // ============================================================================
@@ -1429,6 +1996,9 @@
         applyBrowsePostFilters,
         applyBrowseFrequencyFilter,
         normalizeBrowseFrequencyFilter,
+        setBrowseFrequencyFilter,
+        browseFilterStateOwner,
+        resetBrowseFilterStateToAll,
         launchReadingMemorizeExam,
         isReadingMemorizeBrowseMode,
         isReadingMemorizeExam

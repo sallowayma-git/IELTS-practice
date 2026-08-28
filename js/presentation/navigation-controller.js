@@ -12,7 +12,7 @@
             syncOnNavigate: true,
             onNavigate: function onNavigate(viewName) {
                 if (typeof global.showView === 'function') {
-                    global.showView(viewName);
+                    global.showView(viewName, false);
                     return;
                 }
                 if (global.app && typeof global.app.navigateToView === 'function') {
