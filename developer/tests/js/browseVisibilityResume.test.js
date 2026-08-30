@@ -276,8 +276,13 @@ async function createHarness() {
     sandbox.setBrowseFilterState('P1', 'reading');
     await sandbox.flushBrowsePreferenceWrites();
 
-    sandbox.ensurePracticeRecordsSync = async (trigger, options) => {
-        progressSyncCalls.push({ trigger, options: { ...options } });
+    sandbox.ensurePracticeRecordsSync = async (...syncArgs) => {
+        const [trigger, options] = syncArgs;
+        progressSyncCalls.push({
+            trigger,
+            options: { ...(options || {}) },
+            argumentCount: syncArgs.length
+        });
         const activeFilter = sandbox.getBrowseFilterState();
         const query = searchInput.value.trim().toLowerCase();
         const pathFilter = sandbox.__browsePath;
@@ -401,7 +406,8 @@ test('visibility resume refreshes progress without rehydrating or reactivating B
     assert.deepEqual(harness.durableBrowse.filter, { category: 'all', type: 'all' });
     assert.deepEqual(harness.progressSyncCalls, [{
         trigger: 'visibility-resume',
-        options: { forceRender: true }
+        options: {},
+        argumentCount: 1
     }]);
     assert.deepEqual(harness.renderedIds, [['selected-ocean']]);
 });
@@ -426,12 +432,33 @@ test('visibility resume preserves an explicit empty Browse query', async () => {
     );
     assert.deepEqual(harness.progressSyncCalls, [{
         trigger: 'visibility-resume',
-        options: { forceRender: true }
+        options: {},
+        argumentCount: 1
     }]);
     assert.deepEqual(
         harness.renderedIds,
         [['selected-ocean', 'wrong-query']],
         'an empty query must retain every result in the selected path and frequency scope'
+    );
+});
+
+test('visibility resume fallback sync omits hidden-Practice force-render options', async () => {
+    const harness = await createHarness();
+    const fallbackSyncCalls = [];
+    delete harness.sandbox.ensurePracticeRecordsSync;
+    harness.sandbox.syncPracticeRecords = async (...syncArgs) => {
+        fallbackSyncCalls.push(syncArgs);
+        return [];
+    };
+
+    const refresh = harness.app.refreshData();
+    harness.statsGate.resolve();
+    await refresh;
+
+    assert.deepEqual(
+        fallbackSyncCalls,
+        [[]],
+        'the fallback visibility refresh must not force the hidden Practice UI to render'
     );
 });
 

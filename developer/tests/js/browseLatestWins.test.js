@@ -994,8 +994,7 @@ integrationIndexResolvers.push(visibilityResumeIndex, postCommitIndex);
 integrationCanonicalPracticeRecords = [{ id: 'before-completion' }];
 const completionResumeReadCountBefore = integrationPracticeListCount;
 const visibilityResumeCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'visibility-resume',
-    { forceRender: true }
+    'visibility-resume'
 );
 await waitForCondition(
     () => integrationPracticeListCount === completionResumeReadCountBefore + 1,
@@ -1078,6 +1077,57 @@ integrationSandbox.browseController.currentExamType = 'all';
 integrationRenders.length = 0;
 integrationAnchorIndexes.length = 0;
 integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const unchangedVisibilityFirstIndex = deferred();
+const unchangedVisibilitySecondIndex = deferred();
+const unchangedVisibilityIndexSnapshot = [{ id: 'visibility-unchanged-index' }];
+integrationIndexResolvers.push(
+    unchangedVisibilityFirstIndex,
+    unchangedVisibilitySecondIndex
+);
+integrationCanonicalPracticeRecords = [{ id: 'visibility-unchanged-record' }];
+const firstUnchangedVisibilityCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'visibility-resume'
+);
+unchangedVisibilityFirstIndex.resolve(unchangedVisibilityIndexSnapshot);
+await firstUnchangedVisibilityCycle;
+await new Promise((resolve) => setTimeout(resolve, 0));
+const secondUnchangedVisibilityCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'visibility-resume'
+);
+unchangedVisibilitySecondIndex.resolve(unchangedVisibilityIndexSnapshot);
+await secondUnchangedVisibilityCycle;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationCompletionRefreshes,
+    [
+        ['visibility-unchanged-record'],
+        ['visibility-unchanged-record']
+    ],
+    'unchanged visibility records must still refresh the production Browse projection'
+);
+assert.deepStrictEqual(
+    integrationAnchorIndexes,
+    [
+        ['visibility-unchanged-index'],
+        ['visibility-unchanged-index']
+    ],
+    'unchanged visibility records must still refresh production Browse anchors'
+);
+assert.deepStrictEqual(
+    integrationPracticeUpdates,
+    [{
+        records: ['visibility-unchanged-record'],
+        index: ['visibility-unchanged-index']
+    }],
+    'the repeated visibility refresh must not rebuild the hidden Practice UI'
+);
+integrationCanonicalPracticeRecords = [];
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
 const libraryARecords = deferred();
 const libraryBRecords = deferred();
 const libraryAIndex = deferred();

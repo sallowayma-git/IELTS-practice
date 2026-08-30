@@ -3201,12 +3201,9 @@ class ExamSystemApp {
                     // Re-running Browse activation would rehydrate and
                     // normalize the user's live category/mode/path scope.
                     if (typeof window.ensurePracticeRecordsSync === 'function') {
-                        await window.ensurePracticeRecordsSync(
-                            'visibility-resume',
-                            { forceRender: true }
-                        );
+                        await window.ensurePracticeRecordsSync('visibility-resume');
                     } else if (typeof window.syncPracticeRecords === 'function') {
-                        await window.syncPracticeRecords({ forceRender: true });
+                        await window.syncPracticeRecords();
                     }
                     return;
                 }
