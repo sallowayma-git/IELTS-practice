@@ -70,7 +70,7 @@ async function createHarness() {
     let browseInitializations = 0;
 
     const durableBrowse = {
-        lastFilter: { category: 'P1', type: 'reading' },
+        lastFilter: { category: 'P1', type: 'listening' },
         filter: { category: 'all', type: 'all' },
         frequencyFilter: 'medium',
         sortMode: 'frequency-desc'
@@ -79,33 +79,33 @@ async function createHarness() {
         {
             id: 'selected-ocean',
             title: 'Ocean currents',
-            category: 'P2',
-            type: 'reading',
-            path: 'ReadingPractice/100 P2/Ocean',
+            category: 'P4',
+            type: 'listening',
+            path: 'ListeningPractice/100 P4/P4 高频(52)/Ocean',
             frequency: 'high'
         },
         {
             id: 'wrong-frequency',
             title: 'Ocean climate',
-            category: 'P2',
-            type: 'reading',
-            path: 'ReadingPractice/100 P2/Ocean',
+            category: 'P4',
+            type: 'listening',
+            path: 'ListeningPractice/100 P4/P4 高频(52)/Ocean',
             frequency: 'low'
         },
         {
             id: 'wrong-query',
             title: 'Desert winds',
-            category: 'P2',
-            type: 'reading',
-            path: 'ReadingPractice/100 P2/Ocean',
+            category: 'P4',
+            type: 'listening',
+            path: 'ListeningPractice/100 P4/P4 高频(52)/Ocean',
             frequency: 'high'
         },
         {
             id: 'wrong-category',
             title: 'Ocean habitats',
-            category: 'P3',
-            type: 'reading',
-            path: 'ReadingPractice/100 P3/Ocean',
+            category: 'P1',
+            type: 'listening',
+            path: 'ListeningPractice/100 P1/P1 高频（35）/Ocean',
             frequency: 'high'
         }
     ];
@@ -203,14 +203,14 @@ async function createHarness() {
         confirm() { return false; },
         alert() {},
         __browseFilterMode: 'frequency-p1',
-        __browsePath: 'ReadingPractice/100 P1',
+        __browsePath: 'ListeningPractice/100 P1',
         __browseFrequencyFilter: 'medium',
         __browseSortMode: 'frequency-desc',
         browseController: {
             currentMode: 'frequency-p1',
             activeFilter: 'medium',
             currentCategory: 'P1',
-            currentExamType: 'reading'
+            currentExamType: 'listening'
         },
         browseStateManager: {
             currentFilter: 'P1',
@@ -318,25 +318,25 @@ async function createHarness() {
     };
 }
 
-function applyLatestBrowseIntent(harness) {
+function applyLatestBrowseIntent(harness, searchQuery = 'ocean') {
     const { app, sandbox, searchInput, typeButtons, frequencyButtons } = harness;
-    sandbox.setBrowseFilterState('P2', 'reading');
-    sandbox.__browseFilterMode = 'frequency-p2';
-    sandbox.__browsePath = 'ReadingPractice/100 P2/Ocean';
+    sandbox.setBrowseFilterState('P4', 'listening');
+    sandbox.__browseFilterMode = 'frequency-p4';
+    sandbox.__browsePath = 'ListeningPractice/100 P4/P4 高频(52)/Ocean';
     sandbox.__browseFrequencyFilter = 'high';
     sandbox.__browseSortMode = 'frequency-desc';
-    sandbox.browseController.currentMode = 'frequency-p2';
+    sandbox.browseController.currentMode = 'frequency-p4';
     sandbox.browseController.activeFilter = 'high';
-    sandbox.browseController.currentCategory = 'P2';
-    sandbox.browseController.currentExamType = 'reading';
-    sandbox.browseStateManager.currentFilter = 'P2';
-    sandbox.browseStateManager.state.currentCategory = 'P2';
+    sandbox.browseController.currentCategory = 'P4';
+    sandbox.browseController.currentExamType = 'listening';
+    sandbox.browseStateManager.currentFilter = 'P4';
+    sandbox.browseStateManager.state.currentCategory = 'P4';
     sandbox.browseStateManager.state.currentFrequency = 'high';
     sandbox.browseStateManager.state.filters.frequency = 'high';
-    sandbox.browseStateManager.state.searchQuery = 'ocean';
-    searchInput.value = 'ocean';
+    sandbox.browseStateManager.state.searchQuery = searchQuery;
+    searchInput.value = searchQuery;
     typeButtons.forEach((button) => {
-        const active = button.dataset.filterType === 'reading';
+        const active = button.dataset.filterType === 'listening';
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
@@ -345,7 +345,7 @@ function applyLatestBrowseIntent(harness) {
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-    assert.deepEqual(clone(app.state.ui.browseFilter), { category: 'P2', type: 'reading' });
+    assert.deepEqual(clone(app.state.ui.browseFilter), { category: 'P4', type: 'listening' });
 }
 
 test('visibility resume refreshes progress without rehydrating or reactivating Browse scope', async () => {
@@ -358,7 +358,7 @@ test('visibility resume refreshes progress without rehydrating or reactivating B
     await harness.sandbox.flushBrowsePreferenceWrites();
 
     harness.stalePreferenceRead.resolve({
-        lastFilter: { category: 'P1', type: 'reading' },
+        lastFilter: { category: 'P1', type: 'listening' },
         filter: { category: 'all', type: 'all' },
         frequencyFilter: 'medium',
         sortMode: 'frequency-desc'
@@ -379,31 +379,60 @@ test('visibility resume refreshes progress without rehydrating or reactivating B
     );
     assert.deepEqual(
         clone(harness.sandbox.getBrowseFilterState()),
-        { category: 'P2', type: 'reading' }
+        { category: 'P4', type: 'listening' }
     );
     assert.deepEqual(
         clone(harness.app.state.ui.browseFilter),
-        { category: 'P2', type: 'reading' }
+        { category: 'P4', type: 'listening' }
     );
     assert.equal(harness.sandbox.getBrowseFilterMutationRevision(), 2);
-    assert.equal(harness.sandbox.__browseFilterMode, 'frequency-p2');
-    assert.equal(harness.sandbox.__browsePath, 'ReadingPractice/100 P2/Ocean');
+    assert.equal(harness.sandbox.__browseFilterMode, 'frequency-p4');
+    assert.equal(harness.sandbox.__browsePath, 'ListeningPractice/100 P4/P4 高频(52)/Ocean');
     assert.equal(harness.sandbox.__browseFrequencyFilter, 'high');
     assert.equal(harness.sandbox.__browseSortMode, 'frequency-desc');
-    assert.equal(harness.sandbox.browseController.currentMode, 'frequency-p2');
+    assert.equal(harness.sandbox.browseController.currentMode, 'frequency-p4');
     assert.equal(harness.sandbox.browseController.activeFilter, 'high');
-    assert.equal(harness.sandbox.browseStateManager.currentFilter, 'P2');
+    assert.equal(harness.sandbox.browseStateManager.currentFilter, 'P4');
     assert.equal(harness.sandbox.browseStateManager.state.currentFrequency, 'high');
     assert.equal(harness.searchInput.value, 'ocean');
-    assert.equal(harness.typeButtons[1].ariaPressed, 'true');
+    assert.equal(harness.typeButtons[2].ariaPressed, 'true');
     assert.equal(harness.frequencyButtons[0].ariaPressed, 'true');
-    assert.deepEqual(harness.durableBrowse.lastFilter, { category: 'P2', type: 'reading' });
+    assert.deepEqual(harness.durableBrowse.lastFilter, { category: 'P4', type: 'listening' });
     assert.deepEqual(harness.durableBrowse.filter, { category: 'all', type: 'all' });
     assert.deepEqual(harness.progressSyncCalls, [{
         trigger: 'visibility-resume',
         options: { forceRender: true }
     }]);
     assert.deepEqual(harness.renderedIds, [['selected-ocean']]);
+});
+
+test('visibility resume preserves an explicit empty Browse query', async () => {
+    const harness = await createHarness();
+    applyLatestBrowseIntent(harness, '');
+    await harness.sandbox.flushBrowsePreferenceWrites();
+
+    const refresh = harness.app.refreshData();
+    harness.statsGate.resolve();
+    await refresh;
+
+    assert.equal(harness.searchInput.value, '');
+    assert.equal(harness.sandbox.browseStateManager.state.searchQuery, '');
+    assert.equal(harness.sandbox.__browseFilterMode, 'frequency-p4');
+    assert.equal(harness.sandbox.__browsePath, 'ListeningPractice/100 P4/P4 高频(52)/Ocean');
+    assert.equal(harness.sandbox.__browseFrequencyFilter, 'high');
+    assert.deepEqual(
+        clone(harness.sandbox.getBrowseFilterState()),
+        { category: 'P4', type: 'listening' }
+    );
+    assert.deepEqual(harness.progressSyncCalls, [{
+        trigger: 'visibility-resume',
+        options: { forceRender: true }
+    }]);
+    assert.deepEqual(
+        harness.renderedIds,
+        [['selected-ocean', 'wrong-query']],
+        'an empty query must retain every result in the selected path and frequency scope'
+    );
 });
 
 test('visibilitychange uses the state-neutral refresh path after initialization', async () => {
@@ -424,6 +453,6 @@ test('visibilitychange uses the state-neutral refresh path after initialization'
     assert.deepEqual(harness.renderedIds, [['selected-ocean']]);
     assert.deepEqual(
         clone(harness.sandbox.getBrowseFilterState()),
-        { category: 'P2', type: 'reading' }
+        { category: 'P4', type: 'listening' }
     );
 });

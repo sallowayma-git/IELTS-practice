@@ -18203,12 +18203,15 @@ function ensurePracticeRecordsSync(trigger = 'default', options = {}) {
     const requestedLibraryGeneration = readBrowseProgressGeneration(
         '__getActiveLibraryGeneration'
     );
+    const requiresPostCommitRead = !!(options && options.requirePostCommitRead);
     if (practiceRecordsLoadPromise) {
         // Keep the baseline single-flight contract for same-library calls. Only
-        // a newer active library earns one coalesced Browse-progress tail; this
-        // is not a generic Practice-data replacement scheduler.
-        if (requestedLibraryGeneration != null
-            && requestedLibraryGeneration !== activeBrowseProgressSyncLibraryGeneration) {
+        // a newer active library or an explicitly committed Practice mutation
+        // earns one coalesced Browse-progress tail; this is not a generic
+        // Practice-data replacement scheduler.
+        if (requiresPostCommitRead
+            || (requestedLibraryGeneration != null
+                && requestedLibraryGeneration !== activeBrowseProgressSyncLibraryGeneration)) {
             mergeBrowseProgressLibrarySyncRequest(
                 trigger,
                 options,
@@ -18686,7 +18689,10 @@ function setupMessageListener() {
                     showMessage('练习已完成，正在更新记录...', 'success');
                     showCompletionSummary(payload);
                 }
-                setTimeout(() => ensurePracticeRecordsSync('completion-saved'), 300);
+                setTimeout(() => ensurePracticeRecordsSync('completion-saved', {
+                    forceRender: true,
+                    requirePostCommitRead: true
+                }), 300);
             };
             const onCompletionSaveFailed = (saveError) => {
                 sendFallbackSubmitOutcome(rec, payload, false, 'save_failed');

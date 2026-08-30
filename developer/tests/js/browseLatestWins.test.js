@@ -474,6 +474,8 @@ const integrationBrowseState = { category: 'all', type: 'all' };
 const integrationIndexResolvers = [];
 const integrationPracticeRecordResolvers = [];
 let integrationIndexResolutionCount = 0;
+let integrationPracticeListCount = 0;
+let integrationCanonicalPracticeRecords = [];
 const IntegrationCustomEvent = class CustomEvent {
     constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
 };
@@ -596,8 +598,11 @@ const integrationSandbox = {
         },
         practice: {
             async list() {
+                integrationPracticeListCount += 1;
                 const next = integrationPracticeRecordResolvers.shift();
-                return next ? next.promise : [];
+                return next
+                    ? next.promise
+                    : integrationCanonicalPracticeRecords.map((record) => ({ ...record }));
             },
             async listInsights() { return []; },
             async getStats() { return {}; }
@@ -949,6 +954,126 @@ assert.strictEqual(
     redundantTailPoison,
     'a head success must not be overturned by an invented failing tail'
 );
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+integrationBrowseState.category = 'P4';
+integrationBrowseState.type = 'listening';
+integrationSearchInput.value = '';
+integrationSandbox.__browseFilterMode = 'frequency-p4';
+integrationSandbox.__browsePath = 'ListeningPractice/100 P4/P4 高频(52)';
+integrationSandbox.__browseFrequencyFilter = 'high';
+integrationSandbox.__browseSortMode = 'frequency-desc';
+integrationSandbox.browseController.currentMode = 'frequency-p4';
+integrationSandbox.browseController.currentCategory = 'P4';
+integrationSandbox.browseController.currentExamType = 'listening';
+const completionResumeScope = {
+    filter: { ...integrationBrowseState },
+    query: integrationSearchInput.value,
+    mode: integrationSandbox.__browseFilterMode,
+    path: integrationSandbox.__browsePath,
+    frequency: integrationSandbox.__browseFrequencyFilter,
+    sort: integrationSandbox.__browseSortMode,
+    controllerMode: integrationSandbox.browseController.currentMode,
+    controllerCategory: integrationSandbox.browseController.currentCategory,
+    controllerType: integrationSandbox.browseController.currentExamType
+};
+const visibilityResumeIndex = deferred();
+const postCommitIndex = deferred();
+const visibilityIndexSnapshot = [{
+    id: 'p4-high-current',
+    title: 'Current P4 listening exam',
+    category: 'P4',
+    type: 'listening',
+    path: 'ListeningPractice/100 P4/P4 高频(52)',
+    frequency: 'high'
+}];
+integrationIndexResolvers.push(visibilityResumeIndex, postCommitIndex);
+integrationCanonicalPracticeRecords = [{ id: 'before-completion' }];
+const completionResumeReadCountBefore = integrationPracticeListCount;
+const visibilityResumeCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'visibility-resume',
+    { forceRender: true }
+);
+await waitForCondition(
+    () => integrationPracticeListCount === completionResumeReadCountBefore + 1,
+    'visibility resume must read the pre-commit Practice snapshot'
+);
+await Promise.resolve();
+integrationCanonicalPracticeRecords = [
+    { id: 'before-completion' },
+    { id: 'saved-completion' }
+];
+const completionSavedJoin = integrationSandbox.ensurePracticeRecordsSync(
+    'completion-saved',
+    { forceRender: true, requirePostCommitRead: true }
+);
+assert.strictEqual(
+    completionSavedJoin,
+    visibilityResumeCycle,
+    'completion-saved must remain part of the active managed cycle'
+);
+visibilityResumeIndex.resolve(visibilityIndexSnapshot);
+await waitForCondition(
+    () => integrationPracticeListCount === completionResumeReadCountBefore + 2,
+    'completion-saved must start one authoritative read after the visibility cycle'
+);
+postCommitIndex.resolve(visibilityIndexSnapshot);
+assert.deepStrictEqual(
+    Array.from(await completionSavedJoin, (record) => record.id),
+    ['before-completion', 'saved-completion'],
+    'the managed cycle must resolve with the post-commit Practice snapshot'
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    integrationPracticeListCount,
+    completionResumeReadCountBefore + 2,
+    'the save/resume ordering must perform exactly one head and one trailing read'
+);
+assert.deepStrictEqual(
+    integrationCompletionRefreshes,
+    [
+        ['before-completion'],
+        ['before-completion', 'saved-completion']
+    ],
+    'the production projection path must publish the authoritative completion state'
+);
+assert.deepStrictEqual(
+    integrationPracticeUpdates,
+    [
+        { records: ['before-completion'], index: ['p4-high-current'] },
+        { records: ['before-completion', 'saved-completion'], index: ['p4-high-current'] }
+    ],
+    'the post-commit read must reach the production Practice projection'
+);
+assert.deepStrictEqual(
+    {
+        filter: { ...integrationBrowseState },
+        query: integrationSearchInput.value,
+        mode: integrationSandbox.__browseFilterMode,
+        path: integrationSandbox.__browsePath,
+        frequency: integrationSandbox.__browseFrequencyFilter,
+        sort: integrationSandbox.__browseSortMode,
+        controllerMode: integrationSandbox.browseController.currentMode,
+        controllerCategory: integrationSandbox.browseController.currentCategory,
+        controllerType: integrationSandbox.browseController.currentExamType
+    },
+    completionResumeScope,
+    'the post-commit tail must not rehydrate or replace the live Browse scope'
+);
+integrationCanonicalPracticeRecords = [];
+integrationBrowseState.category = 'all';
+integrationBrowseState.type = 'all';
+integrationSearchInput.value = '';
+integrationSandbox.__browseFilterMode = 'default';
+integrationSandbox.__browsePath = null;
+integrationSandbox.__browseFrequencyFilter = 'all';
+integrationSandbox.__browseSortMode = 'default';
+integrationSandbox.browseController.currentMode = 'default';
+integrationSandbox.browseController.currentCategory = 'all';
+integrationSandbox.browseController.currentExamType = 'all';
 
 integrationRenders.length = 0;
 integrationAnchorIndexes.length = 0;
