@@ -177,6 +177,7 @@
         divider: null,
         groups: null,
         results: null,
+        reviewBanner: null,
         nav: null,
         submitBtn: null,
         resetBtn: null,
@@ -551,13 +552,33 @@
         renderTimer();
     }
 
+    function isSettingsPanelOpen() {
+        return Boolean(document.getElementById('settings-panel')?.classList.contains('is-open'));
+    }
+
     function closeFloatingPanels() {
         const settingsPanel = document.getElementById('settings-panel');
         const notesPanel = document.getElementById('notes-panel');
         const overlay = document.querySelector('.overlay');
-        if (settingsPanel) settingsPanel.style.display = 'none';
+        // Options is a full-screen menu: drive it by class + `hidden` so it stays
+        // out of the a11y tree while closed.
+        if (settingsPanel) {
+            settingsPanel.classList.remove('is-open');
+            settingsPanel.hidden = true;
+        }
+        document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'false');
         if (notesPanel) notesPanel.style.display = 'none';
         if (overlay) overlay.style.display = 'none';
+    }
+
+    function openSettingsPanel() {
+        const settingsPanel = document.getElementById('settings-panel');
+        if (!settingsPanel) return;
+        closeFloatingPanels();
+        settingsPanel.hidden = false;
+        settingsPanel.classList.add('is-open');
+        document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'true');
+        document.getElementById('options-title')?.focus?.();
     }
 
     function attachUnifiedPanels() {
@@ -568,12 +589,30 @@
         const noteBtn = document.getElementById('note-btn');
         const closeNoteBtn = document.getElementById('close-note');
 
+        const optionsCloseBtn = document.getElementById('options-close-btn');
+
         settingsBtn?.addEventListener('click', (event) => {
             event.stopPropagation();
-            const nextVisible = settingsPanel?.style.display !== 'block';
+            if (isSettingsPanelOpen()) {
+                closeFloatingPanels();
+            } else {
+                openSettingsPanel();
+            }
+        });
+        optionsCloseBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
             closeFloatingPanels();
-            if (settingsPanel && nextVisible) {
-                settingsPanel.style.display = 'block';
+            settingsBtn?.focus?.();
+        });
+        settingsPanel?.addEventListener('click', (event) => {
+            // The menu is full-screen; keep clicks inside it from bubbling to the
+            // document-level dismiss handler.
+            event.stopPropagation();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && isSettingsPanelOpen()) {
+                closeFloatingPanels();
+                settingsBtn?.focus?.();
             }
         });
         noteBtn?.addEventListener('click', () => {
@@ -599,15 +638,33 @@
         });
     }
 
+    // The bar sits below the selected word or sentence, which is what its arrow
+    // (pointing up at the text) is drawn for. It only flips above when there is
+    // no room below, and the arrow flips with it via `.is-above`.
     function positionSelectionToolbar(rect) {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
         toolbar.style.display = 'flex';
         global.requestAnimationFrame(() => {
-            const top = global.scrollY + rect.top - toolbar.offsetHeight - 8;
-            const left = global.scrollX + rect.left + (rect.width / 2) - (toolbar.offsetWidth / 2);
-            toolbar.style.top = `${top > 0 ? top : global.scrollY + rect.bottom + 8}px`;
-            toolbar.style.left = `${Math.max(8, left)}px`;
+            const margin = 8;
+            const width = toolbar.offsetWidth || 0;
+            const height = toolbar.offsetHeight || 0;
+            const viewportWidth = global.innerWidth || document.documentElement.clientWidth || 0;
+            const viewportHeight = global.innerHeight || document.documentElement.clientHeight || 0;
+
+            const below = rect.bottom + margin;
+            const above = rect.top - height - margin;
+            const fitsBelow = below + height <= viewportHeight - margin;
+            const isAbove = !fitsBelow && above >= margin;
+            let top = isAbove ? above : below;
+            top = Math.max(margin, Math.min(Math.max(margin, viewportHeight - height - margin), top));
+
+            let left = rect.left + (rect.width / 2) - (width / 2);
+            left = Math.max(margin, Math.min(Math.max(margin, viewportWidth - width - margin), left));
+
+            toolbar.classList.toggle('is-above', isAbove);
+            toolbar.style.top = `${Math.round(top)}px`;
+            toolbar.style.left = `${Math.round(left)}px`;
         });
     }
 
@@ -1052,6 +1109,7 @@
         dom.divider = document.querySelector('.shell > #divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
+        dom.reviewBanner = document.getElementById('review-banner');
         dom.nav = document.getElementById('question-nav');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
@@ -1871,8 +1929,11 @@
             if (node.closest?.('.reading-display-toggle-group')) return;
             node.remove();
         });
-        const headerRight = document.querySelector('.header-right');
-        if (headerRight && !document.getElementById('reading-display-toggle-group')) {
+        // The paper UI keeps the header to status + Options only, so these display
+        // toggles live inside the Options menu. Fall back to the header if an older
+        // shell without #options-tools is in use.
+        const toolsHost = document.getElementById('options-tools') || document.querySelector('.header-right');
+        if (toolsHost && !document.getElementById('reading-display-toggle-group')) {
             const group = document.createElement('div');
             group.id = 'reading-display-toggle-group';
             group.className = 'reading-display-toggle-group';
@@ -1883,8 +1944,12 @@
                 '<button type="button" class="reading-display-toggle" data-highlight-toggle="highlights" title="显示/隐藏普通高亮">H</button>',
                 '<button type="button" class="reading-display-toggle" id="reading-question-nav-toggle" data-question-nav-toggle title="隐藏题卡" aria-pressed="true">Q</button>'
             ].join('');
-            const settingsButton = document.getElementById('settings-btn');
-            headerRight.insertBefore(group, settingsButton?.parentNode === headerRight ? settingsButton : null);
+            if (toolsHost.id === 'options-tools') {
+                toolsHost.appendChild(group);
+            } else {
+                const settingsButton = document.getElementById('settings-btn');
+                toolsHost.insertBefore(group, settingsButton?.parentNode === toolsHost ? settingsButton : null);
+            }
             group.addEventListener('click', (event) => {
                 const target = event.target instanceof HTMLElement ? event.target : null;
                 if (!target) return;
@@ -1932,7 +1997,10 @@
         const style = document.createElement('style');
         style.id = READING_NOTE_STYLE_ID;
         style.textContent = `
-            .hl[data-note-id]{position:relative;cursor:pointer;background:rgba(191,219,254,.78)!important;box-shadow:inset 0 -.52em rgba(147,197,253,.34)}
+            /* Noted text uses the reference's .note-anchor blue on white. The
+               page stylesheet sets the same pair; keeping it here too means a
+               note reads correctly before that sheet's rule wins the cascade. */
+            .hl[data-note-id]{position:relative;cursor:pointer;background:rgb(32,76,207)!important;color:#fff!important}
             .hl[data-note-id].reading-note-flash{outline:2px solid #60a5fa;outline-offset:2px}.reading-notes-btn{position:relative}
             .reading-note-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#16a34a;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;display:none}
             #reading-note-drawer{position:fixed;inset:0 0 0 auto;width:min(360px,92vw);background:#fff;border-left:1px solid #dbe4ef;box-shadow:-18px 0 36px rgba(15,23,42,.16);z-index:3600;transform:translateX(105%);transition:transform 180ms ease;display:flex;flex-direction:column}
@@ -1943,27 +2011,38 @@
             .reading-note-open,.reading-note-outline-title{border:0;background:transparent;color:#0f172a;text-align:left;padding:9px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.reading-note-open:hover{background:#eff6ff;color:#1d4ed8}
             .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
             #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
-            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
-            .reading-note-title,.reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box}.reading-note-title{font-weight:700}.reading-note-body{min-height:190px;resize:vertical;flex:1}
+            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none;justify-content:flex-end;min-height:34px;padding:6px 8px}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
+            .reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1}
             body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
             @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
         `;
         document.head.appendChild(style);
     }
 
+    // Notes live in the header as an icon button, declared in the page markup.
+    // The fallback build is only for hosts that predate that markup.
     function ensureReadingNotesButton() {
         let button = document.getElementById('notes-drawer-btn');
-        if (button) return button;
-        const headerRight = document.querySelector('.header-right');
-        if (!headerRight) return null;
-        button = document.createElement('button');
-        button.id = 'notes-drawer-btn';
-        button.type = 'button';
-        button.className = 'header-btn reading-notes-btn';
-        button.title = 'Notes';
-        button.innerHTML = 'Notes<span class="reading-note-count" aria-hidden="true">0</span>';
-        headerRight.insertBefore(button, headerRight.firstChild);
-        button.addEventListener('click', (event) => { event.stopPropagation(); toggleNotesDrawer(); });
+        if (!button) {
+            const host = document.querySelector('.header-right') || document.getElementById('options-tools');
+            if (!host) return null;
+            button = document.createElement('button');
+            button.id = 'notes-drawer-btn';
+            button.type = 'button';
+            button.className = 'header-btn reading-notes-btn';
+            button.title = 'Notes';
+            button.setAttribute('aria-label', 'Notes');
+            button.innerHTML = 'Notes<span class="reading-note-count" aria-hidden="true">0</span>';
+            host.insertBefore(button, host.lastElementChild || null);
+        }
+        if (button.dataset.notesBound === '1') return button;
+        button.dataset.notesBound = '1';
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            // Dismiss the Options overlay if it happens to be open.
+            closeFloatingPanels();
+            toggleNotesDrawer();
+        });
         return button;
     }
 
@@ -1994,7 +2073,10 @@
             editor = document.createElement('section');
             editor.id = 'reading-note-editor';
             editor.setAttribute('aria-hidden', 'true');
-            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close>×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><input class="reading-note-title" data-note-title type="text" placeholder="Title"><textarea class="reading-note-body" data-note-body placeholder="Write your note"></textarea></div>';
+            // Reference note popup carries no title bar text and no title field:
+            // the drag handle keeps only the close affordance, and the body is
+            // quote + free text.
+            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><textarea class="reading-note-body" data-note-body placeholder="Write your note"></textarea></div>';
             document.body.appendChild(editor);
             editor.addEventListener('click', (event) => { if (event.target.closest?.('[data-note-editor-close]')) closeNoteEditor(); });
             editor.querySelector('[data-note-title]')?.addEventListener('input', saveActiveNoteFromEditor);
@@ -2378,7 +2460,10 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
+        // The editor no longer exposes a title field; keep whatever title the note
+        // already carries instead of blanking it.
+        const titleField = editor?.querySelector('[data-note-title]');
+        const title = titleField ? String(titleField.value || '').trim() : String(note.title || '');
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
         if (title === note.title && body === note.body) return;
         Object.assign(note, { title, body, updatedAt: Date.now() });
@@ -2395,7 +2480,8 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
+        const titleField = editor?.querySelector('[data-note-title]');
+        const title = titleField ? String(titleField.value || '').trim() : String(note.title || '');
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
         if (title === note.title && body === note.body && !state.noteEditorPendingSync) return;
         clearNoteEditorSaveTimer();
@@ -2946,6 +3032,7 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
+            hideReviewBanner();
         }
         updateRedesignedSubHeader();
     }
@@ -5454,6 +5541,156 @@
         return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
+    function hideReviewBanner() {
+        if (!dom.reviewBanner) return;
+        dom.reviewBanner.hidden = true;
+        const partScores = document.getElementById('review-part-scores');
+        if (partScores) partScores.innerHTML = '';
+    }
+
+    function formatReviewElapsed(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // The reference tints each card by assignment difficulty, which this project
+    // has no equivalent for -- its manifest carries a frequency band (高频/低频),
+    // not a difficulty. Tinting by the part's own accuracy keeps the reference's
+    // colour ramp without claiming a difficulty we do not know.
+    function resolveReviewAccuracyTier(correct, total) {
+        if (!Number.isFinite(total) || total <= 0) return '';
+        const ratio = correct / total;
+        if (ratio >= 0.75) return 'easy';
+        if (ratio >= 0.5) return 'standard';
+        return 'hard';
+    }
+
+    // Answered marks, counted in the same weight units scoreInfo.total uses so
+    // the "answered" and "score" metrics stay comparable.
+    function countAnsweredWeight(answerComparison) {
+        const entries = answerComparison && typeof answerComparison === 'object'
+            ? Object.values(answerComparison)
+            : [];
+        return entries.reduce((count, entry) => {
+            const value = entry?.userAnswer;
+            const hasValue = Array.isArray(value)
+                ? value.some((item) => String(item ?? '').trim() !== '')
+                : String(value ?? '').trim() !== '';
+            return hasValue ? count + (Number(entry?.weight) || 1) : count;
+        }, 0);
+    }
+
+    // Per-passage cards. Only the inline suite has more than one passage, so a
+    // standalone run renders a single card describing the current exam.
+    function collectReviewPartRows(results) {
+        const rows = [];
+        const sequence = Array.isArray(state.suite?.sequence) ? state.suite.sequence : [];
+        if (state.suite?.inline && sequence.length) {
+            sequence.forEach((entry, index) => {
+                const slot = getSuiteSlot(entry.examId);
+                const info = slot?.lastResults?.scoreInfo;
+                if (!info) return;
+                const total = Number(info.total ?? info.totalQuestions) || 0;
+                rows.push({
+                    label: `Part ${index + 1}`,
+                    title: slot?.title || entry.title || entry.examId,
+                    category: slot?.category || entry.category || slot?.dataset?.meta?.category || '',
+                    correct: Number(info.correct) || 0,
+                    total,
+                    answered: countAnsweredWeight(slot?.lastResults?.answerComparison),
+                    duration: Math.max(0, Math.round(Number(slot?.durationSeconds) || 0))
+                });
+            });
+            return rows;
+        }
+        const info = results?.scoreInfo || {};
+        const total = Number(info.total ?? info.totalQuestions) || 0;
+        if (!total) return rows;
+        rows.push({
+            label: 'Part 1',
+            title: state.dataset?.meta?.title || dom.title?.textContent || '',
+            category: state.dataset?.meta?.category || '',
+            correct: Number(info.correct) || 0,
+            total,
+            answered: countAnsweredWeight(results?.answerComparison),
+            duration: getPageElapsedSeconds()
+        });
+        return rows;
+    }
+
+    function renderReviewBanner(results) {
+        if (!dom.reviewBanner || !results) return;
+        const rows = collectReviewPartRows(results);
+
+        // In the inline suite, `results` describes only the passage on screen,
+        // so the headline is summed from the per-part rows instead -- otherwise
+        // the metrics would contradict the cards directly beneath them.
+        const aggregate = rows.length > 1;
+        const info = results.scoreInfo || {};
+        const total = aggregate
+            ? rows.reduce((sum, row) => sum + row.total, 0)
+            : (Number(info.total ?? info.totalQuestions) || 0);
+        const correct = aggregate
+            ? rows.reduce((sum, row) => sum + row.correct, 0)
+            : (Number(info.correct) || 0);
+        const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+        const answered = aggregate
+            ? rows.reduce((sum, row) => sum + row.answered, 0)
+            : countAnsweredWeight(results.answerComparison);
+        const answeredTotal = total;
+
+        const setText = (id, value) => {
+            const node = document.getElementById(id);
+            if (node) node.textContent = value;
+        };
+
+        setText('review-assignment-title', dom.title?.textContent || state.dataset?.meta?.title || '练习结果');
+        setText('review-passages', rows.length
+            ? rows.map((row) => row.title).filter(Boolean).join(' · ')
+            : (state.dataset?.meta?.title || '—'));
+        const submittedAt = document.getElementById('review-submitted-at');
+        if (submittedAt) {
+            const now = new Date();
+            submittedAt.textContent = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+            submittedAt.setAttribute('datetime', now.toISOString());
+        }
+        setText('review-score', total > 0 ? `${correct} / ${total}` : '—');
+        setText('review-accuracy', total > 0 ? `${percentage}%` : '—');
+        setText('review-completion', answeredTotal ? `${answered} / ${answeredTotal}` : '—');
+        setText('review-elapsed', formatReviewElapsed(
+            aggregate
+                ? rows.reduce((sum, row) => sum + row.duration, 0)
+                : getPageElapsedSeconds()
+        ));
+
+        const partScores = document.getElementById('review-part-scores');
+        if (partScores) {
+            partScores.innerHTML = rows.map((row) => {
+                const progress = row.total > 0 ? Math.round((row.correct / row.total) * 100) : 0;
+                const tier = resolveReviewAccuracyTier(row.correct, row.total);
+                const difficultyAttr = tier ? ` data-difficulty="${tier}"` : '';
+                return `
+                    <div class="review-part-score"${difficultyAttr} style="--review-progress:${progress}%">
+                        <span class="review-part-label">${escapeHtml(row.label)}</span>
+                        <span class="review-part-score-value">${row.correct} / ${row.total}</span>
+                        <span class="review-part-result">
+                            <span class="review-part-accuracy">${progress}%</span>
+                            <span class="review-part-time">${escapeHtml(formatReviewElapsed(row.duration))}</span>
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        dom.reviewBanner.hidden = false;
+    }
+
     function renderResults(results) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
@@ -5498,6 +5735,7 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
+        renderReviewBanner(results);
         applyResultsToQuestionArea(results);
     }
 
@@ -6284,9 +6522,14 @@
     }
 
     function syncPrimaryActionButtons() {
+        const submitIsIconOnly = Boolean(
+            dom.submitBtn
+            && (dom.submitBtn.querySelector('.submit-btn-icon')
+                || dom.submitBtn.classList.contains('nav-submit-circle-btn'))
+        );
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn') 
-                ? 'Submit' 
+            dom.submitBtn.dataset.defaultLabel = submitIsIconOnly
+                ? (dom.submitBtn.title || 'Submit')
                 : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
@@ -6304,8 +6547,10 @@
         
         const setSubmitLabel = (label) => {
             if (!dom.submitBtn) return;
-            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+            if (submitIsIconOnly) {
+                // Icon-only submit: never write textContent or the glyph is lost.
                 dom.submitBtn.title = label;
+                dom.submitBtn.setAttribute('aria-label', label);
             } else {
                 dom.submitBtn.textContent = label;
             }
@@ -6345,7 +6590,10 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                dom.resetBtn.style.display = '';
+                // Reset is a post-test affordance: keep it out of the footer while
+                // the paper is still being answered.
+                const showReset = Boolean(state.submitted || state.reviewMode || state.readOnly);
+                dom.resetBtn.style.display = showReset ? '' : 'none';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
@@ -6451,6 +6699,7 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
+            hideReviewBanner();
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
@@ -7510,6 +7759,7 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
+            hideReviewBanner();
         }
         clearExplanations();
         setExitButtonVisible(false);

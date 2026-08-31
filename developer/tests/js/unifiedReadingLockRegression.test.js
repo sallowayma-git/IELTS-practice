@@ -148,15 +148,55 @@ async function run() {
   ok(/addEventListener\('keydown'/.test(unifiedPage), 'pane_resizer_missing_keyboard_binding', failed);
   ok(/attachPaneResizer\(\);/.test(unifiedPage), 'pane_resizer_not_bootstrapped', failed);
   ok(!/unified-group__lead/.test(unifiedPage), 'question_group_outer_lead_rendered_again', failed);
-  ok(/#right\s*\{[\s\S]*padding:\s*12px 14px/.test(unifiedHtml), 'question_area_padding_not_compact', failed);
-  ok(/\.unified-group\s*\{[\s\S]*margin-bottom:\s*16px/.test(unifiedHtml), 'question_group_spacing_not_compact', failed);
-  ok(/\.group\s*\{[\s\S]*border-radius:\s*8px[\s\S]*padding:\s*18px 22px[\s\S]*margin-bottom:\s*0/.test(unifiedHtml), 'question_card_padding_not_compact', failed);
+  // The question pane follows the official paper layout: flat groups, no cards.
+  // These locks pin the reference metrics so the card chrome cannot creep back.
+  ok(/#right\s*\{[^}]*padding-left:\s*17px[^}]*padding-right:\s*31px/.test(unifiedHtml), 'question_area_padding_not_reference', failed);
+  ok(/\.unified-group\s*\{[^}]*margin:\s*0 0 31px/.test(unifiedHtml), 'question_group_spacing_not_reference', failed);
+  ok(/\.group\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/.test(unifiedHtml), 'question_card_chrome_regressed', failed);
   ok(/\.matching-table\s*\{[\s\S]*border-spacing:\s*0 4px/.test(unifiedHtml), 'matching_table_row_spacing_missing', failed);
   ok(/\.matching-table tbody td:first-child\s*\{[\s\S]*line-height:\s*1\.35/.test(unifiedHtml), 'matching_table_question_text_spacing_missing', failed);
   ok(/\.tfng-item\s*\{[\s\S]*margin:\s*0 0 14px/.test(unifiedHtml), 'tfng_question_block_spacing_missing', failed);
   ok(/#right \.tfng-item > p\s*\{[\s\S]*margin:\s*0 0 6px/.test(unifiedHtml), 'tfng_stem_option_spacing_not_scoped', failed);
   ok(/\.tfng-options\s*\{[\s\S]*gap:\s*4px 12px/.test(unifiedHtml), 'tfng_option_row_spacing_missing', failed);
   ok(/function restoreHighlights\s*\([\s\S]*?return restoredCount;/.test(highlightShared), 'restoreHighlights_no_restore_count', failed);
+  // Review banner: post-submission summary strip. It must occupy its own grid
+  // row, ship hidden, and be revealed only by renderResults.
+  ok(/grid-template-rows: var\(--header-height\) auto auto minmax\(0, 1fr\) var\(--footer-height\)/.test(unifiedHtml), 'review_banner_grid_row_missing', failed);
+  ok(/id="review-banner"[^>]*class="review-banner"[^>]*hidden/.test(unifiedHtml), 'review_banner_not_hidden_by_default', failed);
+  ok(/\.review-banner\s*\{[^}]*grid-row: 3/.test(unifiedHtml), 'review_banner_not_own_grid_row', failed);
+  ok(/\.shell\s*\{[\s\S]*?grid-row: 4/.test(unifiedHtml), 'reading_shell_grid_row_not_shifted', failed);
+  ok(/\.practice-nav\s*\{[\s\S]*?grid-row: 5/.test(unifiedHtml), 'practice_nav_grid_row_not_shifted', failed);
+  ok(/id="review-score"|id="review-accuracy"/.test(unifiedHtml), 'review_banner_metrics_missing', failed);
+  ok(/id="review-part-scores"/.test(unifiedHtml), 'review_banner_part_scores_missing', failed);
+  ok((unifiedHtml.match(/class="review-key /g) || []).length === 4, 'review_banner_legend_incomplete', failed);
+  ok(/renderReviewBanner\(results\);/.test(unifiedPage), 'review_banner_not_rendered_on_results', failed);
+  ok((unifiedPage.match(/hideReviewBanner\(\);/g) || []).length >= 3, 'review_banner_not_collapsed_on_reset', failed);
+  // Notes: an icon button in the header, and noted text uses the reference's
+  // .note-anchor blue rather than the marker-chip yellow.
+  ok(/id="notes-drawer-btn"[^>]*class="header-btn reading-notes-btn"|class="header-btn reading-notes-btn" id="notes-drawer-btn"/.test(unifiedHtml), 'notes_button_not_in_header', failed);
+  ok(/id="notes-drawer-btn"[\s\S]{0,600}?svg class="header-icon"/.test(unifiedHtml), 'notes_button_missing_icon', failed);
+  ok(/id="notes-drawer-btn"[\s\S]{0,900}?class="reading-note-count"/.test(unifiedHtml), 'notes_button_missing_count_badge', failed);
+  ok(/\.hl\[data-hl-type="note"\]\s*\{[^}]*background-color: rgb\(32, 76, 207\)/.test(unifiedHtml), 'note_highlight_colour_regressed', failed);
+  ok(/\.hl\[data-note-id\]\{[^}]*background:rgb\(32,76,207\)!important/.test(unifiedPage), 'injected_note_highlight_colour_regressed', failed);
+  ok(!/rgba\(191,219,254/.test(unifiedPage), 'pale_blue_note_highlight_returned', failed);
+  // Part intro is a thin bar butted under the header, not an inset card, and
+  // the reading panes scroll without showing a scrollbar.
+  ok(/--intro-height: 34px/.test(unifiedHtml), 'part_intro_not_thin_bar_height', failed);
+  ok(/\.sub-header-bar\s*\{[^}]*margin: 0;[^}]*border-radius: 0/.test(unifiedHtml), 'part_intro_card_chrome_regressed', failed);
+  ok(/\.sub-header-bar\s*\{[^}]*border-bottom: 1px solid var\(--soft-line\)/.test(unifiedHtml), 'part_intro_missing_bottom_rule', failed);
+  ok(/\.pane\s*\{[^}]*scrollbar-width: none/.test(unifiedHtml), 'pane_scrollbar_not_hidden', failed);
+  ok(/\.pane::-webkit-scrollbar\s*\{[^}]*display: none/.test(unifiedHtml), 'pane_webkit_scrollbar_not_hidden', failed);
+  ok(!/\.pane::-webkit-scrollbar-thumb/.test(unifiedHtml), 'pane_scrollbar_thumb_regressed', failed);
+  ok(/\.pane\s*\{[^}]*overflow-y: auto/.test(unifiedHtml), 'pane_scrolling_disabled', failed);
+  // Selection bar sits below the selected text; its arrow points up at it, and
+  // both bar and arrow flip together when there is no room below.
+  ok(/#selbar\s*\{[^}]*position: fixed/.test(unifiedHtml), 'selection_bar_not_viewport_positioned', failed);
+  ok(/#selbar\.is-above::before\s*\{[^}]*bottom: -5px[^}]*transform: rotate\(45deg\)/.test(unifiedHtml), 'selection_bar_flipped_arrow_missing', failed);
+  ok(/const fitsBelow = below \+ height <= viewportHeight - margin;/.test(unifiedPage), 'selection_bar_below_placement_regressed', failed);
+  ok(/toolbar\.classList\.toggle\('is-above', isAbove\);/.test(unifiedPage), 'selection_bar_arrow_flip_not_wired', failed);
+  ok(!/global\.scrollY \+ rect\.top - toolbar\.offsetHeight/.test(unifiedPage), 'selection_bar_above_first_placement_returned', failed);
+  // The bell is decorative: this project has no messages surface to open.
+  ok(!/id="messages-btn"/.test(unifiedHtml), 'dead_messages_button_reintroduced', failed);
   await testEndlessLifecycle(failed);
 
   if (failed.length) {
