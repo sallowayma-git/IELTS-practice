@@ -124,6 +124,7 @@ async function testReviewRuntimeBehaviors(page) {
     await page.addScriptTag({ content: read('js/utils/answerSanitizer.js') });
     await page.addScriptTag({ content: read('js/utils/answerMatchCore.js') });
     await page.addScriptTag({ content: read('js/runtime/unifiedReadingPage.js') });
+    await page.addScriptTag({ content: read('js/app/examSessionMixin.js') });
 
     const modal = await page.evaluate(() => {
         const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
@@ -247,6 +248,137 @@ async function testReviewRuntimeBehaviors(page) {
         elapsed: '2:05',
         part: 'Part 2',
         title: 'Historical Part Two'
+    });
+
+    const hostReplay = await page.evaluate(async () => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        const app = Object.assign({}, window.ExamSystemAppMixins.examSession);
+        const scoreDataset = {
+            meta: { title: 'Canonical root score', category: 'P1' },
+            questionGroups: [],
+            questionOrder: ['q1', 'q2', 'q3'],
+            answerKey: { q1: 'A' }
+        };
+        const scoreEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'canonical-root-score',
+            title: 'Canonical root score',
+            answers: { q1: 'A', q2: 'B', q3: 'C' },
+            correctAnswerMap: { q1: 'A' },
+            correctAnswers: 2,
+            totalQuestions: 3,
+            accuracy: 2 / 3,
+            percentage: 67
+        })[0];
+        hooks.setTestState({
+            examId: 'canonical-root-score',
+            dataKey: 'reading-p1',
+            dataset: scoreDataset,
+            readOnly: false,
+            submitted: false,
+            reviewMode: false,
+            reviewEntryIndex: 0
+        });
+        const scoreResults = hooks.buildReplayResults(scoreEntry);
+        await hooks.applyReplayRecord({ reviewEntryIndex: 0, readOnly: false, entry: scoreEntry });
+        const renderedScore = document.getElementById('review-score').textContent;
+
+        const suiteEntries = app._buildReviewReplayEntriesFromRecord({
+            endTime: '2026-08-15T10:40:00.000Z',
+            duration: 3600,
+            correctAnswers: 2,
+            totalQuestions: 2,
+            suiteEntries: [
+                {
+                    examId: 'reading-p1',
+                    date: '2026-08-15T10:00:00.000Z',
+                    durationSeconds: 600,
+                    answers: { q1: 'A' },
+                    correctAnswerMap: { q1: 'A' },
+                    correctAnswers: 1,
+                    totalQuestions: 1
+                },
+                {
+                    examId: 'reading-p2',
+                    title: 'Legacy suite P2',
+                    date: '2026-08-15T10:20:00.000Z',
+                    answers: { q1: 'B' },
+                    correctAnswerMap: { q1: 'B' },
+                    scoreInfo: { correct: 1, total: 1, timeSpent: 1200 }
+                }
+            ]
+        });
+        const p2Entry = suiteEntries[1];
+        const p2Dataset = {
+            meta: { title: 'Legacy suite P2', category: 'P2' },
+            questionGroups: [],
+            questionOrder: ['q1'],
+            answerKey: { q1: 'B' }
+        };
+        hooks.setTestState({
+            examId: 'reading-p2',
+            dataKey: 'reading-p2',
+            dataset: p2Dataset,
+            readOnly: false,
+            submitted: false,
+            reviewMode: false,
+            reviewEntryIndex: 1
+        });
+        await hooks.applyReplayRecord({ reviewEntryIndex: 1, readOnly: false, entry: p2Entry });
+        const renderedSuiteTimestamp = document.getElementById('review-submitted-at').getAttribute('datetime');
+        const renderedSuiteDuration = document.getElementById('review-elapsed').textContent;
+
+        hooks.setTestState({
+            examId: 'malformed-timestamp',
+            dataKey: 'reading-p3',
+            dataset: {
+                meta: { title: 'Malformed timestamp recovery', category: 'P3' },
+                questionGroups: [],
+                questionOrder: ['q1'],
+                answerKey: { q1: 'C' }
+            },
+            readOnly: false,
+            submitted: false,
+            reviewMode: false,
+            reviewEntryIndex: 0
+        });
+        await hooks.applyReplayRecord({
+            reviewEntryIndex: 0,
+            readOnly: false,
+            entry: {
+                examId: 'malformed-timestamp',
+                answers: { q1: 'C' },
+                correctAnswerMap: { q1: 'C' },
+                scoreInfo: { correct: 1, total: 1, totalQuestions: 1 },
+                timestamp: 1e20,
+                date: '2026-08-15T10:30:00.000Z',
+                duration: 30
+            }
+        });
+
+        return {
+            hostScore: `${scoreEntry.scoreInfo.correct} / ${scoreEntry.scoreInfo.total}`,
+            runtimeScore: `${scoreResults.scoreInfo.correct} / ${scoreResults.scoreInfo.total}`,
+            renderedScore,
+            p1Timestamp: suiteEntries[0].endTime,
+            p1Duration: suiteEntries[0].duration,
+            p2Timestamp: p2Entry.endTime,
+            p2Duration: p2Entry.duration,
+            renderedSuiteTimestamp,
+            renderedSuiteDuration,
+            recoveredTimestamp: document.getElementById('review-submitted-at').getAttribute('datetime')
+        };
+    });
+    assert.deepEqual(hostReplay, {
+        hostScore: '2 / 3',
+        runtimeScore: '2 / 3',
+        renderedScore: '2 / 3',
+        p1Timestamp: '2026-08-15T10:00:00.000Z',
+        p1Duration: 600,
+        p2Timestamp: '2026-08-15T10:20:00.000Z',
+        p2Duration: 1200,
+        renderedSuiteTimestamp: '2026-08-15T10:20:00.000Z',
+        renderedSuiteDuration: '20:00',
+        recoveredTimestamp: '2026-08-15T10:30:00.000Z'
     });
 }
 

@@ -293,6 +293,68 @@ async function run() {
             '2026-08-15T10:20:30.000Z',
             'timestamp-only legacy records must normalize their completion time into the replay entry'
         );
+
+        const canonicalRootTotalsEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p1',
+            title: 'Canonical root totals',
+            answers: { q1: 'A', q2: 'B', q3: 'C' },
+            correctAnswerMap: { q1: 'A' },
+            correctAnswers: 2,
+            totalQuestions: 3,
+            accuracy: 2 / 3,
+            percentage: 67,
+            metadata: { examId: 'reading-p1' }
+        })[0];
+        assert.strictEqual(canonicalRootTotalsEntry.scoreInfo.correct, 2, 'canonical root correctAnswers must reach replay scoreInfo');
+        assert.strictEqual(canonicalRootTotalsEntry.scoreInfo.total, 3, 'canonical root totalQuestions must reach replay scoreInfo');
+        assert.strictEqual(canonicalRootTotalsEntry.scoreInfo.totalQuestions, 3, 'canonical root completion denominator must be preserved');
+        assert.strictEqual(canonicalRootTotalsEntry.answerComparison.q2.isCorrect, null, 'questions without canonical keys must remain ungraded');
+
+        const legacySuiteEntries = app._buildReviewReplayEntriesFromRecord({
+            endTime: '2026-08-15T10:40:00.000Z',
+            duration: 3600,
+            correctAnswers: 2,
+            totalQuestions: 2,
+            suiteEntries: [
+                {
+                    examId: 'reading-p1',
+                    title: 'Legacy P1',
+                    date: '2026-08-15T10:00:00.000Z',
+                    durationSeconds: 600,
+                    answers: { q1: 'A' },
+                    correctAnswerMap: { q1: 'A' },
+                    correctAnswers: 1,
+                    totalQuestions: 1
+                },
+                {
+                    examId: 'reading-p2',
+                    title: 'Legacy P2',
+                    date: '2026-08-15T10:20:00.000Z',
+                    answers: { q1: 'B' },
+                    correctAnswerMap: { q1: 'B' },
+                    scoreInfo: { correct: 1, total: 1, timeSpent: 1200 }
+                }
+            ]
+        });
+        assert.strictEqual(legacySuiteEntries[0].endTime, '2026-08-15T10:00:00.000Z', 'P1 must keep its own canonical date');
+        assert.strictEqual(legacySuiteEntries[0].duration, 600, 'P1 must keep its own durationSeconds alias');
+        assert.strictEqual(legacySuiteEntries[1].endTime, '2026-08-15T10:20:00.000Z', 'P2 must keep its own canonical date');
+        assert.strictEqual(legacySuiteEntries[1].duration, 1200, 'P2 must keep its own scoreInfo.timeSpent alias');
+
+        const recoveredMalformedTimestamp = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p3',
+            timestamp: 1e20,
+            date: '2026-08-15T10:30:00.000Z',
+            answers: { q1: 'C' },
+            correctAnswerMap: { q1: 'C' },
+            correctAnswers: 1,
+            totalQuestions: 1
+        })[0];
+        assert.strictEqual(
+            recoveredMalformedTimestamp.endTime,
+            '2026-08-15T10:30:00.000Z',
+            'an out-of-range numeric timestamp must fall through to the next valid completion alias'
+        );
     }
 
     // Case 1: P1 提交后自动跳转 P2，发送 SIMULATION_CONTEXT

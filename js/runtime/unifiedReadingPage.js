@@ -5374,12 +5374,12 @@
         return lookup;
     }
 
-    function isSharedMultiChoiceGroup(questionGroup) {
+    function isCheckboxMultiChoiceGroup(questionGroup) {
         if (
             !questionGroup
             || (questionGroup.kind !== 'multi_choice' && questionGroup.kind !== 'multiple_choice')
             || !Array.isArray(questionGroup.questionIds)
-            || questionGroup.questionIds.length <= 1
+            || questionGroup.questionIds.length === 0
         ) {
             return false;
         }
@@ -5396,8 +5396,16 @@
         }
 
         // Preserve compatibility for older/synthetic records that lack the
-        // source HTML: multi-ID multi-choice groups were stored as shared sets.
+        // source HTML: multi-choice groups were stored as checkbox sets.
         return true;
+    }
+
+    function isSharedMultiChoiceGroup(questionGroup) {
+        return Boolean(
+            Array.isArray(questionGroup?.questionIds)
+            && questionGroup.questionIds.length > 1
+            && isCheckboxMultiChoiceGroup(questionGroup)
+        );
     }
 
     function areAnswerTokensEquivalent(left, right) {
@@ -5508,12 +5516,7 @@
     function questionWeight(correctAnswer, questionGroup = null) {
         if (Array.isArray(correctAnswer)) {
             const normalized = normalizeAnswerValue(correctAnswer);
-            const isMultiChoiceGroup = Boolean(
-                questionGroup
-                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-                && Array.isArray(questionGroup.questionIds)
-            );
-            if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
+            if (isCheckboxMultiChoiceGroup(questionGroup) && Array.isArray(normalized) && normalized.length > 0) {
                 return normalized.length;
             }
             return 1;
@@ -5578,6 +5581,7 @@
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length === 1
                 && Array.isArray(correctAnswer)
+                && isCheckboxMultiChoiceGroup(questionGroup)
             );
             let displayUserAnswer = userAnswer;
             let isCorrect = compareAnswers(userAnswer, correctAnswer);
@@ -5889,7 +5893,12 @@
         const submittedAt = document.getElementById('review-submitted-at');
         if (submittedAt) {
             const submittedAtMs = Number(reviewSummary.submittedAtMs);
-            const timestamp = Number.isFinite(submittedAtMs) && submittedAtMs > 0 ? submittedAtMs : Date.now();
+            const submittedAtDate = new Date(submittedAtMs);
+            const timestamp = Number.isFinite(submittedAtMs)
+                && submittedAtMs > 0
+                && Number.isFinite(submittedAtDate.getTime())
+                ? submittedAtMs
+                : Date.now();
             const submittedDate = new Date(timestamp);
             submittedAt.textContent = `${submittedDate.toLocaleDateString()} ${submittedDate.toLocaleTimeString()}`;
             submittedAt.setAttribute('datetime', submittedDate.toISOString());
@@ -7061,11 +7070,18 @@
             if (typeof value === 'number' || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
                 const numeric = Number(value);
                 if (Number.isFinite(numeric) && numeric > 0) {
-                    return numeric < 100000000000 ? Math.round(numeric * 1000) : Math.round(numeric);
+                    const timestamp = numeric < 100000000000
+                        ? Math.round(numeric * 1000)
+                        : Math.round(numeric);
+                    if (Number.isFinite(new Date(timestamp).getTime())) {
+                        return timestamp;
+                    }
                 }
             }
             const parsed = Date.parse(String(value));
-            if (Number.isFinite(parsed) && parsed > 0) return parsed;
+            if (Number.isFinite(parsed) && parsed > 0 && Number.isFinite(new Date(parsed).getTime())) {
+                return parsed;
+            }
         }
         return null;
     }

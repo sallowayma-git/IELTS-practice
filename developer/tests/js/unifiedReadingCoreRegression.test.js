@@ -584,6 +584,17 @@ function testIndependentRadioMultiChoiceUsesProductionFixture() {
     );
     assert.strictEqual(results.scoreInfo.correct, 1, 'independent radio answers must be scored per question');
     assert.strictEqual(results.scoreInfo.totalQuestions, 14, 'the production fixture total must remain intact');
+
+    const acceptedAlternativeDataset = plain(fixtureDataset);
+    acceptedAlternativeDataset.answerKey.q11 = ['B', 'A'];
+    const perfectAnswers = Object.fromEntries(acceptedAlternativeDataset.questionOrder.map((questionId) => {
+        const correctAnswer = acceptedAlternativeDataset.answerKey[questionId];
+        return [questionId, Array.isArray(correctAnswer) ? correctAnswer[0] : correctAnswer];
+    }));
+    const perfectResults = hooks.buildResultsFromAnswers(acceptedAlternativeDataset, perfectAnswers);
+    assert.strictEqual(perfectResults.scoreInfo.correct, 14, 'accepted radio alternatives must still award one point');
+    assert.strictEqual(perfectResults.scoreInfo.totalQuestions, 14, 'accepted radio alternatives must not add score weight');
+    assert.strictEqual(perfectResults.answerComparison.q11.weight, 1, 'an independent radio question must remain single-weight');
 }
 
 function testPartialReplayPreservesPersistedTotals() {

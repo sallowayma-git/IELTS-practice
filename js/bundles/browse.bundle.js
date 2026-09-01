@@ -11102,6 +11102,96 @@
             return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
+        _resolveReplaySourceScoreInfo(entry, record, isAggregated = false) {
+            const scoreInfo = {};
+            const firstNonNegative = (...values) => {
+                for (const value of values) {
+                    if (value === null || value === undefined || value === '') continue;
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric) && numeric >= 0) {
+                        return numeric;
+                    }
+                }
+                return null;
+            };
+            const applyScoreAliases = (source) => {
+                if (!this._isReplayObject(source)) return;
+                const correct = firstNonNegative(source.correct, source.correctAnswers, source.score);
+                const total = firstNonNegative(source.total, source.totalQuestions);
+                const accuracy = firstNonNegative(source.accuracy);
+                const percentage = firstNonNegative(source.percentage);
+                if (correct !== null) scoreInfo.correct = correct;
+                if (total !== null) {
+                    scoreInfo.total = total;
+                    scoreInfo.totalQuestions = total;
+                }
+                if (accuracy !== null) scoreInfo.accuracy = accuracy;
+                if (percentage !== null) scoreInfo.percentage = percentage;
+            };
+            const mergeScoreInfo = (source) => {
+                if (!this._isReplayObject(source)) return;
+                Object.assign(scoreInfo, this._cloneReviewData(source));
+                applyScoreAliases(source);
+            };
+
+            if (!isAggregated) {
+                mergeScoreInfo(record.rawData?.scoreInfo);
+                mergeScoreInfo(record.realData?.scoreInfo);
+                mergeScoreInfo(record.scoreInfo);
+            }
+            mergeScoreInfo(entry.rawData?.scoreInfo);
+            mergeScoreInfo(entry.realData?.scoreInfo);
+            mergeScoreInfo(entry.scoreInfo);
+
+            // AppData's canonical/light records expose numeric score totals at
+            // the entry root. Aggregate record totals must not be copied into
+            // every suite child, but each child's own aliases remain authoritative.
+            if (!isAggregated) {
+                applyScoreAliases(record.rawData);
+                applyScoreAliases(record.realData);
+                applyScoreAliases(record);
+            }
+            applyScoreAliases(entry.rawData);
+            applyScoreAliases(entry.realData);
+            applyScoreAliases(entry);
+            return scoreInfo;
+        },
+
+        _resolveReplayTimestampValue(...values) {
+            for (const value of values) {
+                if (value === null || value === undefined || value === '') continue;
+                let timestampMs = null;
+                if (typeof value === 'number' || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric) && numeric > 0) {
+                        timestampMs = numeric < 100000000000
+                            ? Math.round(numeric * 1000)
+                            : Math.round(numeric);
+                    }
+                } else {
+                    const parsed = Date.parse(String(value));
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                        timestampMs = parsed;
+                    }
+                }
+                if (timestampMs !== null && Number.isFinite(new Date(timestampMs).getTime())) {
+                    return value;
+                }
+            }
+            return null;
+        },
+
+        _resolveReplayDurationValue(...values) {
+            for (const value of values) {
+                if (value === null || value === undefined || value === '') continue;
+                const numeric = Number(value);
+                if (Number.isFinite(numeric) && numeric >= 0) {
+                    return numeric;
+                }
+            }
+            return 0;
+        },
+
         _collectReplayQuestionIds(entry) {
             const keys = new Set();
             const collect = (source) => {
@@ -11200,7 +11290,7 @@
                 }
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
-                const sourceScoreInfo = entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo;
+                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(entry, record, isAggregated);
                 const scoreInfo = this._deriveReplayScoreInfo(
                     sourceScoreInfo,
                     comparison,
@@ -11266,27 +11356,64 @@
                         || record.rawData?.startTime
                         || record.date
                         || null,
-                    endTime: entry.endTime
-                        || entry.completedAt
-                        || entry.timestamp
-                        || entry.realData?.endTime
-                        || entry.realData?.completedAt
-                        || entry.realData?.timestamp
-                        || entry.rawData?.endTime
-                        || entry.rawData?.completedAt
-                        || entry.rawData?.timestamp
-                        || record.endTime
-                        || record.completedAt
-                        || record.timestamp
-                        || record.realData?.endTime
-                        || record.realData?.completedAt
-                        || record.realData?.timestamp
-                        || record.rawData?.endTime
-                        || record.rawData?.completedAt
-                        || record.rawData?.timestamp
-                        || record.date
-                        || null,
-                    duration: Number(entry.duration ?? record.duration) || 0,
+                    endTime: this._resolveReplayTimestampValue(
+                        entry.endTime,
+                        entry.completedAt,
+                        entry.timestamp,
+                        entry.date,
+                        entry.realData?.endTime,
+                        entry.realData?.completedAt,
+                        entry.realData?.timestamp,
+                        entry.realData?.date,
+                        entry.rawData?.endTime,
+                        entry.rawData?.completedAt,
+                        entry.rawData?.timestamp,
+                        entry.rawData?.date,
+                        record.endTime,
+                        record.completedAt,
+                        record.timestamp,
+                        record.date,
+                        record.realData?.endTime,
+                        record.realData?.completedAt,
+                        record.realData?.timestamp,
+                        record.realData?.date,
+                        record.rawData?.endTime,
+                        record.rawData?.completedAt,
+                        record.rawData?.timestamp,
+                        record.rawData?.date
+                    ),
+                    duration: this._resolveReplayDurationValue(
+                        entry.duration,
+                        entry.durationSeconds,
+                        entry.timeSpent,
+                        entry.scoreInfo?.duration,
+                        entry.scoreInfo?.timeSpent,
+                        entry.realData?.duration,
+                        entry.realData?.durationSeconds,
+                        entry.realData?.timeSpent,
+                        entry.realData?.scoreInfo?.duration,
+                        entry.realData?.scoreInfo?.timeSpent,
+                        entry.rawData?.duration,
+                        entry.rawData?.durationSeconds,
+                        entry.rawData?.timeSpent,
+                        entry.rawData?.scoreInfo?.duration,
+                        entry.rawData?.scoreInfo?.timeSpent,
+                        record.duration,
+                        record.durationSeconds,
+                        record.timeSpent,
+                        record.scoreInfo?.duration,
+                        record.scoreInfo?.timeSpent,
+                        record.realData?.duration,
+                        record.realData?.durationSeconds,
+                        record.realData?.timeSpent,
+                        record.realData?.scoreInfo?.duration,
+                        record.realData?.scoreInfo?.timeSpent,
+                        record.rawData?.duration,
+                        record.rawData?.durationSeconds,
+                        record.rawData?.timeSpent,
+                        record.rawData?.scoreInfo?.duration,
+                        record.rawData?.scoreInfo?.timeSpent
+                    ),
                     markedQuestions: Array.isArray(entry.markedQuestions)
                         ? entry.markedQuestions.slice()
                         : (Array.isArray(entryMetadata.markedQuestions)
