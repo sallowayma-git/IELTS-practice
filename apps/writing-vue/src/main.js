@@ -1,36 +1,67 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
-import './styles/main.css'
+import { featureFlags } from './config/feature-flags.js'
 import './assets/writing-design.css'
+import './styles/main.css'
+import './styles/a11y-performance.css'
 
-const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,127}$/i
 
 function isValidSessionId(sessionId) {
     return SESSION_ID_PATTERN.test(String(sessionId || '').trim())
 }
 
-function hasSessionCache(sessionId) {
-    if (typeof window === 'undefined') return false
-    return window.sessionStorage.getItem(`evaluation_${sessionId}`) !== null
-}
-
-function hasValidEssayIdQuery(route) {
-    const rawEssayId = Array.isArray(route.query.essayId)
-        ? route.query.essayId[0]
-        : route.query.essayId
-    const essayId = Number(rawEssayId)
-    return Number.isInteger(essayId) && essayId > 0
-}
-
-// 路由配置 (Hash 模式，file:// 兼容)
+// Hash history is the Tauri WebView navigation boundary.
 const router = createRouter({
     history: createWebHashHistory(),
     routes: [
         {
             path: '/',
+            name: 'PracticeLibrary',
+            component: () => import('./views/PracticeLibraryPage.vue')
+        },
+        {
+            path: '/writing',
             name: 'Compose',
             component: () => import('./views/ComposePage.vue')
+        },
+        {
+            path: '/library',
+            name: 'PracticeLibraryAlias',
+            redirect: { name: 'PracticeLibrary' }
+        },
+        ...(featureFlags.learnerModelV1 ? [{
+            path: '/reading/learner',
+            name: 'ReadingLearnerModel',
+            component: () => import('./views/LearnerModelPage.vue')
+        }] : []),
+        ...(featureFlags.agentWorkspaceV1 ? [{
+            path: '/agent',
+            name: 'AgentConsole',
+            component: () => import('./views/AgentConsolePage.vue')
+        }, {
+            path: '/memory-center',
+            name: 'MemoryCenter',
+            redirect: { name: 'AgentConsole' }
+        }] : []),
+        {
+            path: '/reading/:assetId',
+            name: 'PracticeReading',
+            component: () => import('./views/PracticeReadingPage.vue'),
+            props: true
+        },
+        {
+            path: '/reading-suite/:sessionId',
+            name: 'PracticeReadingSuite',
+            component: () => import('./views/PracticeReadingSuitePage.vue'),
+            props: true
+        },
+        {
+            path: '/reading/:assetId/review/:sessionId',
+            name: 'PracticeReadingReview',
+            component: () => import('./views/PracticeReadingPage.vue'),
+            props: true
         },
         {
             path: '/evaluating/:sessionId',
@@ -61,48 +92,29 @@ const router = createRouter({
         },
         {
             path: '/:pathMatch(.*)*',
-            redirect: { name: 'Compose' }
+            redirect: { name: 'PracticeLibrary' }
         }
     ]
 })
 
-router.beforeEach((to, from, next) => {
-    if (to.name === 'Evaluating') {
+router.beforeEach((to) => {
+    if (to.name === 'Evaluating' || to.name === 'Result') {
         const sessionId = String(to.params.sessionId || '').trim()
         if (!isValidSessionId(sessionId)) {
-            return next({ name: 'Compose' })
+            return { name: 'Compose' }
         }
-
-        if (from.name === 'Compose' || from.name === 'Evaluating') {
-            return next()
-        }
-
-        if (hasSessionCache(sessionId)) {
-            return next({
-                name: 'Result',
-                params: { sessionId }
-            })
-        }
-
-        return next({ name: 'Compose' })
     }
-
-    if (to.name === 'Result') {
-        const sessionId = String(to.params.sessionId || '').trim()
-        if (!isValidSessionId(sessionId)) {
-            return next({ name: 'Compose' })
-        }
-
-        if (from.name === 'Evaluating' || hasValidEssayIdQuery(to) || hasSessionCache(sessionId)) {
-            return next()
-        }
-
-        return next({ name: 'Compose' })
-    }
-
-    return next()
+    return true
 })
 
 const app = createApp(App)
 app.use(router)
 app.mount('#app')
+
+if (typeof window !== 'undefined') {
+    try {
+        window.dispatchEvent(new CustomEvent('app-runtime-ready'))
+    } catch (error) {
+        console.warn('[PracticeShell] app-runtime-ready dispatch failed:', error)
+    }
+}

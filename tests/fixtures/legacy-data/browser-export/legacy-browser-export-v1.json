@@ -1,0 +1,49 @@
+{
+  "exportDate": "2024-10-01T08:00:00.000Z",
+  "version": "1.0.0",
+  "source": "legacy-browser-localStorage",
+  "data": {
+    "practice_records": [
+      {
+        "id": "legacy_reading_1",
+        "examId": "p1-high-01",
+        "title": "A Brief History of Tea",
+        "type": "reading",
+        "date": "2024-09-30T09:15:00.000Z",
+        "startTime": "2024-09-30T09:15:00.000Z",
+        "endTime": "2024-09-30T09:40:00.000Z",
+        "duration": 1500,
+        "score": 12,
+        "totalQuestions": 13,
+        "correctAnswers": 12,
+        "realData": {
+          "answers": {
+            "q1": "A",
+            "q2": "TRUE",
+            "q3": "tea"
+          },
+          "markedQuestions": [
+            "q2"
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "theme": "dark",
+      "fontSize": 18
+    },
+    "vocabulary": [
+      {
+        "word": "beverage",
+        "addedAt": "2024-09-30T09:20:00.000Z"
+      }
+    ],
+    "notes": [
+      {
+        "examId": "p1-high-01",
+        "text": "Focus on timeline markers",
+        "updatedAt": "2024-09-30T09:30:00.000Z"
+      }
+    ]
+  }
+}

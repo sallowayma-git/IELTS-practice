@@ -1,0 +1,203 @@
+/*
+ * Global structural primitives.
+ *
+ * Visual values (colour, type, spacing, radius, shadow) resolve from
+ * tokens.css + aliases.css. This file owns reset and layout only.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+html {
+  font-size: 16px;
+  background: var(--anth-canvas);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-base);
+  line-height: var(--anth-leading-normal);
+  color: var(--anth-ink);
+  background: var(--anth-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body.hero-body {
+  color: var(--anth-ink);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  background: var(--anth-canvas);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--anth-ink-strong);
+  font-family: var(--anth-font-serif);
+  font-weight: var(--anth-weight-semibold);
+  line-height: var(--anth-leading-snug);
+  letter-spacing: var(--anth-tracking-tight);
+}
+
+h1 { font-size: var(--anth-text-2xl); }
+h2 { font-size: var(--anth-text-xl); }
+h3 { font-size: var(--anth-text-lg); }
+h4 { font-size: var(--anth-text-md); }
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--anth-divider);
+  margin: var(--anth-space-5) 0;
+}
+
+/* ── Shared surface primitives (Anthropic) ──────────────────────────── */
+.hero-shell {
+  position: relative;
+  z-index: 1;
+  max-width: var(--anth-shell-max-width);
+  margin: 0 auto;
+  padding: clamp(var(--anth-space-6), 5vw, var(--anth-space-8)) clamp(var(--anth-space-4), 5vw, var(--anth-space-6)) var(--anth-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--anth-space-6);
+}
+
+.hero-panel,
+.glass-panel {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-lg);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+.glass-surface {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-md);
+}
+
+.glass-card {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-lg);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+.btn-brand {
+  background: var(--anth-accent);
+  color: var(--anth-accent-contrast);
+  padding: 9px 18px;
+  border: 1px solid var(--anth-accent);
+  border-radius: var(--anth-radius-sm);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  cursor: pointer;
+  transition: background var(--anth-duration-fast) var(--anth-ease);
+}
+
+.btn-brand:hover:not(:disabled) {
+  background: var(--anth-accent-strong);
+  border-color: var(--anth-accent-strong);
+}
+
+.btn-warm-sand,
+.btn-glass {
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+  padding: 9px 18px;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  cursor: pointer;
+  transition: background var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.btn-warm-sand:hover:not(:disabled),
+.btn-glass:hover:not(:disabled) {
+  background: var(--anth-surface-hover);
+  border-color: var(--anth-border-strong);
+}
+
+.btn-white {
+  background: var(--color-white);
+  color: var(--anth-ink);
+  padding: 7px 14px;
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-sm);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  cursor: pointer;
+}
+
+.btn-dark {
+  background: var(--anth-ink);
+  color: var(--color-white);
+  padding: 8px 16px;
+  border: 1px solid var(--anth-ink);
+  border-radius: var(--anth-radius-sm);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  cursor: pointer;
+}
+
+.btn-danger {
+  background: var(--anth-danger);
+  color: var(--color-white);
+  padding: 9px 18px;
+  border: 1px solid var(--anth-danger);
+  border-radius: var(--anth-radius-sm);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  cursor: pointer;
+}
+
+.card {
+  background: var(--anth-surface);
+  border-radius: var(--anth-radius-lg);
+  padding: var(--anth-space-6);
+  border: 1px solid var(--anth-border);
+  box-shadow: var(--anth-shadow-xs);
+}

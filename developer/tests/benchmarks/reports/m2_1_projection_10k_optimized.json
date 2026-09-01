@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-12T18:48:47.078464100+00:00",
+  "gitRevision": "7a99ea4bb765dd5342428b0ad6c6914519e543fe",
+  "profile": "release",
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "cpuParallelism": 24,
+    "sqliteVersion": "3.46.0",
+    "journalMode": "wal",
+    "synchronous": 1
+  },
+  "datasets": [
+    {
+      "learningEventCount": 10000,
+      "attemptCount": 250,
+      "observationCount": 48961,
+      "evidenceCount": 58672,
+      "rebuild": {
+        "samplesMs": [
+          4580.7357,
+          4271.4736,
+          4185.548500000001
+        ],
+        "p50Ms": 4271.4736,
+        "p95Ms": 4580.7357
+      },
+      "verify": {
+        "samplesMs": [
+          1790.6165,
+          1707.0360999999998,
+          1704.7162
+        ],
+        "p50Ms": 1707.0360999999998,
+        "p95Ms": 1790.6165
+      },
+      "historySingleDelete": {
+        "samplesMs": [
+          3713.2141,
+          4536.3847000000005,
+          4420.9457
+        ],
+        "p50Ms": 4420.9457,
+        "p95Ms": 4536.3847000000005
+      },
+      "retentionBatchDelete": {
+        "samplesMs": [
+          3506.5661999999998,
+          4066.7948,
+          3570.2636
+        ],
+        "p50Ms": 3570.2636,
+        "p95Ms": 4066.7948
+      },
+      "databaseSize": {
+        "fileBytes": 76947456,
+        "walBytes": 0,
+        "allocatedBytes": 76947456,
+        "livePageBytes": 76947456
+      },
+      "projectionRunGrowth": {
+        "attemptedRebuilds": 3,
+        "completedRunsBefore": 1,
+        "completedRunsAfter": 4,
+        "failedRunsAfter": 0,
+        "retainedCompletedRuns": 4,
+        "dbFileBytesBefore": 76947456,
+        "dbFileBytesAfter": 76947456
+      }
+    }
+  ]
+}

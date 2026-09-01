@@ -1,0 +1,230 @@
+/*
+ * Exam theme tokens — computer-delivered IELTS simulation skin.
+ *
+ * A sanctioned second theme, deliberately off the Anthropic clay palette:
+ * white paper surfaces, navy chrome, monochrome text. Scoped to
+ * .reading-page so the rest of the app keeps its palette. Consume these
+ * via var(--exam-*); do not hard-code exam colours in component CSS.
+ */
+
+:root,
+.atlas-source-ui {
+  /* Navy header/footer chrome */
+  --exam-navy: #1f3a5f;
+  --exam-navy-strong: #16294a;
+
+  /* CD-IELTS action blue */
+  --exam-accent: #2f6fb2;
+  --exam-accent-hover: #e8f0f9;
+
+  /* Paper surfaces */
+  --exam-paper: #ffffff;
+  --exam-paper-dim: #fafafa;
+  --exam-bar: #eef1f4;
+
+  /* Ink & lines */
+  --exam-ink: #1c1c1c;
+  --exam-muted: #595959;
+  --exam-line: #d9d9d9;
+
+  /* Review flag amber */
+  --exam-flag: #e8960c;
+
+  /* Chrome-on-navy text (white at reduced emphasis tiers) */
+  --exam-chrome-text: #ffffff;
+  --exam-chrome-text-soft: rgba(255, 255, 255, 0.78);
+  --exam-chrome-line: rgba(255, 255, 255, 0.35);
+  --exam-chrome-text-mid: rgba(255, 255, 255, 0.88);
+  --exam-chrome-btn-border: rgba(255, 255, 255, 0.28);
+  --exam-chrome-btn-hover: rgba(255, 255, 255, 0.12);
+  --exam-shadow-panel: 0 12px 32px rgba(22, 41, 74, 0.18);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Exam skin — mirrors the computer-delivered IELTS testing interface.
+ * White paper surfaces, navy header/footer chrome, monochrome text.
+ * Scoped to .reading-page so the rest of the app keeps its palette.
+ * .exam-mode is present during an active attempt and absent in
+ * review/memorize modes, where coaching aids stay visible.
+ * ════════════════════════════════════════════════════════════════════ */
+.reading-page,
+.reading-page.exam-mode {
+  background: var(--exam-paper);
+  color: var(--exam-ink);
+}
+
+.reading-page .reading-header.header {
+  background: var(--exam-navy);
+  border-bottom: none;
+  box-shadow: none;
+}
+
+.reading-page .reading-header h1 {
+  color: var(--exam-chrome-text);
+}
+
+.reading-page .reading-header p {
+  color: var(--exam-chrome-text-soft);
+}
+
+.reading-page .reading-timer {
+  min-width: 96px;
+  border: 1px solid var(--exam-chrome-line);
+  background: transparent;
+  color: var(--exam-chrome-text);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.reading-page .reading-timer.paused {
+  opacity: 0.55;
+}
+
+.reading-page .header-btn {
+  border-color: var(--exam-chrome-btn-border);
+  background: transparent;
+  color: var(--exam-chrome-text-mid);
+}
+
+.reading-page .header-btn:hover:not(:disabled) {
+  background: var(--exam-chrome-btn-hover);
+}
+
+/* Coaching aids stay out of sight during a live attempt; the review
+   mode (no .exam-mode) restores the default buttons and panels. The
+   notes button stays visible: the notes dialog is an accessibility
+   contract pinned by the packaged E2E flow (#note-btn focus trap). */
+.reading-page.exam-mode #reading-coach-fab,
+.reading-page.exam-mode #reading-coach-panel {
+  display: none;
+}
+
+.reading-page .pane {
+  background: var(--exam-paper);
+}
+
+.reading-page #right {
+  background: var(--exam-paper-dim);
+}
+
+.reading-page .reading-html {
+  color: var(--exam-ink);
+}
+
+.reading-page .reading-html p {
+  color: var(--exam-ink);
+  line-height: 1.85;
+}
+
+.reading-page .practice-nav {
+  background: var(--exam-bar);
+  border-top: 1px solid var(--exam-line);
+  box-shadow: none;
+}
+
+.reading-page .practice-nav .title {
+  color: var(--exam-muted);
+}
+
+/* CD-IELTS bottom bar: square numbered cells on a light strip.
+   unanswered = white cell, blue hairline; answered = solid blue;
+   current = thick blue ring; review-marked = amber corner flag. */
+.reading-page .practice-nav .q-item {
+  min-width: 34px;
+  border: 1px solid var(--exam-accent);
+  border-radius: 3px;
+  background: var(--exam-paper);
+  color: var(--exam-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.reading-page .practice-nav .q-item:hover {
+  background: var(--exam-accent-hover);
+}
+
+.reading-page .practice-nav .q-item.answered {
+  border-color: var(--exam-accent);
+  background: var(--exam-accent);
+  color: var(--exam-chrome-text);
+  font-weight: 700;
+}
+
+.reading-page .practice-nav .q-item.active {
+  border-color: var(--exam-accent);
+  background: var(--exam-accent);
+  color: var(--exam-chrome-text);
+  box-shadow: 0 0 0 2px var(--exam-paper), 0 0 0 4px var(--exam-accent);
+}
+
+.reading-page .mark-question-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--exam-muted);
+}
+
+.reading-page .mark-question-button.active {
+  border-color: transparent;
+  color: var(--exam-flag);
+  font-weight: 800;
+}
+
+/* Review flag on the numbered cells: amber dot with a white ring so it
+   reads on both white (unanswered) and blue (answered) cell fills. */
+.reading-page .practice-nav .q-item.marked::after {
+  border-color: var(--exam-chrome-text);
+  background: var(--exam-flag);
+}
+
+.reading-page .practice-nav .controls button:not(.submit-btn),
+.reading-page .practice-nav .controls a {
+  border-color: var(--exam-accent);
+  background: var(--exam-paper);
+  color: var(--exam-accent);
+}
+
+.reading-page .practice-nav .controls button:not(.submit-btn):hover:not(:disabled),
+.reading-page .practice-nav .controls a:hover {
+  background: var(--exam-accent-hover);
+}
+
+.reading-page .suite-progress-mini {
+  border-color: var(--exam-accent);
+  background: var(--exam-paper);
+}
+
+.reading-page .suite-progress-mini span {
+  color: var(--exam-muted);
+}
+
+.reading-page .suite-progress-mini strong {
+  color: var(--exam-ink);
+}
+
+.reading-page .reading-stat.reading-progress {
+  border-color: transparent;
+  background: transparent;
+  color: var(--exam-ink);
+  font-weight: 700;
+}
+
+/* CD-IELTS submit: solid blue, white label. */
+.reading-page .submit-btn {
+  border-color: var(--exam-accent);
+  background: var(--exam-accent);
+  color: var(--exam-chrome-text);
+  font-weight: 700;
+}
+
+.reading-page .submit-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.reading-page .reading-floating-panel {
+  border-color: var(--exam-line);
+  background: var(--exam-paper);
+  color: var(--exam-ink);
+  box-shadow: var(--exam-shadow-panel);
+}

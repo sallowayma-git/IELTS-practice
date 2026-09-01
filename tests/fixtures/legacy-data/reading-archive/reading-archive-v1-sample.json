@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "kind": "reading-archive",
+  "exportedAt": "2025-01-15T12:00:00.000Z",
+  "records": [
+    {
+      "id": "ra-001",
+      "assetId": "p1-high-01",
+      "examId": "p1-high-01",
+      "title": "A Brief History of Tea",
+      "submittedAt": "2025-01-15T11:55:00.000Z",
+      "duration": 1400,
+      "scoreInfo": {
+        "correct": 11,
+        "total": 13,
+        "totalQuestions": 13,
+        "accuracy": 0.846,
+        "percentage": 84.6,
+        "duration": 1400
+      },
+      "answers": {
+        "q1": "A",
+        "q2": "TRUE"
+      },
+      "correctAnswers": {
+        "q1": "A",
+        "q2": "TRUE"
+      },
+      "markedQuestions": [
+        "q3"
+      ],
+      "highlights": [
+        {
+          "text": "tea leaves",
+          "color": "yellow"
+        }
+      ],
+      "metadata": {
+        "examTitle": "A Brief History of Tea",
+        "practiceMode": "single",
+        "renderMode": "legacy-html"
+      }
+    }
+  ]
+}

@@ -29,11 +29,11 @@
     },
     {
       "label": "Paragraph D",
-      "text": "审判于 1818 年 12 月开始。贾德的辩护律师选择了纽约最著名的人物之一、国会议员塞缪尔・米切尔作为他们的明星证人。米切尔被称为“活百科全书”，被传唤来陈述案件的生物学依据。然而，检方律师威廉・桑普森将审判变成了一场科学知识与常识之间的较量，他请直言不讳的捕鲸者在陪审团面前陈述他们的观点。"
+      "text": "审判于 1818 年 12 月开始。贾德的辩护律师选择了纽约最著名的人物之一、国会议员塞缪尔・米切尔作为他们的明星证人。米切尔被称为“活百科全书”和“行走的图书馆”，是内外科医学院一位著名的自然史讲师，喜欢挑战学生测试他对自然世界的知识。他夸口说：“给我看鳍，我就能说出鱼的名字。”从科学角度看，这本是一个一目了然的案件，贾德的辩护律师认为他们只需做一件简单的事就能赢得审判：坚持让案件只由生物学来决定。米切尔似乎完全胜任这一角色。"
     },
     {
       "label": "Paragraph E",
-      "text": "桑普森案件的核心在于，如果贾德被判无罪，对人类会产生什么影响。桑普森告诉陪审团成员，如果他们接受米切尔关于鲸鱼的证词，他们就必须在自然秩序中接受自己物种的较低地位。因此，米切尔在法庭上的日子并不顺利，部分原因是他不得不承认同行们在如何分类生物方面存在严重分歧。桑普森随后将矛头指向米切尔本人及其所代表的群体：来自科学界、脱离现实的特权贵族。能言善辩的桑普森随后声称米切尔的信仰源于欧洲 —— 他正确地判断出这一点会激怒一贯独立自主的纽约市民。桑普森声称，这种革命性的新思维是诚实工作的纽约人所不需要的。这不再是一个关于油桶的案件，而是关于科学知识在美国的适当位置。"
+      "text": "但这正是案件变得有趣的地方，也是鲸鱼审判并非某个尘封的 19 世纪冷门事件的原因。纽约市鱼油检查员一方的律师没有在米切尔的专业领域与他辩论，而是选择了另一种策略。首席律师威廉・桑普森将审判变成了一场科学知识与常识之间的较量，他请直言不讳的捕鲸者在陪审团面前陈述他们的观点。桑普森案件的核心在于，如果贾德被判无罪，对人类会产生什么影响。桑普森告诉陪审团成员，如果他们接受米切尔关于鲸鱼的证词，他们就必须在自然秩序中接受自己物种的较低地位。因此，米切尔在法庭上的日子并不顺利，部分原因是他不得不承认同行们在如何分类生物方面存在严重分歧。桑普森随后将矛头指向米切尔本人及其所代表的群体：来自科学界、脱离现实的特权贵族。能言善辩的桑普森随后声称米切尔的信仰源于欧洲 —— 他正确地判断出这一点会激怒一贯独立自主的纽约市民。桑普森声称，这种革命性的新思维是诚实工作的纽约人所不需要的。这不再是一个关于油桶的案件，而是关于科学知识在美国的适当位置。"
     },
     {
       "label": "Paragraph F",
@@ -41,7 +41,7 @@
     },
     {
       "label": "Paragraph G",
-      "text": "鲸鱼的审判在今天仍然具有现实意义，因为舆论法庭仍然很容易被怀疑论者左右。1818 年的审判真正关乎的问题是：由谁来决定自然世界在人类世界中的位置 —— 是科学专家还是公众舆论？无论今天争论的议题是人类活动对气候的影响还是其他问题，这场辩论仍在继续。"
+      "text": "鲸鱼的审判在今天仍然具有现实意义，因为舆论法庭仍然很容易被怀疑论者左右。1818 年的审判真正关乎的问题是：由谁来决定自然世界在人类世界中的位置 —— 是科学专家还是公众舆论？无论今天争论的议题是人类活动对这个星球气候的影响，还是许多其他当代话题之一，贾德案件的遗产都仍然具有现实意义。"
     }
   ],
   "questionExplanations": [
@@ -97,7 +97,7 @@
       "items": [
         {
           "questionNumber": 8,
-          "text": "（1）题目 8：Samuel Mitchill worked as a congressman and a ______.\n题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：scientist\n解析：定位 Paragraph D 中 “Referred to as a 'living encyclopaedia', Mitchill was called upon to present the biology of the case”。米切尔被称为“活百科全书”，被要求陈述案件的生物学依据，说明他同时具备科学家身份。且 Paragraph A 中提及他作为“congressman”（国会议员），结合上下文，他同时是科学家（scientist），因此答案为 scientist。",
+          "text": "（1）题目 8：Samuel Mitchill worked as a congressman and a ______.\n题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：lecturer\n解析：定位 Paragraph D 中 “Mitchill was a renowned natural history lecturer at the college of Physicians and Surgeons”。题干要求 Samuel Mitchill worked as a congressman and a ______，PDF 原文给出的另一个身份是 lecturer；ONE WORD ONLY，只能填 lecturer。",
           "questionId": "q8"
         },
         {
@@ -122,7 +122,7 @@
         },
         {
           "questionNumber": 13,
-          "text": "（6）题目 13：Judd's case is relevant today, e.g. in the debate about Earth's ______.\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate or some other matter, the debate continues”。文中明确提及人类活动对气候（climate）的影响，因此答案为 climate。",
+          "text": "（6）题目 13：Judd's case is relevant today, e.g. in the debate about Earth's ______.\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate of this planet, or one of many other contemporary topics, the legacy of Judd's case continues to be of relevance”。文中明确提及这个星球的气候（climate），因此答案为 climate。",
           "questionId": "q13"
         }
       ],
@@ -130,7 +130,7 @@
         "start": 8,
         "end": 13
       },
-      "text": "题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：scientist\n解析：定位 Paragraph D 中 “Referred to as a 'living encyclopaedia', Mitchill was called upon to present the biology of the case”。米切尔被称为“活百科全书”，被要求陈述案件的生物学依据，说明他同时具备科学家身份。且 Paragraph A 中提及他作为“congressman”（国会议员），结合上下文，他同时是科学家（scientist），因此答案为 scientist。\n题目翻译：威廉・桑普森传唤 ______ 作为证人，以诉诸陪审团的常识。\n答案：whalers\n解析：定位 Paragraph D 中 “Sampson turned the trial into a contest between scientific learning and common sense, by asking plain-spoken whalers to make their case before the jury”。桑普森请直言不讳的捕鲸者（whalers）在陪审团面前陈述，以诉诸常识，因此答案为 whalers。\n题目翻译：纽约人不喜欢米切尔，因为他的观点来自 ______。\n答案：Europe\n解析：定位 Paragraph E 中 “Sampson then claimed Mitchill's beliefs had their origin in Europe – something he rightly judged would infuriate the citizens of always-independent New York”。桑普森声称米切尔的观点源于欧洲，这激怒了纽约市民，因此答案为 Europe。\n题目翻译：最终帮助贾德获胜的是当地 ______ 的陈述，而非米切尔的证词。\n答案：merchants\n解析：定位 Paragraph F 中 “In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same... In the end it was this testimony that led to Judd's victory”。纽约市场中的商人（merchants）提供了关键证词，帮助贾德获胜，因此答案为 merchants。\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：定位 Paragraph F 中 “whale oil could be used as a fuel for lamps because it could be burned without giving off smoke”。鲸油可用作灯的燃料（fuel），因为燃烧时不冒烟，因此答案为 fuel。\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate or some other matter, the debate continues”。文中明确提及人类活动对气候（climate）的影响，因此答案为 climate。"
+      "text": "题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：lecturer\n解析：定位 Paragraph D 中 “Mitchill was a renowned natural history lecturer at the college of Physicians and Surgeons”。题干要求 Samuel Mitchill worked as a congressman and a ______，PDF 原文给出的另一个身份是 lecturer；ONE WORD ONLY，只能填 lecturer。\n题目翻译：威廉・桑普森传唤 ______ 作为证人，以诉诸陪审团的常识。\n答案：whalers\n解析：定位 Paragraph D 中 “Sampson turned the trial into a contest between scientific learning and common sense, by asking plain-spoken whalers to make their case before the jury”。桑普森请直言不讳的捕鲸者（whalers）在陪审团面前陈述，以诉诸常识，因此答案为 whalers。\n题目翻译：纽约人不喜欢米切尔，因为他的观点来自 ______。\n答案：Europe\n解析：定位 Paragraph E 中 “Sampson then claimed Mitchill's beliefs had their origin in Europe – something he rightly judged would infuriate the citizens of always-independent New York”。桑普森声称米切尔的观点源于欧洲，这激怒了纽约市民，因此答案为 Europe。\n题目翻译：最终帮助贾德获胜的是当地 ______ 的陈述，而非米切尔的证词。\n答案：merchants\n解析：定位 Paragraph F 中 “In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same... In the end it was this testimony that led to Judd's victory”。纽约市场中的商人（merchants）提供了关键证词，帮助贾德获胜，因此答案为 merchants。\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：定位 Paragraph F 中 “whale oil could be used as a fuel for lamps because it could be burned without giving off smoke”。鲸油可用作灯的燃料（fuel），因为燃烧时不冒烟，因此答案为 fuel。\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate of this planet, or one of many other contemporary topics, the legacy of Judd's case continues to be of relevance”。文中明确提及这个星球的气候（climate），因此答案为 climate。"
     }
   ]
 }

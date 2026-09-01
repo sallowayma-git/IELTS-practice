@@ -81,7 +81,7 @@
     "q8": "C",
     "q9": "microscope",
     "q10": "concepts",
-    "q11": "the computer",
+    "q11": "computer",
     "q12": "spectral analysis",
     "q13": "table",
     "q14": "C"
@@ -130,5 +130,5 @@
     "q14": "40"
   }
 }
-);
+  );
 })(typeof window !== "undefined" ? window : globalThis);

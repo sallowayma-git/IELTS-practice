@@ -1,0 +1,142 @@
+/*
+ * Anthropic design language — token source.
+ *
+ * One physical source of truth for colour, type, spacing, radius, shadow and
+ * motion. Component aliases map onto these tokens via aliases.css and
+ * opensource-skin.css. Light mode only; no dark theme is shipped.
+ *
+ * Palette intent:
+ *   - warm neutral canvas (cream/ivory), never cold white, never blue-violet
+ *   - restrained clay/terracotta accent (Claude orange), not saturated blue
+ *   - warm grey ink, fine hairline borders, almost-flat surfaces
+ *   - serif display + sans body, system fallback (zero webfont dependency)
+ */
+
+:root,
+.atlas-source-ui {
+  color-scheme: light;
+
+  /* ── Brand accent (Claude clay/terracotta) ─────────────────────────── */
+  --anth-accent: #C15F3C;            /* primary clay */
+  --anth-accent-strong: #A84B2A;     /* hover/press */
+  --anth-accent-soft: #F1E4DC;       /* tinted wash */
+  --anth-accent-softer: #F7EEE8;    /* faintest wash */
+  --anth-accent-ring: rgba(193, 95, 60, 0.42);
+  --anth-accent-contrast: #FFFFFF;
+
+  /* ── Ink (warm grey text) ──────────────────────────────────────────── */
+  --anth-ink: #1F1F1F;              /* primary text */
+  --anth-ink-strong: #141414;        /* headings */
+  --anth-ink-soft: #4A4A4A;          /* secondary text */
+  --anth-ink-faint: #6B6B6B;         /* muted/tertiary */
+  --anth-ink-disabled: #9A9A9A;
+
+  /* ── Warm neutral surfaces ────────────────────────────────────────── */
+  --anth-canvas: #F5F4EE;           /* app background, warm cream */
+  --anth-canvas-soft: #FAF9F5;      /* lifted canvas */
+  --anth-surface: #FFFFFF;          /* cards/panels */
+  --anth-surface-raised: #FFFFFF;   /* elevated surfaces */
+  --anth-surface-sunken: #EFEDE4;   /* recessed wells */
+  --anth-surface-hover: #F7F5EE;    /* row hover */
+  --anth-surface-inset: #F3F1E8;    /* inputs/code blocks */
+
+  /* ── Hairline borders (warm grey) ─────────────────────────────────── */
+  --anth-border: rgba(31, 31, 31, 0.08);
+  --anth-border-strong: rgba(31, 31, 31, 0.14);
+  --anth-border-subtle: rgba(31, 31, 31, 0.05);
+  --anth-divider: rgba(31, 31, 31, 0.07);
+
+  /* ── Status colours (muted, warm-shifted) ─────────────────────────── */
+  --anth-success: #3F7D5E;
+  --anth-success-soft: #E8F0EA;
+  --anth-warning: #B8862F;
+  --anth-warning-soft: #F4ECD8;
+  --anth-danger: #A23B39;
+  --anth-danger-soft: #F4E3E1;
+  --anth-info: #4A6FA5;
+  --anth-info-soft: #E7ECF3;
+
+  /* ── Typography stacks (system fallback, no webfont) ──────────────── */
+  --anth-font-serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", Georgia, "Times New Roman", serif;
+  --anth-font-sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --anth-font-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* ── Type scale ───────────────────────────────────────────────────── */
+  --anth-text-xs: 0.75rem;     /* 12px — captions, badges */
+  --anth-text-sm: 0.875rem;    /* 14px — secondary, labels */
+  --anth-text-base: 0.9375rem; /* 15px — body */
+  --anth-text-md: 1rem;        /* 16px — emphasized body */
+  --anth-text-lg: 1.25rem;     /* 20px — section heading */
+  --anth-text-xl: 1.5rem;      /* 24px — page heading */
+  --anth-text-2xl: 1.875rem;   /* 30px — hero */
+  --anth-text-3xl: 2.25rem;    /* 36px — display */
+
+  --anth-leading-tight: 1.2;
+  --anth-leading-snug: 1.4;
+  --anth-leading-normal: 1.6;
+  --anth-leading-relaxed: 1.7;
+
+  --anth-tracking-tight: -0.015em;
+  --anth-tracking-normal: 0;
+  --anth-tracking-wide: 0.04em;
+  --anth-tracking-caps: 0.1em;
+
+  --anth-weight-normal: 400;
+  --anth-weight-medium: 500;
+  --anth-weight-semibold: 600;
+  --anth-weight-bold: 700;
+
+  /* ── Spacing scale (4px base) ─────────────────────────────────────── */
+  --anth-space-0: 0;
+  --anth-space-1: 0.25rem;   /* 4px */
+  --anth-space-2: 0.5rem;    /* 8px */
+  --anth-space-3: 0.75rem;   /* 12px */
+  --anth-space-4: 1rem;      /* 16px */
+  --anth-space-5: 1.5rem;    /* 24px */
+  --anth-space-6: 2rem;      /* 32px */
+  --anth-space-7: 2.5rem;    /* 40px */
+  --anth-space-8: 3rem;      /* 48px */
+  --anth-space-9: 4rem;      /* 64px */
+
+  /* ── Radii (restrained) ───────────────────────────────────────────── */
+  --anth-radius-xs: 4px;      /* tags, chips */
+  --anth-radius-sm: 6px;      /* buttons, inputs */
+  --anth-radius-md: 8px;      /* small cards */
+  --anth-radius-lg: 10px;     /* cards, panels */
+  --anth-radius-xl: 12px;     /* large panels, modals */
+  --anth-radius-pill: 9999px;
+
+  /* ── Shadows (almost flat; single hairline elevation) ────────────── */
+  --anth-shadow-none: none;
+  --anth-shadow-xs: 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-sm: 0 1px 3px rgba(31, 31, 31, 0.06), 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-md: 0 2px 6px rgba(31, 31, 31, 0.06), 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-lg: 0 4px 12px rgba(31, 31, 31, 0.08), 0 1px 3px rgba(31, 31, 31, 0.05);
+  --anth-ring-focus: 0 0 0 3px var(--anth-accent-ring);
+
+  /* ── Motion ───────────────────────────────────────────────────────── */
+  --anth-duration-fast: 120ms;
+  --anth-duration-normal: 180ms;
+  --anth-duration-slow: 280ms;
+  --anth-ease: cubic-bezier(0.2, 0, 0, 1);
+  --anth-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  --anth-shell-max-width: 1200px;
+  --anth-content-max-width: 720px;
+  --anth-content-width-wide: 860px;   /* tables, multi-column detail grids */
+  --anth-content-width-narrow: 560px; /* forms, focused single-column flows */
+  --anth-nav-height: 56px;
+
+  /* ── Z-index layers (the only sanctioned scale) ─────────────────────
+   * base(0) < raised(10) < sticky(100) < nav(120) < floating(200)
+   *        < overlay-modal(500) < toast(600) < skip-link(10000).
+   * Do not invent ad-hoc values; snap to the nearest layer. */
+  --anth-z-raised: 10;
+  --anth-z-sticky: 100;
+  --anth-z-nav: 120;
+  --anth-z-floating: 200;
+  --anth-z-overlay: 500;
+  --anth-z-toast: 600;
+  --anth-z-skip-link: 10000;
+}

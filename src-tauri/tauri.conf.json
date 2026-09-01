@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "IELTS Practice",
+  "version": "0.1.0",
+  "identifier": "com.sallowayma.ieltspractice",
+  "build": {
+    "beforeDevCommand": "npm --prefix apps/writing-vue run dev -- --host 127.0.0.1 --port 5173",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm --prefix apps/writing-vue run build",
+    "frontendDist": "../dist/writing"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "IELTS Practice",
+        "width": 1440,
+        "height": 960,
+        "minWidth": 1024,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob: asset: https://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; script-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "dangerousDisableAssetCspModification": false,
+      "freezePrototype": true,
+      "capabilities": [
+        "main"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": [
+      "binaries/ielts-agent-runtime"
+    ],
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "allowDowngrades": false
+    },
+    "resources": {
+      "../assets/resource-pack/reading": "reading",
+      "../assets/generated/writing-topics": "writing-topics"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/256x256.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "category": "Education",
+    "shortDescription": "IELTS Reading + Writing practice",
+    "longDescription": "Native IELTS Practice desktop client powered by Tauri 2 and Rust domain services."
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": "",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

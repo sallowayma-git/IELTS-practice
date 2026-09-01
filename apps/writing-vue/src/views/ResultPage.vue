@@ -1,8 +1,16 @@
 <template>
   <div class="result-page">
-    <div class="result-layout">
+    <section v-if="loadError" class="result-load-error glass-card" role="alert">
+      <h1 class="heading-serif">无法加载评测结果</h1>
+      <p>{{ loadError }}</p>
+      <div class="result-load-error__actions">
+        <button class="btn btn-brand" type="button" @click="loadResult">重试加载</button>
+        <button class="btn btn-secondary" type="button" @click="writeNew">返回写作页</button>
+      </div>
+    </section>
+    <div v-else class="result-layout">
       <!-- Left Column: Essay & Annotated Errors -->
-      <section class="essay-panel card card-whisper" style="animation: slideFromLeft 0.6s ease-out;">
+      <section class="essay-panel card card-whisper result-panel--from-left">
         <header class="essay-head border-base">
           <div>
             <h1 class="heading-serif display-heading">Feedback &amp; Results</h1>
@@ -35,14 +43,19 @@
            <div v-if="sentences.length > 0">
              <template v-for="(sentence, index) in sentences" :key="index">
                
-               <span class="sentence-container"
+               <component
+                     :is="sentence.errors?.length > 0 ? 'button' : 'span'"
+                     class="sentence-container"
                      :class="{'has-error': sentence.errors?.length > 0}"
+                     :type="sentence.errors?.length > 0 ? 'button' : undefined"
+                     :aria-expanded="sentence.errors?.length > 0 ? String(expandedSentences.has(index)) : undefined"
+                     :aria-controls="sentence.errors?.length > 0 ? `sentence-errors-${index}` : undefined"
                      @click="sentence.errors?.length > 0 ? toggleExpand(index) : null"
                >
                  <span v-html="highlightErrors(sentence)"></span>
-               </span>
+               </component>
 
-               <component :is="'div'" v-if="sentence.errors?.length > 0 && expandedSentences.has(index)" class="error-details glass-card shadow-elevated mb-3 mt-1">
+               <div :id="`sentence-errors-${index}`" v-if="sentence.errors?.length > 0 && expandedSentences.has(index)" class="error-details glass-card shadow-elevated mb-3 mt-1">
                  <div v-for="(err, errIdx) in sentence.errors" :key="errIdx" class="error-item border-base-light pb-2 mb-2 last-no-border">
                     <div class="error-type mb-1" :class="'text-' + err.type.replace('_', '-')">
                       <svg class="icon-inline icon-inline--xs mr-1" viewBox="0 0 24 24" aria-hidden="true">
@@ -66,7 +79,7 @@
                     <span class="label text-secondary font-normal text-xs mb-1 block">Revised Sentence:</span>
                     {{ sentence.corrected }}
                  </div>
-               </component>
+               </div>
                
              </template>
            </div>
@@ -77,7 +90,7 @@
       </section>
 
       <!-- Right Column: Sidebar Analysis -->
-      <aside class="right-panel custom-scroll" style="animation: slideFromRight 0.6s ease-out; flex: 0.8 !important;">
+      <aside class="right-panel result-panel--from-right custom-scroll">
         
         <!-- Score summary -->
         <div class="glass-card text-center relative overflow-hidden p-6 mb-4">
@@ -242,7 +255,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { essays as essaysApi } from '@/api/client.js'
 import {
   BAND_RATIONALE_LABELS,
@@ -259,7 +272,6 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const route = useRoute()
 
 const viewMode = ref('full')
 const expandedSentences = ref(new Set([0, 1, 2]))
@@ -276,6 +288,7 @@ const bandRationale = ref({})
 const improvementPlan = ref([])
 const reviewBlocks = ref([])
 const reviewDegraded = ref(false)
+const loadError = ref('')
 
 const ERROR_TYPE_LABELS = {
   grammar: '语法错误',
@@ -310,12 +323,13 @@ onMounted(() => {
 })
 
 async function loadResult() {
-  const essayId = route.query.essayId ? Number(route.query.essayId) : null
-
-  if (essayId) {
-    try {
-      const detail = await essaysApi.getById(essayId)
-      const evaluationView = buildEvaluationView(detail.evaluation_json, {
+  loadError.value = ''
+  try {
+      const detail = await essaysApi.getById(props.sessionId)
+      if (!detail) throw new Error('writing attempt not found')
+      // essays.getById already runs adaptWritingHistoryDetail (V4 → UI)
+      const evaluation = detail.evaluation || detail.evaluation_json || null
+      const evaluationView = buildEvaluationView(evaluation?.result || evaluation?.result_json || evaluation, {
         score: {
           total_score: detail.total_score,
           task_achievement: detail.task_achievement,
@@ -323,6 +337,7 @@ async function loadResult() {
           lexical_resource: detail.lexical_resource,
           grammatical_range: detail.grammatical_range
         },
+        overall_feedback: detail.overall_feedback || detail.feedback,
         task_analysis: detail.task_analysis,
         band_rationale: detail.band_rationale,
         improvement_plan: detail.improvement_plan,
@@ -330,26 +345,16 @@ async function loadResult() {
         topic_source: detail.topic_source || ''
       })
 
-      essayText.value = detail.content || ''
-      essayWordCount.value = detail.word_count || 0
+      essayText.value = detail.content || detail.contentText || detail.content_text || ''
+      essayWordCount.value = detail.word_count || detail.wordCount || 0
       applyEvaluationView(evaluationView)
       return
-    } catch (error) {
-      console.warn('从数据库加载结果失败，降级读取 sessionStorage', error)
-    }
+  } catch (error) {
+    console.warn('从 SQLite 加载结果失败', error)
+    loadError.value = error?.message
+      ? `结果读取失败：${error.message}`
+      : '结果读取失败，请检查本地数据后重试。'
   }
-
-  const stored = sessionStorage.getItem(`evaluation_${props.sessionId}`)
-  if (stored) {
-    try {
-      applyEvaluationView(buildEvaluationView(JSON.parse(stored)))
-      return
-    } catch (error) {
-      console.warn('sessionStorage 结果解析失败，返回写作页', error)
-    }
-  }
-
-  router.replace({ name: 'Compose' })
 }
 
 function applyEvaluationView(view) {
@@ -431,13 +436,12 @@ function collapseAll() {
 }
 
 function writeNew() {
-  sessionStorage.removeItem(`evaluation_${props.sessionId}`)
   router.push({ name: 'Compose' })
 }
 </script>
 <style scoped>
 .result-page {
-  animation: fade-in 0.3s ease-out;
+  animation: result-page-enter var(--lg-duration-normal) var(--lg-easing-spring);
 }
 
 .result-layout {
@@ -449,16 +453,16 @@ function writeNew() {
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+  background: var(--lg-bg-primary);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  border: 1px solid var(--lg-border-color);
+  border-radius: var(--lg-radius-md);
+  box-shadow: var(--lg-shadow-elevated);
   padding: 24px;
 }
 .shadow-elevated {
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  box-shadow: var(--lg-shadow-high);
 }
 
 .essay-panel {
@@ -469,7 +473,7 @@ function writeNew() {
 }
 
 .right-panel {
-  flex: 0.8 !important;
+  flex: 0.8;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -477,16 +481,16 @@ function writeNew() {
 }
 
 .border-base {
-  border-bottom: 1px solid var(--color-border-warm);
+  border-bottom: 1px solid var(--lg-border-subtle);
   padding-bottom: 20px;
   margin-bottom: 24px;
 }
 
 .border-base-light {
-  border-bottom: 1px dashed var(--color-border-warm);
+  border-bottom: 1px dashed var(--lg-border-subtle);
 }
 .border-top-dashed {
-  border-top: 1px dashed var(--color-border-warm);
+  border-top: 1px dashed var(--lg-border-subtle);
 }
 .last-no-border:last-child {
   border-bottom: none;
@@ -502,20 +506,20 @@ function writeNew() {
 
 .display-heading {
   font-size: 2rem;
-  color: var(--text-primary);
+  color: var(--atlas-ink);
   margin-bottom: 6px;
 }
 
 .topic-meta {
-  color: var(--text-secondary);
+  color: var(--atlas-ink-soft);
   font-style: italic;
   font-size: 0.95rem;
   line-height: 1.5;
 }
 
 .word-badge {
-  background: var(--color-warm-sand);
-  color: var(--text-primary);
+  background: var(--lg-bg-interactive);
+  color: var(--atlas-ink);
   padding: 6px 14px;
   border-radius: 999px;
   font-weight: 500;
@@ -526,7 +530,7 @@ function writeNew() {
   flex: 1;
   white-space: pre-wrap;
   line-height: 2;
-  color: var(--text-primary);
+  color: var(--atlas-ink);
   font-size: 1.05rem;
   overflow-y: auto;
   padding-right: 12px;
@@ -546,16 +550,47 @@ function writeNew() {
 .sentence-container {
   display: inline;
   margin-right: 4px;
-  transition: all 0.2s;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  transition:
+    background var(--lg-duration-fast) var(--lg-easing-spring),
+    border-color var(--lg-duration-fast) var(--lg-easing-spring);
+}
+
+.result-load-error {
+  max-width: 640px;
+  margin: 8vh auto;
+  display: grid;
+  gap: 14px;
+}
+
+.result-load-error h1,
+.result-load-error p {
+  margin: 0;
+}
+
+.result-load-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .has-error {
   cursor: pointer;
-  border-bottom: 2px dashed var(--color-error);
+  border-bottom: 2px dashed var(--atlas-danger);
 }
 
 .has-error:hover {
-  background: rgba(181, 51, 51, 0.05); /* very light error red */
+  background: var(--atlas-library-danger);
+}
+
+.has-error:focus-visible {
+  outline: 3px solid var(--atlas-accent-ring);
+  outline-offset: 3px;
 }
 
 .error-details {
@@ -567,7 +602,7 @@ function writeNew() {
 
 .label {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--atlas-ink-soft);
   margin-right: 6px;
 }
 .line-through {
@@ -590,8 +625,7 @@ function writeNew() {
 .p-6 { padding: 24px; }
 .w-full { width: 100%; }
 
-.text-primary { color: var(--color-terracotta); }
-.text-secondary { color: var(--color-olive-gray); }
+.text-secondary { color: var(--atlas-ink-soft); }
 .font-bold { font-weight: 600; }
 .font-normal { font-weight: 400; }
 .italic { font-style: italic; }
@@ -651,22 +685,22 @@ function writeNew() {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
+  filter: drop-shadow(var(--lg-shadow-subtle));
 }
 
 .score-bg {
   fill: transparent;
-  stroke: var(--color-border-warm);
+  stroke: var(--lg-border-subtle);
   stroke-width: 14;
 }
 
 .score-fill {
   fill: transparent;
-  stroke: var(--color-terracotta);
+  stroke: var(--atlas-accent);
   stroke-width: 14;
   stroke-linecap: round;
   stroke-dasharray: 502;
-  transition: stroke-dashoffset 1s ease-out;
+  transition: stroke-dashoffset var(--lg-duration-slow) var(--lg-easing-spring);
 }
 
 .score-info {
@@ -679,14 +713,14 @@ function writeNew() {
 .score-total {
   font-size: 3.5rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--atlas-ink);
   line-height: 1;
 }
 
 .score-label {
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--atlas-ink-soft);
   letter-spacing: 0.1em;
   margin-top: 4px;
 }
@@ -697,6 +731,14 @@ function writeNew() {
   gap: 16px;
 }
 
+.metrics-grid > * {
+  animation: atlas-rise-in var(--anth-duration-slow) var(--anth-ease-out) both;
+}
+
+.metrics-grid > *:nth-child(2) { animation-delay: 50ms; }
+.metrics-grid > *:nth-child(3) { animation-delay: 100ms; }
+.metrics-grid > *:nth-child(4) { animation-delay: 150ms; }
+
 .metric-card {
   display: flex;
   flex-direction: column;
@@ -706,7 +748,7 @@ function writeNew() {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  color: var(--atlas-ink-soft);
   font-weight: 600;
   margin-top: 4px;
 }
@@ -714,11 +756,11 @@ function writeNew() {
 .metric-value {
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--atlas-ink);
 }
 
 .hover-lift {
-  transition: transform 0.2s;
+  transition: transform var(--lg-duration-fast) var(--lg-easing-spring);
 }
 
 .hover-lift:hover {
@@ -738,7 +780,7 @@ function writeNew() {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-terracotta);
+  background: var(--atlas-accent);
   margin-top: 7px;
   margin-right: 12px;
   flex-shrink: 0;
@@ -751,47 +793,60 @@ function writeNew() {
 }
 
 .degraded-warning {
-  background: rgba(181, 51, 51, 0.1);
-  border: 1px solid rgba(181, 51, 51, 0.3);
-  border-radius: 12px;
+  background: var(--atlas-library-danger);
+  border: 1px solid color-mix(in srgb, var(--atlas-danger) 30%, var(--lg-border-color));
+  border-radius: var(--lg-radius-sm);
   padding: 16px;
-  color: var(--color-error);
+  color: var(--atlas-danger);
 }
 
-@keyframes slideFromRight {
-  0% { transform: translateX(30px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
+@keyframes result-page-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes slideFromLeft {
-  0% { transform: translateX(-30px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
+@keyframes result-panel-enter-left {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes result-panel-enter-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.result-panel--from-left {
+  animation: result-panel-enter-left var(--lg-duration-slow) var(--lg-easing-spring) both;
+}
+
+.result-panel--from-right {
+  animation: result-panel-enter-right var(--lg-duration-slow) var(--lg-easing-spring) both;
 }
 
 /* Error highlights inside v-html */
 :deep(.highlight-grammar) {
-  background: rgba(181, 51, 51, 0.1);
-  border-bottom: 2px solid var(--color-error);
+  background: var(--atlas-library-danger);
+  border-bottom: 2px solid var(--atlas-danger);
 }
 
 :deep(.highlight-spelling) {
-  background: rgba(201, 100, 66, 0.1);
-  border-bottom: 2px solid var(--color-terracotta);
+  background: var(--atlas-accent-soft);
+  border-bottom: 2px solid var(--atlas-accent);
 }
 
 :deep(.highlight-word_choice) {
-  background: rgba(56, 152, 236, 0.1);
-  border-bottom: 2px solid var(--color-focus-blue);
+  background: var(--atlas-library-success);
+  border-bottom: 2px solid var(--atlas-accent-alt);
 }
 
 :deep(.highlight-sentence_structure) {
-  background: rgba(135, 134, 127, 0.15);
-  border-bottom: 2px solid var(--color-stone-gray);
+  background: var(--lg-bg-interactive);
+  border-bottom: 2px solid var(--atlas-ink-faint);
 }
 
 :deep(.highlight-coherence) {
-  background: rgba(94, 93, 89, 0.15);
-  border-bottom: 2px solid var(--color-olive-gray);
+  background: var(--atlas-accent-soft);
+  border-bottom: 2px solid var(--atlas-accent-strong);
 }
 
 /* Custom Scroll for cards */
@@ -799,7 +854,21 @@ function writeNew() {
   width: 4px;
 }
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-ring-warm);
+  background: var(--atlas-accent-ring);
   border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-page,
+  .result-panel--from-left,
+  .result-panel--from-right {
+    animation: none;
+  }
+
+  .sentence-container,
+  .hover-lift,
+  .score-fill {
+    transition: none;
+  }
 }
 </style>

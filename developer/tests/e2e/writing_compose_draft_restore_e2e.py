@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIST_ENTRY = REPO_ROOT / "dist" / "writing" / "index.html"
+WRITING_SOURCE_ROOT = REPO_ROOT / "apps" / "writing-vue" / "src"
 DRAFT_KEY = "ielts_writing_draft_compose-essay"
 SESSION_ID = "11111111-1111-4111-8111-111111111111"
 TOPIC_TEXT = "Some people think university education should be free for everyone. Discuss both views and give your own opinion."
@@ -41,6 +43,24 @@ BANK_ESSAY_TEXT = " ".join([
 BANK_SOCIETY_TOPIC_TEXT = "Some people believe remote work weakens communities, while others think it improves quality of life. Discuss both views and give your opinion."
 BANK_SOCIETY_TOPIC_LABEL_SNIPPET = "Some people believe remote work weakens communities"
 BANK_MISSING_TOPIC_TEXT = "Some people think online education platforms should replace physical classrooms. Discuss both views and give your opinion."
+COMPOSE_WAIT_COUNT = 0
+
+
+def configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+configure_utf8_stdio()
+
+
+def npm_command(*args: str) -> list[str]:
+    if sys.platform == "win32":
+        return [str(Path(os.environ.get("ComSpec", "cmd.exe"))), "/d", "/s", "/c", "npm", *args]
+    return ["npm", *args]
 
 try:
     from playwright.async_api import async_playwright  # type: ignore[import-untyped]
@@ -54,14 +74,28 @@ except ModuleNotFoundError:
     raise SystemExit(json.dumps({"status": "fail", "detail": "playwright_python_missing"}, ensure_ascii=False))
 
 
+def is_bundle_stale() -> bool:
+    if not DIST_ENTRY.exists():
+        return True
+    bundle_mtime = DIST_ENTRY.stat().st_mtime
+    for source_path in WRITING_SOURCE_ROOT.rglob("*"):
+        if source_path.suffix not in {".vue", ".js", ".css"}:
+            continue
+        if source_path.stat().st_mtime > bundle_mtime:
+            return True
+    return False
+
+
 def ensure_bundle() -> None:
-    if DIST_ENTRY.exists():
+    if not is_bundle_stale():
         return
     completed = subprocess.run(
-        ["npm", "run", "build:writing"],
+        npm_command("run", "build:writing"),
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if completed.returncode != 0:
         detail = completed.stdout or completed.stderr or "unknown build failure"
@@ -72,7 +106,6 @@ async def install_api_stub(page) -> None:
     await page.add_init_script(
         """
         (() => {
-          const listeners = [];
           const topicFixtures = [
             {
               id: 2001,
@@ -108,64 +141,230 @@ async def install_api_stub(page) -> None:
               }
             }
           ];
+          const LOCAL_API_BASE_URL = 'http://127.0.0.1:3905';
+          const writingConfigFixtures = [
+            {
+              id: 1,
+              config_name: 'Default test provider',
+              provider: 'openai',
+              base_url: 'https://api.openai.com/v1',
+              default_model: 'gpt-4o-mini',
+              is_default: true,
+              is_enabled: true
+            }
+          ];
+          const promptFixtures = [
+            {
+              id: 1,
+              task_type: 'task2',
+              name: 'Default prompt',
+              version: 'test',
+              is_active: true,
+              created_at: '2026-01-01T00:00:00.000Z'
+            }
+          ];
+
+          const createHeaders = (contentType = 'application/json') => ({
+            get(name) {
+              return String(name || '').toLowerCase() === 'content-type' ? contentType : '';
+            }
+          });
+
+          const createJsonResponse = (payload, ok = true, status = 200) => ({
+            ok,
+            status,
+            headers: createHeaders('application/json'),
+            async json() {
+              return payload;
+            },
+            async text() {
+              return JSON.stringify(payload);
+            }
+          });
+
+          class StubEventSource {
+            constructor(url) {
+              this.url = url;
+              this.readyState = 1;
+              this.listeners = new Map();
+              this.onerror = null;
+            }
+
+            addEventListener(type, callback) {
+              if (!this.listeners.has(type)) {
+                this.listeners.set(type, []);
+              }
+              this.listeners.get(type).push(callback);
+            }
+
+            removeEventListener(type, callback) {
+              const list = this.listeners.get(type) || [];
+              this.listeners.set(type, list.filter((item) => item !== callback));
+            }
+
+            close() {
+              this.readyState = 2;
+            }
+          }
+
           window.__writingStartCalls = [];
           window.__writingStartMode = 'success';
           window.__topicListDelayConfig = {};
           window.__topicListRequests = [];
-          window.__writingStubState = { listeners };
-          window.writingAPI = {
-            evaluate: {
-              start: async (payload) => {
-                window.__writingStartCalls.push(payload);
-                if (window.__writingStartMode === 'fail') {
-                  return { success: false, error: { code: 'network_error', message: 'simulated failure' } };
+          window.__writingStubState = { localApiBaseUrl: LOCAL_API_BASE_URL };
+          window.electronAPI = {
+            getLocalApiInfo: async () => ({
+              success: true,
+              data: { baseUrl: LOCAL_API_BASE_URL }
+            })
+          };
+          window.EventSource = StubEventSource;
+          window.fetch = async (input, init = {}) => {
+            const url = typeof input === 'string' ? input : String(input && input.url ? input.url : '');
+            if (!url.startsWith(LOCAL_API_BASE_URL)) {
+              throw new Error(`unexpected_fetch_url:${url}`);
+            }
+
+            const parsed = new URL(url);
+            const pathname = parsed.pathname;
+            const method = String(init.method || 'GET').toUpperCase();
+            const body = init.body ? JSON.parse(init.body) : null;
+
+            if (pathname === '/api/writing/evaluations' && method === 'POST') {
+              window.__writingStartCalls.push(body);
+              if (window.__writingStartMode === 'fail') {
+                return createJsonResponse({
+                  error: 'network_error',
+                  message: 'simulated failure'
+                }, false, 503);
+              }
+              return createJsonResponse({
+                success: true,
+                data: { sessionId: '11111111-1111-4111-8111-111111111111' }
+              });
+            }
+
+            if (pathname === '/api/writing/evaluations/11111111-1111-4111-8111-111111111111' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { sessionId: '11111111-1111-4111-8111-111111111111', events: [] }
+              });
+            }
+
+            if (pathname === '/api/writing/evaluations/11111111-1111-4111-8111-111111111111' && method === 'DELETE') {
+              return createJsonResponse({
+                success: true,
+                data: { ok: true }
+              });
+            }
+
+            if (pathname === '/api/topics' && method === 'GET') {
+              const type = parsed.searchParams.get('type') || '';
+              const category = parsed.searchParams.get('category') || '';
+              const delayConfig = window.__topicListDelayConfig || {};
+              const delay = Number(
+                delayConfig[`${type}:${category}`]
+                || delayConfig[type]
+                || delayConfig[category]
+                || 0
+              );
+              if (delay > 0) {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
+              window.__topicListRequests.push({ type, category, delay });
+              const list = topicFixtures.filter((topic) => {
+                if (type && topic.type !== type) return false;
+                if (category && topic.category !== category) return false;
+                return true;
+              });
+              return createJsonResponse({
+                success: true,
+                data: { data: list, total: list.length }
+              });
+            }
+
+            if (pathname === '/api/topics/statistics' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  total: topicFixtures.length,
+                  byType: [
+                    { type: 'task1', count: topicFixtures.filter((topic) => topic.type === 'task1').length },
+                    { type: 'task2', count: topicFixtures.filter((topic) => topic.type === 'task2').length }
+                  ]
                 }
-                return { success: true, data: { sessionId: '11111111-1111-4111-8111-111111111111' } };
-              },
-              cancel: async () => ({ success: true, data: { ok: true } }),
-              onEvent: (callback) => { if (typeof callback === 'function') listeners.push(callback); },
-              removeEventListener: () => { listeners.length = 0; }
-            },
-            topics: {
-              list: async (filters = {}) => {
-                const type = typeof filters.type === 'string' ? filters.type : '';
-                const category = typeof filters.category === 'string' ? filters.category : '';
-                const delayConfig = window.__topicListDelayConfig || {};
-                const delay = Number(
-                  delayConfig[`${type}:${category}`]
-                  || delayConfig[type]
-                  || delayConfig[category]
-                  || 0
-                );
-                if (delay > 0) {
-                  await new Promise((resolve) => setTimeout(resolve, delay));
+              });
+            }
+
+            if (pathname.startsWith('/api/topics/') && method === 'GET') {
+              const id = Number(pathname.split('/').pop());
+              const topic = topicFixtures.find((item) => item.id === id);
+              if (!topic) {
+                return createJsonResponse({
+                  error: 'not_found',
+                  message: 'topic not found'
+                }, false, 404);
+              }
+              return createJsonResponse({
+                success: true,
+                data: topic
+              });
+            }
+
+            if (pathname === '/api/essays' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { data: [], total: 0, page: 1, limit: Number(parsed.searchParams.get('limit') || 20) }
+              });
+            }
+
+            if (pathname === '/api/essays/statistics' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  count: 0,
+                  average: { tr_ta: 0, cc: 0, lr: 0, gra: 0 },
+                  latest: { tr_ta: 0, cc: 0, lr: 0, gra: 0 },
+                  latest_task_type: 'task2',
+                  latest_date: null
                 }
-                window.__topicListRequests.push({ type, category, delay });
-                const list = topicFixtures.filter((topic) => {
-                  if (type && topic.type !== type) return false;
-                  if (category && topic.category !== category) return false;
-                  return true;
-                });
-                return { success: true, data: { data: list, total: list.length } };
-              },
-              getById: async (id) => {
-                const topic = topicFixtures.find((item) => item.id === Number(id));
-                if (!topic) {
-                  return { success: false, error: { message: 'topic not found' } };
+              });
+            }
+
+            if (pathname === '/api/practice/history' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { data: [], total: 0, page: 1, limit: Number(parsed.searchParams.get('limit') || 200) }
+              });
+            }
+
+            if (pathname === '/api/settings' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  temperature_mode: 'balanced',
+                  temperature_task1: 0.3,
+                  temperature_task2: 0.5,
+                  history_limit: 100
                 }
-                return { success: true, data: topic };
-              },
-              create: async () => ({ success: false, error: { message: 'not used in draft regression' } }),
-              update: async () => ({ success: false, error: { message: 'not used in draft regression' } }),
-              delete: async () => ({ success: false, error: { message: 'not used in draft regression' } })
-            },
-            essays: {
-              list: async () => ({ success: true, data: [], total: 0 }),
-              getById: async () => ({ success: false, error: { message: 'not used in draft regression' } })
-            },
-            configs: {},
-            prompts: {},
-            settings: {}
+              });
+            }
+
+            if (pathname === '/api/configs' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: writingConfigFixtures
+              });
+            }
+
+            if (pathname === '/api/prompts' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: promptFixtures
+              });
+            }
+
+            throw new Error(`unhandled_local_api_request:${method}:${pathname}`);
           };
         })();
         """
@@ -173,9 +372,50 @@ async def install_api_stub(page) -> None:
 
 
 async def wait_for_compose(page) -> None:
-    await page.wait_for_selector('h2:has-text("作文输入")', timeout=20000)
-    await page.wait_for_selector('#custom-topic-text', timeout=20000)
+    global COMPOSE_WAIT_COUNT
+    COMPOSE_WAIT_COUNT += 1
+    try:
+        await page.wait_for_selector('h2:has-text("作文输入")', timeout=20000)
+    except Exception as exc:  # noqa: BLE001
+        state = await page.evaluate(
+            """
+            () => ({
+              url: location.href,
+              title: document.title,
+              navText: document.querySelector('.nav-shell')?.innerText || '',
+              headings: Array.from(document.querySelectorAll('h1, h2')).map((item) => item.textContent.trim()),
+              bodyText: document.body.innerText.slice(0, 800)
+            })
+            """
+        )
+        raise AssertionError(f"compose_heading_not_visible:{COMPOSE_WAIT_COUNT}:{json.dumps(state, ensure_ascii=False)}") from exc
+    try:
+        await page.wait_for_selector('#custom-topic-text', timeout=20000)
+    except Exception as exc:  # noqa: BLE001
+        state = await page.evaluate(
+            """
+            () => ({
+              url: location.href,
+              modeButtons: Array.from(document.querySelectorAll('.mode-btn')).map((button) => ({
+                text: button.textContent.trim(),
+                className: button.className,
+                visible: !!(button.offsetWidth || button.offsetHeight || button.getClientRects().length)
+              })),
+              promptHtml: (document.querySelector('.prompt-display')?.innerHTML || '').slice(0, 800),
+              bodyText: document.body.innerText.slice(0, 800)
+            })
+            """
+        )
+        raise AssertionError(f"compose_custom_topic_not_visible:{COMPOSE_WAIT_COUNT}:{json.dumps(state, ensure_ascii=False)}") from exc
     await page.wait_for_selector('.essay-input', timeout=20000)
+
+
+async def open_compose_entry(page, entry_url: str) -> None:
+    if page.url == entry_url:
+        await page.reload()
+    else:
+        await page.goto(entry_url)
+    await wait_for_compose(page)
 
 
 async def read_draft(page):
@@ -187,9 +427,56 @@ async def set_start_mode(page, mode: str) -> None:
     await page.evaluate(f"(value) => {{ window.__writingStartMode = value; }}", mode)
 
 
+async def assert_not_reading_home(page, context: str) -> None:
+    reading_home_count = await page.locator("[data-practice-reading-home]").count()
+    if reading_home_count:
+        state = await page.evaluate(
+            """
+            () => ({
+              url: location.href,
+              navText: document.querySelector('.nav-shell')?.innerText || '',
+              heading: document.querySelector('h1, h2')?.textContent || '',
+              bodyText: document.body.innerText.slice(0, 500)
+            })
+            """
+        )
+        raise AssertionError(f"writing_nav_leaked_to_reading_home:{context}:{json.dumps(state, ensure_ascii=False)}")
+
+
+async def assert_writing_nav_target(page, nav_label: str, expected_hash: str, selector: str) -> None:
+    await page.click(f'.nav-item:has-text("{nav_label}")')
+    await page.wait_for_url(f"**#{expected_hash}", timeout=10000)
+    await page.wait_for_selector(selector, timeout=20000)
+    await assert_not_reading_home(page, nav_label)
+
+
+async def assert_writing_top_nav_stays_in_writing_module(page, entry_url: str) -> None:
+    await open_compose_entry(page, entry_url)
+    await assert_not_reading_home(page, "compose-entry")
+
+    await assert_writing_nav_target(page, "写作", "/writing", ".compose-page")
+    await wait_for_compose(page)
+
+    await assert_writing_nav_target(page, "历史", "/history", ".history-page")
+    history_heading = await page.locator(".history-page .page-header").text_content()
+    if not history_heading or "Performance Analytics" not in history_heading:
+        raise AssertionError(f"writing_history_heading_mismatch:{history_heading}")
+
+    await assert_writing_nav_target(page, "设置", "/settings", "#settings-view")
+    settings_panels = await page.locator("#settings-view .hero-settings-group > .hero-panel").count()
+    if settings_panels < 3:
+        raise AssertionError(f"writing_settings_three_panel_missing:{settings_panels}")
+
+    await page.click(".brand-block")
+    await page.wait_for_url("**#/", timeout=10000)
+    await page.wait_for_selector('[data-practice-reading-home][data-library-ready]', timeout=20000)
+    await assert_writing_nav_target(page, "写作", "/writing", ".compose-page")
+    await wait_for_compose(page)
+
+
 async def run_regression() -> dict:
     ensure_bundle()
-    entry_url = DIST_ENTRY.as_uri()
+    entry_url = f"{DIST_ENTRY.as_uri()}#/writing"
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -199,11 +486,11 @@ async def run_regression() -> dict:
         page = await browser.new_page()
         await install_api_stub(page)
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
         await page.reload()
         await wait_for_compose(page)
+        await assert_writing_top_nav_stays_in_writing_module(page, entry_url)
 
         await page.evaluate(f"() => localStorage.setItem('{DRAFT_KEY}', '{{bad-json')")  # malformed payload probe
         await page.reload()
@@ -302,8 +589,7 @@ async def run_regression() -> dict:
         if int(payload.get("word_count") or 0) <= 0:
             raise AssertionError("submit_word_count_invalid")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_success_submit")
         if await page.locator(".draft-notification").count() != 0:
@@ -356,8 +642,7 @@ async def run_regression() -> dict:
         if int(bank_payload.get("word_count") or 0) <= 0:
             raise AssertionError("bank_submit_word_count_invalid")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_bank_submit")
 
@@ -378,7 +663,28 @@ async def run_regression() -> dict:
         race_task2_option = await page.locator(f'#topic-select option[value="{BANK_TOPIC_ID}"]').count()
         race_task1_option = await page.locator('#topic-select option[value="3001"]').count()
         if race_task2_option != 1:
-            raise AssertionError("topic_race_guard_failed_task2_option_missing")
+            race_state = await page.evaluate(
+                """
+                () => ({
+                  modeButtons: Array.from(document.querySelectorAll('.mode-btn')).map((button) => ({
+                    text: button.textContent.trim(),
+                    className: button.className
+                  })),
+                  taskButtons: Array.from(document.querySelectorAll('.task-btn')).map((button) => ({
+                    text: button.textContent.trim(),
+                    className: button.className
+                  })),
+                  topicOptions: Array.from(document.querySelectorAll('#topic-select option')).map((option) => ({
+                    value: option.value,
+                    text: option.textContent.trim()
+                  })),
+                  topicRequests: window.__topicListRequests || [],
+                  topicCategory: document.querySelector('#topic-category')?.value || null,
+                  topicSelect: document.querySelector('#topic-select')?.value || null
+                })
+                """
+            )
+            raise AssertionError(f"topic_race_guard_failed_task2_option_missing:{json.dumps(race_state, ensure_ascii=False)}")
         if race_task1_option != 0:
             raise AssertionError("topic_race_guard_failed_stale_task1_option_visible")
 
@@ -415,8 +721,7 @@ async def run_regression() -> dict:
         await page.fill("#custom-topic-text", "")
         await page.wait_for_timeout(700)
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
               task_type: 'task2',
@@ -447,8 +752,7 @@ async def run_regression() -> dict:
         if healed_bank_content != BANK_ESSAY_TEXT:
             raise AssertionError("invalid_bank_category_should_preserve_content")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
 
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
@@ -499,8 +803,7 @@ async def run_regression() -> dict:
         if missing_topic_payload.get("topic_text") != BANK_MISSING_TOPIC_TEXT:
             raise AssertionError("missing_bank_topic_submit_text_mismatch")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_missing_bank_topic_submit")
 
@@ -531,8 +834,7 @@ async def run_regression() -> dict:
         if healed_content != "self-heal probe content":
             raise AssertionError("self_healed_content_mismatch")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
               task_type: 'task2',
@@ -572,6 +874,7 @@ async def run_regression() -> dict:
             "bankSocietyTopicId": BANK_SOCIETY_TOPIC_ID,
             "missingBankTopicId": BANK_MISSING_TOPIC_ID,
             "startCallCount": 1,
+            "topNavRoutes": ["#/", "#/?view=browse", "#/writing", "#/history", "#/settings"],
         },
     }
 

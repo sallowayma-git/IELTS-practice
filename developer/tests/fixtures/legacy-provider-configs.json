@@ -1,0 +1,27 @@
+{
+  "legacy": [
+    {
+      "id": "legacy-openai",
+      "config_name": "OpenAI",
+      "provider": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "default_model": "gpt-4o-mini",
+      "api_key": "sk-legacy-plaintext-must-never-reach-v2",
+      "is_default": true,
+      "is_enabled": true
+    }
+  ],
+  "expectedRuntimeSettings": {
+    "provider": "openai-compatible",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "secretName": "legacy-openai.api_key",
+    "timeoutSeconds": 45
+  },
+  "forbiddenPersistedKeys": [
+    "api_key",
+    "apiKey",
+    "token",
+    "password"
+  ]
+}

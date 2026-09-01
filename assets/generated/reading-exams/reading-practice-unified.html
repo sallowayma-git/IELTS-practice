@@ -278,6 +278,10 @@
             border-color: #93c5fd;
         }
 
+        .q-item.marked {
+            box-shadow: inset 0 -3px 0 #f59e0b;
+        }
+
         .q-item.correct {
             border-color: var(--success);
             background: #dcfce7;
@@ -398,6 +402,29 @@
             opacity: 0.5;
         }
 
+        #timer.endless-countdown {
+            background: rgba(239, 68, 68, 0.18);
+            color: #dc2626;
+            animation: endless-pulse 1s ease-in-out infinite;
+            font-weight: 700;
+        }
+
+        @keyframes endless-pulse {
+            0%, 100% { background: rgba(239, 68, 68, 0.18); }
+            50% { background: rgba(239, 68, 68, 0.28); }
+        }
+
+        body.dark-mode #timer.endless-countdown {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            animation: endless-pulse-dark 1s ease-in-out infinite;
+        }
+
+        @keyframes endless-pulse-dark {
+            0%, 100% { background: rgba(239, 68, 68, 0.25); }
+            50% { background: rgba(239, 68, 68, 0.35); }
+        }
+
         #settings-btn {
             font-size: 1.1rem;
             padding: 6px 12px;
@@ -445,10 +472,6 @@
         .hl {
             background-color: #72361c;
             color: #fff;
-            /* Keep highlighted English words intact even if parent containers use aggressive wrapping rules. */
-            word-break: normal;
-            overflow-wrap: normal;
-            white-space: normal;
         }
 
         /* Note highlight */
@@ -532,6 +555,10 @@
             background: #1e3a8a;
             border-color: #3b82f6;
             color: #ffffff;
+        }
+
+        body.dark-mode .q-item.marked {
+            box-shadow: inset 0 -3px 0 #fbbf24;
         }
 
         body.dark-mode .q-item.correct {
@@ -897,7 +924,6 @@
     <script src="../../../js/runtime/readingExplanationRegistry.js"></script>
     <script src="./manifest.js"></script>
     <script src="../../../js/utils/answerMatchCore.js"></script>
-    <script src="../../../js/practice-page-ui.js"></script>
     <script src="../../../js/runtime/unifiedReadingPage.js"></script>
 </body>
 

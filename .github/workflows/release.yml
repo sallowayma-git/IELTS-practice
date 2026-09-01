@@ -1,3 +1,5 @@
+# Tag release — Tauri 2 only (Electron packaging removed)
+
 name: Release
 
 on:
@@ -9,245 +11,205 @@ permissions:
   contents: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_TERM_COLOR: always
+  TAURI_CLI_VERSION: 2.11.4
+  TAURI_DRIVER_VERSION: 2.0.6
+  PY_PLAYWRIGHT_VERSION: 1.61.0
 
 jobs:
-  build-shell:
-    name: Build shell (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  shipping-gate:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend deps
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - uses: Swatinem/rust-cache@v2
+      - name: Tauri + Vue static gate
+        run: python developer/tests/ci/run_static_suite.py
+      - name: Install pinned Playwright
+        run: |
+          python -m pip install --disable-pip-version-check "playwright==$env:PY_PLAYWRIGHT_VERSION"
+          python -m playwright install chromium
+      - name: Run visual regression matrix
+        run: python developer/tests/e2e/run_visual_regressions.py
+      - name: Install Tauri WebDriver tooling
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version $env:TAURI_CLI_VERSION --locked
+          cargo install tauri-driver --version $env:TAURI_DRIVER_VERSION --locked
+      - name: Install matching WebView2 EdgeDriver
+        id: edge-driver
+        shell: pwsh
+        run: ./developer/tests/ci/install_edge_webdriver.ps1
+      - name: Build packaged Tauri application
+        run: cargo tauri build --no-bundle
+      - name: Packaged Tauri WebView gate
+        shell: pwsh
+        env:
+          TAURI_APP_BINARY: ${{ github.workspace }}\target\release\ielts-practice-tauri.exe
+          TAURI_NATIVE_DRIVER: ${{ steps.edge-driver.outputs.driver-path }}
+        run: |
+          $env:TAURI_DRIVER = (Get-Command tauri-driver).Source
+          python developer/tests/e2e/suite_practice_flow.py
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-evidence
+          path: |
+            developer/tests/e2e/reports/static-ci-report.json
+            developer/tests/e2e/reports/suite-practice-flow-report.json
+            developer/tests/e2e/reports/tauri-driver.log
+            developer/tests/e2e/reports/visual-ci-evidence/**
+            developer/tests/e2e/reports/*-current.png
+          if-no-files-found: error
+
+  rust-test:
+    needs: shipping-gate
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - name: Build frontend required by the Tauri test crate
+        run: npm --prefix apps/writing-vue run build
+      - uses: Swatinem/rust-cache@v2
+      - name: Rust workspace tests
+        run: cargo test --workspace --locked
+
+  tauri-release:
+    needs: rust-test
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - macos-latest
+        include:
+          - platform: windows-2022
+            platformKey: windows
+            args: ''
+          - platform: macos-latest
+            platformKey: macos
+            args: '--target aarch64-apple-darwin'
+          - platform: ubuntu-22.04
+            platformKey: linux
+            args: ''
+    runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+      - name: Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate update contracts
-        run: npm run check:update-syntax
-
-      - name: Run update runtime smoke
-        run: npm run verify:update-runtime
-
-      - name: Run release client smoke
-        run: npm run verify:release-client-smoke
-
-      - name: Run shell release smoke
-        run: npm run verify:shell-release-smoke
-
-      - name: Run shell support smoke
-        run: npm run verify:shell-support-smoke
-
-      - name: Build Electron artifacts
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend deps
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - uses: Swatinem/rust-cache@v2
+      - name: Import macOS Developer ID certificate
+        if: matrix.platformKey == 'macos'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - name: Import Windows Authenticode certificate
+        if: matrix.platformKey == 'windows'
+        shell: pwsh
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'ielts-practice-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $certificate) { throw 'Windows code-signing certificate import failed' }
+          $actual = ($certificate.Thumbprint -replace ' ', '').ToUpperInvariant()
+          $expected = ($env:WINDOWS_CERTIFICATE_THUMBPRINT -replace ' ', '').ToUpperInvariant()
+          if ($actual -ne $expected) { throw "Imported certificate thumbprint mismatch: $actual" }
+      - name: Generate fail-closed release config
+        run: python developer/tests/ci/prepare_tauri_release.py --require-signing-key --platform ${{ matrix.platformKey }} --tag "${{ github.ref_name }}" --output developer/tests/e2e/reports/tauri.release.generated.json
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          TAURI_UPDATE_ENDPOINT: ${{ vars.TAURI_UPDATE_ENDPOINT }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run release:build
-
-      - name: Inject macOS first-launch helper assets
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp assets/release/macos/mac-first-launch.command dist/electron/mac-first-launch.command
-          cp assets/release/macos/mac-first-launch-guide.txt dist/electron/mac-first-launch-guide.txt
-
-      - name: Validate shell artifacts
+      - name: Build, sign, and attach Tauri release
+        uses: tauri-apps/tauri-action@v0
         env:
-          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
-        run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${{ github.ref_name }}"
-
-      - name: Upload shell artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: IELTS Practice ${{ github.ref_name }}
+          releaseBody: Signed Tauri 2 desktop release for Windows, macOS, and Linux.
+          releaseDraft: true
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }} --config developer/tests/e2e/reports/tauri.release.generated.json
+      - name: Verify signed updater bundle
+        run: python developer/tests/ci/verify_tauri_bundle.py --platform ${{ matrix.platformKey }} --require-updater --require-signatures --report developer/tests/e2e/reports/tauri-bundle-${{ matrix.platform }}.json
+      - name: Verify operating-system code signature
+        if: matrix.platformKey != 'linux'
+        run: python developer/tests/ci/verify_code_signature.py --platform ${{ matrix.platformKey }} --report developer/tests/e2e/reports/code-sign-${{ matrix.platform }}.json
+      - name: Upload Tauri artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shell-${{ matrix.os }}
-          path: dist/electron/*
+          name: tauri-${{ matrix.platform }}
+          path: |
+            target/**/release/bundle/**
+            developer/tests/e2e/reports/tauri-bundle-${{ matrix.platform }}.json
+            developer/tests/e2e/reports/code-sign-${{ matrix.platform }}.json
           if-no-files-found: error
 
-  build-resource-packages:
-    name: Build resource packages
+  publish-release:
+    needs: tauri-release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-        run: npm ci
-
-      - name: Validate resource release scripts
-        run: npm run check:update-syntax
-
-      - name: Run update runtime smoke
-        run: npm run verify:update-runtime
-
-      - name: Run release client smoke
-        run: npm run verify:release-client-smoke
-
-      - name: Resolve previous stable tag
-        id: previous-tag
-        run: |
-          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-version:refname | awk -v current="${{ github.ref_name }}" '$0 != current { print; exit }')"
-          echo "value=${PREVIOUS_TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Build resource manifest and packages
-        run: |
-          if [ -n "${{ steps.previous-tag.outputs.value }}" ]; then
-            npm run build:resource-release -- --tag "${{ github.ref_name }}" --previous-tag "${{ steps.previous-tag.outputs.value }}" --output "dist/resources"
-          else
-            npm run build:resource-release -- --tag "${{ github.ref_name }}" --output "dist/resources"
-          fi
-
-      - name: Validate resource manifest contract
-        run: npm run verify:resource-release -- --dir dist/resources
-
-      - name: Run resource release smoke
-        run: npm run verify:resource-release-smoke -- --dir dist/resources
-
-      - name: Upload resource artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: resource-packages
-          path: dist/resources/*
-          if-no-files-found: error
-
-  publish-release-assets:
-    name: Publish verified release assets
-    needs:
-      - build-shell
-      - build-resource-packages
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-        run: npm ci
-
-      - name: Download Windows shell artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: shell-windows-latest
-          path: dist/release-shell/windows
-
-      - name: Download macOS shell artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: shell-macos-latest
-          path: dist/release-shell/macos
-
-      - name: Detect macOS release assets
-        id: mac-assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ls dist/release-shell/macos/latest-mac.yml >/dev/null 2>&1 \
-            && ls dist/release-shell/macos/ielts-practice-*-macos-*.dmg >/dev/null 2>&1 \
-            && ls dist/release-shell/macos/ielts-practice-*-macos-*.zip >/dev/null 2>&1 \
-            && ls dist/release-shell/macos/mac-first-launch.command >/dev/null 2>&1 \
-            && ls dist/release-shell/macos/mac-first-launch-guide.txt >/dev/null 2>&1; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            printf "macOS package is not notarized.\nBefore first launch, run mac-first-launch.command.\nIf you copied the app to /Applications, the helper script will remove quarantine and open the app.\n" > dist/release-shell/macos-notarization-status.txt
-          else
-            echo "缺少 macOS Release 资产（latest-mac.yml / dmg / zip / mac-first-launch.*），终止发布。"
-            exit 1
-          fi
-
-      - name: Download resource artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: resource-packages
-          path: dist/release-resources
-
-      - name: Re-verify downloaded Windows shell artifacts
-        env:
-          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
-        run: npm run verify:shell-release -- --dir dist/release-shell/windows --platform Windows --tag "${{ github.ref_name }}"
-
-      - name: Re-verify downloaded macOS shell artifacts
-        env:
-          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
-        run: npm run verify:shell-release -- --dir dist/release-shell/macos --platform macOS --tag "${{ github.ref_name }}"
-
-      - name: Re-verify downloaded resource artifacts
-        run: npm run verify:resource-release -- --dir dist/release-resources
-
-      - name: Re-run resource release smoke
-        run: npm run verify:resource-release-smoke -- --dir dist/release-resources
-
-      - name: Ensure GitHub Release exists
+      - uses: actions/checkout@v4
+      - name: Download updater manifest from draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view "${{ github.ref_name }}" >/dev/null 2>&1 || \
-          gh release create "${{ github.ref_name }}" --verify-tag --title "${{ github.ref_name }}" --generate-notes --draft
-
-      - name: Upload Windows/resource assets to GitHub Release
+        run: gh release download "${{ github.ref_name }}" --pattern latest.json --dir developer/tests/e2e/reports
+      - name: Verify cross-platform updater manifest
+        run: python developer/tests/ci/verify_updater_manifest.py --manifest developer/tests/e2e/reports/latest.json --tag "${{ github.ref_name }}"
+      - name: Publish verified release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.ref_name }}" \
-            dist/release-shell/windows/latest.yml \
-            dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe \
-            dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe.blockmap \
-            dist/release-resources/resources-manifest.json \
-            dist/release-resources/resources-delta.zip \
-            dist/release-resources/resources-full.zip \
-            --clobber
-
-      - name: Upload macOS assets and first-launch guide to GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.ref_name }}" \
-            dist/release-shell/macos-notarization-status.txt \
-            dist/release-shell/macos/mac-first-launch.command \
-            dist/release-shell/macos/mac-first-launch-guide.txt \
-            dist/release-shell/macos/latest-mac.yml \
-            dist/release-shell/macos/ielts-practice-*-macos-*.dmg \
-            dist/release-shell/macos/ielts-practice-*-macos-*.zip \
-            dist/release-shell/macos/ielts-practice-*-macos-*.zip.blockmap \
-            --clobber
-
-      - name: Publish completed GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "$(gh release view "${{ github.ref_name }}" --json isDraft -q '.isDraft')" = "true" ]; then
-            gh release edit "${{ github.ref_name }}" --draft=false
-          fi
+        run: gh release edit "${{ github.ref_name }}" --draft=false

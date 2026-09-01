@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "electron-db-1.0.0",
+  "source": "electron/db/schema.sql",
+  "tables": [
+    "migrations",
+    "api_configs",
+    "prompts",
+    "app_settings",
+    "topics",
+    "essays",
+    "evaluation_sessions",
+    "practice_history_records",
+    "practice_reading_suite_sessions"
+  ],
+  "notes": [
+    "No production SQLite binary is committed in-repo; Phase 0 records schema path and expected tables.",
+    "Migration samples should be generated from a local app data directory when available.",
+    "Shadow migration tests will create synthetic DBs from schema.sql + fixtures."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "selectedProtocol": 1,
+  "runtimeVersion": "0.1.0",
+  "buildId": "fixture-build",
+  "capabilities": {
+    "runtime.health": "1",
+    "runtime.shutdown": "1",
+    "memory.candidates.extract": "1",
+    "memory.candidates.generate": "1"
+  },
+  "requiredHostCapabilities": {
+    "model.invoke": "1",
+    "tool.invoke": "1"
+  },
+  "maxFrameBytes": 1048576
+}

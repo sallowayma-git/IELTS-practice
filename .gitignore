@@ -4,15 +4,24 @@
 /.vscode/
 /documents/
 /docs/
+!/docs/
+/docs/*
+!/docs/architecture/
+!/docs/architecture/**
+!/docs/evaluations/
+!/docs/evaluations/**
 /tools/
 /developer/node_modules/
 /node_modules/
 /dist/
+/server/dist/
 /out/
 /build/
 /apps/dist/
 /apps/writing-vue/dist/
 /apps/writing-vue/node_modules/
+/.playwright-mcp/
+/tmp/
 /.tmp/
 /.cache/
 /.electron/
@@ -26,6 +35,8 @@ latest-linux.yml
 *.dmg
 *.pkg
 *.exe
+src-tauri/binaries/ielts-agent-runtime-*
+!src-tauri/binaries/*.sha256
 *.msi
 *.AppImage
 *.deb
@@ -44,14 +55,6 @@ pnpm-debug.log*
 /developer/design/
 
 
-# ListeningPractice 资源体积大，默认忽略；仅放行 100 P1 / 100 P4 的 HTML 便于维护与回归
-/ListeningPractice/**
-!/ListeningPractice/100 P1/
-!/ListeningPractice/100 P4/
-!/ListeningPractice/100 P1/**/
-!/ListeningPractice/100 P4/**/
-!/ListeningPractice/100 P1/**/*.html
-!/ListeningPractice/100 P4/**/*.html
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
@@ -70,6 +73,7 @@ developer/tests/e2e/reports/static-ci-report.json
 # 忽略 E2E 运行产物
 developer/tests/e2e/.pw-browsers/
 developer/tests/e2e/__pycache__/
+developer/tests/ci/__pycache__/
 developer/tests/e2e/reports/
 developer/tests/e2e/reports/suite-practice-flow-report.json
 developer/tests/e2e/reports/*.png
@@ -96,3 +100,7 @@ node_modules/
 # 日志文件 (electron/utils/logger.js 生成)
 logs/
 *.log
+
+# Rust
+/target/
+__pycache__/

@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-11T18:31:44.276446+00:00",
+  "purpose": "Phase 0 representative reading assets for rewrite parity tests",
+  "assets": [
+    {
+      "examId": "p3-medium-169",
+      "title": "（无题目）  Music Language We All Speak 音乐语言",
+      "category": "P3",
+      "frequency": "medium",
+      "signature": [
+        "radio",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": true,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p3-medium-169.js",
+      "fingerprint": "01b5868ad6ea134b",
+      "bytes": 20798
+    },
+    {
+      "examId": "p1-high-01",
+      "title": "A Brief History of Tea 茶叶简史",
+      "category": "P1",
+      "frequency": "high",
+      "signature": [
+        "radio",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p1-high-01.js",
+      "fingerprint": "387bfe63a4b5871b",
+      "bytes": 16318
+    },
+    {
+      "examId": "p2-high-09",
+      "title": "Early Approaches to Organisational Design 组织设计",
+      "category": "P2",
+      "frequency": "high",
+      "signature": [
+        "checkbox",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p2-high-09.js",
+      "fingerprint": "bea967fcffef393d",
+      "bytes": 18649
+    },
+    {
+      "examId": "p2-medium-10",
+      "title": "A study of western celebrity 西方名人",
+      "category": "P2",
+      "frequency": "medium",
+      "signature": [
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p2-medium-10.js",
+      "fingerprint": "88b9e084ec21e999",
+      "bytes": 16566
+    },
+    {
+      "examId": "p2-high-14",
+      "title": "Should space be explored by robots or by humans 人机太空探索",
+      "category": "P2",
+      "frequency": "high",
+      "signature": [
+        "checkbox",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p2-high-14.js",
+      "fingerprint": "f3b8d90c29070a9d",
+      "bytes": 16053
+    },
+    {
+      "examId": "p3-high-15",
+      "title": "Whale Culture 鲸鱼文化",
+      "category": "P3",
+      "frequency": "high",
+      "signature": [
+        "radio",
+        "checkbox",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p3-high-15.js",
+      "fingerprint": "d6a85aefd33dfb66",
+      "bytes": 17894
+    },
+    {
+      "examId": "p3-high-32",
+      "title": "Science and Filmmaking 电影科学(CGI)",
+      "category": "P3",
+      "frequency": "high",
+      "signature": [
+        "radio",
+        "textarea",
+        "select",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p3-high-32.js",
+      "fingerprint": "5dfc779d4e5f3767",
+      "bytes": 19770
+    },
+    {
+      "examId": "p3-low-44",
+      "title": "Conformity 从众心理",
+      "category": "P3",
+      "frequency": "low",
+      "signature": [
+        "radio",
+        "text",
+        "textarea",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": false,
+      "sourcePath": "assets/generated/reading-exams/p3-low-44.js",
+      "fingerprint": "ac26ffbb93351a85",
+      "bytes": 14522
+    },
+    {
+      "examId": "p1-high-24",
+      "title": "Rubber 橡胶",
+      "category": "P1",
+      "frequency": "high",
+      "signature": [
+        "radio",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p1-high-24.js",
+      "fingerprint": "507e082c6d1c260f",
+      "bytes": 14507
+    },
+    {
+      "examId": "p1-low-02",
+      "title": "Maori Fish Hooks 毛利鱼钩",
+      "category": "P1",
+      "frequency": "low",
+      "signature": [
+        "radio",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p1-low-02.js",
+      "fingerprint": "8dc185205a13bdcf",
+      "bytes": 20315
+    },
+    {
+      "examId": "p2-low-06",
+      "title": "Biomimicry 仿生学",
+      "category": "P2",
+      "frequency": "low",
+      "signature": [
+        "radio",
+        "text",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p2-low-06.js",
+      "fingerprint": "85054da360fb6257",
+      "bytes": 16137
+    },
+    {
+      "examId": "p3-low-07",
+      "title": "Star Performers 明星员工",
+      "category": "P3",
+      "frequency": "low",
+      "signature": [
+        "radio",
+        "text",
+        "select",
+        "textarea",
+        "dragdrop",
+        "table"
+      ],
+      "hasExplanation": true,
+      "pdfOnly": false,
+      "dragdrop": true,
+      "sourcePath": "assets/generated/reading-exams/p3-low-07.js",
+      "fingerprint": "48283bfcfbb703d5",
+      "bytes": 17832
+    }
+  ]
+}

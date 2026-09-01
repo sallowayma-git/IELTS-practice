@@ -1,0 +1,98 @@
+{
+  "id": "writing-task1-freeform-normal",
+  "taskType": "task1",
+  "mode": "freeform",
+  "assetId": null,
+  "status": "completed",
+  "degraded": false,
+  "prompt": "The table shows the percentage of households with internet access.",
+  "content": "Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions. Overall, internet access rose in all regions.",
+  "evaluation": {
+    "schemaVersion": "v3",
+    "task_type": "task1",
+    "status": "completed",
+    "score": {
+      "overall": 6.5,
+      "taskResponse": 6.5,
+      "coherence": 6.0,
+      "lexical": 6.5,
+      "grammar": 6.0
+    },
+    "total_score": 6.5,
+    "task_achievement": 6.5,
+    "coherence_cohesion": 6.0,
+    "lexical_resource": 6.5,
+    "grammatical_range": 6.0,
+    "scorecard": {
+      "overall": 6.5,
+      "TR": 6.5,
+      "CC": 6.0,
+      "LR": 6.5,
+      "GRA": 6.0
+    },
+    "feedback": "Overall the essay addresses the task with adequate organization.",
+    "overall_feedback": "Overall the essay addresses the task with adequate organization.",
+    "task_analysis": {
+      "prompt_response_quality": "Responds to the main prompt",
+      "position_clarity": "Position is clear",
+      "argument_development": "Arguments are present but generic",
+      "conclusion_effectiveness": "Conclusion restates position"
+    },
+    "analysis": {
+      "task_analysis": {
+        "prompt_response_quality": "Responds to the main prompt",
+        "position_clarity": "Position is clear"
+      }
+    },
+    "band_rationale": {
+      "task_achievement": "Adequate response but limited support",
+      "coherence_cohesion": "Clear paragraphs, weak progression",
+      "lexical_resource": "Sufficient range with some repetition",
+      "grammatical_range": "Mixed accuracy in complex sentences"
+    },
+    "improvement_plan": [
+      "Strengthen topic sentences with clearer claims",
+      "Replace repeated adjectives with precise academic vocabulary",
+      "Add one concrete example per body paragraph"
+    ],
+    "review_blocks": [
+      {
+        "paragraph_index": 0,
+        "summary": "Introduction states position",
+        "issues": []
+      },
+      {
+        "paragraph_index": 1,
+        "summary": "Body 1 needs stronger evidence",
+        "issues": [
+          "vague example"
+        ]
+      }
+    ],
+    "paragraph_reviews": [
+      {
+        "paragraph_index": 0,
+        "summary": "Introduction states position",
+        "issues": []
+      },
+      {
+        "paragraph_index": 1,
+        "summary": "Body 1 needs stronger evidence",
+        "issues": [
+          "vague example"
+        ]
+      }
+    ],
+    "sentence_errors": [
+      {
+        "sentence": "People is happy.",
+        "correction": "People are happy.",
+        "type": "grammar"
+      }
+    ],
+    "review_degraded": false,
+    "review": null,
+    "review_status": null,
+    "error": null
+  }
+}

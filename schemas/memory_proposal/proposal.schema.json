@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ielts-atlas.local/schemas/memory_proposal/proposal.v1.json",
+  "title": "IELTS Atlas Memory Mutation Proposal Batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "proposals"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "proposals": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/proposal" }
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "const": "activity" },
+        "key": { "enum": ["reading", "writing"] }
+      }
+    },
+    "observationIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "pattern": "^obs-[A-Za-z0-9_-]+$"
+      }
+    },
+    "targetMemoryId": {
+      "type": "string",
+      "pattern": "^mem-[A-Za-z0-9_-]+$"
+    },
+    "namespace": {
+      "enum": [
+        "knowledge",
+        "language",
+        "strategy",
+        "behavior",
+        "metacognition",
+        "preference",
+        "goal"
+      ]
+    },
+    "canonicalKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^(knowledge|language|strategy|behavior|metacognition|preference|goal)\\.[a-z0-9_]+(\\.[a-z0-9_]+)*$"
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "proposal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "namespace", "canonicalKey", "scope", "statement", "evidenceObservationIds"],
+          "properties": {
+            "action": { "const": "ADD" },
+            "namespace": { "$ref": "#/$defs/namespace" },
+            "canonicalKey": { "$ref": "#/$defs/canonicalKey" },
+            "scope": { "$ref": "#/$defs/scope" },
+            "statement": { "$ref": "#/$defs/statement" },
+            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "targetMemoryId", "evidenceObservationIds"],
+          "properties": {
+            "action": { "enum": ["REINFORCE", "IMPROVE", "REGRESS", "CONTRADICT", "ARCHIVE"] },
+            "targetMemoryId": { "$ref": "#/$defs/targetMemoryId" },
+            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "targetMemoryId", "proposedStatement", "evidenceObservationIds"],
+          "properties": {
+            "action": { "const": "REFINE" },
+            "targetMemoryId": { "$ref": "#/$defs/targetMemoryId" },
+            "proposedStatement": { "$ref": "#/$defs/statement" },
+            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "targetMemoryId", "namespace", "canonicalKey", "scope", "proposedStatement", "evidenceObservationIds"],
+          "properties": {
+            "action": { "const": "SUPERSEDE" },
+            "targetMemoryId": { "$ref": "#/$defs/targetMemoryId" },
+            "namespace": { "$ref": "#/$defs/namespace" },
+            "canonicalKey": { "$ref": "#/$defs/canonicalKey" },
+            "scope": { "$ref": "#/$defs/scope" },
+            "proposedStatement": { "$ref": "#/$defs/statement" },
+            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action"],
+          "properties": {
+            "action": { "const": "NOOP" }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-16T00:47:14Z",
+  "scope": "m5-retrieval-eval-synthetic-baseline",
+  "config": {
+    "embeddings": "not_enabled",
+    "rerank": "not_enabled",
+    "fusion": "reciprocal_rank_fusion",
+    "lexical": "like_fts_mirror"
+  },
+  "metrics": {
+    "recallAtKMean": 1.0,
+    "mrrMean": 0.7222,
+    "sourceHitRateMean": 0.8889,
+    "unsupportedCitationRate": 0.0,
+    "privateRestrictedLeaks": 0,
+    "forbiddenIdViolations": 1,
+    "p50LatencyMs": 0,
+    "p95LatencyMs": 0.0,
+    "indexSize": 20,
+    "queryCount": 9,
+    "embeddingMetrics": "not_enabled"
+  },
+  "assertions": {
+    "unsupportedCitationRateIsZero": true,
+    "noPrivateOrRestrictedLeaks": true,
+    "deterministic": true
+  },
+  "perQuery": [
+    {
+      "id": "exact-question-attempt-lookup",
+      "category": "exact question/attempt lookup",
+      "retrievedIds": [
+        "writing:history-attempt-07:v1:0",
+        "writing:task2-coherence-01:v1:0",
+        "writing:task2-lexical-01:v1:0",
+        "writing:history-attempt-08:v1:0",
+        "writing:task2-grammar-01:v1:0"
+      ],
+      "expectedIds": [
+        "writing:history-attempt-07:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 1.0,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "skill-specific-memory-recall",
+      "category": "skill-specific memory recall",
+      "retrievedIds": [
+        "memory:skill-paraphrase-01:v1:0",
+        "memory:skill-matching-01:v1:0",
+        "reading:p2-tfng-02:v1:0"
+      ],
+      "expectedIds": [
+        "memory:skill-paraphrase-01:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 1.0,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "cross-session-coach-evidence",
+      "category": "cross-session Coach evidence",
+      "retrievedIds": [
+        "coach:session-42:v1:0",
+        "memory:skill-paraphrase-01:v1:0",
+        "reading:p2-tfng-02:v1:0"
+      ],
+      "expectedIds": [
+        "coach:session-42:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 1.0,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "writing-criterion-history",
+      "category": "writing criterion history",
+      "retrievedIds": [
+        "writing:task2-coherence-01:v1:0",
+        "writing:task2-lexical-01:v1:0",
+        "writing:task2-grammar-01:v1:0",
+        "writing:history-attempt-08:v1:0",
+        "writing:history-attempt-07:v1:0"
+      ],
+      "expectedIds": [
+        "writing:history-attempt-07:v1:0",
+        "writing:history-attempt-08:v1:0",
+        "writing:task2-coherence-01:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 1.0,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "lexical-synonym-query",
+      "category": "lexical synonym query",
+      "retrievedIds": [
+        "reading:passage-green-spaces-04:v1:0",
+        "reading:synonym-passage-01:v1:0",
+        "reading:passage-green-spaces-01:v1:0",
+        "reading:passage-green-spaces-02:v1:0",
+        "reading:distractor-urban-01:v1:0"
+      ],
+      "expectedIds": [
+        "reading:synonym-passage-01:v1:0",
+        "reading:passage-green-spaces-01:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 0.5,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "same-term-distractor",
+      "category": "same-term distractor",
+      "retrievedIds": [
+        "reading:passage-green-spaces-04:v1:0",
+        "reading:synonym-passage-01:v1:0",
+        "reading:passage-green-spaces-01:v1:0",
+        "reading:distractor-urban-01:v1:0"
+      ],
+      "expectedIds": [
+        "reading:passage-green-spaces-01:v1:0",
+        "reading:synonym-passage-01:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 0.5,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "private-restricted-exclusion",
+      "category": "private/restricted exclusion",
+      "retrievedIds": [],
+      "expectedIds": [],
+      "recallAtK": 1.0,
+      "mrr": 0.0,
+      "sourceHitRate": 0.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "stale-superseded-memory-exclusion",
+      "category": "stale/superseded memory exclusion",
+      "retrievedIds": [
+        "memory:current-strategy:v1:0",
+        "memory:skill-matching-01:v1:0",
+        "reading:p1-high-01:v1:0",
+        "memory:stale-old-strategy:v1:0"
+      ],
+      "expectedIds": [
+        "memory:current-strategy:v1:0",
+        "reading:p1-high-01:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 1.0,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 1,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    },
+    {
+      "id": "anti-repeat-diversity",
+      "category": "anti-repeat / diversity",
+      "retrievedIds": [
+        "reading:passage-green-spaces-04:v1:0",
+        "reading:passage-green-spaces-02:v1:0",
+        "reading:synonym-passage-01:v1:0",
+        "reading:passage-green-spaces-01:v1:0"
+      ],
+      "expectedIds": [
+        "reading:passage-green-spaces-01:v1:0",
+        "reading:synonym-passage-01:v1:0",
+        "reading:passage-green-spaces-02:v1:0"
+      ],
+      "recallAtK": 1.0,
+      "mrr": 0.5,
+      "sourceHitRate": 1.0,
+      "unsupportedCitations": 0,
+      "forbiddenIdViolations": 0,
+      "distractorAboveExpected": 0,
+      "latencyMs": 0
+    }
+  ],
+  "forbiddenLeakIds": [],
+  "forbiddenIdViolationIds": [
+    "memory:stale-old-strategy:v1:0"
+  ],
+  "determinismMismatches": []
+}

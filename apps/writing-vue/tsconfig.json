@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/env.d.ts",
+    "src/api/*.d.ts",
+    "src/types/generated/**/*.ts",
+    "src/modules/practice-reading/contracts.ts",
+    "src/modules/practice-reading/api.ts",
+    "src/modules/practice-reading/readingQuestionIds.ts",
+    "src/modules/practice-reading/useReadingAnswers.ts",
+    "src/modules/practice-reading/useReadingAsset.ts",
+    "src/modules/practice-reading/useReadingAttempt.ts",
+    "src/modules/practice-reading/useReadingCoach.ts",
+    "src/modules/practice-reading/useReadingHighlights.ts",
+    "src/modules/practice-reading/useReadingHistory.ts",
+    "src/modules/practice-reading/useReadingInteractions.ts",
+    "src/modules/practice-reading/useReadingLibrary.ts",
+    "src/modules/practice-reading/useReadingSuite.ts",
+    "src/modules/practice-reading/useReadingTimer.ts",
+    "src/modules/practice-reading/useReadingUiPreferences.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,70 @@
+{
+  "id": "writing-task2-freeform-degraded",
+  "taskType": "task2",
+  "mode": "freeform",
+  "assetId": null,
+  "status": "completed",
+  "degraded": true,
+  "prompt": "Is remote work beneficial for society?",
+  "content": "Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate. Remote work has changed how people collaborate.",
+  "evaluation": {
+    "schemaVersion": "v3",
+    "task_type": "task2",
+    "status": "completed",
+    "score": {
+      "overall": 6.5,
+      "taskResponse": 6.5,
+      "coherence": 6.0,
+      "lexical": 6.5,
+      "grammar": 6.0
+    },
+    "total_score": 6.5,
+    "task_achievement": 6.5,
+    "coherence_cohesion": 6.0,
+    "lexical_resource": 6.5,
+    "grammatical_range": 6.0,
+    "scorecard": {
+      "overall": 6.5,
+      "TR": 6.5,
+      "CC": 6.0,
+      "LR": 6.5,
+      "GRA": 6.0
+    },
+    "feedback": "Overall the essay addresses the task with adequate organization.",
+    "overall_feedback": "Overall the essay addresses the task with adequate organization.",
+    "task_analysis": {
+      "prompt_response_quality": "Responds to the main prompt",
+      "position_clarity": "Position is clear",
+      "argument_development": "Arguments are present but generic",
+      "conclusion_effectiveness": "Conclusion restates position"
+    },
+    "analysis": {
+      "task_analysis": {
+        "prompt_response_quality": "Responds to the main prompt",
+        "position_clarity": "Position is clear"
+      }
+    },
+    "band_rationale": {
+      "task_achievement": "Adequate response but limited support",
+      "coherence_cohesion": "Clear paragraphs, weak progression",
+      "lexical_resource": "Sufficient range with some repetition",
+      "grammatical_range": "Mixed accuracy in complex sentences"
+    },
+    "improvement_plan": [
+      "Strengthen topic sentences with clearer claims",
+      "Replace repeated adjectives with precise academic vocabulary",
+      "Add one concrete example per body paragraph"
+    ],
+    "review_blocks": null,
+    "paragraph_reviews": null,
+    "sentence_errors": null,
+    "review_degraded": true,
+    "review": {
+      "review_degraded": true
+    },
+    "review_status": {
+      "degraded": true
+    },
+    "error": null
+  }
+}

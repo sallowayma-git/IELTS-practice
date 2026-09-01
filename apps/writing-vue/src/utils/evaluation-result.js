@@ -2,7 +2,7 @@ function hasOwnKeys(value) {
   return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
 }
 
-export const EVALUATION_CONTRACT_VERSION = 'v3'
+export const EVALUATION_CONTRACT_VERSION = 'v4'
 
 export const TASK_ANALYSIS_LABELS = {
   task_fulfillment: '任务完成度',
@@ -56,18 +56,24 @@ export function normalizeReviewBlocks(value) {
 
   return value
     .filter((item) => item && typeof item === 'object')
-    .map((item) => ({
-      paragraph_index: typeof item.paragraph_index === 'number'
-        ? item.paragraph_index
-        : (typeof item.paragraph === 'number' ? item.paragraph : null),
-      comment: typeof item.comment === 'string'
-        ? item.comment.trim()
-        : (typeof item.strength === 'string' ? item.strength.trim() : ''),
-      analysis: typeof item.analysis === 'string'
-        ? item.analysis.trim()
-        : (typeof item.risk === 'string' ? item.risk.trim() : ''),
-      feedback: typeof item.feedback === 'string' ? item.feedback.trim() : ''
-    }))
+    .map((item) => {
+      const issues = Array.isArray(item.issues)
+        ? item.issues.map((entry) => normalizeText(entry)).filter(Boolean)
+        : []
+      const comment = pickText(item.comment, item.summary, item.strength)
+      const analysis = pickText(item.analysis, item.risk, issues.join('；'))
+      const feedback = pickText(item.feedback)
+      const paragraphIndex = coerceInteger(
+        item.paragraph_index ?? item.paragraphIndex ?? item.paragraph
+      )
+
+      return {
+        paragraph_index: paragraphIndex,
+        comment,
+        analysis,
+        feedback
+      }
+    })
     .filter((item) => item.comment || item.analysis || item.feedback)
 }
 
@@ -113,18 +119,42 @@ export function normalizeSentences(value) {
   return value
     .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
     .map((item, index) => {
-      const original = typeof item.original === 'string' ? item.original : ''
+      // V4 SentenceFeedback uses `sentence`; legacy uses `original`
+      const original = typeof item.original === 'string'
+        ? item.original
+        : (typeof item.sentence === 'string' ? item.sentence : '')
       if (!original.trim()) return null
+
+      const errors = Array.isArray(item.errors)
+        ? item.errors.map(normalizeSentenceError).filter(Boolean)
+        : []
+
+      // V4 may only provide kind + correction without range errors
+      if (errors.length === 0) {
+        const kind = pickText(item.kind, item.type)
+        const correction = pickText(item.correction, item.corrected)
+        if (kind && correction) {
+          errors.push({
+            type: kind,
+            word: original.trim(),
+            reason: kind,
+            correction,
+            range: {
+              start: 0,
+              end: original.length,
+              unit: 'utf16'
+            }
+          })
+        }
+      }
 
       const normalized = {
         index: coerceInteger(item.index) ?? index,
         original,
-        errors: Array.isArray(item.errors)
-          ? item.errors.map(normalizeSentenceError).filter(Boolean)
-          : []
+        errors
       }
 
-      const corrected = normalizeText(item.corrected)
+      const corrected = pickText(item.corrected, item.correction)
       if (corrected) {
         normalized.corrected = corrected
       }
@@ -209,10 +239,59 @@ function pickBoolean(...values) {
   return false
 }
 
-export function resolveEvaluationConsumption(payload, overrides = {}) {
+function extractEvaluationPayload(payload) {
   const parsed = normalizeMap(parseEvaluationPayload(payload))
+  if (!hasOwnKeys(parsed)) return {}
+
+  // WritingEvaluationRecord wraps V4 under `result`
+  const nestedResult = parsed.result || parsed.result_json
+  if (nestedResult && typeof nestedResult === 'object' && !Array.isArray(nestedResult)) {
+    return normalizeMap(nestedResult)
+  }
+  return parsed
+}
+
+function isV4Evaluation(parsed) {
+  const schema = parsed.schemaVersion ?? parsed.schema_version ?? parsed.contract_version
+  if (schema === 4 || schema === '4' || schema === 'v4') return true
+  const score = normalizeMap(parsed.score)
+  if (score.taskResponse != null || score.task_response != null) return true
+  if (score.overall != null && (score.coherence != null || score.lexical != null || score.grammar != null)) {
+    return true
+  }
+  const feedback = parsed.feedback
+  return !!(feedback && typeof feedback === 'object' && !Array.isArray(feedback) && (
+    feedback.overall != null || Array.isArray(feedback.sentences) || Array.isArray(feedback.plan)
+  ))
+}
+
+function countWords(text) {
+  const normalized = normalizeText(text)
+  if (!normalized) return 0
+  return normalized.split(/\s+/).filter(Boolean).length
+}
+
+function normalizeTaskType(value) {
+  const raw = normalizeText(value).toLowerCase().replace(/[\s-]+/g, '_')
+  if (raw === 'task1' || raw === 'task_1' || raw === 't1') return 'task1'
+  if (raw === 'task2' || raw === 'task_2' || raw === 't2') return 'task2'
+  return raw || ''
+}
+
+export function resolveEvaluationConsumption(payload, overrides = {}) {
+  const parsed = extractEvaluationPayload(payload)
   const analysis = pickMap(parsed.analysis)
   const review = pickMap(parsed.review)
+  const diagnosis = pickMap(parsed.diagnosis)
+  const degradation = pickMap(parsed.degradation)
+  // V4 feedback is an object; legacy feedback may be a plain string
+  const feedbackObject = (
+    parsed.feedback
+    && typeof parsed.feedback === 'object'
+    && !Array.isArray(parsed.feedback)
+  )
+    ? normalizeMap(parsed.feedback)
+    : {}
   const reviewStatusEnvelope = pickMap(
     overrides.review_status,
     parsed.review_status,
@@ -227,65 +306,238 @@ export function resolveEvaluationConsumption(payload, overrides = {}) {
   const reviewBlocks = normalizeReviewBlocks(
     parsed.review_blocks
     || parsed.paragraph_reviews
+    || feedbackObject.paragraphs
     || review.review_blocks
     || review.paragraph_reviews
   )
+  const hasDegradation = hasOwnKeys(degradation)
+    || String(parsed.status || '').toLowerCase() === 'degraded'
   const reviewDegraded = pickBoolean(
     overrides.review_degraded,
     parsed.review_degraded,
     review.review_degraded,
-    reviewStatusEnvelope.degraded
+    reviewStatusEnvelope.degraded,
+    hasDegradation ? true : null
   )
   const reviewStatus = {
     ...reviewStatusEnvelope,
-    status: pickText(reviewStatusEnvelope.status, review.status, reviewDegraded ? 'degraded' : 'completed') || 'completed',
-    degraded: reviewDegraded
+    status: pickText(
+      reviewStatusEnvelope.status,
+      review.status,
+      degradation.stage,
+      reviewDegraded ? 'degraded' : 'completed'
+    ) || 'completed',
+    degraded: reviewDegraded,
+    reason: pickText(reviewStatusEnvelope.reason, degradation.reason)
   }
   const score = {
-    total_score: pickScore(overrides.total_score, scoreEnvelope.total_score, parsed.total_score),
-    task_achievement: pickScore(overrides.task_achievement, scoreEnvelope.task_achievement, parsed.task_achievement),
-    coherence_cohesion: pickScore(overrides.coherence_cohesion, scoreEnvelope.coherence_cohesion, parsed.coherence_cohesion),
-    lexical_resource: pickScore(overrides.lexical_resource, scoreEnvelope.lexical_resource, parsed.lexical_resource),
-    grammatical_range: pickScore(overrides.grammatical_range, scoreEnvelope.grammatical_range, parsed.grammatical_range)
+    total_score: pickScore(
+      overrides.total_score,
+      scoreEnvelope.total_score,
+      scoreEnvelope.overall,
+      parsed.total_score,
+      parsed.overall
+    ),
+    task_achievement: pickScore(
+      overrides.task_achievement,
+      scoreEnvelope.task_achievement,
+      scoreEnvelope.taskResponse,
+      scoreEnvelope.task_response,
+      scoreEnvelope.TR,
+      scoreEnvelope.tr,
+      parsed.task_achievement
+    ),
+    coherence_cohesion: pickScore(
+      overrides.coherence_cohesion,
+      scoreEnvelope.coherence_cohesion,
+      scoreEnvelope.coherence,
+      scoreEnvelope.CC,
+      scoreEnvelope.cc,
+      parsed.coherence_cohesion
+    ),
+    lexical_resource: pickScore(
+      overrides.lexical_resource,
+      scoreEnvelope.lexical_resource,
+      scoreEnvelope.lexical,
+      scoreEnvelope.LR,
+      scoreEnvelope.lr,
+      parsed.lexical_resource
+    ),
+    grammatical_range: pickScore(
+      overrides.grammatical_range,
+      scoreEnvelope.grammatical_range,
+      scoreEnvelope.grammar,
+      scoreEnvelope.GRA,
+      scoreEnvelope.gra,
+      parsed.grammatical_range
+    )
   }
+
+  const feedbackText = pickText(
+    overrides.overall_feedback,
+    overrides.feedback,
+    parsed.overall_feedback,
+    typeof parsed.feedback === 'string' ? parsed.feedback : '',
+    feedbackObject.overall,
+    review.overall_feedback
+  )
+
+  const contractVersion = pickText(parsed.contract_version)
+    || (
+      isV4Evaluation(parsed)
+        || parsed.schemaVersion === 4
+        || parsed.schema_version === 4
+        ? 'v4'
+        : ''
+    )
+    || 'legacy'
 
   return {
     raw: parsed,
-    contract_version: pickText(parsed.contract_version) || 'legacy',
+    contract_version: contractVersion,
     score,
-    feedback: pickText(
-      overrides.overall_feedback,
-      overrides.feedback,
-      parsed.overall_feedback,
-      parsed.feedback,
-      review.overall_feedback
-    ),
+    feedback: feedbackText,
     task_analysis: pickMap(
       overrides.task_analysis,
       parsed.task_analysis,
+      diagnosis.task,
       analysis.task_analysis,
       review.task_analysis
     ),
     band_rationale: pickMap(
       overrides.band_rationale,
       parsed.band_rationale,
+      diagnosis.rationale,
       analysis.band_rationale,
       review.band_rationale
     ),
     improvement_plan: pickList(
       overrides.improvement_plan,
       parsed.improvement_plan,
+      feedbackObject.plan,
       analysis.improvement_plan,
       review.improvement_plan
     ),
     review_blocks: reviewBlocks,
-    sentences: normalizeSentences(pickSentences(parsed.sentences, review.sentences)),
-    rewrite_suggestions: pickList(parsed.rewrite_suggestions, review.rewrite_suggestions),
+    sentences: normalizeSentences(pickSentences(
+      overrides.sentences,
+      parsed.sentences,
+      feedbackObject.sentences,
+      parsed.sentence_errors,
+      review.sentences
+    )),
+    rewrite_suggestions: pickList(
+      parsed.rewrite_suggestions,
+      feedbackObject.rewrites,
+      review.rewrite_suggestions
+    ),
     input_context: inputContext,
     review_degraded: reviewDegraded,
     review_status: reviewStatus,
     topic_text: pickText(overrides.topic_text, parsed.topic_text, inputContext.topic_text),
     topic_source: pickText(overrides.topic_source, parsed.topic_source, inputContext.topic_source)
+  }
+}
+
+/**
+ * Single adapter for Result + History: HistoryDetailResponse / attempt+evaluation → UI shape.
+ * Maps V4 nested fields (contentText, score.*, feedback.*) onto legacy UI keys.
+ */
+export function adaptWritingHistoryDetail(detail) {
+  if (!detail || typeof detail !== 'object') return null
+
+  const summary = normalizeMap(detail.summary)
+  const attempt = normalizeMap(detail.attempt || detail)
+  const evaluationRaw = detail.evaluation || detail.evaluation_json || attempt.evaluation || null
+  const evaluationPayload = extractEvaluationPayload(evaluationRaw)
+
+  const content = pickText(
+    attempt.contentText,
+    attempt.content_text,
+    attempt.content,
+    detail.content
+  )
+  const topicText = pickText(
+    attempt.promptSnapshot,
+    attempt.prompt_snapshot,
+    attempt.titleSnapshot,
+    attempt.title_snapshot,
+    summary.title,
+    detail.topic_text,
+    detail.display_topic_title
+  )
+  const topicTitle = pickText(
+    attempt.titleSnapshot,
+    attempt.title_snapshot,
+    summary.title,
+    detail.topic_title,
+    detail.display_topic_title,
+    topicText
+  ) || 'Untitled'
+
+  const resolved = resolveEvaluationConsumption(evaluationPayload, {
+    total_score: attempt.scoreValue ?? attempt.score_value ?? summary.scoreValue ?? summary.score_value,
+    topic_text: topicText
+  })
+
+  const normalizedTaskType = normalizeTaskType(
+    attempt.taskType
+    || attempt.task_type
+    || summary.taskType
+    || summary.task_type
+    || evaluationPayload.taskType
+    || evaluationPayload.task_type
+    || detail.task_type
+  )
+  const taskType = normalizedTaskType === 'task1' || normalizedTaskType === 'task2'
+    ? normalizedTaskType
+    : null
+
+  const wordCount = coerceInteger(
+    attempt.wordCount
+    ?? attempt.word_count
+    ?? detail.word_count
+  ) ?? countWords(content)
+
+  const submittedAt = pickText(
+    attempt.submittedAt,
+    attempt.submitted_at,
+    summary.submittedAt,
+    summary.submitted_at,
+    detail.submitted_at
+  )
+
+  return {
+    id: attempt.id || summary.id || detail.id,
+    ...attempt,
+    content,
+    content_text: content,
+    contentText: content,
+    word_count: wordCount,
+    wordCount,
+    total_score: resolved.score.total_score,
+    task_achievement: resolved.score.task_achievement,
+    coherence_cohesion: resolved.score.coherence_cohesion,
+    lexical_resource: resolved.score.lexical_resource,
+    grammatical_range: resolved.score.grammatical_range,
+    overall_feedback: resolved.feedback,
+    feedback: resolved.feedback,
+    task_analysis: resolved.task_analysis,
+    band_rationale: resolved.band_rationale,
+    improvement_plan: resolved.improvement_plan,
+    review_blocks: resolved.review_blocks,
+    sentences: resolved.sentences,
+    topic_text: topicText,
+    topic_title: topicTitle,
+    display_topic_title: topicTitle,
+    topic_source: pickText(attempt.topic_source, detail.topic_source, resolved.topic_source),
+    submitted_at: submittedAt,
+    task_type: taskType,
+    model_name: pickText(detail.model_name, attempt.model, attempt.model_name),
+    evaluation: evaluationPayload,
+    evaluation_json: evaluationPayload,
+    review_degraded: resolved.review_degraded,
+    source: 'tauri'
   }
 }
 

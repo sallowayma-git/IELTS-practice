@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "plannerVersion": "m5-retrieval-v1",
+  "taskKind": "reading_review",
+  "sections": [
+    {
+      "section": "SOUL_POLICY",
+      "itemIds": [],
+      "requestedTokenBudget": 480,
+      "inclusionReasons": ["required:rust_injects_soul_policy"]
+    },
+    {
+      "section": "CURRENT_TASK",
+      "itemIds": ["reading:asset-p1-high-01:v1:0"],
+      "requestedTokenBudget": 1400,
+      "inclusionReasons": ["task:current_attempt"]
+    },
+    {
+      "section": "RETRIEVED_CORPUS",
+      "itemIds": ["reading:asset-p1-high-01:v1:0", "reading:asset-p2-medium-058:v1:0"],
+      "requestedTokenBudget": 320,
+      "inclusionReasons": ["retrieval:lexical:fts5", "retrieval:rrf"]
+    }
+  ],
+  "rankedItemIds": [
+    "reading:asset-p1-high-01:v1:0",
+    "reading:asset-p2-medium-058:v1:0"
+  ],
+  "inclusionReasons": {
+    "reading:asset-p1-high-01:v1:0": ["task:current_attempt", "retrieval:lexical:fts5"],
+    "reading:asset-p2-medium-058:v1:0": ["retrieval:rrf"]
+  },
+  "requestedTokenBudget": 4000,
+  "retrievalRunIds": ["rr-a1b2c3d4e5f6"]
+}

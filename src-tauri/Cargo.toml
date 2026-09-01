@@ -1,0 +1,72 @@
+[package]
+name = "ielts-practice-tauri"
+version = "0.1.0"
+description = "IELTS Practice Tauri 2 shell"
+authors = ["IELTS Practice"]
+edition = "2021"
+publish = false
+
+[lib]
+name = "ielts_practice_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+sha2 = "0.10"
+hex = "0.4"
+
+[dependencies]
+async-trait = "0.1"
+ielts-domain = { path = "../crates/ielts-domain" }
+ielts-db = { path = "../crates/ielts-db", default-features = false }
+ielts-application = { path = "../crates/ielts-application", default-features = false }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-shell = "2"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+tokio = { version = "1", features = ["macros", "rt", "time", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = ["custom-protocol", "learning-event-ledger-v1", "learning-observation-v1", "memory-core-v1", "learner-model-v1", "context-compiler-v1", "daily-dream-v1", "agent-threads-v1"]
+custom-protocol = ["tauri/custom-protocol"]
+context-compiler-v1 = []
+daily-dream-v1 = ["context-compiler-v1"]
+agent-threads-v1 = []
+learning-event-ledger-v1 = [
+  "ielts-db/learning-event-ledger-v1",
+  "ielts-application/learning-event-ledger-v1",
+]
+learning-observation-v1 = [
+  "learning-event-ledger-v1",
+  "ielts-db/learning-observation-v1",
+  "ielts-application/learning-observation-v1",
+]
+memory-core-v1 = [
+  "learning-observation-v1",
+  "ielts-db/memory-core-v1",
+  "ielts-application/memory-core-v1",
+]
+learner-model-v1 = [
+  "learning-observation-v1",
+  "ielts-db/learner-model-v1",
+  "ielts-application/learner-model-v1",
+]
+developer-tools = []

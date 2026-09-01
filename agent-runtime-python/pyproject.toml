@@ -1,0 +1,9 @@
+[project]
+name = "ielts-agent-runtime"
+version = "0.1.0"
+description = "Thin framed JSON-RPC cognitive runtime bootstrap for IELTS Atlas"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.11,<3"]
+
+[project.scripts]
+ielts-agent-runtime = "ielts_agent.runtime:main"

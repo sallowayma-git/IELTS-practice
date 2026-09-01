@@ -1,0 +1,112 @@
+# Branch/PR gates only. Desktop packaging lives in release.yml and runs on v* tags.
+
+name: tauri-ci
+
+on:
+  push:
+    branches: [main, master, 'IELTS-*']
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  PY_PLAYWRIGHT_VERSION: 1.61.0
+
+jobs:
+  static-gate:
+    name: Vue and static gate
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - uses: Swatinem/rust-cache@v2
+      - name: Run static gate
+        run: python developer/tests/ci/run_static_suite.py
+      - name: Upload static gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-ci-report
+          path: developer/tests/e2e/reports/static-ci-report.json
+          if-no-files-found: error
+
+  rust-test:
+    name: Rust workspace tests
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - name: Compile Vue test assets (no desktop package)
+        run: npm --prefix apps/writing-vue run build
+      - uses: Swatinem/rust-cache@v2
+      - name: Run all Rust workspace tests
+        run: cargo test --workspace --locked
+
+  visual-regression:
+    name: Vue U1-U25 visual and state regressions
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/writing-vue/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix apps/writing-vue ci --no-fund --no-audit
+      - name: Compile Vue browser-test assets (no desktop package)
+        run: npm --prefix apps/writing-vue run build
+      - name: Install pinned Playwright
+        run: |
+          python -m pip install --disable-pip-version-check "playwright==$env:PY_PLAYWRIGHT_VERSION"
+          python -m playwright install chromium
+      - name: Run visual regression matrix
+        run: python developer/tests/e2e/run_visual_regressions.py
+      - name: Upload visual regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vue-visual-regression-evidence
+          path: developer/tests/e2e/reports/visual-ci-evidence
+          if-no-files-found: error
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [static-gate, rust-test, visual-regression]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every gate to pass
+        env:
+          STATIC_RESULT: ${{ needs.static-gate.result }}
+          RUST_RESULT: ${{ needs.rust-test.result }}
+          VISUAL_RESULT: ${{ needs.visual-regression.result }}
+        run: |
+          set -eu
+          printf 'static=%s rust=%s visual=%s\n' "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT"
+          for result in "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT"; do
+            test "$result" = success
+          done

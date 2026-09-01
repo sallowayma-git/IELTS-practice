@@ -10,7 +10,7 @@
     "examId": "p3-low-151",
     "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
     "category": "P3",
-    "sourceDoc": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
+    "sourceDoc": "P3 解析+1202高频_副本.md",
     "noteType": "总结",
     "matchedTitle": "Book Review The Discovery of Slowness 富兰克林 (慢的发现)"
   },
@@ -91,22 +91,22 @@
       "items": [
         {
           "questionNumber": 32,
-          "text": "（1）题目 32：Little is known from Franklin’s correspondence and published writings about his \\___\\___.\n题目翻译：从富兰克林的书信和出版作品中，人们对他的_\\___\\__知之甚少。\n答案：personality\n解析：定位 Paragraph C 中 “Franklin comes across as a man dedicated to the external duties... who kept introspection and self-analysis to a minimum. His blandness”，明确提到书信和回忆录 “极少提及内省，无法体现个性”，因此答案为 personality。",
+          "text": "（1）题目 32：Little is known from Franklin’s correspondence and published writings about his \\___\\___.\n题目翻译：从富兰克林的书信和出版作品中，人们对他的_\\___\\__知之甚少。\n答案：G（personality，个性）\n解析：定位 Paragraph C 中 “Franklin comes across as a man dedicated to the external duties... who kept introspection and self-analysis to a minimum. His blandness”，明确提到书信和回忆录 “极少提及内省，无法体现个性”，因此选 G。",
           "questionId": "q6"
         },
         {
           "questionNumber": 33,
-          "text": "（2）题目 33：The author, Nadolny, suggests that Franklin’s whole life can be explained by the quality of ‘slowness’. He begins the book by showing how this affects the young Franklin’s \\___\\___ activities.\n题目翻译：作者 Nadolny 认为，“缓慢” 这一特质可解释富兰克林的一生。他在书中开篇描写这一特质如何影响少年富兰克林的_\\___\\__活动。\n答案：sporting\n解析：定位 Paragraph D 中 “The opening scene... depicts Franklin as a young boy, failing to catch a ball because his reaction time is too slow”，“接球” 属于体育活动，因此答案为 sporting。",
+          "text": "（2）题目 33：The author, Nadolny, suggests that Franklin’s whole life can be explained by the quality of ‘slowness’. He begins the book by showing how this affects the young Franklin’s \\___\\___ activities.\n题目翻译：作者 Nadolny 认为，“缓慢” 这一特质可解释富兰克林的一生。他在书中开篇描写这一特质如何影响少年富兰克林的_\\___\\__活动。\n答案：K（sporting，体育）\n解析：定位 Paragraph D 中 “The opening scene... depicts Franklin as a young boy, failing to catch a ball because his reaction time is too slow”，“接球” 属于体育活动，因此选 K。",
           "questionId": "q7"
         },
         {
           "questionNumber": 34,
-          "text": "（3）题目 34：and makes him become \\___\\___.\n题目翻译：并使他成为_\\___\\__。\n答案：an outsider\n解析：定位 Paragraph D 中 “despite the bullying of his peers, Franklin resolves not to fall into step with ‘their way of doing things’”，“拒绝跟风” 意味着成为 “局外人”，因此答案为 an outsider。",
+          "text": "（3）题目 34：and makes him become \\___\\___.\n题目翻译：并使他成为_\\___\\__。\n答案：F（an outsider，局外人）\n解析：定位 Paragraph D 中 “despite the bullying of his peers, Franklin resolves not to fall into step with ‘their way of doing things’”，“拒绝跟风” 意味着成为 “局外人”，因此选 F。",
           "questionId": "q8"
         },
         {
           "questionNumber": 35,
-          "text": "（4）题目 35：As a child, it is the quality of \\___\\___ that attracts Franklin to the Arctic.\n题目翻译：童年时，是_\\___\\__这一特质吸引富兰克林向往北极。\n答案：timelessness\n解析：定位 Paragraph D 中 “Franklin as a boy dreaming of the ‘time without hours and days’ which exists in the far north”，“没有时辰与昼夜” 对应 “timelessness（无时间性）”，因此答案为 timelessness。",
+          "text": "（4）题目 35：As a child, it is the quality of \\___\\___ that attracts Franklin to the Arctic.\n题目翻译：童年时，是_\\___\\__这一特质吸引富兰克林向往北极。\n答案：L（timelessness，无时间性）\n解析：定位 Paragraph D 中 “Franklin as a boy dreaming of the ‘time without hours and days’ which exists in the far north”，“没有时辰与昼夜” 对应 “timelessness（无时间性）”，因此选 L。",
           "questionId": "q9"
         }
       ],

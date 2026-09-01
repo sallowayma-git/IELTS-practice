@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "requestId": "req-error-1",
+  "traceId": "trace-error-1",
+  "ok": false,
+  "error": {
+    "code": "capability_mismatch",
+    "message": "runtime cannot provide requested capabilities",
+    "retryable": false,
+    "details": { "unsupported": ["model.embed"] }
+  }
+}

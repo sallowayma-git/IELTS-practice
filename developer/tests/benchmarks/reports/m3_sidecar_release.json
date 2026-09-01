@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "target": "x86_64-pc-windows-msvc",
+  "binary": "src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.exe",
+  "sha256": "3fd87e7b719b5916a0aee3f2a4fd1b3f5f1ad77e96c50207c8ed6073adb8c80e",
+  "protocolVersion": 1,
+  "capabilities": {
+    "runtime.health": "1",
+    "runtime.shutdown": "1",
+    "memory.candidates.extract": "1",
+    "memory.candidates.generate": "1"
+  },
+  "unpackedBytes": 12129853,
+  "compressedBytes": 11836082,
+  "installerDeltaUpperBoundBytes": 12129853,
+  "coldStartMs": 894.121,
+  "idleRssBytes": 8855552,
+  "thresholds": {
+    "unpackedSize": true,
+    "compressedSize": true,
+    "installerDelta": true,
+    "idleRss": true,
+    "coldStart": true
+  },
+  "status": "pass"
+}

@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,7 +22,7 @@ function readText(filePath) {
 }
 
 function parseArgs(argv) {
-  const args = { examId: '', list: false };
+  const args = { examId: '', list: false, outputDir: '' };
   for (let i = 2; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--list') {
@@ -33,8 +34,53 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (token === '--output-dir') {
+      args.outputDir = (argv[i + 1] || '').trim();
+      i += 1;
+      continue;
+    }
   }
   return args;
+}
+
+function stableJson(value) {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+function exportResourcePack(context, registry, manifest, outputDir) {
+  const resolvedOutput = path.resolve(REPO_ROOT, outputDir);
+  const payloadDir = path.join(resolvedOutput, 'payloads');
+  fs.mkdirSync(payloadDir, { recursive: true });
+
+  const entries = buildEntryList(manifest).map((entry) => {
+    const dataset = loadDataset(context, registry, manifest[entry.examId] || entry);
+    const payload = { ...dataset, examId: dataset.examId || entry.examId };
+    const text = stableJson(payload);
+    const file = `payloads/${entry.examId}.json`;
+    fs.writeFileSync(path.join(resolvedOutput, file), text, 'utf8');
+    return {
+      examId: entry.examId,
+      file,
+      title: entry.title || payload.meta?.title || entry.examId,
+      category: entry.category || payload.meta?.category || null,
+      difficulty: payload.meta?.difficulty || null,
+      frequency: payload.meta?.frequency || null,
+      sha256: sha256(text)
+    };
+  });
+
+  const packManifest = {
+    schemaVersion: 1,
+    packId: 'ielts-reading-builtin-v1',
+    assetCount: entries.length,
+    entries
+  };
+  fs.writeFileSync(path.join(resolvedOutput, 'manifest.json'), stableJson(packManifest), 'utf8');
+  process.stdout.write(`${JSON.stringify({ outputDir: resolvedOutput, assetCount: entries.length })}\n`);
 }
 
 function createRegistry() {
@@ -128,6 +174,11 @@ function main() {
   const args = parseArgs(process.argv);
   const { context, registry } = createContext();
   const manifest = loadManifest(context);
+
+  if (args.outputDir) {
+    exportResourcePack(context, registry, manifest, args.outputDir);
+    return;
+  }
 
   if (args.list) {
     process.stdout.write(`${JSON.stringify({ entries: buildEntryList(manifest) })}\n`);

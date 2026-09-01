@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-12T18:36:32.131490500+00:00",
+  "gitRevision": "7a99ea4bb765dd5342428b0ad6c6914519e543fe",
+  "profile": "release",
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "cpuParallelism": 24,
+    "sqliteVersion": "3.46.0",
+    "journalMode": "wal",
+    "synchronous": 1
+  },
+  "datasets": [
+    {
+      "learningEventCount": 10000,
+      "attemptCount": 250,
+      "observationCount": 48961,
+      "evidenceCount": 58672,
+      "rebuild": {
+        "samplesMs": [
+          4747.8148
+        ],
+        "p50Ms": 4747.8148,
+        "p95Ms": 4747.8148
+      },
+      "verify": {
+        "samplesMs": [
+          2003.4171999999999
+        ],
+        "p50Ms": 2003.4171999999999,
+        "p95Ms": 2003.4171999999999
+      },
+      "historySingleDelete": {
+        "samplesMs": [
+          4375.177
+        ],
+        "p50Ms": 4375.177,
+        "p95Ms": 4375.177
+      },
+      "retentionBatchDelete": {
+        "samplesMs": [
+          3324.0236
+        ],
+        "p50Ms": 3324.0236,
+        "p95Ms": 3324.0236
+      },
+      "databaseSize": {
+        "fileBytes": 76984320,
+        "walBytes": 0,
+        "allocatedBytes": 76984320,
+        "livePageBytes": 76984320
+      },
+      "projectionRunGrowth": {
+        "attemptedRebuilds": 1,
+        "completedRunsBefore": 1,
+        "completedRunsAfter": 2,
+        "failedRunsAfter": 0,
+        "retainedCompletedRuns": 2,
+        "dbFileBytesBefore": 76984320,
+        "dbFileBytesAfter": 76984320
+      }
+    },
+    {
+      "learningEventCount": 50000,
+      "attemptCount": 1250,
+      "observationCount": 244961,
+      "evidenceCount": 293672,
+      "rebuild": {
+        "samplesMs": [
+          33162.8074
+        ],
+        "p50Ms": 33162.8074,
+        "p95Ms": 33162.8074
+      },
+      "verify": {
+        "samplesMs": [
+          10298.5607
+        ],
+        "p50Ms": 10298.5607,
+        "p95Ms": 10298.5607
+      },
+      "historySingleDelete": {
+        "samplesMs": [
+          30137.48
+        ],
+        "p50Ms": 30137.48,
+        "p95Ms": 30137.48
+      },
+      "retentionBatchDelete": {
+        "samplesMs": [
+          21896.1159
+        ],
+        "p50Ms": 21896.1159,
+        "p95Ms": 21896.1159
+      },
+      "databaseSize": {
+        "fileBytes": 386142208,
+        "walBytes": 0,
+        "allocatedBytes": 386142208,
+        "livePageBytes": 386142208
+      },
+      "projectionRunGrowth": {
+        "attemptedRebuilds": 1,
+        "completedRunsBefore": 1,
+        "completedRunsAfter": 2,
+        "failedRunsAfter": 0,
+        "retainedCompletedRuns": 2,
+        "dbFileBytesBefore": 386142208,
+        "dbFileBytesAfter": 386142208
+      }
+    },
+    {
+      "learningEventCount": 100000,
+      "attemptCount": 2500,
+      "observationCount": 489961,
+      "evidenceCount": 587422,
+      "rebuild": {
+        "samplesMs": [
+          76776.8732
+        ],
+        "p50Ms": 76776.8732,
+        "p95Ms": 76776.8732
+      },
+      "verify": {
+        "samplesMs": [
+          23285.1754
+        ],
+        "p50Ms": 23285.1754,
+        "p95Ms": 23285.1754
+      },
+      "historySingleDelete": {
+        "samplesMs": [
+          74146.383
+        ],
+        "p50Ms": 74146.383,
+        "p95Ms": 74146.383
+      },
+      "retentionBatchDelete": {
+        "samplesMs": [
+          49627.342599999996
+        ],
+        "p50Ms": 49627.342599999996,
+        "p95Ms": 49627.342599999996
+      },
+      "databaseSize": {
+        "fileBytes": 773775360,
+        "walBytes": 0,
+        "allocatedBytes": 773775360,
+        "livePageBytes": 773775360
+      },
+      "projectionRunGrowth": {
+        "attemptedRebuilds": 1,
+        "completedRunsBefore": 1,
+        "completedRunsAfter": 2,
+        "failedRunsAfter": 0,
+        "retainedCompletedRuns": 2,
+        "dbFileBytesBefore": 773775360,
+        "dbFileBytesAfter": 773775360
+      }
+    }
+  ]
+}

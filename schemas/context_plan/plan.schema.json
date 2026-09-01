@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ielts-atlas.local/schemas/context_plan/plan.v1.json",
+  "title": "IELTS Atlas Typed Context Plan v1",
+  "description": "Python emits a ContextPlan of stable IDs + inclusion reasons. Rust re-validates, re-authorizes, re-fetches canonical text, injects Soul/policy, enforces the token ceiling, and returns a ContextPack. The plan never carries prompt text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "plannerVersion", "taskKind", "sections"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "plannerVersion": { "const": "m5-retrieval-v1" },
+    "taskKind": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "rankedItemIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 160 },
+      "default": []
+    },
+    "inclusionReasons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "default": {}
+    },
+    "requestedTokenBudget": { "type": "integer", "minimum": 0, "default": 0 },
+    "retrievalRunIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 160 },
+      "default": []
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section"],
+      "properties": {
+        "section": { "$ref": "#/$defs/sectionName" },
+        "itemIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "default": []
+        },
+        "requestedTokenBudget": { "type": "integer", "minimum": 0, "default": 0 },
+        "inclusionReasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    },
+    "sectionName": {
+      "type": "string",
+      "enum": [
+        "SOUL_POLICY",
+        "CURRENT_TASK",
+        "EXPLICIT_USER",
+        "LEARNER_STATE",
+        "ACTIVE_MEMORY",
+        "RECENT_RELEVANT_EVIDENCE",
+        "RETRIEVED_CORPUS",
+        "RECENT_JOURNAL",
+        "TOOL_RESERVE"
+      ]
+    }
+  }
+}

@@ -1,0 +1,282 @@
+/*
+ * Compatibility alias map.
+ *
+ * Legacy component-level variable names (atlas-*, lg-*, shui-*, color-*, text-*,
+ * bg-*, border-*, etc.) are mapped here onto the Anthropic token source in
+ * tokens.css. Component templates must not need to change; the visual values
+ * resolve through this single layer.
+ *
+ * Only light mode is shipped; no dark-theme aliases exist.
+ */
+
+:root,
+.atlas-source-ui {
+  /* ── Atlas brand/accent aliases ───────────────────────────────────── */
+  --atlas-accent: var(--anth-accent);
+  --atlas-accent-strong: var(--anth-accent-strong);
+  --atlas-accent-alt: var(--anth-accent);
+  --atlas-accent-soft: var(--anth-accent-soft);
+  --atlas-accent-ring: var(--anth-accent-ring);
+  --atlas-sheen: linear-gradient(135deg, var(--anth-accent-soft), var(--anth-accent-softer));
+  --atlas-success: var(--anth-success);
+  --atlas-warning: var(--anth-warning);
+  --atlas-danger: var(--anth-danger);
+
+  /* Glass tokens collapse to opaque warm surfaces (no glassmorphism). */
+  --atlas-glass: var(--anth-surface);
+  --atlas-glass-elevated: var(--anth-surface-raised);
+  --atlas-glass-elevated-alt: var(--anth-surface);
+  --atlas-glass-pressed: var(--anth-surface-sunken);
+  --atlas-rim: var(--anth-border);
+  --atlas-line: var(--anth-border);
+  --atlas-surface-raised: var(--anth-surface-raised);
+  --atlas-surface-soft: var(--anth-surface-hover);
+  --atlas-control-surface: var(--anth-surface);
+  --atlas-control-surface-hover: var(--anth-surface-hover);
+  --atlas-input-surface: var(--anth-surface);
+  --atlas-input-placeholder: var(--anth-ink-faint);
+  --atlas-nav-surface: var(--anth-canvas-soft);
+  --atlas-nav-links-surface: transparent;
+  --atlas-nav-active-surface: var(--anth-accent-soft);
+  --atlas-brand-rim: var(--anth-border);
+  --atlas-danger-surface: var(--anth-danger-soft);
+  --atlas-info-surface: var(--anth-info-soft);
+
+  /* Shadows flatten to hairline elevation. */
+  --atlas-shadow: var(--anth-shadow-sm);
+  --atlas-shadow-high: var(--anth-shadow-md);
+  --atlas-nav-active-bg: var(--anth-accent-soft);
+  --atlas-nav-active-shadow: var(--anth-shadow-none);
+  --atlas-button-brand-overlay: transparent;
+  --atlas-button-brand-border: transparent;
+
+  /* Radii shrink to the restrained Anthropic scale. */
+  --atlas-radius-sm: var(--anth-radius-sm);
+  --atlas-radius-md: var(--anth-radius-md);
+  --atlas-radius-lg: var(--anth-radius-lg);
+  --atlas-radius-xl: var(--anth-radius-xl);
+
+  /* Library-specific surfaces flatten to warm tints. */
+  --atlas-library-surface: var(--anth-surface);
+  --atlas-library-surface-soft: var(--anth-surface-hover);
+  --atlas-library-selected: var(--anth-accent-soft);
+  --atlas-library-muted: var(--anth-surface-sunken);
+  --atlas-library-danger: var(--anth-danger-soft);
+  --atlas-library-success: var(--anth-success-soft);
+
+  /* Canvas (ShuiBackground) — static warm cream, no orbs/overlays. */
+  --atlas-canvas: var(--anth-canvas);
+  --atlas-canvas-overlay: none;
+  --atlas-canvas-orb: none;
+  --atlas-canvas-solid: var(--anth-canvas);
+
+  /* Ink aliases. */
+  --atlas-ink: var(--anth-ink);
+  --atlas-ink-soft: var(--anth-ink-soft);
+  --atlas-ink-faint: var(--anth-ink-faint);
+
+  /* ── Foundational grey scale (warm-shifted) ───────────────────────── */
+  --color-white: #FFFFFF;
+  --color-gray-50: var(--anth-canvas-soft);
+  --color-gray-100: var(--anth-canvas);
+  --color-gray-200: var(--anth-surface-sunken);
+  --color-gray-300: #DAD7CC;
+  --color-gray-400: #B8B4A8;
+  --color-gray-500: #8F8B7E;
+  --color-gray-600: var(--anth-ink-faint);
+  --color-gray-700: var(--anth-ink-soft);
+  --color-gray-800: var(--anth-ink);
+  --color-gray-900: var(--anth-ink-strong);
+
+  --color-error: var(--anth-danger);
+  --color-error-bg: var(--anth-danger-soft);
+  --color-info-bg: var(--anth-info-soft);
+  --color-success: var(--anth-success);
+  --color-success-bg: var(--anth-success-soft);
+  --color-warning: var(--anth-warning);
+  --color-warning-bg: var(--anth-warning-soft);
+  --color-info: var(--anth-info);
+
+  /* ── Font families ────────────────────────────────────────────────── */
+  --font-family-primary: var(--anth-font-sans);
+  --font-family-base: var(--anth-font-sans);
+  --font-family-display: var(--anth-font-serif);
+  --font-family-mono: var(--anth-font-mono);
+  --font-mono: var(--anth-font-mono);
+
+  /* ── Type scale ───────────────────────────────────────────────────── */
+  --font-size-xs: var(--anth-text-xs);
+  --font-size-sm: var(--anth-text-sm);
+  --font-size-base: var(--anth-text-base);
+  --font-size-lg: var(--anth-text-md);
+  --font-size-xl: var(--anth-text-lg);
+  --font-size-2xl: var(--anth-text-xl);
+  --font-size-3xl: var(--anth-text-2xl);
+  --font-size-4xl: var(--anth-text-3xl);
+  --font-size-5xl: var(--anth-text-3xl);
+
+  --font-weight-normal: var(--anth-weight-normal);
+  --font-weight-medium: var(--anth-weight-medium);
+  --font-weight-semibold: var(--anth-weight-semibold);
+  --font-weight-bold: var(--anth-weight-bold);
+
+  --line-height-tight: var(--anth-leading-tight);
+  --line-height-normal: var(--anth-leading-normal);
+  --line-height-relaxed: var(--anth-leading-relaxed);
+
+  /* ── Spacing ──────────────────────────────────────────────────────── */
+  --space-2xs: var(--anth-space-1);
+  --space-xs: var(--anth-space-1);
+  --space-sm: var(--anth-space-2);
+  --space-md: var(--anth-space-4);
+  --space-lg: var(--anth-space-5);
+  --space-xl: var(--anth-space-6);
+  --space-2xl: var(--anth-space-8);
+  --space-3xl: var(--anth-space-9);
+
+  /* ── Radii ─────────────────────────────────────────────────────────── */
+  --border-radius-sm: var(--anth-radius-sm);
+  --border-radius-md: var(--anth-radius-md);
+  --border-radius-lg: var(--anth-radius-lg);
+  --border-radius-xl: var(--anth-radius-xl);
+  --border-radius-2xl: var(--anth-radius-xl);
+  --border-radius-full: var(--anth-radius-pill);
+  --radius-sm: var(--anth-radius-sm);
+  --radius-md: var(--anth-radius-md);
+  --radius-lg: var(--anth-radius-lg);
+  --radius-xl: var(--anth-radius-xl);
+
+  /* ── Shadows ──────────────────────────────────────────────────────── */
+  --shadow-xs: var(--anth-shadow-xs);
+  --shadow-sm: var(--anth-shadow-xs);
+  --shadow-md: var(--anth-shadow-sm);
+  --shadow-lg: var(--anth-shadow-md);
+  --shadow-xl: var(--anth-shadow-lg);
+  --shadow-warm: var(--anth-shadow-xs);
+
+  /* ── Motion ──────────────────────────────────────────────────────── */
+  --duration-fast: var(--anth-duration-fast);
+  --duration-normal: var(--anth-duration-normal);
+  --duration-slow: var(--anth-duration-slow);
+  --ease-smooth: var(--anth-ease);
+
+  /* ── Surfaces ─────────────────────────────────────────────────────── */
+  --bg-app: var(--anth-canvas);
+  --bg-page: var(--anth-canvas);
+  --bg-surface: var(--anth-surface);
+  --bg-surface-strong: var(--anth-surface-raised);
+  --bg-muted: var(--anth-surface-sunken);
+  --bg-muted-strong: var(--anth-surface-sunken);
+  --bg-light: var(--color-white);
+  --bg-dark: var(--anth-ink);
+  --bg-dark-surface: var(--anth-ink-soft);
+
+  /* ── Text ──────────────────────────────────────────────────────────── */
+  --text-primary: var(--anth-ink);
+  --text-secondary: var(--anth-ink-soft);
+  --text-muted: var(--anth-ink-faint);
+  --text-subtle: var(--anth-ink-faint);
+  --text-inverse: var(--color-white);
+
+  /* ── Borders ───────────────────────────────────────────────────────── */
+  --border-color: var(--anth-border);
+  --border-strong: var(--anth-border-strong);
+  --border-dark: var(--anth-ink);
+  --line-strong: var(--anth-border-strong);
+  --line-1: var(--anth-border);
+  --surface-0: var(--anth-surface);
+
+  /* ── Secondary/utility colours ────────────────────────────────────── */
+  --secondary-color: var(--anth-ink-soft);
+  --info-color: var(--anth-info);
+  --primary-color: var(--anth-accent);
+  --primary-strong: var(--anth-accent-strong);
+  --primary-soft: var(--anth-accent-soft);
+  --warning-color: var(--anth-warning);
+  --success-color: var(--anth-success);
+  --danger-color: var(--anth-danger);
+
+  /* Error-highlight categories (writing) — muted warm variants. */
+  --error-grammar: var(--anth-danger);
+  --error-spelling: var(--anth-warning);
+  --error-word-choice: var(--anth-info);
+  --error-sentence-structure: var(--anth-ink-soft);
+  --error-coherence: var(--anth-success);
+
+  /* ── Brand gradient collapses to a solid clay (no violet) ─────────── */
+  --color-brand-primary: var(--anth-accent);
+  --color-brand-secondary: var(--anth-accent);
+  --color-brand-gradient: var(--anth-accent);
+  --color-brand-soft: var(--anth-accent-soft);
+  --color-brand-soft-strong: var(--anth-accent-soft);
+  --color-brand-ring: var(--anth-accent-ring);
+
+  /* Legacy warm-naming aliases (no longer violet). */
+  --color-terracotta: var(--anth-accent);
+  --color-coral: var(--anth-accent);
+  --color-warm-sand: var(--anth-surface-hover);
+  --color-warm-silver: var(--anth-ink-faint);
+  --color-charcoal-warm: var(--anth-ink);
+  --color-dark-warm: var(--anth-ink);
+  --color-border-warm: var(--anth-border);
+  --color-ring-warm: var(--anth-accent-ring);
+
+  /* ── Shui panel aliases ───────────────────────────────────────────── */
+  --shui-shell-max-width: var(--anth-shell-max-width);
+  --shui-panel-bg: var(--anth-surface);
+  --shui-panel-border: var(--anth-border);
+  --shui-panel-shadow: var(--anth-shadow-xs);
+  --shui-surface-bg: var(--anth-surface);
+  --shui-surface-border: var(--anth-border);
+  --shui-text-strong: var(--anth-ink-strong);
+  --shui-text-muted: var(--anth-ink-soft);
+  --shui-accent: var(--anth-accent);
+  --shui-accent-alt: var(--anth-accent);
+  --shui-gradient-start: var(--anth-accent-soft);
+  --shui-gradient-end: var(--anth-accent-softer);
+  --shui-radius-xl: var(--anth-radius-xl);
+  --shui-radius-lg: var(--anth-radius-lg);
+  --shui-radius-md: var(--anth-radius-md);
+  --shui-radius-sm: var(--anth-radius-sm);
+  --shui-blur: 0;
+
+  /* ── Liquid Glass aliases — collapse to opaque surfaces, no blur ────
+   * Still referenced by ~200 call sites across 8 views. Frozen: new code
+   * must use --anth-* tokens directly; do not add new --lg-* usages. */
+  --lg-blur-sm: 0;
+  --lg-blur-md: 0;
+  --lg-blur-lg: 0;
+  --lg-blur-xl: 0;
+  --lg-saturate: 1;
+  --lg-bg-primary: var(--anth-surface);
+  --lg-bg-elevated: var(--anth-surface-raised);
+  --lg-bg-toolbar: var(--anth-canvas-soft);
+  --lg-bg-interactive: var(--anth-surface-hover);
+  --lg-bg-pressed: var(--anth-surface-sunken);
+  --lg-bg-scrim: rgba(31, 31, 31, 0.42);
+  --lg-border-color: var(--anth-border);
+  --lg-border-subtle: var(--anth-border-subtle);
+  --lg-shadow-subtle: var(--anth-shadow-xs);
+  --lg-shadow-elevated: var(--anth-shadow-sm);
+  --lg-shadow-high: var(--anth-shadow-md);
+  --lg-radius-sm: var(--anth-radius-sm);
+  --lg-radius-md: var(--anth-radius-md);
+  --lg-radius-lg: var(--anth-radius-lg);
+  --lg-radius-xl: var(--anth-radius-xl);
+  --lg-duration-fast: var(--anth-duration-fast);
+  --lg-duration-normal: var(--anth-duration-normal);
+  --lg-duration-slow: var(--anth-duration-slow);
+  --lg-easing-spring: var(--anth-ease);
+
+  /* ── Reading workspace geometry tokens (kept; not visual) ──────────── */
+  --atlas-reading-left-pane-width: min(56ch, 50vw);
+  --atlas-reading-nav-height: 52px;
+  --atlas-reading-divider-width: 1px;
+
+  /* ── Evaluate/Result page local tokens ────────────────────────────── */
+  --evaluate-accent: var(--anth-accent);
+  --evaluate-ink: var(--anth-ink);
+  --evaluate-line: var(--anth-border);
+  --evaluate-muted: var(--anth-ink-soft);
+  --evaluate-rim: var(--anth-border-strong);
+}

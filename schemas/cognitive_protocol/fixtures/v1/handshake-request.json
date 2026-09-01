@@ -1,0 +1,15 @@
+{
+  "protocolVersion": 1,
+  "requestId": "req-handshake-1",
+  "traceId": "trace-1",
+  "deadlineMs": 1000,
+  "method": "runtime.handshake",
+  "params": {
+    "hostProtocolVersion": 1,
+    "requestedCapabilities": ["runtime.health", "runtime.shutdown", "memory.candidates.extract", "memory.candidates.generate"],
+    "hostCapabilities": {
+      "model.invoke": "1",
+      "tool.invoke": "1"
+    }
+  }
+}

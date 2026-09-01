@@ -1,18 +1,15 @@
 # IELTS Practice Repository Guide
 
 ## Component map
-- **`index.html`** – main entry point for the browser-only IELTS practice app.
-- **`js/`** – application logic (state management, recommendation engine, UI controllers).  Module naming follows feature-based folders.
-- **`css/`** – theme and layout styles for all public pages.
-- **`templates/`** – HTML shells for alternative themes and experimental layouts.
+- **`src-tauri/`** – Tauri 2 host (commands, capabilities, app shell).
+- **`crates/ielts-domain`**, **`crates/ielts-db`** – domain contracts and SQLite v2 persistence.
+- **`apps/writing-vue/`** – Vue UI (reading + writing practice shell).
 - **`assets/`** – static data and media resources.
-  - **`developer/doc/Wiki/`** – curated wiki pages describing feature specs and historical decisions.
 - **`developer/`** – engineering-only material separated from production assets.
-  - **`developer/docs/`** – optimization logs and design memos.
-  - **`developer/tests/`** – static regression suites, E2E harnesses, and prototype tooling.
-    - **`developer/tests/e2e/app-e2e-runner.html`** – launches the production app in an iframe and runs scripted smoke checks.
-    - **`developer/tests/js/`** – reusable JavaScript utilities for manual and automated QA.
-    - **`developer/tests/ci/`** – CI/CD bootstrap scripts and documentation.
+  - **`developer/docs/`** – current engineering plans and release runbooks.
+  - **`developer/tests/`** – current static regression suites and packaged E2E harnesses.
+    - **`developer/tests/ci/`** – static CI checks and release verification.
+    - **`developer/tests/e2e/`** – packaged Tauri and Vue flow checks.
 
 ## Test & CI expectations
 - The repo ships with a static E2E harness; **after every优化或功能改动 / after every optimization or feature change, run the following commands in order**:
@@ -86,4 +83,4 @@ Before starting any task, carefully examine the following five layers of questio
 
 Adhere to this playbook for every directory under the repository root.
 
-The operation/debugging must be compatible with the `file://` protocol.
+The product target is the packaged **Tauri 2** desktop client (Phase 10 cutover). Electron/Fastify are removed from the shipping tree. Prefer solutions that align with Tauri command/capability + Rust domain/SQLite architecture rather than preserving Electron/Fastify or legacy `file://` compatibility hacks.

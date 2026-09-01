@@ -1,0 +1,39 @@
+{
+  "id": "writing-task2-freeform-failed",
+  "taskType": "task2",
+  "mode": "freeform",
+  "assetId": null,
+  "status": "failed",
+  "degraded": false,
+  "prompt": "Do the advantages of tourism outweigh the disadvantages?",
+  "content": "Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies. Tourism boosts local economies.",
+  "evaluation": {
+    "schemaVersion": "v3",
+    "task_type": "task2",
+    "status": "failed",
+    "score": null,
+    "total_score": null,
+    "task_achievement": null,
+    "coherence_cohesion": null,
+    "lexical_resource": null,
+    "grammatical_range": null,
+    "scorecard": null,
+    "feedback": null,
+    "overall_feedback": null,
+    "task_analysis": null,
+    "analysis": null,
+    "band_rationale": null,
+    "improvement_plan": null,
+    "review_blocks": null,
+    "paragraph_reviews": null,
+    "sentence_errors": null,
+    "review_degraded": false,
+    "review": null,
+    "review_status": null,
+    "error": {
+      "code": "PROVIDER_TIMEOUT",
+      "message": "upstream timeout",
+      "retryable": true
+    }
+  }
+}

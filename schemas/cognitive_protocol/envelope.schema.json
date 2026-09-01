@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ielts-atlas.local/schemas/cognitive_protocol/envelope.v1.json",
+  "title": "IELTS Atlas Cognitive Protocol Envelope v1",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "traceId", "deadlineMs", "method", "params"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "deadlineMs": { "type": "integer", "minimum": 0 },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable", "details"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "requestId", "traceId", "ok"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "requestId": { "type": "string" },
+        "traceId": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "result": {},
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "ok": { "const": true } } },
+          "then": { "required": ["result"], "not": { "required": ["error"] } }
+        },
+        {
+          "if": { "properties": { "ok": { "const": false } } },
+          "then": { "required": ["error"], "not": { "required": ["result"] } }
+        }
+      ]
+    }
+  }
+}

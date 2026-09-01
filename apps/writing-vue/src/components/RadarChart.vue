@@ -260,13 +260,13 @@ const chartLabel = computed(() => {
 }
 
 .radar-grid-level {
-  fill: rgba(240, 240, 240, 0.28);
-  stroke: #d7dce5;
+  fill: var(--anth-surface-sunken);
+  stroke: var(--anth-border-strong);
   stroke-width: 1;
 }
 
 .radar-axis-line {
-  stroke: #d7dce5;
+  stroke: var(--anth-border-strong);
   stroke-width: 1;
 }
 
@@ -276,31 +276,33 @@ const chartLabel = computed(() => {
 }
 
 .radar-series-polygon.current {
-  fill: rgba(58, 122, 254, 0.20);
-  stroke: #3a7afe;
+  fill: var(--anth-accent-soft);
+  stroke: var(--anth-accent);
+  transform-origin: 160px 160px;
+  animation: radar-draw-in 480ms var(--anth-ease-out) both;
 }
 
 .radar-series-polygon.average {
-  fill: rgba(128, 135, 148, 0.08);
-  stroke: #808794;
+  fill: rgba(107, 107, 107, 0.08);
+  stroke: var(--anth-ink-disabled);
   stroke-dasharray: 6 4;
 }
 
 .radar-point {
-  stroke: #ffffff;
+  stroke: var(--anth-surface);
   stroke-width: 1.5;
 }
 
 .radar-point.current {
-  fill: #3a7afe;
+  fill: var(--anth-accent);
 }
 
 .radar-point.average {
-  fill: #808794;
+  fill: var(--anth-ink-disabled);
 }
 
 .radar-label {
-  fill: #586275;
+  fill: var(--anth-ink-soft);
   font-size: 11px;
   font-weight: 600;
 }
@@ -327,11 +329,22 @@ const chartLabel = computed(() => {
 }
 
 .legend-swatch.current {
-  background: rgba(58, 122, 254, 0.9);
+  background: var(--anth-accent);
 }
 
 .legend-swatch.average {
-  background: linear-gradient(90deg, #808794 60%, rgba(128, 135, 148, 0.18) 60%);
+  background: linear-gradient(90deg, var(--anth-ink-disabled) 60%, color-mix(in srgb, var(--anth-ink-disabled) 18%, transparent) 60%);
+}
+
+@keyframes radar-draw-in {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-series-polygon.current {
+    animation: none;
+  }
 }
 
 @media (max-width: 640px) {

@@ -1,0 +1,36 @@
+[package]
+name = "ielts-db"
+version = "0.1.0"
+edition = "2021"
+description = "SQLite v2 schema, migrations, importers, and shadow-read for IELTS Practice rewrite"
+publish = false
+
+[features]
+default = ["learning-event-ledger-v1", "learning-observation-v1", "memory-core-v1", "learner-model-v1"]
+learning-event-ledger-v1 = []
+learning-observation-v1 = ["learning-event-ledger-v1"]
+memory-core-v1 = ["learning-observation-v1"]
+learner-model-v1 = ["learning-observation-v1"]
+
+[dependencies]
+ielts-domain = { path = "../ielts-domain" }
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+sha2 = "0.10"
+hex = "0.4"
+tracing = "0.1"
+keyring = { version = "3", default-features = false, features = ["windows-native", "apple-native", "linux-native"] }
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile = "3"
+proptest = "1"
+
+[[bench]]
+name = "m2_1_projection"
+path = "../../developer/tests/benchmarks/m2_1_projection/src/main.rs"
+harness = false

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ielts-atlas.local/schemas/cognitive_protocol/runtime.v1.json",
+  "title": "IELTS Atlas Cognitive Runtime Metadata v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["selectedProtocol", "runtimeVersion", "buildId", "capabilities", "requiredHostCapabilities", "maxFrameBytes"],
+  "properties": {
+    "selectedProtocol": { "const": 1 },
+    "runtimeVersion": { "type": "string", "minLength": 1 },
+    "buildId": { "type": "string", "minLength": 1 },
+    "capabilities": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)+$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "requiredHostCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model.invoke", "tool.invoke"],
+      "properties": {
+        "model.invoke": { "const": "1" },
+        "tool.invoke": { "const": "1" }
+      }
+    },
+    "maxFrameBytes": { "type": "integer", "minimum": 1024 }
+  }
+}

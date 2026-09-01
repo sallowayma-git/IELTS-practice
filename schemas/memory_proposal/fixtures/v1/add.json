@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "proposals": [
+    {
+      "action": "ADD",
+      "namespace": "strategy",
+      "canonicalKey": "strategy.reading.local_evidence_premature_commitment",
+      "scope": {
+        "type": "activity",
+        "key": "reading"
+      },
+      "statement": "先确认局部证据，再提交答案。",
+      "evidenceObservationIds": ["obs-reading-1"]
+    }
+  ]
+}

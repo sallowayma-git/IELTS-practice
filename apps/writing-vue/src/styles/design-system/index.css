@@ -1,0 +1,12 @@
+/*
+ * Design system entrypoint.
+ *
+ * Order matters: tokens define physical values; aliases map legacy names
+ * onto tokens; base owns reset and layout primitives. Product surfaces live
+ * in opensource-skin.css, which consumes aliases only.
+ */
+@import './tokens.css';
+@import './exam-theme.css';
+@import './aliases.css';
+@import './base.css';
+@import './motion.css';

@@ -1,0 +1,125 @@
+/* Phase 9: accessibility + reduced-motion + touch targets + status live regions */
+
+:root {
+  --a11y-focus-ring: 2px solid var(--anth-accent, #C15F3C);
+  --a11y-focus-offset: 2px;
+  --a11y-min-target: 44px;
+  --motion-duration-fast: 120ms;
+  --motion-duration: 220ms;
+}
+
+/* Keyboard focus visibility (WCAG 2.4.7 / 2.4.11) */
+:where(a, button, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--a11y-focus-ring);
+  outline-offset: var(--a11y-focus-offset);
+}
+
+/* Minimum target size (WCAG 2.5.8) for primary chrome controls */
+.app-shell :where(button, .nav-item, .tool-card, .q-item, .answer-item) {
+  min-height: var(--a11y-min-target);
+}
+
+/* Live status region used by submit/delete/import progress */
+.a11y-status-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.a11y-status-live--visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Skip link */
+.a11y-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: var(--anth-z-skip-link);
+  padding: 0.5rem 0.75rem;
+  background: var(--anth-ink, #1F1F1F);
+  color: var(--anth-accent-contrast, #fff);
+  border-radius: var(--anth-radius-sm, 6px);
+  transition: top var(--motion-duration-fast) ease;
+}
+
+.a11y-skip-link:focus {
+  top: 0.75rem;
+}
+
+/* Reduced motion: kill decorative motion, keep essential state changes short */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .page-enter-active,
+  .page-leave-active,
+  .shui-bg,
+  .typing-cursor,
+  .flip-clock,
+  .ambient-clock,
+  .dynamic-background {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Drag alternatives: ensure drop targets remain keyboard-focusable */
+[data-drag-alternative],
+[data-drop-target] {
+  min-height: var(--a11y-min-target);
+}
+
+[data-drag-alternative]:focus-visible,
+[data-drop-target]:focus-visible {
+  outline: var(--a11y-focus-ring);
+  outline-offset: var(--a11y-focus-offset);
+}
+
+/* Dense virtualized list scaffolding */
+.virtual-list {
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.virtual-list__spacer {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-list__window {
+  position: absolute;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+/* Dialog / modal accessibility baseline */
+[role="dialog"],
+[role="alertdialog"] {
+  outline: none;
+}
+
+[role="dialog"]:focus-visible,
+[role="alertdialog"]:focus-visible {
+  outline: var(--a11y-focus-ring);
+}

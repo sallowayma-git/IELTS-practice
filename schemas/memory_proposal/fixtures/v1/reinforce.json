@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "proposals": [
+    {
+      "action": "REINFORCE",
+      "targetMemoryId": "mem-strategy-reading-1",
+      "evidenceObservationIds": ["obs-reading-1", "obs-reading-2"]
+    }
+  ]
+}

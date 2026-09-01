@@ -1,0 +1,75 @@
+/*
+ * Shared motion primitives.
+ *
+ * Entry animations and micro-interactions built on the token durations
+ * and easing curves in tokens.css. Reduced-motion is handled globally
+ * by a11y-performance.css; nothing here needs its own opt-out except
+ * where an animation must not run at all (see per-component rules).
+ */
+@import './tokens.css';
+
+@keyframes atlas-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes atlas-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes atlas-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Opt-in entry animation for cards, panels, list items. */
+.atlas-rise {
+  animation: atlas-rise-in var(--anth-duration-slow) var(--anth-ease-out) both;
+}
+
+.atlas-fade {
+  animation: atlas-fade-in var(--anth-duration-slow) var(--anth-ease) both;
+}
+
+/*
+ * Stagger children of a container. Delay is driven by --stagger-i,
+ * which pages may set inline; without it the nth-child ladder covers
+ * the first eight rows, which is enough for card grids above the fold.
+ */
+.atlas-stagger > * {
+  animation: atlas-rise-in var(--anth-duration-slow) var(--anth-ease-out) both;
+  animation-delay: calc(var(--stagger-i, 0) * 40ms);
+}
+
+.atlas-stagger > *:nth-child(2) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 40ms); }
+.atlas-stagger > *:nth-child(3) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 80ms); }
+.atlas-stagger > *:nth-child(4) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 120ms); }
+.atlas-stagger > *:nth-child(5) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 160ms); }
+.atlas-stagger > *:nth-child(6) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 200ms); }
+.atlas-stagger > *:nth-child(7) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 240ms); }
+.atlas-stagger > *:nth-child(8) { animation-delay: calc(var(--stagger-i, 0) * 40ms + 280ms); }
+
+/* Press feedback shared by buttons and toggle-like controls. */
+.atlas-press {
+  transition:
+    transform var(--anth-duration-fast) var(--anth-ease),
+    box-shadow var(--anth-duration-normal) var(--anth-ease),
+    background var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-press:active:not(:disabled) {
+  transform: scale(0.97);
+}

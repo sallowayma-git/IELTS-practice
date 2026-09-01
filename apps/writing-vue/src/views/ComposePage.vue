@@ -2,7 +2,7 @@
   <div class="compose-page">
     <section v-if="showDraftNotification" class="draft-banner draft-notification card card-whisper">
       <div class="draft-banner__copy">
-        <span class="panel-label">Draft Recovery</span>
+        <span class="panel-label">草稿恢复</span>
         <strong>检测到未保存的草稿</strong>
         <p>可以直接恢复继续写，也可以丢弃后从空白工作台开始。</p>
       </div>
@@ -20,8 +20,8 @@
       <aside class="practice-left card card-whisper">
         <header class="compose-hero">
           <div class="compose-hero__copy">
-            <span class="hero-chip">Writing Task {{ taskType === 'task1' ? '1' : '2' }}</span>
-            <h1 class="heading-serif">Immersive Writing Practice</h1>
+            <span class="hero-chip">写作任务 {{ taskType === 'task1' ? '1' : '2' }}</span>
+            <h1 class="heading-serif">沉浸式写作练习</h1>
           </div>
 
           <div class="compose-hero__metrics">
@@ -47,13 +47,13 @@
               <div class="toggle-group toggle-group--compact">
                 <button
                   :class="['toggle-item', 'task-btn', { active: taskType === 'task1' }]"
-                  @click="taskType = 'task1'"
+                  @click="selectTaskType('task1')"
                 >
                   <span class="toggle-item__label">Task 1</span>
                 </button>
                 <button
                   :class="['toggle-item', 'task-btn', { active: taskType === 'task2' }]"
-                  @click="taskType = 'task2'"
+                  @click="selectTaskType('task2')"
                 >
                   <span class="toggle-item__label">Task 2</span>
                 </button>
@@ -65,13 +65,13 @@
               <div class="toggle-group toggle-group--compact">
                 <button
                   :class="['toggle-item', 'mode-btn', { active: topicMode === 'free' }]"
-                  @click="topicMode = 'free'"
+                  @click="selectTopicMode('free')"
                 >
                   <span class="toggle-item__label">自由写作</span>
                 </button>
                 <button
                   :class="['toggle-item', 'mode-btn', { active: topicMode === 'bank' }]"
-                  @click="topicMode = 'bank'"
+                  @click="selectTopicMode('bank')"
                 >
                   <span class="toggle-item__label">从题库选择</span>
                 </button>
@@ -130,6 +130,9 @@
                 <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
                 <div v-else-if="selectedTopicText">
                   <p class="prompt-text">{{ selectedTopicText }}</p>
+                  <figure v-if="selectedTopicImage" class="prompt-image">
+                    <img :src="selectedTopicImage" :alt="`${currentTopicLabel} Task 1 图表`" />
+                  </figure>
                 </div>
                 <div v-else class="topic-status topic-status-plain">
                   <span v-if="topicsList.length === 0" style="opacity: 0.5;">当前分类下无记录</span>
@@ -221,9 +224,10 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { evaluate, getErrorMessage, topics as topicsApi } from '@/api/client.js'
+import { useRoute, useRouter } from 'vue-router'
+import { evaluate, resolveApiErrorMessage, topics as topicsApi } from '@/api/client.js'
 import { useDraft } from '@/composables/useDraft.js'
+import { writingTopicModeToAttemptMode } from '@/api/writing-mode.js'
 import { createRequestGate } from '@/utils/request-gate.js'
 import { extractTextFromTiptap, getTopicTitlePreview } from '@/utils/tiptap-text.js'
 import {
@@ -233,6 +237,7 @@ import {
 } from '@/utils/writing-categories.js'
 
 const router = useRouter()
+const route = useRoute()
 
 const taskType = ref('task2')
 const topicMode = ref('free')
@@ -251,6 +256,16 @@ const showDraftNotification = ref(false)
 const isRestoringDraft = ref(false)
 const topicsRequestGate = createRequestGate()
 
+function getResumeAttemptId() {
+  const raw = Array.isArray(route.query.resumeAttemptId)
+    ? route.query.resumeAttemptId[0]
+    : route.query.resumeAttemptId
+  const attemptId = String(raw || '').trim()
+  return /^attempt-[a-z0-9_-]{1,128}$/i.test(attemptId) ? attemptId : null
+}
+
+const resumeAttemptId = getResumeAttemptId()
+
 function invalidateTopicRequests() {
   topicsRequestGate.invalidate()
   topicLoading.value = false
@@ -261,6 +276,7 @@ const {
   scheduleSave,
   loadDraft,
   clearDraft,
+  discardDraft,
   hasDraft,
   stopAutoSave
 } = useDraft('compose-essay', () => ({
@@ -271,7 +287,7 @@ const {
   category: selectedCategory.value,
   content: content.value,
   word_count: wordCount.value
-}))
+}), { attemptId: resumeAttemptId })
 
 const categoryOptions = computed(() => getWritingCategoryOptions(taskType.value))
 
@@ -282,6 +298,11 @@ const selectedTopic = computed(() => (
 const selectedTopicText = computed(() => (
   selectedTopic.value ? extractTextFromTiptap(selectedTopic.value.title_json) : ''
 ))
+
+const selectedTopicImage = computed(() => {
+  const image = String(selectedTopic.value?.image_path || selectedTopic.value?.image_url || '').trim()
+  return /^data:image\/(?:png|jpeg|jpg|webp);base64,/i.test(image) ? image : null
+})
 
 const currentTopicLabel = computed(() => {
   if (!selectedTopic.value) return ''
@@ -350,9 +371,93 @@ const canSubmit = computed(() => (
   !getSubmitBlockReason()
 ))
 
-onMounted(() => {
-  if (hasDraft()) {
+function getRouteTopicId() {
+  const rawTopicId = Array.isArray(route.query.topicId)
+    ? route.query.topicId[0]
+    : route.query.topicId
+  const topicId = String(rawTopicId || '').trim()
+  return topicId && topicId.length <= 160 ? topicId : null
+}
+
+function resetComposeWorkspace() {
+  isRestoringDraft.value = true
+  taskType.value = 'task2'
+  topicMode.value = 'free'
+  selectedCategory.value = ''
+  selectedTopicId.value = null
+  topicsList.value = []
+  topicLoading.value = false
+  topicError.value = ''
+  customTopicText.value = ''
+  content.value = ''
+  error.value = ''
+  restoreNotice.value = ''
+  showConfirmDialog.value = false
+  showDraftNotification.value = false
+  nextTick(() => {
+    isRestoringDraft.value = false
+  })
+}
+
+async function selectTaskType(nextTaskType) {
+  const normalizedTaskType = nextTaskType === 'task1' ? 'task1' : 'task2'
+  if (taskType.value === normalizedTaskType) return
+  taskType.value = normalizedTaskType
+  selectedTopicId.value = null
+  const normalizedCategory = normalizeWritingCategory(normalizedTaskType, selectedCategory.value)
+  if (normalizedCategory !== selectedCategory.value) {
+    selectedCategory.value = normalizedCategory
+  }
+  if (topicMode.value === 'bank') {
+    await loadTopics(normalizedTaskType)
+  }
+}
+
+async function selectTopicMode(nextMode) {
+  const normalizedMode = nextMode === 'bank' ? 'bank' : 'free'
+  if (topicMode.value === normalizedMode) return
+  topicMode.value = normalizedMode
+  selectedTopicId.value = null
+  restoreNotice.value = ''
+  if (normalizedMode === 'bank') {
+    await loadTopics(taskType.value)
+  } else {
+    invalidateTopicRequests()
+    topicError.value = ''
+  }
+  scheduleSave()
+}
+
+async function hydrateEntryState(options = {}) {
+  const hasExistingDraft = await hasDraft()
+  if (getRouteTopicId()) {
+    await hydrateFromPracticeAssetQuery({ preserveExistingDraft: hasExistingDraft })
+  } else if (options.resetDefault && !hasExistingDraft) {
+    resetComposeWorkspace()
+  }
+
+  if (hasExistingDraft) {
     showDraftNotification.value = true
+  }
+}
+
+onMounted(async () => {
+  await hydrateEntryState()
+})
+
+watch(() => route.name, async (nextName, previousName) => {
+  if (nextName === 'Compose' && previousName && previousName !== 'Compose') {
+    await hydrateEntryState({ resetDefault: true })
+  }
+})
+
+watch(() => [route.query.topicId, route.query.taskType], async ([nextTopicId], [previousTopicId]) => {
+  if (getRouteTopicId()) {
+    await hydrateEntryState()
+    return
+  }
+  if (route.name === 'Compose' && previousTopicId && !nextTopicId && !(await hasDraft())) {
+    resetComposeWorkspace()
   }
 })
 
@@ -414,7 +519,19 @@ async function loadTopics(type = taskType.value) {
       return
     }
 
-    topicsList.value = Array.isArray(result.data) ? result.data : []
+    const pageItems = Array.isArray(result.data) ? result.data : []
+    const requestedTopicId = selectedTopicId.value
+    let resolvedItems = pageItems
+    if (requestedTopicId && !pageItems.some((topic) => topic.id === requestedTopicId)) {
+      const topic = await topicsApi.get(requestedTopicId)
+      if (!topicsRequestGate.isCurrent(requestId)) {
+        return
+      }
+      if (topic && topic.type === type) {
+        resolvedItems = [topic, ...pageItems]
+      }
+    }
+    topicsList.value = resolvedItems
 
     const selectedStillExists = topicsList.value.some((topic) => topic.id === selectedTopicId.value)
     if (!selectedStillExists) {
@@ -437,8 +554,34 @@ async function loadTopics(type = taskType.value) {
   }
 }
 
+async function hydrateFromPracticeAssetQuery(options = {}) {
+  const topicId = getRouteTopicId()
+  if (!topicId) {
+    return
+  }
+
+  try {
+    isRestoringDraft.value = true
+    const rawTaskType = Array.isArray(route.query.taskType)
+      ? route.query.taskType[0]
+      : route.query.taskType
+    const normalizedTaskType = String(rawTaskType || '').trim().toLowerCase()
+    taskType.value = normalizedTaskType === 'task1' ? 'task1' : 'task2'
+    topicMode.value = 'bank'
+    selectedCategory.value = ''
+    selectedTopicId.value = topicId
+    await loadTopics(taskType.value)
+  } finally {
+    isRestoringDraft.value = false
+  }
+
+  if (!options.preserveExistingDraft) {
+    scheduleSave()
+  }
+}
+
 async function handleRecoverDraft() {
-  const draft = loadDraft()
+  const draft = await loadDraft()
   if (!draft) {
     showDraftNotification.value = false
     return
@@ -472,15 +615,15 @@ async function handleRecoverDraft() {
   scheduleSave()
 }
 
-function handleDiscardDraft() {
-  clearDraft()
+async function handleDiscardDraft() {
+  await clearDraft()
   showDraftNotification.value = false
   restoreNotice.value = ''
 }
 
 function handleTopicChange(event) {
-  const value = event.target.value
-  selectedTopicId.value = value ? Number(value) : null
+  const value = String(event.target.value || '').trim()
+  selectedTopicId.value = value || null
   restoreNotice.value = ''
 }
 
@@ -524,6 +667,7 @@ async function submitEssay() {
   restoreNotice.value = ''
 
   try {
+    const attemptMode = writingTopicModeToAttemptMode(topicMode.value)
     const payload = {
       task_type: taskType.value,
       topic_id: bankTopicId,
@@ -532,18 +676,19 @@ async function submitEssay() {
       word_count: wordCount.value
     }
     const result = await evaluate.start({
+      sessionId: resumeAttemptId || undefined,
       task_type: payload.task_type,
+      mode: attemptMode,
       topic_id: payload.topic_id,
-      topic_text: topicMode.value === 'free' ? customTopicText.value.trim() : null,
+      // Bank and free both need the prompt text for AI + history/result topic display.
+      topic_text: payload.topic_text,
       content: payload.content,
       word_count: payload.word_count
     })
 
-    try {
-      sessionStorage.setItem('temp_essay_' + result.sessionId, JSON.stringify(payload))
-    } catch(err) { console.warn(err) }
-
-    clearDraft()
+    if (!resumeAttemptId) {
+      await discardDraft()
+    }
     stopAutoSave()
 
     router.push({
@@ -552,7 +697,13 @@ async function submitEssay() {
     })
   } catch (err) {
     console.error('提交失败:', err)
-    error.value = getErrorMessage(err.code)
+    if (err?.attemptId) {
+      stopAutoSave()
+      await router.push({ name: 'Evaluating', params: { sessionId: err.attemptId }, query: { startError: err.code || 'start_failed' } })
+      return
+    }
+    // Prefer startEvaluation Chinese message over bare code mapping
+    error.value = resolveApiErrorMessage(err, 'start_failed')
   } finally {
     isSubmitting.value = false
   }
@@ -561,16 +712,23 @@ async function submitEssay() {
 
 <style scoped>
 .compose-page {
+  position: relative;
   display: grid;
-  gap: 20px;
-  animation: rise-in 0.45s var(--ease-smooth);
+  gap: 18px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2px;
+  color: var(--atlas-ink);
+  background: transparent;
+  border-radius: 32px;
+  animation: compose-enter 360ms var(--lg-easing-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
 .practice-shell {
   display: grid;
-  grid-template-columns: minmax(360px, 0.84fr) minmax(0, 1.16fr);
-  gap: 24px;
-  min-height: calc(100vh - 176px);
+  grid-template-columns: minmax(350px, 0.86fr) minmax(0, 1.14fr);
+  gap: 18px;
+  min-height: calc(100vh - 168px);
 }
 
 .draft-banner {
@@ -578,9 +736,13 @@ async function submitEssay() {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 20px;
-  background: var(--lg-bg-elevated);
+  padding: 17px 20px;
   border: 1px solid var(--lg-border-color);
+  border-radius: 20px;
+  background: var(--atlas-sheen), var(--lg-bg-primary);
+  box-shadow: var(--lg-shadow-elevated);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
 }
 
 .draft-banner__copy {
@@ -590,12 +752,13 @@ async function submitEssay() {
 }
 
 .draft-banner__copy strong {
-  font-size: 18px;
+  font-size: var(--anth-text-md);
+  letter-spacing: -0.01em;
 }
 
 .draft-banner__copy p {
-  color: var(--text-secondary);
-  font-size: 14px;
+  color: var(--atlas-ink-soft);
+  font-size: var(--anth-text-sm);
 }
 
 .draft-banner__actions {
@@ -606,10 +769,18 @@ async function submitEssay() {
 .practice-left {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-height: calc(100vh - 176px);
+  gap: 20px;
+  min-width: 0;
+  max-height: calc(100vh - 168px);
   padding: 24px;
   overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--lg-border-color);
+  border-radius: 26px;
+  background: var(--lg-bg-primary);
+  box-shadow: var(--lg-shadow-elevated);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
 }
 
 .compose-hero {
@@ -623,20 +794,23 @@ async function submitEssay() {
 }
 
 .compose-hero__copy h1 {
-  font-size: clamp(1.8rem, 2.8vw, 2.7rem);
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.85rem, 2.8vw, 2.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--atlas-ink);
 }
 
 .hero-chip {
   display: inline-flex;
   width: fit-content;
-  padding: 6px 12px;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 11px;
   border-radius: 999px;
-  background: rgba(201, 100, 66, 0.14);
-  color: var(--primary-color);
-  font-size: 12px;
-  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--atlas-accent) 24%, var(--atlas-rim));
+  color: var(--atlas-accent);
+  font-size: var(--anth-text-xs);
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -644,64 +818,69 @@ async function submitEssay() {
 .compose-hero__metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 9px;
 }
 
 .hero-metric {
   display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid var(--lg-border-color);
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 15px;
+  background: var(--lg-bg-interactive);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .hero-metric__label {
-  font-size: 11px;
+  font-size: var(--anth-text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--atlas-ink-soft);
 }
 
 .hero-metric strong {
-  font-size: 20px;
-  font-weight: 600;
+  overflow: hidden;
+  font-size: var(--anth-text-lg);
+  font-weight: 700;
   line-height: 1.1;
+  color: var(--atlas-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .compose-config-top {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 13px;
 }
 
 .config-toolbar {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  border: 1px solid var(--lg-border-color);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.52);
-  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  padding: 9px;
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 19px;
+  background: var(--lg-bg-toolbar);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .config-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
+  padding: 3px;
 }
 
 .config-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
+  padding-left: 7px;
+  font-size: var(--anth-text-xs);
+  font-weight: 700;
+  color: var(--atlas-ink-soft);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding-left: 6px;
 }
 
 .field-row {
@@ -711,9 +890,9 @@ async function submitEssay() {
 }
 
 .select-sm {
-  min-height: 38px;
-  padding: 6px 12px;
-  border-radius: 999px;
+  min-height: 40px;
+  padding: 7px 12px;
+  border-radius: 12px;
 }
 
 .prompt-display {
@@ -728,18 +907,17 @@ async function submitEssay() {
 
 .topic-input {
   min-height: 132px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
 }
 
 .topic-status {
-  padding: 16px;
-  color: var(--text-muted);
-  font-size: 14px;
+  padding: 15px;
+  color: var(--atlas-ink-soft);
+  font-size: var(--anth-text-sm);
   text-align: center;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--lg-border-color);
+  background: var(--lg-bg-interactive);
+  border: 1px dashed var(--lg-border-subtle);
+  border-radius: 16px;
 }
 
 .topic-status--error {
@@ -754,10 +932,26 @@ async function submitEssay() {
 }
 
 .prompt-content {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--lg-bg-interactive);
   padding: 18px;
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--lg-shadow-subtle);
+}
+
+.prompt-image {
+  margin: 14px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 16px;
-  border: 1px solid var(--lg-border-color);
+  background: var(--lg-bg-primary);
+}
+
+.prompt-image img {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
 }
 
 .prompt-meta {
@@ -779,14 +973,15 @@ async function submitEssay() {
 }
 
 .inline-select {
-  min-width: 138px;
+  min-width: 0;
+  width: 100%;
 }
 
 .prompt-text {
-  font-size: 17px;
+  font-size: var(--anth-text-md);
   font-weight: 500;
-  line-height: 1.8;
-  color: var(--text-primary);
+  line-height: 1.75;
+  color: var(--atlas-ink);
   white-space: pre-wrap;
 }
 
@@ -795,36 +990,20 @@ async function submitEssay() {
 }
 
 .compose-editor {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: calc(100vh - 176px);
+  gap: 15px;
+  min-width: 0;
+  min-height: calc(100vh - 168px);
   padding: 0;
-}
-
-.compose-editor::before,
-.compose-editor::after {
-  content: '';
-  position: absolute;
-  border-radius: 999px;
-  pointer-events: none;
-  z-index: -1;
-}
-
-.compose-editor::before {
-  width: 320px;
-  height: 320px;
-  top: -120px;
-  right: -90px;
-  background: radial-gradient(circle, rgba(167, 186, 255, 0.28), transparent 70%);
-}
-
-.compose-editor::after {
-  width: 280px;
-  height: 260px;
-  left: -70px;
-  bottom: -110px;
-  background: radial-gradient(circle, rgba(216, 233, 183, 0.34), transparent 70%);
+  overflow: hidden;
+  border: 1px solid var(--lg-border-color);
+  border-radius: 26px;
+  background: var(--atlas-sheen), var(--lg-bg-primary);
+  box-shadow: var(--lg-shadow-elevated);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
 }
 
 .editor-head {
@@ -832,9 +1011,9 @@ async function submitEssay() {
   justify-content: space-between;
   align-items: center;
   gap: 18px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.36);
-  background: rgba(255, 255, 255, 0.24);
+  padding: 21px 24px 16px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+  background: var(--lg-bg-toolbar);
 }
 
 .editor-head__copy {
@@ -845,10 +1024,11 @@ async function submitEssay() {
 }
 
 .editor-head__copy h2 {
-  font-size: clamp(1.65rem, 2.5vw, 2.2rem);
+  font-size: clamp(1.6rem, 2.5vw, 2.15rem);
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
   margin: 0;
+  color: var(--atlas-ink);
 }
 
 .editor-head__stats {
@@ -862,25 +1042,28 @@ async function submitEssay() {
   flex-direction: row;
   align-items: center;
   gap: 10px;
-  padding: 8px 13px;
+  min-height: 42px;
+  padding: 7px 13px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--lg-bg-elevated);
   border: 1px solid var(--lg-border-color);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .word-badge span,
 .word-meta,
 .word-status__label {
-  font-size: 11px;
+  font-size: var(--anth-text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--atlas-ink-soft);
 }
 
 .word-badge strong {
-  font-size: 24px;
+  font-size: var(--anth-text-xl);
   line-height: 1;
   letter-spacing: -0.02em;
+  color: var(--atlas-accent);
 }
 
 .word-badge.is-warning strong,
@@ -892,23 +1075,25 @@ async function submitEssay() {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 0 22px;
+  padding: 0 24px;
 }
 
 .essay-input {
   flex: 1;
-  min-height: 460px;
-  width: calc(100% - 36px);
-  max-width: calc(100% - 36px);
+  min-height: 450px;
+  width: calc(100% - 40px);
+  max-width: calc(100% - 40px);
   box-sizing: border-box;
-  margin: 0 18px;
-  padding: 26px 24px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  font-size: 18px;
+  margin: 0 20px;
+  padding: 24px;
+  border: 1px solid var(--lg-border-color);
+  border-radius: 20px;
+  background: var(--lg-bg-elevated);
+  font-size: var(--anth-text-lg);
   line-height: 1.8;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.75);
+  color: var(--atlas-ink);
+  box-shadow: var(--lg-shadow-subtle);
+  resize: vertical;
 }
 
 .editor-footer {
@@ -916,13 +1101,15 @@ async function submitEssay() {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  width: calc(100% - 36px);
-  max-width: calc(100% - 36px);
+  width: calc(100% - 40px);
+  max-width: calc(100% - 40px);
   box-sizing: border-box;
-  margin: 0 18px 18px;
-  padding: 14px 14px 6px;
-  border-radius: 999px;
-  background: linear-gradient(to top, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.2));
+  margin: 0 20px 20px;
+  padding: 12px;
+  border: 1px solid var(--lg-border-color);
+  border-radius: 18px;
+  background: var(--lg-bg-interactive);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .word-status {
@@ -932,8 +1119,8 @@ async function submitEssay() {
 }
 
 .word-status strong {
-  font-size: 16px;
-  color: var(--text-primary);
+  font-size: var(--anth-text-md);
+  color: var(--atlas-ink);
 }
 
 .editor-actions {
@@ -948,64 +1135,108 @@ async function submitEssay() {
 
 .toggle-group {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 999px;
+  background: var(--lg-bg-interactive);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .toggle-item {
   display: inline-flex;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  padding: 7px 13px;
-  border: 1px solid var(--lg-border-color);
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.45);
-  color: var(--text-secondary);
+  background: transparent;
+  color: var(--atlas-ink-soft);
   cursor: pointer;
-  transition: all var(--duration-fast) ease;
+  transition:
+    color var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
+    background var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
+    box-shadow var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
+    transform var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease);
 }
 
 .toggle-item:hover {
-  background: rgba(255, 255, 255, 0.72);
+  color: var(--atlas-ink);
+  background: var(--lg-bg-elevated);
 }
 
 .toggle-item.active {
-  background: linear-gradient(135deg, var(--color-terracotta), var(--color-coral));
-  border-color: rgba(201, 100, 66, 0.4);
-  color: var(--color-ivory);
-  box-shadow: 0 6px 16px rgba(201, 100, 66, 0.28);
+  background: var(--color-brand-gradient);
+  border-color: var(--atlas-button-brand-border);
+  color: var(--text-inverse);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .toggle-item__label {
-  font-size: 13px;
+  overflow: hidden;
+  font-size: var(--anth-text-sm);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 20;
-}
-
-.dialog {
-  max-width: 420px;
-  width: 100%;
-  overflow: visible;
-}
-
-.dialog h3 {
-  margin-top: 0;
-}
-
-.dialog-actions {
-  display: flex;
+.compose-page .dialog-actions {
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+}.compose-page :is(.textarea, .select) {
+  width: 100%;
+  color: var(--atlas-ink);
+  border: 1px solid var(--lg-border-subtle);
+  background: var(--lg-bg-elevated);
+  box-shadow: var(--lg-shadow-subtle);
+  transition:
+    border-color var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
+    box-shadow var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
+    background var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease);
+}
+
+.compose-page :is(.textarea, .select)::placeholder {
+  color: var(--atlas-ink-soft);
+}
+
+.compose-page :is(.textarea, .select):focus {
+  outline: none;
+  border-color: var(--atlas-accent-ring);
+  background: var(--lg-bg-elevated);
+  box-shadow:
+    0 0 0 4px var(--atlas-accent-soft),
+    var(--lg-shadow-subtle);
+}
+
+.compose-page .btn:active:not(:disabled),
+.toggle-item:active {
+  transform: scale(0.98);
+}
+
+.compose-page .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  box-shadow: none;
+}
+
+.compose-page :is(.btn, .toggle-item, .textarea, .select):focus-visible {
+  outline: 3px solid var(--atlas-accent-ring);
+  outline-offset: 3px;
+}
+
+@keyframes compose-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 1240px) {
@@ -1020,8 +1251,7 @@ async function submitEssay() {
   }
 
   .config-toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
     border-radius: 18px;
   }
 }
@@ -1045,6 +1275,10 @@ async function submitEssay() {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .editor-actions {
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1058,20 +1292,36 @@ async function submitEssay() {
   }
 
   .compose-hero__copy h1 {
-    font-size: 32px;
+    font-size: var(--anth-text-3xl);
   }
 
   .editor-head__stats {
     align-items: stretch;
   }
 
-  .practice-left {
+  .essay-input {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+    margin: 0 12px;
     padding: 18px;
   }
 
-  .essay-input {
-    margin: 0 12px;
-    padding: 18px;
+  .editor-footer {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+    margin: 0 12px 12px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .compose-page :is(.practice-left, .compose-editor, .draft-banner, .dialog) {
+    background: var(--atlas-canvas-solid);
+    border-color: var(--atlas-ink);
+  }
+
+  .compose-page :is(.textarea, .select, .toggle-group) {
+    background: var(--atlas-canvas-solid);
+    border-color: var(--atlas-ink);
   }
 }
 </style>
