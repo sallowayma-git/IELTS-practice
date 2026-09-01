@@ -11829,6 +11829,32 @@
         return lookup;
     }
 
+    function isSharedMultiChoiceGroup(questionGroup) {
+        if (
+            !questionGroup
+            || (questionGroup.kind !== 'multi_choice' && questionGroup.kind !== 'multiple_choice')
+            || !Array.isArray(questionGroup.questionIds)
+            || questionGroup.questionIds.length <= 1
+        ) {
+            return false;
+        }
+
+        // Generated datasets historically used `multi_choice` for both one
+        // shared checkbox set and several independent radio questions. The
+        // input primitive in bodyHtml disambiguates those production shapes.
+        const bodyHtml = typeof questionGroup.bodyHtml === 'string' ? questionGroup.bodyHtml : '';
+        if (/\btype\s*=\s*(?:"checkbox"|'checkbox'|checkbox)(?=\s|\/?>)/i.test(bodyHtml)) {
+            return true;
+        }
+        if (/\btype\s*=\s*(?:"radio"|'radio'|radio)(?=\s|\/?>)/i.test(bodyHtml)) {
+            return false;
+        }
+
+        // Preserve compatibility for older/synthetic records that lack the
+        // source HTML: multi-ID multi-choice groups were stored as shared sets.
+        return true;
+    }
+
     function areAnswerTokensEquivalent(left, right) {
         const core = getAnswerMatchCore();
         if (core && typeof core.areTokensEquivalent === 'function') {
@@ -11960,12 +11986,7 @@
         // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
         const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
         const questionGroup = buildQuestionGroupLookup(dataset).get(normalizedQuestionId) || null;
-        const isSplitMultiChoiceGroup = Boolean(
-            questionGroup
-            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-            && Array.isArray(questionGroup.questionIds)
-            && questionGroup.questionIds.length > 1
-        );
+        const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
         if (isSplitMultiChoiceGroup) {
             const answerKey = dataset?.answerKey || {};
             const expectedCount = questionGroup.questionIds
@@ -12006,11 +12027,7 @@
                 questionGroup
                 && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
             );
-            const isSplitMultiChoiceGroup = Boolean(
-                isMultiChoiceKind
-                && Array.isArray(questionGroup.questionIds)
-                && questionGroup.questionIds.length > 1
-            );
+            const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
             const isSingleKeyMultiChoiceGroup = Boolean(
                 isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
@@ -12175,6 +12192,14 @@
                 && group.questionIds.length
             );
             if (isMultiChoice) {
+                if (!isSharedMultiChoiceGroup(group) && group.questionIds.length > 1) {
+                    const entry = comparison[rawQuestionId] || comparison[questionId] || {};
+                    const value = readReviewAnswer(results, rawQuestionId);
+                    if (splitAnswerTokens(value).length > 0) {
+                        answered += Math.max(1, Number(entry.weight) || 1);
+                    }
+                    return;
+                }
                 const groupKey = String(group.groupId || group.questionIds.join('|'));
                 if (visitedGroups.has(groupKey)) return;
                 visitedGroups.add(groupKey);
@@ -12214,6 +12239,26 @@
         return Number.isFinite(total) && total >= 0 ? Math.min(answered, total) : answered;
     }
 
+    function resolveReadingPartIndex(dataset = state.dataset) {
+        const candidates = [
+            dataset?.meta?.category,
+            dataset?.meta?.part,
+            dataset?.category,
+            state.examId,
+            state.dataKey,
+            state.suite?.activeExamId
+        ];
+        for (const candidate of candidates) {
+            const value = String(candidate || '').trim();
+            if (!value) continue;
+            const match = value.match(/(?:^|[^a-z0-9])p(?:art)?[\s_-]*([123])(?:[^0-9]|$)/i);
+            if (match) {
+                return Number(match[1]) - 1;
+            }
+        }
+        return null;
+    }
+
     // Per-passage cards. Only the inline suite has more than one passage, so a
     // standalone run renders a single card describing the current exam.
     function collectReviewPartRows(results, reviewSummary = {}) {
@@ -12246,10 +12291,13 @@
         const info = results?.scoreInfo || {};
         const total = Number(info.total ?? info.totalQuestions) || 0;
         if (!total) return rows;
+        const datasetPartIndex = resolveReadingPartIndex();
         const summaryPartIndex = Number(reviewSummary.partIndex);
-        const partIndex = Number.isInteger(summaryPartIndex) && summaryPartIndex >= 0
-            ? summaryPartIndex
-            : (state.reviewMode && Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0);
+        const partIndex = datasetPartIndex !== null
+            ? datasetPartIndex
+            : (Number.isInteger(summaryPartIndex) && summaryPartIndex >= 0
+                ? summaryPartIndex
+                : (state.reviewMode && Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0));
         const summaryDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
         rows.push({
             label: `Part ${partIndex + 1}`,
@@ -12594,12 +12642,7 @@
                 return false;
             }
             const questionGroup = replayGroupLookup.get(questionId);
-            const isSplitMultiChoiceGroup = Boolean(
-                questionGroup
-                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-                && Array.isArray(questionGroup.questionIds)
-                && questionGroup.questionIds.length > 1
-            );
+            const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
             return !isSplitMultiChoiceGroup
                 || questionGroup.questionIds.every((groupQuestionId) => hasUsableCorrectAnswer(groupQuestionId));
         });
@@ -12620,11 +12663,51 @@
                     isCorrect: null
                 };
             });
+            const persistedScoreInfo = entry.scoreInfo && typeof entry.scoreInfo === 'object'
+                ? entry.scoreInfo
+                : (entry.realData?.scoreInfo && typeof entry.realData.scoreInfo === 'object'
+                    ? entry.realData.scoreInfo
+                    : {});
+            const persistedTotalForCompleteness = Number(
+                persistedScoreInfo.total ?? persistedScoreInfo.totalQuestions
+            );
+            const replayTotalForCompleteness = Number(
+                replayResults.scoreInfo?.total ?? replayResults.scoreInfo?.totalQuestions
+            );
+            const hasCompleteCorrectAnswerMap = questionIds.size > 0
+                && Array.from(questionIds).every((questionId) => hasUsableCorrectAnswer(questionId))
+                && (
+                    !Number.isFinite(persistedTotalForCompleteness)
+                    || !Number.isFinite(replayTotalForCompleteness)
+                    || persistedTotalForCompleteness <= replayTotalForCompleteness
+                );
+            const scoreInfo = hasCompleteCorrectAnswerMap
+                ? Object.assign({}, persistedScoreInfo, replayResults.scoreInfo)
+                : Object.assign({}, replayResults.scoreInfo, persistedScoreInfo);
+            if (!hasCompleteCorrectAnswerMap) {
+                const persistedCorrect = Number(persistedScoreInfo.correct ?? persistedScoreInfo.score);
+                const persistedTotal = Number(persistedScoreInfo.total ?? persistedScoreInfo.totalQuestions);
+                if (Number.isFinite(persistedCorrect) && persistedCorrect >= 0) {
+                    scoreInfo.correct = persistedCorrect;
+                }
+                if (Number.isFinite(persistedTotal) && persistedTotal >= 0) {
+                    scoreInfo.total = persistedTotal;
+                    scoreInfo.totalQuestions = persistedTotal;
+                }
+                const persistedAccuracy = Number(persistedScoreInfo.accuracy);
+                scoreInfo.accuracy = Number.isFinite(persistedAccuracy)
+                    ? persistedAccuracy
+                    : (scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0);
+                const persistedPercentage = Number(persistedScoreInfo.percentage);
+                scoreInfo.percentage = Number.isFinite(persistedPercentage)
+                    ? persistedPercentage
+                    : Math.round(scoreInfo.accuracy * 100);
+            }
             return {
                 answers: replayAnswers,
                 correctAnswers: normalizedCorrectAnswers,
                 answerComparison,
-                scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
+                scoreInfo
             };
         }
 
@@ -12639,7 +12722,11 @@
         });
 
         const totalQuestions = questionIds.size;
-        const scoreInfo = Object.assign({}, entry.scoreInfo || {});
+        const scoreInfo = Object.assign(
+            {},
+            (entry.realData?.scoreInfo && typeof entry.realData.scoreInfo === 'object') ? entry.realData.scoreInfo : {},
+            (entry.scoreInfo && typeof entry.scoreInfo === 'object') ? entry.scoreInfo : {}
+        );
         scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : 0;
         scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
         scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
@@ -13461,13 +13548,16 @@
                 replayData?.endTime,
                 entry?.completedAt,
                 replayData?.completedAt,
+                entry?.timestamp,
+                replayData?.timestamp,
+                entry?.rawData?.timestamp,
                 entry?.date,
                 replayData?.date
             ),
             durationSeconds,
-            partIndex: Number.isInteger(data?.reviewEntryIndex)
+            partIndex: resolveReadingPartIndex() ?? (Number.isInteger(data?.reviewEntryIndex)
                 ? data.reviewEntryIndex
-                : state.reviewEntryIndex,
+                : state.reviewEntryIndex),
             title: entry?.title || entry?.metadata?.examTitle || state.dataset?.meta?.title || ''
         };
     }
@@ -14404,7 +14494,7 @@
         const reviewSummary = {
             submittedAtMs: timing.endTimeMs,
             durationSeconds: timing.duration,
-            partIndex: state.suite?.inline ? 0 : state.reviewEntryIndex,
+            partIndex: resolveReadingPartIndex() ?? (state.suite?.inline ? 0 : state.reviewEntryIndex),
             title: state.dataset?.meta?.title || '',
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries)
                 ? submissionSnapshot.suiteEntries.map((entry) => ({

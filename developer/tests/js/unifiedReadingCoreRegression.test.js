@@ -199,7 +199,7 @@ function loadHooks() {
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, document, timer };
+    return { hooks, window, document, timer, context };
 }
 
 function plain(value) {
@@ -559,6 +559,94 @@ function testReviewCompletionCountsSelectedOptionsExactlyOnce() {
     );
 }
 
+function testIndependentRadioMultiChoiceUsesProductionFixture() {
+    const { hooks, window, context } = loadHooks();
+    let fixtureDataset = null;
+    window.__READING_EXAM_DATA__ = {
+        register(examId, dataset) {
+            if (examId === 'p3-high-221') fixtureDataset = dataset;
+        }
+    };
+    loadScript('assets/generated/reading-exams/p3-high-221.js', context);
+    assert(fixtureDataset, 'p3-high-221 production fixture should register');
+
+    const answers = {
+        q11: 'A',
+        q12: 'A',
+        q13: 'A',
+        q14: 'A'
+    };
+    const results = hooks.buildResultsFromAnswers(fixtureDataset, answers);
+    assert.strictEqual(
+        hooks.countAnsweredWeight(results, fixtureDataset),
+        4,
+        'four independent production radio questions must count as four answered questions'
+    );
+    assert.strictEqual(results.scoreInfo.correct, 1, 'independent radio answers must be scored per question');
+    assert.strictEqual(results.scoreInfo.totalQuestions, 14, 'the production fixture total must remain intact');
+}
+
+function testPartialReplayPreservesPersistedTotals() {
+    const { hooks } = loadHooks();
+    const dataset = {
+        questionGroups: [],
+        questionOrder: ['q1', 'q2', 'q3']
+    };
+    hooks.setTestState({ dataset });
+    const results = hooks.buildReplayResults({
+        answers: { q1: 'A', q2: 'B', q3: 'C' },
+        correctAnswerMap: { q1: 'A' },
+        allQuestionIds: ['q1', 'q2', 'q3'],
+        scoreInfo: {
+            correct: 2,
+            total: 3,
+            totalQuestions: 3,
+            accuracy: 2 / 3,
+            percentage: 67
+        }
+    });
+
+    assert.strictEqual(results.answerComparison.q1.isCorrect, true, 'known legacy keys should remain gradable');
+    assert.strictEqual(results.answerComparison.q2.isCorrect, null, 'missing legacy keys should remain ungraded');
+    assert.strictEqual(results.answerComparison.q3.isCorrect, null, 'all missing legacy keys should remain ungraded');
+    assert.strictEqual(results.scoreInfo.correct, 2, 'partial keys must not truncate the persisted score');
+    assert.strictEqual(results.scoreInfo.total, 3, 'partial keys must preserve the persisted total');
+    assert.strictEqual(results.scoreInfo.totalQuestions, 3, 'partial keys must preserve the completion denominator');
+    assert.strictEqual(hooks.countAnsweredWeight(results, dataset), 3, 'persisted answered values should retain 3 / 3 completion');
+
+    const sparseLegacy = hooks.buildReplayResults({
+        answers: { q1: 'A' },
+        correctAnswerMap: { q1: 'A' },
+        scoreInfo: { correct: 2, total: 3, percentage: 67 }
+    });
+    assert.strictEqual(sparseLegacy.scoreInfo.correct, 2, 'sparse legacy records must retain their persisted score');
+    assert.strictEqual(sparseLegacy.scoreInfo.total, 3, 'persisted totals larger than the gradable subset signal a partial key map');
+    assert.strictEqual(sparseLegacy.scoreInfo.totalQuestions, 3, 'sparse legacy completion must retain the persisted denominator');
+}
+
+function testStandalonePartIdentityUsesDatasetCategory() {
+    for (const [category, expectedLabel] of [['P2', 'Part 2'], ['P3', 'Part 3']]) {
+        const { hooks } = loadHooks();
+        const dataset = {
+            meta: { category, title: `${category} standalone` },
+            questionGroups: [],
+            questionOrder: ['q1'],
+            answerKey: { q1: 'A' }
+        };
+        hooks.setTestState({
+            examId: `${category.toLowerCase()}-standalone`,
+            dataKey: `${category.toLowerCase()}-standalone`,
+            dataset,
+            reviewMode: false,
+            reviewEntryIndex: 0,
+            suiteSessionId: null
+        });
+        const results = hooks.buildResultsFromAnswers(dataset, { q1: 'A' });
+        const rows = hooks.collectReviewPartRows(results, { partIndex: 0, durationSeconds: 5 });
+        assert.strictEqual(rows[0].label, expectedLabel, `${category} must not inherit the review-navigation index`);
+    }
+}
+
 function testPersistedChoiceStringSplitsForHighlighting() {
     const { hooks } = loadHooks();
     assert.deepStrictEqual(
@@ -599,6 +687,9 @@ async function main() {
         testReplayKeepsMissingCorrectAnswersUnknown();
         testSplitCheckboxRequiresExpectedSelectionCount();
         testReviewCompletionCountsSelectedOptionsExactlyOnce();
+        testIndependentRadioMultiChoiceUsesProductionFixture();
+        testPartialReplayPreservesPersistedTotals();
+        testStandalonePartIdentityUsesDatasetCategory();
         testPersistedChoiceStringSplitsForHighlighting();
         testJudgementChoicesRemainAvailableForHighlighting();
         process.stdout.write(JSON.stringify({
@@ -617,6 +708,9 @@ async function main() {
     testReplayKeepsMissingCorrectAnswersUnknown();
     testSplitCheckboxRequiresExpectedSelectionCount();
     testReviewCompletionCountsSelectedOptionsExactlyOnce();
+    testIndependentRadioMultiChoiceUsesProductionFixture();
+    testPartialReplayPreservesPersistedTotals();
+    testStandalonePartIdentityUsesDatasetCategory();
     testPersistedChoiceStringSplitsForHighlighting();
     testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();

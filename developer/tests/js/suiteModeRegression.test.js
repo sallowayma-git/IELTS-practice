@@ -277,6 +277,22 @@ async function run() {
 
         assert.deepStrictEqual(plain(legacyEntry.highlights), realDataHighlights, '单题 legacy realData.highlights 必须进入 replay entry');
         assert.strictEqual(legacyEntry.scrollY, 240, '单题 legacy realData.scrollY 必须进入 replay entry');
+
+        const timestampOnlyEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p3',
+            title: 'Legacy timestamp P3',
+            answers: { q1: 'C' },
+            correctAnswerMap: { q1: 'C' },
+            answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            realData: { timestamp: '2026-08-15T10:20:30.000Z' },
+            metadata: { examId: 'reading-p3', examTitle: 'Legacy timestamp P3' }
+        })[0];
+        assert.strictEqual(
+            timestampOnlyEntry.endTime,
+            '2026-08-15T10:20:30.000Z',
+            'timestamp-only legacy records must normalize their completion time into the replay entry'
+        );
     }
 
     // Case 1: P1 提交后自动跳转 P2，发送 SIMULATION_CONTEXT
@@ -346,6 +362,37 @@ async function run() {
         assert.strictEqual(reviewStateCount, 1, '手动模式应下发回看上下文');
         assert.strictEqual(session.currentIndex, 0, '手动模式应停留在当前篇');
         assert.strictEqual(session.pendingAdvance.completedExamId, 'reading-p1', '应记录待切题状态');
+    }
+
+    // Case 1.2: 驻足模式回放必须区分当前篇时长与套题累计时长
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_stationary_duration');
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.currentIndex = 1;
+        session.activeExamId = 'reading-p2';
+        session.elapsedByExam['reading-p1'] = 1200;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const completedAt = '2026-08-15T10:20:30.000Z';
+        const handled = await app.handleSuitePracticeComplete('reading-p2', {
+            suiteSessionId: session.id,
+            duration: 2400,
+            endTime: completedAt,
+            answers: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        }, session.windowRef);
+
+        assert.strictEqual(handled, true, 'stationary P2 submission should be handled');
+        const p2Result = session.results.find(entry => entry.examId === 'reading-p2');
+        assert.strictEqual(p2Result.duration, 1200, 'P2 result must subtract the previously consumed P1 duration');
+        const replayMessage = session.windowRef._messages.find(message => message?.type === 'REPLAY_PRACTICE_RECORD');
+        assert(replayMessage, 'stationary submission must send a replay entry');
+        assert.strictEqual(replayMessage.data.entry.duration, 1200, 'replay must freeze the per-part duration, not the 2400-second suite total');
+        assert.strictEqual(replayMessage.data.entry.endTime, completedAt, 'replay must freeze the submitted timestamp');
     }
 
     // Case 2: SIMULATION_NAVIGATE 前后切换并保存 draft

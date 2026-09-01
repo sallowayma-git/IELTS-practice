@@ -11258,8 +11258,34 @@
                     answerComparison: comparison,
                     scoreInfo,
                     allQuestionIds: [],
-                    startTime: entry.startTime || record.startTime || record.date || null,
-                    endTime: entry.endTime || record.endTime || record.date || null,
+                    startTime: entry.startTime
+                        || entry.realData?.startTime
+                        || entry.rawData?.startTime
+                        || record.startTime
+                        || record.realData?.startTime
+                        || record.rawData?.startTime
+                        || record.date
+                        || null,
+                    endTime: entry.endTime
+                        || entry.completedAt
+                        || entry.timestamp
+                        || entry.realData?.endTime
+                        || entry.realData?.completedAt
+                        || entry.realData?.timestamp
+                        || entry.rawData?.endTime
+                        || entry.rawData?.completedAt
+                        || entry.rawData?.timestamp
+                        || record.endTime
+                        || record.completedAt
+                        || record.timestamp
+                        || record.realData?.endTime
+                        || record.realData?.completedAt
+                        || record.realData?.timestamp
+                        || record.rawData?.endTime
+                        || record.rawData?.completedAt
+                        || record.rawData?.timestamp
+                        || record.date
+                        || null,
                     duration: Number(entry.duration ?? record.duration) || 0,
                     markedQuestions: Array.isArray(entry.markedQuestions)
                         ? entry.markedQuestions.slice()

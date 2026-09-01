@@ -37,6 +37,9 @@ async function testResponsiveAndDarkReviewPresentation(page) {
         document.getElementById('review-accuracy').textContent = '78%';
         document.getElementById('review-completion').textContent = '36 / 40';
         document.getElementById('review-elapsed').textContent = '1:02:03';
+        const candidateId = document.getElementById('candidate-id');
+        candidateId.hidden = false;
+        candidateId.textContent = '482731';
         document.getElementById('review-part-scores').innerHTML = [1, 2, 3].map((part) => `
             <div class="review-part-score" style="--review-progress:${part * 25}%">
                 <span class="review-part-label">Part ${part}</span>
@@ -46,22 +49,34 @@ async function testResponsiveAndDarkReviewPresentation(page) {
         `).join('');
     });
 
-    for (const width of [320, 375, 480, 768, 960]) {
+    for (const width of [320, 375, 480, 520, 768, 960]) {
         await page.setViewportSize({ width, height: 900 });
         const layout = await page.evaluate(() => {
             const timer = document.getElementById('timer').getBoundingClientRect();
             const controls = document.querySelector('.header-right').getBoundingClientRect();
+            const candidate = document.getElementById('candidate-id');
+            const candidateRect = candidate.getBoundingClientRect();
+            const candidateContainer = candidate.parentElement.getBoundingClientRect();
             return {
                 clientWidth: document.documentElement.clientWidth,
                 scrollWidth: document.documentElement.scrollWidth,
                 timerRight: timer.right,
                 controlsLeft: controls.left,
+                candidateDisplay: getComputedStyle(candidate).display,
+                candidateWidth: candidateRect.width,
+                candidateWithinContainer: candidateRect.left >= candidateContainer.left - 0.5
+                    && candidateRect.right <= candidateContainer.right + 0.5,
                 metricsColumns: getComputedStyle(document.querySelector('.review-metrics')).gridTemplateColumns,
                 partColumns: getComputedStyle(document.getElementById('review-part-scores')).gridTemplateColumns
             };
         });
         assert.ok(layout.scrollWidth <= layout.clientWidth, `review layout must not overflow at ${width}px: ${JSON.stringify(layout)}`);
         assert.ok(layout.timerRight <= layout.controlsLeft + 0.5, `header controls must not cover the timer at ${width}px`);
+        if (width <= 520) {
+            assert.notEqual(layout.candidateDisplay, 'none', `candidate code must remain displayed at ${width}px`);
+            assert.ok(layout.candidateWidth > 0, `candidate code must retain visible width at ${width}px`);
+            assert.ok(layout.candidateWithinContainer, `candidate code must not be clipped at ${width}px`);
+        }
         if (width <= 480) {
             assert.equal(layout.metricsColumns.trim().split(/\s+/).length, 2, `phone metrics should reflow to two columns at ${width}px`);
             assert.equal(layout.partColumns.trim().split(/\s+/).length, 1, `phone part cards should stack at ${width}px`);
@@ -216,7 +231,7 @@ async function testReviewRuntimeBehaviors(page) {
                 correctAnswerMap: { q1: 'A' },
                 allQuestionIds: ['q1'],
                 scoreInfo: { correct: 1, total: 1, totalQuestions: 1, percentage: 100 },
-                endTime: '2026-08-15T10:20:30.000Z',
+                timestamp: '2026-08-15T10:20:30.000Z',
                 duration: 125
             }
         });

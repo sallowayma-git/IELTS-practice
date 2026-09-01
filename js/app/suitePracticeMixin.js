@@ -1319,9 +1319,24 @@
             if (!hasReplayData) {
                 return null;
             }
+            const replayDuration = Number(
+                result?.duration
+                ?? (session.elapsedByExam && session.elapsedByExam[examId])
+                ?? draft?.duration
+            );
+            const replayEndTime = result?.endTime
+                || result?.completedAt
+                || result?.timestamp
+                || result?.rawData?.endTime
+                || result?.rawData?.completedAt
+                || result?.rawData?.timestamp
+                || result?.rawData?.realData?.timestamp
+                || null;
             return {
                 examId: (result && result.examId) || examId,
                 title: (result && result.title) || (sequenceEntry && sequenceEntry.exam && sequenceEntry.exam.title) || examId,
+                duration: Number.isFinite(replayDuration) ? Math.max(0, replayDuration) : 0,
+                endTime: replayEndTime,
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
                 scoreInfo: (result && result.scoreInfo) || {},
