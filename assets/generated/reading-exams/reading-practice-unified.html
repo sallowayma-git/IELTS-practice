@@ -1918,6 +1918,52 @@
             color: #d4d4d4;
         }
 
+        body.dark-mode .review-banner {
+            background: #171c22;
+            border-color: #55606b;
+            color: #f2f2f2;
+        }
+
+        body.dark-mode .review-scope,
+        body.dark-mode .review-submission,
+        body.dark-mode .review-part-result {
+            color: #c9d1d9;
+        }
+
+        body.dark-mode .review-metrics div {
+            border-color: #46515d;
+        }
+
+        body.dark-mode .review-score {
+            color: #8bd5ff;
+        }
+
+        body.dark-mode .review-part-score {
+            background: #20262d;
+            border-color: rgba(174, 187, 199, 0.62);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+
+        body.dark-mode .review-part-score-value {
+            color: #f2f2f2;
+        }
+
+        body.dark-mode .review-key-correct {
+            color: #70d68a;
+        }
+
+        body.dark-mode .review-key-partial {
+            color: #f2bd68;
+        }
+
+        body.dark-mode .review-key-incorrect {
+            color: #ff8b84;
+        }
+
+        body.dark-mode .review-key-unanswered {
+            color: #c9d1d9;
+        }
+
         /* ================================================================
            Responsive
            ================================================================ */
@@ -2007,7 +2053,132 @@
             }
         }
 
+        @media (max-width: 980px) {
+            .review-banner {
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-rows: auto auto auto;
+                align-items: start;
+                padding-inline: 16px;
+            }
+
+            .review-identity {
+                grid-row: 1;
+                grid-column: 1;
+            }
+
+            .review-legend {
+                width: auto;
+                grid-row: 1;
+                grid-column: 2;
+                gap: 4px 14px;
+                justify-content: flex-end;
+            }
+
+            .review-metrics {
+                width: 100%;
+                grid-row: 2;
+                grid-column: 1 / -1;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            .review-part-scores {
+                width: 100%;
+                grid-row: 3;
+                grid-column: 1 / -1;
+            }
+        }
+
         @media (max-width: 520px) {
+            .header {
+                padding-left: 10px;
+            }
+
+            .header-left {
+                flex: 1 1 auto;
+                gap: 8px;
+                overflow: hidden;
+            }
+
+            .header-right {
+                flex: 0 0 auto;
+            }
+
+            .header-status {
+                display: none;
+            }
+
+            .header-btn {
+                flex-basis: 44px;
+                width: 44px;
+            }
+
+            .header-icon {
+                margin-inline: 10px;
+            }
+
+            .ielts-brand {
+                flex: 0 0 auto;
+                font-size: 17px;
+            }
+
+            .candidate-details {
+                flex: 1 1 auto;
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            .candidate-id {
+                display: none !important;
+            }
+
+            #timer {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            #notes-drawer-btn.header-btn .reading-note-count {
+                top: 10px;
+                right: 6px;
+            }
+
+            .review-banner {
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-rows: repeat(4, auto);
+                gap: 8px;
+                padding: 10px 12px;
+            }
+
+            .review-identity,
+            .review-metrics,
+            .review-part-scores,
+            .review-legend {
+                width: 100%;
+                grid-column: 1;
+            }
+
+            .review-identity { grid-row: 1; }
+            .review-metrics {
+                grid-row: 2;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .review-part-scores {
+                grid-row: 3;
+                grid-template-columns: minmax(0, 1fr);
+            }
+            .review-legend {
+                grid-row: 4;
+                justify-content: flex-start;
+                gap: 6px 16px;
+            }
+
+            .review-metrics div:nth-child(odd) {
+                border-left: 0;
+            }
+
+            .review-submission {
+                white-space: normal;
+            }
+
             .part-nav-status {
                 display: none;
             }

@@ -506,6 +506,59 @@ function testSplitCheckboxRequiresExpectedSelectionCount() {
     );
 }
 
+function testReviewCompletionCountsSelectedOptionsExactlyOnce() {
+    const { hooks } = loadHooks();
+    const splitDataset = {
+        questionGroups: [{
+            groupId: 'production-style-three-choice',
+            kind: 'multi_choice',
+            questionIds: ['q11', 'q12', 'q13']
+        }],
+        questionOrder: ['q11', 'q12', 'q13'],
+        answerKey: { q11: 'C', q12: 'D', q13: 'E' }
+    };
+    const partial = hooks.buildResultsFromAnswers(splitDataset, {
+        q11: ['C'],
+        q12: ['C'],
+        q13: ['C']
+    });
+    assert.strictEqual(
+        hooks.countAnsweredWeight(partial, splitDataset),
+        1,
+        'one shared selection in a three-point split group must report 1 / 3 completion'
+    );
+
+    const legacyComparisonOnly = {
+        answerComparison: {
+            q11: { questionId: 'q11', userAnswer: ['C'], weight: 1 },
+            q12: { questionId: 'q12', userAnswer: ['C'], weight: 1 },
+            q13: { questionId: 'q13', userAnswer: ['C'], weight: 1 }
+        },
+        scoreInfo: { total: 3, totalQuestions: 3 }
+    };
+    assert.strictEqual(
+        hooks.countAnsweredWeight(legacyComparisonOnly, splitDataset),
+        1,
+        'comparison-only replay data must de-duplicate the repeated selected set'
+    );
+
+    const weightedDataset = {
+        questionGroups: [{
+            groupId: 'weighted-three-choice',
+            kind: 'multi_choice',
+            questionIds: ['q21']
+        }],
+        questionOrder: ['q21'],
+        answerKey: { q21: ['A', 'B', 'C'] }
+    };
+    const weightedPartial = hooks.buildResultsFromAnswers(weightedDataset, { q21: ['A'] });
+    assert.strictEqual(
+        hooks.countAnsweredWeight(weightedPartial, weightedDataset),
+        1,
+        'one selection in a weighted single-key group must not receive its full three-point weight'
+    );
+}
+
 function testPersistedChoiceStringSplitsForHighlighting() {
     const { hooks } = loadHooks();
     assert.deepStrictEqual(
@@ -545,6 +598,7 @@ async function main() {
         testReplaySplitCheckboxStringScoresByToken();
         testReplayKeepsMissingCorrectAnswersUnknown();
         testSplitCheckboxRequiresExpectedSelectionCount();
+        testReviewCompletionCountsSelectedOptionsExactlyOnce();
         testPersistedChoiceStringSplitsForHighlighting();
         testJudgementChoicesRemainAvailableForHighlighting();
         process.stdout.write(JSON.stringify({
@@ -562,6 +616,7 @@ async function main() {
     testReplaySplitCheckboxStringScoresByToken();
     testReplayKeepsMissingCorrectAnswersUnknown();
     testSplitCheckboxRequiresExpectedSelectionCount();
+    testReviewCompletionCountsSelectedOptionsExactlyOnce();
     testPersistedChoiceStringSplitsForHighlighting();
     testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();

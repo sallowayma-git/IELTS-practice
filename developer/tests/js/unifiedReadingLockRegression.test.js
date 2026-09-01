@@ -169,8 +169,20 @@ async function run() {
   ok(/id="review-score"|id="review-accuracy"/.test(unifiedHtml), 'review_banner_metrics_missing', failed);
   ok(/id="review-part-scores"/.test(unifiedHtml), 'review_banner_part_scores_missing', failed);
   ok((unifiedHtml.match(/class="review-key /g) || []).length === 4, 'review_banner_legend_incomplete', failed);
-  ok(/renderReviewBanner\(results\);/.test(unifiedPage), 'review_banner_not_rendered_on_results', failed);
+  ok(/renderReviewBanner\(results, reviewSummary\);/.test(unifiedPage), 'review_banner_not_rendered_on_results', failed);
   ok((unifiedPage.match(/hideReviewBanner\(\);/g) || []).length >= 3, 'review_banner_not_collapsed_on_reset', failed);
+  ok(/countAnsweredWeight\(results, dataset = state\.dataset\)/.test(unifiedPage), 'review_completion_not_group_aware', failed);
+  ok(/resolveReplayReviewSummary\(data, entry, replayData\)/.test(unifiedPage), 'historical_review_summary_not_recorded', failed);
+  ok(/presentation\.reviewSummary \|\| \{\}/.test(unifiedPage), 'submit_snapshot_not_used_for_review_banner', failed);
+  ok(/dom\.submitBtn\.querySelector\('\.submit-btn-icon'\)/.test(unifiedPage), 'readonly_submit_icon_not_preserved', failed);
+  ok(/dom\.resetBtn\.style\.display = '';/.test(unifiedPage), 'draft_reset_affordance_not_restored', failed);
+  ok(/setSettingsBackgroundInert\(true\)/.test(unifiedPage), 'options_background_not_inert', failed);
+  ok(/settingsPanel\?\.addEventListener\('keydown', trapSettingsFocus\)/.test(unifiedPage), 'options_focus_trap_not_bound', failed);
+  ok(/data-note-title[^>]*type="text"/.test(unifiedPage), 'note_title_editor_not_restored', failed);
+  ok(/body\.dark-mode \.review-banner\s*\{[^}]*background: #171c22/.test(unifiedHtml), 'review_banner_dark_mode_missing', failed);
+  ok(/@media \(max-width: 980px\)[\s\S]*?\.review-banner\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/.test(unifiedHtml), 'review_banner_tablet_reflow_missing', failed);
+  ok(/@media \(max-width: 520px\)[\s\S]*?\.review-metrics\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(unifiedHtml), 'review_banner_phone_reflow_missing', failed);
+  ok(/@media \(max-width: 520px\)[\s\S]*?\.header-status\s*\{[^}]*display: none/.test(unifiedHtml), 'phone_header_status_not_collapsed', failed);
   // Notes: an icon button in the header, and noted text uses the reference's
   // .note-anchor blue rather than the marker-chip yellow.
   ok(/id="notes-drawer-btn"[^>]*class="header-btn reading-notes-btn"|class="header-btn reading-notes-btn" id="notes-drawer-btn"/.test(unifiedHtml), 'notes_button_not_in_header', failed);

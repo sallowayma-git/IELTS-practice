@@ -6599,6 +6599,8 @@
         noteDrawerDirty: true,
         noteHighlightMetaDirty: true,
         noteEditorPendingSync: false,
+        optionsReturnFocus: null,
+        optionsInertSiblings: [],
         reviewRecordId: '',
         // 单篇阅读 final-submit 成功后，宿主通过 PRACTICE_RECORD_SAVED 回传的已存档
         // practice record id。持有该 id 时，笔记编辑在只读提交页仍然可写，并且
@@ -6748,6 +6750,43 @@
         if (Number.isFinite(state.pagePausedAtMs)) {
             state.pagePausedOffsetMs += Math.max(0, now - state.pagePausedAtMs);
             state.pagePausedAtMs = null;
+        }
+    }
+
+    function readSuiteSlotDurationMs(slot) {
+        if (slot && slot.durationMs !== null && slot.durationMs !== undefined) {
+            const durationMs = Number(slot.durationMs);
+            if (Number.isFinite(durationMs)) return Math.max(0, durationMs);
+        }
+        return Math.max(0, Number(slot?.durationSeconds) || 0) * 1000;
+    }
+
+    function checkpointActiveSuiteDuration(nowMs = Date.now(), keepRunning = interaction.timerRunning) {
+        if (!state.suite?.inline) {
+            return 0;
+        }
+        const slot = getActiveSuiteSlot();
+        const startedAtMs = Number(state.suite.activeStartedAtMs);
+        const checkpointMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+        if (slot && Number.isFinite(startedAtMs) && startedAtMs > 0) {
+            const elapsedMs = Math.max(0, checkpointMs - startedAtMs);
+            slot.durationMs = readSuiteSlotDurationMs(slot) + elapsedMs;
+            // Retain this compatibility projection for callers that still inspect
+            // the old field, but round only after the millisecond accumulator is
+            // updated so frequent draft snapshots cannot lose fractional seconds.
+            slot.durationSeconds = Math.max(0, Math.round(slot.durationMs / 1000));
+        }
+        state.suite.activeStartedAtMs = keepRunning && slot ? checkpointMs : null;
+        return readSuiteSlotDurationMs(slot);
+    }
+
+    function syncActiveSuiteTimer(nextRunning, nowMs = Date.now()) {
+        const running = nextRunning !== false;
+        const wasRunning = interaction.timerRunning !== false;
+        if (wasRunning && !running) {
+            checkpointActiveSuiteDuration(nowMs, false);
+        } else if (!wasRunning && running && state.suite?.inline && getActiveSuiteSlot()) {
+            state.suite.activeStartedAtMs = Number(nowMs) || Date.now();
         }
     }
 
@@ -6972,6 +7011,8 @@
     }
 
     function setTimerRunning(nextRunning) {
+        const nowMs = Date.now();
+        syncActiveSuiteTimer(Boolean(nextRunning), nowMs);
         interaction.timerRunning = !!nextRunning;
         syncPagePauseState(interaction.timerRunning);
         renderTimer();
@@ -7011,27 +7052,99 @@
         return Boolean(document.getElementById('settings-panel')?.classList.contains('is-open'));
     }
 
+    function setSettingsBackgroundInert(enabled) {
+        const settingsPanel = document.getElementById('settings-panel');
+        if (!settingsPanel || !document.body) return;
+        if (enabled) {
+            if (state.optionsInertSiblings.length) return;
+            state.optionsInertSiblings = Array.from(document.body.children || [])
+                .filter((node) => node !== settingsPanel)
+                .map((node) => ({
+                    node,
+                    hadAttribute: node.hasAttribute('inert'),
+                    inertValue: Boolean(node.inert)
+                }));
+            state.optionsInertSiblings.forEach(({ node }) => {
+                node.inert = true;
+                node.setAttribute('inert', '');
+            });
+            return;
+        }
+        state.optionsInertSiblings.forEach(({ node, hadAttribute, inertValue }) => {
+            node.inert = inertValue;
+            if (hadAttribute) node.setAttribute('inert', '');
+            else node.removeAttribute('inert');
+        });
+        state.optionsInertSiblings = [];
+    }
+
+    function getSettingsFocusableElements(settingsPanel) {
+        if (!settingsPanel) return [];
+        return Array.from(settingsPanel.querySelectorAll([
+            'button:not([disabled])',
+            'a[href]',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])'
+        ].join(','))).filter((node) => (
+            node.getAttribute('aria-hidden') !== 'true'
+            && !node.hidden
+            && node.getClientRects().length > 0
+        ));
+    }
+
+    function trapSettingsFocus(event) {
+        if (event.key !== 'Tab' || !isSettingsPanelOpen()) return;
+        const settingsPanel = document.getElementById('settings-panel');
+        const focusable = getSettingsFocusableElements(settingsPanel);
+        if (!settingsPanel || !focusable.length) {
+            event.preventDefault();
+            settingsPanel?.focus?.();
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey && (active === first || !focusable.includes(active))) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && (active === last || !focusable.includes(active))) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
     function closeFloatingPanels() {
         const settingsPanel = document.getElementById('settings-panel');
         const notesPanel = document.getElementById('notes-panel');
         const overlay = document.querySelector('.overlay');
+        const settingsWereOpen = isSettingsPanelOpen();
         // Options is a full-screen menu: drive it by class + `hidden` so it stays
         // out of the a11y tree while closed.
         if (settingsPanel) {
             settingsPanel.classList.remove('is-open');
             settingsPanel.hidden = true;
         }
+        setSettingsBackgroundInert(false);
         document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'false');
         if (notesPanel) notesPanel.style.display = 'none';
         if (overlay) overlay.style.display = 'none';
+        if (settingsWereOpen) {
+            const returnFocus = state.optionsReturnFocus;
+            state.optionsReturnFocus = null;
+            returnFocus?.focus?.();
+        }
     }
 
     function openSettingsPanel() {
         const settingsPanel = document.getElementById('settings-panel');
         if (!settingsPanel) return;
         closeFloatingPanels();
+        state.optionsReturnFocus = document.activeElement;
         settingsPanel.hidden = false;
         settingsPanel.classList.add('is-open');
+        setSettingsBackgroundInert(true);
         document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'true');
         document.getElementById('options-title')?.focus?.();
     }
@@ -7064,6 +7177,7 @@
             // document-level dismiss handler.
             event.stopPropagation();
         });
+        settingsPanel?.addEventListener('keydown', trapSettingsFocus);
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && isSettingsPanelOpen()) {
                 closeFloatingPanels();
@@ -8049,13 +8163,7 @@
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
-        if (Number.isFinite(Number(state.suite.activeStartedAtMs)) && state.suite.activeStartedAtMs > 0) {
-            const elapsedSeconds = Math.max(0, Math.round((Date.now() - state.suite.activeStartedAtMs) / 1000));
-            if (elapsedSeconds > 0) {
-                slot.durationSeconds = Math.max(0, Number(slot.durationSeconds) || 0) + elapsedSeconds;
-                state.suite.activeStartedAtMs = Date.now();
-            }
-        }
+        checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
         state.simulationDraftFingerprint = reason === 'activate'
             ? state.simulationDraftFingerprint
             : buildDraftFingerprint(draft);
@@ -8140,7 +8248,16 @@
                 draft: mergeDraft(existing?.draft, inheritedDraft),
                 navStatus: existing?.navStatus instanceof Map ? existing.navStatus : new Map(),
                 lastResults: existing?.lastResults || null,
-                durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
+                durationMs: existing?.durationMs !== null
+                    && existing?.durationMs !== undefined
+                    && Number.isFinite(Number(existing.durationMs))
+                    ? Math.max(0, Number(existing.durationMs))
+                    : Math.max(0, Number(existing?.durationSeconds) || 0) * 1000,
+                durationSeconds: existing?.durationMs !== null
+                    && existing?.durationMs !== undefined
+                    && Number.isFinite(Number(existing.durationMs))
+                    ? Math.max(0, Math.round(Number(existing.durationMs) / 1000))
+                    : (Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0)
             }));
         }));
         return true;
@@ -8242,7 +8359,7 @@
         }
         state.suite.activating = true;
         state.suite.activeExamId = targetExamId;
-        state.suite.activeStartedAtMs = Date.now();
+        state.suite.activeStartedAtMs = interaction.timerRunning ? Date.now() : null;
         state.examId = targetExamId;
         state.dataKey = slot.dataKey || targetExamId;
         state.dataset = slot.dataset;
@@ -8466,8 +8583,8 @@
             .reading-note-open,.reading-note-outline-title{border:0;background:transparent;color:#0f172a;text-align:left;padding:9px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.reading-note-open:hover{background:#eff6ff;color:#1d4ed8}
             .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
             #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
-            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none;justify-content:flex-end;min-height:34px;padding:6px 8px}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
-            .reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1}
+            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
+            .reading-note-title,.reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box}.reading-note-title{font-weight:700}.reading-note-body{min-height:190px;resize:vertical;flex:1}
             body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
             @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
         `;
@@ -8528,10 +8645,7 @@
             editor = document.createElement('section');
             editor.id = 'reading-note-editor';
             editor.setAttribute('aria-hidden', 'true');
-            // Reference note popup carries no title bar text and no title field:
-            // the drag handle keeps only the close affordance, and the body is
-            // quote + free text.
-            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><textarea class="reading-note-body" data-note-body placeholder="Write your note"></textarea></div>';
+            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><input class="reading-note-title" data-note-title type="text" placeholder="Title" aria-label="Note title"><textarea class="reading-note-body" data-note-body placeholder="Write your note" aria-label="Note body"></textarea></div>';
             document.body.appendChild(editor);
             editor.addEventListener('click', (event) => { if (event.target.closest?.('[data-note-editor-close]')) closeNoteEditor(); });
             editor.querySelector('[data-note-title]')?.addEventListener('input', saveActiveNoteFromEditor);
@@ -8915,8 +9029,6 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        // The editor no longer exposes a title field; keep whatever title the note
-        // already carries instead of blanking it.
         const titleField = editor?.querySelector('[data-note-title]');
         const title = titleField ? String(titleField.value || '').trim() : String(note.title || '');
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
@@ -12026,31 +12138,96 @@
         return 'hard';
     }
 
-    // Answered marks, counted in the same weight units scoreInfo.total uses so
-    // the "answered" and "score" metrics stay comparable.
-    function countAnsweredWeight(answerComparison) {
-        const entries = answerComparison && typeof answerComparison === 'object'
-            ? Object.values(answerComparison)
-            : [];
-        return entries.reduce((count, entry) => {
-            const value = entry?.userAnswer;
-            const hasValue = Array.isArray(value)
-                ? value.some((item) => String(item ?? '').trim() !== '')
-                : String(value ?? '').trim() !== '';
-            return hasValue ? count + (Number(entry?.weight) || 1) : count;
-        }, 0);
+    function readReviewAnswer(results, questionId) {
+        const normalizedId = normalizeQuestionId(questionId) || questionId;
+        const answers = results?.answers && typeof results.answers === 'object' ? results.answers : {};
+        if (Object.prototype.hasOwnProperty.call(answers, questionId)) return answers[questionId];
+        if (Object.prototype.hasOwnProperty.call(answers, normalizedId)) return answers[normalizedId];
+        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
+            ? results.answerComparison
+            : {};
+        return comparison[questionId]?.userAnswer ?? comparison[normalizedId]?.userAnswer ?? '';
+    }
+
+    // Count completion from the original answer map and question-group
+    // semantics. Split multi-select comparison rows intentionally repeat the
+    // same selected-token array, so counting non-empty comparison rows inflates
+    // one selected option into a fully answered group.
+    function countAnsweredWeight(results, dataset = state.dataset) {
+        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
+            ? results.answerComparison
+            : {};
+        const answerKey = dataset?.answerKey || results?.correctAnswers || {};
+        const questionOrder = Array.isArray(dataset?.questionOrder) && dataset.questionOrder.length
+            ? dataset.questionOrder
+            : Array.from(new Set([...Object.keys(comparison), ...Object.keys(results?.answers || {})]));
+        const groupLookup = buildQuestionGroupLookup(dataset);
+        const visitedGroups = new Set();
+        let answered = 0;
+
+        questionOrder.forEach((rawQuestionId) => {
+            const questionId = normalizeQuestionId(rawQuestionId) || rawQuestionId;
+            const group = groupLookup.get(questionId) || null;
+            const isMultiChoice = Boolean(
+                group
+                && (group.kind === 'multi_choice' || group.kind === 'multiple_choice')
+                && Array.isArray(group.questionIds)
+                && group.questionIds.length
+            );
+            if (isMultiChoice) {
+                const groupKey = String(group.groupId || group.questionIds.join('|'));
+                if (visitedGroups.has(groupKey)) return;
+                visitedGroups.add(groupKey);
+                const questionIds = group.questionIds
+                    .map((entry) => normalizeQuestionId(entry) || entry)
+                    .filter(Boolean);
+                const groupAnswers = {};
+                questionIds.forEach((id) => {
+                    groupAnswers[id] = readReviewAnswer(results, id);
+                });
+                const selectedTokens = collectGroupChoiceTokens(groupAnswers, questionIds);
+                if (questionIds.length > 1) {
+                    const expectedCount = questionIds
+                        .map((id) => canonicalizeAnswerToken(answerKey[id]))
+                        .filter(Boolean)
+                        .length;
+                    const capacity = expectedCount || questionIds.length;
+                    answered += Math.min(selectedTokens.length, capacity);
+                    return;
+                }
+                const onlyId = questionIds[0];
+                const entry = comparison[onlyId] || comparison[rawQuestionId] || {};
+                const expectedCount = normalizeChoiceTokenList(answerKey[onlyId]).length;
+                const capacity = Math.max(1, Number(entry.weight) || expectedCount || 1);
+                answered += Math.min(selectedTokens.length, capacity);
+                return;
+            }
+
+            const entry = comparison[rawQuestionId] || comparison[questionId] || {};
+            const value = readReviewAnswer(results, rawQuestionId);
+            if (splitAnswerTokens(value).length > 0) {
+                answered += Math.max(1, Number(entry.weight) || 1);
+            }
+        });
+
+        const total = Number(results?.scoreInfo?.total ?? results?.scoreInfo?.totalQuestions);
+        return Number.isFinite(total) && total >= 0 ? Math.min(answered, total) : answered;
     }
 
     // Per-passage cards. Only the inline suite has more than one passage, so a
     // standalone run renders a single card describing the current exam.
-    function collectReviewPartRows(results) {
+    function collectReviewPartRows(results, reviewSummary = {}) {
         const rows = [];
         const sequence = Array.isArray(state.suite?.sequence) ? state.suite.sequence : [];
+        const summaryEntries = Array.isArray(reviewSummary.suiteEntries) ? reviewSummary.suiteEntries : [];
         if (state.suite?.inline && sequence.length) {
             sequence.forEach((entry, index) => {
                 const slot = getSuiteSlot(entry.examId);
                 const info = slot?.lastResults?.scoreInfo;
                 if (!info) return;
+                const summaryEntry = summaryEntries.find((candidate) => (
+                    candidate && String(candidate.examId || '') === String(entry.examId || '')
+                ));
                 const total = Number(info.total ?? info.totalQuestions) || 0;
                 rows.push({
                     label: `Part ${index + 1}`,
@@ -12058,8 +12235,10 @@
                     category: slot?.category || entry.category || slot?.dataset?.meta?.category || '',
                     correct: Number(info.correct) || 0,
                     total,
-                    answered: countAnsweredWeight(slot?.lastResults?.answerComparison),
-                    duration: Math.max(0, Math.round(Number(slot?.durationSeconds) || 0))
+                    answered: countAnsweredWeight(slot?.lastResults, slot?.dataset),
+                    duration: Number.isFinite(Number(summaryEntry?.duration))
+                        ? Math.max(0, Math.round(Number(summaryEntry.duration)))
+                        : Math.max(0, Math.round(readSuiteSlotDurationMs(slot) / 1000))
                 });
             });
             return rows;
@@ -12067,21 +12246,26 @@
         const info = results?.scoreInfo || {};
         const total = Number(info.total ?? info.totalQuestions) || 0;
         if (!total) return rows;
+        const summaryPartIndex = Number(reviewSummary.partIndex);
+        const partIndex = Number.isInteger(summaryPartIndex) && summaryPartIndex >= 0
+            ? summaryPartIndex
+            : (state.reviewMode && Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0);
+        const summaryDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
         rows.push({
-            label: 'Part 1',
-            title: state.dataset?.meta?.title || dom.title?.textContent || '',
+            label: `Part ${partIndex + 1}`,
+            title: reviewSummary.title || state.dataset?.meta?.title || dom.title?.textContent || '',
             category: state.dataset?.meta?.category || '',
             correct: Number(info.correct) || 0,
             total,
-            answered: countAnsweredWeight(results?.answerComparison),
-            duration: getPageElapsedSeconds()
+            answered: countAnsweredWeight(results, state.dataset),
+            duration: summaryDuration === null ? getPageElapsedSeconds() : summaryDuration
         });
         return rows;
     }
 
-    function renderReviewBanner(results) {
+    function renderReviewBanner(results, reviewSummary = {}) {
         if (!dom.reviewBanner || !results) return;
-        const rows = collectReviewPartRows(results);
+        const rows = collectReviewPartRows(results, reviewSummary);
 
         // In the inline suite, `results` describes only the passage on screen,
         // so the headline is summed from the per-part rows instead -- otherwise
@@ -12097,7 +12281,7 @@
         const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
         const answered = aggregate
             ? rows.reduce((sum, row) => sum + row.answered, 0)
-            : countAnsweredWeight(results.answerComparison);
+            : countAnsweredWeight(results, state.dataset);
         const answeredTotal = total;
 
         const setText = (id, value) => {
@@ -12105,23 +12289,24 @@
             if (node) node.textContent = value;
         };
 
-        setText('review-assignment-title', dom.title?.textContent || state.dataset?.meta?.title || '练习结果');
+        setText('review-assignment-title', reviewSummary.title || dom.title?.textContent || state.dataset?.meta?.title || '练习结果');
         setText('review-passages', rows.length
             ? rows.map((row) => row.title).filter(Boolean).join(' · ')
             : (state.dataset?.meta?.title || '—'));
         const submittedAt = document.getElementById('review-submitted-at');
         if (submittedAt) {
-            const now = new Date();
-            submittedAt.textContent = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
-            submittedAt.setAttribute('datetime', now.toISOString());
+            const submittedAtMs = Number(reviewSummary.submittedAtMs);
+            const timestamp = Number.isFinite(submittedAtMs) && submittedAtMs > 0 ? submittedAtMs : Date.now();
+            const submittedDate = new Date(timestamp);
+            submittedAt.textContent = `${submittedDate.toLocaleDateString()} ${submittedDate.toLocaleTimeString()}`;
+            submittedAt.setAttribute('datetime', submittedDate.toISOString());
         }
         setText('review-score', total > 0 ? `${correct} / ${total}` : '—');
         setText('review-accuracy', total > 0 ? `${percentage}%` : '—');
         setText('review-completion', answeredTotal ? `${answered} / ${answeredTotal}` : '—');
+        const recordedDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
         setText('review-elapsed', formatReviewElapsed(
-            aggregate
-                ? rows.reduce((sum, row) => sum + row.duration, 0)
-                : getPageElapsedSeconds()
+            recordedDuration === null ? getPageElapsedSeconds() : recordedDuration
         ));
 
         const partScores = document.getElementById('review-part-scores');
@@ -12146,7 +12331,7 @@
         dom.reviewBanner.hidden = false;
     }
 
-    function renderResults(results) {
+    function renderResults(results, reviewSummary = {}) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
@@ -12190,7 +12375,7 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
-        renderReviewBanner(results);
+        renderReviewBanner(results, reviewSummary);
         applyResultsToQuestionArea(results);
     }
 
@@ -12614,8 +12799,13 @@
             }
             dom.submitBtn.disabled = state.readOnly;
             const label = state.readOnly ? '回顾模式' : dom.submitBtn.dataset.defaultLabel;
-            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+            const submitIsIconOnly = Boolean(
+                dom.submitBtn.querySelector('.submit-btn-icon')
+                || dom.submitBtn.classList.contains('nav-submit-circle-btn')
+            );
+            if (submitIsIconOnly) {
                 dom.submitBtn.title = label;
+                dom.submitBtn.setAttribute('aria-label', label);
             } else {
                 dom.submitBtn.textContent = label;
             }
@@ -12799,7 +12989,7 @@
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         if (presentation && presentation.results) {
             state.lastResults = presentation.results;
-            renderResults(presentation.results);
+            renderResults(presentation.results, presentation.reviewSummary || {});
             await renderExplanations();
             if (!retainsSubmissionOwnership(ownership)) {
                 return false;
@@ -12856,6 +13046,16 @@
                 captureDom,
                 updateSelectionToolbar,
                 applySelectionHighlight,
+                attachUnifiedPanels,
+                ensureReadingNotesUi,
+                openNoteEditor,
+                closeNoteEditor,
+                applyReplayRecord,
+                countAnsweredWeight,
+                collectReviewPartRows,
+                renderReviewBanner,
+                setTimerRunning,
+                checkpointActiveSuiteDuration,
                 getSelectionHighlightTestState() {
                     return {
                         hasLastRange: Boolean(interaction.lastRange),
@@ -13045,10 +13245,7 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                // Reset is a post-test affordance: keep it out of the footer while
-                // the paper is still being answered.
-                const showReset = Boolean(state.submitted || state.reviewMode || state.readOnly);
-                dom.resetBtn.style.display = showReset ? '' : 'none';
+                dom.resetBtn.style.display = '';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
@@ -13226,6 +13423,55 @@
         }
     }
 
+    function resolveReviewTimestampMs(...values) {
+        for (const value of values) {
+            if (value === null || value === undefined || value === '') continue;
+            if (typeof value === 'number' || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+                const numeric = Number(value);
+                if (Number.isFinite(numeric) && numeric > 0) {
+                    return numeric < 100000000000 ? Math.round(numeric * 1000) : Math.round(numeric);
+                }
+            }
+            const parsed = Date.parse(String(value));
+            if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        }
+        return null;
+    }
+
+    function resolveReplayReviewSummary(data, entry, replayData) {
+        const durationCandidates = [
+            entry?.duration,
+            replayData?.duration,
+            entry?.scoreInfo?.duration,
+            entry?.scoreInfo?.timeSpent,
+            replayData?.scoreInfo?.duration,
+            replayData?.scoreInfo?.timeSpent
+        ];
+        let durationSeconds = null;
+        for (const candidate of durationCandidates) {
+            const parsed = parseOptionalNonNegativeInteger(candidate);
+            if (parsed !== null) {
+                durationSeconds = parsed;
+                break;
+            }
+        }
+        return {
+            submittedAtMs: resolveReviewTimestampMs(
+                entry?.endTime,
+                replayData?.endTime,
+                entry?.completedAt,
+                replayData?.completedAt,
+                entry?.date,
+                replayData?.date
+            ),
+            durationSeconds,
+            partIndex: Number.isInteger(data?.reviewEntryIndex)
+                ? data.reviewEntryIndex
+                : state.reviewEntryIndex,
+            title: entry?.title || entry?.metadata?.examTitle || state.dataset?.meta?.title || ''
+        };
+    }
+
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
         const replayData = entry.realData && typeof entry.realData === 'object' ? entry.realData : {};
@@ -13269,7 +13515,7 @@
             global.scrollTo(0, Number(entry.scrollY));
         }
         state.lastResults = replayResults;
-        renderResults(replayResults);
+        renderResults(replayResults, resolveReplayReviewSummary(data, entry, replayData));
         await renderExplanations();
         applyHighlights(replayHighlights);
         refreshNoteHighlightAttributes();
@@ -13985,7 +14231,7 @@
                 title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
                 category: slot.category || entry.category || slot.dataset?.meta?.category || '',
                 dataKey: slot.dataKey || entry.dataKey || entry.examId,
-                duration: Math.max(0, Math.round(Number(slot.durationSeconds) || 0)),
+                duration: Math.max(0, Math.round(readSuiteSlotDurationMs(slot) / 1000)),
                 answers: results.answers || {},
                 answerComparison: results.answerComparison || {},
                 correctAnswers: results.correctAnswers || {},
@@ -14155,6 +14401,18 @@
         }
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
+        const reviewSummary = {
+            submittedAtMs: timing.endTimeMs,
+            durationSeconds: timing.duration,
+            partIndex: state.suite?.inline ? 0 : state.reviewEntryIndex,
+            title: state.dataset?.meta?.title || '',
+            suiteEntries: Array.isArray(submissionSnapshot.suiteEntries)
+                ? submissionSnapshot.suiteEntries.map((entry) => ({
+                    examId: entry.examId,
+                    duration: entry.duration
+                }))
+                : []
+        };
         beginSubmission(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
@@ -14189,7 +14447,8 @@
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
         } : {}, postedResults), {
             results,
-            highlights: highlightSnapshot
+            highlights: highlightSnapshot,
+            reviewSummary
         });
     }
 
@@ -14711,6 +14970,8 @@
             if (!detail || typeof detail.running !== 'boolean') {
                 return;
             }
+            syncActiveSuiteTimer(detail.running, Date.now());
+            interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
         });
     }

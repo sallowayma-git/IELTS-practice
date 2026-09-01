@@ -242,7 +242,7 @@ async def assert_pending(frame, detail: str) -> Dict[str, Any]:
     require(not state.get("submitted"), f"{detail}:submitted_before_ack:{state}")
     require(not state.get("readOnly"), f"{detail}:readonly_before_ack:{state}")
     require(not state.get("readOnlyClass"), f"{detail}:readonly_class_before_ack:{state}")
-    require(not state.get("resetVisible"), f"{detail}:reset_visible_before_ack:{state}")
+    require(state.get("resetVisible"), f"{detail}:draft_reset_hidden:{state}")
     require(not state.get("bannerVisible"), f"{detail}:banner_visible_before_ack:{state}")
     require(not state.get("inputDisabled"), f"{detail}:input_disabled_before_ack:{state}")
     require(bool(state.get("submitDisabled")), f"{detail}:submit_not_guarded:{state}")
