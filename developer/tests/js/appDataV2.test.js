@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const appDataSource = fs.readFileSync(path.join(root, 'js/data/v2/appData.js'), 'utf8');
 const catalogSource = fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(root, 'js/data/practiceRecordSource.js'), 'utf8');
+const examSessionSource = fs.readFileSync(path.join(root, 'js/app/examSessionMixin.js'), 'utf8');
 const clone = (value) => value === undefined ? undefined : structuredClone(value);
 function stable(value) { if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`; if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`; return JSON.stringify(value); }
 function checksum(value) { let hash = 0x811c9dc5; for (const char of stable(value)) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 0x01000193); } return `fnv1a-${(hash >>> 0).toString(16)}`; }
@@ -120,7 +121,7 @@ function harness() {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, parseLegacyValue, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)) };
     const sandbox = { console, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
 }
 
 async function testVocabPhoneticMutationProtection() {
@@ -468,11 +469,79 @@ async function testV2MergeImportPhoneticProtection() {
     assert.strictEqual(collections['unrelated-list'].words[0].phonetic, 'untouched-value');
 }
 
+async function testLegacyReplayProjectionContract() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const completed = await fixture.app.practice.completeAttempt({
+        operationId: 'legacy-replay-projection',
+        record: {
+            id: 'legacy-replay-projection',
+            examId: 'legacy-reading-score',
+            type: 'reading',
+            scoreInfo: { score: 8, total: 10, accuracy: 67, timeSpent: 1200 }
+        }
+    });
+    const projected = completed.record;
+    assert.strictEqual(projected.correctAnswers, 0, 'AppData documents the generated zero score fallback');
+    assert.strictEqual(projected.duration, 0, 'AppData documents the generated zero duration fallback');
+    assert.strictEqual(projected.scoreInfo.score, 8);
+    assert.strictEqual(projected.scoreInfo.accuracy, 67);
+    assert.strictEqual(projected.scoreInfo.timeSpent, 1200);
+
+    const suiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'legacy-suite-replay-projection',
+        record: {
+            id: 'legacy-suite-replay-projection',
+            type: 'reading-suite',
+            suiteEntries: [
+                {
+                    examId: 'legacy-reading-part-one',
+                    scoreInfo: { correct: 2, total: 3, accuracy: 67 },
+                    rawData: {
+                        completedAt: '2026-08-15T10:45:00.000Z',
+                        duration_seconds: 900
+                    }
+                },
+                {
+                    examId: 'legacy-reading-part-two',
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1 }
+                }
+            ]
+        }
+    });
+    const projectedSuiteEntry = suiteCompleted.record.suiteEntries[0];
+    assert.strictEqual(projectedSuiteEntry.completedAt, '2026-08-15T10:45:00.000Z');
+    assert.strictEqual(projectedSuiteEntry.duration_seconds, 900);
+    assert.strictEqual(projectedSuiteEntry.rawData, undefined, 'rawData must still be stripped after replay timing is promoted');
+
+    vm.runInContext(examSessionSource, fixture.context, { filename: 'examSessionMixin.js' });
+    const replayMixin = Object.assign({}, fixture.sandbox.ExamSystemAppMixins.examSession);
+    const replay = replayMixin._buildReviewReplayEntriesFromRecord(projected)[0];
+    assert.strictEqual(replay.scoreInfo.correct, 8, 'nested legacy score must outrank AppData generated zero');
+    assert.strictEqual(replay.scoreInfo.total, 10);
+    assert.strictEqual(replay.scoreInfo.accuracy, 0.67, 'percent-form accuracy must normalize to a ratio');
+    assert.strictEqual(replay.scoreInfo.percentage, 67);
+    assert.strictEqual(replay.duration, 1200, 'positive timeSpent must outrank AppData generated zero duration');
+
+    const suiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(suiteCompleted.record);
+    assert.strictEqual(suiteReplay[0].scoreInfo.accuracy, 0.67);
+    assert.strictEqual(suiteReplay[0].duration, 900);
+    assert.strictEqual(suiteReplay[0].endTime, '2026-08-15T10:45:00.000Z');
+
+    const signedTimestampReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'legacy-signed-timestamp',
+        timestamp: '-1',
+        date: '2026-08-15T10:50:00.000Z'
+    })[0];
+    assert.strictEqual(signedTimestampReplay.endTime, '2026-08-15T10:50:00.000Z');
+}
+
 async function run() {
     await testVocabPhoneticMutationProtection();
     await testAtomicVocabPhoneticBackfill();
     await testReplaceProgressPhoneticProtection();
     await testV2MergeImportPhoneticProtection();
+    await testLegacyReplayProjectionContract();
     const { app, shared, envelope, sandbox } = harness(); await app.ready;
     const huge = 'x'.repeat(20000);
     const completed = await app.practice.completeAttempt({ operationId: 'complete', record: { id: 'r1', examId: 'reading-1', type: 'reading', title: 'Test', totalQuestions: 2, correctAnswers: 1, answers: { 1: 'A' }, answerMap: { 2: 'B' }, answerList: [{ questionId: '3', answer: 'C' }], correctAnswerMap: { 1: 'B' }, answerDetails: huge, scoreInfo: { band: 7 }, markedQuestions: ['q1'], highlights: [{ text: huge }], notes: { q1: huge }, interactions: [{ type: 'click' }], metadata: { examId: 'reading-1', examTitle: 'Reading 1', category: 'academic', frequency: 4, libraryConfigurationId: 'library-1', privatePayload: huge }, realData: { rawData: { token: huge }, answers: { 1: 'wrong', 4: 'D' }, answerMap: { 5: 'E' } }, rawData: { shouldNotPersist: huge, answers: { 6: 'F' }, answerMap: { 7: 'G' }, realData: { answers: { 8: 'H' } } } } });
@@ -1016,6 +1085,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 51 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 52 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

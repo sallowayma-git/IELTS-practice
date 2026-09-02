@@ -49,7 +49,7 @@ async function testResponsiveAndDarkReviewPresentation(page) {
         `).join('');
     });
 
-    for (const width of [320, 375, 480, 520, 768, 960]) {
+    for (const width of [320, 360, 361, 375, 400, 401, 480, 481, 520, 768, 960]) {
         await page.setViewportSize({ width, height: 900 });
         const layout = await page.evaluate(() => {
             const timer = document.getElementById('timer').getBoundingClientRect();
@@ -57,21 +57,36 @@ async function testResponsiveAndDarkReviewPresentation(page) {
             const candidate = document.getElementById('candidate-id');
             const candidateRect = candidate.getBoundingClientRect();
             const candidateContainer = candidate.parentElement.getBoundingClientRect();
+            const display = (selector) => getComputedStyle(document.querySelector(selector)).display;
             return {
                 clientWidth: document.documentElement.clientWidth,
                 scrollWidth: document.documentElement.scrollWidth,
                 timerRight: timer.right,
+                timerDisplay: display('#timer'),
+                timerWidth: timer.width,
                 controlsLeft: controls.left,
                 candidateDisplay: getComputedStyle(candidate).display,
                 candidateWidth: candidateRect.width,
                 candidateWithinContainer: candidateRect.left >= candidateContainer.left - 0.5
                     && candidateRect.right <= candidateContainer.right + 0.5,
+                connectionDisplay: display('#connection-indicator'),
+                messagesDisplay: display('#messages-indicator'),
+                brandDisplay: display('.ielts-brand'),
+                notesDisplay: display('#notes-drawer-btn'),
+                optionsDisplay: display('#settings-btn'),
                 metricsColumns: getComputedStyle(document.querySelector('.review-metrics')).gridTemplateColumns,
                 partColumns: getComputedStyle(document.getElementById('review-part-scores')).gridTemplateColumns
             };
         });
         assert.ok(layout.scrollWidth <= layout.clientWidth, `review layout must not overflow at ${width}px: ${JSON.stringify(layout)}`);
         assert.ok(layout.timerRight <= layout.controlsLeft + 0.5, `header controls must not cover the timer at ${width}px`);
+        assert.notEqual(layout.timerDisplay, 'none', `timer must remain visible at ${width}px`);
+        assert.ok(layout.timerWidth > 0, `timer must retain visible width at ${width}px`);
+        assert.notEqual(layout.notesDisplay, 'none', `Notes must remain visible at ${width}px`);
+        assert.notEqual(layout.optionsDisplay, 'none', `Options must remain visible at ${width}px`);
+        assert.equal(layout.connectionDisplay === 'none', width <= 480, `connection indicator breakpoint mismatch at ${width}px`);
+        assert.equal(layout.messagesDisplay === 'none', width <= 400, `messages indicator breakpoint mismatch at ${width}px`);
+        assert.equal(layout.brandDisplay === 'none', width <= 360, `IELTS wordmark breakpoint mismatch at ${width}px`);
         if (width <= 520) {
             assert.notEqual(layout.candidateDisplay, 'none', `candidate code must remain displayed at ${width}px`);
             assert.ok(layout.candidateWidth > 0, `candidate code must retain visible width at ${width}px`);
@@ -159,6 +174,110 @@ async function testReviewRuntimeBehaviors(page) {
         focusedId: document.activeElement.id
     }));
     assert.deepEqual(closedModal, { hidden: true, headerInert: false, focusedId: 'settings-btn' });
+
+    const draftAction = await page.evaluate(() => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        document.getElementById('question-groups').innerHTML = `
+            <label><input id="draft-radio" type="radio" name="q1" value="A" checked> A</label>
+            <div id="draft-drop" class="paragraph-dropzone" data-answer-value="B" data-answer-label="B">
+                <div class="dropped-items"><span>B</span></div>
+            </div>
+        `;
+        hooks.setTestState({
+            submissionStatus: 'draft',
+            readOnly: false,
+            readOnlyReason: '',
+            submitted: false,
+            reviewMode: false,
+            memorizeMode: false,
+            timerLocked: false,
+            suiteSessionId: null,
+            notes: [{ id: 'draft-note', title: 'Draft note', body: 'Keep until cleared', quote: '', updatedAt: 1 }],
+            noteOutlines: [{ id: 'draft-outline', title: 'Draft outline', order: 0 }]
+        });
+        hooks.attachActionListeners();
+        hooks.syncPrimaryActionButtons();
+        return {
+            clearHidden: document.getElementById('options-clear-answers').hidden,
+            clearDisabled: document.getElementById('options-clear-answers').disabled,
+            footerDisplay: document.getElementById('reset-btn').style.display
+        };
+    });
+    assert.deepEqual(draftAction, { clearHidden: false, clearDisabled: false, footerDisplay: 'none' });
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#options-clear-answers').click();
+    const clearedDraft = await page.evaluate(() => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        const dropzone = document.getElementById('draft-drop');
+        const testState = hooks.getTestState();
+        return {
+            radioChecked: document.getElementById('draft-radio').checked,
+            dropValue: dropzone.dataset.answerValue,
+            droppedChildren: dropzone.querySelector('.dropped-items').childElementCount,
+            notes: testState.notes.length,
+            outlines: testState.noteOutlines.length
+        };
+    });
+    assert.deepEqual(clearedDraft, {
+        radioChecked: false,
+        dropValue: '',
+        droppedChildren: 0,
+        notes: 0,
+        outlines: 0
+    }, 'the visible Options action must clear answers and structured notes through handleReset');
+    await page.keyboard.press('Escape');
+
+    const actionVisibility = await page.evaluate(() => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        const base = {
+            submissionStatus: 'draft',
+            readOnly: false,
+            readOnlyReason: '',
+            submitted: false,
+            reviewMode: false,
+            memorizeMode: false,
+            timerLocked: false,
+            suiteSessionId: null
+        };
+        const scenarios = {
+            draft: {},
+            submitting: { submissionStatus: 'submitting' },
+            readOnly: { readOnly: true },
+            submitted: { submitted: true, readOnly: true, submissionStatus: 'submitted' },
+            memorize: { memorizeMode: true },
+            review: { reviewMode: true, readOnly: true }
+        };
+        return Object.fromEntries(Object.entries(scenarios).map(([name, patch]) => {
+            hooks.setTestState({ ...base, ...patch });
+            hooks.syncPrimaryActionButtons();
+            return [name, {
+                clearHidden: document.getElementById('options-clear-answers').hidden,
+                footerDisplay: document.getElementById('reset-btn').style.display
+            }];
+        }));
+    });
+    assert.deepEqual(actionVisibility, {
+        draft: { clearHidden: false, footerDisplay: 'none' },
+        submitting: { clearHidden: true, footerDisplay: 'none' },
+        readOnly: { clearHidden: true, footerDisplay: 'none' },
+        submitted: { clearHidden: true, footerDisplay: 'none' },
+        memorize: { clearHidden: true, footerDisplay: '' },
+        review: { clearHidden: true, footerDisplay: '' }
+    });
+    await page.evaluate(() => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        hooks.setTestState({
+            submissionStatus: 'draft',
+            readOnly: false,
+            submitted: false,
+            reviewMode: false,
+            memorizeMode: false,
+            timerLocked: false
+        });
+        hooks.syncPrimaryActionButtons();
+        document.getElementById('question-groups').innerHTML = '';
+    });
 
     const note = await page.evaluate(async () => {
         const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
@@ -282,6 +401,16 @@ async function testReviewRuntimeBehaviors(page) {
         await hooks.applyReplayRecord({ reviewEntryIndex: 0, readOnly: false, entry: scoreEntry });
         const renderedScore = document.getElementById('review-score').textContent;
 
+        const projectedLegacyEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'projected-legacy-score',
+            correctAnswers: 0,
+            totalQuestions: 10,
+            accuracy: 0.67,
+            percentage: 67,
+            duration: 0,
+            scoreInfo: { score: 8, total: 10, accuracy: 67, timeSpent: 1200 }
+        })[0];
+
         const suiteEntries = app._buildReviewReplayEntriesFromRecord({
             endTime: '2026-08-15T10:40:00.000Z',
             duration: 3600,
@@ -354,31 +483,58 @@ async function testReviewRuntimeBehaviors(page) {
                 duration: 30
             }
         });
+        const outOfRangeRecoveredTimestamp = document.getElementById('review-submitted-at').getAttribute('datetime');
+
+        await hooks.applyReplayRecord({
+            reviewEntryIndex: 0,
+            readOnly: false,
+            entry: {
+                examId: 'malformed-timestamp',
+                answers: { q1: 'C' },
+                correctAnswerMap: { q1: 'C' },
+                scoreInfo: { correct: 1, total: 1, totalQuestions: 1, timeSpent: 1200 },
+                duration: 0,
+                timestamp: '-1',
+                date: '2026-08-15T10:35:00.000Z'
+            }
+        });
 
         return {
             hostScore: `${scoreEntry.scoreInfo.correct} / ${scoreEntry.scoreInfo.total}`,
             runtimeScore: `${scoreResults.scoreInfo.correct} / ${scoreResults.scoreInfo.total}`,
             renderedScore,
+            projectedLegacyScore: `${projectedLegacyEntry.scoreInfo.correct} / ${projectedLegacyEntry.scoreInfo.total}`,
+            projectedLegacyAccuracy: projectedLegacyEntry.scoreInfo.accuracy,
+            projectedLegacyPercentage: projectedLegacyEntry.scoreInfo.percentage,
+            projectedLegacyDuration: projectedLegacyEntry.duration,
             p1Timestamp: suiteEntries[0].endTime,
             p1Duration: suiteEntries[0].duration,
             p2Timestamp: p2Entry.endTime,
             p2Duration: p2Entry.duration,
             renderedSuiteTimestamp,
             renderedSuiteDuration,
-            recoveredTimestamp: document.getElementById('review-submitted-at').getAttribute('datetime')
+            outOfRangeRecoveredTimestamp,
+            signedRecoveredTimestamp: document.getElementById('review-submitted-at').getAttribute('datetime'),
+            zeroProjectedDuration: document.getElementById('review-elapsed').textContent
         };
     });
     assert.deepEqual(hostReplay, {
         hostScore: '2 / 3',
         runtimeScore: '2 / 3',
         renderedScore: '2 / 3',
+        projectedLegacyScore: '8 / 10',
+        projectedLegacyAccuracy: 0.67,
+        projectedLegacyPercentage: 67,
+        projectedLegacyDuration: 1200,
         p1Timestamp: '2026-08-15T10:00:00.000Z',
         p1Duration: 600,
         p2Timestamp: '2026-08-15T10:20:00.000Z',
         p2Duration: 1200,
         renderedSuiteTimestamp: '2026-08-15T10:20:00.000Z',
         renderedSuiteDuration: '20:00',
-        recoveredTimestamp: '2026-08-15T10:30:00.000Z'
+        outOfRangeRecoveredTimestamp: '2026-08-15T10:30:00.000Z',
+        signedRecoveredTimestamp: '2026-08-15T10:35:00.000Z',
+        zeroProjectedDuration: '20:00'
     });
 }
 

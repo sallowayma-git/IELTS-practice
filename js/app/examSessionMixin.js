@@ -3574,34 +3574,43 @@
 
         _resolveReplaySourceScoreInfo(entry, record, isAggregated = false) {
             const scoreInfo = {};
-            const firstNonNegative = (...values) => {
-                for (const value of values) {
-                    if (value === null || value === undefined || value === '') continue;
-                    const numeric = Number(value);
-                    if (Number.isFinite(numeric) && numeric >= 0) {
-                        return numeric;
-                    }
-                }
-                return null;
-            };
-            const applyScoreAliases = (source) => {
-                if (!this._isReplayObject(source)) return;
-                const correct = firstNonNegative(source.correct, source.correctAnswers, source.score);
-                const total = firstNonNegative(source.total, source.totalQuestions);
-                const accuracy = firstNonNegative(source.accuracy);
-                const percentage = firstNonNegative(source.percentage);
-                if (correct !== null) scoreInfo.correct = correct;
-                if (total !== null) {
-                    scoreInfo.total = total;
-                    scoreInfo.totalQuestions = total;
-                }
-                if (accuracy !== null) scoreInfo.accuracy = accuracy;
-                if (percentage !== null) scoreInfo.percentage = percentage;
-            };
+            const aliasSources = [];
             const mergeScoreInfo = (source) => {
                 if (!this._isReplayObject(source)) return;
                 Object.assign(scoreInfo, this._cloneReviewData(source));
-                applyScoreAliases(source);
+                aliasSources.push(source);
+            };
+            const collectScoreAliases = (source) => {
+                if (this._isReplayObject(source)) aliasSources.push(source);
+            };
+            const normalizeNonNegative = (value) => {
+                if (value === null || value === undefined || value === '' || typeof value === 'object') {
+                    return null;
+                }
+                const numeric = Number(value);
+                return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+            };
+            const normalizeAccuracy = (value) => {
+                const numeric = normalizeNonNegative(value);
+                if (numeric === null || numeric > 100) return null;
+                return numeric > 1 ? numeric / 100 : numeric;
+            };
+            const normalizePercentage = (value) => {
+                const numeric = normalizeNonNegative(value);
+                return numeric !== null && numeric <= 100 ? numeric : null;
+            };
+            const resolvePreferredAlias = (keys, normalize = normalizeNonNegative) => {
+                let zeroFallback = null;
+                for (let sourceIndex = aliasSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const source = aliasSources[sourceIndex];
+                    for (const key of keys) {
+                        const normalized = normalize(source[key]);
+                        if (normalized === null) continue;
+                        if (normalized > 0) return normalized;
+                        zeroFallback = 0;
+                    }
+                }
+                return zeroFallback;
             };
 
             if (!isAggregated) {
@@ -3617,13 +3626,33 @@
             // the entry root. Aggregate record totals must not be copied into
             // every suite child, but each child's own aliases remain authoritative.
             if (!isAggregated) {
-                applyScoreAliases(record.rawData);
-                applyScoreAliases(record.realData);
-                applyScoreAliases(record);
+                collectScoreAliases(record.rawData);
+                collectScoreAliases(record.realData);
+                collectScoreAliases(record);
             }
-            applyScoreAliases(entry.rawData);
-            applyScoreAliases(entry.realData);
-            applyScoreAliases(entry);
+            collectScoreAliases(entry.rawData);
+            collectScoreAliases(entry.realData);
+            collectScoreAliases(entry);
+
+            // AppData full projections synthesize zero-valued summary fields.
+            // A real positive legacy alias must outrank that generated fallback,
+            // while an explicit zero remains valid when no positive value exists.
+            delete scoreInfo.correct;
+            delete scoreInfo.total;
+            delete scoreInfo.totalQuestions;
+            delete scoreInfo.accuracy;
+            delete scoreInfo.percentage;
+            const correct = resolvePreferredAlias(['correct', 'correctAnswers', 'score']);
+            const total = resolvePreferredAlias(['total', 'totalQuestions']);
+            const accuracy = resolvePreferredAlias(['accuracy'], normalizeAccuracy);
+            const percentage = resolvePreferredAlias(['percentage'], normalizePercentage);
+            if (correct !== null) scoreInfo.correct = correct;
+            if (total !== null) {
+                scoreInfo.total = total;
+                scoreInfo.totalQuestions = total;
+            }
+            if (accuracy !== null) scoreInfo.accuracy = accuracy;
+            if (percentage !== null) scoreInfo.percentage = percentage;
             return scoreInfo;
         },
 
@@ -3631,7 +3660,7 @@
             for (const value of values) {
                 if (value === null || value === undefined || value === '') continue;
                 let timestampMs = null;
-                if (typeof value === 'number' || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+                if (typeof value === 'number' || /^[+-]?\d+(?:\.\d+)?$/.test(String(value).trim())) {
                     const numeric = Number(value);
                     if (Number.isFinite(numeric) && numeric > 0) {
                         timestampMs = numeric < 100000000000
@@ -3652,12 +3681,19 @@
         },
 
         _resolveReplayDurationValue(...values) {
+            // Match PracticeCore.resolveDurationSeconds: prefer every real
+            // positive alias before accepting a projected zero fallback.
             for (const value of values) {
                 if (value === null || value === undefined || value === '') continue;
                 const numeric = Number(value);
-                if (Number.isFinite(numeric) && numeric >= 0) {
+                if (Number.isFinite(numeric) && numeric > 0) {
                     return numeric;
                 }
+            }
+            for (const value of values) {
+                if (value === null || value === undefined || value === '') continue;
+                const numeric = Number(value);
+                if (Number.isFinite(numeric) && numeric >= 0) return numeric;
             }
             return 0;
         },
@@ -3855,34 +3891,88 @@
                     duration: this._resolveReplayDurationValue(
                         entry.duration,
                         entry.durationSeconds,
+                        entry.duration_seconds,
+                        entry.elapsedSeconds,
+                        entry.elapsed_seconds,
                         entry.timeSpent,
+                        entry.time_spent,
                         entry.scoreInfo?.duration,
+                        entry.scoreInfo?.durationSeconds,
+                        entry.scoreInfo?.duration_seconds,
+                        entry.scoreInfo?.elapsedSeconds,
+                        entry.scoreInfo?.elapsed_seconds,
                         entry.scoreInfo?.timeSpent,
+                        entry.scoreInfo?.time_spent,
                         entry.realData?.duration,
                         entry.realData?.durationSeconds,
+                        entry.realData?.duration_seconds,
+                        entry.realData?.elapsedSeconds,
+                        entry.realData?.elapsed_seconds,
                         entry.realData?.timeSpent,
+                        entry.realData?.time_spent,
                         entry.realData?.scoreInfo?.duration,
+                        entry.realData?.scoreInfo?.durationSeconds,
+                        entry.realData?.scoreInfo?.duration_seconds,
+                        entry.realData?.scoreInfo?.elapsedSeconds,
+                        entry.realData?.scoreInfo?.elapsed_seconds,
                         entry.realData?.scoreInfo?.timeSpent,
+                        entry.realData?.scoreInfo?.time_spent,
                         entry.rawData?.duration,
                         entry.rawData?.durationSeconds,
+                        entry.rawData?.duration_seconds,
+                        entry.rawData?.elapsedSeconds,
+                        entry.rawData?.elapsed_seconds,
                         entry.rawData?.timeSpent,
+                        entry.rawData?.time_spent,
                         entry.rawData?.scoreInfo?.duration,
+                        entry.rawData?.scoreInfo?.durationSeconds,
+                        entry.rawData?.scoreInfo?.duration_seconds,
+                        entry.rawData?.scoreInfo?.elapsedSeconds,
+                        entry.rawData?.scoreInfo?.elapsed_seconds,
                         entry.rawData?.scoreInfo?.timeSpent,
+                        entry.rawData?.scoreInfo?.time_spent,
                         record.duration,
                         record.durationSeconds,
+                        record.duration_seconds,
+                        record.elapsedSeconds,
+                        record.elapsed_seconds,
                         record.timeSpent,
+                        record.time_spent,
                         record.scoreInfo?.duration,
+                        record.scoreInfo?.durationSeconds,
+                        record.scoreInfo?.duration_seconds,
+                        record.scoreInfo?.elapsedSeconds,
+                        record.scoreInfo?.elapsed_seconds,
                         record.scoreInfo?.timeSpent,
+                        record.scoreInfo?.time_spent,
                         record.realData?.duration,
                         record.realData?.durationSeconds,
+                        record.realData?.duration_seconds,
+                        record.realData?.elapsedSeconds,
+                        record.realData?.elapsed_seconds,
                         record.realData?.timeSpent,
+                        record.realData?.time_spent,
                         record.realData?.scoreInfo?.duration,
+                        record.realData?.scoreInfo?.durationSeconds,
+                        record.realData?.scoreInfo?.duration_seconds,
+                        record.realData?.scoreInfo?.elapsedSeconds,
+                        record.realData?.scoreInfo?.elapsed_seconds,
                         record.realData?.scoreInfo?.timeSpent,
+                        record.realData?.scoreInfo?.time_spent,
                         record.rawData?.duration,
                         record.rawData?.durationSeconds,
+                        record.rawData?.duration_seconds,
+                        record.rawData?.elapsedSeconds,
+                        record.rawData?.elapsed_seconds,
                         record.rawData?.timeSpent,
+                        record.rawData?.time_spent,
                         record.rawData?.scoreInfo?.duration,
-                        record.rawData?.scoreInfo?.timeSpent
+                        record.rawData?.scoreInfo?.durationSeconds,
+                        record.rawData?.scoreInfo?.duration_seconds,
+                        record.rawData?.scoreInfo?.elapsedSeconds,
+                        record.rawData?.scoreInfo?.elapsed_seconds,
+                        record.rawData?.scoreInfo?.timeSpent,
+                        record.rawData?.scoreInfo?.time_spent
                     ),
                     markedQuestions: Array.isArray(entry.markedQuestions)
                         ? entry.markedQuestions.slice()

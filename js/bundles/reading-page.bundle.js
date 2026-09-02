@@ -2092,7 +2092,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
@@ -6856,6 +6860,7 @@
             }
         });
         if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly;
+        syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
         });
@@ -7141,6 +7146,7 @@
         const settingsPanel = document.getElementById('settings-panel');
         if (!settingsPanel) return;
         closeFloatingPanels();
+        syncOptionsClearAnswersAction();
         state.optionsReturnFocus = document.activeElement;
         settingsPanel.hidden = false;
         settingsPanel.classList.add('is-open');
@@ -13168,6 +13174,8 @@
                 restoreDraftSubmissionState,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
+                attachActionListeners,
+                syncPrimaryActionButtons,
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -13272,7 +13280,30 @@
         }
     }
 
+    function canClearDraftAnswers() {
+        return Boolean(
+            state.submissionStatus === 'draft'
+            && !state.readOnly
+            && !state.submitted
+            && !state.reviewMode
+            && !state.memorizeMode
+            && !state.timerLocked
+        );
+    }
+
+    function syncOptionsClearAnswersAction() {
+        const section = document.getElementById('options-clear-answers-section');
+        const button = document.getElementById('options-clear-answers');
+        const visible = canClearDraftAnswers();
+        if (section) section.hidden = !visible;
+        if (button) {
+            button.hidden = !visible;
+            button.disabled = !visible;
+        }
+    }
+
     function syncPrimaryActionButtons() {
+        syncOptionsClearAnswersAction();
         const submitIsIconOnly = Boolean(
             dom.submitBtn
             && (dom.submitBtn.querySelector('.submit-btn-icon')
@@ -13341,9 +13372,9 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                // Footer Reset is visible during submission (for cancellation), in review mode, or after single-exam submission.
-                // Mid-test clearing lives in the Options panel.
-                const shouldShowReset = state.submissionStatus === 'submitting' || canResetSubmittedSingle || state.reviewMode;
+                // Footer Reset is review/retake-only. Draft clearing lives in
+                // Options, and no reset path is exposed while an ACK is pending.
+                const shouldShowReset = canResetSubmittedSingle || state.reviewMode;
                 dom.resetBtn.style.display = shouldShowReset ? '' : 'none';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
@@ -13525,7 +13556,7 @@
     function resolveReviewTimestampMs(...values) {
         for (const value of values) {
             if (value === null || value === undefined || value === '') continue;
-            if (typeof value === 'number' || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+            if (typeof value === 'number' || /^[+-]?\d+(?:\.\d+)?$/.test(String(value).trim())) {
                 const numeric = Number(value);
                 if (Number.isFinite(numeric) && numeric > 0) {
                     const timestamp = numeric < 100000000000
@@ -13535,6 +13566,7 @@
                         return timestamp;
                     }
                 }
+                continue;
             }
             const parsed = Date.parse(String(value));
             if (Number.isFinite(parsed) && parsed > 0 && Number.isFinite(new Date(parsed).getTime())) {
@@ -13548,17 +13580,48 @@
         const durationCandidates = [
             entry?.duration,
             replayData?.duration,
+            entry?.durationSeconds,
+            replayData?.durationSeconds,
+            entry?.duration_seconds,
+            replayData?.duration_seconds,
+            entry?.elapsedSeconds,
+            replayData?.elapsedSeconds,
+            entry?.elapsed_seconds,
+            replayData?.elapsed_seconds,
+            entry?.timeSpent,
+            replayData?.timeSpent,
+            entry?.time_spent,
+            replayData?.time_spent,
             entry?.scoreInfo?.duration,
+            entry?.scoreInfo?.durationSeconds,
+            entry?.scoreInfo?.duration_seconds,
+            entry?.scoreInfo?.elapsedSeconds,
+            entry?.scoreInfo?.elapsed_seconds,
             entry?.scoreInfo?.timeSpent,
+            entry?.scoreInfo?.time_spent,
             replayData?.scoreInfo?.duration,
-            replayData?.scoreInfo?.timeSpent
+            replayData?.scoreInfo?.durationSeconds,
+            replayData?.scoreInfo?.duration_seconds,
+            replayData?.scoreInfo?.elapsedSeconds,
+            replayData?.scoreInfo?.elapsed_seconds,
+            replayData?.scoreInfo?.timeSpent,
+            replayData?.scoreInfo?.time_spent
         ];
         let durationSeconds = null;
         for (const candidate of durationCandidates) {
             const parsed = parseOptionalNonNegativeInteger(candidate);
-            if (parsed !== null) {
+            if (parsed !== null && parsed > 0) {
                 durationSeconds = parsed;
                 break;
+            }
+        }
+        if (durationSeconds === null) {
+            for (const candidate of durationCandidates) {
+                const parsed = parseOptionalNonNegativeInteger(candidate);
+                if (parsed !== null) {
+                    durationSeconds = parsed;
+                    break;
+                }
             }
         }
         return {
@@ -14573,7 +14636,7 @@
             requestNormalPracticeRestart('retake-after-submit');
             return;
         }
-        if (state.readOnly || state.submitted) {
+        if (!canClearDraftAnswers()) {
             return;
         }
         closeReviewHighlightDictionary();
@@ -14623,6 +14686,7 @@
     function attachActionListeners() {
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
+        document.getElementById('options-clear-answers')?.addEventListener('click', handleReset);
         dom.exitBtn?.addEventListener('click', handleExitClick);
         document.addEventListener('change', () => updateNavStatuses());
         document.addEventListener('input', () => updateNavStatuses());

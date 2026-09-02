@@ -2088,21 +2088,21 @@
             }
         }
 
-        @media (max-width: 719px) {
+        @media (max-width: 480px) {
+            #connection-indicator {
+                display: none;
+            }
+        }
+
+        @media (max-width: 400px) {
             #messages-indicator {
                 display: none;
             }
         }
 
-        @media (max-width: 519px) {
-            .header-status {
+        @media (max-width: 360px) {
+            .ielts-brand {
                 display: none;
-            }
-        }
-
-        @media (max-width: 418px) {
-            .candidate-details {
-                min-width: 100px;
             }
         }
 
@@ -2223,7 +2223,7 @@
             </div>
         </div>
         <div class="header-right">
-            <div class="header-status" role="status" aria-label="Connected">
+            <div class="header-status" id="connection-indicator" role="status" aria-label="Connected">
                 <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
                     <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
@@ -2330,6 +2330,12 @@
                 <h3 class="settings-title">笔记与标注</h3>
                 <p class="settings-hint">A 答案定位 · N 笔记高亮 · H 普通高亮 · Q 题卡</p>
                 <div id="options-tools"></div>
+            </div>
+            <div class="settings-section" id="options-clear-answers-section" hidden>
+                <h3 class="settings-title">Actions</h3>
+                <div class="settings-options">
+                    <button class="settings-option" id="options-clear-answers" type="button" hidden>Clear answers</button>
+                </div>
             </div>
         </main>
     </div>

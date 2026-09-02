@@ -2423,7 +2423,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
