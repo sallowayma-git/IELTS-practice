@@ -3587,13 +3587,19 @@
         _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
             const scoreInfo = {};
             const aliasSources = [];
+            const counterSourceGroups = [];
             const mergeScoreInfo = (source) => {
                 if (!this._isReplayObject(source)) return;
                 Object.assign(scoreInfo, this._cloneReviewData(source));
                 aliasSources.push({ source, rootProjection: false });
             };
             const collectScoreAliases = (source) => {
-                if (this._isReplayObject(source)) aliasSources.push({ source, rootProjection: true });
+                if (!this._isReplayObject(source)) return;
+                aliasSources.push({ source, rootProjection: true });
+                counterSourceGroups.push({
+                    root: source,
+                    nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
+                });
             };
             const normalizeNonNegative = value => this._normalizeReplayNonNegativeNumber(value);
             const normalizeAccuracy = (value) => {
@@ -3637,31 +3643,39 @@
                 resolveFromAliasSources(aliasSources, keys, normalize)
             );
             const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
-                const rootSources = aliasSources.filter(({ rootProjection }) => rootProjection);
-                const nestedSources = aliasSources.filter(({ rootProjection }) => !rootProjection);
-                for (let sourceIndex = rootSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { source } = rootSources[sourceIndex];
-                    const normalized = normalizeNonNegative(source[canonicalRootKey]);
-                    if (normalized === null) continue;
-                    // AppData projects a missing canonical correct count as
-                    // `correctAnswers: 0` while retaining a legacy positive
-                    // `score` under scoreInfo. Only that generated root zero
-                    // may yield to nested score provenance.
-                    if (canonicalRootKey === 'correctAnswers' && normalized === 0) {
-                        const hasCanonicalNestedCount = ['correct', 'correctAnswers'].some(
-                            nestedKey => normalizeNonNegative(source.scoreInfo?.[nestedKey]) !== null
-                        );
-                        const copiedScore = normalizeNonNegative(source.scoreInfo?.score);
-                        if (!hasCanonicalNestedCount && copiedScore !== null && copiedScore > 0) {
-                            return resolveFromAliasSources(nestedSources, nestedKeys) ?? copiedScore;
+                for (let sourceIndex = counterSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { root, nested } = counterSourceGroups[sourceIndex];
+                    const normalized = normalizeNonNegative(root[canonicalRootKey]);
+                    if (normalized !== null) {
+                        // AppData projects a missing canonical correct count as
+                        // `correctAnswers: 0` while retaining a legacy positive
+                        // `score` under scoreInfo. Only that generated root zero
+                        // may yield to nested score provenance.
+                        if (canonicalRootKey === 'correctAnswers' && normalized === 0) {
+                            const hasCanonicalNestedCount = ['correct', 'correctAnswers'].some(
+                                nestedKey => normalizeNonNegative(nested?.[nestedKey]) !== null
+                            );
+                            const copiedScore = normalizeNonNegative(nested?.score);
+                            if (!hasCanonicalNestedCount && copiedScore !== null && copiedScore > 0) {
+                                return resolveFromAliasSources([{ source: nested }], nestedKeys) ?? copiedScore;
+                            }
                         }
+                        return normalized;
                     }
-                    return normalized;
+
+                    const nestedCounter = resolveFromAliasSources(
+                        nested ? [{ source: nested }] : [],
+                        nestedKeys
+                    );
+                    if (nestedCounter !== null) return nestedCounter;
+
+                    const rootLegacyCounter = resolveFromAliasSources(
+                        [{ source: root }],
+                        rootLegacyKeys
+                    );
+                    if (rootLegacyCounter !== null) return rootLegacyCounter;
                 }
-                const nested = resolveFromAliasSources(nestedSources, nestedKeys);
-                return nested !== null
-                    ? nested
-                    : resolveFromAliasSources(rootSources, rootLegacyKeys);
+                return null;
             };
 
             if (includeParentScore) {
@@ -3686,8 +3700,8 @@
             collectScoreAliases(entry.realData);
             collectScoreAliases(entry);
 
-            // Resolve each source atomically so an authoritative zero cannot be
-            // replaced by a stale positive alias from a lower-priority source.
+            // Resolve each provenance atomically so an authoritative value
+            // cannot be replaced by a stale alias from a lower-priority source.
             delete scoreInfo.correct;
             delete scoreInfo.total;
             delete scoreInfo.totalQuestions;

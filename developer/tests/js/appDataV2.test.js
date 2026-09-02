@@ -769,6 +769,39 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.total, 10);
     assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.accuracy, 0.8);
 
+    const currentProvenanceCounterReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'current-provenance-counter',
+        correct: 8,
+        total: 10,
+        scoreInfo: { correct: 8, total: 10, accuracy: 0.8 },
+        realData: { correctAnswers: 4, totalQuestions: 5 },
+        rawData: { correctAnswers: 2, totalQuestions: 3 }
+    })[0];
+    assert.strictEqual(
+        currentProvenanceCounterReplay.scoreInfo.correct,
+        8,
+        'current entry score provenance must outrank stale canonical counters in realData and rawData'
+    );
+    assert.strictEqual(currentProvenanceCounterReplay.scoreInfo.total, 10);
+    assert.strictEqual(currentProvenanceCounterReplay.scoreInfo.accuracy, 0.8);
+
+    const realDataProvenanceCounterReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'real-data-provenance-counter',
+        realData: {
+            correct: 8,
+            total: 10,
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8 }
+        },
+        rawData: { correctAnswers: 2, totalQuestions: 3 }
+    })[0];
+    assert.strictEqual(
+        realDataProvenanceCounterReplay.scoreInfo.correct,
+        8,
+        'realData score provenance must outrank stale canonical counters in rawData'
+    );
+    assert.strictEqual(realDataProvenanceCounterReplay.scoreInfo.total, 10);
+    assert.strictEqual(realDataProvenanceCounterReplay.scoreInfo.accuracy, 0.8);
+
     const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score',
         scoreInfo: { correct: 0, total: 10 },
