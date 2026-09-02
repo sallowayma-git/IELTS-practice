@@ -11102,6 +11102,18 @@
             return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
+        _normalizeReplayNonNegativeNumber(value) {
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) return null;
+            } else if (typeof candidate !== 'number') {
+                return null;
+            }
+            const numeric = Number(candidate);
+            return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+        },
+
         _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
             const scoreInfo = {};
             const aliasSources = [];
@@ -11113,13 +11125,7 @@
             const collectScoreAliases = (source) => {
                 if (this._isReplayObject(source)) aliasSources.push({ source, rootProjection: true });
             };
-            const normalizeNonNegative = (value) => {
-                if (value === null || value === undefined || value === '' || typeof value === 'object') {
-                    return null;
-                }
-                const numeric = Number(value);
-                return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
-            };
+            const normalizeNonNegative = value => this._normalizeReplayNonNegativeNumber(value);
             const normalizeAccuracy = (value) => {
                 const numeric = normalizeNonNegative(value);
                 if (numeric === null || numeric > 100) return null;
@@ -11295,9 +11301,8 @@
                 // AppData promotes legacy aliases when a canonical duration is
                 // missing, so field order can preserve an explicit root zero.
                 for (const value of values) {
-                    if (value === null || value === undefined || value === '') continue;
-                    const numeric = Number(value);
-                    if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+                    const numeric = this._normalizeReplayNonNegativeNumber(value);
+                    if (numeric !== null) return numeric;
                 }
             }
             return null;

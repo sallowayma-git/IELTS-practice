@@ -525,6 +525,27 @@ async function testLegacyReplayProjectionContract() {
         'AppData must skip an invalid legacy duration alias before selecting a later valid alias'
     );
 
+    const blankDurationAliasCompleted = await fixture.app.practice.completeAttempt({
+        operationId: 'blank-duration-alias-projection',
+        record: {
+            id: 'blank-duration-alias-projection',
+            examId: 'blank-duration-alias',
+            type: 'reading',
+            duration_seconds: '   ',
+            scoreInfo: { duration: 1200 }
+        }
+    });
+    assert.strictEqual(
+        blankDurationAliasCompleted.record.duration,
+        1200,
+        'AppData must treat a whitespace-only duration alias as absent'
+    );
+    assert.strictEqual(
+        (await fixture.app.practice.get('blank-duration-alias-projection')).duration,
+        1200,
+        'the normalized duration must survive a full AppData read'
+    );
+
     const negativeDurationAliasCompleted = await fixture.app.practice.completeAttempt({
         operationId: 'negative-duration-alias-projection',
         record: {
@@ -593,6 +614,32 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(scorelessOneEntrySuiteCompleted.record.correctAnswers, 8);
     assert.strictEqual(scorelessOneEntrySuiteCompleted.record.totalQuestions, 10);
 
+    const blankScoreOneEntrySuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'blank-score-one-entry-suite-projection',
+        record: {
+            id: 'blank-score-one-entry-suite-projection',
+            type: 'reading-suite',
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8 },
+            suiteEntries: [{
+                examId: 'blank-score-one-entry-reading-part',
+                correct: '   '
+            }]
+        }
+    });
+
+    const blankDurationOneEntrySuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'blank-duration-one-entry-suite-projection',
+        record: {
+            id: 'blank-duration-one-entry-suite-projection',
+            type: 'reading-suite',
+            duration: 1200,
+            suiteEntries: [{
+                examId: 'blank-duration-one-entry-reading-part',
+                duration_seconds: '   '
+            }]
+        }
+    });
+
     vm.runInContext(examSessionSource, fixture.context, { filename: 'examSessionMixin.js' });
     const replayMixin = Object.assign({}, fixture.sandbox.ExamSystemAppMixins.examSession);
     const replay = replayMixin._buildReviewReplayEntriesFromRecord(projected)[0];
@@ -615,6 +662,11 @@ async function testLegacyReplayProjectionContract() {
         invalidDurationAliasCompleted.record
     )[0];
     assert.strictEqual(invalidDurationAliasReplay.duration, 1200);
+
+    const blankDurationAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        blankDurationAliasCompleted.record
+    )[0];
+    assert.strictEqual(blankDurationAliasReplay.duration, 1200);
 
     const negativeDurationAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord(
         negativeDurationAliasCompleted.record
@@ -642,6 +694,26 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(scorelessOneEntrySuiteReplay.scoreInfo.total, 10);
     assert.strictEqual(scorelessOneEntrySuiteReplay.scoreInfo.accuracy, 0.8);
+
+    const blankScoreOneEntrySuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        blankScoreOneEntrySuiteCompleted.record
+    )[0];
+    assert.strictEqual(
+        blankScoreOneEntrySuiteReplay.scoreInfo.correct,
+        8,
+        'a whitespace-only child score alias must not block the one-entry parent fallback'
+    );
+    assert.strictEqual(blankScoreOneEntrySuiteReplay.scoreInfo.total, 10);
+    assert.strictEqual(blankScoreOneEntrySuiteReplay.scoreInfo.accuracy, 0.8);
+
+    const blankDurationOneEntrySuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        blankDurationOneEntrySuiteCompleted.record
+    )[0];
+    assert.strictEqual(
+        blankDurationOneEntrySuiteReplay.duration,
+        1200,
+        'a whitespace-only child duration must fall back to the parent duration provenance'
+    );
 
     const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score',

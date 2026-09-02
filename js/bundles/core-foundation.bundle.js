@@ -2190,8 +2190,14 @@
 
     function firstNonNegative(...values) {
         for (const value of values) {
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            const numeric = Number(value);
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) continue;
+            } else if (typeof candidate !== 'number') {
+                continue;
+            }
+            const numeric = Number(candidate);
             if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
