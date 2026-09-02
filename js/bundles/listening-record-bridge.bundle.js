@@ -2024,30 +2024,33 @@
             date: source.date || source.completedAt || source.timestamp || null,
             startTime: source.startTime || null,
             endTime: source.endTime || null,
-            duration: Number(
-                source.duration
-                ?? source.durationSeconds
-                ?? source.duration_seconds
-                ?? source.elapsedSeconds
-                ?? source.elapsed_seconds
-                ?? source.timeSpent
-                ?? source.time_spent
-                ?? scoreInfo.duration
-                ?? scoreInfo.durationSeconds
-                ?? scoreInfo.duration_seconds
-                ?? scoreInfo.elapsedSeconds
-                ?? scoreInfo.elapsed_seconds
-                ?? scoreInfo.timeSpent
-                ?? scoreInfo.time_spent
-                ?? realScoreInfo.duration
-                ?? realScoreInfo.durationSeconds
-                ?? realScoreInfo.duration_seconds
-                ?? realScoreInfo.elapsedSeconds
-                ?? realScoreInfo.elapsed_seconds
-                ?? realScoreInfo.timeSpent
-                ?? realScoreInfo.time_spent
-                ?? 0
-            ) || 0,
+            // canonicalizeRecord validates an explicit root duration first.
+            // Legacy aliases still need individual validation so a malformed
+            // earlier alias cannot mask a later valid value or persist a
+            // negative canonical summary.
+            duration: firstNonNegative(
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                scoreInfo.duration,
+                scoreInfo.durationSeconds,
+                scoreInfo.duration_seconds,
+                scoreInfo.elapsedSeconds,
+                scoreInfo.elapsed_seconds,
+                scoreInfo.timeSpent,
+                scoreInfo.time_spent,
+                realScoreInfo.duration,
+                realScoreInfo.durationSeconds,
+                realScoreInfo.duration_seconds,
+                realScoreInfo.elapsedSeconds,
+                realScoreInfo.elapsed_seconds,
+                realScoreInfo.timeSpent,
+                realScoreInfo.time_spent
+            ) ?? 0,
             totalQuestions,
             correctAnswers,
             accuracy,

@@ -3572,7 +3572,7 @@
             return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
-        _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false) {
+        _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
             const scoreInfo = {};
             const aliasSources = [];
             const mergeScoreInfo = (source) => {
@@ -3599,6 +3599,23 @@
                 const numeric = normalizeNonNegative(value);
                 return numeric !== null && numeric <= 100 ? numeric : null;
             };
+            const hasUsableScoreAlias = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                return ['correct', 'correctAnswers', 'score', 'total', 'totalQuestions']
+                    .some(key => normalizeNonNegative(source[key]) !== null)
+                    || normalizeAccuracy(source.accuracy) !== null
+                    || normalizePercentage(source.percentage) !== null;
+            };
+            const entryHasUsableScore = [
+                entry.rawData,
+                entry.rawData?.scoreInfo,
+                entry.realData,
+                entry.realData?.scoreInfo,
+                entry,
+                entry.scoreInfo
+            ].some(hasUsableScoreAlias);
+            const includeParentScore = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasUsableScore);
             const resolvePreferredAlias = (keys, normalize = normalizeNonNegative) => {
                 for (let sourceIndex = aliasSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
                     const { source, rootProjection } = aliasSources[sourceIndex];
@@ -3627,7 +3644,7 @@
                 return null;
             };
 
-            if (!isSuiteEntry) {
+            if (includeParentScore) {
                 mergeScoreInfo(record.rawData?.scoreInfo);
                 mergeScoreInfo(record.realData?.scoreInfo);
                 mergeScoreInfo(record.scoreInfo);
@@ -3637,9 +3654,10 @@
             mergeScoreInfo(entry.scoreInfo);
 
             // AppData's canonical/light records expose numeric score totals at
-            // the entry root. Parent record totals must not be copied into a
-            // suite child, even when the suite contains only one entry.
-            if (!isSuiteEntry) {
+            // the entry root. Parent totals stay out of suite children except
+            // for the structurally equivalent one-entry suite whose child has
+            // no usable score of its own.
+            if (includeParentScore) {
                 collectScoreAliases(record.rawData);
                 collectScoreAliases(record.realData);
                 collectScoreAliases(record);
@@ -3853,7 +3871,12 @@
                 }
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
-                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(entry, record, hasSuiteEntries);
+                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(
+                    entry,
+                    record,
+                    hasSuiteEntries,
+                    hasSuiteEntries && baseEntries.length === 1
+                );
                 const scoreInfo = this._deriveReplayScoreInfo(
                     sourceScoreInfo,
                     comparison,

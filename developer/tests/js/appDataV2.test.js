@@ -509,6 +509,38 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(explicitZeroDurationCompleted.record.scoreInfo.timeSpent, 1200);
 
+    const invalidDurationAliasCompleted = await fixture.app.practice.completeAttempt({
+        operationId: 'invalid-duration-alias-projection',
+        record: {
+            id: 'invalid-duration-alias-projection',
+            examId: 'invalid-duration-alias',
+            type: 'reading',
+            duration_seconds: 'bad',
+            scoreInfo: { duration: 1200 }
+        }
+    });
+    assert.strictEqual(
+        invalidDurationAliasCompleted.record.duration,
+        1200,
+        'AppData must skip an invalid legacy duration alias before selecting a later valid alias'
+    );
+
+    const negativeDurationAliasCompleted = await fixture.app.practice.completeAttempt({
+        operationId: 'negative-duration-alias-projection',
+        record: {
+            id: 'negative-duration-alias-projection',
+            examId: 'negative-duration-alias',
+            type: 'reading',
+            scoreInfo: { timeSpent: -5 }
+        }
+    });
+    assert.strictEqual(
+        negativeDurationAliasCompleted.record.duration,
+        0,
+        'AppData must not persist a negative legacy duration alias as the canonical summary duration'
+    );
+    await fixture.app.practice.getStats();
+
     const suiteCompleted = await fixture.app.practice.finalizeSuite({
         operationId: 'legacy-suite-replay-projection',
         record: {
@@ -549,6 +581,18 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(oneEntrySuiteCompleted.record.correctAnswers, 0);
     assert.strictEqual(oneEntrySuiteCompleted.record.totalQuestions, 0);
 
+    const scorelessOneEntrySuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'scoreless-one-entry-suite-projection',
+        record: {
+            id: 'scoreless-one-entry-suite-projection',
+            type: 'reading-suite',
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8 },
+            suiteEntries: [{ examId: 'scoreless-one-entry-reading-part' }]
+        }
+    });
+    assert.strictEqual(scorelessOneEntrySuiteCompleted.record.correctAnswers, 8);
+    assert.strictEqual(scorelessOneEntrySuiteCompleted.record.totalQuestions, 10);
+
     vm.runInContext(examSessionSource, fixture.context, { filename: 'examSessionMixin.js' });
     const replayMixin = Object.assign({}, fixture.sandbox.ExamSystemAppMixins.examSession);
     const replay = replayMixin._buildReviewReplayEntriesFromRecord(projected)[0];
@@ -567,6 +611,16 @@ async function testLegacyReplayProjectionContract() {
         'an explicit canonical zero must outrank a stale nested duration alias after projection'
     );
 
+    const invalidDurationAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        invalidDurationAliasCompleted.record
+    )[0];
+    assert.strictEqual(invalidDurationAliasReplay.duration, 1200);
+
+    const negativeDurationAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        negativeDurationAliasCompleted.record
+    )[0];
+    assert.strictEqual(negativeDurationAliasReplay.duration, 0);
+
     const oneEntrySuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
         oneEntrySuiteCompleted.record
     )[0];
@@ -577,6 +631,17 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(oneEntrySuiteReplay.scoreInfo.total, 10);
     assert.strictEqual(oneEntrySuiteReplay.scoreInfo.accuracy, 0.8);
+
+    const scorelessOneEntrySuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        scorelessOneEntrySuiteCompleted.record
+    )[0];
+    assert.strictEqual(
+        scorelessOneEntrySuiteReplay.scoreInfo.correct,
+        8,
+        'a scoreless child in a one-entry suite must fall back to the equivalent parent score'
+    );
+    assert.strictEqual(scorelessOneEntrySuiteReplay.scoreInfo.total, 10);
+    assert.strictEqual(scorelessOneEntrySuiteReplay.scoreInfo.accuracy, 0.8);
 
     const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score',
@@ -619,6 +684,12 @@ async function testLegacyReplayProjectionContract() {
         'an explicit child zero duration must outrank the parent suite aggregate'
     );
     assert.strictEqual(zeroDurationSuiteReplay[1].duration, 120);
+    assert.strictEqual(
+        zeroDurationSuiteReplay[0].scoreInfo.correct,
+        0,
+        'a scoreless child in a multi-entry suite must not inherit the parent aggregate score'
+    );
+    assert.strictEqual(zeroDurationSuiteReplay[0].scoreInfo.total, 0);
 
     const signedTimestampReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-signed-timestamp',
