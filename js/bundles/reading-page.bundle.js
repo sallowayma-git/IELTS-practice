@@ -13341,7 +13341,8 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                dom.resetBtn.style.display = '';
+                // Footer Reset is review-only; mid-test clearing lives in the Options panel.
+                dom.resetBtn.style.display = (canResetSubmittedSingle || state.reviewMode) ? '' : 'none';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
