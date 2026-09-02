@@ -6886,8 +6886,10 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                // Footer Reset is review-only; mid-test clearing lives in the Options panel.
-                dom.resetBtn.style.display = (canResetSubmittedSingle || state.reviewMode) ? '' : 'none';
+                // Footer Reset is visible during submission (for cancellation), in review mode, or after single-exam submission.
+                // Mid-test clearing lives in the Options panel.
+                const shouldShowReset = state.submissionStatus === 'submitting' || canResetSubmittedSingle || state.reviewMode;
+                dom.resetBtn.style.display = shouldShowReset ? '' : 'none';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }

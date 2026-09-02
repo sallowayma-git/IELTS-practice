@@ -175,7 +175,7 @@ async function run() {
   ok(/resolveReplayReviewSummary\(data, entry, replayData\)/.test(unifiedPage), 'historical_review_summary_not_recorded', failed);
   ok(/presentation\.reviewSummary \|\| \{\}/.test(unifiedPage), 'submit_snapshot_not_used_for_review_banner', failed);
   ok(/dom\.submitBtn\.querySelector\('\.submit-btn-icon'\)/.test(unifiedPage), 'readonly_submit_icon_not_preserved', failed);
-  ok(/dom\.resetBtn\.style\.display = \(canResetSubmittedSingle \|\| state\.reviewMode\) \? '' : 'none';/.test(unifiedPage), 'reset_not_hidden_during_test', failed);
+  ok(/dom\.resetBtn\.style\.display = shouldShowReset \? '' : 'none';/.test(unifiedPage) && /shouldShowReset = state\.submissionStatus === 'submitting' \|\| canResetSubmittedSingle \|\| state\.reviewMode/.test(unifiedPage), 'reset_not_hidden_during_test', failed);
   ok(/setSettingsBackgroundInert\(true\)/.test(unifiedPage), 'options_background_not_inert', failed);
   ok(/settingsPanel\?\.addEventListener\('keydown', trapSettingsFocus\)/.test(unifiedPage), 'options_focus_trap_not_bound', failed);
   ok(/data-note-title[^>]*type="text"/.test(unifiedPage), 'note_title_editor_not_restored', failed);
