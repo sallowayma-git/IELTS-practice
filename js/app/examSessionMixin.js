@@ -3586,17 +3586,14 @@
 
         _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
             const scoreInfo = {};
-            const aliasSources = [];
-            const counterSourceGroups = [];
+            const scoreSourceGroups = [];
             const mergeScoreInfo = (source) => {
                 if (!this._isReplayObject(source)) return;
                 Object.assign(scoreInfo, this._cloneReviewData(source));
-                aliasSources.push({ source, rootProjection: false });
             };
             const collectScoreAliases = (source) => {
                 if (!this._isReplayObject(source)) return;
-                aliasSources.push({ source, rootProjection: true });
-                counterSourceGroups.push({
+                scoreSourceGroups.push({
                     root: source,
                     nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
                 });
@@ -3628,23 +3625,30 @@
             ].some(hasUsableScoreAlias);
             const includeParentScore = !isSuiteEntry
                 || (allowSingleEntryParentFallback && !entryHasUsableScore);
-            const resolveFromAliasSources = (sources, keys, normalize = normalizeNonNegative) => {
-                for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { source } = sources[sourceIndex];
-                    for (const key of keys) {
-                        const normalized = normalize(source[key]);
-                        if (normalized === null) continue;
-                        return normalized;
-                    }
+            const resolveFromAliasSource = (source, keys, normalize = normalizeNonNegative) => {
+                if (!this._isReplayObject(source)) return null;
+                for (const key of keys) {
+                    const normalized = normalize(source[key]);
+                    if (normalized === null) continue;
+                    return normalized;
                 }
                 return null;
             };
-            const resolvePreferredAlias = (keys, normalize = normalizeNonNegative) => (
-                resolveFromAliasSources(aliasSources, keys, normalize)
-            );
+            const resolvePreferredMetric = (keys, normalize) => {
+                for (let sourceIndex = scoreSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { root, nested } = scoreSourceGroups[sourceIndex];
+                    // AppData canonicalizes accuracy and percentage at the
+                    // provenance root; nested scoreInfo remains its fallback.
+                    const rootMetric = resolveFromAliasSource(root, keys, normalize);
+                    if (rootMetric !== null) return rootMetric;
+                    const nestedMetric = resolveFromAliasSource(nested, keys, normalize);
+                    if (nestedMetric !== null) return nestedMetric;
+                }
+                return null;
+            };
             const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
-                for (let sourceIndex = counterSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { root, nested } = counterSourceGroups[sourceIndex];
+                for (let sourceIndex = scoreSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { root, nested } = scoreSourceGroups[sourceIndex];
                     const normalized = normalizeNonNegative(root[canonicalRootKey]);
                     if (normalized !== null) {
                         // AppData projects a missing canonical correct count as
@@ -3657,22 +3661,16 @@
                             );
                             const copiedScore = normalizeNonNegative(nested?.score);
                             if (!hasCanonicalNestedCount && copiedScore !== null && copiedScore > 0) {
-                                return resolveFromAliasSources([{ source: nested }], nestedKeys) ?? copiedScore;
+                                return resolveFromAliasSource(nested, nestedKeys) ?? copiedScore;
                             }
                         }
                         return normalized;
                     }
 
-                    const nestedCounter = resolveFromAliasSources(
-                        nested ? [{ source: nested }] : [],
-                        nestedKeys
-                    );
+                    const nestedCounter = resolveFromAliasSource(nested, nestedKeys);
                     if (nestedCounter !== null) return nestedCounter;
 
-                    const rootLegacyCounter = resolveFromAliasSources(
-                        [{ source: root }],
-                        rootLegacyKeys
-                    );
+                    const rootLegacyCounter = resolveFromAliasSource(root, rootLegacyKeys);
                     if (rootLegacyCounter !== null) return rootLegacyCounter;
                 }
                 return null;
@@ -3717,8 +3715,8 @@
                 nestedKeys: ['total', 'totalQuestions'],
                 rootLegacyKeys: ['total']
             });
-            const accuracy = resolvePreferredAlias(['accuracy'], normalizeAccuracy);
-            const percentage = resolvePreferredAlias(['percentage'], normalizePercentage);
+            const accuracy = resolvePreferredMetric(['accuracy'], normalizeAccuracy);
+            const percentage = resolvePreferredMetric(['percentage'], normalizePercentage);
             if (correct !== null) scoreInfo.correct = correct;
             if (total !== null) {
                 scoreInfo.total = total;

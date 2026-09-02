@@ -773,9 +773,9 @@ async function testLegacyReplayProjectionContract() {
         examId: 'current-provenance-counter',
         correct: 8,
         total: 10,
-        scoreInfo: { correct: 8, total: 10, accuracy: 0.8 },
-        realData: { correctAnswers: 4, totalQuestions: 5 },
-        rawData: { correctAnswers: 2, totalQuestions: 3 }
+        scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 },
+        realData: { correctAnswers: 4, totalQuestions: 5, accuracy: 0.4, percentage: 40 },
+        rawData: { correctAnswers: 2, totalQuestions: 3, accuracy: 0.2, percentage: 20 }
     })[0];
     assert.strictEqual(
         currentProvenanceCounterReplay.scoreInfo.correct,
@@ -784,15 +784,20 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(currentProvenanceCounterReplay.scoreInfo.total, 10);
     assert.strictEqual(currentProvenanceCounterReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(
+        currentProvenanceCounterReplay.scoreInfo.percentage,
+        80,
+        'current entry metrics must outrank stale accuracy and percentage in realData and rawData'
+    );
 
     const realDataProvenanceCounterReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'real-data-provenance-counter',
         realData: {
             correct: 8,
             total: 10,
-            scoreInfo: { correct: 8, total: 10, accuracy: 0.8 }
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 }
         },
-        rawData: { correctAnswers: 2, totalQuestions: 3 }
+        rawData: { correctAnswers: 2, totalQuestions: 3, accuracy: 0.2, percentage: 20 }
     })[0];
     assert.strictEqual(
         realDataProvenanceCounterReplay.scoreInfo.correct,
@@ -801,6 +806,24 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(realDataProvenanceCounterReplay.scoreInfo.total, 10);
     assert.strictEqual(realDataProvenanceCounterReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(
+        realDataProvenanceCounterReplay.scoreInfo.percentage,
+        80,
+        'realData metrics must outrank stale accuracy and percentage in rawData'
+    );
+
+    const canonicalMetricReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'canonical-root-metric',
+        accuracy: 0.9,
+        percentage: 90,
+        scoreInfo: { correct: 9, total: 10, accuracy: 0.8, percentage: 80 }
+    })[0];
+    assert.strictEqual(
+        canonicalMetricReplay.scoreInfo.accuracy,
+        0.9,
+        'canonical root accuracy must outrank nested scoreInfo within the same provenance'
+    );
+    assert.strictEqual(canonicalMetricReplay.scoreInfo.percentage, 90);
 
     const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score',
