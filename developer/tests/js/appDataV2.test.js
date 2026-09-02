@@ -523,10 +523,47 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(replay.scoreInfo.percentage, 67);
     assert.strictEqual(replay.duration, 1200, 'positive timeSpent must outrank AppData generated zero duration');
 
+    const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'authoritative-zero-score',
+        scoreInfo: { correct: 0, total: 10 },
+        realData: { scoreInfo: { correct: 8, total: 10 } }
+    })[0];
+    assert.strictEqual(
+        authoritativeZeroReplay.scoreInfo.correct,
+        0,
+        'an authoritative zero must retain score-info source precedence over stale aliases'
+    );
+    assert.strictEqual(authoritativeZeroReplay.scoreInfo.total, 10);
+
+    const authoritativeZeroAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'authoritative-zero-score-alias',
+        correctAnswers: 0,
+        scoreInfo: { correct: 0, score: 8, total: 10 }
+    })[0];
+    assert.strictEqual(
+        authoritativeZeroAliasReplay.scoreInfo.correct,
+        0,
+        'canonical scoreInfo keys must outrank a stale score alias in the same source'
+    );
+
     const suiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(suiteCompleted.record);
     assert.strictEqual(suiteReplay[0].scoreInfo.accuracy, 0.67);
     assert.strictEqual(suiteReplay[0].duration, 900);
     assert.strictEqual(suiteReplay[0].endTime, '2026-08-15T10:45:00.000Z');
+
+    const zeroDurationSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        duration: 3600,
+        suiteEntries: [
+            { examId: 'zero-duration-child', duration: 0 },
+            { examId: 'positive-duration-child', duration: 120 }
+        ]
+    });
+    assert.strictEqual(
+        zeroDurationSuiteReplay[0].duration,
+        0,
+        'an explicit child zero duration must outrank the parent suite aggregate'
+    );
+    assert.strictEqual(zeroDurationSuiteReplay[1].duration, 120);
 
     const signedTimestampReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-signed-timestamp',
