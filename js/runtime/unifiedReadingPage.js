@@ -7151,18 +7151,9 @@
         let durationSeconds = null;
         for (const candidate of durationCandidates) {
             const parsed = parseOptionalNonNegativeInteger(candidate);
-            if (parsed !== null && parsed > 0) {
+            if (parsed !== null) {
                 durationSeconds = parsed;
                 break;
-            }
-        }
-        if (durationSeconds === null) {
-            for (const candidate of durationCandidates) {
-                const parsed = parseOptionalNonNegativeInteger(candidate);
-                if (parsed !== null) {
-                    durationSeconds = parsed;
-                    break;
-                }
             }
         }
         return {

@@ -407,7 +407,7 @@ async function testReviewRuntimeBehaviors(page) {
             totalQuestions: 10,
             accuracy: 0.67,
             percentage: 67,
-            duration: 0,
+            duration: 1200,
             scoreInfo: { score: 8, total: 10, accuracy: 67, timeSpent: 1200 }
         })[0];
 
@@ -515,7 +515,7 @@ async function testReviewRuntimeBehaviors(page) {
             renderedSuiteDuration,
             outOfRangeRecoveredTimestamp,
             signedRecoveredTimestamp: document.getElementById('review-submitted-at').getAttribute('datetime'),
-            zeroProjectedDuration: document.getElementById('review-elapsed').textContent
+            explicitZeroDuration: document.getElementById('review-elapsed').textContent
         };
     });
     assert.deepEqual(hostReplay, {
@@ -534,7 +534,7 @@ async function testReviewRuntimeBehaviors(page) {
         renderedSuiteDuration: '20:00',
         outOfRangeRecoveredTimestamp: '2026-08-15T10:30:00.000Z',
         signedRecoveredTimestamp: '2026-08-15T10:35:00.000Z',
-        zeroProjectedDuration: '20:00'
+        explicitZeroDuration: '0:00'
     });
 }
 

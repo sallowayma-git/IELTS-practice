@@ -11102,7 +11102,7 @@
             return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
-        _resolveReplaySourceScoreInfo(entry, record, isAggregated = false) {
+        _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false) {
             const scoreInfo = {};
             const aliasSources = [];
             const mergeScoreInfo = (source) => {
@@ -11157,7 +11157,7 @@
                 return null;
             };
 
-            if (!isAggregated) {
+            if (!isSuiteEntry) {
                 mergeScoreInfo(record.rawData?.scoreInfo);
                 mergeScoreInfo(record.realData?.scoreInfo);
                 mergeScoreInfo(record.scoreInfo);
@@ -11167,9 +11167,9 @@
             mergeScoreInfo(entry.scoreInfo);
 
             // AppData's canonical/light records expose numeric score totals at
-            // the entry root. Aggregate record totals must not be copied into
-            // every suite child, but each child's own aliases remain authoritative.
-            if (!isAggregated) {
+            // the entry root. Parent record totals must not be copied into a
+            // suite child, even when the suite contains only one entry.
+            if (!isSuiteEntry) {
                 collectScoreAliases(record.rawData);
                 collectScoreAliases(record.realData);
                 collectScoreAliases(record);
@@ -11274,16 +11274,8 @@
         _resolveReplayDurationValue(...groups) {
             const provenanceGroups = groups.every(Array.isArray) ? groups : [groups];
             for (const values of provenanceGroups) {
-                // Match PracticeCore.resolveDurationSeconds within one
-                // provenance boundary: prefer a real positive alias, then
-                // accept an explicit zero before consulting parent fallbacks.
-                for (const value of values) {
-                    if (value === null || value === undefined || value === '') continue;
-                    const numeric = Number(value);
-                    if (Number.isFinite(numeric) && numeric > 0) {
-                        return numeric;
-                    }
-                }
+                // AppData promotes legacy aliases when a canonical duration is
+                // missing, so field order can preserve an explicit root zero.
                 for (const value of values) {
                     if (value === null || value === undefined || value === '') continue;
                     const numeric = Number(value);
@@ -11391,7 +11383,7 @@
                 }
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
-                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(entry, record, isAggregated);
+                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(entry, record, hasSuiteEntries);
                 const scoreInfo = this._deriveReplayScoreInfo(
                     sourceScoreInfo,
                     comparison,
