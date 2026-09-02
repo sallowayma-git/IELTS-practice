@@ -640,6 +640,38 @@ async function testLegacyReplayProjectionContract() {
         }
     });
 
+    const canonicalCounterSuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'canonical-counter-suite-projection',
+        record: {
+            id: 'canonical-counter-suite-projection',
+            type: 'reading-suite',
+            suiteEntries: [{
+                examId: 'canonical-counter-reading-part',
+                correct: 2,
+                total: 3,
+                correctAnswers: 8,
+                totalQuestions: 10,
+                scoreInfo: { correct: 8, total: 10, accuracy: 0.8 }
+            }]
+        }
+    });
+    assert.strictEqual(canonicalCounterSuiteCompleted.record.suiteEntrySummaries[0].correctAnswers, 8);
+    assert.strictEqual(canonicalCounterSuiteCompleted.record.suiteEntrySummaries[0].totalQuestions, 10);
+
+    const nestedCounterSuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'nested-counter-suite-projection',
+        record: {
+            id: 'nested-counter-suite-projection',
+            type: 'reading-suite',
+            suiteEntries: [{
+                examId: 'nested-counter-reading-part',
+                correct: 2,
+                total: 3,
+                scoreInfo: { correct: 8, total: 10, accuracy: 0.8 }
+            }]
+        }
+    });
+
     vm.runInContext(examSessionSource, fixture.context, { filename: 'examSessionMixin.js' });
     const replayMixin = Object.assign({}, fixture.sandbox.ExamSystemAppMixins.examSession);
     const replay = replayMixin._buildReviewReplayEntriesFromRecord(projected)[0];
@@ -714,6 +746,28 @@ async function testLegacyReplayProjectionContract() {
         1200,
         'a whitespace-only child duration must fall back to the parent duration provenance'
     );
+
+    const canonicalCounterSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        canonicalCounterSuiteCompleted.record
+    )[0];
+    assert.strictEqual(
+        canonicalCounterSuiteReplay.scoreInfo.correct,
+        8,
+        'canonical root correctAnswers must outrank the stale root correct alias'
+    );
+    assert.strictEqual(canonicalCounterSuiteReplay.scoreInfo.total, 10);
+    assert.strictEqual(canonicalCounterSuiteReplay.scoreInfo.accuracy, 0.8);
+
+    const nestedCounterSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        nestedCounterSuiteCompleted.record
+    )[0];
+    assert.strictEqual(
+        nestedCounterSuiteReplay.scoreInfo.correct,
+        8,
+        'nested scoreInfo.correct must outrank a root legacy correct alias when no canonical counter exists'
+    );
+    assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.total, 10);
+    assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.accuracy, 0.8);
 
     const authoritativeZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score',

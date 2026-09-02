@@ -11152,32 +11152,46 @@
             ].some(hasUsableScoreAlias);
             const includeParentScore = !isSuiteEntry
                 || (allowSingleEntryParentFallback && !entryHasUsableScore);
-            const resolvePreferredAlias = (keys, normalize = normalizeNonNegative) => {
-                for (let sourceIndex = aliasSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { source, rootProjection } = aliasSources[sourceIndex];
+            const resolveFromAliasSources = (sources, keys, normalize = normalizeNonNegative) => {
+                for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { source } = sources[sourceIndex];
                     for (const key of keys) {
                         const normalized = normalize(source[key]);
                         if (normalized === null) continue;
-                        // AppData projects a missing canonical count as
-                        // `correctAnswers: 0` while also copying a legacy
-                        // `score` alias into the full record (some legacy full
-                        // projections retain it only under scoreInfo). Only
-                        // that generated root fallback may yield to the copied
-                        // positive alias; zeroes from scoreInfo sources retain
-                        // their source/key precedence.
-                        if (rootProjection && key === 'correctAnswers' && normalized === 0) {
-                            const hasCanonicalNestedCount = ['correct', 'correctAnswers'].some(
-                                nestedKey => normalize(source.scoreInfo?.[nestedKey]) !== null
-                            );
-                            if (!hasCanonicalNestedCount) {
-                                const copiedScore = normalize(source.scoreInfo?.score);
-                                if (copiedScore !== null && copiedScore > 0) return copiedScore;
-                            }
-                        }
                         return normalized;
                     }
                 }
                 return null;
+            };
+            const resolvePreferredAlias = (keys, normalize = normalizeNonNegative) => (
+                resolveFromAliasSources(aliasSources, keys, normalize)
+            );
+            const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
+                const rootSources = aliasSources.filter(({ rootProjection }) => rootProjection);
+                const nestedSources = aliasSources.filter(({ rootProjection }) => !rootProjection);
+                for (let sourceIndex = rootSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { source } = rootSources[sourceIndex];
+                    const normalized = normalizeNonNegative(source[canonicalRootKey]);
+                    if (normalized === null) continue;
+                    // AppData projects a missing canonical correct count as
+                    // `correctAnswers: 0` while retaining a legacy positive
+                    // `score` under scoreInfo. Only that generated root zero
+                    // may yield to nested score provenance.
+                    if (canonicalRootKey === 'correctAnswers' && normalized === 0) {
+                        const hasCanonicalNestedCount = ['correct', 'correctAnswers'].some(
+                            nestedKey => normalizeNonNegative(source.scoreInfo?.[nestedKey]) !== null
+                        );
+                        const copiedScore = normalizeNonNegative(source.scoreInfo?.score);
+                        if (!hasCanonicalNestedCount && copiedScore !== null && copiedScore > 0) {
+                            return resolveFromAliasSources(nestedSources, nestedKeys) ?? copiedScore;
+                        }
+                    }
+                    return normalized;
+                }
+                const nested = resolveFromAliasSources(nestedSources, nestedKeys);
+                return nested !== null
+                    ? nested
+                    : resolveFromAliasSources(rootSources, rootLegacyKeys);
             };
 
             if (includeParentScore) {
@@ -11209,8 +11223,16 @@
             delete scoreInfo.totalQuestions;
             delete scoreInfo.accuracy;
             delete scoreInfo.percentage;
-            const correct = resolvePreferredAlias(['correct', 'correctAnswers', 'score']);
-            const total = resolvePreferredAlias(['total', 'totalQuestions']);
+            const correct = resolvePreferredCounter({
+                canonicalRootKey: 'correctAnswers',
+                nestedKeys: ['correct', 'correctAnswers', 'score'],
+                rootLegacyKeys: ['correct', 'score']
+            });
+            const total = resolvePreferredCounter({
+                canonicalRootKey: 'totalQuestions',
+                nestedKeys: ['total', 'totalQuestions'],
+                rootLegacyKeys: ['total']
+            });
             const accuracy = resolvePreferredAlias(['accuracy'], normalizeAccuracy);
             const percentage = resolvePreferredAlias(['percentage'], normalizePercentage);
             if (correct !== null) scoreInfo.correct = correct;
