@@ -186,7 +186,9 @@ async function run() {
   ok(/getElementById\('options-clear-answers'\)\?\.addEventListener\('click', handleReset\)/.test(unifiedPage), 'options_clear_answers_not_bound_to_reset', failed);
   ok(/setSettingsBackgroundInert\(true\)/.test(unifiedPage), 'options_background_not_inert', failed);
   ok(/settingsPanel\?\.addEventListener\('keydown', trapSettingsFocus\)/.test(unifiedPage), 'options_focus_trap_not_bound', failed);
-  ok(/data-note-title[^>]*type="text"/.test(unifiedPage), 'note_title_editor_not_restored', failed);
+  ok(/body\?\.focus\(\)/.test(unifiedPage), 'note_editor_body_focus_missing', failed);
+  ok(!/String\(note\.title \|\| ''\)\.trim\(\) \|\| 'Untitled note'/.test(unifiedPage), 'note_title_fallback_not_using_buildDefaultNoteTitle', failed);
+  ok(/buildDefaultNoteTitle\(note\.quote\)/.test(unifiedPage), 'note_title_buildDefaultNoteTitle_not_called', failed);
   ok(/body\.dark-mode \.review-banner\s*\{[^}]*background: #171c22/.test(unifiedHtml), 'review_banner_dark_mode_missing', failed);
   ok(/@media \(max-width: 980px\)[\s\S]*?\.review-banner\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/.test(unifiedHtml), 'review_banner_tablet_reflow_missing', failed);
   ok(/@media \(max-width: 520px\)[\s\S]*?\.review-metrics\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(unifiedHtml), 'review_banner_phone_reflow_missing', failed);

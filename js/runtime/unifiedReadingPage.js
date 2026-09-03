@@ -973,7 +973,7 @@
         interaction.currentHighlightNode = null;
         if (kind === 'note') {
             const note = ensureNoteForHighlight(span, normalizeNoteText(span.textContent), { sync: false });
-            if (note) openNoteEditor(note.id, { anchorNode: span, focusBody: true });
+            if (note) openNoteEditor(note.id, { anchorNode: span });
         }
         syncReadingAnnotation('highlight');
     }
@@ -1056,7 +1056,7 @@
             if (targetNode && text) {
                 const note = ensureNoteForHighlight(targetNode, text);
                 closeFloatingPanels();
-                if (note) openNoteEditor(note.id, { anchorNode: targetNode, focusBody: true });
+                if (note) openNoteEditor(note.id, { anchorNode: targetNode });
             }
         });
         document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
@@ -1479,7 +1479,7 @@
 
     function formatNotesForLegacyText(notes = state.notes) {
         return normalizeNotes(notes).map((note) => {
-            const parts = [`# ${String(note.title || '').trim() || 'Untitled note'}`];
+            const parts = [`# ${String(note.title || '').trim() || buildDefaultNoteTitle(note.quote)}`];
             if (note.quote) parts.push(`> ${normalizeNoteText(note.quote)}`);
             if (note.body) parts.push(note.body);
             return parts.join('\n');
@@ -2131,7 +2131,7 @@
             .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
             #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
             .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
-            .reading-note-title,.reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box}.reading-note-title{font-weight:700}.reading-note-body{min-height:190px;resize:vertical;flex:1}
+            .reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1}
             body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
             @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
         `;
@@ -2192,12 +2192,10 @@
             editor = document.createElement('section');
             editor.id = 'reading-note-editor';
             editor.setAttribute('aria-hidden', 'true');
-            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><input class="reading-note-title" data-note-title type="text" placeholder="Title" aria-label="Note title"><textarea class="reading-note-body" data-note-body placeholder="Write your note" aria-label="Note body"></textarea></div>';
+            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><textarea class="reading-note-body" data-note-body placeholder="Write your note" aria-label="Note body"></textarea></div>';
             document.body.appendChild(editor);
             editor.addEventListener('click', (event) => { if (event.target.closest?.('[data-note-editor-close]')) closeNoteEditor(); });
-            editor.querySelector('[data-note-title]')?.addEventListener('input', saveActiveNoteFromEditor);
             editor.querySelector('[data-note-body]')?.addEventListener('input', saveActiveNoteFromEditor);
-            editor.querySelector('[data-note-title]')?.addEventListener('change', flushActiveNoteFromEditor);
             editor.querySelector('[data-note-body]')?.addEventListener('change', flushActiveNoteFromEditor);
             attachNoteEditorDrag(editor);
         }
@@ -2236,7 +2234,7 @@
     }
 
     function renderNoteRow(note) {
-        const title = String(note.title || '').trim() || 'Untitled note';
+        const title = String(note.title || '').trim() || buildDefaultNoteTitle(note.quote);
         const editable = canEditReadingNotes();
         const disabled = editable ? '' : ' disabled';
         return `<div class="reading-note-row" draggable="${editable}" data-note-row="${escapeHtml(note.id)}"><button class="reading-note-open" type="button" data-note-open="${escapeHtml(note.id)}" title="${escapeHtml(title)}">${escapeHtml(title)}</button><button class="reading-note-drag-handle" type="button" data-note-drag-handle="${escapeHtml(note.id)}" aria-label="Move note"${disabled}>⋮⋮</button><button class="reading-note-delete" type="button" data-note-delete="${escapeHtml(note.id)}" aria-label="Delete note"${disabled}>×</button></div>`;
@@ -2515,19 +2513,17 @@
         if (!note) return;
         state.activeNoteId = note.id;
         const editor = document.getElementById('reading-note-editor');
-        const title = editor?.querySelector('[data-note-title]');
         const body = editor?.querySelector('[data-note-body]');
         const quote = editor?.querySelector('[data-note-quote]');
         if (!editor) return;
         const canEditNotes = canEditReadingNotes();
-        if (title) { title.value = note.title || ''; title.disabled = !canEditNotes; }
         if (body) { body.value = note.body || ''; body.disabled = !canEditNotes; }
         if (quote) { quote.textContent = note.quote || ''; quote.style.display = note.quote ? '' : 'none'; }
         editor.style.display = 'flex';
         editor.setAttribute('aria-hidden', 'false');
         global.requestAnimationFrame(() => {
             positionNoteEditor(options.anchorNode || findNoteHighlight(note.id));
-            (options.focusBody ? body : title)?.focus();
+            body?.focus();
         });
     }
 
@@ -2576,11 +2572,9 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const titleField = editor?.querySelector('[data-note-title]');
-        const title = titleField ? String(titleField.value || '').trim() : String(note.title || '');
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
-        if (title === note.title && body === note.body) return;
-        Object.assign(note, { title, body, updatedAt: Date.now() });
+        if (body === note.body) return;
+        Object.assign(note, { body, updatedAt: Date.now() });
         state.noteDrawerDirty = true;
         state.noteHighlightMetaDirty = true;
         state.noteEditorPendingSync = true;
@@ -2594,13 +2588,11 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const titleField = editor?.querySelector('[data-note-title]');
-        const title = titleField ? String(titleField.value || '').trim() : String(note.title || '');
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
-        if (title === note.title && body === note.body && !state.noteEditorPendingSync) return;
+        if (body === note.body && !state.noteEditorPendingSync) return;
         clearNoteEditorSaveTimer();
         state.noteEditorPendingSync = false;
-        upsertNote({ ...note, title, body, updatedAt: Date.now() }, { forceUi: true, reason: 'note-edit' });
+        upsertNote({ ...note, body, updatedAt: Date.now() }, { forceUi: true, reason: 'note-edit' });
     }
 
     function createNoteAnchorSpan(note) {

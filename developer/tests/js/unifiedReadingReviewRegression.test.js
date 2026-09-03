@@ -286,23 +286,82 @@ async function testReviewRuntimeBehaviors(page) {
             submitted: false,
             reviewMode: false,
             memorizeMode: false,
-            notes: [{ id: 'note-1', title: 'Original title', body: '', quote: '', updatedAt: 1 }],
+            notes: [{ id: 'note-1', title: 'Original title', body: '', quote: 'A quoted passage from the article for verification', updatedAt: 1 }],
             noteOutlines: []
         });
         hooks.ensureReadingNotesUi();
         hooks.openNoteEditor('note-1');
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const title = document.querySelector('#reading-note-editor [data-note-title]');
-        const initiallyFocused = document.activeElement === title;
-        title.value = 'Renamed note';
-        title.dispatchEvent(new Event('input', { bubbles: true }));
+        const titleInput = document.querySelector('#reading-note-editor [data-note-title]');
+        const body = document.querySelector('#reading-note-editor [data-note-body]');
+        const focusedBody = document.activeElement === body;
+        body.value = 'Edited note body';
+        body.dispatchEvent(new Event('input', { bubbles: true }));
         return {
-            hasTitle: Boolean(title),
-            initiallyFocused,
-            savedTitle: hooks.getTestState().notes[0]?.title || ''
+            hasTitleInput: Boolean(titleInput),
+            focusedBody,
+            savedTitle: hooks.getTestState().notes[0]?.title || '',
+            savedBody: hooks.getTestState().notes[0]?.body || ''
         };
     });
-    assert.deepEqual(note, { hasTitle: true, initiallyFocused: true, savedTitle: 'Renamed note' });
+    assert.deepEqual(note, { hasTitleInput: false, focusedBody: true, savedTitle: 'Original title', savedBody: 'Edited note body' });
+
+    const noteNaming = await page.evaluate(async () => {
+        const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+        const q = (count) => 'q'.repeat(count);
+        hooks.setTestState({
+            readOnly: false,
+            submitted: false,
+            reviewMode: false,
+            memorizeMode: false,
+            notes: [
+                { id: 'note-long', title: '', body: '', quote: q(40), updatedAt: 1 },
+                { id: 'note-exact36', title: '', body: '', quote: q(36), updatedAt: 2 },
+                { id: 'note-at37', title: '', body: '', quote: q(37), updatedAt: 3 },
+                { id: 'note-empty', title: '', body: '', quote: '', updatedAt: 4 },
+                { id: 'note-custom', title: 'Custom kept title', body: '', quote: q(10), updatedAt: 5 }
+            ],
+            noteOutlines: []
+        });
+        hooks.ensureReadingNotesUi();
+        hooks.openNoteEditor('note-long');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // The drawer only repaints when dirty; editing the open note's body
+        // marks it so the next ensureReadingNotesUi() renders the rows.
+        const body = document.querySelector('#reading-note-editor [data-note-body]');
+        body.value = 'Body edit to mark the drawer dirty';
+        body.dispatchEvent(new Event('input', { bubbles: true }));
+        hooks.ensureReadingNotesUi();
+        const row = (id) => document.querySelector(`#reading-note-drawer [data-note-open="${id}"]`);
+        const legacyText = String(document.querySelector('#notes-panel textarea')?.value || '');
+        const blocks = legacyText.split('\n\n');
+        return {
+            longTitle: row('note-long')?.textContent || '',
+            longTooltip: row('note-long')?.getAttribute('title') || '',
+            exact36Title: row('note-exact36')?.textContent || '',
+            at37Title: row('note-at37')?.textContent || '',
+            emptyQuoteTitle: row('note-empty')?.textContent || '',
+            customTitleTitle: row('note-custom')?.textContent || '',
+            exportHeadings: blocks.map((block) => block.split('\n')[0]),
+            longQuoteLine: blocks[0]?.split('\n')[1] || ''
+        };
+    });
+    assert.deepEqual(noteNaming, {
+        longTitle: `${'q'.repeat(36)}...`,
+        longTooltip: `${'q'.repeat(36)}...`,
+        exact36Title: 'q'.repeat(36),
+        at37Title: `${'q'.repeat(36)}...`,
+        emptyQuoteTitle: 'Untitled note',
+        customTitleTitle: 'Custom kept title',
+        exportHeadings: [
+            `# ${'q'.repeat(36)}...`,
+            `# ${'q'.repeat(36)}`,
+            `# ${'q'.repeat(36)}...`,
+            '# Untitled note',
+            '# Custom kept title'
+        ],
+        longQuoteLine: `> ${'q'.repeat(40)}`
+    }, 'quote-derived note titles must apply the 36-char truncation, ellipsis, and Untitled-note fallback in both the drawer and the legacy export');
 
     const completion = await page.evaluate(() => {
         const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
@@ -551,7 +610,7 @@ async function main() {
     }
     process.stdout.write(JSON.stringify({
         status: 'pass',
-        detail: 'review completion, replay identity/timing, modal focus, note naming, dark mode, and narrow layouts covered'
+        detail: 'review completion, replay identity/timing, modal focus, quote-based note naming (36-char truncation, ellipsis, Untitled-note fallback, drawer and export) with preserved titles and body focus, dark mode, and narrow layouts covered'
     }));
 }
 

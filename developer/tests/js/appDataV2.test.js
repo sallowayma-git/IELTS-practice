@@ -873,6 +873,354 @@ async function testLegacyReplayProjectionContract() {
     );
     assert.strictEqual(zeroDurationSuiteReplay[0].scoreInfo.total, 0);
 
+    // Field-aware fallback: child has only counters, should fall back to parent metrics
+    const fieldAwareFallbackMetricsReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'field-aware-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'field-aware-child-counter-only',
+            scoreInfo: { correctAnswers: 8 }  // Child has counter but no total or metrics
+        }]
+    });
+    assert.strictEqual(
+        fieldAwareFallbackMetricsReplay[0].scoreInfo.correct,
+        8,
+        'one-entry suite child counter must be used when present'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackMetricsReplay[0].scoreInfo.total,
+        10,
+        'one-entry suite must fall back to parent total when child has only correct'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackMetricsReplay[0].scoreInfo.percentage,
+        80,
+        'one-entry suite must fall back to parent percentage when child has only counters'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackMetricsReplay[0].scoreInfo.accuracy,
+        0.8,
+        'one-entry suite must fall back to parent accuracy when child has only counters'
+    );
+
+    // Field-aware fallback: child has only metrics, should fall back to parent counters
+    const fieldAwareFallbackCountersReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'field-aware-parent-2',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'field-aware-child-metric-only',
+            scoreInfo: { percentage: 90 }  // Child has metric but no counters
+        }]
+    });
+    assert.strictEqual(
+        fieldAwareFallbackCountersReplay[0].scoreInfo.correct,
+        8,
+        'one-entry suite must fall back to parent correct when child has only metrics'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackCountersReplay[0].scoreInfo.total,
+        10,
+        'one-entry suite must fall back to parent total when child has only metrics'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackCountersReplay[0].scoreInfo.percentage,
+        90,
+        'one-entry suite child metric must be used when present'
+    );
+    assert.strictEqual(
+        fieldAwareFallbackCountersReplay[0].scoreInfo.accuracy,
+        0.9,
+        'accuracy must derive from child percentage when present'
+    );
+
+    // Partial metric pairs must resolve atomically within one provenance:
+    // the missing sibling is derived, never borrowed from a lower source.
+    const atomicAccuracyPairReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'atomic-accuracy-pair',
+        scoreInfo: { correct: 8, total: 10, accuracy: 0.8 },
+        rawData: { percentage: 20 }
+    })[0];
+    assert.strictEqual(atomicAccuracyPairReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(
+        atomicAccuracyPairReplay.scoreInfo.percentage,
+        80,
+        'percentage must derive from the same provenance as accuracy, not mix in rawData'
+    );
+
+    const atomicPercentagePairReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'atomic-percentage-pair',
+        scoreInfo: { correct: 8, total: 10, percentage: 20 },
+        rawData: { accuracy: 0.8 }
+    })[0];
+    assert.strictEqual(
+        atomicPercentagePairReplay.scoreInfo.accuracy,
+        0.2,
+        'accuracy must derive from the same provenance as percentage, not mix in rawData'
+    );
+    assert.strictEqual(atomicPercentagePairReplay.scoreInfo.percentage, 20);
+
+    const atomicExplicitZeroPairReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'atomic-explicit-zero-pair',
+        scoreInfo: { correct: 8, total: 10, accuracy: 0 },
+        rawData: { percentage: 20 }
+    })[0];
+    assert.strictEqual(atomicExplicitZeroPairReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(
+        atomicExplicitZeroPairReplay.scoreInfo.percentage,
+        0,
+        'an authored zero metric must not be paired with a lower-provenance percentage'
+    );
+
+    // AppData's full projection shape: generated root zero quartet plus the
+    // authored detail under rawData.scoreInfo must replay 8/10 at 80%.
+    const generatedZeroQuartetReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'generated-zero-quartet',
+        correctAnswers: 0,
+        totalQuestions: 0,
+        accuracy: 0,
+        percentage: 0,
+        rawData: { scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 } }
+    })[0];
+    assert.strictEqual(
+        generatedZeroQuartetReplay.scoreInfo.correct,
+        8,
+        'generated root zeroes must yield to the authored nested detail'
+    );
+    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.total, 10);
+    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.percentage, 80);
+
+    // Legacy score-only detail with generated metric zeroes: the metrics must
+    // derive from the restored 8/10 counters instead of staying at 0%.
+    const legacyScoreMetricDerivationReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'legacy-score-metric-derivation',
+        correctAnswers: 0,
+        totalQuestions: 0,
+        accuracy: 0,
+        percentage: 0,
+        scoreInfo: { score: 8, total: 10 }
+    })[0];
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.correct, 8);
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.total, 10);
+    assert.strictEqual(
+        legacyScoreMetricDerivationReplay.scoreInfo.accuracy,
+        0.8,
+        'metrics must derive from restored counters when only generated zeroes remain'
+    );
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.percentage, 80);
+
+    // Symmetric generated-zero handling: both counters must yield, never just
+    // correctAnswers (which produced 25/0 at 0%).
+    const symmetricGeneratedZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'symmetric-generated-zero',
+        correctAnswers: 0,
+        totalQuestions: 0,
+        scoreInfo: { correct: 25, total: 40 }
+    })[0];
+    assert.strictEqual(symmetricGeneratedZeroReplay.scoreInfo.correct, 25);
+    assert.strictEqual(
+        symmetricGeneratedZeroReplay.scoreInfo.total,
+        40,
+        'a generated totalQuestions zero must yield to the nested total like correctAnswers does'
+    );
+
+    // A genuine zero stays zero when the nested detail corroborates it.
+    const corroboratedZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'corroborated-zero',
+        correctAnswers: 0,
+        scoreInfo: { correct: 0 }
+    })[0];
+    assert.strictEqual(
+        corroboratedZeroReplay.scoreInfo.correct,
+        0,
+        'a root zero corroborated by a nested zero must be preserved'
+    );
+
+    // A partial one-entry-suite child must inherit parent fields without
+    // inheriting the parent's non-canonical scoreInfo keys.
+    const parentKeyLeakGuardReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'parent-key-leak-guard-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        scoreInfo: {
+            correct: 8,
+            total: 10,
+            score: 8,
+            duration: 999,
+            source: 'suite_mode_aggregated'
+        },
+        suiteEntries: [{
+            examId: 'parent-key-leak-guard-child',
+            correctAnswers: 5,
+            totalQuestions: 10
+        }]
+    })[0];
+    assert.strictEqual(parentKeyLeakGuardReplay.scoreInfo.correct, 5);
+    assert.strictEqual(parentKeyLeakGuardReplay.scoreInfo.total, 10);
+    assert.strictEqual(
+        parentKeyLeakGuardReplay.scoreInfo.accuracy,
+        0.5,
+        'parent metrics that contradict the child counters must be dropped, not spliced onto them'
+    );
+    assert.strictEqual(
+        parentKeyLeakGuardReplay.scoreInfo.percentage,
+        50,
+        'metrics must derive from the 5/10 child counters, not the 80% parent aggregate'
+    );
+    assert.strictEqual(
+        parentKeyLeakGuardReplay.scoreInfo.source,
+        undefined,
+        'a partial child must not inherit the parent scoreInfo source label'
+    );
+    assert.strictEqual(
+        parentKeyLeakGuardReplay.scoreInfo.score,
+        undefined,
+        'a partial child must not inherit the parent scoreInfo legacy score'
+    );
+    assert.strictEqual(
+        parentKeyLeakGuardReplay.scoreInfo.duration,
+        undefined,
+        'a partial child must not inherit the parent scoreInfo duration'
+    );
+
+    const counterOnlyChildLeakGuardReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'counter-only-leak-guard-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        scoreInfo: {
+            correct: 8,
+            total: 10,
+            score: 8,
+            duration: 999,
+            source: 'suite_mode_aggregated'
+        },
+        suiteEntries: [{
+            examId: 'counter-only-leak-guard-child',
+            scoreInfo: { correctAnswers: 8 }
+        }]
+    })[0];
+    assert.strictEqual(counterOnlyChildLeakGuardReplay.scoreInfo.correct, 8);
+    assert.strictEqual(
+        counterOnlyChildLeakGuardReplay.scoreInfo.total,
+        10,
+        'a counter-only child must still fall back to the parent total per field'
+    );
+    assert.strictEqual(counterOnlyChildLeakGuardReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(counterOnlyChildLeakGuardReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(counterOnlyChildLeakGuardReplay.scoreInfo.source, undefined);
+    assert.strictEqual(counterOnlyChildLeakGuardReplay.scoreInfo.duration, undefined);
+
+    // Parent-metric coherence: a one-entry-suite child with its own complete
+    // counters must never display the parent aggregate's metrics when the
+    // two describe different scores (the "3/10 at 80%" assembly bug).
+    const incoherentParentMetricReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'incoherent-parent-metric-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'incoherent-parent-metric-child',
+            correctAnswers: 3,
+            totalQuestions: 10
+        }]
+    })[0];
+    assert.strictEqual(incoherentParentMetricReplay.scoreInfo.correct, 3);
+    assert.strictEqual(incoherentParentMetricReplay.scoreInfo.total, 10);
+    assert.strictEqual(
+        incoherentParentMetricReplay.scoreInfo.accuracy,
+        0.3,
+        'a child counter pair must not be spliced onto the parent aggregate accuracy'
+    );
+    assert.strictEqual(
+        incoherentParentMetricReplay.scoreInfo.percentage,
+        30,
+        'metrics must derive from the child counters when the parent pair contradicts them'
+    );
+
+    // Generated zero quartet on a one-entry-suite child: the parent's
+    // aggregate metrics must not resurrect a score the child never had.
+    const zeroQuartetChildParentMetricReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'zero-quartet-child-parent-metric-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'zero-quartet-child-parent-metric-child',
+            correctAnswers: 0,
+            totalQuestions: 0
+        }]
+    })[0];
+    assert.strictEqual(zeroQuartetChildParentMetricReplay.scoreInfo.correct, 0);
+    assert.strictEqual(zeroQuartetChildParentMetricReplay.scoreInfo.total, 0);
+    assert.strictEqual(
+        zeroQuartetChildParentMetricReplay.scoreInfo.accuracy,
+        0,
+        'a generated child zero quartet must not inherit the parent aggregate metrics'
+    );
+    assert.strictEqual(
+        zeroQuartetChildParentMetricReplay.scoreInfo.percentage,
+        0
+    );
+
+    // A generated child correctAnswers zero must not import the parent's
+    // correct count; the missing total still falls back per field.
+    const childZeroCorrectReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'child-zero-correct-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'child-zero-correct-child',
+            correctAnswers: 0
+        }]
+    })[0];
+    assert.strictEqual(
+        childZeroCorrectReplay.scoreInfo.correct,
+        0,
+        'an uncorroborated child zero must not cross into the parent aggregate counters'
+    );
+    assert.strictEqual(
+        childZeroCorrectReplay.scoreInfo.total,
+        10,
+        'the child total may still fall back to the parent per field'
+    );
+    assert.strictEqual(childZeroCorrectReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(childZeroCorrectReplay.scoreInfo.percentage, 0);
+
+    // An authored child zero with its own total keeps both: the zero does
+    // not import the parent correct count, and the parent metrics that
+    // contradict 0/10 are dropped.
+    const childZeroCorrectWithTotalReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'child-zero-correct-with-total-parent',
+        correctAnswers: 8,
+        totalQuestions: 10,
+        accuracy: 0.8,
+        percentage: 80,
+        suiteEntries: [{
+            examId: 'child-zero-correct-with-total-child',
+            correctAnswers: 0,
+            totalQuestions: 10
+        }]
+    })[0];
+    assert.strictEqual(childZeroCorrectWithTotalReplay.scoreInfo.correct, 0);
+    assert.strictEqual(childZeroCorrectWithTotalReplay.scoreInfo.total, 10);
+    assert.strictEqual(childZeroCorrectWithTotalReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(childZeroCorrectWithTotalReplay.scoreInfo.percentage, 0);
+
+
     const signedTimestampReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-signed-timestamp',
         timestamp: '-1',

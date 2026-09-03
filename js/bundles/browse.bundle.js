@@ -11116,14 +11116,28 @@
 
         _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
             const scoreInfo = {};
-            const scoreSourceGroups = [];
+            const counterSourceGroups = [];
+            const metricSourceGroups = [];
+            // Number of leading groups collected from the aggregate parent
+            // record. Groups are collected parent-first, then iterated
+            // backwards (entry first), so a group index below these counts
+            // comes from the parent rather than the entry itself.
+            let counterParentGroupCount = 0;
+            let metricParentGroupCount = 0;
             const mergeScoreInfo = (source) => {
                 if (!this._isReplayObject(source)) return;
                 Object.assign(scoreInfo, this._cloneReviewData(source));
             };
-            const collectScoreAliases = (source) => {
+            const collectCounterAliases = (source) => {
                 if (!this._isReplayObject(source)) return;
-                scoreSourceGroups.push({
+                counterSourceGroups.push({
+                    root: source,
+                    nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
+                });
+            };
+            const collectMetricAliases = (source) => {
+                if (!this._isReplayObject(source)) return;
+                metricSourceGroups.push({
                     root: source,
                     nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
                 });
@@ -11138,22 +11152,49 @@
                 const numeric = normalizeNonNegative(value);
                 return numeric !== null && numeric <= 100 ? numeric : null;
             };
-            const hasUsableScoreAlias = (source) => {
+            const hasCounterAlias = (source) => {
                 if (!this._isReplayObject(source)) return false;
                 return ['correct', 'correctAnswers', 'score', 'total', 'totalQuestions']
-                    .some(key => normalizeNonNegative(source[key]) !== null)
-                    || normalizeAccuracy(source.accuracy) !== null
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+            };
+            const hasMetricAlias = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                return normalizeAccuracy(source.accuracy) !== null
                     || normalizePercentage(source.percentage) !== null;
             };
-            const entryHasUsableScore = [
+            const hasCompleteCounters = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                const hasCorrect = ['correct', 'correctAnswers', 'score']
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+                const hasTotal = ['total', 'totalQuestions']
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+                return hasCorrect && hasTotal;
+            };
+            const entrySources = [
                 entry.rawData,
                 entry.rawData?.scoreInfo,
                 entry.realData,
                 entry.realData?.scoreInfo,
                 entry,
                 entry.scoreInfo
-            ].some(hasUsableScoreAlias);
-            const includeParentScore = !isSuiteEntry
+            ];
+            const entryHasCompleteCounters = entrySources.some(hasCompleteCounters);
+            const entryHasMetric = entrySources.some(hasMetricAlias);
+
+            // Split the gates: counters and metrics fall back independently
+            const includeParentCounters = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasCompleteCounters);
+            const includeParentMetrics = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasMetric);
+            // The wholesale parent scoreInfo merge stays gated on the child
+            // having no usable score of its own, matching the pre-split
+            // semantics. Field-level fallback flows through the source
+            // groups below, so a partial child never inherits the parent's
+            // non-canonical scoreInfo keys (source, score, duration, ...).
+            const entryHasUsableScore = entrySources.some(
+                source => hasCounterAlias(source) || hasMetricAlias(source)
+            );
+            const includeParentScoreInfo = !isSuiteEntry
                 || (allowSingleEntryParentFallback && !entryHasUsableScore);
             const resolveFromAliasSource = (source, keys, normalize = normalizeNonNegative) => {
                 if (!this._isReplayObject(source)) return null;
@@ -11164,37 +11205,52 @@
                 }
                 return null;
             };
-            const resolvePreferredMetric = (keys, normalize) => {
-                for (let sourceIndex = scoreSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { root, nested } = scoreSourceGroups[sourceIndex];
-                    // AppData canonicalizes accuracy and percentage at the
-                    // provenance root; nested scoreInfo remains its fallback.
-                    const rootMetric = resolveFromAliasSource(root, keys, normalize);
-                    if (rootMetric !== null) return rootMetric;
-                    const nestedMetric = resolveFromAliasSource(nested, keys, normalize);
-                    if (nestedMetric !== null) return nestedMetric;
-                }
-                return null;
-            };
             const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
-                for (let sourceIndex = scoreSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { root, nested } = scoreSourceGroups[sourceIndex];
+                let uncorroboratedRootZero = null;
+                for (let sourceIndex = counterSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    // An uncorroborated root zero may keep probing its own
+                    // provenance chain, but must never cross into the parent
+                    // aggregate groups: a generated child zero is not a signal
+                    // to import the parent's aggregate counters.
+                    if (uncorroboratedRootZero !== null && sourceIndex < counterParentGroupCount) {
+                        break;
+                    }
+                    const { root, nested } = counterSourceGroups[sourceIndex];
                     const normalized = normalizeNonNegative(root[canonicalRootKey]);
                     if (normalized !== null) {
-                        // AppData projects a missing canonical correct count as
-                        // `correctAnswers: 0` while retaining a legacy positive
-                        // `score` under scoreInfo. Only that generated root zero
-                        // may yield to nested score provenance.
-                        if (canonicalRootKey === 'correctAnswers' && normalized === 0) {
-                            const hasCanonicalNestedCount = ['correct', 'correctAnswers'].some(
-                                nestedKey => normalizeNonNegative(nested?.[nestedKey]) !== null
-                            );
+                        if (normalized > 0) return normalized;
+                        // AppData projects a missing canonical count as a root
+                        // zero while the authored detail survives under the
+                        // nested scoreInfo or a lower provenance. A root zero
+                        // only survives when nothing authored contradicts it.
+                        const nestedCanonicalKeys = canonicalRootKey === 'correctAnswers'
+                            ? ['correct', 'correctAnswers']
+                            : ['total', 'totalQuestions'];
+                        const hasCanonicalNestedCount = nestedCanonicalKeys.some(
+                            nestedKey => normalizeNonNegative(nested?.[nestedKey]) !== null
+                        );
+                        if (hasCanonicalNestedCount) {
+                            const canonicalNested = resolveFromAliasSource(nested, nestedCanonicalKeys);
+                            if (canonicalNested !== null && canonicalNested > 0) {
+                                return canonicalNested;
+                            }
+                            // A nested zero corroborates the root zero as
+                            // authored rather than generated.
+                            return 0;
+                        }
+                        if (canonicalRootKey === 'correctAnswers') {
+                            // Legacy score fallback when no canonical nested
+                            // count exists.
                             const copiedScore = normalizeNonNegative(nested?.score);
-                            if (!hasCanonicalNestedCount && copiedScore !== null && copiedScore > 0) {
+                            if (copiedScore !== null && copiedScore > 0) {
                                 return resolveFromAliasSource(nested, nestedKeys) ?? copiedScore;
                             }
                         }
-                        return normalized;
+                        // Uncorroborated root zero: it may be an AppData
+                        // generated projection, so keep probing lower
+                        // provenances before conceding it.
+                        if (uncorroboratedRootZero === null) uncorroboratedRootZero = 0;
+                        continue;
                     }
 
                     const nestedCounter = resolveFromAliasSource(nested, nestedKeys);
@@ -11203,10 +11259,10 @@
                     const rootLegacyCounter = resolveFromAliasSource(root, rootLegacyKeys);
                     if (rootLegacyCounter !== null) return rootLegacyCounter;
                 }
-                return null;
+                return uncorroboratedRootZero;
             };
 
-            if (includeParentScore) {
+            if (includeParentScoreInfo) {
                 mergeScoreInfo(record.rawData?.scoreInfo);
                 mergeScoreInfo(record.realData?.scoreInfo);
                 mergeScoreInfo(record.scoreInfo);
@@ -11216,17 +11272,29 @@
             mergeScoreInfo(entry.scoreInfo);
 
             // AppData's canonical/light records expose numeric score totals at
-            // the entry root. Parent totals stay out of suite children except
-            // for the structurally equivalent one-entry suite whose child has
-            // no usable score of its own.
-            if (includeParentScore) {
-                collectScoreAliases(record.rawData);
-                collectScoreAliases(record.realData);
-                collectScoreAliases(record);
+            // the entry root. Parent provenances stay out of suite children
+            // except for the structurally equivalent one-entry suite, where
+            // each field family (counters, metrics) falls back to the parent
+            // independently of the other.
+            if (includeParentCounters) {
+                collectCounterAliases(record.rawData);
+                collectCounterAliases(record.realData);
+                collectCounterAliases(record);
+                counterParentGroupCount = counterSourceGroups.length;
             }
-            collectScoreAliases(entry.rawData);
-            collectScoreAliases(entry.realData);
-            collectScoreAliases(entry);
+            collectCounterAliases(entry.rawData);
+            collectCounterAliases(entry.realData);
+            collectCounterAliases(entry);
+
+            if (includeParentMetrics) {
+                collectMetricAliases(record.rawData);
+                collectMetricAliases(record.realData);
+                collectMetricAliases(record);
+                metricParentGroupCount = metricSourceGroups.length;
+            }
+            collectMetricAliases(entry.rawData);
+            collectMetricAliases(entry.realData);
+            collectMetricAliases(entry);
 
             // Resolve each provenance atomically so an authoritative value
             // cannot be replaced by a stale alias from a lower-priority source.
@@ -11245,8 +11313,62 @@
                 nestedKeys: ['total', 'totalQuestions'],
                 rootLegacyKeys: ['total']
             });
-            const accuracy = resolvePreferredMetric(['accuracy'], normalizeAccuracy);
-            const percentage = resolvePreferredMetric(['percentage'], normalizePercentage);
+            const resolveMetricPair = () => {
+                // AppData projects missing canonical metrics as root zeroes,
+                // mirroring the counter projection. A root zero is only
+                // trustworthy when the nested scoreInfo corroborates it;
+                // otherwise defer to lower provenances and, failing those,
+                // let _deriveReplayScoreInfo derive the pair from the
+                // resolved counters.
+                const resolveEffectiveMetric = (rootValue, nestedValue) => {
+                    if (rootValue !== null && rootValue > 0) return rootValue;
+                    if (nestedValue !== null && nestedValue > 0) return nestedValue;
+                    if (rootValue === 0 && nestedValue === null) return null;
+                    return rootValue ?? nestedValue;
+                };
+                for (let sourceIndex = metricSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const { root, nested } = metricSourceGroups[sourceIndex];
+                    const fromParent = sourceIndex < metricParentGroupCount;
+                    const accuracy = resolveEffectiveMetric(
+                        normalizeAccuracy(root?.accuracy),
+                        normalizeAccuracy(nested?.accuracy)
+                    );
+                    const percentage = resolveEffectiveMetric(
+                        normalizePercentage(root?.percentage),
+                        normalizePercentage(nested?.percentage)
+                    );
+
+                    if (accuracy === null && percentage === null) continue;
+
+                    // Derive missing sibling from the one we found
+                    if (accuracy !== null && percentage === null) {
+                        return { accuracy, percentage: Math.round(accuracy * 100), fromParent };
+                    }
+                    if (percentage !== null && accuracy === null) {
+                        return { accuracy: percentage / 100, percentage, fromParent };
+                    }
+                    return { accuracy, percentage, fromParent };
+                }
+                return { accuracy: null, percentage: null, fromParent: false };
+            };
+
+            let { accuracy, percentage, fromParent } = resolveMetricPair();
+            // Coherence guard: a metric pair borrowed from the parent
+            // aggregate must describe the same score as the resolved entry
+            // counters. A parent pair that contradicts the child counters
+            // describes the aggregate, not this entry — drop it and let
+            // _deriveReplayScoreInfo derive the pair from the counters.
+            if (fromParent && correct !== null && total !== null) {
+                const counterPercentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+                const accuracyCoherent = accuracy === null
+                    || Math.round(accuracy * 100) === counterPercentage;
+                const percentageCoherent = percentage === null
+                    || Math.round(percentage) === counterPercentage;
+                if (!accuracyCoherent || !percentageCoherent) {
+                    accuracy = null;
+                    percentage = null;
+                }
+            }
             if (correct !== null) scoreInfo.correct = correct;
             if (total !== null) {
                 scoreInfo.total = total;
