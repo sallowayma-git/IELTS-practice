@@ -11200,14 +11200,16 @@
                 const rootPercentage = normalizePercentage(source.percentage);
                 const nestedCanonicalCorrect = resolveFromAliasSource(nested, ['correct', 'correctAnswers']);
                 const nestedLegacyScore = resolveFromAliasSource(nested, ['score']);
-                const generatedLegacyCorrect = rootCorrect === 0
+                const hasAppDataProjectionShape = ['correctAnswers', 'totalQuestions', 'accuracy', 'percentage']
+                    .every(key => Object.prototype.hasOwnProperty.call(source, key))
+                    && Object.prototype.hasOwnProperty.call(source, 'score');
+                const rootLegacyScore = resolveFromAliasSource(source, ['score']);
+                const generatedLegacyCorrect = hasAppDataProjectionShape
+                    && rootCorrect === 0
                     && nestedCanonicalCorrect === null
                     && nestedLegacyScore !== null
-                    && nestedLegacyScore > 0;
-                const hasAppDataSummaryShape = ['correctAnswers', 'totalQuestions', 'accuracy', 'percentage']
-                    .every(key => Object.prototype.hasOwnProperty.call(source, key))
-                    && Object.prototype.hasOwnProperty.call(source, 'score')
-                    && source.score === null;
+                    && nestedLegacyScore > 0
+                    && rootLegacyScore === nestedLegacyScore;
                 const nestedHasNonZeroScore = [
                     nestedCanonicalCorrect,
                     nestedLegacyScore,
@@ -11215,7 +11217,8 @@
                     resolveFromAliasSource(nested, ['accuracy'], normalizeAccuracy),
                     resolveFromAliasSource(nested, ['percentage'], normalizePercentage)
                 ].some(value => value !== null && value > 0);
-                const generatedEmptySummary = hasAppDataSummaryShape
+                const generatedEmptySummary = hasAppDataProjectionShape
+                    && source.score === null
                     && rootCorrect === 0
                     && rootTotal === 0
                     && rootAccuracy === 0

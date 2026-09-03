@@ -466,6 +466,7 @@ async function testReviewRuntimeBehaviors(page) {
             totalQuestions: 10,
             accuracy: 0.67,
             percentage: 67,
+            score: 8,
             duration: 1200,
             scoreInfo: { score: 8, total: 10, accuracy: 67, timeSpent: 1200 }
         })[0];

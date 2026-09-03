@@ -708,6 +708,11 @@ async function testLegacyReplayProjectionContract() {
             scoreInfo: { score: 8, total: 10 }
         }
     });
+    assert.strictEqual(
+        legacyCountersOnlyCompleted.record.score,
+        8,
+        'the full AppData projection must expose the retained legacy score at the root'
+    );
 
     const partialChildSuiteCompleted = await fixture.app.practice.finalizeSuite({
         operationId: 'partial-child-suite-projection',
@@ -1162,8 +1167,8 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(explicitSyntheticZeroQuartetReplay.scoreInfo.accuracy, 0);
     assert.strictEqual(explicitSyntheticZeroQuartetReplay.scoreInfo.percentage, 0);
 
-    // The legacy score exception restores only the generated correct count;
-    // a synthetic explicit root total zero remains authoritative.
+    // A nested legacy score does not make a synthetic authored zero quartet
+    // look like an AppData projection without the matching root score field.
     const legacyScoreMetricDerivationReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-score-metric-derivation',
         correctAnswers: 0,
@@ -1172,12 +1177,12 @@ async function testLegacyReplayProjectionContract() {
         percentage: 0,
         scoreInfo: { score: 8, total: 10 }
     })[0];
-    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.correct, 8);
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.correct, 0);
     assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.total, 0);
     assert.strictEqual(
         legacyScoreMetricDerivationReplay.scoreInfo.accuracy,
         0,
-        'metrics must derive from the restored score and authoritative zero total'
+        'authored root zero metrics must remain authoritative without projection evidence'
     );
     assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.percentage, 0);
 

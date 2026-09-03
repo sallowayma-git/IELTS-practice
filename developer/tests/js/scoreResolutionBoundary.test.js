@@ -609,20 +609,37 @@ async function testGeneratedZeroProvenance() {
     assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.accuracy, 0);
     assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.percentage, 0);
 
-    // The legacy score exception restores only the generated correct count.
-    // A synthetic explicit root total zero still outranks nested total.
-    const legacyScoreGeneratedMetricZeroesReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'legacy-score-generated-metric-zeroes',
+    // A nested legacy score is not projection evidence on its own. Without
+    // AppData's matching root score field, the authored zero quartet wins.
+    const authoredZeroQuartetWithLegacyScoreReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'authored-zero-quartet-with-legacy-score',
         correctAnswers: 0,
         totalQuestions: 0,
         accuracy: 0,
         percentage: 0,
         scoreInfo: { score: 8, total: 10 }
     })[0];
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.correct, 8);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.total, 0);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.accuracy, 0);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.percentage, 0);
+    assert.strictEqual(authoredZeroQuartetWithLegacyScoreReplay.scoreInfo.correct, 0);
+    assert.strictEqual(authoredZeroQuartetWithLegacyScoreReplay.scoreInfo.total, 0);
+    assert.strictEqual(authoredZeroQuartetWithLegacyScoreReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(authoredZeroQuartetWithLegacyScoreReplay.scoreInfo.percentage, 0);
+
+    // AppData projects the retained legacy score to the root as well. That
+    // duplicated score field is the evidence that the root correct zero was
+    // synthesized and that the nested legacy counters should be restored.
+    const projectedLegacyScoreReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'projected-legacy-score',
+        correctAnswers: 0,
+        totalQuestions: 10,
+        accuracy: 0,
+        percentage: 0,
+        score: 8,
+        scoreInfo: { score: 8, total: 10 }
+    })[0];
+    assert.strictEqual(projectedLegacyScoreReplay.scoreInfo.correct, 8);
+    assert.strictEqual(projectedLegacyScoreReplay.scoreInfo.total, 10);
+    assert.strictEqual(projectedLegacyScoreReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(projectedLegacyScoreReplay.scoreInfo.percentage, 80);
 
     // Explicit root metric zeroes remain authoritative even when counters
     // could produce a different pair.
