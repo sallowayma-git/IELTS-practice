@@ -672,6 +672,82 @@ async function testLegacyReplayProjectionContract() {
         }
     });
 
+    const rawScoreInfoCompleted = await fixture.app.practice.completeAttempt({
+        operationId: 'raw-score-info-replay-projection',
+        record: {
+            id: 'raw-score-info-replay-projection',
+            examId: 'raw-score-info-reading',
+            type: 'reading',
+            rawData: {
+                scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 }
+            }
+        }
+    });
+    assert.deepStrictEqual(
+        [
+            rawScoreInfoCompleted.record.correctAnswers,
+            rawScoreInfoCompleted.record.totalQuestions,
+            rawScoreInfoCompleted.record.accuracy,
+            rawScoreInfoCompleted.record.percentage
+        ],
+        [0, 0, 0, 0],
+        'the regression fixture must retain AppData generated summary zeroes'
+    );
+    assert.deepStrictEqual(
+        rawScoreInfoCompleted.record.scoreInfo,
+        { correct: 8, total: 10, accuracy: 0.8, percentage: 80 },
+        'the full projection must retain authored raw score detail'
+    );
+
+    const legacyCountersOnlyCompleted = await fixture.app.practice.completeAttempt({
+        operationId: 'legacy-counters-only-replay-projection',
+        record: {
+            id: 'legacy-counters-only-replay-projection',
+            examId: 'legacy-counters-only-reading',
+            type: 'reading',
+            scoreInfo: { score: 8, total: 10 }
+        }
+    });
+
+    const partialChildSuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'partial-child-suite-projection',
+        record: {
+            id: 'partial-child-suite-projection',
+            type: 'reading-suite',
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 },
+            suiteEntries: [{
+                examId: 'partial-child-reading-part',
+                correctAnswers: 8
+            }]
+        }
+    });
+
+    const childMetricConflictSuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'child-metric-conflict-suite-projection',
+        record: {
+            id: 'child-metric-conflict-suite-projection',
+            type: 'reading-suite',
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 },
+            suiteEntries: [{
+                examId: 'child-metric-conflict-reading-part',
+                accuracy: 0.5
+            }]
+        }
+    });
+
+    const explicitZeroChildSuiteCompleted = await fixture.app.practice.finalizeSuite({
+        operationId: 'explicit-zero-child-suite-projection',
+        record: {
+            id: 'explicit-zero-child-suite-projection',
+            type: 'reading-suite',
+            scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 },
+            suiteEntries: [{
+                examId: 'explicit-zero-child-reading-part',
+                correctAnswers: 0
+            }]
+        }
+    });
+
     vm.runInContext(examSessionSource, fixture.context, { filename: 'examSessionMixin.js' });
     const replayMixin = Object.assign({}, fixture.sandbox.ExamSystemAppMixins.examSession);
     const replay = replayMixin._buildReviewReplayEntriesFromRecord(projected)[0];
@@ -769,6 +845,76 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.total, 10);
     assert.strictEqual(nestedCounterSuiteReplay.scoreInfo.accuracy, 0.8);
 
+    const rawScoreInfoReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        rawScoreInfoCompleted.record
+    )[0];
+    assert.deepStrictEqual(
+        [
+            rawScoreInfoReplay.scoreInfo.correct,
+            rawScoreInfoReplay.scoreInfo.total,
+            rawScoreInfoReplay.scoreInfo.accuracy,
+            rawScoreInfoReplay.scoreInfo.percentage
+        ],
+        [8, 10, 0.8, 80],
+        'generated summary zeroes must not replace retained AppData score detail'
+    );
+
+    const legacyCountersOnlyReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        legacyCountersOnlyCompleted.record
+    )[0];
+    assert.deepStrictEqual(
+        [
+            legacyCountersOnlyReplay.scoreInfo.correct,
+            legacyCountersOnlyReplay.scoreInfo.total,
+            legacyCountersOnlyReplay.scoreInfo.accuracy,
+            legacyCountersOnlyReplay.scoreInfo.percentage
+        ],
+        [8, 10, 0.8, 80],
+        'metrics synthesized from generated zeroes must be rederived from retained legacy counters'
+    );
+
+    const partialChildSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        partialChildSuiteCompleted.record
+    )[0];
+    assert.deepStrictEqual(
+        [
+            partialChildSuiteReplay.scoreInfo.correct,
+            partialChildSuiteReplay.scoreInfo.total,
+            partialChildSuiteReplay.scoreInfo.accuracy,
+            partialChildSuiteReplay.scoreInfo.percentage
+        ],
+        [8, 10, 0.8, 80],
+        'a one-entry child must keep its counter and fill only missing fields from the parent'
+    );
+
+    const childMetricConflictSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        childMetricConflictSuiteCompleted.record
+    )[0];
+    assert.deepStrictEqual(
+        [
+            childMetricConflictSuiteReplay.scoreInfo.correct,
+            childMetricConflictSuiteReplay.scoreInfo.total,
+            childMetricConflictSuiteReplay.scoreInfo.accuracy,
+            childMetricConflictSuiteReplay.scoreInfo.percentage
+        ],
+        [8, 10, 0.5, 50],
+        'a child metric must outrank the parent pair while missing counters use parent fallback'
+    );
+
+    const explicitZeroChildSuiteReplay = replayMixin._buildReviewReplayEntriesFromRecord(
+        explicitZeroChildSuiteCompleted.record
+    )[0];
+    assert.deepStrictEqual(
+        [
+            explicitZeroChildSuiteReplay.scoreInfo.correct,
+            explicitZeroChildSuiteReplay.scoreInfo.total,
+            explicitZeroChildSuiteReplay.scoreInfo.accuracy,
+            explicitZeroChildSuiteReplay.scoreInfo.percentage
+        ],
+        [0, 10, 0, 0],
+        'an explicit child zero must not be treated as a missing field'
+    );
+
     const currentProvenanceCounterReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'current-provenance-counter',
         correct: 8,
@@ -836,6 +982,26 @@ async function testLegacyReplayProjectionContract() {
         'an authoritative zero must retain score-info source precedence over stale aliases'
     );
     assert.strictEqual(authoritativeZeroReplay.scoreInfo.total, 10);
+
+    const authoritativeRootZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'authoritative-root-zero',
+        correctAnswers: 0,
+        totalQuestions: 0,
+        accuracy: 0,
+        percentage: 0,
+        realData: { correctAnswers: 8, totalQuestions: 10, accuracy: 0.8, percentage: 80 },
+        rawData: { correctAnswers: 6, totalQuestions: 8, accuracy: 0.75, percentage: 75 }
+    })[0];
+    assert.deepStrictEqual(
+        [
+            authoritativeRootZeroReplay.scoreInfo.correct,
+            authoritativeRootZeroReplay.scoreInfo.total,
+            authoritativeRootZeroReplay.scoreInfo.accuracy,
+            authoritativeRootZeroReplay.scoreInfo.percentage
+        ],
+        [0, 0, 0, 0],
+        'an authored root zero quartet must outrank stale realData and rawData aliases'
+    );
 
     const authoritativeZeroAliasReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'authoritative-zero-score-alias',
@@ -977,10 +1143,10 @@ async function testLegacyReplayProjectionContract() {
         'an authored zero metric must not be paired with a lower-provenance percentage'
     );
 
-    // AppData's full projection shape: generated root zero quartet plus the
-    // authored detail under rawData.scoreInfo must replay 8/10 at 80%.
-    const generatedZeroQuartetReplay = replayMixin._buildReviewReplayEntriesFromRecord({
-        examId: 'generated-zero-quartet',
+    // A synthetic zero quartet without AppData's projection-only score:null
+    // field is authored and must outrank lower-provenance detail.
+    const explicitSyntheticZeroQuartetReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'explicit-synthetic-zero-quartet',
         correctAnswers: 0,
         totalQuestions: 0,
         accuracy: 0,
@@ -988,16 +1154,16 @@ async function testLegacyReplayProjectionContract() {
         rawData: { scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 } }
     })[0];
     assert.strictEqual(
-        generatedZeroQuartetReplay.scoreInfo.correct,
-        8,
-        'generated root zeroes must yield to the authored nested detail'
+        explicitSyntheticZeroQuartetReplay.scoreInfo.correct,
+        0,
+        'a synthetic root zero must not be inferred to be generated'
     );
-    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.total, 10);
-    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(generatedZeroQuartetReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(explicitSyntheticZeroQuartetReplay.scoreInfo.total, 0);
+    assert.strictEqual(explicitSyntheticZeroQuartetReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(explicitSyntheticZeroQuartetReplay.scoreInfo.percentage, 0);
 
-    // Legacy score-only detail with generated metric zeroes: the metrics must
-    // derive from the restored 8/10 counters instead of staying at 0%.
+    // The legacy score exception restores only the generated correct count;
+    // a synthetic explicit root total zero remains authoritative.
     const legacyScoreMetricDerivationReplay = replayMixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-score-metric-derivation',
         correctAnswers: 0,
@@ -1007,27 +1173,27 @@ async function testLegacyReplayProjectionContract() {
         scoreInfo: { score: 8, total: 10 }
     })[0];
     assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.correct, 8);
-    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.total, 10);
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.total, 0);
     assert.strictEqual(
         legacyScoreMetricDerivationReplay.scoreInfo.accuracy,
-        0.8,
-        'metrics must derive from restored counters when only generated zeroes remain'
+        0,
+        'metrics must derive from the restored score and authoritative zero total'
     );
-    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(legacyScoreMetricDerivationReplay.scoreInfo.percentage, 0);
 
-    // Symmetric generated-zero handling: both counters must yield, never just
-    // correctAnswers (which produced 25/0 at 0%).
-    const symmetricGeneratedZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
-        examId: 'symmetric-generated-zero',
+    // Without the AppData projection shape, both root zero counters remain
+    // authoritative over nested positives.
+    const symmetricExplicitZeroReplay = replayMixin._buildReviewReplayEntriesFromRecord({
+        examId: 'symmetric-explicit-zero',
         correctAnswers: 0,
         totalQuestions: 0,
         scoreInfo: { correct: 25, total: 40 }
     })[0];
-    assert.strictEqual(symmetricGeneratedZeroReplay.scoreInfo.correct, 25);
+    assert.strictEqual(symmetricExplicitZeroReplay.scoreInfo.correct, 0);
     assert.strictEqual(
-        symmetricGeneratedZeroReplay.scoreInfo.total,
-        40,
-        'a generated totalQuestions zero must yield to the nested total like correctAnswers does'
+        symmetricExplicitZeroReplay.scoreInfo.total,
+        0,
+        'an explicit totalQuestions zero must outrank the nested total like correctAnswers does'
     );
 
     // A genuine zero stays zero when the nested detail corroborates it.

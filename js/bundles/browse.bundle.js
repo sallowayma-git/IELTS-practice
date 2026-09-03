@@ -11128,20 +11128,6 @@
                 if (!this._isReplayObject(source)) return;
                 Object.assign(scoreInfo, this._cloneReviewData(source));
             };
-            const collectCounterAliases = (source) => {
-                if (!this._isReplayObject(source)) return;
-                counterSourceGroups.push({
-                    root: source,
-                    nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
-                });
-            };
-            const collectMetricAliases = (source) => {
-                if (!this._isReplayObject(source)) return;
-                metricSourceGroups.push({
-                    root: source,
-                    nested: this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null
-                });
-            };
             const normalizeNonNegative = value => this._normalizeReplayNonNegativeNumber(value);
             const normalizeAccuracy = (value) => {
                 const numeric = normalizeNonNegative(value);
@@ -11205,52 +11191,75 @@
                 }
                 return null;
             };
+            const describeScoreAliases = (source) => {
+                if (!this._isReplayObject(source)) return null;
+                const nested = this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null;
+                const rootCorrect = normalizeNonNegative(source.correctAnswers);
+                const rootTotal = normalizeNonNegative(source.totalQuestions);
+                const rootAccuracy = normalizeAccuracy(source.accuracy);
+                const rootPercentage = normalizePercentage(source.percentage);
+                const nestedCanonicalCorrect = resolveFromAliasSource(nested, ['correct', 'correctAnswers']);
+                const nestedLegacyScore = resolveFromAliasSource(nested, ['score']);
+                const generatedLegacyCorrect = rootCorrect === 0
+                    && nestedCanonicalCorrect === null
+                    && nestedLegacyScore !== null
+                    && nestedLegacyScore > 0;
+                const hasAppDataSummaryShape = ['correctAnswers', 'totalQuestions', 'accuracy', 'percentage']
+                    .every(key => Object.prototype.hasOwnProperty.call(source, key))
+                    && Object.prototype.hasOwnProperty.call(source, 'score')
+                    && source.score === null;
+                const nestedHasNonZeroScore = [
+                    nestedCanonicalCorrect,
+                    nestedLegacyScore,
+                    resolveFromAliasSource(nested, ['total', 'totalQuestions']),
+                    resolveFromAliasSource(nested, ['accuracy'], normalizeAccuracy),
+                    resolveFromAliasSource(nested, ['percentage'], normalizePercentage)
+                ].some(value => value !== null && value > 0);
+                const generatedEmptySummary = hasAppDataSummaryShape
+                    && rootCorrect === 0
+                    && rootTotal === 0
+                    && rootAccuracy === 0
+                    && rootPercentage === 0
+                    && nestedHasNonZeroScore;
+                return {
+                    root: source,
+                    nested,
+                    generatedEmptySummary,
+                    generatedLegacyCorrect,
+                    generatedMetricPair: generatedEmptySummary || (
+                        generatedLegacyCorrect
+                        && rootAccuracy === 0
+                        && rootPercentage === 0
+                    )
+                };
+            };
+            const collectCounterAliases = (source) => {
+                const group = describeScoreAliases(source);
+                if (group) counterSourceGroups.push(group);
+            };
+            const collectMetricAliases = (source) => {
+                const group = describeScoreAliases(source);
+                if (group) metricSourceGroups.push(group);
+            };
             const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
-                let uncorroboratedRootZero = null;
+                let generatedRootZero = null;
                 for (let sourceIndex = counterSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    // An uncorroborated root zero may keep probing its own
+                    // A generated child zero may keep probing the child's own
                     // provenance chain, but must never cross into the parent
-                    // aggregate groups: a generated child zero is not a signal
-                    // to import the parent's aggregate counters.
-                    if (uncorroboratedRootZero !== null && sourceIndex < counterParentGroupCount) {
+                    // aggregate groups.
+                    if (generatedRootZero !== null && sourceIndex < counterParentGroupCount) {
                         break;
                     }
-                    const { root, nested } = counterSourceGroups[sourceIndex];
+                    const group = counterSourceGroups[sourceIndex];
+                    const { root, nested } = group;
                     const normalized = normalizeNonNegative(root[canonicalRootKey]);
                     if (normalized !== null) {
-                        if (normalized > 0) return normalized;
-                        // AppData projects a missing canonical count as a root
-                        // zero while the authored detail survives under the
-                        // nested scoreInfo or a lower provenance. A root zero
-                        // only survives when nothing authored contradicts it.
-                        const nestedCanonicalKeys = canonicalRootKey === 'correctAnswers'
-                            ? ['correct', 'correctAnswers']
-                            : ['total', 'totalQuestions'];
-                        const hasCanonicalNestedCount = nestedCanonicalKeys.some(
-                            nestedKey => normalizeNonNegative(nested?.[nestedKey]) !== null
+                        const generatedCanonicalZero = normalized === 0 && (
+                            group.generatedEmptySummary
+                            || (canonicalRootKey === 'correctAnswers' && group.generatedLegacyCorrect)
                         );
-                        if (hasCanonicalNestedCount) {
-                            const canonicalNested = resolveFromAliasSource(nested, nestedCanonicalKeys);
-                            if (canonicalNested !== null && canonicalNested > 0) {
-                                return canonicalNested;
-                            }
-                            // A nested zero corroborates the root zero as
-                            // authored rather than generated.
-                            return 0;
-                        }
-                        if (canonicalRootKey === 'correctAnswers') {
-                            // Legacy score fallback when no canonical nested
-                            // count exists.
-                            const copiedScore = normalizeNonNegative(nested?.score);
-                            if (copiedScore !== null && copiedScore > 0) {
-                                return resolveFromAliasSource(nested, nestedKeys) ?? copiedScore;
-                            }
-                        }
-                        // Uncorroborated root zero: it may be an AppData
-                        // generated projection, so keep probing lower
-                        // provenances before conceding it.
-                        if (uncorroboratedRootZero === null) uncorroboratedRootZero = 0;
-                        continue;
+                        if (!generatedCanonicalZero) return normalized;
+                        if (generatedRootZero === null) generatedRootZero = 0;
                     }
 
                     const nestedCounter = resolveFromAliasSource(nested, nestedKeys);
@@ -11259,7 +11268,7 @@
                     const rootLegacyCounter = resolveFromAliasSource(root, rootLegacyKeys);
                     if (rootLegacyCounter !== null) return rootLegacyCounter;
                 }
-                return uncorroboratedRootZero;
+                return generatedRootZero;
             };
 
             if (includeParentScoreInfo) {
@@ -11314,40 +11323,34 @@
                 rootLegacyKeys: ['total']
             });
             const resolveMetricPair = () => {
-                // AppData projects missing canonical metrics as root zeroes,
-                // mirroring the counter projection. A root zero is only
-                // trustworthy when the nested scoreInfo corroborates it;
-                // otherwise defer to lower provenances and, failing those,
-                // let _deriveReplayScoreInfo derive the pair from the
-                // resolved counters.
-                const resolveEffectiveMetric = (rootValue, nestedValue) => {
-                    if (rootValue !== null && rootValue > 0) return rootValue;
-                    if (nestedValue !== null && nestedValue > 0) return nestedValue;
-                    if (rootValue === 0 && nestedValue === null) return null;
-                    return rootValue ?? nestedValue;
-                };
                 for (let sourceIndex = metricSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
-                    const { root, nested } = metricSourceGroups[sourceIndex];
+                    const group = metricSourceGroups[sourceIndex];
                     const fromParent = sourceIndex < metricParentGroupCount;
-                    const accuracy = resolveEffectiveMetric(
-                        normalizeAccuracy(root?.accuracy),
-                        normalizeAccuracy(nested?.accuracy)
-                    );
-                    const percentage = resolveEffectiveMetric(
-                        normalizePercentage(root?.percentage),
-                        normalizePercentage(nested?.percentage)
-                    );
+                    const sources = group.generatedMetricPair
+                        ? [group.nested]
+                        : [group.root, group.nested];
+                    for (const source of sources) {
+                        const accuracy = resolveFromAliasSource(source, ['accuracy'], normalizeAccuracy);
+                        const percentage = resolveFromAliasSource(source, ['percentage'], normalizePercentage);
+                        if (accuracy === null && percentage === null) continue;
 
-                    if (accuracy === null && percentage === null) continue;
-
-                    // Derive missing sibling from the one we found
-                    if (accuracy !== null && percentage === null) {
-                        return { accuracy, percentage: Math.round(accuracy * 100), fromParent };
+                        // Keep the metric pair atomic within one source. Root
+                        // fields outrank nested scoreInfo unless the root pair
+                        // is a recognized AppData-generated projection.
+                        if (accuracy !== null && percentage === null) {
+                            return { accuracy, percentage: Math.round(accuracy * 100), fromParent };
+                        }
+                        if (percentage !== null && accuracy === null) {
+                            return { accuracy: percentage / 100, percentage, fromParent };
+                        }
+                        return { accuracy, percentage, fromParent };
                     }
-                    if (percentage !== null && accuracy === null) {
-                        return { accuracy: percentage / 100, percentage, fromParent };
+                    // Generated metrics with retained counters must be
+                    // re-derived from the resolved counters, not replaced by
+                    // stale metrics from a lower provenance.
+                    if (group.generatedMetricPair && hasCounterAlias(group.nested)) {
+                        return { accuracy: null, percentage: null, fromParent };
                     }
-                    return { accuracy, percentage, fromParent };
                 }
                 return { accuracy: null, percentage: null, fromParent: false };
             };

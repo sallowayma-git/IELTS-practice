@@ -479,7 +479,8 @@ async function testProvenanceMixingScenarios() {
         'percentage must derive from scoreInfo accuracy, not mix from rawData'
     );
 
-    // Root has accuracy, nested scoreInfo has percentage within same provenance (SHOULD use both)
+    // Root metrics outrank nested scoreInfo within the same provenance. A
+    // missing root sibling is derived instead of borrowed from nested data.
     const sameProvenanceMixReplay = mixin._buildReviewReplayEntriesFromRecord({
         examId: 'same-provenance-mix',
         accuracy: 0.9,
@@ -492,8 +493,8 @@ async function testProvenanceMixingScenarios() {
     );
     assert.strictEqual(
         sameProvenanceMixReplay.scoreInfo.percentage,
-        85,
-        'nested percentage within same provenance is used when present'
+        90,
+        'percentage must derive from the root accuracy instead of nested scoreInfo'
     );
 
     // Counters at different provenances CAN mix (each counter resolved independently)
@@ -582,34 +583,34 @@ async function testLegacyCompatibility() {
 async function testGeneratedZeroProvenance() {
     const mixin = createTestContext();
 
-    // AppData projects missing canonical counts as root zeroes; the authored
-    // detail survives under nested scoreInfo or a lower provenance.
-    const generatedZeroesReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'generated-zeroes',
+    // A synthetic root zero without AppData's complete light-projection shape
+    // is authored and must outrank nested scoreInfo.
+    const explicitRootZeroesReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'explicit-root-zeroes',
         correctAnswers: 0,
         totalQuestions: 0,
         scoreInfo: { correct: 25, total: 40 }
     })[0];
-    assert.strictEqual(generatedZeroesReplay.scoreInfo.correct, 25);
-    assert.strictEqual(generatedZeroesReplay.scoreInfo.total, 40);
+    assert.strictEqual(explicitRootZeroesReplay.scoreInfo.correct, 0);
+    assert.strictEqual(explicitRootZeroesReplay.scoreInfo.total, 0);
 
-    // Generated root zero quartet with the authored detail at rawData.scoreInfo
-    // must fall through the root provenance instead of stopping at the zeroes.
-    const lowerProvenanceDetailReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'lower-provenance-detail',
+    // A zero quartet alone is not proof of an AppData projection. Without the
+    // projection-only score:null field, stale rawData must not replace it.
+    const explicitQuartetBeatsLowerDetailReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'explicit-quartet-beats-lower-detail',
         correctAnswers: 0,
         totalQuestions: 0,
         accuracy: 0,
         percentage: 0,
         rawData: { scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 } }
     })[0];
-    assert.strictEqual(lowerProvenanceDetailReplay.scoreInfo.correct, 8);
-    assert.strictEqual(lowerProvenanceDetailReplay.scoreInfo.total, 10);
-    assert.strictEqual(lowerProvenanceDetailReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(lowerProvenanceDetailReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.correct, 0);
+    assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.total, 0);
+    assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(explicitQuartetBeatsLowerDetailReplay.scoreInfo.percentage, 0);
 
-    // Legacy score-only detail: counters restore 8/10 and the generated
-    // metric zeroes must not mask the counter-derived 80%.
+    // The legacy score exception restores only the generated correct count.
+    // A synthetic explicit root total zero still outranks nested total.
     const legacyScoreGeneratedMetricZeroesReplay = mixin._buildReviewReplayEntriesFromRecord({
         examId: 'legacy-score-generated-metric-zeroes',
         correctAnswers: 0,
@@ -619,43 +620,45 @@ async function testGeneratedZeroProvenance() {
         scoreInfo: { score: 8, total: 10 }
     })[0];
     assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.correct, 8);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.total, 10);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.total, 0);
+    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(legacyScoreGeneratedMetricZeroesReplay.scoreInfo.percentage, 0);
 
-    // Generated metric zeroes with real counters: derive 8/10 at 80%.
-    const generatedMetricZeroesWithCountersReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'generated-metric-zeroes-with-counters',
+    // Explicit root metric zeroes remain authoritative even when counters
+    // could produce a different pair.
+    const explicitMetricZeroesWithCountersReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'explicit-metric-zeroes-with-counters',
         correctAnswers: 8,
         totalQuestions: 10,
         accuracy: 0,
         percentage: 0
     })[0];
-    assert.strictEqual(generatedMetricZeroesWithCountersReplay.scoreInfo.correct, 8);
-    assert.strictEqual(generatedMetricZeroesWithCountersReplay.scoreInfo.total, 10);
-    assert.strictEqual(generatedMetricZeroesWithCountersReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(generatedMetricZeroesWithCountersReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(explicitMetricZeroesWithCountersReplay.scoreInfo.correct, 8);
+    assert.strictEqual(explicitMetricZeroesWithCountersReplay.scoreInfo.total, 10);
+    assert.strictEqual(explicitMetricZeroesWithCountersReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(explicitMetricZeroesWithCountersReplay.scoreInfo.percentage, 0);
 
-    // Nested positive metrics must outrank generated root metric zeroes.
-    const nestedMetricBeatsRootZeroReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'nested-metric-beats-root-zero',
+    // Root zero metrics also outrank nested positives unless the containing
+    // object matches AppData's generated summary shape.
+    const rootZeroMetricBeatsNestedReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'root-zero-metric-beats-nested',
         accuracy: 0,
         percentage: 0,
         scoreInfo: { correct: 8, total: 10, accuracy: 0.8, percentage: 80 }
     })[0];
-    assert.strictEqual(nestedMetricBeatsRootZeroReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(nestedMetricBeatsRootZeroReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(rootZeroMetricBeatsNestedReplay.scoreInfo.accuracy, 0);
+    assert.strictEqual(rootZeroMetricBeatsNestedReplay.scoreInfo.percentage, 0);
 
-    // Root accuracy positive + root percentage generated zero + nested
-    // percentage positive resolves the self-consistent pair.
-    const selfConsistentPairReplay = mixin._buildReviewReplayEntriesFromRecord({
-        examId: 'self-consistent-pair',
+    // Both root fields are resolved before nested scoreInfo, including an
+    // explicit zero sibling.
+    const rootPairReplay = mixin._buildReviewReplayEntriesFromRecord({
+        examId: 'root-pair',
         accuracy: 0.8,
         percentage: 0,
         scoreInfo: { percentage: 80 }
     })[0];
-    assert.strictEqual(selfConsistentPairReplay.scoreInfo.accuracy, 0.8);
-    assert.strictEqual(selfConsistentPairReplay.scoreInfo.percentage, 80);
+    assert.strictEqual(rootPairReplay.scoreInfo.accuracy, 0.8);
+    assert.strictEqual(rootPairReplay.scoreInfo.percentage, 0);
 
     // A corroborated nested zero authenticates the root zero as authored.
     const trueZeroReplay = mixin._buildReviewReplayEntriesFromRecord({
@@ -784,10 +787,9 @@ async function testParentAggregateBoundary() {
         'a missing entry total may still fall back to the parent per field'
     );
 
-    // The entry-internal chain descent still works: the zero yields to the
-    // authored detail under the entry's own rawData.scoreInfo long before
-    // any parent group is reached.
-    const chainDescent = mixin._resolveReplaySourceScoreInfo(
+    // An ordinary root zero also outranks stale detail within the entry's own
+    // rawData chain; only a recognized AppData projection may descend.
+    const explicitZeroBeatsEntryRawData = mixin._resolveReplaySourceScoreInfo(
         {
             examId: 'parent-boundary-chain-entry',
             correctAnswers: 0,
@@ -798,11 +800,11 @@ async function testParentAggregateBoundary() {
         false
     );
     assert.strictEqual(
-        chainDescent.correct,
-        8,
-        'an uncorroborated zero must still descend its own provenance chain'
+        explicitZeroBeatsEntryRawData.correct,
+        0,
+        'an explicit root zero must not be replaced by stale entry rawData'
     );
-    assert.strictEqual(chainDescent.total, 10);
+    assert.strictEqual(explicitZeroBeatsEntryRawData.total, 10);
 
     // A corroborated zero is authored and needs no boundary protection, but
     // must also never be overridden by parent aggregate counters.
@@ -832,4 +834,3 @@ run().catch((error) => {
     console.error('Test failed:', error);
     process.exit(1);
 });
-
