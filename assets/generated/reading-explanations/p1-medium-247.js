@@ -57,21 +57,21 @@
             "text": "（1）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（having to abide by modern employment regulations）\n定位：第7段，末句\n原文：today it’s illegal to work more than 8 hours a day, as they did at the time.\n译文：如今每天工作超过8小时是违法的，而当时的人会这样长时间工作。\n\n解析：原文说现代法律禁止每天工作超过8小时，而13世纪的工人会工作更久。这一现代就业法规限制了每日工时，直接拖长工期，所以 C 正确。"
           },
           {
-            "questionNumber": 5,
-            "questionId": "q5",
-            "text": "（2）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（tourists who come and visit the site）\n定位：第7段，末句\n原文：if the site wasn’t open to the public\n译文：如果工地不向公众开放。\n\n解析：原文把“工地向公众开放”列为不能按13世纪速度施工的条件之一。游客参观会影响工地按普通施工现场高效运行，所以 E 正确。"
+            "questionNumber": 6,
+            "questionId": "q6",
+            "text": "（2）题目 6：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：E（tourists who come and visit the site）\n定位：第7段，末句\n原文：if the site wasn’t open to the public\n译文：如果工地不向公众开放。\n\n解析：原文把“工地向公众开放”列为不能按13世纪速度施工的条件之一。游客参观会影响工地按普通施工现场高效运行，所以 E 正确。"
           },
           {
-            "questionNumber": 5,
-            "questionId": "q5",
-            "text": "（3）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（the number of unskilled workers employed）\n定位：第7段，末句\n原文：if we had only professional workers\n译文：如果我们这里只有专业工人。\n\n解析：原文说若只有专业工人就能更快完成，后文又说明现有人员包括学生、转行者和正在学习技能的失业者，说明非熟练工人的存在会降低效率，所以 F 正确。A、B、D、G、H 都没有被原文列为工期长的原因。"
+            "questionNumber": 7,
+            "questionId": "q7",
+            "text": "（3）题目 7：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：F（the number of unskilled workers employed）\n定位：第7段，末句\n原文：if we had only professional workers\n译文：如果我们这里只有专业工人。\n\n解析：原文说若只有专业工人就能更快完成，后文又说明现有人员包括学生、转行者和正在学习技能的失业者，说明非熟练工人的存在会降低效率，所以 F 正确。A、B、D、G、H 都没有被原文列为工期长的原因。"
           }
         ],
         "questionRange": {
           "start": 5,
           "end": 7
         },
-        "text": "（1）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（having to abide by modern employment regulations）\n定位：第7段，末句\n原文：today it’s illegal to work more than 8 hours a day, as they did at the time.\n译文：如今每天工作超过8小时是违法的，而当时的人会这样长时间工作。\n\n解析：原文说现代法律禁止每天工作超过8小时，而13世纪的工人会工作更久。这一现代就业法规限制了每日工时，直接拖长工期，所以 C 正确。\n\n（2）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（tourists who come and visit the site）\n定位：第7段，末句\n原文：if the site wasn’t open to the public\n译文：如果工地不向公众开放。\n\n解析：原文把“工地向公众开放”列为不能按13世纪速度施工的条件之一。游客参观会影响工地按普通施工现场高效运行，所以 E 正确。\n\n（3）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（the number of unskilled workers employed）\n定位：第7段，末句\n原文：if we had only professional workers\n译文：如果我们这里只有专业工人。\n\n解析：原文说若只有专业工人就能更快完成，后文又说明现有人员包括学生、转行者和正在学习技能的失业者，说明非熟练工人的存在会降低效率，所以 F 正确。A、B、D、G、H 都没有被原文列为工期长的原因。"
+        "text": "（1）题目 5：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：C（having to abide by modern employment regulations）\n定位：第7段，末句\n原文：today it’s illegal to work more than 8 hours a day, as they did at the time.\n译文：如今每天工作超过8小时是违法的，而当时的人会这样长时间工作。\n\n解析：原文说现代法律禁止每天工作超过8小时，而13世纪的工人会工作更久。这一现代就业法规限制了每日工时，直接拖长工期，所以 C 正确。\n\n（2）题目 6：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：E（tourists who come and visit the site）\n定位：第7段，末句\n原文：if the site wasn’t open to the public\n译文：如果工地不向公众开放。\n\n解析：原文把“工地向公众开放”列为不能按13世纪速度施工的条件之一。游客参观会影响工地按普通施工现场高效运行，所以 E 正确。\n\n（3）题目 7：\n题目翻译：下列哪些原因被作者提及，会导致城堡建造耗时很长？\n答案：F（the number of unskilled workers employed）\n定位：第7段，末句\n原文：if we had only professional workers\n译文：如果我们这里只有专业工人。\n\n解析：原文说若只有专业工人就能更快完成，后文又说明现有人员包括学生、转行者和正在学习技能的失业者，说明非熟练工人的存在会降低效率，所以 F 正确。A、B、D、G、H 都没有被原文列为工期长的原因。"
       },
       {
         "sectionTitle": "3. Flow-chart Completion（Questions 8–13）",
@@ -85,34 +85,34 @@
           {
             "questionNumber": 9,
             "questionId": "q9",
-            "text": "（2）题目 9：________ are used.\n题目翻译：他们钻出一排排________。\n答案：holes\n定位：第4段，第6句\n原文：They bore lines of holes into the rocks\n译文：他们在岩石上钻出一排排孔。\n\n解析：流程图中的 rows of 对应原文 lines of，二者都表示“一排排”；中心名词是 holes，因此答案为 holes。"
+            "text": "（2）题目 9：The ________ drill rows of ________.\n题目翻译：他们钻出一排排________。\n答案：holes\n定位：第4段，第6句\n原文：They bore lines of holes into the rocks\n译文：他们在岩石上钻出一排排孔。\n\n解析：流程图中的 rows of 对应原文 lines of，二者都表示“一排排”；中心名词是 holes，因此答案为 holes。"
           },
           {
             "questionNumber": 10,
             "questionId": "q10",
-            "text": "（3）题目 10：The result is that the rock eventually ________.\n题目翻译：接着使用________。\n答案：metal wedges\n定位：第4段，第6句\n原文：then they hammer metal wedges into them until the rock splits along the line\n译文：然后他们把金属楔子敲进这些孔里，直到岩石沿着孔线裂开。\n\n解析：原文紧接着说把 metal wedges（金属楔子）敲进孔里，所以标准答案为 metal wedges。题干已明确楔入孔洞的物件时，省略材质修饰语 metal 后的 wedges 仍指向同一对象。"
+            "text": "（3）题目 10：________ are used.\n题目翻译：接着使用________。\n答案：metal wedges\n定位：第4段，第6句\n原文：then they hammer metal wedges into them until the rock splits along the line\n译文：然后他们把金属楔子敲进这些孔里，直到岩石沿着孔线裂开。\n\n解析：原文紧接着说把 metal wedges（金属楔子）敲进孔里，所以标准答案为 metal wedges。题干已明确楔入孔洞的物件时，省略材质修饰语 metal 后的 wedges 仍指向同一对象。"
           },
           {
             "questionNumber": 11,
             "questionId": "q11",
-            "text": "（4）题目 11：is made into ________.\n题目翻译：结果是岩石最终________。\n答案：splits\n定位：第4段，第6句\n原文：until the rock splits along the line\n译文：直到岩石沿着孔线裂开。\n\n解析：原文直接说明 rock splits along the line；流程图主语仍是单数 rock，因此应使用原文第三人称单数形式 splits。"
+            "text": "（4）题目 11：The result is that the rock eventually ________.\n题目翻译：结果是岩石最终________。\n答案：splits\n定位：第4段，第6句\n原文：until the rock splits along the line\n译文：直到岩石沿着孔线裂开。\n\n解析：原文直接说明 rock splits along the line；流程图主语仍是单数 rock，因此应使用原文第三人称单数形式 splits。"
           },
           {
             "questionNumber": 12,
             "questionId": "q12",
-            "text": "（5）题目 12：or, through a ________ process, can be used to make quicklime.\n题目翻译：开采出的石灰石被制作成________。\n答案：bricks\n定位：第4段，第7句\n原文：It is then hewn into bricks\n译文：随后石灰石被凿削加工成砖块。\n\n解析：原文说石灰石随后被 hewn into bricks，即加工成砖块，所以答案为 bricks。"
+            "text": "（5）题目 12：is made into ________.\n题目翻译：开采出的石灰石被制作成________。\n答案：bricks\n定位：第4段，第7句\n原文：It is then hewn into bricks\n译文：随后石灰石被凿削加工成砖块。\n\n解析：原文说石灰石随后被 hewn into bricks，即加工成砖块，所以答案为 bricks。"
           },
           {
             "questionNumber": 13,
             "questionId": "q13",
-            "text": "（6）题目 13：\n题目翻译：或者，通过一种________过程，石灰石可用于制作生石灰。\n答案：heating\n定位：第4段，第8句\n原文：Quicklime is made by heating limestone to 800°C\n译文：生石灰通过把石灰石加热到800摄氏度制成。\n\n解析：原文说生石灰由 heating limestone 制成；流程图结构为 “through a ________ process”，填入名词化形式 heating 在语法和含义上都吻合。"
+            "text": "（6）题目 13：or, through a ________ process, can be used to make quicklime.\n题目翻译：或者，通过一种________过程，石灰石可用于制作生石灰。\n答案：heating\n定位：第4段，第8句\n原文：Quicklime is made by heating limestone to 800°C\n译文：生石灰通过把石灰石加热到800摄氏度制成。\n\n解析：原文说生石灰由 heating limestone 制成；流程图结构为 “through a ________ process”，填入名词化形式 heating 在语法和含义上都吻合。"
           }
         ],
         "questionRange": {
           "start": 8,
           "end": 13
         },
-        "text": "（1）题目 8：The ________ drill rows of ________.\n题目翻译：这些________钻出一排排孔。\n答案：masons\n定位：第4段，第5—6句\n原文：Next to the beginnings of the east wall is the quarry, where masons extract the ferruginous limestone to build the thick castle walls. They bore lines of holes into the rocks\n译文：东墙起始处旁边是采石场，石匠在那里开采含铁石灰石来修筑厚实的城墙。他们在岩石上钻出一排排孔。\n\n解析：执行钻孔动作的主语 “They” 指代前一句的 masons（石匠），所以应填 masons。\n\n（2）题目 9：________ are used.\n题目翻译：他们钻出一排排________。\n答案：holes\n定位：第4段，第6句\n原文：They bore lines of holes into the rocks\n译文：他们在岩石上钻出一排排孔。\n\n解析：流程图中的 rows of 对应原文 lines of，二者都表示“一排排”；中心名词是 holes，因此答案为 holes。\n\n（3）题目 10：The result is that the rock eventually ________.\n题目翻译：接着使用________。\n答案：metal wedges\n定位：第4段，第6句\n原文：then they hammer metal wedges into them until the rock splits along the line\n译文：然后他们把金属楔子敲进这些孔里，直到岩石沿着孔线裂开。\n\n解析：原文紧接着说把 metal wedges（金属楔子）敲进孔里，所以标准答案为 metal wedges。题干已明确楔入孔洞的物件时，省略材质修饰语 metal 后的 wedges 仍指向同一对象。\n\n（4）题目 11：is made into ________.\n题目翻译：结果是岩石最终________。\n答案：splits\n定位：第4段，第6句\n原文：until the rock splits along the line\n译文：直到岩石沿着孔线裂开。\n\n解析：原文直接说明 rock splits along the line；流程图主语仍是单数 rock，因此应使用原文第三人称单数形式 splits。\n\n（5）题目 12：or, through a ________ process, can be used to make quicklime.\n题目翻译：开采出的石灰石被制作成________。\n答案：bricks\n定位：第4段，第7句\n原文：It is then hewn into bricks\n译文：随后石灰石被凿削加工成砖块。\n\n解析：原文说石灰石随后被 hewn into bricks，即加工成砖块，所以答案为 bricks。\n\n（6）题目 13：\n题目翻译：或者，通过一种________过程，石灰石可用于制作生石灰。\n答案：heating\n定位：第4段，第8句\n原文：Quicklime is made by heating limestone to 800°C\n译文：生石灰通过把石灰石加热到800摄氏度制成。\n\n解析：原文说生石灰由 heating limestone 制成；流程图结构为 “through a ________ process”，填入名词化形式 heating 在语法和含义上都吻合。"
+        "text": "（1）题目 8：The ________ drill rows of ________.\n题目翻译：这些________钻出一排排孔。\n答案：masons\n定位：第4段，第5—6句\n原文：Next to the beginnings of the east wall is the quarry, where masons extract the ferruginous limestone to build the thick castle walls. They bore lines of holes into the rocks\n译文：东墙起始处旁边是采石场，石匠在那里开采含铁石灰石来修筑厚实的城墙。他们在岩石上钻出一排排孔。\n\n解析：执行钻孔动作的主语 “They” 指代前一句的 masons（石匠），所以应填 masons。\n\n（2）题目 9：The ________ drill rows of ________.\n题目翻译：他们钻出一排排________。\n答案：holes\n定位：第4段，第6句\n原文：They bore lines of holes into the rocks\n译文：他们在岩石上钻出一排排孔。\n\n解析：流程图中的 rows of 对应原文 lines of，二者都表示“一排排”；中心名词是 holes，因此答案为 holes。\n\n（3）题目 10：________ are used.\n题目翻译：接着使用________。\n答案：metal wedges\n定位：第4段，第6句\n原文：then they hammer metal wedges into them until the rock splits along the line\n译文：然后他们把金属楔子敲进这些孔里，直到岩石沿着孔线裂开。\n\n解析：原文紧接着说把 metal wedges（金属楔子）敲进孔里，所以标准答案为 metal wedges。题干已明确楔入孔洞的物件时，省略材质修饰语 metal 后的 wedges 仍指向同一对象。\n\n（4）题目 11：The result is that the rock eventually ________.\n题目翻译：结果是岩石最终________。\n答案：splits\n定位：第4段，第6句\n原文：until the rock splits along the line\n译文：直到岩石沿着孔线裂开。\n\n解析：原文直接说明 rock splits along the line；流程图主语仍是单数 rock，因此应使用原文第三人称单数形式 splits。\n\n（5）题目 12：is made into ________.\n题目翻译：开采出的石灰石被制作成________。\n答案：bricks\n定位：第4段，第7句\n原文：It is then hewn into bricks\n译文：随后石灰石被凿削加工成砖块。\n\n解析：原文说石灰石随后被 hewn into bricks，即加工成砖块，所以答案为 bricks。\n\n（6）题目 13：or, through a ________ process, can be used to make quicklime.\n题目翻译：或者，通过一种________过程，石灰石可用于制作生石灰。\n答案：heating\n定位：第4段，第8句\n原文：Quicklime is made by heating limestone to 800°C\n译文：生石灰通过把石灰石加热到800摄氏度制成。\n\n解析：原文说生石灰由 heating limestone 制成；流程图结构为 “through a ________ process”，填入名词化形式 heating 在语法和含义上都吻合。"
       }
     ]
   });

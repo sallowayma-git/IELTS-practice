@@ -1,7 +1,7 @@
 (function initPracticeReviewScheduler(global) {
     'use strict';
 
-    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v1 === true) return;
+    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v2 === true) return;
 
     const vocabScheduler = global.VocabScheduler;
     if (!vocabScheduler
@@ -19,6 +19,24 @@
         return new Date(time).toISOString();
     }
 
+    function normalizeAppliedAttemptIds(value) {
+        if (value === undefined) return [];
+        if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
+        const normalized = [];
+        const seen = new Set();
+        for (const rawAttemptId of value) {
+            if (typeof rawAttemptId !== 'string') {
+                throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            }
+            const attemptId = rawAttemptId.trim();
+            if (!attemptId) throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            if (seen.has(attemptId)) continue;
+            seen.add(attemptId);
+            normalized.push(attemptId);
+        }
+        return normalized;
+    }
+
     function createInitialState(referenceTime) {
         const nextReview = validIso(referenceTime || new Date(), 'referenceTime');
         return {
@@ -34,6 +52,7 @@
             nextReview,
             lastQuality: null,
             lastReviewAttemptId: null,
+            appliedReviewAttemptIds: [],
             updatedAt: nextReview
         };
     }
@@ -62,6 +81,14 @@
         const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
         const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
         if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
+        const normalizedLastAttemptId = input.lastReviewAttemptId == null
+            ? ''
+            : String(input.lastReviewAttemptId).trim();
+        const lastReviewAttemptId = normalizedLastAttemptId || null;
+        const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
+        if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
+            appliedReviewAttemptIds.push(lastReviewAttemptId);
+        }
         return {
             schemaVersion: 1,
             algorithm: 'sm2-practice',
@@ -74,7 +101,8 @@
             lastReviewed,
             nextReview,
             lastQuality,
-            lastReviewAttemptId: input.lastReviewAttemptId == null ? null : String(input.lastReviewAttemptId),
+            lastReviewAttemptId,
+            appliedReviewAttemptIds,
             updatedAt
         };
     }
@@ -85,6 +113,7 @@
         if (!VALID_QUALITIES.includes(normalizedQuality)) throw new TypeError('quality must be hard, good, or easy');
         const attemptId = String(reviewAttemptId || '').trim();
         if (!attemptId) throw new TypeError('reviewAttemptId is required');
+        if (current.appliedReviewAttemptIds.includes(attemptId)) return current;
         const timestamp = validIso(reviewedAt || new Date(), 'reviewedAt');
         const nextEaseFactor = vocabScheduler.calculateEaseFactor(current.easeFactor, QUALITY_VALUES[normalizedQuality]);
         let repetitions;
@@ -122,12 +151,14 @@
             nextReview: vocabScheduler.calculateNextReview(interval, timestamp).toISOString(),
             lastQuality: normalizedQuality,
             lastReviewAttemptId: attemptId,
+            appliedReviewAttemptIds: current.appliedReviewAttemptIds.concat(attemptId),
             updatedAt: timestamp
         };
     }
 
     global.PracticeReviewScheduler = Object.freeze({
         __v1: true,
+        __v2: true,
         QUALITY_VALUES,
         VALID_QUALITIES,
         createInitialState,

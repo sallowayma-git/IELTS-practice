@@ -64,19 +64,19 @@
           {
             "questionNumber": 20,
             "questionId": "q7",
-            "text": "（1）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.；It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样\n定位：原文 PDF 第 1 页，D 段\n原文：the most common approach to carbon footprint calculations\n译文：碳足迹计算中最常见的方法\n\n解析：A 对应“听起来简单但实际并不简单”；C 对应 most common approach。B 与 underestimate 相反，D 与 problems are commonly overlooked 相反，E 未提及。"
+            "text": "（1）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样。\n\n解析：sound simple 与 sounds 对应，but it is not at all 表明实际过程比听起来复杂，所以选 A。"
           },
           {
-            "questionNumber": 20,
-            "questionId": "q7",
-            "text": "（2）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.；It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样\n定位：原文 PDF 第 1 页，D 段\n原文：the most common approach to carbon footprint calculations\n译文：碳足迹计算中最常见的方法\n\n解析：本题与第 20 题共享无序正确集合 A、C；每个正确选择计 1 分。"
+            "questionNumber": 21,
+            "questionId": "q8",
+            "text": "（2）题目 21：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：C（It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：The first of these, process-based life-cycle analysis, is the most common approach to carbon footprint calculations.\n译文：第一种方法，即基于过程的生命周期分析，是碳足迹计算中最常见的方法。\n\n解析：the most common approach 表明这种方法经常被采用，对应 a frequently used procedure，所以选 C。"
           }
         ],
         "questionRange": {
           "start": 20,
           "end": 21
         },
-        "text": "（1）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.；It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样\n定位：原文 PDF 第 1 页，D 段\n原文：the most common approach to carbon footprint calculations\n译文：碳足迹计算中最常见的方法\n\n解析：A 对应“听起来简单但实际并不简单”；C 对应 most common approach。B 与 underestimate 相反，D 与 problems are commonly overlooked 相反，E 未提及。\n\n（2）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.；It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样\n定位：原文 PDF 第 1 页，D 段\n原文：the most common approach to carbon footprint calculations\n译文：碳足迹计算中最常见的方法\n\n解析：本题与第 20 题共享无序正确集合 A、C；每个正确选择计 1 分。"
+        "text": "（1）题目 20：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：A（It is more complicated than it sounds.）\n定位：原文 PDF 第 1 页，D 段\n原文：It may sound simple, but it is not at all.\n译文：它听起来也许很简单，但事实完全不是这样。\n\n解析：sound simple 与 sounds 对应，but it is not at all 表明实际过程比听起来复杂，所以选 A。\n\n（2）题目 21：\n题目翻译：基于过程的生命周期分析有哪些两项特点？\n答案：C（It is a frequently used procedure.）\n定位：原文 PDF 第 1 页，D 段\n原文：The first of these, process-based life-cycle analysis, is the most common approach to carbon footprint calculations.\n译文：第一种方法，即基于过程的生命周期分析，是碳足迹计算中最常见的方法。\n\n解析：the most common approach 表明这种方法经常被采用，对应 a frequently used procedure，所以选 C。"
       },
       {
         "sectionTitle": "3. Multiple Choice（多选）（Questions 22–23）",
@@ -85,19 +85,19 @@
           {
             "questionNumber": 22,
             "questionId": "q9",
-            "text": "（1）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.；It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：它能百分之百完整地捕捉无尽的连锁效应，并且不会遗漏项目\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹\n\n解析：C 对应 one hundred per cent complete 和 does not omit things；E 对应通过成本获得粗略估算。A、B、D 均无原文依据。"
+            "text": "（1）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：以百分之百完整的方式捕捉无尽的连锁效应。\n\n解析：endless ripple effects 和 one hundred per cent complete 表明分析范围全面，对应 comprehensive in scope，所以选 C。"
           },
           {
-            "questionNumber": 22,
-            "questionId": "q9",
-            "text": "（2）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.；It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：它能百分之百完整地捕捉无尽的连锁效应，并且不会遗漏项目\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹\n\n解析：本题与第 22 题共享无序正确集合 C、E；每个正确选择计 1 分。"
+            "questionNumber": 23,
+            "questionId": "q10",
+            "text": "（2）题目 23：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：E（It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹。\n\n解析：how much something costs 对应 prices，crude estimate 对应 approximate carbon footprints，所以选 E。"
           }
         ],
         "questionRange": {
           "start": 22,
           "end": 23
         },
-        "text": "（1）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.；It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：它能百分之百完整地捕捉无尽的连锁效应，并且不会遗漏项目\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹\n\n解析：C 对应 one hundred per cent complete 和 does not omit things；E 对应通过成本获得粗略估算。A、B、D 均无原文依据。\n\n（2）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.；It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：它能百分之百完整地捕捉无尽的连锁效应，并且不会遗漏项目\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹\n\n解析：本题与第 22 题共享无序正确集合 C、E；每个正确选择计 1 分。"
+        "text": "（1）题目 22：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：C（It is comprehensive in scope.）\n定位：原文 PDF 第 2 页，E 段\n原文：capturing the endless ripple effects in a way that is one hundred per cent complete\n译文：以百分之百完整的方式捕捉无尽的连锁效应。\n\n解析：endless ripple effects 和 one hundred per cent complete 表明分析范围全面，对应 comprehensive in scope，所以选 C。\n\n（2）题目 23：\n题目翻译：环境投入产出分析有哪些两项特点？\n答案：E（It can use prices to get approximate carbon footprints.）\n定位：原文 PDF 第 2 页，E 段\n原文：if you know how much something costs, you can get an instant crude estimate of its carbon footprint\n译文：只要知道某物的价格，就能立即粗略估算其碳足迹。\n\n解析：how much something costs 对应 prices，crude estimate 对应 approximate carbon footprints，所以选 E。"
       },
       {
         "sectionTitle": "4. Summary Completion（无选项）（Questions 24–26）",

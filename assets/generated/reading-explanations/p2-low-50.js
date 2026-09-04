@@ -83,19 +83,19 @@
           {
             "questionNumber": 18,
             "questionId": "q5",
-            "text": "（1）题目 18：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：C（They have created financial hardship in the fishing industry.）\n定位：正文 F 节，末两句\n原文：One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.\n译文：大量水母对渔业造成了经济影响；墨西哥湾的水母暴发塞满并撑破渔网，导致数百万美元损失。\n\n解析：millions of dollars in losses 直接说明渔业遭遇财务困难，因此 E 正确。"
+            "text": "（1）题目 18：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：C（They have contributed to the decline in the Black Sea anchovy population.）\n定位：正文 B 节，末两句\n原文：This increase first gained attention in the 1980s when a huge number of jellyfish, Atlantic Ocean natives named Mnemiopsis leidyi, devastated the Black Sea, an ecosystem already weakened by overfishing of anchovies. Scientists believe that this species of jellyfish came in on the bottom of a ship and then rapidly multiplied, feeding on anchovy eggs and the plankton that young fish rely on.\n译文：20 世纪 80 年代，大量名为 Mnemiopsis leidyi 的水母重创了本已因过度捕捞凤尾鱼而脆弱的黑海生态系统；这种水母迅速繁殖，并以凤尾鱼卵和幼鱼依赖的浮游生物为食。\n\n解析：水母既吃凤尾鱼卵，也争夺幼鱼赖以生存的浮游生物，因而加剧了黑海凤尾鱼种群的衰退，因此 C 正确。"
           },
           {
             "questionNumber": 19,
             "questionId": "q6",
-            "text": "（2）题目 19：（题干见题目区）\n答案：E"
+            "text": "（2）题目 19：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：E（They have created financial hardship in the fishing industry.）\n定位：正文 F 节，末两句\n原文：One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.\n译文：大量水母对渔业造成了经济影响；墨西哥湾的水母暴发塞满并撑破渔网，导致数百万美元损失。\n\n解析：millions of dollars in losses 直接说明水母使渔业遭遇财务困难，因此 E 正确。"
           }
         ],
         "questionRange": {
           "start": 18,
           "end": 19
         },
-        "text": "（1）题目 18：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：C（They have created financial hardship in the fishing industry.）\n定位：正文 F 节，末两句\n原文：One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.\n译文：大量水母对渔业造成了经济影响；墨西哥湾的水母暴发塞满并撑破渔网，导致数百万美元损失。\n\n解析：millions of dollars in losses 直接说明渔业遭遇财务困难，因此 E 正确。\n\n（2）题目 19：（题干见题目区）\n答案：E"
+        "text": "（1）题目 18：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：C（They have contributed to the decline in the Black Sea anchovy population.）\n定位：正文 B 节，末两句\n原文：This increase first gained attention in the 1980s when a huge number of jellyfish, Atlantic Ocean natives named Mnemiopsis leidyi, devastated the Black Sea, an ecosystem already weakened by overfishing of anchovies. Scientists believe that this species of jellyfish came in on the bottom of a ship and then rapidly multiplied, feeding on anchovy eggs and the plankton that young fish rely on.\n译文：20 世纪 80 年代，大量名为 Mnemiopsis leidyi 的水母重创了本已因过度捕捞凤尾鱼而脆弱的黑海生态系统；这种水母迅速繁殖，并以凤尾鱼卵和幼鱼依赖的浮游生物为食。\n\n解析：水母既吃凤尾鱼卵，也争夺幼鱼赖以生存的浮游生物，因而加剧了黑海凤尾鱼种群的衰退，因此 C 正确。\n\n（2）题目 19：（题干见题目区）\n题目翻译：作者在文中提到了水母造成的哪两种影响？\n答案：E（They have created financial hardship in the fishing industry.）\n定位：正文 F 节，末两句\n原文：One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.\n译文：大量水母对渔业造成了经济影响；墨西哥湾的水母暴发塞满并撑破渔网，导致数百万美元损失。\n\n解析：millions of dollars in losses 直接说明水母使渔业遭遇财务困难，因此 E 正确。"
       },
       {
         "sectionTitle": "3. Multiple Choice（多选）（Questions 20–21）",
@@ -104,19 +104,19 @@
           {
             "questionNumber": 20,
             "questionId": "q7",
-            "text": "（1）题目 20：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：A（the dumping of chemicals into the oceans）\n定位：正文 D 节，第7至9句\n原文：Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem\n译文：海洋中的氮和磷增加会造成富营养化，主要源于化肥和废弃物径流；这会引发藻华并降低海洋生态系统的氧含量。\n\n解析：fertilizer and waste run-off 属于化学物质输入，并通过低氧环境让水母获得优势，因此 B 正确。"
+            "text": "（1）题目 20：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：A（a shortage of small fish in the oceans）\n定位：正文 D 节，第3至6句\n原文：Overfishing has removed fish from marine ecosystems at astounding rates. According to Richardson, this has made it possible for jellyfish to take their place. ‘This is because small fish appear to keep jellyfish in check by predation (on jellyfish when they are very small) and competition (when feeding). So, once we remove fish, jellyfish can proliferate.’\n译文：过度捕捞正以惊人的速度从海洋生态系统中移除鱼类，使水母得以取而代之；小鱼会通过捕食幼小水母及争夺食物来抑制水母，因此一旦鱼类被移除，水母就会大量繁殖。\n\n解析：a shortage of small fish 对应 once we remove fish；少了小鱼的捕食和竞争，水母便能 proliferate，因此 A 正确。"
           },
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（2）题目 21：（题干见题目区）\n答案：B"
+            "text": "（2）题目 21：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：B（the dumping of chemicals into the oceans）\n定位：正文 D 节，第7至9句\n原文：Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem, creating so-called ‘dead zones’, which have been increasing dramatically around the world. According to Richardson, these low-oxygen waters give jellyfish the advantage.\n译文：海洋中氮和磷的增加会造成富营养化，而这主要源于化肥和废弃物径流；随后出现的藻华会降低海洋生态系统的氧含量并形成“死亡区”，这种低氧水域让水母获得优势。\n\n解析：fertilizer and waste run-off 属于向海洋排入化学物质；它们引发的低氧环境有利于水母生存和繁殖，因此 B 正确。"
           }
         ],
         "questionRange": {
           "start": 20,
           "end": 21
         },
-        "text": "（1）题目 20：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：A（the dumping of chemicals into the oceans）\n定位：正文 D 节，第7至9句\n原文：Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem\n译文：海洋中的氮和磷增加会造成富营养化，主要源于化肥和废弃物径流；这会引发藻华并降低海洋生态系统的氧含量。\n\n解析：fertilizer and waste run-off 属于化学物质输入，并通过低氧环境让水母获得优势，因此 B 正确。\n\n（2）题目 21：（题干见题目区）\n答案：B"
+        "text": "（1）题目 20：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：A（a shortage of small fish in the oceans）\n定位：正文 D 节，第3至6句\n原文：Overfishing has removed fish from marine ecosystems at astounding rates. According to Richardson, this has made it possible for jellyfish to take their place. ‘This is because small fish appear to keep jellyfish in check by predation (on jellyfish when they are very small) and competition (when feeding). So, once we remove fish, jellyfish can proliferate.’\n译文：过度捕捞正以惊人的速度从海洋生态系统中移除鱼类，使水母得以取而代之；小鱼会通过捕食幼小水母及争夺食物来抑制水母，因此一旦鱼类被移除，水母就会大量繁殖。\n\n解析：a shortage of small fish 对应 once we remove fish；少了小鱼的捕食和竞争，水母便能 proliferate，因此 A 正确。\n\n（2）题目 21：（题干见题目区）\n题目翻译：下列哪两项可能导致水母数量增加？\n答案：B（the dumping of chemicals into the oceans）\n定位：正文 D 节，第7至9句\n原文：Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem, creating so-called ‘dead zones’, which have been increasing dramatically around the world. According to Richardson, these low-oxygen waters give jellyfish the advantage.\n译文：海洋中氮和磷的增加会造成富营养化，而这主要源于化肥和废弃物径流；随后出现的藻华会降低海洋生态系统的氧含量并形成“死亡区”，这种低氧水域让水母获得优势。\n\n解析：fertilizer and waste run-off 属于向海洋排入化学物质；它们引发的低氧环境有利于水母生存和繁殖，因此 B 正确。"
       },
       {
         "sectionTitle": "4. Summary Completion（Questions 22–26）",

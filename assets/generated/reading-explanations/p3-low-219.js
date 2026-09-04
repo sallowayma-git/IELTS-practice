@@ -127,20 +127,20 @@
         "text": "（1）题目 32：The Société de Linguistique de Paris\n题目翻译：Société de Linguistique de Paris（巴黎语言学会）采取了什么立场？\n答案：D（felt that the origin of language should not be debated.）\n定位：正文第1段，中部\n原文：in 1866 the influential Société de Linguistique de Paris banned all discussions about the origin of language.\n译文：1866年，颇具影响力的巴黎语言学会禁止了一切有关语言起源的讨论。\n\n解析：banned all discussions 对应“不应讨论语言起源”。\n\n（2）题目 33：Charles Darwin\n题目翻译：Charles Darwin 对音乐做过什么研究？\n答案：H（referred to music in part of a book about the development of human beings.）\n定位：正文第3段，后半部分\n原文：in his 1871 book on human evolution, The Descent of Man, devoted several pages to the development of music.\n译文：他在1871年关于人类进化的著作《人类的由来》中，用数页讨论了音乐的发展。\n\n解析：book on human evolution 对应 a book about the development of human beings；devoted several pages to music 对应“在书的一部分提及音乐”。\n\n（3）题目 34：John Blacking\n题目翻译：John Blacking 对音乐提出了什么看法？\n答案：A（suggested music was an essential part of every individual.）\n定位：正文第3段，末句\n原文：music is an inherent and universal human quality.\n译文：音乐是人类与生俱来且普遍具有的品质。\n\n解析：inherent and universal 表明音乐对每个人都是基本而普遍的组成部分。\n\n（4）题目 35：Christiansen and Kirby\n题目翻译：Christiansen 和 Kirby 的研究怎样处理音乐与语言的关系？\n答案：B（made no link between music and language in a comprehensive study.）\n定位：正文第4段，后半部分\n原文：Morten Christiansen and Simon Kirby's book, Language Evolution (2000), which they conceived as 'a definitive book on the subject', failed to mention music in any of its 17 chapters.\n译文：他们自认为具有权威性的《语言进化》一书共有17章，却完全没有提及音乐。\n\n解析：这本综合性著作没有把音乐与语言联系起来；“devoted 17 chapters of a book to music.” 把“17章都未提音乐”说成“用17章谈音乐”，含义相反。\n\n（5）题目 36：Derek Bickerton\n题目翻译：Derek Bickerton 如何描述早期语言？\n答案：E（states that early language was made up of basic words used in an unsystematic way.）\n定位：正文第7段，中部\n原文：the precursor of modern language consisted of words strung together with limited, if any, grammar\n译文：现代语言的前身由串在一起的词构成，语法即使存在也很有限。\n\n解析：words strung together 和 limited grammar 对应“基本词语以不成体系的方式使用”。\n\n（6）题目 37：Alison Wray\n题目翻译：Alison Wray 认为原始语言由什么构成？\n答案：G（believes that proto-language had no individual words.）\n定位：正文第8段，中部\n原文：the precursor to language was a communication system composed of 'messages' rather than words\n译文：语言的前身是一套由完整“信息”而不是单个词构成的交流系统。\n\n解析：messages rather than words 明确否定原始语言由独立词语组成。"
       },
       {
-        "sectionTitle": "3. Multiple Choice（多选）（Questions Infinity–-Infinity）",
+        "sectionTitle": "3. Multiple Choice（多选）（Questions 38–40）",
         "mode": "group",
         "items": [
           {
-            "questionNumber": null,
+            "questionNumber": 38,
             "questionId": "q12",
-            "text": "（1）题目 NaN：（题干见题目区）\n答案：A,D,E"
+            "text": "（1）题目 38–40：（题干见题目区）\n答案：A,D,E"
           }
         ],
         "questionRange": {
-          "start": null,
-          "end": null
+          "start": 38,
+          "end": 40
         },
-        "text": "（1）题目 NaN：（题干见题目区）\n答案：A,D,E"
+        "text": "（1）题目 38–40：（题干见题目区）\n答案：A,D,E"
       }
     ]
   });

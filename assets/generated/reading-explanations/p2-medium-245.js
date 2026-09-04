@@ -88,16 +88,16 @@
             "text": "（1）题目 22：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：C（non-numerical descriptions of wind force）\n定位：第6段，第3句\n原文：most of the logbooks in Wheeler’s archives describe weather conditions using words alone — and often archaic or peculiar ones\n译文：Wheeler 档案中的大多数航海日志只用文字描述天气状况，而且常常使用古老或特殊的词语。\n\n解析：原文明确说明早期日志没有统一数值尺度，风力主要用文字描述，正对应“风力的非数字化描述”。因此这是两个正确问题之一。"
           },
           {
-            "questionNumber": 22,
-            "questionId": "q9",
-            "text": "（2）题目 22：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：C（errors found in the charting of wind direction）\n定位：第5段，第1—3句\n原文：It took a long time to work out if the direction noted in the log was based on magnetic north or true north. Get it wrong and the data could be out by as much as 30 degrees.\n译文：研究人员花了很长时间才弄清日志中的方向是以磁北还是真北为基准；一旦判断错误，数据最多可能偏差30度。\n\n解析：日志没有说明风向记录采用磁北还是真北，错误判断会造成最高30度的偏差，正对应风向绘制中的错误。因此这是另一个正确问题。"
+            "questionNumber": 23,
+            "questionId": "q10",
+            "text": "（2）题目 23：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：D（errors found in the charting of wind direction）\n定位：第5段，第1—3句\n原文：It took a long time to work out if the direction noted in the log was based on magnetic north or true north. Get it wrong and the data could be out by as much as 30 degrees.\n译文：研究人员花了很长时间才弄清日志中的方向是以磁北还是真北为基准；一旦判断错误，数据最多可能偏差30度。\n\n解析：日志没有说明风向记录采用磁北还是真北，错误判断会造成最高30度的偏差，正对应 errors found in the charting of wind direction，因此选 D。"
           }
         ],
         "questionRange": {
           "start": 22,
           "end": 23
         },
-        "text": "（1）题目 22：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：C（non-numerical descriptions of wind force）\n定位：第6段，第3句\n原文：most of the logbooks in Wheeler’s archives describe weather conditions using words alone — and often archaic or peculiar ones\n译文：Wheeler 档案中的大多数航海日志只用文字描述天气状况，而且常常使用古老或特殊的词语。\n\n解析：原文明确说明早期日志没有统一数值尺度，风力主要用文字描述，正对应“风力的非数字化描述”。因此这是两个正确问题之一。\n\n（2）题目 22：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：C（errors found in the charting of wind direction）\n定位：第5段，第1—3句\n原文：It took a long time to work out if the direction noted in the log was based on magnetic north or true north. Get it wrong and the data could be out by as much as 30 degrees.\n译文：研究人员花了很长时间才弄清日志中的方向是以磁北还是真北为基准；一旦判断错误，数据最多可能偏差30度。\n\n解析：日志没有说明风向记录采用磁北还是真北，错误判断会造成最高30度的偏差，正对应风向绘制中的错误。因此这是另一个正确问题。"
+        "text": "（1）题目 22：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：C（non-numerical descriptions of wind force）\n定位：第6段，第3句\n原文：most of the logbooks in Wheeler’s archives describe weather conditions using words alone — and often archaic or peculiar ones\n译文：Wheeler 档案中的大多数航海日志只用文字描述天气状况，而且常常使用古老或特殊的词语。\n\n解析：原文明确说明早期日志没有统一数值尺度，风力主要用文字描述，正对应“风力的非数字化描述”。因此这是两个正确问题之一。\n\n（2）题目 23：\n题目翻译：以下列出了一些解读早期航海日志时可能遇到的问题。文章提到了其中哪两项？\n答案：D（errors found in the charting of wind direction）\n定位：第5段，第1—3句\n原文：It took a long time to work out if the direction noted in the log was based on magnetic north or true north. Get it wrong and the data could be out by as much as 30 degrees.\n译文：研究人员花了很长时间才弄清日志中的方向是以磁北还是真北为基准；一旦判断错误，数据最多可能偏差30度。\n\n解析：日志没有说明风向记录采用磁北还是真北，错误判断会造成最高30度的偏差，正对应 errors found in the charting of wind direction，因此选 D。"
       },
       {
         "sectionTitle": "4. TRUE / FALSE / NOT GIVEN（Questions 24–26）",

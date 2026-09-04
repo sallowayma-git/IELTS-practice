@@ -1712,6 +1712,540 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/core/vocabScheduler.js ===== */
+(function(window) {
+    // SuperMemo SM-2 算法常量
+    const SM2_CONSTANTS = Object.freeze({
+        MIN_EASE_FACTOR: 1.3,
+        MAX_EASE_FACTOR: 3.0,
+        DEFAULT_EASE_FACTOR: 2.5,
+        INITIAL_INTERVAL_DAYS: 1,
+        SECOND_INTERVAL_DAYS: 6,
+        MAX_INTRA_CYCLES: 12
+    });
+
+    // 三档起始难度因子
+    const INITIAL_EASE_FACTORS = Object.freeze({
+        easy: 2.8,    // 简单：高起始难度因子，间隔长
+        good: 2.5,    // 一般：标准起始难度因子
+        hard: 1.8     // 困难：低起始难度因子，间隔短，需要更多复习
+    });
+
+    // 轮内循环的EF调整
+    const INTRA_EF_ADJUSTMENTS = Object.freeze({
+        easy: 0.15,   // 简单：提升难度因子
+        good: 0.05,   // 一般：小幅提升
+        hard: -0.10   // 困难：降低难度因子
+    });
+
+    // 质量评分映射（简化为 3 档）
+    const QUALITY_RATINGS = Object.freeze({
+        wrong: 0,      // 完全错误
+        hard: 3,       // 正确但很困难
+        good: 4,       // 正确但有犹豫
+        easy: 5        // 完美回忆（秒答）
+    });
+
+    // 向后兼容：旧的 Leitner 箱号
+    const MAX_BOX = 5;
+    const MIN_BOX = 1;
+
+    function toDate(input, fallback = new Date()) {
+        if (!input) {
+            return new Date(fallback);
+        }
+        if (input instanceof Date) {
+            return new Date(input.getTime());
+        }
+        const parsed = new Date(input);
+        if (Number.isNaN(parsed.getTime())) {
+            return new Date(fallback);
+        }
+        return parsed;
+    }
+
+    /**
+     * SM-2 算法：计算难度因子
+     * @param {number} oldEF - 旧难度因子
+     * @param {number} quality - 质量评分 (0-5)
+     * @returns {number} 新难度因子 (1.3-2.5)
+     */
+    function calculateEaseFactor(oldEF, quality) {
+        const q = Math.max(0, Math.min(5, Number(quality) || 0));
+        const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
+        const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+
+        // 限制在 [1.3, 2.5] 范围内
+        return Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, newEF)
+        );
+    }
+
+    /**
+     * SM-2 算法：计算下次复习间隔（天）
+     * @param {number} repetitions - 连续正确次数
+     * @param {number} oldInterval - 旧间隔（天）
+     * @param {number} easeFactor - 难度因子
+     * @returns {number} 新间隔（天）
+     */
+    function calculateInterval(repetitions, oldInterval, easeFactor) {
+        const reps = Number(repetitions) || 0;
+        const interval = Number(oldInterval) || 0;
+        const ef = easeFactor || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        if (reps === 0) {
+            return SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        }
+        if (reps === 1) {
+            return SM2_CONSTANTS.SECOND_INTERVAL_DAYS;
+        }
+        // reps >= 2: 间隔 = 上次间隔 × 难度因子
+        return Math.round(interval * ef);
+    }
+
+    /**
+     * 计算下次复习时间
+     * @param {number} intervalDays - 间隔天数
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Date} 下次复习时间
+     */
+    function calculateNextReview(intervalDays, referenceTime) {
+        const base = toDate(referenceTime, new Date());
+        const days = Math.max(0, Number(intervalDays) || 0);
+        const next = new Date(base.getTime());
+        next.setDate(next.getDate() + days);
+        return next;
+    }
+
+    /**
+     * 归一化词条数据
+     * @param {Object} word - 词条对象
+     * @returns {Object} 归一化后的词条
+     */
+    function normalizeWord(word) {
+        if (!word || typeof word !== 'object') {
+            return null;
+        }
+
+        // SM-2 字段
+        const easeFactor = typeof word.easeFactor === 'number'
+            ? word.easeFactor
+            : null; // 新词没有EF，将根据首次判断设置
+
+        const interval = typeof word.interval === 'number'
+            ? word.interval
+            : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+
+        const repetitions = typeof word.repetitions === 'number'
+            ? word.repetitions
+            : 0;
+
+        // 轮内循环状态
+        const intraCycles = typeof word.intraCycles === 'number'
+            ? word.intraCycles
+            : 0;
+
+        return {
+            ...word,
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles
+        };
+    }
+
+    /**
+     * 设置新词的起始难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} initialQuality - 首次认识质量 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function setInitialEaseFactor(word, initialQuality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
+
+        return {
+            ...normalized,
+            easeFactor: initialEF,
+            intraCycles: initialQuality === 'easy' ? 0 : 1 // easy不进入轮内循环
+        };
+    }
+
+    /**
+     * 轮内循环调整难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function adjustIntraCycleEF(word, quality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const adjustment = INTRA_EF_ADJUSTMENTS[quality] || 0;
+        const newEF = Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, normalized.easeFactor + adjustment)
+        );
+
+        const newCycles = normalized.intraCycles + 1;
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            intraCycles: newCycles
+        };
+    }
+
+    /**
+     * SM-2 算法：根据回忆质量更新词条
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('wrong'|'hard'|'good'|'easy')
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Object} 更新后的词条
+     */
+    function scheduleAfterResult(word, quality, referenceTime = new Date()) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        // 如果是新词（没有EF），设置起始难度因子
+        if (normalized.easeFactor === null) {
+            return setInitialEaseFactor(normalized, quality);
+        }
+
+        const q = QUALITY_RATINGS[quality] !== undefined
+            ? QUALITY_RATINGS[quality]
+            : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
+
+        const reviewedAt = toDate(referenceTime, new Date()).toISOString();
+
+        // 质量评分 < 3 视为失败，重置进度
+        if (q < 3) {
+            return {
+                ...normalized,
+                easeFactor: Math.max(
+                    SM2_CONSTANTS.MIN_EASE_FACTOR,
+                    normalized.easeFactor - 0.2
+                ),
+                interval: SM2_CONSTANTS.INITIAL_INTERVAL_DAYS,
+                repetitions: 0,
+                intraCycles: 1, // 重新进入轮内循环
+                correctCount: 0,
+                lastReviewed: reviewedAt,
+                nextReview: calculateNextReview(SM2_CONSTANTS.INITIAL_INTERVAL_DAYS, reviewedAt).toISOString()
+            };
+        }
+
+        // 质量评分 >= 3，更新难度因子和间隔
+        const newEF = calculateEaseFactor(normalized.easeFactor, q);
+        const newReps = normalized.repetitions + 1;
+        const newInterval = calculateInterval(newReps, normalized.interval, newEF);
+        const nextReviewDate = calculateNextReview(newInterval, reviewedAt);
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            interval: newInterval,
+            repetitions: newReps,
+            intraCycles: 0, // 完成学习，退出轮内循环
+            correctCount: (normalized.correctCount || 0) + 1,
+            lastReviewed: reviewedAt,
+            nextReview: nextReviewDate.toISOString()
+        };
+    }
+
+    /**
+     * 向后兼容：旧的 promote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'good') 替代
+     */
+    function promote(word) {
+        return scheduleAfterResult(word, 'good');
+    }
+
+    /**
+     * 向后兼容：旧的 demote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'wrong') 替代
+     */
+    function demote(word) {
+        return scheduleAfterResult(word, 'wrong');
+    }
+
+    function pickDailyTask(allWords, limit = 100, options = {}) {
+        const words = Array.isArray(allWords) ? allWords.slice() : [];
+        const reviewLimit = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : 100;
+        const newLimit = typeof options.newLimit === 'number' && options.newLimit >= 0 ? Math.floor(options.newLimit) : 20;
+        const now = toDate(options.now, new Date());
+
+        const dueWords = [];
+        const newWords = [];
+
+        words.forEach((word) => {
+            if (!word) {
+                return;
+            }
+            const nextReview = word.nextReview ? new Date(word.nextReview) : null;
+            const lastReviewed = word.lastReviewed ? new Date(word.lastReviewed) : null;
+            if (nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= now) {
+                dueWords.push(word);
+                return;
+            }
+            if (!lastReviewed || Number.isNaN(lastReviewed.getTime())) {
+                newWords.push(word);
+            }
+        });
+
+        const sortByDue = (a, b) => {
+            const nextA = a.nextReview ? new Date(a.nextReview).getTime() : 0;
+            const nextB = b.nextReview ? new Date(b.nextReview).getTime() : 0;
+            if (Number.isNaN(nextA) && Number.isNaN(nextB)) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            if (Number.isNaN(nextA)) {
+                return -1;
+            }
+            if (Number.isNaN(nextB)) {
+                return 1;
+            }
+            if (nextA === nextB) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            return nextA - nextB;
+        };
+
+        dueWords.sort(sortByDue);
+
+        const tasks = dueWords.slice(0, reviewLimit);
+        if (tasks.length < reviewLimit && newLimit > 0) {
+            const remaining = Math.min(newLimit, reviewLimit - tasks.length);
+            const sortedNew = newWords.sort((a, b) => {
+                const freqA = typeof a.freq === 'number' ? a.freq : 0;
+                const freqB = typeof b.freq === 'number' ? b.freq : 0;
+                if (freqA === freqB) {
+                    return (a.word || '').localeCompare(b.word || '');
+                }
+                return freqB - freqA;
+            });
+            for (let i = 0; i < sortedNew.length && tasks.length < reviewLimit && i < remaining; i += 1) {
+                tasks.push(sortedNew[i]);
+            }
+        }
+
+        return tasks;
+    }
+
+    const api = Object.freeze({
+        // SM-2 算法核心
+        SM2_CONSTANTS,
+        QUALITY_RATINGS,
+        INITIAL_EASE_FACTORS,
+        INTRA_EF_ADJUSTMENTS,
+        calculateEaseFactor,
+        calculateInterval,
+        calculateNextReview,
+        scheduleAfterResult,
+        normalizeWord,
+        setInitialEaseFactor,
+        adjustIntraCycleEF,
+
+        // 任务生成
+        pickDailyTask,
+
+        // 向后兼容（已废弃）
+        promote,
+        demote,
+        MAX_BOX,
+        MIN_BOX
+    });
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else {
+        window.VocabScheduler = api;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/practiceReviewScheduler.js ===== */
+(function initPracticeReviewScheduler(global) {
+    'use strict';
+
+    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v2 === true) return;
+
+    const vocabScheduler = global.VocabScheduler;
+    if (!vocabScheduler
+        || typeof vocabScheduler.calculateEaseFactor !== 'function'
+        || typeof vocabScheduler.calculateNextReview !== 'function') {
+        throw new Error('PracticeReviewScheduler requires VocabScheduler');
+    }
+
+    const QUALITY_VALUES = Object.freeze({ hard: 2, good: 4, easy: 5 });
+    const VALID_QUALITIES = Object.freeze(Object.keys(QUALITY_VALUES));
+
+    function validIso(value, label) {
+        const time = new Date(value).getTime();
+        if (!Number.isFinite(time)) throw new TypeError(`${label || 'date'} must be a valid date`);
+        return new Date(time).toISOString();
+    }
+
+    function normalizeAppliedAttemptIds(value) {
+        if (value === undefined) return [];
+        if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
+        const normalized = [];
+        const seen = new Set();
+        for (const rawAttemptId of value) {
+            if (typeof rawAttemptId !== 'string') {
+                throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            }
+            const attemptId = rawAttemptId.trim();
+            if (!attemptId) throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            if (seen.has(attemptId)) continue;
+            seen.add(attemptId);
+            normalized.push(attemptId);
+        }
+        return normalized;
+    }
+
+    function createInitialState(referenceTime) {
+        const nextReview = validIso(referenceTime || new Date(), 'referenceTime');
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            reviewCount: 0,
+            lapseCount: 0,
+            lastReviewed: null,
+            nextReview,
+            lastQuality: null,
+            lastReviewAttemptId: null,
+            appliedReviewAttemptIds: [],
+            updatedAt: nextReview
+        };
+    }
+
+    function normalizeState(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) {
+            throw new TypeError('reviewState must be an object');
+        }
+        if (Number(input.schemaVersion) !== 1
+            || input.algorithm !== 'sm2-practice'
+            || Number(input.algorithmVersion) !== 1) {
+            throw new TypeError('Unsupported practice review state');
+        }
+        const easeFactor = Number(input.easeFactor);
+        const interval = Number(input.interval);
+        const repetitions = Number(input.repetitions);
+        const reviewCount = Number(input.reviewCount);
+        const lapseCount = Number(input.lapseCount);
+        if (!Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 3) throw new TypeError('Invalid easeFactor');
+        if (!Number.isFinite(interval) || interval < 0) throw new TypeError('Invalid interval');
+        if (![repetitions, reviewCount, lapseCount].every((value) => Number.isInteger(value) && value >= 0)) {
+            throw new TypeError('Invalid review counters');
+        }
+        const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
+        const nextReview = validIso(input.nextReview, 'nextReview');
+        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
+        if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
+        const normalizedLastAttemptId = input.lastReviewAttemptId == null
+            ? ''
+            : String(input.lastReviewAttemptId).trim();
+        const lastReviewAttemptId = normalizedLastAttemptId || null;
+        const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
+        if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
+            appliedReviewAttemptIds.push(lastReviewAttemptId);
+        }
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor,
+            interval,
+            repetitions,
+            reviewCount,
+            lapseCount,
+            lastReviewed,
+            nextReview,
+            lastQuality,
+            lastReviewAttemptId,
+            appliedReviewAttemptIds,
+            updatedAt
+        };
+    }
+
+    function scheduleOutcome(input, quality, reviewedAt, reviewAttemptId) {
+        const current = normalizeState(input);
+        const normalizedQuality = String(quality || '').toLowerCase();
+        if (!VALID_QUALITIES.includes(normalizedQuality)) throw new TypeError('quality must be hard, good, or easy');
+        const attemptId = String(reviewAttemptId || '').trim();
+        if (!attemptId) throw new TypeError('reviewAttemptId is required');
+        if (current.appliedReviewAttemptIds.includes(attemptId)) return current;
+        const timestamp = validIso(reviewedAt || new Date(), 'reviewedAt');
+        const nextEaseFactor = vocabScheduler.calculateEaseFactor(current.easeFactor, QUALITY_VALUES[normalizedQuality]);
+        let repetitions;
+        let interval;
+        let lapseCount = current.lapseCount;
+
+        if (normalizedQuality === 'hard') {
+            repetitions = 0;
+            interval = 1;
+            lapseCount += 1;
+        } else if (normalizedQuality === 'easy' && current.repetitions === 0) {
+            repetitions = 2;
+            interval = 6;
+        } else if (current.repetitions === 0) {
+            repetitions = 1;
+            interval = 1;
+        } else if (current.repetitions === 1) {
+            repetitions = 2;
+            interval = 6;
+        } else {
+            repetitions = current.repetitions + 1;
+            interval = Math.max(1, Math.round(current.interval * nextEaseFactor));
+        }
+
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: nextEaseFactor,
+            interval,
+            repetitions,
+            reviewCount: current.reviewCount + 1,
+            lapseCount,
+            lastReviewed: timestamp,
+            nextReview: vocabScheduler.calculateNextReview(interval, timestamp).toISOString(),
+            lastQuality: normalizedQuality,
+            lastReviewAttemptId: attemptId,
+            appliedReviewAttemptIds: current.appliedReviewAttemptIds.concat(attemptId),
+            updatedAt: timestamp
+        };
+    }
+
+    global.PracticeReviewScheduler = Object.freeze({
+        __v1: true,
+        __v2: true,
+        QUALITY_VALUES,
+        VALID_QUALITIES,
+        createInitialState,
+        normalizeState,
+        scheduleOutcome
+    });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/data/v2/appData.js ===== */
 (function installAppData(global) {
     'use strict';
@@ -6670,7 +7204,6 @@
         divider: null,
         groups: null,
         results: null,
-        reviewBanner: null,
         nav: null,
         submitBtn: null,
         resetBtn: null,
@@ -7716,7 +8249,6 @@
         dom.divider = document.querySelector('.shell > #divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
-        dom.reviewBanner = document.getElementById('review-banner');
         dom.nav = document.getElementById('question-nav');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
@@ -9629,7 +10161,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         updateRedesignedSubHeader();
     }
@@ -12159,266 +12690,7 @@
         return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
-    function hideReviewBanner() {
-        if (!dom.reviewBanner) return;
-        dom.reviewBanner.hidden = true;
-        const partScores = document.getElementById('review-part-scores');
-        if (partScores) partScores.innerHTML = '';
-    }
-
-    function formatReviewElapsed(totalSeconds) {
-        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-        const hours = Math.floor(safeSeconds / 3600);
-        const minutes = Math.floor((safeSeconds % 3600) / 60);
-        const seconds = safeSeconds % 60;
-        if (hours > 0) {
-            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-        }
-        return `${minutes}:${String(seconds).padStart(2, '0')}`;
-    }
-
-    // The reference tints each card by assignment difficulty, which this project
-    // has no equivalent for -- its manifest carries a frequency band (高频/低频),
-    // not a difficulty. Tinting by the part's own accuracy keeps the reference's
-    // colour ramp without claiming a difficulty we do not know.
-    function resolveReviewAccuracyTier(correct, total) {
-        if (!Number.isFinite(total) || total <= 0) return '';
-        const ratio = correct / total;
-        if (ratio >= 0.75) return 'easy';
-        if (ratio >= 0.5) return 'standard';
-        return 'hard';
-    }
-
-    function readReviewAnswer(results, questionId) {
-        const normalizedId = normalizeQuestionId(questionId) || questionId;
-        const answers = results?.answers && typeof results.answers === 'object' ? results.answers : {};
-        if (Object.prototype.hasOwnProperty.call(answers, questionId)) return answers[questionId];
-        if (Object.prototype.hasOwnProperty.call(answers, normalizedId)) return answers[normalizedId];
-        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
-            ? results.answerComparison
-            : {};
-        return comparison[questionId]?.userAnswer ?? comparison[normalizedId]?.userAnswer ?? '';
-    }
-
-    // Count completion from the original answer map and question-group
-    // semantics. Split multi-select comparison rows intentionally repeat the
-    // same selected-token array, so counting non-empty comparison rows inflates
-    // one selected option into a fully answered group.
-    function countAnsweredWeight(results, dataset = state.dataset) {
-        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
-            ? results.answerComparison
-            : {};
-        const answerKey = dataset?.answerKey || results?.correctAnswers || {};
-        const questionOrder = Array.isArray(dataset?.questionOrder) && dataset.questionOrder.length
-            ? dataset.questionOrder
-            : Array.from(new Set([...Object.keys(comparison), ...Object.keys(results?.answers || {})]));
-        const groupLookup = buildQuestionGroupLookup(dataset);
-        const visitedGroups = new Set();
-        let answered = 0;
-
-        questionOrder.forEach((rawQuestionId) => {
-            const questionId = normalizeQuestionId(rawQuestionId) || rawQuestionId;
-            const group = groupLookup.get(questionId) || null;
-            const isMultiChoice = Boolean(
-                group
-                && (group.kind === 'multi_choice' || group.kind === 'multiple_choice')
-                && Array.isArray(group.questionIds)
-                && group.questionIds.length
-            );
-            if (isMultiChoice) {
-                if (!isSharedMultiChoiceGroup(group) && group.questionIds.length > 1) {
-                    const entry = comparison[rawQuestionId] || comparison[questionId] || {};
-                    const value = readReviewAnswer(results, rawQuestionId);
-                    if (splitAnswerTokens(value).length > 0) {
-                        answered += Math.max(1, Number(entry.weight) || 1);
-                    }
-                    return;
-                }
-                const groupKey = String(group.groupId || group.questionIds.join('|'));
-                if (visitedGroups.has(groupKey)) return;
-                visitedGroups.add(groupKey);
-                const questionIds = group.questionIds
-                    .map((entry) => normalizeQuestionId(entry) || entry)
-                    .filter(Boolean);
-                const groupAnswers = {};
-                questionIds.forEach((id) => {
-                    groupAnswers[id] = readReviewAnswer(results, id);
-                });
-                const selectedTokens = collectGroupChoiceTokens(groupAnswers, questionIds);
-                if (questionIds.length > 1) {
-                    const expectedCount = questionIds
-                        .map((id) => canonicalizeAnswerToken(answerKey[id]))
-                        .filter(Boolean)
-                        .length;
-                    const capacity = expectedCount || questionIds.length;
-                    answered += Math.min(selectedTokens.length, capacity);
-                    return;
-                }
-                const onlyId = questionIds[0];
-                const entry = comparison[onlyId] || comparison[rawQuestionId] || {};
-                const expectedCount = normalizeChoiceTokenList(answerKey[onlyId]).length;
-                const capacity = Math.max(1, Number(entry.weight) || expectedCount || 1);
-                answered += Math.min(selectedTokens.length, capacity);
-                return;
-            }
-
-            const entry = comparison[rawQuestionId] || comparison[questionId] || {};
-            const value = readReviewAnswer(results, rawQuestionId);
-            if (splitAnswerTokens(value).length > 0) {
-                answered += Math.max(1, Number(entry.weight) || 1);
-            }
-        });
-
-        const total = Number(results?.scoreInfo?.total ?? results?.scoreInfo?.totalQuestions);
-        return Number.isFinite(total) && total >= 0 ? Math.min(answered, total) : answered;
-    }
-
-    function resolveReadingPartIndex(dataset = state.dataset) {
-        const candidates = [
-            dataset?.meta?.category,
-            dataset?.meta?.part,
-            dataset?.category,
-            state.examId,
-            state.dataKey,
-            state.suite?.activeExamId
-        ];
-        for (const candidate of candidates) {
-            const value = String(candidate || '').trim();
-            if (!value) continue;
-            const match = value.match(/(?:^|[^a-z0-9])p(?:art)?[\s_-]*([123])(?:[^0-9]|$)/i);
-            if (match) {
-                return Number(match[1]) - 1;
-            }
-        }
-        return null;
-    }
-
-    // Per-passage cards. Only the inline suite has more than one passage, so a
-    // standalone run renders a single card describing the current exam.
-    function collectReviewPartRows(results, reviewSummary = {}) {
-        const rows = [];
-        const sequence = Array.isArray(state.suite?.sequence) ? state.suite.sequence : [];
-        const summaryEntries = Array.isArray(reviewSummary.suiteEntries) ? reviewSummary.suiteEntries : [];
-        if (state.suite?.inline && sequence.length) {
-            sequence.forEach((entry, index) => {
-                const slot = getSuiteSlot(entry.examId);
-                const info = slot?.lastResults?.scoreInfo;
-                if (!info) return;
-                const summaryEntry = summaryEntries.find((candidate) => (
-                    candidate && String(candidate.examId || '') === String(entry.examId || '')
-                ));
-                const total = Number(info.total ?? info.totalQuestions) || 0;
-                rows.push({
-                    label: `Part ${index + 1}`,
-                    title: slot?.title || entry.title || entry.examId,
-                    category: slot?.category || entry.category || slot?.dataset?.meta?.category || '',
-                    correct: Number(info.correct) || 0,
-                    total,
-                    answered: countAnsweredWeight(slot?.lastResults, slot?.dataset),
-                    duration: Number.isFinite(Number(summaryEntry?.duration))
-                        ? Math.max(0, Math.round(Number(summaryEntry.duration)))
-                        : Math.max(0, Math.round(readSuiteSlotDurationMs(slot) / 1000))
-                });
-            });
-            return rows;
-        }
-        const info = results?.scoreInfo || {};
-        const total = Number(info.total ?? info.totalQuestions) || 0;
-        if (!total) return rows;
-        const datasetPartIndex = resolveReadingPartIndex();
-        const summaryPartIndex = Number(reviewSummary.partIndex);
-        const partIndex = datasetPartIndex !== null
-            ? datasetPartIndex
-            : (Number.isInteger(summaryPartIndex) && summaryPartIndex >= 0
-                ? summaryPartIndex
-                : (state.reviewMode && Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0));
-        const summaryDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
-        rows.push({
-            label: `Part ${partIndex + 1}`,
-            title: reviewSummary.title || state.dataset?.meta?.title || dom.title?.textContent || '',
-            category: state.dataset?.meta?.category || '',
-            correct: Number(info.correct) || 0,
-            total,
-            answered: countAnsweredWeight(results, state.dataset),
-            duration: summaryDuration === null ? getPageElapsedSeconds() : summaryDuration
-        });
-        return rows;
-    }
-
-    function renderReviewBanner(results, reviewSummary = {}) {
-        if (!dom.reviewBanner || !results) return;
-        const rows = collectReviewPartRows(results, reviewSummary);
-
-        // In the inline suite, `results` describes only the passage on screen,
-        // so the headline is summed from the per-part rows instead -- otherwise
-        // the metrics would contradict the cards directly beneath them.
-        const aggregate = rows.length > 1;
-        const info = results.scoreInfo || {};
-        const total = aggregate
-            ? rows.reduce((sum, row) => sum + row.total, 0)
-            : (Number(info.total ?? info.totalQuestions) || 0);
-        const correct = aggregate
-            ? rows.reduce((sum, row) => sum + row.correct, 0)
-            : (Number(info.correct) || 0);
-        const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
-        const answered = aggregate
-            ? rows.reduce((sum, row) => sum + row.answered, 0)
-            : countAnsweredWeight(results, state.dataset);
-        const answeredTotal = total;
-
-        const setText = (id, value) => {
-            const node = document.getElementById(id);
-            if (node) node.textContent = value;
-        };
-
-        setText('review-assignment-title', reviewSummary.title || dom.title?.textContent || state.dataset?.meta?.title || '练习结果');
-        setText('review-passages', rows.length
-            ? rows.map((row) => row.title).filter(Boolean).join(' · ')
-            : (state.dataset?.meta?.title || '—'));
-        const submittedAt = document.getElementById('review-submitted-at');
-        if (submittedAt) {
-            const submittedAtMs = Number(reviewSummary.submittedAtMs);
-            const submittedAtDate = new Date(submittedAtMs);
-            const timestamp = Number.isFinite(submittedAtMs)
-                && submittedAtMs > 0
-                && Number.isFinite(submittedAtDate.getTime())
-                ? submittedAtMs
-                : Date.now();
-            const submittedDate = new Date(timestamp);
-            submittedAt.textContent = `${submittedDate.toLocaleDateString()} ${submittedDate.toLocaleTimeString()}`;
-            submittedAt.setAttribute('datetime', submittedDate.toISOString());
-        }
-        setText('review-score', total > 0 ? `${correct} / ${total}` : '—');
-        setText('review-accuracy', total > 0 ? `${percentage}%` : '—');
-        setText('review-completion', answeredTotal ? `${answered} / ${answeredTotal}` : '—');
-        const recordedDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
-        setText('review-elapsed', formatReviewElapsed(
-            recordedDuration === null ? getPageElapsedSeconds() : recordedDuration
-        ));
-
-        const partScores = document.getElementById('review-part-scores');
-        if (partScores) {
-            partScores.innerHTML = rows.map((row) => {
-                const progress = row.total > 0 ? Math.round((row.correct / row.total) * 100) : 0;
-                const tier = resolveReviewAccuracyTier(row.correct, row.total);
-                const difficultyAttr = tier ? ` data-difficulty="${tier}"` : '';
-                return `
-                    <div class="review-part-score"${difficultyAttr} style="--review-progress:${progress}%">
-                        <span class="review-part-label">${escapeHtml(row.label)}</span>
-                        <span class="review-part-score-value">${row.correct} / ${row.total}</span>
-                        <span class="review-part-result">
-                            <span class="review-part-accuracy">${progress}%</span>
-                            <span class="review-part-time">${escapeHtml(formatReviewElapsed(row.duration))}</span>
-                        </span>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        dom.reviewBanner.hidden = false;
-    }
-
-    function renderResults(results, reviewSummary = {}) {
+    function renderResults(results) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
@@ -12462,7 +12734,6 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
-        renderReviewBanner(results, reviewSummary);
         applyResultsToQuestionArea(results);
     }
 
@@ -13115,7 +13386,7 @@
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         if (presentation && presentation.results) {
             state.lastResults = presentation.results;
-            renderResults(presentation.results, presentation.reviewSummary || {});
+            renderResults(presentation.results);
             await renderExplanations();
             if (!retainsSubmissionOwnership(ownership)) {
                 return false;
@@ -13177,9 +13448,6 @@
                 openNoteEditor,
                 closeNoteEditor,
                 applyReplayRecord,
-                countAnsweredWeight,
-                collectReviewPartRows,
-                renderReviewBanner,
                 setTimerRunning,
                 checkpointActiveSuiteDuration,
                 getSelectionHighlightTestState() {
@@ -13505,7 +13773,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
@@ -13577,88 +13844,6 @@
         }
     }
 
-    function resolveReviewTimestampMs(...values) {
-        for (const value of values) {
-            if (value === null || value === undefined || value === '') continue;
-            if (typeof value === 'number' || /^[+-]?\d+(?:\.\d+)?$/.test(String(value).trim())) {
-                const numeric = Number(value);
-                if (Number.isFinite(numeric) && numeric > 0) {
-                    const timestamp = numeric < 100000000000
-                        ? Math.round(numeric * 1000)
-                        : Math.round(numeric);
-                    if (Number.isFinite(new Date(timestamp).getTime())) {
-                        return timestamp;
-                    }
-                }
-                continue;
-            }
-            const parsed = Date.parse(String(value));
-            if (Number.isFinite(parsed) && parsed > 0 && Number.isFinite(new Date(parsed).getTime())) {
-                return parsed;
-            }
-        }
-        return null;
-    }
-
-    function resolveReplayReviewSummary(data, entry, replayData) {
-        const durationCandidates = [
-            entry?.duration,
-            replayData?.duration,
-            entry?.durationSeconds,
-            replayData?.durationSeconds,
-            entry?.duration_seconds,
-            replayData?.duration_seconds,
-            entry?.elapsedSeconds,
-            replayData?.elapsedSeconds,
-            entry?.elapsed_seconds,
-            replayData?.elapsed_seconds,
-            entry?.timeSpent,
-            replayData?.timeSpent,
-            entry?.time_spent,
-            replayData?.time_spent,
-            entry?.scoreInfo?.duration,
-            entry?.scoreInfo?.durationSeconds,
-            entry?.scoreInfo?.duration_seconds,
-            entry?.scoreInfo?.elapsedSeconds,
-            entry?.scoreInfo?.elapsed_seconds,
-            entry?.scoreInfo?.timeSpent,
-            entry?.scoreInfo?.time_spent,
-            replayData?.scoreInfo?.duration,
-            replayData?.scoreInfo?.durationSeconds,
-            replayData?.scoreInfo?.duration_seconds,
-            replayData?.scoreInfo?.elapsedSeconds,
-            replayData?.scoreInfo?.elapsed_seconds,
-            replayData?.scoreInfo?.timeSpent,
-            replayData?.scoreInfo?.time_spent
-        ];
-        let durationSeconds = null;
-        for (const candidate of durationCandidates) {
-            const parsed = parseOptionalNonNegativeInteger(candidate);
-            if (parsed !== null) {
-                durationSeconds = parsed;
-                break;
-            }
-        }
-        return {
-            submittedAtMs: resolveReviewTimestampMs(
-                entry?.endTime,
-                replayData?.endTime,
-                entry?.completedAt,
-                replayData?.completedAt,
-                entry?.timestamp,
-                replayData?.timestamp,
-                entry?.rawData?.timestamp,
-                entry?.date,
-                replayData?.date
-            ),
-            durationSeconds,
-            partIndex: resolveReadingPartIndex() ?? (Number.isInteger(data?.reviewEntryIndex)
-                ? data.reviewEntryIndex
-                : state.reviewEntryIndex),
-            title: entry?.title || entry?.metadata?.examTitle || state.dataset?.meta?.title || ''
-        };
-    }
-
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
         const replayData = entry.realData && typeof entry.realData === 'object' ? entry.realData : {};
@@ -13702,7 +13887,7 @@
             global.scrollTo(0, Number(entry.scrollY));
         }
         state.lastResults = replayResults;
-        renderResults(replayResults, resolveReplayReviewSummary(data, entry, replayData));
+        renderResults(replayResults);
         await renderExplanations();
         applyHighlights(replayHighlights);
         refreshNoteHighlightAttributes();
@@ -14588,18 +14773,6 @@
         }
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
-        const reviewSummary = {
-            submittedAtMs: timing.endTimeMs,
-            durationSeconds: timing.duration,
-            partIndex: resolveReadingPartIndex() ?? (state.suite?.inline ? 0 : state.reviewEntryIndex),
-            title: state.dataset?.meta?.title || '',
-            suiteEntries: Array.isArray(submissionSnapshot.suiteEntries)
-                ? submissionSnapshot.suiteEntries.map((entry) => ({
-                    examId: entry.examId,
-                    duration: entry.duration
-                }))
-                : []
-        };
         beginSubmission(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
@@ -14634,8 +14807,7 @@
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
         } : {}, postedResults), {
             results,
-            highlights: highlightSnapshot,
-            reviewSummary
+            highlights: highlightSnapshot
         });
     }
 
@@ -14660,7 +14832,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         clearExplanations();
         setExitButtonVisible(false);
@@ -15221,6 +15392,8 @@
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
     "js/data/v2/dataKernel.js",
+    "js/core/vocabScheduler.js",
+    "js/core/practiceReviewScheduler.js",
     "js/data/v2/appData.js",
     "js/runtime/readingExamRegistry.js",
     "js/runtime/readingExplanationRegistry.js",
