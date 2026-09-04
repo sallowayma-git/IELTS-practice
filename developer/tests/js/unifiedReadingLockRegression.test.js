@@ -159,21 +159,10 @@ async function run() {
   ok(/#right \.tfng-item > p\s*\{[\s\S]*margin:\s*0 0 6px/.test(unifiedHtml), 'tfng_stem_option_spacing_not_scoped', failed);
   ok(/\.tfng-options\s*\{[\s\S]*gap:\s*4px 12px/.test(unifiedHtml), 'tfng_option_row_spacing_missing', failed);
   ok(/function restoreHighlights\s*\([\s\S]*?return restoredCount;/.test(highlightShared), 'restoreHighlights_no_restore_count', failed);
-  // Review banner: post-submission summary strip. It must occupy its own grid
-  // row, ship hidden, and be revealed only by renderResults.
-  ok(/grid-template-rows: var\(--header-height\) auto auto minmax\(0, 1fr\) var\(--footer-height\)/.test(unifiedHtml), 'review_banner_grid_row_missing', failed);
-  ok(/id="review-banner"[^>]*class="review-banner"[^>]*hidden/.test(unifiedHtml), 'review_banner_not_hidden_by_default', failed);
-  ok(/\.review-banner\s*\{[^}]*grid-row: 3/.test(unifiedHtml), 'review_banner_not_own_grid_row', failed);
-  ok(/\.shell\s*\{[\s\S]*?grid-row: 4/.test(unifiedHtml), 'reading_shell_grid_row_not_shifted', failed);
-  ok(/\.practice-nav\s*\{[\s\S]*?grid-row: 5/.test(unifiedHtml), 'practice_nav_grid_row_not_shifted', failed);
-  ok(/id="review-score"|id="review-accuracy"/.test(unifiedHtml), 'review_banner_metrics_missing', failed);
-  ok(/id="review-part-scores"/.test(unifiedHtml), 'review_banner_part_scores_missing', failed);
-  ok((unifiedHtml.match(/class="review-key /g) || []).length === 4, 'review_banner_legend_incomplete', failed);
-  ok(/renderReviewBanner\(results, reviewSummary\);/.test(unifiedPage), 'review_banner_not_rendered_on_results', failed);
-  ok((unifiedPage.match(/hideReviewBanner\(\);/g) || []).length >= 3, 'review_banner_not_collapsed_on_reset', failed);
-  ok(/countAnsweredWeight\(results, dataset = state\.dataset\)/.test(unifiedPage), 'review_completion_not_group_aware', failed);
-  ok(/resolveReplayReviewSummary\(data, entry, replayData\)/.test(unifiedPage), 'historical_review_summary_not_recorded', failed);
-  ok(/presentation\.reviewSummary \|\| \{\}/.test(unifiedPage), 'submit_snapshot_not_used_for_review_banner', failed);
+  // Body grid is a 4-row layout: header / part intro / reading shell / nav.
+  ok(/grid-template-rows: var\(--header-height\) auto minmax\(0, 1fr\) var\(--footer-height\)/.test(unifiedHtml), 'body_grid_rows_not_reference', failed);
+  ok(/\.shell\s*\{[\s\S]*?grid-row: 3/.test(unifiedHtml), 'reading_shell_grid_row_not_reference', failed);
+  ok(/\.practice-nav\s*\{[\s\S]*?grid-row: 4/.test(unifiedHtml), 'practice_nav_grid_row_not_reference', failed);
   ok(/dom\.submitBtn\.querySelector\('\.submit-btn-icon'\)/.test(unifiedPage), 'readonly_submit_icon_not_preserved', failed);
   ok(
     /dom\.resetBtn\.style\.display = shouldShowReset \? '' : 'none';/.test(unifiedPage)
@@ -189,9 +178,6 @@ async function run() {
   ok(/body\?\.focus\(\)/.test(unifiedPage), 'note_editor_body_focus_missing', failed);
   ok(!/String\(note\.title \|\| ''\)\.trim\(\) \|\| 'Untitled note'/.test(unifiedPage), 'note_title_fallback_not_using_buildDefaultNoteTitle', failed);
   ok(/buildDefaultNoteTitle\(note\.quote\)/.test(unifiedPage), 'note_title_buildDefaultNoteTitle_not_called', failed);
-  ok(/body\.dark-mode \.review-banner\s*\{[^}]*background: #171c22/.test(unifiedHtml), 'review_banner_dark_mode_missing', failed);
-  ok(/@media \(max-width: 980px\)[\s\S]*?\.review-banner\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/.test(unifiedHtml), 'review_banner_tablet_reflow_missing', failed);
-  ok(/@media \(max-width: 520px\)[\s\S]*?\.review-metrics\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(unifiedHtml), 'review_banner_phone_reflow_missing', failed);
   ok(/id="connection-indicator"[^>]*role="status"/.test(unifiedHtml), 'connection_indicator_id_missing', failed);
   ok(/@media \(max-width: 480px\)[\s\S]*?#connection-indicator\s*\{[^}]*display: none/.test(unifiedHtml), 'connection_indicator_not_collapsed_at_480', failed);
   ok(/@media \(max-width: 400px\)[\s\S]*?#messages-indicator\s*\{[^}]*display: none/.test(unifiedHtml), 'messages_indicator_not_collapsed_at_400', failed);

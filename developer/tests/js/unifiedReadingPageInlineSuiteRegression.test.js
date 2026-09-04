@@ -279,12 +279,6 @@ async function testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRo
     hooks.checkpointActiveSuiteDuration(startedAtMs + 70 * 1200, false);
     slot = hooks.getTestState().slotsByExamId[0][1];
     assert.strictEqual(slot.durationMs, pausedDurationMs, 'paused time must not accrue into the active part');
-
-    const frozenRows = hooks.collectReviewPartRows(results, {
-        durationSeconds: 60,
-        suiteEntries: [{ examId: 'timed-part', duration: 60 }]
-    });
-    assert.strictEqual(frozenRows[0].duration, 60, 'post-submit rendering must use the captured part duration instead of ACK latency');
 }
 
 async function testInlineEnvelopeGuard() {

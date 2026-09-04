@@ -139,7 +139,6 @@ async def get_state(frame) -> Dict[str, Any]:
             const results = document.getElementById('results');
             const exit = document.getElementById('exit-btn');
             const reset = document.getElementById('reset-btn');
-            const banner = document.getElementById('review-banner');
             const highlights = Array.from(document.querySelectorAll('#left .hl'));
             return {
                 submissionStatus: state.submissionStatus,
@@ -153,9 +152,6 @@ async def get_state(frame) -> Dict[str, Any]:
                 resultsVisible: !!(results && getComputedStyle(results).display !== 'none'),
                 exitVisible: !!(exit && getComputedStyle(exit).display !== 'none'),
                 resetVisible: !!(reset && getComputedStyle(reset).display !== 'none'),
-                bannerVisible: !!(banner && !banner.hidden && getComputedStyle(banner).display !== 'none'),
-                bannerScore: banner ? String(document.getElementById('review-score')?.textContent || '') : '',
-                bannerPartCards: banner ? document.querySelectorAll('#review-part-scores .review-part-score').length : 0,
                 highlightCount: highlights.length,
                 highlightTexts: highlights.map((node) => String(node.textContent || '').trim()).filter(Boolean)
             };
@@ -243,7 +239,6 @@ async def assert_pending(frame, detail: str) -> Dict[str, Any]:
     require(not state.get("readOnly"), f"{detail}:readonly_before_ack:{state}")
     require(not state.get("readOnlyClass"), f"{detail}:readonly_class_before_ack:{state}")
     require(not state.get("resetVisible"), f"{detail}:pending_reset_visible:{state}")
-    require(not state.get("bannerVisible"), f"{detail}:banner_visible_before_ack:{state}")
     require(not state.get("inputDisabled"), f"{detail}:input_disabled_before_ack:{state}")
     require(bool(state.get("submitDisabled")), f"{detail}:submit_not_guarded:{state}")
     require(not state.get("resultsVisible"), f"{detail}:results_visible_before_ack:{state}")
@@ -321,9 +316,6 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(after_ack.get("submitted"), f"valid_ack_not_submitted:{after_ack}")
     require(after_ack.get("readOnly") and after_ack.get("readOnlyClass"), f"valid_ack_not_readonly:{after_ack}")
     require(after_ack.get("resetVisible"), f"valid_ack_reset_hidden:{after_ack}")
-    require(after_ack.get("bannerVisible"), f"valid_ack_banner_hidden:{after_ack}")
-    require("/" in after_ack.get("bannerScore", ""), f"valid_ack_banner_score_missing:{after_ack}")
-    require(after_ack.get("bannerPartCards", 0) >= 1, f"valid_ack_banner_part_cards_missing:{after_ack}")
     require(after_ack.get("inputDisabled"), f"valid_ack_input_enabled:{after_ack}")
     require(after_ack.get("submitDisabled"), f"valid_ack_submit_enabled:{after_ack}")
     require(after_ack.get("resultsVisible"), f"valid_ack_results_hidden:{after_ack}")

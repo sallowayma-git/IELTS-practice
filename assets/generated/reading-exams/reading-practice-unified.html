@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-page-node-id="eECVKeP3YgHLUWC1ej8pbB">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light">
+<head data-page-node-id="emoT3jGqOxtDR35ATkFUJS">
+    <meta charset="UTF-8" data-page-node-id="5dv0TBEokPvqKC6tMyXslL">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="mufvlgrzpGpxCyywLiTIB0">
+    <meta name="color-scheme" content="light" data-page-node-id="YKAcptWtkHPGXC9JV7OplE">
     <title>IELTS 阅读练习</title>
     <style>
         /* ================================================================
@@ -70,7 +70,7 @@
             height: 100dvh;
             overflow: hidden;
             display: grid;
-            grid-template-rows: var(--header-height) auto auto minmax(0, 1fr) var(--footer-height);
+            grid-template-rows: var(--header-height) auto minmax(0, 1fr) var(--footer-height);
             min-height: 0;
         }
 
@@ -283,268 +283,13 @@
             white-space: nowrap;
         }
 
-        /* ================================================================
-           Review banner — post-submission summary strip (grid row 3).
-           Collapses to nothing while hidden, so the pre-submit layout is
-           byte-identical to the unsubmitted reference.
-           ================================================================ */
-        .review-banner {
-            --review-core-width: 780px;
-            z-index: 15;
-            grid-row: 3;
-            display: grid;
-            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.7fr) minmax(200px, 224px);
-            grid-template-rows: auto auto;
-            align-items: center;
-            column-gap: 18px;
-            row-gap: 6px;
-            min-width: 0;
-            min-height: 0;
-            padding: 8px 20px 7px;
-            border-block: 1px solid #b7b7b7;
-            background: #f8fafb;
-        }
-
-        .review-banner[hidden] {
-            display: none;
-        }
-
-        .review-identity,
-        .review-identity p,
-        .review-metrics,
-        .review-metrics div,
-        .review-metrics dt,
-        .review-metrics dd {
-            margin: 0;
-        }
-
-        .review-identity {
-            grid-row: 1 / span 2;
-            grid-column: 1;
-            align-self: center;
-            min-width: 0;
-        }
-
-        .review-assignment-identity {
-            display: grid;
-            align-content: center;
-            gap: 2px;
-            min-width: 0;
-        }
-
-        .review-assignment-title {
-            min-width: 0;
-            margin-bottom: 3px !important;
-            font-size: 17px;
-            font-weight: 700;
-            line-height: 1.15;
-            overflow-wrap: anywhere;
-        }
-
-        .review-scope,
-        .review-submission {
-            display: grid;
-            min-width: 0;
-            grid-template-columns: 3em minmax(0, 1fr);
-            column-gap: 4px;
-            align-items: baseline;
-            color: #343a3e;
-            font-size: 12px;
-            line-height: 1.25;
-        }
-
-        .review-scope {
-            white-space: normal;
-            overflow-wrap: anywhere;
-        }
-
-        .review-submission {
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-        }
-
-        .review-metrics {
-            display: grid;
-            width: min(100%, var(--review-core-width));
-            grid-row: 1;
-            grid-column: 2;
-            grid-template-columns: repeat(4, minmax(70px, 1fr));
-            align-self: end;
-            justify-self: center;
-        }
-
-        .review-metrics div {
-            min-width: 0;
-            padding: 6px 12px 5px;
-            border-left: 1px solid #dbe3e7;
-        }
-
-        .review-metrics div:first-child {
-            border-left: 0;
-        }
-
-        .review-metrics dt {
-            color: var(--muted-ink);
-            font-size: 11px;
-            line-height: 1.2;
-        }
-
-        .review-metrics dd {
-            margin-top: 2px;
-            overflow: hidden;
-            font-size: 17px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            line-height: 1.2;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .review-metric-elapsed dd {
-            overflow: visible;
-            font-size: clamp(15px, 1vw, 17px);
-            letter-spacing: -0.01em;
-            text-overflow: clip;
-        }
-
-        .review-score {
-            color: #174f6a;
-        }
-
-        .review-part-scores {
-            display: grid;
-            width: min(100%, var(--review-core-width));
-            grid-column: 2;
-            grid-row: 2;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            align-self: start;
-            justify-self: center;
-            gap: 8px;
-        }
-
-        .review-part-scores:empty {
-            display: none;
-        }
-
-        .review-part-score {
-            --review-difficulty-rgb: 111, 125, 134;
-            --review-card-border: rgba(111, 125, 134, 0.5);
-            --review-card-fill: rgba(111, 125, 134, 0.13);
-            position: relative;
-            display: grid;
-            min-width: 0;
-            min-height: 42px;
-            grid-template-columns: minmax(0, 1fr) auto;
-            align-items: center;
-            column-gap: 12px;
-            row-gap: 2px;
-            padding: 5px 10px 6px;
-            overflow: hidden;
-            border: 1px solid var(--review-card-border);
-            border-radius: 8px;
-            background: #fff;
-            box-shadow: 0 1px 4px rgba(var(--review-difficulty-rgb), 0.16);
-            font-variant-numeric: tabular-nums;
-            isolation: isolate;
-        }
-
-        .review-part-score::before {
-            position: absolute;
-            z-index: 0;
-            inset: 0 auto 0 0;
-            width: var(--review-progress, 0%);
-            background: var(--review-card-fill);
-            content: "";
-            pointer-events: none;
-        }
-
-        .review-part-label,
-        .review-part-score-value,
-        .review-part-result {
-            position: relative;
-            z-index: 1;
-        }
-
-        .review-part-label,
-        .review-part-score-value {
-            font-size: 12px;
-            font-weight: 700;
-            line-height: 1.1;
-        }
-
-        .review-part-score-value {
-            color: #1f343f;
-            text-align: right;
-        }
-
-        .review-part-result {
-            display: flex;
-            min-width: 0;
-            grid-column: 1 / -1;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            color: var(--muted-ink);
-            font-size: 11px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            line-height: 1.15;
-            white-space: nowrap;
-        }
-
-        .review-legend {
-            display: flex;
-            width: 100%;
-            min-width: 0;
-            grid-row: 1 / span 2;
-            grid-column: 3;
-            align-self: center;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0;
-            flex-wrap: wrap;
-        }
-
-        .review-key {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 12px;
-            white-space: nowrap;
-        }
-
-        .review-key::before {
-            width: 9px;
-            height: 9px;
-            content: "";
-            border: 1px solid currentColor;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-        .review-key-correct {
-            color: var(--correct);
-        }
-
-        .review-key-partial {
-            color: #a8630f;
-        }
-
-        .review-key-incorrect {
-            color: var(--incorrect);
-        }
-
-        .review-key-unanswered {
-            color: var(--muted-ink);
-        }
-
         /* ---------------- Split reading surface ---------------- */
         .shell {
             --reading-left-pane-width: clamp(320px, 50%, calc(100% - 320px));
             --reading-divider-width: var(--splitter-width);
             position: relative;
             z-index: 1;
-            grid-row: 4;
+            grid-row: 3;
             display: grid;
             grid-template-columns:
                 minmax(280px, var(--reading-left-pane-width))
@@ -1186,7 +931,7 @@
            ================================================================ */
         .practice-nav {
             z-index: 25;
-            grid-row: 5;
+            grid-row: 4;
             position: relative;
             display: flex;
             min-width: 0;
@@ -1918,52 +1663,6 @@
             color: #d4d4d4;
         }
 
-        body.dark-mode .review-banner {
-            background: #171c22;
-            border-color: #55606b;
-            color: #f2f2f2;
-        }
-
-        body.dark-mode .review-scope,
-        body.dark-mode .review-submission,
-        body.dark-mode .review-part-result {
-            color: #c9d1d9;
-        }
-
-        body.dark-mode .review-metrics div {
-            border-color: #46515d;
-        }
-
-        body.dark-mode .review-score {
-            color: #8bd5ff;
-        }
-
-        body.dark-mode .review-part-score {
-            background: #20262d;
-            border-color: rgba(174, 187, 199, 0.62);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-        }
-
-        body.dark-mode .review-part-score-value {
-            color: #f2f2f2;
-        }
-
-        body.dark-mode .review-key-correct {
-            color: #70d68a;
-        }
-
-        body.dark-mode .review-key-partial {
-            color: #f2bd68;
-        }
-
-        body.dark-mode .review-key-incorrect {
-            color: #ff8b84;
-        }
-
-        body.dark-mode .review-key-unanswered {
-            color: #c9d1d9;
-        }
-
         /* ================================================================
            Responsive
            ================================================================ */
@@ -1994,7 +1693,7 @@
 
         @media (max-width: 980px) {
             body {
-                grid-template-rows: var(--header-height) auto auto minmax(0, 1fr) auto;
+                grid-template-rows: var(--header-height) auto minmax(0, 1fr) auto;
                 overflow: auto;
             }
 
@@ -2050,41 +1749,6 @@
                 position: fixed;
                 right: 16px;
                 bottom: calc(var(--footer-height) + 16px);
-            }
-        }
-
-        @media (max-width: 980px) {
-            .review-banner {
-                grid-template-columns: minmax(0, 1fr) auto;
-                grid-template-rows: auto auto auto;
-                align-items: start;
-                padding-inline: 16px;
-            }
-
-            .review-identity {
-                grid-row: 1;
-                grid-column: 1;
-            }
-
-            .review-legend {
-                width: auto;
-                grid-row: 1;
-                grid-column: 2;
-                gap: 4px 14px;
-                justify-content: flex-end;
-            }
-
-            .review-metrics {
-                width: 100%;
-                grid-row: 2;
-                grid-column: 1 / -1;
-                grid-template-columns: repeat(4, minmax(0, 1fr));
-            }
-
-            .review-part-scores {
-                width: 100%;
-                grid-row: 3;
-                grid-column: 1 / -1;
             }
         }
 
@@ -2151,44 +1815,6 @@
                 right: 6px;
             }
 
-            .review-banner {
-                grid-template-columns: minmax(0, 1fr);
-                grid-template-rows: repeat(4, auto);
-                gap: 8px;
-                padding: 10px 12px;
-            }
-
-            .review-identity,
-            .review-metrics,
-            .review-part-scores,
-            .review-legend {
-                width: 100%;
-                grid-column: 1;
-            }
-
-            .review-identity { grid-row: 1; }
-            .review-metrics {
-                grid-row: 2;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-            .review-part-scores {
-                grid-row: 3;
-                grid-template-columns: minmax(0, 1fr);
-            }
-            .review-legend {
-                grid-row: 4;
-                justify-content: flex-start;
-                gap: 6px 16px;
-            }
-
-            .review-metrics div:nth-child(odd) {
-                border-left: 0;
-            }
-
-            .review-submission {
-                white-space: normal;
-            }
-
             .part-nav-status {
                 display: none;
             }
@@ -2208,202 +1834,165 @@
     </style>
 </head>
 
-<body>
-    <header class="header">
-        <div class="header-left">
-            <div class="ielts-brand">IELTS</div>
-            <div class="candidate-details">
-                <div class="candidate-id" id="candidate-id" hidden></div>
-                <div id="timer" title="点击启停">60 minutes remaining</div>
+<body data-page-node-id="AS04mOy4HONAkSIVdf9fOD">
+    <header class="header" data-page-node-id="L8WIpU7D5yPGb3Em8Jxl3r">
+        <div class="header-left" data-page-node-id="BH2vb6GQtwNTHlkk5VSH50">
+            <div class="ielts-brand" data-page-node-id="KOoSNHhBKaUw033OrEAcRY">IELTS</div>
+            <div class="candidate-details" data-page-node-id="3OURNVDZWkBbxF6sYVGQ0X">
+                <div class="candidate-id" id="candidate-id" hidden data-page-node-id="xYsMYlXb8zmqsT3KSYAoYC"></div>
+                <div id="timer" title="点击启停" data-page-node-id="UsZsPMtpzMI66rj5BrFEbA">60 minutes remaining</div>
             </div>
             <!-- Retained for runtime compatibility; not shown in the paper UI. -->
-            <div style="display: none;">
-                <h1 id="exam-title">IELTS 阅读练习</h1>
-                <p id="exam-subtitle">统一阅读页</p>
+            <div style="display: none;" data-page-node-id="7ANOFyQ959OcQFnpjBvWya">
+                <h1 id="exam-title" data-page-node-id="6JXDb8sZGFT9JtwOWRBx6c">IELTS 阅读练习</h1>
+                <p id="exam-subtitle" data-page-node-id="dBedkwcVHgESLHSYbrs7UB">统一阅读页</p>
             </div>
         </div>
-        <div class="header-right">
-            <div class="header-status" id="connection-indicator" role="status" aria-label="Connected">
-                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-                    <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
-                    <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        <div class="header-right" data-page-node-id="ziS7hJdSGa82flAL16xMoh">
+            <div class="header-status" id="connection-indicator" role="status" aria-label="Connected" data-page-node-id="7GXmF0xHGJnZGrbULE1v0C">
+                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="xzTlh1EYoPBLHavFDQEmVM">
+                    <path d="M5 12.55a11 11 0 0 1 14.08 0" data-page-node-id="HutkF9xBejHbSqjRwikP3H"></path>
+                    <path d="M1.42 9a16 16 0 0 1 21.16 0" data-page-node-id="IQTskHwuyTIBwhnAM7SOX5"></path>
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" data-page-node-id="f8KgbzuU5m3BNg0iVSsYOH"></path>
+                    <line x1="12" y1="20" x2="12.01" y2="20" data-page-node-id="15cw6n9MxBoH5NoWNYPTBC"></line>
                 </svg>
-                <span class="sr-only">Connected</span>
+                <span class="sr-only" data-page-node-id="DVVY2QNpzIPMcxHyVBI6LJ">Connected</span>
             </div>
-            <div class="header-status" id="messages-indicator" aria-hidden="true">
-                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            <div class="header-status" id="messages-indicator" aria-hidden="true" data-page-node-id="aPvcsfHrl7b9z3dfbKJ3D8">
+                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="Juu9iqJ8Ql2m5WXhQd5OI5">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" data-page-node-id="63yXnSbsjySGGe1kPEk6UO"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" data-page-node-id="zYyW83D00OThdYACl0bLx1"></path>
                 </svg>
             </div>
-            <button class="header-btn reading-notes-btn" id="notes-drawer-btn" type="button" title="Notes" aria-label="Notes">
-                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16l4 4v13.5A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5z"></path>
-                    <polyline points="15 3 15 8 20 8"></polyline>
-                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                    <line x1="8" y1="16" x2="13" y2="16"></line>
+            <button class="header-btn reading-notes-btn" id="notes-drawer-btn" type="button" title="Notes" aria-label="Notes" data-page-node-id="xyCEG6VFUjGHZin7P57Cud">
+                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="qhQ4GliBh2I5TsGHhdHMdz">
+                    <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16l4 4v13.5A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5z" data-page-node-id="nH61tEkd2ljBjUXYocbsMF"></path>
+                    <polyline points="15 3 15 8 20 8" data-page-node-id="qyg8eIXX4CuJ8HY1Hyabbh"></polyline>
+                    <line x1="8" y1="12" x2="16" y2="12" data-page-node-id="Og8utgFecAGz65YuQJDPLe"></line>
+                    <line x1="8" y1="16" x2="13" y2="16" data-page-node-id="XGLDbChwDVjCqICIuzrLYT"></line>
                 </svg>
-                <span class="reading-note-count" aria-hidden="true">0</span>
+                <span class="reading-note-count" aria-hidden="true" data-page-node-id="864hn3aCPPDC72qAkyNnrD">0</span>
             </button>
-            <button class="header-btn" id="settings-btn" type="button" aria-label="Options" aria-controls="settings-panel" aria-expanded="false" aria-haspopup="dialog">
-                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
+            <button class="header-btn" id="settings-btn" type="button" aria-label="Options" aria-controls="settings-panel" aria-expanded="false" aria-haspopup="dialog" data-page-node-id="WL77duWaby1AyZ79kcOH2S">
+                <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="a7K55hpMcgMJF9tbJ8hzFd">
+                    <line x1="3" y1="12" x2="21" y2="12" data-page-node-id="NszBIzBiGovEE54d0G2vqj"></line>
+                    <line x1="3" y1="6" x2="21" y2="6" data-page-node-id="TS1P6ja7lqYRvdhLGOTTQh"></line>
+                    <line x1="3" y1="18" x2="21" y2="18" data-page-node-id="Bn2wNZVlEuMUMfK9V9bLqW"></line>
                 </svg>
             </button>
         </div>
     </header>
 
-    <div class="sub-header-bar">
-        <div id="sub-header-part">Part 1</div>
-        <div id="sub-header-instruction">Read the text and answer questions.</div>
+    <div class="sub-header-bar" data-page-node-id="6DrYCz9TNTDa5aHzrsJC6F">
+        <div id="sub-header-part" data-page-node-id="C0Arz2lTGFwU8IPvsK4baw">Part 1</div>
+        <div id="sub-header-instruction" data-page-node-id="C5ePpgKQhGhEA2KilljoC5">Read the text and answer questions.</div>
     </div>
 
-    <!-- Review banner: filled by renderResults, hidden until the exam ends. -->
-    <section id="review-banner" class="review-banner" aria-labelledby="review-title" aria-live="polite" hidden>
-        <div class="review-identity">
-            <h2 id="review-title" class="sr-only">练习结果</h2>
-            <div class="review-assignment-identity">
-                <p id="review-assignment-title" class="review-assignment-title"></p>
-                <p class="review-scope"><span class="review-meta-label">文章：</span><span id="review-passages"></span></p>
-                <p class="review-submission"><span class="review-meta-label">提交：</span><time id="review-submitted-at"></time></p>
-            </div>
-        </div>
-        <dl class="review-metrics" aria-label="本次练习概览">
-            <div class="review-metric review-metric-score">
-                <dt>得分</dt>
-                <dd id="review-score" class="review-score"></dd>
-            </div>
-            <div class="review-metric review-metric-accuracy">
-                <dt>正确率</dt>
-                <dd id="review-accuracy"></dd>
-            </div>
-            <div class="review-metric review-metric-completion">
-                <dt>已作答</dt>
-                <dd id="review-completion"></dd>
-            </div>
-            <div class="review-metric review-metric-elapsed">
-                <dt>用时</dt>
-                <dd id="review-elapsed"></dd>
-            </div>
-        </dl>
-        <div id="review-part-scores" class="review-part-scores" aria-label="各篇得分与正确率"></div>
-        <div class="review-legend" aria-label="答题状态图例">
-            <span class="review-key review-key-correct">正确</span>
-            <span class="review-key review-key-partial">部分正确</span>
-            <span class="review-key review-key-incorrect">错误</span>
-            <span class="review-key review-key-unanswered">未作答</span>
-        </div>
-    </section>
-
     <!-- Options: every display control lives here instead of the header. -->
-    <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="options-title" hidden>
-        <header class="options-header">
-            <h2 id="options-title" tabindex="-1">Options</h2>
-            <button id="options-close-btn" class="options-close-button" type="button" aria-label="Close options">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
+    <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="options-title" hidden data-page-node-id="CBIxrRkNsdfODh9Nc5IxrR">
+        <header class="options-header" data-page-node-id="MAQm7gbKPeQejRfZ6YdGr9">
+            <h2 id="options-title" tabindex="-1" data-page-node-id="unvZkGoIjRXvjvi7yb4iQq">Options</h2>
+            <button id="options-close-btn" class="options-close-button" type="button" aria-label="Close options" data-page-node-id="BwsfEkNRfEJFSpCR2PEceZ">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="n2PwfSD3X7YfAeIiRDdhGt">
+                    <line x1="18" y1="6" x2="6" y2="18" data-page-node-id="hgQdGj4Y462HRyjj2c2GOG"></line>
+                    <line x1="6" y1="6" x2="18" y2="18" data-page-node-id="ZKsUCtVG6VzNTwnnKCQmwm"></line>
                 </svg>
             </button>
         </header>
-        <main class="options-content">
-            <div class="settings-section">
-                <h3 class="settings-title">字号调整</h3>
-                <div class="settings-options">
-                    <button class="settings-option" data-size="small" type="button">小</button>
-                    <button class="settings-option active" data-size="normal" type="button">中</button>
-                    <button class="settings-option" data-size="large" type="button">大</button>
+        <main class="options-content" data-page-node-id="kgOF9mrfpfJG97yXkccqIa">
+            <div class="settings-section" data-page-node-id="8cK5vyK2CpmAB2ozStopqL">
+                <h3 class="settings-title" data-page-node-id="iZo7eerAcAUSHnOFcbf2fW">字号调整</h3>
+                <div class="settings-options" data-page-node-id="NwJHlLnii4W3ldEEIeGXxV">
+                    <button class="settings-option" data-size="small" type="button" data-page-node-id="sFo3YosOsrePYlFK2qMqLh">小</button>
+                    <button class="settings-option active" data-size="normal" type="button" data-page-node-id="caNwYsWuPCBYuXeg48RlaJ">中</button>
+                    <button class="settings-option" data-size="large" type="button" data-page-node-id="ny4kBJvlG8eJNiNF1LlTKd">大</button>
                 </div>
             </div>
-            <div class="settings-section">
-                <h3 class="settings-title">背景颜色</h3>
-                <div class="settings-options">
-                    <button class="settings-option active" data-mode="light" type="button">浅色</button>
-                    <button class="settings-option" data-mode="dark" type="button">深色</button>
+            <div class="settings-section" data-page-node-id="ivYHXALawkcLS4ON9T5Bjo">
+                <h3 class="settings-title" data-page-node-id="HEZCbcLlitwy3HyVJNmtaS">背景颜色</h3>
+                <div class="settings-options" data-page-node-id="3Fgb4UvUFJFuACPAU4xf2f">
+                    <button class="settings-option active" data-mode="light" type="button" data-page-node-id="RkqKRyHwhST3EnZXbLRXiZ">浅色</button>
+                    <button class="settings-option" data-mode="dark" type="button" data-page-node-id="BG9yIJPRgKWrYTabi4pypv">深色</button>
                 </div>
             </div>
-            <div class="settings-section">
-                <h3 class="settings-title">笔记与标注</h3>
-                <p class="settings-hint">A 答案定位 · N 笔记高亮 · H 普通高亮 · Q 题卡</p>
-                <div id="options-tools"></div>
+            <div class="settings-section" data-page-node-id="eW2sHH8BzS5hufIFd9FmHm">
+                <h3 class="settings-title" data-page-node-id="fY85KaVNlCXlcITj7Qu36f">笔记与标注</h3>
+                <p class="settings-hint" data-page-node-id="IvGytJsLllXwnPXvIjFuKp">A 答案定位 · N 笔记高亮 · H 普通高亮 · Q 题卡</p>
+                <div id="options-tools" data-page-node-id="e3uqo7kowKFqyeWQZB3WSG"></div>
             </div>
-            <div class="settings-section" id="options-clear-answers-section" hidden>
-                <h3 class="settings-title">Actions</h3>
-                <div class="settings-options">
-                    <button class="settings-option" id="options-clear-answers" type="button" hidden>Clear answers</button>
+            <div class="settings-section" id="options-clear-answers-section" hidden data-page-node-id="GFevHNGiSrVT4r2EUlOVHI">
+                <h3 class="settings-title" data-page-node-id="4y26AsyQsCBnpafNYSKerS">Actions</h3>
+                <div class="settings-options" data-page-node-id="BmFmFnbQPDy0KiCNmrF0XQ">
+                    <button class="settings-option" id="options-clear-answers" type="button" hidden data-page-node-id="sNtMht0b9YFqECAZPJinOJ">Clear answers</button>
                 </div>
             </div>
         </main>
     </div>
 
-    <div id="notes-panel">
+    <div id="notes-panel" data-page-node-id="juLHmHsFB06hbrtEiVHflM">
         <textarea></textarea>
     </div>
-    <div class="overlay"></div>
+    <div class="overlay" data-page-node-id="HUQ3yR9bmCmdvzBlFOBF7e"></div>
 
-    <div class="shell">
-        <section class="pane" id="left" tabindex="0"></section>
-        <div id="divider" role="separator" aria-orientation="vertical" aria-label="调整原文与题目宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
-        <section class="pane" id="right" tabindex="0">
-            <div id="question-groups"></div>
-            <div id="results"></div>
+    <div class="shell" data-page-node-id="GQ0Agb1ouPcNzwu9bzHzBl">
+        <section class="pane" id="left" tabindex="0" data-page-node-id="z5AhAGpn4KlGPaQtmmxdVN"></section>
+        <div id="divider" role="separator" aria-orientation="vertical" aria-label="调整原文与题目宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0" data-page-node-id="ey4A3iGHYOGo9HWhHO5j4E"></div>
+        <section class="pane" id="right" tabindex="0" data-page-node-id="BCDO7TsIXe8FrFqzIGW9i4">
+            <div id="question-groups" data-page-node-id="TBmXyNvITSNIW3EKuskKpa"></div>
+            <div id="results" data-page-node-id="xhIoGTr897sL5Rse7CcHN4"></div>
 
-            <div id="floating-passage-nav" class="floating-nav-box">
-                <button id="float-prev-btn" class="float-nav-btn" type="button" title="上一篇" aria-label="上一篇">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12 19 5 12 12 5"></polyline>
+            <div id="floating-passage-nav" class="floating-nav-box" data-page-node-id="6hWO8a6ErYcNR55mZKY2by">
+                <button id="float-prev-btn" class="float-nav-btn" type="button" title="上一篇" aria-label="上一篇" data-page-node-id="JSDLx0YvTEUu9CVNRFHCAF">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="vOhZ7wnk2fSvtmINI2uhzD">
+                        <line x1="19" y1="12" x2="5" y2="12" data-page-node-id="kp31FH0IpgG5MFqWsludeo"></line>
+                        <polyline points="12 19 5 12 12 5" data-page-node-id="cGRvvxTbULQdTWPjm3QBHn"></polyline>
                     </svg>
                 </button>
-                <button id="float-next-btn" class="float-nav-btn" type="button" title="下一篇" aria-label="下一篇">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                        <polyline points="12 5 19 12 12 19"></polyline>
+                <button id="float-next-btn" class="float-nav-btn" type="button" title="下一篇" aria-label="下一篇" data-page-node-id="Z31AI0oCehTbKTSLW4A77w">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="eHHHA1L2VnC6ICL3lUO61D">
+                        <line x1="5" y1="12" x2="19" y2="12" data-page-node-id="VGX6EtRNEq9ScYSpnIFXdS"></line>
+                        <polyline points="12 5 19 12 12 19" data-page-node-id="XN0pyvlzGL1MMo5MkFIZCi"></polyline>
                     </svg>
                 </button>
             </div>
         </section>
     </div>
 
-    <div id="selbar">
-        <button type="button" id="btnNote" data-role="note">Note</button>
-        <button type="button" id="btnUH" data-role="remove-highlight">Remove</button>
-        <button type="button" id="btnHL" data-role="highlight">Highlight</button>
+    <div id="selbar" data-page-node-id="MvCwDkaaYMVpjBJcoL8mcP">
+        <button type="button" id="btnNote" data-role="note" data-page-node-id="7S2AYakj5FkBCQecKiy6ux">Note</button>
+        <button type="button" id="btnUH" data-role="remove-highlight" data-page-node-id="8MRsMt19Ft7gyf3gkZ5RAN">Remove</button>
+        <button type="button" id="btnHL" data-role="highlight" data-page-node-id="Oo2CXgFzvQfE2JHmRokhwx">Highlight</button>
     </div>
 
-    <div class="practice-nav">
-        <div class="part-nav-section" id="part-section-1">
-            <div class="part-nav-info">
-                <div class="part-nav-name">Part 1</div>
-                <div class="part-nav-status" id="part1-status-text">0 of 13</div>
+    <div class="practice-nav" data-page-node-id="O6DuXkwKkQhAsblmLssgjd">
+        <div class="part-nav-section" id="part-section-1" data-page-node-id="AUwxj7y7xFBJsKBsE1Yq1Z">
+            <div class="part-nav-info" data-page-node-id="p5fpStQcNCsWy0cnVqoDmk">
+                <div class="part-nav-name" data-page-node-id="0L2FrHCAv79Q6dSG5yqwGn">Part 1</div>
+                <div class="part-nav-status" id="part1-status-text" data-page-node-id="Fhuv0n6f7IVTugkTRDN1Gl">0 of 13</div>
             </div>
-            <div class="part-nav-questions" id="part1-questions"></div>
+            <div class="part-nav-questions" id="part1-questions" data-page-node-id="PpGRf7QTiszCF7wdMNA6nv"></div>
         </div>
-        <div class="part-nav-section" id="part-section-2">
-            <div class="part-nav-info">
-                <div class="part-nav-name">Part 2</div>
-                <div class="part-nav-status" id="part2-status-text">0 of 13</div>
+        <div class="part-nav-section" id="part-section-2" data-page-node-id="xPrqHgJ0KU6DWp4OGsDa5v">
+            <div class="part-nav-info" data-page-node-id="3hpdJRtuIkZcVo7LKKjB5j">
+                <div class="part-nav-name" data-page-node-id="pbYacZ2WibmEcVl9uYpxCm">Part 2</div>
+                <div class="part-nav-status" id="part2-status-text" data-page-node-id="MJ0DrQ3AkmJOsGXPoYBhPq">0 of 13</div>
             </div>
-            <div class="part-nav-questions" id="part2-questions"></div>
+            <div class="part-nav-questions" id="part2-questions" data-page-node-id="fYL0YCChQbaeOFLx2spYqG"></div>
         </div>
-        <div class="part-nav-section" id="part-section-3">
-            <div class="part-nav-info">
-                <div class="part-nav-name">Part 3</div>
-                <div class="part-nav-status" id="part3-status-text">0 of 14</div>
+        <div class="part-nav-section" id="part-section-3" data-page-node-id="WeWs3MEBps2eJbnnrz0vYA">
+            <div class="part-nav-info" data-page-node-id="b18AxDyOSkXVGNE8wpjKmy">
+                <div class="part-nav-name" data-page-node-id="A5F8IJdeZ4FCf3Vp84ddPm">Part 3</div>
+                <div class="part-nav-status" id="part3-status-text" data-page-node-id="OaE0rak32zOJYEbjGn6AEM">0 of 14</div>
             </div>
-            <div class="part-nav-questions" id="part3-questions"></div>
+            <div class="part-nav-questions" id="part3-questions" data-page-node-id="YNC7byliCbukPo6BhDXF3s"></div>
         </div>
 
-        <div class="nav-controls-right">
-            <button id="exit-btn" type="button" style="display: none;">Exit</button>
-            <button id="reset-btn" type="button" style="display: none;">Reset</button>
-            <button id="submit-btn" type="button" title="Submit" aria-label="Submit">
-                <svg class="submit-btn-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12"></polyline>
+        <div class="nav-controls-right" data-page-node-id="lwJhcg9La3ZcZupz9WPMLm">
+            <button id="exit-btn" type="button" style="display: none;" data-page-node-id="PJaxGcPU9xTcpdsOXajnWj">Exit</button>
+            <button id="reset-btn" type="button" style="display: none;" data-page-node-id="AorsSPyHsfbTnlBXAUOfl2">Reset</button>
+            <button id="submit-btn" type="button" title="Submit" aria-label="Submit" data-page-node-id="oTyYG2rgJhlamWAW65mNK4">
+                <svg class="submit-btn-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-page-node-id="6nlBZt98Fa484016JA1qN0">
+                    <polyline points="20 6 9 17 4 12" data-page-node-id="AT55rOn48vFBYvtFk4ulE7"></polyline>
                 </svg>
             </button>
         </div>

@@ -3514,6 +3514,66 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
     "sourceKind": "generated-reading"
+  },
+  "p2-medium-245": {
+    "examId": "p2-medium-245",
+    "dataKey": "p2-medium-245",
+    "script": "./p2-medium-245.js",
+    "title": "Understanding climate change 理解气候变化",
+    "category": "P2",
+    "frequency": "中频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-246": {
+    "examId": "p1-medium-246",
+    "dataKey": "p1-medium-246",
+    "script": "./p1-medium-246.js",
+    "title": "Socotra Island 索科特拉岛",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 2.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-247": {
+    "examId": "p1-medium-247",
+    "dataKey": "p1-medium-247",
+    "script": "./p1-medium-247.js",
+    "title": "Building a castle 建造城堡",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 3,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-248": {
+    "examId": "p2-medium-248",
+    "dataKey": "p2-medium-248",
+    "script": "./p2-medium-248.js",
+    "title": "Introduction to a book about the assessment of carbon footprints 碳足迹",
+    "category": "P2",
+    "frequency": "中频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
   }
 
   };

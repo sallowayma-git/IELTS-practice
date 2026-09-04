@@ -179,7 +179,6 @@
         divider: null,
         groups: null,
         results: null,
-        reviewBanner: null,
         nav: null,
         submitBtn: null,
         resetBtn: null,
@@ -1225,7 +1224,6 @@
         dom.divider = document.querySelector('.shell > #divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
-        dom.reviewBanner = document.getElementById('review-banner');
         dom.nav = document.getElementById('question-nav');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
@@ -3138,7 +3136,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         updateRedesignedSubHeader();
     }
@@ -5668,266 +5665,7 @@
         return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
-    function hideReviewBanner() {
-        if (!dom.reviewBanner) return;
-        dom.reviewBanner.hidden = true;
-        const partScores = document.getElementById('review-part-scores');
-        if (partScores) partScores.innerHTML = '';
-    }
-
-    function formatReviewElapsed(totalSeconds) {
-        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-        const hours = Math.floor(safeSeconds / 3600);
-        const minutes = Math.floor((safeSeconds % 3600) / 60);
-        const seconds = safeSeconds % 60;
-        if (hours > 0) {
-            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-        }
-        return `${minutes}:${String(seconds).padStart(2, '0')}`;
-    }
-
-    // The reference tints each card by assignment difficulty, which this project
-    // has no equivalent for -- its manifest carries a frequency band (高频/低频),
-    // not a difficulty. Tinting by the part's own accuracy keeps the reference's
-    // colour ramp without claiming a difficulty we do not know.
-    function resolveReviewAccuracyTier(correct, total) {
-        if (!Number.isFinite(total) || total <= 0) return '';
-        const ratio = correct / total;
-        if (ratio >= 0.75) return 'easy';
-        if (ratio >= 0.5) return 'standard';
-        return 'hard';
-    }
-
-    function readReviewAnswer(results, questionId) {
-        const normalizedId = normalizeQuestionId(questionId) || questionId;
-        const answers = results?.answers && typeof results.answers === 'object' ? results.answers : {};
-        if (Object.prototype.hasOwnProperty.call(answers, questionId)) return answers[questionId];
-        if (Object.prototype.hasOwnProperty.call(answers, normalizedId)) return answers[normalizedId];
-        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
-            ? results.answerComparison
-            : {};
-        return comparison[questionId]?.userAnswer ?? comparison[normalizedId]?.userAnswer ?? '';
-    }
-
-    // Count completion from the original answer map and question-group
-    // semantics. Split multi-select comparison rows intentionally repeat the
-    // same selected-token array, so counting non-empty comparison rows inflates
-    // one selected option into a fully answered group.
-    function countAnsweredWeight(results, dataset = state.dataset) {
-        const comparison = results?.answerComparison && typeof results.answerComparison === 'object'
-            ? results.answerComparison
-            : {};
-        const answerKey = dataset?.answerKey || results?.correctAnswers || {};
-        const questionOrder = Array.isArray(dataset?.questionOrder) && dataset.questionOrder.length
-            ? dataset.questionOrder
-            : Array.from(new Set([...Object.keys(comparison), ...Object.keys(results?.answers || {})]));
-        const groupLookup = buildQuestionGroupLookup(dataset);
-        const visitedGroups = new Set();
-        let answered = 0;
-
-        questionOrder.forEach((rawQuestionId) => {
-            const questionId = normalizeQuestionId(rawQuestionId) || rawQuestionId;
-            const group = groupLookup.get(questionId) || null;
-            const isMultiChoice = Boolean(
-                group
-                && (group.kind === 'multi_choice' || group.kind === 'multiple_choice')
-                && Array.isArray(group.questionIds)
-                && group.questionIds.length
-            );
-            if (isMultiChoice) {
-                if (!isSharedMultiChoiceGroup(group) && group.questionIds.length > 1) {
-                    const entry = comparison[rawQuestionId] || comparison[questionId] || {};
-                    const value = readReviewAnswer(results, rawQuestionId);
-                    if (splitAnswerTokens(value).length > 0) {
-                        answered += Math.max(1, Number(entry.weight) || 1);
-                    }
-                    return;
-                }
-                const groupKey = String(group.groupId || group.questionIds.join('|'));
-                if (visitedGroups.has(groupKey)) return;
-                visitedGroups.add(groupKey);
-                const questionIds = group.questionIds
-                    .map((entry) => normalizeQuestionId(entry) || entry)
-                    .filter(Boolean);
-                const groupAnswers = {};
-                questionIds.forEach((id) => {
-                    groupAnswers[id] = readReviewAnswer(results, id);
-                });
-                const selectedTokens = collectGroupChoiceTokens(groupAnswers, questionIds);
-                if (questionIds.length > 1) {
-                    const expectedCount = questionIds
-                        .map((id) => canonicalizeAnswerToken(answerKey[id]))
-                        .filter(Boolean)
-                        .length;
-                    const capacity = expectedCount || questionIds.length;
-                    answered += Math.min(selectedTokens.length, capacity);
-                    return;
-                }
-                const onlyId = questionIds[0];
-                const entry = comparison[onlyId] || comparison[rawQuestionId] || {};
-                const expectedCount = normalizeChoiceTokenList(answerKey[onlyId]).length;
-                const capacity = Math.max(1, Number(entry.weight) || expectedCount || 1);
-                answered += Math.min(selectedTokens.length, capacity);
-                return;
-            }
-
-            const entry = comparison[rawQuestionId] || comparison[questionId] || {};
-            const value = readReviewAnswer(results, rawQuestionId);
-            if (splitAnswerTokens(value).length > 0) {
-                answered += Math.max(1, Number(entry.weight) || 1);
-            }
-        });
-
-        const total = Number(results?.scoreInfo?.total ?? results?.scoreInfo?.totalQuestions);
-        return Number.isFinite(total) && total >= 0 ? Math.min(answered, total) : answered;
-    }
-
-    function resolveReadingPartIndex(dataset = state.dataset) {
-        const candidates = [
-            dataset?.meta?.category,
-            dataset?.meta?.part,
-            dataset?.category,
-            state.examId,
-            state.dataKey,
-            state.suite?.activeExamId
-        ];
-        for (const candidate of candidates) {
-            const value = String(candidate || '').trim();
-            if (!value) continue;
-            const match = value.match(/(?:^|[^a-z0-9])p(?:art)?[\s_-]*([123])(?:[^0-9]|$)/i);
-            if (match) {
-                return Number(match[1]) - 1;
-            }
-        }
-        return null;
-    }
-
-    // Per-passage cards. Only the inline suite has more than one passage, so a
-    // standalone run renders a single card describing the current exam.
-    function collectReviewPartRows(results, reviewSummary = {}) {
-        const rows = [];
-        const sequence = Array.isArray(state.suite?.sequence) ? state.suite.sequence : [];
-        const summaryEntries = Array.isArray(reviewSummary.suiteEntries) ? reviewSummary.suiteEntries : [];
-        if (state.suite?.inline && sequence.length) {
-            sequence.forEach((entry, index) => {
-                const slot = getSuiteSlot(entry.examId);
-                const info = slot?.lastResults?.scoreInfo;
-                if (!info) return;
-                const summaryEntry = summaryEntries.find((candidate) => (
-                    candidate && String(candidate.examId || '') === String(entry.examId || '')
-                ));
-                const total = Number(info.total ?? info.totalQuestions) || 0;
-                rows.push({
-                    label: `Part ${index + 1}`,
-                    title: slot?.title || entry.title || entry.examId,
-                    category: slot?.category || entry.category || slot?.dataset?.meta?.category || '',
-                    correct: Number(info.correct) || 0,
-                    total,
-                    answered: countAnsweredWeight(slot?.lastResults, slot?.dataset),
-                    duration: Number.isFinite(Number(summaryEntry?.duration))
-                        ? Math.max(0, Math.round(Number(summaryEntry.duration)))
-                        : Math.max(0, Math.round(readSuiteSlotDurationMs(slot) / 1000))
-                });
-            });
-            return rows;
-        }
-        const info = results?.scoreInfo || {};
-        const total = Number(info.total ?? info.totalQuestions) || 0;
-        if (!total) return rows;
-        const datasetPartIndex = resolveReadingPartIndex();
-        const summaryPartIndex = Number(reviewSummary.partIndex);
-        const partIndex = datasetPartIndex !== null
-            ? datasetPartIndex
-            : (Number.isInteger(summaryPartIndex) && summaryPartIndex >= 0
-                ? summaryPartIndex
-                : (state.reviewMode && Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0));
-        const summaryDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
-        rows.push({
-            label: `Part ${partIndex + 1}`,
-            title: reviewSummary.title || state.dataset?.meta?.title || dom.title?.textContent || '',
-            category: state.dataset?.meta?.category || '',
-            correct: Number(info.correct) || 0,
-            total,
-            answered: countAnsweredWeight(results, state.dataset),
-            duration: summaryDuration === null ? getPageElapsedSeconds() : summaryDuration
-        });
-        return rows;
-    }
-
-    function renderReviewBanner(results, reviewSummary = {}) {
-        if (!dom.reviewBanner || !results) return;
-        const rows = collectReviewPartRows(results, reviewSummary);
-
-        // In the inline suite, `results` describes only the passage on screen,
-        // so the headline is summed from the per-part rows instead -- otherwise
-        // the metrics would contradict the cards directly beneath them.
-        const aggregate = rows.length > 1;
-        const info = results.scoreInfo || {};
-        const total = aggregate
-            ? rows.reduce((sum, row) => sum + row.total, 0)
-            : (Number(info.total ?? info.totalQuestions) || 0);
-        const correct = aggregate
-            ? rows.reduce((sum, row) => sum + row.correct, 0)
-            : (Number(info.correct) || 0);
-        const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
-        const answered = aggregate
-            ? rows.reduce((sum, row) => sum + row.answered, 0)
-            : countAnsweredWeight(results, state.dataset);
-        const answeredTotal = total;
-
-        const setText = (id, value) => {
-            const node = document.getElementById(id);
-            if (node) node.textContent = value;
-        };
-
-        setText('review-assignment-title', reviewSummary.title || dom.title?.textContent || state.dataset?.meta?.title || '练习结果');
-        setText('review-passages', rows.length
-            ? rows.map((row) => row.title).filter(Boolean).join(' · ')
-            : (state.dataset?.meta?.title || '—'));
-        const submittedAt = document.getElementById('review-submitted-at');
-        if (submittedAt) {
-            const submittedAtMs = Number(reviewSummary.submittedAtMs);
-            const submittedAtDate = new Date(submittedAtMs);
-            const timestamp = Number.isFinite(submittedAtMs)
-                && submittedAtMs > 0
-                && Number.isFinite(submittedAtDate.getTime())
-                ? submittedAtMs
-                : Date.now();
-            const submittedDate = new Date(timestamp);
-            submittedAt.textContent = `${submittedDate.toLocaleDateString()} ${submittedDate.toLocaleTimeString()}`;
-            submittedAt.setAttribute('datetime', submittedDate.toISOString());
-        }
-        setText('review-score', total > 0 ? `${correct} / ${total}` : '—');
-        setText('review-accuracy', total > 0 ? `${percentage}%` : '—');
-        setText('review-completion', answeredTotal ? `${answered} / ${answeredTotal}` : '—');
-        const recordedDuration = parseOptionalNonNegativeInteger(reviewSummary.durationSeconds);
-        setText('review-elapsed', formatReviewElapsed(
-            recordedDuration === null ? getPageElapsedSeconds() : recordedDuration
-        ));
-
-        const partScores = document.getElementById('review-part-scores');
-        if (partScores) {
-            partScores.innerHTML = rows.map((row) => {
-                const progress = row.total > 0 ? Math.round((row.correct / row.total) * 100) : 0;
-                const tier = resolveReviewAccuracyTier(row.correct, row.total);
-                const difficultyAttr = tier ? ` data-difficulty="${tier}"` : '';
-                return `
-                    <div class="review-part-score"${difficultyAttr} style="--review-progress:${progress}%">
-                        <span class="review-part-label">${escapeHtml(row.label)}</span>
-                        <span class="review-part-score-value">${row.correct} / ${row.total}</span>
-                        <span class="review-part-result">
-                            <span class="review-part-accuracy">${progress}%</span>
-                            <span class="review-part-time">${escapeHtml(formatReviewElapsed(row.duration))}</span>
-                        </span>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        dom.reviewBanner.hidden = false;
-    }
-
-    function renderResults(results, reviewSummary = {}) {
+    function renderResults(results) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
@@ -5971,7 +5709,6 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
-        renderReviewBanner(results, reviewSummary);
         applyResultsToQuestionArea(results);
     }
 
@@ -6624,7 +6361,7 @@
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         if (presentation && presentation.results) {
             state.lastResults = presentation.results;
-            renderResults(presentation.results, presentation.reviewSummary || {});
+            renderResults(presentation.results);
             await renderExplanations();
             if (!retainsSubmissionOwnership(ownership)) {
                 return false;
@@ -6686,9 +6423,6 @@
                 openNoteEditor,
                 closeNoteEditor,
                 applyReplayRecord,
-                countAnsweredWeight,
-                collectReviewPartRows,
-                renderReviewBanner,
                 setTimerRunning,
                 checkpointActiveSuiteDuration,
                 getSelectionHighlightTestState() {
@@ -7014,7 +6748,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
@@ -7086,88 +6819,6 @@
         }
     }
 
-    function resolveReviewTimestampMs(...values) {
-        for (const value of values) {
-            if (value === null || value === undefined || value === '') continue;
-            if (typeof value === 'number' || /^[+-]?\d+(?:\.\d+)?$/.test(String(value).trim())) {
-                const numeric = Number(value);
-                if (Number.isFinite(numeric) && numeric > 0) {
-                    const timestamp = numeric < 100000000000
-                        ? Math.round(numeric * 1000)
-                        : Math.round(numeric);
-                    if (Number.isFinite(new Date(timestamp).getTime())) {
-                        return timestamp;
-                    }
-                }
-                continue;
-            }
-            const parsed = Date.parse(String(value));
-            if (Number.isFinite(parsed) && parsed > 0 && Number.isFinite(new Date(parsed).getTime())) {
-                return parsed;
-            }
-        }
-        return null;
-    }
-
-    function resolveReplayReviewSummary(data, entry, replayData) {
-        const durationCandidates = [
-            entry?.duration,
-            replayData?.duration,
-            entry?.durationSeconds,
-            replayData?.durationSeconds,
-            entry?.duration_seconds,
-            replayData?.duration_seconds,
-            entry?.elapsedSeconds,
-            replayData?.elapsedSeconds,
-            entry?.elapsed_seconds,
-            replayData?.elapsed_seconds,
-            entry?.timeSpent,
-            replayData?.timeSpent,
-            entry?.time_spent,
-            replayData?.time_spent,
-            entry?.scoreInfo?.duration,
-            entry?.scoreInfo?.durationSeconds,
-            entry?.scoreInfo?.duration_seconds,
-            entry?.scoreInfo?.elapsedSeconds,
-            entry?.scoreInfo?.elapsed_seconds,
-            entry?.scoreInfo?.timeSpent,
-            entry?.scoreInfo?.time_spent,
-            replayData?.scoreInfo?.duration,
-            replayData?.scoreInfo?.durationSeconds,
-            replayData?.scoreInfo?.duration_seconds,
-            replayData?.scoreInfo?.elapsedSeconds,
-            replayData?.scoreInfo?.elapsed_seconds,
-            replayData?.scoreInfo?.timeSpent,
-            replayData?.scoreInfo?.time_spent
-        ];
-        let durationSeconds = null;
-        for (const candidate of durationCandidates) {
-            const parsed = parseOptionalNonNegativeInteger(candidate);
-            if (parsed !== null) {
-                durationSeconds = parsed;
-                break;
-            }
-        }
-        return {
-            submittedAtMs: resolveReviewTimestampMs(
-                entry?.endTime,
-                replayData?.endTime,
-                entry?.completedAt,
-                replayData?.completedAt,
-                entry?.timestamp,
-                replayData?.timestamp,
-                entry?.rawData?.timestamp,
-                entry?.date,
-                replayData?.date
-            ),
-            durationSeconds,
-            partIndex: resolveReadingPartIndex() ?? (Number.isInteger(data?.reviewEntryIndex)
-                ? data.reviewEntryIndex
-                : state.reviewEntryIndex),
-            title: entry?.title || entry?.metadata?.examTitle || state.dataset?.meta?.title || ''
-        };
-    }
-
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
         const replayData = entry.realData && typeof entry.realData === 'object' ? entry.realData : {};
@@ -7211,7 +6862,7 @@
             global.scrollTo(0, Number(entry.scrollY));
         }
         state.lastResults = replayResults;
-        renderResults(replayResults, resolveReplayReviewSummary(data, entry, replayData));
+        renderResults(replayResults);
         await renderExplanations();
         applyHighlights(replayHighlights);
         refreshNoteHighlightAttributes();
@@ -8097,18 +7748,6 @@
         }
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
-        const reviewSummary = {
-            submittedAtMs: timing.endTimeMs,
-            durationSeconds: timing.duration,
-            partIndex: resolveReadingPartIndex() ?? (state.suite?.inline ? 0 : state.reviewEntryIndex),
-            title: state.dataset?.meta?.title || '',
-            suiteEntries: Array.isArray(submissionSnapshot.suiteEntries)
-                ? submissionSnapshot.suiteEntries.map((entry) => ({
-                    examId: entry.examId,
-                    duration: entry.duration
-                }))
-                : []
-        };
         beginSubmission(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
@@ -8143,8 +7782,7 @@
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
         } : {}, postedResults), {
             results,
-            highlights: highlightSnapshot,
-            reviewSummary
+            highlights: highlightSnapshot
         });
     }
 
@@ -8169,7 +7807,6 @@
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
-            hideReviewBanner();
         }
         clearExplanations();
         setExitButtonVisible(false);
