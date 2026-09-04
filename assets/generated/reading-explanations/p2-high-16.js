@@ -89,19 +89,19 @@
           {
             "questionNumber": 20,
             "questionId": "q7",
-            "text": "（1）题目 20：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：C（Society could not function effectively without legal experts.）\n定位：正文 Paragraph C\n原文：Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：没有这些知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，并且同样被普遍需要。\n\n解析：作者先说缺少 IT 知识会使社会和商业生活停摆，再断言法律理解同样关键；由这个明确类比可推出社会没有法律专家也无法有效运作，所以 D 正确。"
+            "text": "（1）题目 20：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：C（Knowledge of the law is as important as having computer skills.）\n定位：正文 Paragraph C\n原文：There is now someone with IT skills or an IT help desk in every UK school, every company, every hospital, every local and central government office. Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：如今，英国每所学校、每家公司、每家医院及每个地方和中央政府办公室都有具备 IT 技能的人或 IT 服务台。没有这些知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，也同样被普遍需要。\n\n解析：题干的 computer skills 对应 IT skills，as important as 对应 just as vital；原文直接把法律理解与 IT 技能并列为同等重要，因此 C 正确。"
           },
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（2）题目 21：（题干见题目区）\n答案：D"
+            "text": "（2）题目 21：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：D（Society could not function effectively without legal experts.）\n定位：正文 Paragraph C\n原文：Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：没有 IT 专业知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，也同样被普遍需要。\n\n解析：作者先说明缺少 IT 专业知识会使商业和社会生活迅速停摆，随即指出法律理解同样重要且普遍需要；这一类比表明社会没有法律专家也无法有效运作，因此 D 正确。"
           }
         ],
         "questionRange": {
           "start": 20,
           "end": 21
         },
-        "text": "（1）题目 20：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：C（Society could not function effectively without legal experts.）\n定位：正文 Paragraph C\n原文：Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：没有这些知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，并且同样被普遍需要。\n\n解析：作者先说缺少 IT 知识会使社会和商业生活停摆，再断言法律理解同样关键；由这个明确类比可推出社会没有法律专家也无法有效运作，所以 D 正确。\n\n（2）题目 21：（题干见题目区）\n答案：D"
+        "text": "（1）题目 20：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：C（Knowledge of the law is as important as having computer skills.）\n定位：正文 Paragraph C\n原文：There is now someone with IT skills or an IT help desk in every UK school, every company, every hospital, every local and central government office. Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：如今，英国每所学校、每家公司、每家医院及每个地方和中央政府办公室都有具备 IT 技能的人或 IT 服务台。没有这些知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，也同样被普遍需要。\n\n解析：题干的 computer skills 对应 IT skills，as important as 对应 just as vital；原文直接把法律理解与 IT 技能并列为同等重要，因此 C 正确。\n\n（2）题目 21：（题干见题目区）\n题目翻译：作者对当今世界中的法律技能提出了以下哪两项看法？\n答案：D（Society could not function effectively without legal experts.）\n定位：正文 Paragraph C\n原文：Without their knowledge, many parts of commercial and social life today would seize up in minutes. But legal understanding is just as vital and as universally needed.\n译文：没有 IT 专业知识，现代商业和社会生活的许多部分会在几分钟内停摆；而法律理解同样关键，也同样被普遍需要。\n\n解析：作者先说明缺少 IT 专业知识会使商业和社会生活迅速停摆，随即指出法律理解同样重要且普遍需要；这一类比表明社会没有法律专家也无法有效运作，因此 D 正确。"
       },
       {
         "sectionTitle": "3. Summary Completion（Questions 22–26）",
