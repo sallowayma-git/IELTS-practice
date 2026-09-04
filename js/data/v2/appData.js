@@ -386,7 +386,7 @@
     }
 
     const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
-    const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
+    const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations', 'reviewState']);
 
     function withoutRawData(value) {
         if (Array.isArray(value)) return value.map(withoutRawData);
@@ -472,6 +472,12 @@
         throw new Error('AppData v2 requires PracticeRecordSource (js/data/practiceRecordSource.js)');
     }
     const isRealPracticeRecord = practiceRecordSource.isRealPracticeRecord;
+    const practiceReviewScheduler = global.PracticeReviewScheduler;
+    if (!practiceReviewScheduler
+        || typeof practiceReviewScheduler.createInitialState !== 'function'
+        || typeof practiceReviewScheduler.scheduleOutcome !== 'function') {
+        throw new Error('AppData v2 requires PracticeReviewScheduler (js/core/practiceReviewScheduler.js)');
+    }
 
     function computeStats(records) {
         const stats = defaultStats();
@@ -505,6 +511,73 @@
         if (hints.includes('listen') || hints.includes('audio') || hints.includes('hearing')) return 'listening';
         if (hints.includes('read')) return 'reading';
         return null;
+    }
+
+    function reviewReferenceTime(summary) {
+        return validIso(summary.completedAt || summary.timestamp || summary.date) || nowIso();
+    }
+
+    function prepareReviewLayersForUpsert(layers, existing) {
+        const next = clone(layers);
+        const persistedAnnotations = asObject(existing && existing.annotations && existing.annotations.data);
+        const persistedState = persistedAnnotations.reviewState;
+        if (persistedState) {
+            next.annotations.reviewState = practiceReviewScheduler.normalizeState(persistedState);
+            return next;
+        }
+        if (next.annotations.reviewState) {
+            next.annotations.reviewState = practiceReviewScheduler.normalizeState(next.annotations.reviewState);
+            return next;
+        }
+        const summary = next.summary;
+        const isNew = !(existing && existing.summary);
+        const wrongCount = Math.max(0, Number(summary.totalQuestions) - Number(summary.correctAnswers));
+        if (isNew && wrongCount > 0 && practiceType(summary) === 'reading' && isRealPracticeRecord(summary)) {
+            next.annotations.reviewState = practiceReviewScheduler.createInitialState(reviewReferenceTime(summary));
+        }
+        return next;
+    }
+
+    function reviewQueueComparator(left, right) {
+        if (left.isDue !== right.isDue) return left.isDue ? -1 : 1;
+        const dueOrder = String(left.reviewState.nextReview).localeCompare(String(right.reviewState.nextReview));
+        if (dueOrder) return dueOrder;
+        if (left.wrongCount !== right.wrongCount) return right.wrongCount - left.wrongCount;
+        const dateOrder = String(left.date || left.completedAt || left.timestamp || '')
+            .localeCompare(String(right.date || right.completedAt || right.timestamp || ''));
+        if (dateOrder) return dateOrder;
+        return String(left.id || '').localeCompare(String(right.id || ''));
+    }
+
+    function buildReviewQueueStats(records, now) {
+        const start = new Date(now); start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(end.getDate() + 1);
+        const buckets = Array.from({ length: 7 }, (_unused, index) => {
+            const date = new Date(start); date.setDate(date.getDate() + index);
+            return { date: date.toISOString(), count: 0 };
+        });
+        let dueToday = 0;
+        let overdue = 0;
+        let completedToday = 0;
+        for (const record of records) {
+            const due = new Date(record.reviewState.nextReview);
+            if (due < start) overdue += 1;
+            else if (due < end) dueToday += 1;
+            const reviewed = record.reviewState.lastReviewed ? new Date(record.reviewState.lastReviewed) : null;
+            if (reviewed && reviewed >= start && reviewed < end) completedToday += 1;
+            for (let index = 0; index < buckets.length; index += 1) {
+                const bucketStart = new Date(start); bucketStart.setDate(bucketStart.getDate() + index);
+                const bucketEnd = new Date(bucketStart); bucketEnd.setDate(bucketEnd.getDate() + 1);
+                if (due >= bucketStart && due < bucketEnd) { buckets[index].count += 1; break; }
+            }
+        }
+        return {
+            dueToday,
+            overdue,
+            completedToday,
+            futureSevenDayTotal: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+            buckets
+        };
     }
 
     function accuracyRatio(record) {
@@ -814,8 +887,11 @@
             const recordInput = await practiceRecordWithLibraryProvenance(source, command);
             if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
             const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
-            const receipt = await retryMergeConflict(command || {}, async () => kernel.mutateEntities(
-                practiceUpserts(recordId, layers, await practiceLayersForUpsert(recordId)), mutation));
+            const receipt = await retryMergeConflict(command || {}, async () => {
+                const existing = await practiceLayersForUpsert(recordId);
+                const reviewAwareLayers = prepareReviewLayersForUpsert(layers, existing);
+                return kernel.mutateEntities(practiceUpserts(recordId, reviewAwareLayers, existing), mutation);
+            });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
         async finalizeSuite(command) {
@@ -832,9 +908,94 @@
             const receipt = await retryMergeConflict(command, async () => {
                 const existing = await practiceLayersForUpsert(recordId);
                 const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
+                const reviewAwareLayers = prepareReviewLayersForUpsert(layers, existing);
+                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, reviewAwareLayers, existing)), mutation);
             });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+        },
+        async listReviewQueue(options = {}) {
+            await ready;
+            const nowIsoValue = validIso(options.now) || nowIso();
+            const now = new Date(nowIsoValue);
+            const snapshot = await kernel.readPracticeSnapshot(null, {
+                stores: ['practiceSummaries', 'practiceAnnotations']
+            });
+            const annotationsById = new Map(asArray(snapshot.practiceAnnotations)
+                .map((annotations) => [practiceLayerId(annotations), annotations]));
+            const records = [];
+            for (const summary of asArray(snapshot.practiceSummaries)) {
+                if (!isRealPracticeRecord(summary) || practiceType(summary) !== 'reading') continue;
+                const annotations = asObject(annotationsById.get(practiceLayerId(summary)));
+                if (!annotations.reviewState) continue;
+                let reviewState;
+                try { reviewState = practiceReviewScheduler.normalizeState(annotations.reviewState); }
+                catch (_) { continue; }
+                const wrongCount = Math.max(0, Number(summary.totalQuestions) - Number(summary.correctAnswers));
+                records.push(Object.assign({}, clone(summary), {
+                    reviewState,
+                    review: clone(reviewState),
+                    wrongCount,
+                    isDue: new Date(reviewState.nextReview) <= now
+                }));
+            }
+            records.sort(reviewQueueComparator);
+            return {
+                generatedAt: nowIsoValue,
+                records,
+                stats: buildReviewQueueStats(records, now)
+            };
+        },
+        async getReviewState(recordId) {
+            await ready;
+            const id = String(recordId || '').trim();
+            if (!id) throw new AppDataError('VALIDATION', 'practice record id is required');
+            const current = await practiceLayers(id, false);
+            if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${id}`);
+            const state = asObject(current.annotations).reviewState;
+            if (!state) return null;
+            try { return practiceReviewScheduler.normalizeState(state); }
+            catch (error) { throw new AppDataError('VALIDATION', `Invalid review state for ${id}`, { cause: error && error.message }); }
+        },
+        async recordReviewOutcome(command) {
+            await ready; assertObject(command, 'recordReviewOutcome command is required');
+            const recordId = String(command.recordId || '').trim();
+            const reviewAttemptId = String(command.reviewAttemptId || '').trim();
+            const quality = String(command.quality || '').toLowerCase();
+            const reviewedAt = validIso(command.reviewedAt || nowIso());
+            if (!recordId) throw new AppDataError('VALIDATION', 'recordId is required');
+            if (!reviewAttemptId) throw new AppDataError('VALIDATION', 'reviewAttemptId is required');
+            if (!practiceReviewScheduler.VALID_QUALITIES.includes(quality)) throw new AppDataError('VALIDATION', 'quality must be hard, good, or easy');
+            if (!reviewedAt) throw new AppDataError('VALIDATION', 'reviewedAt must be a valid date');
+            const semantic = { recordId, reviewAttemptId, quality, reviewedAt };
+            const mutation = mutationOptions(command, 'practice-review-outcome', semantic);
+            const receipt = await retryMergeConflict(command, async () => {
+                const current = await practiceLayers(recordId, true);
+                if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
+                if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) {
+                    throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
+                }
+                const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
+                if (!annotations.reviewState) throw new AppDataError('VALIDATION', `Practice record is not scheduled for review: ${recordId}`);
+                const normalized = practiceReviewScheduler.normalizeState(annotations.reviewState);
+                if (normalized.lastReviewAttemptId === reviewAttemptId) {
+                    return { committed: false, noop: true, operationId: mutation.operationId, revisions: {} };
+                }
+                try {
+                    annotations.reviewState = practiceReviewScheduler.scheduleOutcome(
+                        normalized, quality, reviewedAt, reviewAttemptId
+                    );
+                } catch (error) {
+                    throw new AppDataError('VALIDATION', error && error.message || 'Invalid review outcome');
+                }
+                return kernel.mutateEntities([{
+                    type: 'upsert',
+                    store: 'practiceAnnotations',
+                    recordId,
+                    data: annotations,
+                    expectedRevision: entityRevision(current.annotations)
+                }], mutation);
+            });
+            return Object.assign({}, receipt, { reviewState: await practice.getReviewState(recordId) });
         },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
