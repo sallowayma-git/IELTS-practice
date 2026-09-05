@@ -6,6 +6,7 @@ class PracticeRecorder {
     constructor() {
         this.activeSessions = new Map();
         this.sessionListeners = new Map();
+        this.sessionStartGenerations = new WeakMap();
         this.autoSaveInterval = 30000; // 30秒自动保存
         this.autoSaveTimer = null;
 
@@ -819,6 +820,9 @@ class PracticeRecorder {
 
         let session = this.activeSessions.get(examId);
         const previousEntityId = this.activeSessionEntityId(session);
+        // A host start supersedes pending cleanup even if its ID, status, and
+        // timestamp are unchanged. Keep this generation out of stored sessions.
+        this.sessionStartGenerations.set(session, (this.sessionStartGenerations.get(session) || 0) + 1);
         session.sessionId = sessionId;
         session.id = this.activeSessionEntityId(sessionId);
         session.status = 'active';
@@ -1219,6 +1223,7 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) return false;
 
         const session = this.activeSessions.get(examId);
+        const sessionStartGeneration = this.sessionStartGenerations.get(session) || 0;
         let sessionEntityId;
         try {
             sessionEntityId = this.activeSessionEntityId(session);
@@ -1261,9 +1266,10 @@ class PracticeRecorder {
         }
 
         // The interrupted save may outlive a replacement or an in-place host
-        // rebind. Only the original object and identity still own this cleanup.
+        // rebind. Only the original object, identity, and start generation own cleanup.
         if (this.activeSessions.get(examId) !== session
-            || this.activeSessionEntityId(session) !== sessionEntityId) {
+            || this.activeSessionEntityId(session) !== sessionEntityId
+            || (this.sessionStartGenerations.get(session) || 0) !== sessionStartGeneration) {
             return true;
         }
 
