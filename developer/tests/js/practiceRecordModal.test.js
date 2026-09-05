@@ -265,6 +265,14 @@ async function testInterruptedRecordIsInspectableButNotReplayable() {
         endTime: '2026-09-05T09:05:00.000Z',
         duration: 300,
         answers: { q1: 'A' },
+        __entries: [{
+            canonicalKey: 'q1',
+            displayNumber: '1',
+            correctAnswer: 'B',
+            userAnswer: 'A',
+            isCorrect: false,
+            hasUserAnswer: true
+        }],
         metadata: { category: 'P2' }
     });
 

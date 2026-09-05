@@ -446,6 +446,9 @@ class PracticeRecordModal {
 
     generateAnswerTable(record) {
         const preparedRecord = this.prepareRecordForDisplay(record);
+        if (record && (record.status === 'interrupted' || record.historyRecordKind === 'interrupted')) {
+            return this.generateInterruptedAnswerTable(preparedRecord);
+        }
         const suiteEntries = this.getSuiteEntries(preparedRecord);
 
         if (suiteEntries.length > 0) {

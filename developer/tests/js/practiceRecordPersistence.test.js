@@ -70,13 +70,15 @@ function createHarness(options = {}) {
     const clearCommands = [];
     const completionCommands = [];
     const discardInterruptedCommands = [];
+    const selectedRecordState = new Set();
+    const showMessageSpy = (message, type) => {
+        messageLog.push({ message, type });
+    };
 
     const sandbox = {
         console: quietConsole,
         confirm: () => true,
-        showMessage: (message, type) => {
-            messageLog.push({ message, type });
-        },
+        showMessage: showMessageSpy,
         setTimeout,
         clearTimeout,
         setInterval,
@@ -84,13 +86,15 @@ function createHarness(options = {}) {
         Date,
         Math,
         JSON,
+        async ensurePracticeSuiteReady() {},
         processedSessions: {
             clear() {}
         },
-        getSelectedRecordsState() {
-            return new Set();
-        },
-        clearSelectedRecordsState() {},
+        getBulkDeleteModeState() { return true; },
+        getSelectedRecordsState() { return selectedRecordState; },
+        addSelectedRecordState(recordId) { selectedRecordState.add(String(recordId)); },
+        removeSelectedRecordState(recordId) { selectedRecordState.delete(String(recordId)); },
+        clearSelectedRecordsState() { selectedRecordState.clear(); },
         setBulkDeleteModeState() {},
         refreshBulkDeleteButton() {},
         refreshBrowseProgressFromRecords(records, index) {
@@ -133,6 +137,7 @@ function createHarness(options = {}) {
                 }
                 listeners.get(type).push(handler);
             },
+            async ensurePracticeSuiteReady() {},
             async __dispatchWindowEvent(type, event) {
                 const handlers = listeners.get(type) || [];
                 for (const handler of handlers) {
@@ -284,6 +289,7 @@ function createHarness(options = {}) {
     };
     sandbox.window.updatePracticeView = sandbox.updatePracticeView;
     sandbox.window.refreshBrowseProgressFromRecords = sandbox.refreshBrowseProgressFromRecords;
+    sandbox.window.showMessage = showMessageSpy;
 
     return {
         sandbox,
@@ -297,6 +303,7 @@ function createHarness(options = {}) {
         clearCommands,
         completionCommands,
         discardInterruptedCommands,
+        selectedRecordState,
         messageLog,
         savedSpellingErrors
     };
@@ -356,14 +363,38 @@ async function testDeleteInterruptedRecordUsesRecoveryStoreAndRefreshesHistoryOn
     );
 }
 
+async function testMissingInterruptedDetailsUseRecoverySpecificMessage() {
+    const harness = createHarness();
+
+    await harness.sandbox.showRecordDetails('missing-interrupted', { recordKind: 'interrupted' });
+
+    assert.deepStrictEqual(
+        harness.messageLog.at(-1),
+        { message: '中断记录不存在或已清理', type: 'warning' },
+        '中断记录缺失时不能误报为详情模块加载失败'
+    );
+}
+
+async function testInterruptedRecordCannotEnterBulkSelection() {
+    const harness = createHarness();
+
+    await harness.sandbox.toggleRecordSelection('interrupted-session-1', { recordKind: 'interrupted' });
+    assert.strictEqual(harness.selectedRecordState.size, 0, '中断记录不能进入正式成绩的批量选择状态');
+
+    await harness.sandbox.toggleRecordSelection('record-1', { recordKind: 'completed' });
+    assert.deepStrictEqual([...harness.selectedRecordState], ['record-1'], '正式记录仍必须可以进入批量选择状态');
+}
+
 async function testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot() {
     const harness = createHarness();
 
     await harness.sandbox.clearPracticeData();
 
     assert.strictEqual(harness.practiceState.length, 0, 'clearPracticeData 应清空 canonical store');
+    assert.strictEqual(harness.interruptedState.length, 0, 'clearPracticeData 应在刷新历史前清空 recovery store');
     assert.strictEqual(harness.clearCommands.length, 1, 'clearPracticeData 应通过 AppData.practice.clear 写入 tombstone');
     assert.deepStrictEqual(harness.renderedSnapshots.at(-1).records, [], 'clearPracticeData 后练习视图应接收空快照');
+    assert.deepStrictEqual(harness.renderedSnapshots.at(-1).interruptedRecords, [], 'clearPracticeData 后历史视图不能残留中断记录');
     assert.deepStrictEqual(harness.browseSnapshots.at(-1).records, [], 'clearPracticeData 后浏览完成索引应接收空快照');
 }
 
@@ -547,6 +578,8 @@ async function main() {
     try {
         await testDeleteRecordCommitsAndRefreshesCanonicalSnapshot();
         await testDeleteInterruptedRecordUsesRecoveryStoreAndRefreshesHistoryOnly();
+        await testMissingInterruptedDetailsUseRecoverySpecificMessage();
+        await testInterruptedRecordCannotEnterBulkSelection();
         await testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot();
         await testFallbackCompletionPersistsNormalizedSpellingErrors();
         await testCanonicalCompletionSaveRejectsWhenPersistenceFails();

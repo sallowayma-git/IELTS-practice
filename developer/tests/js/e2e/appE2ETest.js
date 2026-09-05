@@ -1038,10 +1038,18 @@ class AppE2ETestSuite {
                 `#history-list .history-item[data-record-id="${interruptedId}"][data-record-kind="interrupted"]`
             ), { timeout: 5000, description: '中断记录渲染' });
 
-            const card = this.doc.querySelector(`#history-list .history-item[data-record-id="${interruptedId}"]`);
+            let card = this.doc.querySelector(`#history-list .history-item[data-record-id="${interruptedId}"]`);
             const totalAfter = this.doc.getElementById('total-practiced')?.textContent || '';
             const statusText = card?.querySelector('.record-interrupted-label')?.textContent?.trim() || '';
             const hasBulkCheckbox = !!card?.querySelector('input[data-record-id]');
+            await this.win.toggleBulkDelete();
+            card = this.doc.querySelector(`#history-list .history-item[data-record-id="${interruptedId}"]`);
+            const selectedBeforeClick = this.win.getSelectedRecordsState().size;
+            card?.click();
+            await this.delay(100);
+            const selectedAfterClick = this.win.getSelectedRecordsState().size;
+            await this.win.toggleBulkDelete();
+            card = this.doc.querySelector(`#history-list .history-item[data-record-id="${interruptedId}"]`);
             const detailsLink = card?.querySelector('[data-record-action="details"]');
             detailsLink?.click();
             await this.waitFor(() => this.doc.querySelector('#practice-record-modal.show'), {
@@ -1054,6 +1062,7 @@ class AppE2ETestSuite {
             const passed = totalAfter === totalBefore
                 && statusText === '中断'
                 && !hasBulkCheckbox
+                && selectedAfterClick === selectedBeforeClick
                 && modalText.includes('未完成练习详情')
                 && modalText.includes('已保留作答')
                 && modalText.includes('A')
@@ -1063,6 +1072,8 @@ class AppE2ETestSuite {
                 totalAfter,
                 statusText,
                 hasBulkCheckbox,
+                selectedBeforeClick,
+                selectedAfterClick,
                 hasReplayAction
             });
         } catch (error) {

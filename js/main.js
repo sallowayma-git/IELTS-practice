@@ -1711,10 +1711,10 @@ function setupPracticeHistoryInteractions() {
         }
     };
 
-    const handleSelection = (recordId, event) => {
-        if (!getBulkDeleteModeState() || !recordId) return;
+    const handleSelection = (recordId, recordKind, event) => {
+        if (!getBulkDeleteModeState() || !recordId || recordKind === 'interrupted') return;
         if (event) event.preventDefault();
-        toggleRecordSelection(recordId);
+        toggleRecordSelection(recordId, { recordKind });
     };
 
     const handleCheckbox = (recordId, event) => {
@@ -1745,7 +1745,7 @@ function setupPracticeHistoryInteractions() {
             if (event.target && event.target.matches('input[data-record-id]')) {
                 return;
             }
-            handleSelection(this.dataset.recordId, event);
+            handleSelection(this.dataset.recordId, this.dataset.recordKind, event);
         });
 
         window.DOM.delegate('change', '.practice-history-list input[data-record-id], #history-list input[data-record-id]', function (event) {
@@ -1771,7 +1771,7 @@ function setupPracticeHistoryInteractions() {
                 if (actionTarget || (event.target && event.target.matches('input[data-record-id]'))) {
                     return;
                 }
-                handleSelection(item.dataset.recordId, event);
+                handleSelection(item.dataset.recordId, item.dataset.recordKind, event);
             }
         });
 
@@ -3746,14 +3746,24 @@ function showRecordDetails(recordId, options = {}) {
         if (options.recordKind === 'interrupted') {
             const recovery = window.AppData && window.AppData.recovery;
             if (!recovery || typeof recovery.getInterrupted !== 'function') {
-                throw new Error('中断记录恢复服务不可用');
+                window.showMessage('中断记录恢复服务不可用', 'error');
+                return;
             }
-            const record = await recovery.getInterrupted(recordId);
+            let record;
+            try {
+                record = await recovery.getInterrupted(recordId);
+            } catch (error) {
+                console.error('[PracticeHistory] 读取中断记录详情失败:', error);
+                window.showMessage('中断记录读取失败，请稍后重试', 'error');
+                return;
+            }
             if (!record) {
-                throw new Error('中断记录不存在或已清理');
+                window.showMessage('中断记录不存在或已清理', 'warning');
+                return;
             }
             if (!window.practiceRecordModal || typeof window.practiceRecordModal.show !== 'function') {
-                throw new Error('记录详情组件未加载');
+                window.showMessage('记录详情组件未加载', 'error');
+                return;
             }
             window.practiceRecordModal.show({
                 ...record,
@@ -4255,8 +4265,8 @@ async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
     console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);
 }
 
-async function toggleRecordSelection(recordId) {
-    if (!getBulkDeleteModeState()) return;
+async function toggleRecordSelection(recordId, options = {}) {
+    if (!getBulkDeleteModeState() || options.recordKind === 'interrupted') return;
 
     const normalizedId = normalizeRecordId(recordId);
     if (!normalizedId) {
@@ -4322,10 +4332,10 @@ async function deleteRecord(recordId, options = {}) {
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
         await window.AppData.practice.clear();
-        await syncPracticeRecords({ forceRender: true, trigger: 'clear-all' });
         if (window.AppData && window.AppData.recovery && typeof window.AppData.recovery.clear === 'function') {
             await window.AppData.recovery.clear();
         }
+        await syncPracticeRecords({ forceRender: true, trigger: 'clear-all' });
         processedSessions.clear();
         clearSelectedRecordsState();
         setBulkDeleteModeState(false);
