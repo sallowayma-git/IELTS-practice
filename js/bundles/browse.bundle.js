@@ -290,6 +290,32 @@
         return examCategory ? 'P' + examCategory[1] : '';
     }
 
+    function resolvePerformanceExamType(record, exams) {
+        if (!record) {
+            return '';
+        }
+        var metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var realData = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var recordType = normalizeTypeValue(
+            record.type ||
+            record.examType ||
+            metadata.type ||
+            metadata.examType ||
+            realData.type ||
+            realData.examType
+        );
+        if (recordType) {
+            return recordType;
+        }
+        var exam = ensureArray(exams).find(function findExam(item) {
+            return item && (
+                (record.examId && item.id === record.examId) ||
+                (record.title && item.title === record.title)
+            );
+        });
+        return exam ? normalizeTypeValue(exam.type || exam.examType) : '';
+    }
+
     function expandPerformanceRecords(records) {
         var expanded = [];
         ensureArray(records).forEach(function expandRecord(record) {
@@ -320,6 +346,11 @@
         };
 
         expandPerformanceRecords(records).forEach(function aggregateRecord(record) {
+            // 本面板仅展示阅读 P1/P2/P3；明确标记为听力的历史记录不能混入。
+            // 未标记类型的旧阅读记录仍保留，以兼容历史数据。
+            if (resolvePerformanceExamType(record, exams) === 'listening') {
+                return;
+            }
             var performanceMap = record.questionTypePerformance ||
                 (record.realData && record.realData.questionTypePerformance) || {};
             var duration = firstPerformanceNumber(record.duration);
@@ -4601,6 +4632,9 @@
     }
 
     function resolveFavoriteExamIds(value) {
+        if (value && typeof value.has === 'function' && Object.prototype.toString.call(value) === '[object Set]') {
+            return value;
+        }
         return new Set((Array.isArray(value) ? value : (global.__browseFavoriteExamIds || []))
             .map((id) => String(id || '').trim())
             .filter(Boolean));
@@ -4656,9 +4690,10 @@
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
         if (mode === 'recommended') {
+            const favorites = resolveFavoriteExamIds(favoriteExamIds);
             return list.sort((a, b) => {
-                const scoreDiff = recommendationScore(b, favoriteExamIds, completionResolver)
-                    - recommendationScore(a, favoriteExamIds, completionResolver);
+                const scoreDiff = recommendationScore(b, favorites, completionResolver)
+                    - recommendationScore(a, favorites, completionResolver);
                 return scoreDiff || compareByCategoryThenTitle(a, b);
             });
         }
@@ -4743,7 +4778,7 @@
         const progressFilter = normalizeBrowseProgressFilter(
             safeState.progressFilter || safeState.browseProgressFilter || global.__browseProgressFilter || 'all'
         );
-        const favoriteExamIds = Array.isArray(safeState.favoriteExamIds)
+        const favoriteExamIds = safeState.favoriteExamIds !== undefined
             ? safeState.favoriteExamIds
             : global.__browseFavoriteExamIds;
         const completionResolver = typeof safeState.completionResolver === 'function'
@@ -20412,11 +20447,6 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         applyPracticeSummaryFallback(summary);
     }
 
-    const performanceView = ensurePracticePerformanceView();
-    if (performanceView && stats && typeof stats.calculatePerformanceBreakdown === 'function') {
-        performanceView.update(stats.calculatePerformanceBreakdown(records, examIndex));
-    }
-
     // --- 3. Filter and Render History List ---
     const historyContainer = document.getElementById('practice-history-list') || document.getElementById('history-list');
     if (!historyContainer) {
@@ -20439,6 +20469,11 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
     }
 
     const recordsForInsights = recordsToShow.slice();
+
+    const performanceView = ensurePracticePerformanceView();
+    if (performanceView && stats && typeof stats.calculatePerformanceBreakdown === 'function') {
+        performanceView.update(stats.calculatePerformanceBreakdown(recordsForInsights, examIndex));
+    }
 
     const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     if (historyQuery) {

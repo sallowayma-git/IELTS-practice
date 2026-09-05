@@ -287,6 +287,32 @@
         return examCategory ? 'P' + examCategory[1] : '';
     }
 
+    function resolvePerformanceExamType(record, exams) {
+        if (!record) {
+            return '';
+        }
+        var metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var realData = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var recordType = normalizeTypeValue(
+            record.type ||
+            record.examType ||
+            metadata.type ||
+            metadata.examType ||
+            realData.type ||
+            realData.examType
+        );
+        if (recordType) {
+            return recordType;
+        }
+        var exam = ensureArray(exams).find(function findExam(item) {
+            return item && (
+                (record.examId && item.id === record.examId) ||
+                (record.title && item.title === record.title)
+            );
+        });
+        return exam ? normalizeTypeValue(exam.type || exam.examType) : '';
+    }
+
     function expandPerformanceRecords(records) {
         var expanded = [];
         ensureArray(records).forEach(function expandRecord(record) {
@@ -317,6 +343,11 @@
         };
 
         expandPerformanceRecords(records).forEach(function aggregateRecord(record) {
+            // 本面板仅展示阅读 P1/P2/P3；明确标记为听力的历史记录不能混入。
+            // 未标记类型的旧阅读记录仍保留，以兼容历史数据。
+            if (resolvePerformanceExamType(record, exams) === 'listening') {
+                return;
+            }
             var performanceMap = record.questionTypePerformance ||
                 (record.realData && record.realData.questionTypePerformance) || {};
             var duration = firstPerformanceNumber(record.duration);

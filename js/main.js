@@ -1862,11 +1862,6 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         applyPracticeSummaryFallback(summary);
     }
 
-    const performanceView = ensurePracticePerformanceView();
-    if (performanceView && stats && typeof stats.calculatePerformanceBreakdown === 'function') {
-        performanceView.update(stats.calculatePerformanceBreakdown(records, examIndex));
-    }
-
     // --- 3. Filter and Render History List ---
     const historyContainer = document.getElementById('practice-history-list') || document.getElementById('history-list');
     if (!historyContainer) {
@@ -1889,6 +1884,11 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
     }
 
     const recordsForInsights = recordsToShow.slice();
+
+    const performanceView = ensurePracticePerformanceView();
+    if (performanceView && stats && typeof stats.calculatePerformanceBreakdown === 'function') {
+        performanceView.update(stats.calculatePerformanceBreakdown(recordsForInsights, examIndex));
+    }
 
     const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     if (historyQuery) {

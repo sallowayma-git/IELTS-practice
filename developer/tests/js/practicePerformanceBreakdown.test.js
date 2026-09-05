@@ -46,6 +46,17 @@ const records = [
                 }
             }
         ]
+    },
+    {
+        examId: 'listening-p1',
+        type: 'listening',
+        metadata: { category: 'P1' },
+        duration: 600,
+        totalQuestions: 10,
+        correctAnswers: 10,
+        questionTypePerformance: {
+            general: { total: 10, correct: 10, timeSpent: 600 }
+        }
     }
 ];
 
@@ -56,6 +67,7 @@ assert.strictEqual(result.categories[0].averageDuration, 120);
 assert.strictEqual(result.categories[1].attempts, 1, '套题子项应归入自己的 P2 分项');
 assert.strictEqual(result.categories[1].accuracy, 1 / 3);
 assert.strictEqual(result.categories[2].attempts, 0);
+assert.strictEqual(result.questionTypes.some((row) => row.type === 'other'), false, '听力题型不能混入阅读表现面板');
 
 const tfng = result.questionTypes.find((row) => row.type === 'true-false-not-given');
 const shortAnswer = result.questionTypes.find((row) => row.type === 'short-answer');

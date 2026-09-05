@@ -122,6 +122,9 @@
     }
 
     function resolveFavoriteExamIds(value) {
+        if (value && typeof value.has === 'function' && Object.prototype.toString.call(value) === '[object Set]') {
+            return value;
+        }
         return new Set((Array.isArray(value) ? value : (global.__browseFavoriteExamIds || []))
             .map((id) => String(id || '').trim())
             .filter(Boolean));
@@ -177,9 +180,10 @@
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
         if (mode === 'recommended') {
+            const favorites = resolveFavoriteExamIds(favoriteExamIds);
             return list.sort((a, b) => {
-                const scoreDiff = recommendationScore(b, favoriteExamIds, completionResolver)
-                    - recommendationScore(a, favoriteExamIds, completionResolver);
+                const scoreDiff = recommendationScore(b, favorites, completionResolver)
+                    - recommendationScore(a, favorites, completionResolver);
                 return scoreDiff || compareByCategoryThenTitle(a, b);
             });
         }
@@ -264,7 +268,7 @@
         const progressFilter = normalizeBrowseProgressFilter(
             safeState.progressFilter || safeState.browseProgressFilter || global.__browseProgressFilter || 'all'
         );
-        const favoriteExamIds = Array.isArray(safeState.favoriteExamIds)
+        const favoriteExamIds = safeState.favoriteExamIds !== undefined
             ? safeState.favoriteExamIds
             : global.__browseFavoriteExamIds;
         const completionResolver = typeof safeState.completionResolver === 'function'

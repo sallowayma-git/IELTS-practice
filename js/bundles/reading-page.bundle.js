@@ -7250,7 +7250,10 @@
         keepToolbar: false,
         noteDragFrame: null,
         noteListDragging: false,
-        noteSuppressClickUntil: 0
+        noteSuppressClickUntil: 0,
+        questionDragStartedAtMs: null,
+        questionDragOriginId: '',
+        questionDragCommitted: false
     };
     const testOverrides = {
         renderExplanations: null
@@ -7445,6 +7448,9 @@
             && !state.reviewMode
             && !state.submitted
         ) ? Date.now() : null;
+        interaction.questionDragStartedAtMs = null;
+        interaction.questionDragOriginId = '';
+        interaction.questionDragCommitted = false;
     }
 
     function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
@@ -10554,10 +10560,11 @@
         return { info, currentPart };
     }
 
-    function updateActiveQuestionHighlight(qId) {
+    function updateActiveQuestionHighlight(qId, nowMs = Date.now()) {
         const nextQuestionId = normalizeQuestionId(qId) || '';
+        const checkpointMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
         if (nextQuestionId !== state.currentActiveQuestionId) {
-            checkpointActiveQuestionTiming(Date.now(), false);
+            checkpointActiveQuestionTiming(checkpointMs, false);
             state.currentActiveQuestionId = nextQuestionId;
             state.questionTimingStartedAtMs = (
                 interaction.timerRunning !== false
@@ -10565,7 +10572,7 @@
                 && !state.readOnly
                 && !state.reviewMode
                 && !state.submitted
-            ) ? Date.now() : null;
+            ) ? checkpointMs : null;
         }
         document.querySelectorAll('.q-item').forEach((item) => {
             if (item.dataset.questionId === nextQuestionId) {
@@ -11758,13 +11765,65 @@
                 event.preventDefault();
                 return;
             }
+            const dragStartedAtMs = Date.now();
+            checkpointActiveQuestionTiming(dragStartedAtMs, false);
+            interaction.questionDragStartedAtMs = dragStartedAtMs;
+            interaction.questionDragOriginId = normalizeQuestionId(state.currentActiveQuestionId) || '';
+            interaction.questionDragCommitted = false;
             event.dataTransfer?.setData('text/plain', JSON.stringify(payload));
             event.dataTransfer.effectAllowed = 'move';
             item.classList.add('dragging');
         });
         item.addEventListener('dragend', () => {
             item.classList.remove('dragging');
+            const dragStartedAtMs = Number(interaction.questionDragStartedAtMs);
+            if (!interaction.questionDragCommitted
+                && Number.isFinite(dragStartedAtMs)
+                && dragStartedAtMs > 0
+                && interaction.questionDragOriginId
+                && interaction.timerRunning !== false
+                && !state.readOnly
+                && !state.reviewMode
+                && !state.submitted) {
+                state.currentActiveQuestionId = interaction.questionDragOriginId;
+                state.questionTimingStartedAtMs = dragStartedAtMs;
+            }
+            interaction.questionDragStartedAtMs = null;
+            interaction.questionDragOriginId = '';
+            interaction.questionDragCommitted = false;
         });
+    }
+
+    function resolveDropzoneQuestionId(dropzone) {
+        if (!dropzone) {
+            return '';
+        }
+        const rawQuestionId = dropzone.dataset?.question || dropzone.dataset?.questionId || '';
+        const candidates = expandQuestionSequence(rawQuestionId);
+        const questionOrder = Array.isArray(state.dataset?.questionOrder)
+            ? state.dataset.questionOrder.map((questionId) => normalizeQuestionId(questionId)).filter(Boolean)
+            : [];
+        return candidates.find((questionId) => questionOrder.includes(questionId)) || '';
+    }
+
+    function activateQuestionTimingForDropzone(dropzone) {
+        const questionId = resolveDropzoneQuestionId(dropzone);
+        if (!questionId) {
+            return false;
+        }
+        const dragStartedAtMs = Number(interaction.questionDragStartedAtMs);
+        const activationMs = Number.isFinite(dragStartedAtMs) && dragStartedAtMs > 0
+            ? dragStartedAtMs
+            : Date.now();
+        updateActiveQuestionHighlight(questionId, activationMs);
+        if (interaction.timerRunning !== false
+            && !state.readOnly
+            && !state.reviewMode
+            && !state.submitted) {
+            state.questionTimingStartedAtMs = activationMs;
+        }
+        interaction.questionDragCommitted = true;
+        return true;
     }
 
     function setDropzoneAnswer(dropzone, value, label) {
@@ -12038,9 +12097,14 @@
                 return;
             }
             if (target.matches(POOL_CONTAINER_SELECTOR) || target.closest(POOL_CONTAINER_SELECTOR)) {
+                const sourceDropzone = payload.sourceDropzoneId
+                    ? document.querySelector(`[data-dropzone-id="${payload.sourceDropzoneId}"]`)
+                    : null;
+                activateQuestionTimingForDropzone(sourceDropzone);
                 handleDropBackToPool(payload);
                 return;
             }
+            activateQuestionTimingForDropzone(target);
             handleDropOnDropzone(target, payload);
         });
     }
@@ -13570,6 +13634,8 @@
                 checkpointActiveSuiteDuration,
                 checkpointActiveQuestionTiming,
                 updateActiveQuestionHighlight,
+                resolveDropzoneQuestionId,
+                activateQuestionTimingForDropzone,
                 getSelectionHighlightTestState() {
                     return {
                         hasLastRange: Boolean(interaction.lastRange),
@@ -13672,6 +13738,16 @@
                             state.suite.slotsByExamId = new Map(Object.entries(slots));
                         }
                     }
+                },
+                setTestInteraction(patch = {}) {
+                    if (!patch || typeof patch !== 'object') {
+                        return;
+                    }
+                    Object.entries(patch).forEach(([key, value]) => {
+                        if (Object.prototype.hasOwnProperty.call(interaction, key)) {
+                            interaction[key] = value;
+                        }
+                    });
                 },
                 setTestOverride(name, value) {
                     if (!Object.prototype.hasOwnProperty.call(testOverrides, name)) {

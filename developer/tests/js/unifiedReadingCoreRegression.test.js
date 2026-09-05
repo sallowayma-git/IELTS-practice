@@ -687,6 +687,31 @@ function testQuestionTypePerformanceIncludesActiveTiming() {
     assert.strictEqual(results.answerComparison.q3.timeSpent, 15);
 }
 
+function testDropzoneTimingTargetsDroppedQuestion() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: { questionOrder: ['q1', 'q2'] },
+        currentActiveQuestionId: 'q1',
+        questionTimingStartedAtMs: 1000,
+        questionTimeSpentMs: {},
+        readOnly: false,
+        reviewMode: false,
+        submitted: false
+    });
+    assert.strictEqual(hooks.checkpointActiveQuestionTiming(2000, false), 1000);
+    hooks.setTestInteraction({
+        timerRunning: true,
+        questionDragStartedAtMs: 2000,
+        questionDragOriginId: 'q1',
+        questionDragCommitted: false
+    });
+
+    const target = { dataset: { question: 'q2' } };
+    assert.strictEqual(hooks.resolveDropzoneQuestionId(target), 'q2');
+    assert.strictEqual(hooks.activateQuestionTimingForDropzone(target), true);
+    assert.strictEqual(hooks.checkpointActiveQuestionTiming(5000, false), 3000, '拖拽耗时应归入目标题');
+}
+
 async function main() {
     testClimateLogbookProductionAnswers();
     testWaterFilterProductionAnswersRemainSlotSpecific();
@@ -721,6 +746,7 @@ async function main() {
     testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
     testQuestionTypePerformanceIncludesActiveTiming();
+    testDropzoneTimingTargetsDroppedQuestion();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading submit/timer/scoring regressions covered'

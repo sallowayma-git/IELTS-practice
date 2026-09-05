@@ -195,9 +195,20 @@ function testLearningStateFiltersAndRecommendations(service) {
     const recommended = service.filterExams(exams, {
         activeExamType: 'reading',
         sortMode: 'recommended',
+        favoriteExamIds: new Set(['p2']),
         completionResolver
     });
     assert.strictEqual(recommended[0].id, 'r1-other', '智能推荐应优先安排正确率较低的已做错题');
+
+    const favoriteRecommended = service.filterExams([
+        { id: 'plain', title: 'A', category: 'P1', type: 'reading', frequency: 'low' },
+        { id: 'saved', title: 'B', category: 'P1', type: 'reading', frequency: 'low' }
+    ], {
+        activeExamType: 'reading',
+        sortMode: 'recommended',
+        favoriteExamIds: new Set(['saved'])
+    });
+    assert.strictEqual(favoriteRecommended[0].id, 'saved', '智能推荐应复用预计算的 Set 收藏索引');
 }
 
 function testLoadExamListBindsBrowseControls() {
