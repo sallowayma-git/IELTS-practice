@@ -625,9 +625,11 @@
                 throw new Error('本地备份服务刚刚开始重置，请重新选择文件夹');
             }
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            var existingLatest = await readValidatedV2File(handle, LATEST_FILENAME, V2_SCHEMA_VERSION);
-            var existingGeneration = existingLatest ? null : await findLatestDatedGeneration(handle);
-            existingBackupFound = Boolean(existingLatest || existingGeneration);
+            // An unreadable or unsupported latest file must remain protected even
+            // when this version cannot restore it and no valid generation exists.
+            var existingLatestFound = await fileExists(handle, LATEST_FILENAME);
+            var existingGeneration = existingLatestFound ? null : await findLatestDatedGeneration(handle);
+            existingBackupFound = existingLatestFound || Boolean(existingGeneration);
             meta = cloneMeta({
                 directoryName: handle.name || 'backup',
                 lastWriteAt: null,
