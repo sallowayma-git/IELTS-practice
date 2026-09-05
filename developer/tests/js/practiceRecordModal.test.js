@@ -253,13 +253,43 @@ async function testCanonicalCorrectAnswerMapWinsInModalHelpers() {
     });
 }
 
+async function testInterruptedRecordIsInspectableButNotReplayable() {
+    const modal = loadModal();
+    const html = modal.createModalHtml({
+        id: 'interrupted-session',
+        examId: 'reading-p2',
+        title: 'Interrupted practice',
+        status: 'interrupted',
+        reason: 'closed',
+        startTime: '2026-09-05T09:00:00.000Z',
+        endTime: '2026-09-05T09:05:00.000Z',
+        duration: 300,
+        answers: { q1: 'A' },
+        metadata: { category: 'P2' }
+    });
+
+    assert(html.includes('未完成练习详情'), '中断记录详情必须明确标记为未完成');
+    assert(html.includes('已保留作答'), '中断记录详情必须说明已保留用户作答');
+    assert(html.includes('interrupted-answer-table'), '中断详情必须渲染专用的已保存作答表格');
+    assert(html.includes('<td class="user-answer">A</td>'), '中断详情必须展示已保存的用户答案');
+    assert(!html.includes('<th>\u6b63\u786e\u7b54\u6848</th>'), '未提交记录不能伪造正确答案或对错判定');
+    assert(!html.includes('错题数：'), '未提交记录不能把未判分答案显示成零道错题');
+    assert(html.includes('未完成（窗口已关闭）'), '详情应将关闭原因转换成用户可理解的状态');
+    assert(!html.includes('record-summary-replay-trigger'), '未提交记录不能提供依赖 canonical practice 的回放入口');
+    assert(!html.includes('aria-label="打开该练习记录回放"'), '未提交记录不能暴露误导性的回放可访问性动作');
+    recordResult('interrupted records are inspectable without a broken replay action', true, {
+        status: 'interrupted'
+    });
+}
+
 async function runAllTests() {
     const tests = [
         testSuiteEntriesDoNotCollapseAcrossPassages,
         testDuplicateRowsStillCollapseInsideSamePassage,
         testReplayKeepsCanonicalRecordSnapshot,
         testNumericCorrectAnswersAreNotAnswerMaps,
-        testCanonicalCorrectAnswerMapWinsInModalHelpers
+        testCanonicalCorrectAnswerMapWinsInModalHelpers,
+        testInterruptedRecordIsInspectableButNotReplayable
     ];
     for (const testFn of tests) {
         try {

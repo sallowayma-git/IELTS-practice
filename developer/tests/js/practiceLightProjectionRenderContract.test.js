@@ -356,6 +356,9 @@ function loadRealPracticeView() {
             const last = renderedBatches.at(-1) || [];
             return Array.from(last, (record) => String(record && record.id || '')).sort();
         },
+        lastRenderedRecords() {
+            return Array.from(renderedBatches.at(-1) || []);
+        },
         lastSummaryIds() {
             const last = summaries.at(-1) || [];
             return Array.from(last, (record) => String(record && record.id || '')).sort();
@@ -807,6 +810,52 @@ async function testRenderFilterKeepsUnlabelledRecordsAfterProjectionChange() {
         ['shape-absent', 'shape-projected', 'shape-real'],
         'light 投影实际产出的 dataSource 形态（含缺失）必须全部通过 updatePracticeView 的渲染过滤'
     );
+}
+
+async function testInterruptedRecoveryIsVisibleWithoutAffectingStats() {
+    const view = loadRealPracticeView();
+    const completed = {
+        id: 'completed-session',
+        examId: 'reading-p1',
+        title: 'Completed practice',
+        date: '2026-09-05T09:00:00.000Z',
+        percentage: 80,
+        duration: 600
+    };
+    const interrupted = {
+        id: 'interrupted_session-visible',
+        sessionId: 'session-visible',
+        examId: 'reading-p2',
+        endTime: '2026-09-05T10:00:00.000Z',
+        duration: 240,
+        status: 'interrupted',
+        reason: 'closed',
+        answers: { q1: 'A' },
+        metadata: { examTitle: 'Interrupted practice' }
+    };
+
+    view.updatePracticeView([completed], [
+        { id: 'reading-p1', type: 'reading', title: 'Completed practice' },
+        { id: 'reading-p2', type: 'reading', title: 'Interrupted practice' }
+    ], [interrupted]);
+
+    assert.deepStrictEqual(
+        view.lastRenderedIds(),
+        ['completed-session', 'interrupted_session-visible'],
+        'recovery 中的中断记录必须出现在用户可见的练习历史中'
+    );
+    assert.deepStrictEqual(
+        view.lastSummaryIds(),
+        ['completed-session'],
+        '中断记录尚未提交，不能污染已练题数、正确率或成就统计'
+    );
+    const visibleInterrupted = view.lastRenderedRecords()
+        .find((record) => record.id === 'interrupted_session-visible');
+    assert(visibleInterrupted, '必须保留可见的中断记录投影');
+    assert.strictEqual(visibleInterrupted.title, 'Interrupted practice');
+    assert.strictEqual(visibleInterrupted.date, interrupted.endTime);
+    assert.strictEqual(visibleInterrupted.historyRecordKind, 'interrupted');
+    assert.deepStrictEqual({ ...visibleInterrupted.answers }, { q1: 'A' }, '可见投影必须保留已作答内容');
 }
 
 // ---------------------------------------------------------------------------
@@ -1286,6 +1335,7 @@ const tests = [
     ['light 投影的 dataSource 必须能通过渲染过滤', testLightProjectionDataSourcePassesRenderFilter],
     ['falsy dataSource 在 full/light/detail 中必须保值且 isReal 一致', testFalsyDataSourcesPreserveProjectionAndJudgement],
     ['存入的练习记录必须出现在渲染后的历史列表', testStoredRecordsReachRenderedHistoryList],
+    ['中断记录必须可见但不得计入成绩统计', testInterruptedRecoveryIsVisibleWithoutAffectingStats],
     ['light 投影产出的所有 dataSource 形态都不被渲染过滤吃掉', testRenderFilterKeepsUnlabelledRecordsAfterProjectionChange],
     ['演示/种子记录必须同时不显示、不计入统计、不计入成就', testDemoRecordsAreExcludedFromViewStatsAndAchievements],
     ['列表/统计/成就对每条记录的来源判定必须完全一致', testDemoJudgementIsIdenticalAcrossViewStatsAndAchievements],

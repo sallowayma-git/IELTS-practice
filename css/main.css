@@ -8330,3 +8330,39 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
     }
 }
 
+/* Recovery-backed attempts are visible in history without looking like scores. */
+.history-item.history-item-interrupted {
+    background: #fff7ed;
+    border-color: #d97706;
+    box-shadow: 0 8px 22px rgba(217, 119, 6, 0.12);
+}
+
+.record-status-badge,
+.record-interrupted-label {
+    color: #9a3412;
+    font-weight: 700;
+}
+
+.record-status-badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(251, 146, 60, 0.16);
+    white-space: nowrap;
+}
+
+.record-interrupted-container {
+    min-width: 4rem;
+}
+
+body.bloom-dark-mode .history-item.history-item-interrupted,
+body.blue-dark-mode .history-item.history-item-interrupted {
+    background: rgba(67, 38, 15, 0.78);
+    border-color: #f59e0b;
+}
+
+body.bloom-dark-mode .record-status-badge,
+body.bloom-dark-mode .record-interrupted-label,
+body.blue-dark-mode .record-status-badge,
+body.blue-dark-mode .record-interrupted-label {
+    color: #fed7aa;
+}

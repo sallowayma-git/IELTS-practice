@@ -2286,6 +2286,10 @@
     historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
+        var isInterrupted = Boolean(record && (
+            record.historyRecordKind === 'interrupted'
+            || record.status === 'interrupted'
+        ));
         var selectedRecordsInput = options.selectedRecords;
         var selectedRecords = new Set();
         if (selectedRecordsInput && typeof selectedRecordsInput.forEach === 'function') {
@@ -2317,14 +2321,14 @@
         }
 
         var item = createNode('div', {
-            className: 'history-item history-record-item',
-            dataset: { recordId: recordId }
+            className: 'history-item history-record-item' + (isInterrupted ? ' history-item-interrupted' : ''),
+            dataset: { recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
         });
 
         var isSelected = recordId && selectedRecords.has(recordId);
         var selection = createNode('div', {
-            className: 'record-selection' + (bulkDeleteMode ? '' : ' record-selection-hidden')
-        }, [
+            className: 'record-selection' + (bulkDeleteMode && !isInterrupted ? '' : ' record-selection-hidden')
+        }, isInterrupted ? [] : [
             createNode('input', {
                 type: 'checkbox',
                 checked: isSelected ? 'checked' : null,
@@ -2340,7 +2344,7 @@
             checkboxNode.setAttribute('aria-checked', isSelected ? 'true' : 'false');
         }
 
-        if (bulkDeleteMode) {
+        if (bulkDeleteMode && !isInterrupted) {
             item.classList.add('history-item-selectable');
             if (isSelected) {
                 item.classList.add('history-item-selected');
@@ -2348,12 +2352,12 @@
         }
 
         item.appendChild(selection);
-        var infoClass = 'record-info' + (bulkDeleteMode ? ' record-info-selectable' : '');
+        var infoClass = 'record-info' + (bulkDeleteMode && !isInterrupted ? ' record-info-selectable' : '');
         var info = createNode('div', { className: infoClass }, [
             createNode('a', {
                 href: '#',
                 className: 'practice-record-title',
-                dataset: { recordAction: 'details', recordId: recordId }
+                dataset: { recordAction: 'details', recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
             }, [
                 createNode('strong', null, record && record.title ? record.title : '无标题')
             ]),
@@ -2365,25 +2369,28 @@
                         className: 'duration-time',
                         style: { color: helpers.getDurationColor(durationInSeconds) }
                     }, helpers.formatDurationShort(durationInSeconds))
-                ])
+                ]),
+                isInterrupted ? createNode('small', { className: 'record-status-badge' }, '未完成 · 已保留作答') : null
             ])
         ]);
 
-        var percentageNode = createNode('div', { className: 'record-percentage-container' }, [
+        var percentageNode = createNode('div', {
+            className: 'record-percentage-container' + (isInterrupted ? ' record-interrupted-container' : '')
+        }, [
             createNode('div', {
-                className: 'record-percentage',
-                style: { color: helpers.getScoreColor(percentage) }
-            }, formatPercentage(percentage))
+                className: isInterrupted ? 'record-interrupted-label' : 'record-percentage',
+                style: isInterrupted ? null : { color: helpers.getScoreColor(percentage) }
+            }, isInterrupted ? '中断' : formatPercentage(percentage))
         ]);
 
         var actions = null;
-        if (!bulkDeleteMode) {
+        if (!bulkDeleteMode || isInterrupted) {
             actions = createNode('div', { className: 'record-actions-container' }, [
                 createNode('button', {
                     type: 'button',
                     className: 'delete-record-btn',
                     title: '删除此记录',
-                    dataset: { recordAction: 'delete', recordId: recordId }
+                    dataset: { recordAction: 'delete', recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
                 }, '🗑️')
             ]);
         }
@@ -2563,6 +2570,8 @@
                 pct,
                 dur,
                 historyRenderer.helpers.getRecordsSignatureText(title),
+                historyRenderer.helpers.getRecordsSignatureText(record && record.historyRecordKind),
+                historyRenderer.helpers.getRecordsSignatureText(record && record.status),
                 suiteEntries
             ]);
         });

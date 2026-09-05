@@ -14,6 +14,27 @@ const results = [];
 
 function loadHistoryRenderer() {
     const windowStub = {};
+    windowStub.DOMAdapter = {
+        create(tag, attributes = {}, children = []) {
+            attributes = attributes || {};
+            const node = {
+                tag,
+                attributes,
+                className: attributes.className || '',
+                dataset: { ...(attributes.dataset || {}) },
+                children: (Array.isArray(children) ? children : [children]).filter(Boolean),
+                classList: {
+                    add(...classes) {
+                        node.className = [node.className, ...classes].filter(Boolean).join(' ');
+                    }
+                },
+                appendChild(child) { node.children.push(child); },
+                querySelector() { return null; },
+                setAttribute() {}
+            };
+            return node;
+        }
+    };
     const documentStub = {
         createElement() {
             return {
@@ -96,11 +117,54 @@ async function testUpdatedAtChangesAffectSignature() {
     recordResult('practice history signature tracks updatedAt changes', true, { oldSig, newSig });
 }
 
+async function testInterruptedStatusAffectsSignature() {
+    const renderer = loadHistoryRenderer();
+    const completedSig = renderer.helpers.computeRecordsSignature([baseRecord({ status: 'completed' })]);
+    const interruptedSig = renderer.helpers.computeRecordsSignature([baseRecord({
+        status: 'interrupted',
+        historyRecordKind: 'interrupted'
+    })]);
+    assert.notStrictEqual(completedSig, interruptedSig, '历史列表签名必须区分正式成绩与中断恢复记录');
+    recordResult('practice history signature tracks interrupted status', true, { completedSig, interruptedSig });
+}
+
+function findNode(root, predicate) {
+    if (!root || typeof root !== 'object') return null;
+    if (predicate(root)) return root;
+    for (const child of root.children || []) {
+        const match = findNode(child, predicate);
+        if (match) return match;
+    }
+    return null;
+}
+
+async function testInterruptedCardUsesRecoveryActionsInsteadOfScore() {
+    const renderer = loadHistoryRenderer();
+    const card = renderer.createRecordNode(baseRecord({
+        id: 'interrupted-card',
+        status: 'interrupted',
+        historyRecordKind: 'interrupted'
+    }), { bulkDeleteMode: true, selectedRecords: new Set() });
+
+    assert(card.className.includes('history-item-interrupted'), '中断记录卡片必须有独立视觉状态');
+    assert.strictEqual(card.dataset.recordKind, 'interrupted');
+    assert(!card.className.includes('history-item-selectable'), '中断记录不能进入正式成绩批量删除选择');
+    const statusLabel = findNode(card, (node) => node.className === 'record-interrupted-label');
+    assert(statusLabel, '中断记录必须显示状态而不是伪造 0% 成绩');
+    assert(statusLabel.children.includes('中断'));
+    const deleteButton = findNode(card, (node) => node.dataset?.recordAction === 'delete');
+    assert(deleteButton, '中断记录在批量模式下仍应提供明确的独立删除动作');
+    assert.strictEqual(deleteButton.dataset.recordKind, 'interrupted');
+    recordResult('interrupted history card uses recovery-specific actions', true, { recordKind: card.dataset.recordKind });
+}
+
 async function runAllTests() {
     const tests = [
         testTitleChangesAffectSignature,
         testSuiteEntriesChangesAffectSignature,
-        testUpdatedAtChangesAffectSignature
+        testUpdatedAtChangesAffectSignature,
+        testInterruptedStatusAffectsSignature,
+        testInterruptedCardUsesRecoveryActionsInsteadOfScore
     ];
     for (const testFn of tests) {
         try {

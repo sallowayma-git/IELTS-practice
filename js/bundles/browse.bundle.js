@@ -2289,6 +2289,10 @@
     historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
+        var isInterrupted = Boolean(record && (
+            record.historyRecordKind === 'interrupted'
+            || record.status === 'interrupted'
+        ));
         var selectedRecordsInput = options.selectedRecords;
         var selectedRecords = new Set();
         if (selectedRecordsInput && typeof selectedRecordsInput.forEach === 'function') {
@@ -2320,14 +2324,14 @@
         }
 
         var item = createNode('div', {
-            className: 'history-item history-record-item',
-            dataset: { recordId: recordId }
+            className: 'history-item history-record-item' + (isInterrupted ? ' history-item-interrupted' : ''),
+            dataset: { recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
         });
 
         var isSelected = recordId && selectedRecords.has(recordId);
         var selection = createNode('div', {
-            className: 'record-selection' + (bulkDeleteMode ? '' : ' record-selection-hidden')
-        }, [
+            className: 'record-selection' + (bulkDeleteMode && !isInterrupted ? '' : ' record-selection-hidden')
+        }, isInterrupted ? [] : [
             createNode('input', {
                 type: 'checkbox',
                 checked: isSelected ? 'checked' : null,
@@ -2343,7 +2347,7 @@
             checkboxNode.setAttribute('aria-checked', isSelected ? 'true' : 'false');
         }
 
-        if (bulkDeleteMode) {
+        if (bulkDeleteMode && !isInterrupted) {
             item.classList.add('history-item-selectable');
             if (isSelected) {
                 item.classList.add('history-item-selected');
@@ -2351,12 +2355,12 @@
         }
 
         item.appendChild(selection);
-        var infoClass = 'record-info' + (bulkDeleteMode ? ' record-info-selectable' : '');
+        var infoClass = 'record-info' + (bulkDeleteMode && !isInterrupted ? ' record-info-selectable' : '');
         var info = createNode('div', { className: infoClass }, [
             createNode('a', {
                 href: '#',
                 className: 'practice-record-title',
-                dataset: { recordAction: 'details', recordId: recordId }
+                dataset: { recordAction: 'details', recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
             }, [
                 createNode('strong', null, record && record.title ? record.title : '无标题')
             ]),
@@ -2368,25 +2372,28 @@
                         className: 'duration-time',
                         style: { color: helpers.getDurationColor(durationInSeconds) }
                     }, helpers.formatDurationShort(durationInSeconds))
-                ])
+                ]),
+                isInterrupted ? createNode('small', { className: 'record-status-badge' }, '未完成 · 已保留作答') : null
             ])
         ]);
 
-        var percentageNode = createNode('div', { className: 'record-percentage-container' }, [
+        var percentageNode = createNode('div', {
+            className: 'record-percentage-container' + (isInterrupted ? ' record-interrupted-container' : '')
+        }, [
             createNode('div', {
-                className: 'record-percentage',
-                style: { color: helpers.getScoreColor(percentage) }
-            }, formatPercentage(percentage))
+                className: isInterrupted ? 'record-interrupted-label' : 'record-percentage',
+                style: isInterrupted ? null : { color: helpers.getScoreColor(percentage) }
+            }, isInterrupted ? '中断' : formatPercentage(percentage))
         ]);
 
         var actions = null;
-        if (!bulkDeleteMode) {
+        if (!bulkDeleteMode || isInterrupted) {
             actions = createNode('div', { className: 'record-actions-container' }, [
                 createNode('button', {
                     type: 'button',
                     className: 'delete-record-btn',
                     title: '删除此记录',
-                    dataset: { recordAction: 'delete', recordId: recordId }
+                    dataset: { recordAction: 'delete', recordId: recordId, recordKind: isInterrupted ? 'interrupted' : 'completed' }
                 }, '🗑️')
             ]);
         }
@@ -2566,6 +2573,8 @@
                 pct,
                 dur,
                 historyRenderer.helpers.getRecordsSignatureText(title),
+                historyRenderer.helpers.getRecordsSignatureText(record && record.historyRecordKind),
+                historyRenderer.helpers.getRecordsSignatureText(record && record.status),
                 suiteEntries
             ]);
         });
@@ -18453,10 +18462,11 @@ async function syncPracticeRecords(options = {}) {
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
-    let [records, insightRecords, examIndex] = await Promise.all([
+    let [records, insightRecords, examIndex, interruptedRecords] = await Promise.all([
         listCanonicalPracticeRecordSummaries(),
         window.AppData.practice.listInsights({ limit: 10 }),
-        resolveActiveExamIndex()
+        resolveActiveExamIndex(),
+        listInterruptedPracticeRecordsForHistory()
     ]);
     const insightsById = new Map((Array.isArray(insightRecords) ? insightRecords : [])
         .filter((record) => record && record.id)
@@ -18513,7 +18523,10 @@ async function syncPracticeRecords(options = {}) {
     try {
         const renderer = window.PracticeHistoryRenderer;
         if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
-            const nextSignature = renderer.helpers.computeRecordsSignature(records);
+            const historyRecords = records.concat(
+                normalizeInterruptedPracticeRecordsForHistory(interruptedRecords, examIndex)
+            );
+            const nextSignature = renderer.helpers.computeRecordsSignature(historyRecords);
             if (!forceRender && lastPracticeRecordsSignature === nextSignature) {
                 console.log('[System] 练习记录未变化，跳过UI刷新');
                 recordsUnchanged = true;
@@ -18545,7 +18558,7 @@ async function syncPracticeRecords(options = {}) {
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
-        updatePracticeView(records, examIndex);
+        updatePracticeView(records, examIndex, interruptedRecords);
     }
     return records;
 }
@@ -18652,6 +18665,21 @@ async function listCanonicalPracticeRecords() {
 async function listCanonicalPracticeRecordSummaries() {
     const summaries = await window.AppData.practice.list({ projection: 'light' });
     return Array.isArray(summaries) ? summaries : [];
+}
+
+async function listInterruptedPracticeRecordsForHistory() {
+    const recovery = window.AppData && window.AppData.recovery;
+    if (!recovery || typeof recovery.listInterrupted !== 'function') {
+        return [];
+    }
+    try {
+        const records = await recovery.listInterrupted();
+        return Array.isArray(records) ? records : [];
+    } catch (error) {
+        // Recovery visibility must never make canonical history unavailable.
+        console.warn('[PracticeHistory] 读取中断记录失败，继续显示已完成记录:', error);
+        return [];
+    }
 }
 
 async function resolveActiveExamIndex() {
@@ -19810,19 +19838,19 @@ function setupPracticeHistoryInteractions() {
         return;
     }
 
-    const handleDetails = (recordId, event) => {
+    const handleDetails = (recordId, recordKind, event) => {
         if (!recordId) return;
         if (event) event.preventDefault();
         if (typeof showRecordDetails === 'function') {
-            showRecordDetails(recordId);
+            showRecordDetails(recordId, { recordKind });
         }
     };
 
-    const handleDelete = (recordId, event) => {
+    const handleDelete = (recordId, recordKind, event) => {
         if (!recordId) return;
         if (event) event.preventDefault();
         if (typeof deleteRecord === 'function') {
-            deleteRecord(recordId);
+            deleteRecord(recordId, { recordKind });
         }
     };
 
@@ -19847,11 +19875,11 @@ function setupPracticeHistoryInteractions() {
 
     if (hasDomDelegate) {
         window.DOM.delegate('click', '.practice-history-list [data-record-action="details"], #history-list [data-record-action="details"]', function (event) {
-            handleDetails(this.dataset.recordId, event);
+            handleDetails(this.dataset.recordId, this.dataset.recordKind, event);
         });
 
         window.DOM.delegate('click', '.practice-history-list [data-record-action="delete"], #history-list [data-record-action="delete"]', function (event) {
-            handleDelete(this.dataset.recordId, event);
+            handleDelete(this.dataset.recordId, this.dataset.recordKind, event);
         });
 
         window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function (event) {
@@ -19870,13 +19898,13 @@ function setupPracticeHistoryInteractions() {
         container.addEventListener('click', (event) => {
             const detailsTarget = event.target.closest('[data-record-action="details"]');
             if (detailsTarget && container.contains(detailsTarget)) {
-                handleDetails(detailsTarget.dataset.recordId, event);
+                handleDetails(detailsTarget.dataset.recordId, detailsTarget.dataset.recordKind, event);
                 return;
             }
 
             const deleteTarget = event.target.closest('[data-record-action="delete"]');
             if (deleteTarget && container.contains(deleteTarget)) {
-                handleDelete(deleteTarget.dataset.recordId, event);
+                handleDelete(deleteTarget.dataset.recordId, deleteTarget.dataset.recordKind, event);
                 return;
             }
 
@@ -19966,8 +19994,47 @@ function filterRealPracticeRecordsForView(records) {
     return classifier.filterRecordsForHistoryView(list);
 }
 
+function normalizeInterruptedPracticeRecordsForHistory(records, examIndex = []) {
+    const index = Array.isArray(examIndex) ? examIndex : [];
+    return (Array.isArray(records) ? records : []).filter(Boolean).map((record) => {
+        const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        const exam = index.find((item) => item && item.id === record.examId) || {};
+        const id = record.id || (record.sessionId ? `interrupted_${record.sessionId}` : '');
+        const date = record.endTime || record.createdAt || record.updatedAt || record.startTime || '';
+        return {
+            ...record,
+            id,
+            title: record.title || metadata.examTitle || exam.title || record.examId || '未完成练习',
+            date,
+            type: record.type || record.examType || metadata.type || exam.type || '',
+            category: record.category || metadata.category || exam.category || '',
+            frequency: record.frequency || metadata.frequency || exam.frequency || '',
+            status: 'interrupted',
+            historyRecordKind: 'interrupted'
+        };
+    });
+}
+
+function practiceHistoryRecordMatchesQuery(record, query) {
+    if (!record) {
+        return false;
+    }
+    const fields = [
+        record.title,
+        record.examId,
+        record.category,
+        record.frequency,
+        record.status === 'interrupted' ? '未完成 中断' : '',
+        record.reason,
+        record.metadata && record.metadata.examTitle,
+        record.metadata && record.metadata.category,
+        record.date
+    ];
+    return fields.some((field) => String(field || '').toLowerCase().includes(query));
+}
+
 // Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
-function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
+function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = [], interruptedSnapshot = []) {
     const rawRecords = Array.isArray(recordsSnapshot) ? recordsSnapshot : [];
     const examIndex = Array.isArray(examIndexSnapshot) ? examIndexSnapshot : [];
     // 排除演示/种子记录。判定必须与 practice.stats / achievements.progress 两个投影器
@@ -20013,21 +20080,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
 
     const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     if (historyQuery) {
-        recordsToShow = recordsToShow.filter((record) => {
-            if (!record) {
-                return false;
-            }
-            const fields = [
-                record.title,
-                record.examId,
-                record.category,
-                record.frequency,
-                record.metadata && record.metadata.examTitle,
-                record.metadata && record.metadata.category,
-                record.date
-            ];
-            return fields.some((field) => String(field || '').toLowerCase().includes(historyQuery));
-        });
+        recordsToShow = recordsToShow.filter((record) => practiceHistoryRecordMatchesQuery(record, historyQuery));
     }
 
     const trendRenderer = ensurePracticeTrendRenderer();
@@ -20039,6 +20092,19 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
     if (priorityRenderer && typeof priorityRenderer.update === 'function') {
         priorityRenderer.update(recordsForInsights, examIndex, { examType });
     }
+
+    // Interrupted attempts stay in recovery storage and are appended only to
+    // the visible history list. They must not affect score, trend, priority,
+    // achievement, or Browse completion projections.
+    let interruptedToShow = normalizeInterruptedPracticeRecordsForHistory(interruptedSnapshot, examIndex);
+    if (examType !== 'all') {
+        interruptedToShow = interruptedToShow.filter((record) => recordMatchesExamType(record, examType, examIndex));
+    }
+    if (historyQuery) {
+        interruptedToShow = interruptedToShow.filter((record) => practiceHistoryRecordMatchesQuery(record, historyQuery));
+    }
+    recordsToShow = recordsToShow.concat(interruptedToShow)
+        .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
 
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
@@ -21818,8 +21884,29 @@ async function viewPDF(examId) {
 }
 
 // Bridge for record details to existing enhancer/modal if present
-function showRecordDetails(recordId) {
-    ensurePracticeSuiteReady().then(() => {
+function showRecordDetails(recordId, options = {}) {
+    return ensurePracticeSuiteReady().then(async () => {
+        if (options.recordKind === 'interrupted') {
+            const recovery = window.AppData && window.AppData.recovery;
+            if (!recovery || typeof recovery.getInterrupted !== 'function') {
+                throw new Error('中断记录恢复服务不可用');
+            }
+            const record = await recovery.getInterrupted(recordId);
+            if (!record) {
+                throw new Error('中断记录不存在或已清理');
+            }
+            if (!window.practiceRecordModal || typeof window.practiceRecordModal.show !== 'function') {
+                throw new Error('记录详情组件未加载');
+            }
+            window.practiceRecordModal.show({
+                ...record,
+                title: record.title || record.metadata?.examTitle || record.examId || '未完成练习',
+                date: record.endTime || record.createdAt || record.startTime || '',
+                status: 'interrupted',
+                historyRecordKind: 'interrupted'
+            });
+            return;
+        }
         if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
             window.practiceHistoryEnhancer.showRecordDetails(recordId);
             return;
@@ -22329,9 +22416,31 @@ async function toggleRecordSelection(recordId) {
 }
 
 
-async function deleteRecord(recordId) {
+async function deleteRecord(recordId, options = {}) {
     if (!recordId) {
         showMessage('记录ID无效', 'error');
+        return;
+    }
+
+    if (options.recordKind === 'interrupted') {
+        const recovery = window.AppData && window.AppData.recovery;
+        if (!recovery || typeof recovery.getInterrupted !== 'function' || typeof recovery.discardInterrupted !== 'function') {
+            showMessage('中断记录恢复服务不可用', 'error');
+            return;
+        }
+        const record = await recovery.getInterrupted(recordId);
+        if (!record) {
+            showMessage('未找到中断记录', 'error');
+            return;
+        }
+        const title = record.title || record.metadata?.examTitle || record.examId || '未完成练习';
+        const date = record.endTime || record.createdAt || record.startTime;
+        const confirmMessage = `确定要删除这条未完成练习吗？\n\n题目: ${title}\n时间: ${date ? new Date(date).toLocaleString() : '未知时间'}\n\n此操作不可恢复。`;
+        if (confirm(confirmMessage)) {
+            await recovery.discardInterrupted(recordId);
+            await syncPracticeRecords({ forceRender: true, trigger: 'interrupted-delete' });
+            showMessage('未完成练习已删除', 'success');
+        }
         return;
     }
 

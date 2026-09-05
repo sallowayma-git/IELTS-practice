@@ -260,6 +260,7 @@ class AppE2ETestSuite {
             await this.testExamActionButtons();
             await this.testExamEmptyStateAction();
             await this.testPracticeRecordsFlow();
+            await this.testInterruptedPracticeHistoryVisibility();
             await this.testPracticeHistoryBulkDelete();
             await this.testPracticeSubmissionMessageFlow();
             await this.testSettingsControlButtons();
@@ -1000,6 +1001,78 @@ class AppE2ETestSuite {
             this.recordResult(name, passed, stats);
         } catch (error) {
             this.recordResult(name, false, error.message || String(error));
+        }
+    }
+
+    async testInterruptedPracticeHistoryVisibility() {
+        const name = '中断练习在历史页可见且不污染统计';
+        const interruptedId = `e2e-interrupted-${Date.now()}`;
+        try {
+            if (!this.win.AppData?.recovery || typeof this.win.AppData.recovery.saveInterrupted !== 'function') {
+                this.recordResult(name, false, 'AppData.recovery 不可用');
+                return;
+            }
+            if (typeof this.win.showView === 'function') {
+                this.win.showView('practice');
+            }
+            const totalBefore = this.doc.getElementById('total-practiced')?.textContent || '';
+            await this.win.AppData.recovery.saveInterrupted({
+                id: interruptedId,
+                sessionId: interruptedId,
+                examId: 'e2e-reading-interrupted',
+                startTime: new Date(Date.now() - 300000).toISOString(),
+                endTime: new Date().toISOString(),
+                duration: 300,
+                status: 'interrupted',
+                reason: 'closed',
+                answers: { q1: 'A' },
+                metadata: {
+                    examTitle: 'E2E 中断练习',
+                    type: 'reading',
+                    category: 'P1'
+                }
+            });
+            await this.win.syncPracticeRecords({ forceRender: true });
+
+            await this.waitFor(() => this.doc.querySelector(
+                `#history-list .history-item[data-record-id="${interruptedId}"][data-record-kind="interrupted"]`
+            ), { timeout: 5000, description: '中断记录渲染' });
+
+            const card = this.doc.querySelector(`#history-list .history-item[data-record-id="${interruptedId}"]`);
+            const totalAfter = this.doc.getElementById('total-practiced')?.textContent || '';
+            const statusText = card?.querySelector('.record-interrupted-label')?.textContent?.trim() || '';
+            const hasBulkCheckbox = !!card?.querySelector('input[data-record-id]');
+            const detailsLink = card?.querySelector('[data-record-action="details"]');
+            detailsLink?.click();
+            await this.waitFor(() => this.doc.querySelector('#practice-record-modal.show'), {
+                timeout: 5000,
+                description: '中断记录详情显示'
+            });
+            const modal = this.doc.querySelector('#practice-record-modal');
+            const modalText = modal?.textContent || '';
+            const hasReplayAction = !!modal?.querySelector('.record-summary-replay-trigger');
+            const passed = totalAfter === totalBefore
+                && statusText === '中断'
+                && !hasBulkCheckbox
+                && modalText.includes('未完成练习详情')
+                && modalText.includes('已保留作答')
+                && modalText.includes('A')
+                && !hasReplayAction;
+            this.recordResult(name, passed, {
+                totalBefore,
+                totalAfter,
+                statusText,
+                hasBulkCheckbox,
+                hasReplayAction
+            });
+        } catch (error) {
+            this.recordResult(name, false, error.message || String(error));
+        } finally {
+            try { this.win.practiceRecordModal?.hide(); } catch (_) {}
+            try {
+                await this.win.AppData?.recovery?.discardInterrupted(interruptedId);
+                await this.win.syncPracticeRecords?.({ forceRender: true });
+            } catch (_) {}
         }
     }
 

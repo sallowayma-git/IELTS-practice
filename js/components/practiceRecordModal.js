@@ -189,6 +189,7 @@ class PracticeRecordModal {
 
     createModalHtml(record) {
         const metadata = record.metadata || {};
+        const isInterrupted = record.status === 'interrupted' || record.historyRecordKind === 'interrupted';
         const examTitle = metadata.examTitle || record.title || record.examId || '\u672a\u77e5\u9898\u76ee';
         const category = record.category || metadata.category || '\u672a\u77e5\u5206\u7c7b';
         const frequencyLabel = this.getFrequencyLabel(record);
@@ -202,6 +203,25 @@ class PracticeRecordModal {
         const summaryCounts = this.getEntriesSummary(this.collectAllEntries(record));
         const incorrectCount = summaryCounts.incorrect || 0;
         const unansweredCount = summaryCounts.unanswered || 0;
+        const modalTitle = isInterrupted ? '未完成练习详情' : '\u7ec3\u4e60\u8bb0\u5f55\u8be6\u60c5';
+        const scoreText = isInterrupted ? '未提交' : score;
+        const accuracyText = isInterrupted ? '未提交' : (accuracyPercent != null ? `${accuracyPercent}%` : '\u672a\u77e5');
+        const statusInfo = isInterrupted ? `
+            <div class="meta-item">
+                <span class="meta-label">状态：</span>
+                <span class="meta-value record-interrupted-label">未完成（${this.escapeHtml(this.formatInterruptedReason(record.reason))}）</span>
+            </div>
+        ` : '';
+        const gradingCountInfo = isInterrupted ? '' : `
+            <div class="meta-item">
+                <span class="meta-label">错题数：</span>
+                <span class="meta-value error-count">${incorrectCount}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">未作答：</span>
+                <span class="meta-value unanswered-count">${unansweredCount}</span>
+            </div>
+        `;
 
         // 多套题模式的额外信息
         let multiSuiteInfo = '';
@@ -222,17 +242,18 @@ class PracticeRecordModal {
             <div id="${this.modalId}" class="modal-overlay">
                 <div class="modal-container">
                     <div class="modal-header">
-                        <h3 class="modal-title">\u7ec3\u4e60\u8bb0\u5f55\u8be6\u60c5</h3>
+                        <h3 class="modal-title">${modalTitle}</h3>
                         <button class="modal-close" aria-label="\u5173\u95ed\u5f39\u7a97">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4 class="record-summary-replay-trigger" role="button" tabindex="0" aria-label="打开该练习记录回放">
+                            <h4 class="${isInterrupted ? 'record-summary-title' : 'record-summary-replay-trigger'}"${isInterrupted ? '' : ' role="button" tabindex="0" aria-label="打开该练习记录回放"'}>
                                 ${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}
                             </h4>
                             <div class="record-meta">
+                                ${statusInfo}
                                 <div class="meta-item">
                                     <span class="meta-label">\u7ec3\u4e60\u65f6\u95f4\uff1a</span>
                                     <span class="meta-value">${this.escapeHtml(formattedStart)}</span>
@@ -243,25 +264,18 @@ class PracticeRecordModal {
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">\u5f97\u5206\uff1a</span>
-                                    <span class="meta-value score-highlight">${this.escapeHtml(score)}</span>
+                                    <span class="meta-value score-highlight">${this.escapeHtml(scoreText)}</span>
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">\u51c6\u786e\u7387\uff1a</span>
-                                    <span class="meta-value">${accuracyPercent != null ? `${accuracyPercent}%` : '\u672a\u77e5'}</span>
+                                    <span class="meta-value">${this.escapeHtml(accuracyText)}</span>
                                 </div>
-                                <div class="meta-item">
-                                    <span class="meta-label">\u9519\u9898\u6570\uff1a</span>
-                                    <span class="meta-value error-count">${incorrectCount}</span>
-                                </div>
-                                <div class="meta-item">
-                                    <span class="meta-label">\u672a\u4f5c\u7b54\uff1a</span>
-                                    <span class="meta-value unanswered-count">${unansweredCount}</span>
-                                </div>
+                                ${gradingCountInfo}
                                 ${multiSuiteInfo}
                             </div>
                         </div>
                         <div class="answer-details">
-                            <h5>\u7b54\u9898\u8be6\u60c5</h5>
+                            <h5>${isInterrupted ? '已保留作答' : '\u7b54\u9898\u8be6\u60c5'}</h5>
                             ${answerSection}
                         </div>
                     </div>
@@ -328,6 +342,18 @@ class PracticeRecordModal {
             return `${record.score}/${record.total}`;
         }
         return '\u672a\u77e5';
+    }
+
+    formatInterruptedReason(reason) {
+        const labels = {
+            timeout: '窗口失去响应',
+            closed: '窗口已关闭',
+            cancelled: '练习已取消',
+            unload: '页面已离开',
+            error: '练习异常中断'
+        };
+        const normalized = String(reason || '').trim().toLowerCase();
+        return labels[normalized] || (normalized ? String(reason) : '异常退出');
     }
 
     resolveAccuracy(record) {
@@ -627,6 +653,10 @@ class PracticeRecordModal {
             return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
         }
 
+        if (record.status === 'interrupted' || record.historyRecordKind === 'interrupted') {
+            return this.generateInterruptedAnswerTable(record);
+        }
+
         if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
             const merged = this.mergeComparisonWithCorrections(record);
             return this.generateLegacyTableFromComparison(merged);
@@ -679,6 +709,32 @@ class PracticeRecordModal {
                     <tbody>
                         ${rows}
                     </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    generateInterruptedAnswerTable(record) {
+        const answers = record.answers || (record.realData && record.realData.answers) || {};
+        const questionNumbers = this.extractLegacyQuestionNumbers(answers, {});
+        if (questionNumbers.length === 0) {
+            return '<div class="no-answers-message"><p>尚未作答，练习进度已保留</p></div>';
+        }
+        const rows = questionNumbers.map((questionNumber) => {
+            const userAnswer = this.getLegacyUserAnswer(answers, questionNumber);
+            const safeUser = userAnswer != null ? this.truncateAnswer(userAnswer) : '未作答';
+            return `
+                <tr class="answer-row unknown">
+                    <td class="question-num">${this.escapeHtml(String(questionNumber))}</td>
+                    <td class="user-answer">${this.escapeHtml(safeUser)}</td>
+                </tr>
+            `;
+        }).join('');
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table interrupted-answer-table">
+                    <thead><tr><th>题号</th><th>已保存作答</th></tr></thead>
+                    <tbody>${rows}</tbody>
                 </table>
             </div>
         `;

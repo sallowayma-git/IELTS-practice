@@ -36,6 +36,14 @@ function createHarness(options = {}) {
             duration: 90
         }
     ];
+    const interruptedState = [{
+        id: 'interrupted-session-1',
+        sessionId: 'session-1',
+        examId: 'reading-p1-interrupted',
+        endTime: '2026-03-09T11:30:00.000Z',
+        status: 'interrupted',
+        metadata: { examTitle: 'Interrupted Record 1' }
+    }];
     const listeners = new Map();
     const savedSpellingErrors = [];
     const renderedSnapshots = [];
@@ -61,6 +69,7 @@ function createHarness(options = {}) {
     const deleteManyCommands = [];
     const clearCommands = [];
     const completionCommands = [];
+    const discardInterruptedCommands = [];
 
     const sandbox = {
         console: quietConsole,
@@ -87,8 +96,12 @@ function createHarness(options = {}) {
         refreshBrowseProgressFromRecords(records, index) {
             browseSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
         },
-        updatePracticeView(records, index) {
-            renderedSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
+        updatePracticeView(records, index, interruptedRecords) {
+            renderedSnapshots.push({
+                records: structuredClone(records),
+                index: structuredClone(index),
+                interruptedRecords: structuredClone(interruptedRecords || [])
+            });
         },
         normalizeRecordId(id) {
             return id == null ? '' : String(id);
@@ -217,6 +230,24 @@ function createHarness(options = {}) {
                         };
                     }
                 },
+                recovery: {
+                    async listInterrupted() {
+                        return structuredClone(interruptedState);
+                    },
+                    async getInterrupted(recordId) {
+                        return structuredClone(interruptedState.find((record) => String(record.id) === String(recordId)) || null);
+                    },
+                    async discardInterrupted(recordId) {
+                        discardInterruptedCommands.push(String(recordId));
+                        const index = interruptedState.findIndex((record) => String(record.id) === String(recordId));
+                        if (index >= 0) interruptedState.splice(index, 1);
+                        return { committed: true };
+                    },
+                    async clear() {
+                        interruptedState.splice(0, interruptedState.length);
+                        return { committed: true };
+                    }
+                },
                 settings: {
                     async reset() {
                         return {
@@ -241,8 +272,12 @@ function createHarness(options = {}) {
     if (forceCompletionNotice) {
         sandbox.shouldAnnounceCompletion = () => true;
     }
-    sandbox.updatePracticeView = function updatePracticeViewSpy(records, index) {
-        renderedSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
+    sandbox.updatePracticeView = function updatePracticeViewSpy(records, index, interruptedRecords) {
+        renderedSnapshots.push({
+            records: structuredClone(records),
+            index: structuredClone(index),
+            interruptedRecords: structuredClone(interruptedRecords || [])
+        });
     };
     sandbox.refreshBrowseProgressFromRecords = function refreshBrowseProgressFromRecordsSpy(records, index) {
         browseSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
@@ -253,6 +288,7 @@ function createHarness(options = {}) {
     return {
         sandbox,
         practiceState,
+        interruptedState,
         examIndex,
         renderedSnapshots,
         browseSnapshots,
@@ -260,6 +296,7 @@ function createHarness(options = {}) {
         deleteManyCommands,
         clearCommands,
         completionCommands,
+        discardInterruptedCommands,
         messageLog,
         savedSpellingErrors
     };
@@ -292,6 +329,31 @@ async function testDeleteRecordCommitsAndRefreshesCanonicalSnapshot() {
     );
     assert.deepStrictEqual(harness.renderedSnapshots.at(-1).index, harness.examIndex, '练习视图应接收活动题库快照');
     assert.deepStrictEqual(harness.browseSnapshots.at(-1).index, harness.examIndex, '浏览索引应接收同一活动题库快照');
+}
+
+async function testDeleteInterruptedRecordUsesRecoveryStoreAndRefreshesHistoryOnly() {
+    const harness = createHarness();
+
+    await harness.sandbox.deleteRecord('interrupted-session-1', { recordKind: 'interrupted' });
+
+    assert.deepStrictEqual(harness.discardInterruptedCommands, ['interrupted-session-1']);
+    assert.deepStrictEqual(harness.interruptedState, [], '删除中断记录必须清理 recovery，而不是 canonical practice');
+    assert.strictEqual(harness.deleteCommands.length, 0, '删除中断记录不能误删正式练习成绩');
+    assert.deepStrictEqual(
+        harness.practiceState.map((record) => record.id),
+        ['record-1', 'record-2'],
+        '正式练习记录必须保持不变'
+    );
+    assert.deepStrictEqual(
+        harness.renderedSnapshots.at(-1).interruptedRecords,
+        [],
+        '删除后刷新必须从 recovery 回读，确保中断条目立即消失'
+    );
+    assert.deepStrictEqual(
+        harness.browseSnapshots.at(-1).records.map((record) => record.id),
+        ['record-1', 'record-2'],
+        '中断记录的删除不能改变 Browse 完成投影'
+    );
 }
 
 async function testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot() {
@@ -484,6 +546,7 @@ async function testSubmissionIdProducesStableCompletionOperationId() {
 async function main() {
     try {
         await testDeleteRecordCommitsAndRefreshesCanonicalSnapshot();
+        await testDeleteInterruptedRecordUsesRecoveryStoreAndRefreshesHistoryOnly();
         await testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot();
         await testFallbackCompletionPersistsNormalizedSpellingErrors();
         await testCanonicalCompletionSaveRejectsWhenPersistenceFails();
