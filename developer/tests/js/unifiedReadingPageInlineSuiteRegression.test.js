@@ -281,6 +281,49 @@ async function testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRo
     assert.strictEqual(slot.durationMs, pausedDurationMs, 'paused time must not accrue into the active part');
 }
 
+async function testInlineSubmissionCheckpointsActiveQuestionTiming() {
+    const { hooks } = loadHooks();
+    const dataset = {
+        meta: { title: 'Timed Submission Part' },
+        questionOrder: ['q1'],
+        answerKey: { q1: 'A' },
+        questionGroups: [{ kind: 'short_answer', questionIds: ['q1'] }]
+    };
+    const slot = {
+        examId: 'timed-submit-part',
+        title: 'Timed Submission Part',
+        category: 'P1',
+        dataset,
+        draft: { answers: { q1: 'A' }, updatedAt: Date.now() - 5000 },
+        questionTimeSpentMs: {},
+        durationMs: 0,
+        durationSeconds: 0,
+        navStatus: new Map()
+    };
+    hooks.setTestState({
+        dataset,
+        currentActiveQuestionId: 'q1',
+        questionTimingStartedAtMs: Date.now() - 5000,
+        readOnly: false,
+        reviewMode: false,
+        submitted: false,
+        suite: {
+            inline: true,
+            activeExamId: 'timed-submit-part',
+            activeStartedAtMs: Date.now() - 5000,
+            sequence: [{ examId: 'timed-submit-part', title: 'Timed Submission Part', category: 'P1' }],
+            slotsByExamId: new Map([['timed-submit-part', slot]])
+        }
+    });
+    hooks.setTestInteraction({ timerRunning: true });
+
+    const snapshot = hooks.buildInlineSuiteSubmissionSnapshot();
+    const performance = snapshot.suiteEntries[0].questionTypePerformance['short-answer'];
+    assert(performance, 'inline suite submission should include active question type performance');
+    assert(performance.timeSpent >= 4.5, 'running active-question time must be checkpointed before suite scoring');
+    assert(snapshot.results.questionTypePerformance['short-answer'].timeSpent >= 4.5);
+}
+
 async function testInlineEnvelopeGuard() {
     const { hooks } = loadHooks();
 
@@ -915,6 +958,7 @@ async function main() {
     await testDraftArbitration();
     await testSuiteTimerModePrecedence();
     await testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRows();
+    await testInlineSubmissionCheckpointsActiveQuestionTiming();
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
     await testWindowSessionMessageGuard();

@@ -6579,6 +6579,7 @@
                 setTimerRunning,
                 checkpointActiveSuiteDuration,
                 checkpointActiveQuestionTiming,
+                buildInlineSuiteSubmissionSnapshot,
                 updateActiveQuestionHighlight,
                 resolveDropzoneQuestionId,
                 activateQuestionTimingForDropzone,
@@ -7706,6 +7707,9 @@
     }
 
     function buildInlineSuiteSubmissionSnapshot() {
+        // 套题汇总直接读取各 slot 的计时缓存，因此先把当前仍在运行的题目落账；
+        // 单篇提交由 buildResults() 完成同样的 checkpoint。
+        checkpointActiveQuestionTiming(Date.now(), interaction.timerRunning);
         updateActiveSlotFromCurrentDom('submit');
         const timerSnapshot = getPracticeTimerSnapshot();
         const suiteEntries = [];
