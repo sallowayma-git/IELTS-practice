@@ -23,9 +23,9 @@
 
 > **main** 适合所有用户直接使用；**feature/multi-device-easy-deploy** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
 
-| 关联仓库 | 说明 | 状态 | 完成度 | 技术特征 |
-|----------|------|------|--------|----------|
-| [IELTS-Project(IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | — | ![技术](https://img.shields.io/badge/技术-Docker_Compose_%2B_PostgreSQL-blue) |
+| 关联仓库 | 说明 | 状态 | 技术特征 |
+|----------|------|------|----------|
+| [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![技术：Docker Compose](https://img.shields.io/badge/技术-Docker_Compose-blue)<br>![技术：PostgreSQL](https://img.shields.io/badge/技术-PostgreSQL-blue) |
 
 ## 项目概述
 
