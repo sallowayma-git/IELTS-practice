@@ -148,15 +148,66 @@ async function run() {
   ok(/addEventListener\('keydown'/.test(unifiedPage), 'pane_resizer_missing_keyboard_binding', failed);
   ok(/attachPaneResizer\(\);/.test(unifiedPage), 'pane_resizer_not_bootstrapped', failed);
   ok(!/unified-group__lead/.test(unifiedPage), 'question_group_outer_lead_rendered_again', failed);
-  ok(/#right\s*\{[\s\S]*padding:\s*12px 14px/.test(unifiedHtml), 'question_area_padding_not_compact', failed);
-  ok(/\.unified-group\s*\{[\s\S]*margin-bottom:\s*16px/.test(unifiedHtml), 'question_group_spacing_not_compact', failed);
-  ok(/\.group\s*\{[\s\S]*border-radius:\s*8px[\s\S]*padding:\s*18px 22px[\s\S]*margin-bottom:\s*0/.test(unifiedHtml), 'question_card_padding_not_compact', failed);
+  // The question pane follows the official paper layout: flat groups, no cards.
+  // These locks pin the reference metrics so the card chrome cannot creep back.
+  ok(/#right\s*\{[^}]*padding-left:\s*17px[^}]*padding-right:\s*31px/.test(unifiedHtml), 'question_area_padding_not_reference', failed);
+  ok(/\.unified-group\s*\{[^}]*margin:\s*0 0 31px/.test(unifiedHtml), 'question_group_spacing_not_reference', failed);
+  ok(/\.group\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/.test(unifiedHtml), 'question_card_chrome_regressed', failed);
   ok(/\.matching-table\s*\{[\s\S]*border-spacing:\s*0 4px/.test(unifiedHtml), 'matching_table_row_spacing_missing', failed);
   ok(/\.matching-table tbody td:first-child\s*\{[\s\S]*line-height:\s*1\.35/.test(unifiedHtml), 'matching_table_question_text_spacing_missing', failed);
   ok(/\.tfng-item\s*\{[\s\S]*margin:\s*0 0 14px/.test(unifiedHtml), 'tfng_question_block_spacing_missing', failed);
   ok(/#right \.tfng-item > p\s*\{[\s\S]*margin:\s*0 0 6px/.test(unifiedHtml), 'tfng_stem_option_spacing_not_scoped', failed);
   ok(/\.tfng-options\s*\{[\s\S]*gap:\s*4px 12px/.test(unifiedHtml), 'tfng_option_row_spacing_missing', failed);
   ok(/function restoreHighlights\s*\([\s\S]*?return restoredCount;/.test(highlightShared), 'restoreHighlights_no_restore_count', failed);
+  // Body grid is a 4-row layout: header / part intro / reading shell / nav.
+  ok(/grid-template-rows: var\(--header-height\) auto minmax\(0, 1fr\) var\(--footer-height\)/.test(unifiedHtml), 'body_grid_rows_not_reference', failed);
+  ok(/\.shell\s*\{[\s\S]*?grid-row: 3/.test(unifiedHtml), 'reading_shell_grid_row_not_reference', failed);
+  ok(/\.practice-nav\s*\{[\s\S]*?grid-row: 4/.test(unifiedHtml), 'practice_nav_grid_row_not_reference', failed);
+  ok(/dom\.submitBtn\.querySelector\('\.submit-btn-icon'\)/.test(unifiedPage), 'readonly_submit_icon_not_preserved', failed);
+  ok(
+    /dom\.resetBtn\.style\.display = shouldShowReset \? '' : 'none';/.test(unifiedPage)
+      && /const shouldShowReset = canResetSubmittedSingle \|\| state\.reviewMode;/.test(unifiedPage),
+    'footer_reset_not_limited_to_review_and_retake',
+    failed
+  );
+  ok(/id="options-clear-answers"[^>]*>Clear answers<\/button>/.test(unifiedHtml), 'options_clear_answers_action_missing', failed);
+  ok(/function canClearDraftAnswers\s*\([\s\S]*state\.submissionStatus === 'draft'[\s\S]*!state\.readOnly[\s\S]*!state\.submitted[\s\S]*!state\.reviewMode[\s\S]*!state\.memorizeMode/.test(unifiedPage), 'options_clear_answers_not_draft_gated', failed);
+  ok(/getElementById\('options-clear-answers'\)\?\.addEventListener\('click', handleReset\)/.test(unifiedPage), 'options_clear_answers_not_bound_to_reset', failed);
+  ok(/setSettingsBackgroundInert\(true\)/.test(unifiedPage), 'options_background_not_inert', failed);
+  ok(/settingsPanel\?\.addEventListener\('keydown', trapSettingsFocus\)/.test(unifiedPage), 'options_focus_trap_not_bound', failed);
+  ok(/body\?\.focus\(\)/.test(unifiedPage), 'note_editor_body_focus_missing', failed);
+  ok(!/String\(note\.title \|\| ''\)\.trim\(\) \|\| 'Untitled note'/.test(unifiedPage), 'note_title_fallback_not_using_buildDefaultNoteTitle', failed);
+  ok(/buildDefaultNoteTitle\(note\.quote\)/.test(unifiedPage), 'note_title_buildDefaultNoteTitle_not_called', failed);
+  ok(/id="connection-indicator"[^>]*role="status"/.test(unifiedHtml), 'connection_indicator_id_missing', failed);
+  ok(/@media \(max-width: 480px\)[\s\S]*?#connection-indicator\s*\{[^}]*display: none/.test(unifiedHtml), 'connection_indicator_not_collapsed_at_480', failed);
+  ok(/@media \(max-width: 400px\)[\s\S]*?#messages-indicator\s*\{[^}]*display: none/.test(unifiedHtml), 'messages_indicator_not_collapsed_at_400', failed);
+  ok(/@media \(max-width: 360px\)[\s\S]*?\.ielts-brand\s*\{[^}]*display: none/.test(unifiedHtml), 'ielts_brand_not_collapsed_at_360', failed);
+  // Notes: an icon button in the header, and noted text uses the reference's
+  // .note-anchor blue rather than the marker-chip yellow.
+  ok(/id="notes-drawer-btn"[^>]*class="header-btn reading-notes-btn"|class="header-btn reading-notes-btn" id="notes-drawer-btn"/.test(unifiedHtml), 'notes_button_not_in_header', failed);
+  ok(/id="notes-drawer-btn"[\s\S]{0,600}?svg class="header-icon"/.test(unifiedHtml), 'notes_button_missing_icon', failed);
+  ok(/id="notes-drawer-btn"[\s\S]{0,900}?class="reading-note-count"/.test(unifiedHtml), 'notes_button_missing_count_badge', failed);
+  ok(/\.hl\[data-hl-type="note"\]\s*\{[^}]*background-color: rgb\(32, 76, 207\)/.test(unifiedHtml), 'note_highlight_colour_regressed', failed);
+  ok(/\.hl\[data-note-id\]\{[^}]*background:rgb\(32,76,207\)!important/.test(unifiedPage), 'injected_note_highlight_colour_regressed', failed);
+  ok(!/rgba\(191,219,254/.test(unifiedPage), 'pale_blue_note_highlight_returned', failed);
+  // Part intro is a thin bar butted under the header, not an inset card, and
+  // the reading panes scroll without showing a scrollbar.
+  ok(/--intro-height: 34px/.test(unifiedHtml), 'part_intro_not_thin_bar_height', failed);
+  ok(/\.sub-header-bar\s*\{[^}]*margin: 0;[^}]*border-radius: 0/.test(unifiedHtml), 'part_intro_card_chrome_regressed', failed);
+  ok(/\.sub-header-bar\s*\{[^}]*border-bottom: 1px solid var\(--soft-line\)/.test(unifiedHtml), 'part_intro_missing_bottom_rule', failed);
+  ok(/\.pane\s*\{[^}]*scrollbar-width: none/.test(unifiedHtml), 'pane_scrollbar_not_hidden', failed);
+  ok(/\.pane::-webkit-scrollbar\s*\{[^}]*display: none/.test(unifiedHtml), 'pane_webkit_scrollbar_not_hidden', failed);
+  ok(!/\.pane::-webkit-scrollbar-thumb/.test(unifiedHtml), 'pane_scrollbar_thumb_regressed', failed);
+  ok(/\.pane\s*\{[^}]*overflow-y: auto/.test(unifiedHtml), 'pane_scrolling_disabled', failed);
+  // Selection bar sits below the selected text; its arrow points up at it, and
+  // both bar and arrow flip together when there is no room below.
+  ok(/#selbar\s*\{[^}]*position: fixed/.test(unifiedHtml), 'selection_bar_not_viewport_positioned', failed);
+  ok(/#selbar\.is-above::before\s*\{[^}]*bottom: -5px[^}]*transform: rotate\(45deg\)/.test(unifiedHtml), 'selection_bar_flipped_arrow_missing', failed);
+  ok(/const fitsBelow = below \+ height <= viewportHeight - margin;/.test(unifiedPage), 'selection_bar_below_placement_regressed', failed);
+  ok(/toolbar\.classList\.toggle\('is-above', isAbove\);/.test(unifiedPage), 'selection_bar_arrow_flip_not_wired', failed);
+  ok(!/global\.scrollY \+ rect\.top - toolbar\.offsetHeight/.test(unifiedPage), 'selection_bar_above_first_placement_returned', failed);
+  // The bell is decorative: this project has no messages surface to open.
+  ok(!/id="messages-btn"/.test(unifiedHtml), 'dead_messages_button_reintroduced', failed);
   await testEndlessLifecycle(failed);
 
   if (failed.length) {

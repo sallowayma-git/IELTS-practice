@@ -144,8 +144,14 @@
 
     function firstNonNegative(...values) {
         for (const value of values) {
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            const numeric = Number(value);
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) continue;
+            } else if (typeof candidate !== 'number') {
+                continue;
+            }
+            const numeric = Number(candidate);
             if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
@@ -309,7 +315,33 @@
             date: source.date || source.completedAt || source.timestamp || null,
             startTime: source.startTime || null,
             endTime: source.endTime || null,
-            duration: Number(source.duration ?? source.durationSeconds ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            // canonicalizeRecord validates an explicit root duration first.
+            // Legacy aliases still need individual validation so a malformed
+            // earlier alias cannot mask a later valid value or persist a
+            // negative canonical summary.
+            duration: firstNonNegative(
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                scoreInfo.duration,
+                scoreInfo.durationSeconds,
+                scoreInfo.duration_seconds,
+                scoreInfo.elapsedSeconds,
+                scoreInfo.elapsed_seconds,
+                scoreInfo.timeSpent,
+                scoreInfo.time_spent,
+                realScoreInfo.duration,
+                realScoreInfo.durationSeconds,
+                realScoreInfo.duration_seconds,
+                realScoreInfo.elapsedSeconds,
+                realScoreInfo.elapsed_seconds,
+                realScoreInfo.timeSpent,
+                realScoreInfo.time_spent
+            ) ?? 0,
             totalQuestions,
             correctAnswers,
             accuracy,
@@ -377,7 +409,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};

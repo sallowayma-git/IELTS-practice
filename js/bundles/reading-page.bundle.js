@@ -1712,6 +1712,540 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/core/vocabScheduler.js ===== */
+(function(window) {
+    // SuperMemo SM-2 算法常量
+    const SM2_CONSTANTS = Object.freeze({
+        MIN_EASE_FACTOR: 1.3,
+        MAX_EASE_FACTOR: 3.0,
+        DEFAULT_EASE_FACTOR: 2.5,
+        INITIAL_INTERVAL_DAYS: 1,
+        SECOND_INTERVAL_DAYS: 6,
+        MAX_INTRA_CYCLES: 12
+    });
+
+    // 三档起始难度因子
+    const INITIAL_EASE_FACTORS = Object.freeze({
+        easy: 2.8,    // 简单：高起始难度因子，间隔长
+        good: 2.5,    // 一般：标准起始难度因子
+        hard: 1.8     // 困难：低起始难度因子，间隔短，需要更多复习
+    });
+
+    // 轮内循环的EF调整
+    const INTRA_EF_ADJUSTMENTS = Object.freeze({
+        easy: 0.15,   // 简单：提升难度因子
+        good: 0.05,   // 一般：小幅提升
+        hard: -0.10   // 困难：降低难度因子
+    });
+
+    // 质量评分映射（简化为 3 档）
+    const QUALITY_RATINGS = Object.freeze({
+        wrong: 0,      // 完全错误
+        hard: 3,       // 正确但很困难
+        good: 4,       // 正确但有犹豫
+        easy: 5        // 完美回忆（秒答）
+    });
+
+    // 向后兼容：旧的 Leitner 箱号
+    const MAX_BOX = 5;
+    const MIN_BOX = 1;
+
+    function toDate(input, fallback = new Date()) {
+        if (!input) {
+            return new Date(fallback);
+        }
+        if (input instanceof Date) {
+            return new Date(input.getTime());
+        }
+        const parsed = new Date(input);
+        if (Number.isNaN(parsed.getTime())) {
+            return new Date(fallback);
+        }
+        return parsed;
+    }
+
+    /**
+     * SM-2 算法：计算难度因子
+     * @param {number} oldEF - 旧难度因子
+     * @param {number} quality - 质量评分 (0-5)
+     * @returns {number} 新难度因子 (1.3-2.5)
+     */
+    function calculateEaseFactor(oldEF, quality) {
+        const q = Math.max(0, Math.min(5, Number(quality) || 0));
+        const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
+        const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+
+        // 限制在 [1.3, 2.5] 范围内
+        return Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, newEF)
+        );
+    }
+
+    /**
+     * SM-2 算法：计算下次复习间隔（天）
+     * @param {number} repetitions - 连续正确次数
+     * @param {number} oldInterval - 旧间隔（天）
+     * @param {number} easeFactor - 难度因子
+     * @returns {number} 新间隔（天）
+     */
+    function calculateInterval(repetitions, oldInterval, easeFactor) {
+        const reps = Number(repetitions) || 0;
+        const interval = Number(oldInterval) || 0;
+        const ef = easeFactor || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        if (reps === 0) {
+            return SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        }
+        if (reps === 1) {
+            return SM2_CONSTANTS.SECOND_INTERVAL_DAYS;
+        }
+        // reps >= 2: 间隔 = 上次间隔 × 难度因子
+        return Math.round(interval * ef);
+    }
+
+    /**
+     * 计算下次复习时间
+     * @param {number} intervalDays - 间隔天数
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Date} 下次复习时间
+     */
+    function calculateNextReview(intervalDays, referenceTime) {
+        const base = toDate(referenceTime, new Date());
+        const days = Math.max(0, Number(intervalDays) || 0);
+        const next = new Date(base.getTime());
+        next.setDate(next.getDate() + days);
+        return next;
+    }
+
+    /**
+     * 归一化词条数据
+     * @param {Object} word - 词条对象
+     * @returns {Object} 归一化后的词条
+     */
+    function normalizeWord(word) {
+        if (!word || typeof word !== 'object') {
+            return null;
+        }
+
+        // SM-2 字段
+        const easeFactor = typeof word.easeFactor === 'number'
+            ? word.easeFactor
+            : null; // 新词没有EF，将根据首次判断设置
+
+        const interval = typeof word.interval === 'number'
+            ? word.interval
+            : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+
+        const repetitions = typeof word.repetitions === 'number'
+            ? word.repetitions
+            : 0;
+
+        // 轮内循环状态
+        const intraCycles = typeof word.intraCycles === 'number'
+            ? word.intraCycles
+            : 0;
+
+        return {
+            ...word,
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles
+        };
+    }
+
+    /**
+     * 设置新词的起始难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} initialQuality - 首次认识质量 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function setInitialEaseFactor(word, initialQuality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
+
+        return {
+            ...normalized,
+            easeFactor: initialEF,
+            intraCycles: initialQuality === 'easy' ? 0 : 1 // easy不进入轮内循环
+        };
+    }
+
+    /**
+     * 轮内循环调整难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function adjustIntraCycleEF(word, quality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const adjustment = INTRA_EF_ADJUSTMENTS[quality] || 0;
+        const newEF = Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, normalized.easeFactor + adjustment)
+        );
+
+        const newCycles = normalized.intraCycles + 1;
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            intraCycles: newCycles
+        };
+    }
+
+    /**
+     * SM-2 算法：根据回忆质量更新词条
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('wrong'|'hard'|'good'|'easy')
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Object} 更新后的词条
+     */
+    function scheduleAfterResult(word, quality, referenceTime = new Date()) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        // 如果是新词（没有EF），设置起始难度因子
+        if (normalized.easeFactor === null) {
+            return setInitialEaseFactor(normalized, quality);
+        }
+
+        const q = QUALITY_RATINGS[quality] !== undefined
+            ? QUALITY_RATINGS[quality]
+            : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
+
+        const reviewedAt = toDate(referenceTime, new Date()).toISOString();
+
+        // 质量评分 < 3 视为失败，重置进度
+        if (q < 3) {
+            return {
+                ...normalized,
+                easeFactor: Math.max(
+                    SM2_CONSTANTS.MIN_EASE_FACTOR,
+                    normalized.easeFactor - 0.2
+                ),
+                interval: SM2_CONSTANTS.INITIAL_INTERVAL_DAYS,
+                repetitions: 0,
+                intraCycles: 1, // 重新进入轮内循环
+                correctCount: 0,
+                lastReviewed: reviewedAt,
+                nextReview: calculateNextReview(SM2_CONSTANTS.INITIAL_INTERVAL_DAYS, reviewedAt).toISOString()
+            };
+        }
+
+        // 质量评分 >= 3，更新难度因子和间隔
+        const newEF = calculateEaseFactor(normalized.easeFactor, q);
+        const newReps = normalized.repetitions + 1;
+        const newInterval = calculateInterval(newReps, normalized.interval, newEF);
+        const nextReviewDate = calculateNextReview(newInterval, reviewedAt);
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            interval: newInterval,
+            repetitions: newReps,
+            intraCycles: 0, // 完成学习，退出轮内循环
+            correctCount: (normalized.correctCount || 0) + 1,
+            lastReviewed: reviewedAt,
+            nextReview: nextReviewDate.toISOString()
+        };
+    }
+
+    /**
+     * 向后兼容：旧的 promote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'good') 替代
+     */
+    function promote(word) {
+        return scheduleAfterResult(word, 'good');
+    }
+
+    /**
+     * 向后兼容：旧的 demote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'wrong') 替代
+     */
+    function demote(word) {
+        return scheduleAfterResult(word, 'wrong');
+    }
+
+    function pickDailyTask(allWords, limit = 100, options = {}) {
+        const words = Array.isArray(allWords) ? allWords.slice() : [];
+        const reviewLimit = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : 100;
+        const newLimit = typeof options.newLimit === 'number' && options.newLimit >= 0 ? Math.floor(options.newLimit) : 20;
+        const now = toDate(options.now, new Date());
+
+        const dueWords = [];
+        const newWords = [];
+
+        words.forEach((word) => {
+            if (!word) {
+                return;
+            }
+            const nextReview = word.nextReview ? new Date(word.nextReview) : null;
+            const lastReviewed = word.lastReviewed ? new Date(word.lastReviewed) : null;
+            if (nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= now) {
+                dueWords.push(word);
+                return;
+            }
+            if (!lastReviewed || Number.isNaN(lastReviewed.getTime())) {
+                newWords.push(word);
+            }
+        });
+
+        const sortByDue = (a, b) => {
+            const nextA = a.nextReview ? new Date(a.nextReview).getTime() : 0;
+            const nextB = b.nextReview ? new Date(b.nextReview).getTime() : 0;
+            if (Number.isNaN(nextA) && Number.isNaN(nextB)) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            if (Number.isNaN(nextA)) {
+                return -1;
+            }
+            if (Number.isNaN(nextB)) {
+                return 1;
+            }
+            if (nextA === nextB) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            return nextA - nextB;
+        };
+
+        dueWords.sort(sortByDue);
+
+        const tasks = dueWords.slice(0, reviewLimit);
+        if (tasks.length < reviewLimit && newLimit > 0) {
+            const remaining = Math.min(newLimit, reviewLimit - tasks.length);
+            const sortedNew = newWords.sort((a, b) => {
+                const freqA = typeof a.freq === 'number' ? a.freq : 0;
+                const freqB = typeof b.freq === 'number' ? b.freq : 0;
+                if (freqA === freqB) {
+                    return (a.word || '').localeCompare(b.word || '');
+                }
+                return freqB - freqA;
+            });
+            for (let i = 0; i < sortedNew.length && tasks.length < reviewLimit && i < remaining; i += 1) {
+                tasks.push(sortedNew[i]);
+            }
+        }
+
+        return tasks;
+    }
+
+    const api = Object.freeze({
+        // SM-2 算法核心
+        SM2_CONSTANTS,
+        QUALITY_RATINGS,
+        INITIAL_EASE_FACTORS,
+        INTRA_EF_ADJUSTMENTS,
+        calculateEaseFactor,
+        calculateInterval,
+        calculateNextReview,
+        scheduleAfterResult,
+        normalizeWord,
+        setInitialEaseFactor,
+        adjustIntraCycleEF,
+
+        // 任务生成
+        pickDailyTask,
+
+        // 向后兼容（已废弃）
+        promote,
+        demote,
+        MAX_BOX,
+        MIN_BOX
+    });
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else {
+        window.VocabScheduler = api;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/practiceReviewScheduler.js ===== */
+(function initPracticeReviewScheduler(global) {
+    'use strict';
+
+    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v2 === true) return;
+
+    const vocabScheduler = global.VocabScheduler;
+    if (!vocabScheduler
+        || typeof vocabScheduler.calculateEaseFactor !== 'function'
+        || typeof vocabScheduler.calculateNextReview !== 'function') {
+        throw new Error('PracticeReviewScheduler requires VocabScheduler');
+    }
+
+    const QUALITY_VALUES = Object.freeze({ hard: 2, good: 4, easy: 5 });
+    const VALID_QUALITIES = Object.freeze(Object.keys(QUALITY_VALUES));
+
+    function validIso(value, label) {
+        const time = new Date(value).getTime();
+        if (!Number.isFinite(time)) throw new TypeError(`${label || 'date'} must be a valid date`);
+        return new Date(time).toISOString();
+    }
+
+    function normalizeAppliedAttemptIds(value) {
+        if (value === undefined) return [];
+        if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
+        const normalized = [];
+        const seen = new Set();
+        for (const rawAttemptId of value) {
+            if (typeof rawAttemptId !== 'string') {
+                throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            }
+            const attemptId = rawAttemptId.trim();
+            if (!attemptId) throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            if (seen.has(attemptId)) continue;
+            seen.add(attemptId);
+            normalized.push(attemptId);
+        }
+        return normalized;
+    }
+
+    function createInitialState(referenceTime) {
+        const nextReview = validIso(referenceTime || new Date(), 'referenceTime');
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            reviewCount: 0,
+            lapseCount: 0,
+            lastReviewed: null,
+            nextReview,
+            lastQuality: null,
+            lastReviewAttemptId: null,
+            appliedReviewAttemptIds: [],
+            updatedAt: nextReview
+        };
+    }
+
+    function normalizeState(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) {
+            throw new TypeError('reviewState must be an object');
+        }
+        if (Number(input.schemaVersion) !== 1
+            || input.algorithm !== 'sm2-practice'
+            || Number(input.algorithmVersion) !== 1) {
+            throw new TypeError('Unsupported practice review state');
+        }
+        const easeFactor = Number(input.easeFactor);
+        const interval = Number(input.interval);
+        const repetitions = Number(input.repetitions);
+        const reviewCount = Number(input.reviewCount);
+        const lapseCount = Number(input.lapseCount);
+        if (!Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 3) throw new TypeError('Invalid easeFactor');
+        if (!Number.isFinite(interval) || interval < 0) throw new TypeError('Invalid interval');
+        if (![repetitions, reviewCount, lapseCount].every((value) => Number.isInteger(value) && value >= 0)) {
+            throw new TypeError('Invalid review counters');
+        }
+        const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
+        const nextReview = validIso(input.nextReview, 'nextReview');
+        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
+        if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
+        const normalizedLastAttemptId = input.lastReviewAttemptId == null
+            ? ''
+            : String(input.lastReviewAttemptId).trim();
+        const lastReviewAttemptId = normalizedLastAttemptId || null;
+        const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
+        if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
+            appliedReviewAttemptIds.push(lastReviewAttemptId);
+        }
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor,
+            interval,
+            repetitions,
+            reviewCount,
+            lapseCount,
+            lastReviewed,
+            nextReview,
+            lastQuality,
+            lastReviewAttemptId,
+            appliedReviewAttemptIds,
+            updatedAt
+        };
+    }
+
+    function scheduleOutcome(input, quality, reviewedAt, reviewAttemptId) {
+        const current = normalizeState(input);
+        const normalizedQuality = String(quality || '').toLowerCase();
+        if (!VALID_QUALITIES.includes(normalizedQuality)) throw new TypeError('quality must be hard, good, or easy');
+        const attemptId = String(reviewAttemptId || '').trim();
+        if (!attemptId) throw new TypeError('reviewAttemptId is required');
+        if (current.appliedReviewAttemptIds.includes(attemptId)) return current;
+        const timestamp = validIso(reviewedAt || new Date(), 'reviewedAt');
+        const nextEaseFactor = vocabScheduler.calculateEaseFactor(current.easeFactor, QUALITY_VALUES[normalizedQuality]);
+        let repetitions;
+        let interval;
+        let lapseCount = current.lapseCount;
+
+        if (normalizedQuality === 'hard') {
+            repetitions = 0;
+            interval = 1;
+            lapseCount += 1;
+        } else if (normalizedQuality === 'easy' && current.repetitions === 0) {
+            repetitions = 2;
+            interval = 6;
+        } else if (current.repetitions === 0) {
+            repetitions = 1;
+            interval = 1;
+        } else if (current.repetitions === 1) {
+            repetitions = 2;
+            interval = 6;
+        } else {
+            repetitions = current.repetitions + 1;
+            interval = Math.max(1, Math.round(current.interval * nextEaseFactor));
+        }
+
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: nextEaseFactor,
+            interval,
+            repetitions,
+            reviewCount: current.reviewCount + 1,
+            lapseCount,
+            lastReviewed: timestamp,
+            nextReview: vocabScheduler.calculateNextReview(interval, timestamp).toISOString(),
+            lastQuality: normalizedQuality,
+            lastReviewAttemptId: attemptId,
+            appliedReviewAttemptIds: current.appliedReviewAttemptIds.concat(attemptId),
+            updatedAt: timestamp
+        };
+    }
+
+    global.PracticeReviewScheduler = Object.freeze({
+        __v1: true,
+        __v2: true,
+        QUALITY_VALUES,
+        VALID_QUALITIES,
+        createInitialState,
+        normalizeState,
+        scheduleOutcome
+    });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/data/v2/appData.js ===== */
 (function installAppData(global) {
     'use strict';
@@ -1859,8 +2393,14 @@
 
     function firstNonNegative(...values) {
         for (const value of values) {
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            const numeric = Number(value);
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) continue;
+            } else if (typeof candidate !== 'number') {
+                continue;
+            }
+            const numeric = Number(candidate);
             if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
@@ -2024,7 +2564,33 @@
             date: source.date || source.completedAt || source.timestamp || null,
             startTime: source.startTime || null,
             endTime: source.endTime || null,
-            duration: Number(source.duration ?? source.durationSeconds ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            // canonicalizeRecord validates an explicit root duration first.
+            // Legacy aliases still need individual validation so a malformed
+            // earlier alias cannot mask a later valid value or persist a
+            // negative canonical summary.
+            duration: firstNonNegative(
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                scoreInfo.duration,
+                scoreInfo.durationSeconds,
+                scoreInfo.duration_seconds,
+                scoreInfo.elapsedSeconds,
+                scoreInfo.elapsed_seconds,
+                scoreInfo.timeSpent,
+                scoreInfo.time_spent,
+                realScoreInfo.duration,
+                realScoreInfo.durationSeconds,
+                realScoreInfo.duration_seconds,
+                realScoreInfo.elapsedSeconds,
+                realScoreInfo.elapsed_seconds,
+                realScoreInfo.timeSpent,
+                realScoreInfo.time_spent
+            ) ?? 0,
             totalQuestions,
             correctAnswers,
             accuracy,
@@ -2092,7 +2658,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
@@ -6599,6 +7169,8 @@
         noteDrawerDirty: true,
         noteHighlightMetaDirty: true,
         noteEditorPendingSync: false,
+        optionsReturnFocus: null,
+        optionsInertSiblings: [],
         reviewRecordId: '',
         // 单篇阅读 final-submit 成功后，宿主通过 PRACTICE_RECORD_SAVED 回传的已存档
         // practice record id。持有该 id 时，笔记编辑在只读提交页仍然可写，并且
@@ -6750,6 +7322,43 @@
         }
     }
 
+    function readSuiteSlotDurationMs(slot) {
+        if (slot && slot.durationMs !== null && slot.durationMs !== undefined) {
+            const durationMs = Number(slot.durationMs);
+            if (Number.isFinite(durationMs)) return Math.max(0, durationMs);
+        }
+        return Math.max(0, Number(slot?.durationSeconds) || 0) * 1000;
+    }
+
+    function checkpointActiveSuiteDuration(nowMs = Date.now(), keepRunning = interaction.timerRunning) {
+        if (!state.suite?.inline) {
+            return 0;
+        }
+        const slot = getActiveSuiteSlot();
+        const startedAtMs = Number(state.suite.activeStartedAtMs);
+        const checkpointMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+        if (slot && Number.isFinite(startedAtMs) && startedAtMs > 0) {
+            const elapsedMs = Math.max(0, checkpointMs - startedAtMs);
+            slot.durationMs = readSuiteSlotDurationMs(slot) + elapsedMs;
+            // Retain this compatibility projection for callers that still inspect
+            // the old field, but round only after the millisecond accumulator is
+            // updated so frequent draft snapshots cannot lose fractional seconds.
+            slot.durationSeconds = Math.max(0, Math.round(slot.durationMs / 1000));
+        }
+        state.suite.activeStartedAtMs = keepRunning && slot ? checkpointMs : null;
+        return readSuiteSlotDurationMs(slot);
+    }
+
+    function syncActiveSuiteTimer(nextRunning, nowMs = Date.now()) {
+        const running = nextRunning !== false;
+        const wasRunning = interaction.timerRunning !== false;
+        if (wasRunning && !running) {
+            checkpointActiveSuiteDuration(nowMs, false);
+        } else if (!wasRunning && running && state.suite?.inline && getActiveSuiteSlot()) {
+            state.suite.activeStartedAtMs = Number(nowMs) || Date.now();
+        }
+    }
+
     function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
         const snapshot = timerSnapshot && typeof timerSnapshot === 'object'
             ? timerSnapshot
@@ -6816,6 +7425,7 @@
             }
         });
         if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly;
+        syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
         });
@@ -6971,6 +7581,8 @@
     }
 
     function setTimerRunning(nextRunning) {
+        const nowMs = Date.now();
+        syncActiveSuiteTimer(Boolean(nextRunning), nowMs);
         interaction.timerRunning = !!nextRunning;
         syncPagePauseState(interaction.timerRunning);
         renderTimer();
@@ -7006,13 +7618,106 @@
         renderTimer();
     }
 
+    function isSettingsPanelOpen() {
+        return Boolean(document.getElementById('settings-panel')?.classList.contains('is-open'));
+    }
+
+    function setSettingsBackgroundInert(enabled) {
+        const settingsPanel = document.getElementById('settings-panel');
+        if (!settingsPanel || !document.body) return;
+        if (enabled) {
+            if (state.optionsInertSiblings.length) return;
+            state.optionsInertSiblings = Array.from(document.body.children || [])
+                .filter((node) => node !== settingsPanel)
+                .map((node) => ({
+                    node,
+                    hadAttribute: node.hasAttribute('inert'),
+                    inertValue: Boolean(node.inert)
+                }));
+            state.optionsInertSiblings.forEach(({ node }) => {
+                node.inert = true;
+                node.setAttribute('inert', '');
+            });
+            return;
+        }
+        state.optionsInertSiblings.forEach(({ node, hadAttribute, inertValue }) => {
+            node.inert = inertValue;
+            if (hadAttribute) node.setAttribute('inert', '');
+            else node.removeAttribute('inert');
+        });
+        state.optionsInertSiblings = [];
+    }
+
+    function getSettingsFocusableElements(settingsPanel) {
+        if (!settingsPanel) return [];
+        return Array.from(settingsPanel.querySelectorAll([
+            'button:not([disabled])',
+            'a[href]',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])'
+        ].join(','))).filter((node) => (
+            node.getAttribute('aria-hidden') !== 'true'
+            && !node.hidden
+            && node.getClientRects().length > 0
+        ));
+    }
+
+    function trapSettingsFocus(event) {
+        if (event.key !== 'Tab' || !isSettingsPanelOpen()) return;
+        const settingsPanel = document.getElementById('settings-panel');
+        const focusable = getSettingsFocusableElements(settingsPanel);
+        if (!settingsPanel || !focusable.length) {
+            event.preventDefault();
+            settingsPanel?.focus?.();
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey && (active === first || !focusable.includes(active))) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && (active === last || !focusable.includes(active))) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
     function closeFloatingPanels() {
         const settingsPanel = document.getElementById('settings-panel');
         const notesPanel = document.getElementById('notes-panel');
         const overlay = document.querySelector('.overlay');
-        if (settingsPanel) settingsPanel.style.display = 'none';
+        const settingsWereOpen = isSettingsPanelOpen();
+        // Options is a full-screen menu: drive it by class + `hidden` so it stays
+        // out of the a11y tree while closed.
+        if (settingsPanel) {
+            settingsPanel.classList.remove('is-open');
+            settingsPanel.hidden = true;
+        }
+        setSettingsBackgroundInert(false);
+        document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'false');
         if (notesPanel) notesPanel.style.display = 'none';
         if (overlay) overlay.style.display = 'none';
+        if (settingsWereOpen) {
+            const returnFocus = state.optionsReturnFocus;
+            state.optionsReturnFocus = null;
+            returnFocus?.focus?.();
+        }
+    }
+
+    function openSettingsPanel() {
+        const settingsPanel = document.getElementById('settings-panel');
+        if (!settingsPanel) return;
+        closeFloatingPanels();
+        syncOptionsClearAnswersAction();
+        state.optionsReturnFocus = document.activeElement;
+        settingsPanel.hidden = false;
+        settingsPanel.classList.add('is-open');
+        setSettingsBackgroundInert(true);
+        document.getElementById('settings-btn')?.setAttribute('aria-expanded', 'true');
+        document.getElementById('options-title')?.focus?.();
     }
 
     function attachUnifiedPanels() {
@@ -7023,12 +7728,31 @@
         const noteBtn = document.getElementById('note-btn');
         const closeNoteBtn = document.getElementById('close-note');
 
+        const optionsCloseBtn = document.getElementById('options-close-btn');
+
         settingsBtn?.addEventListener('click', (event) => {
             event.stopPropagation();
-            const nextVisible = settingsPanel?.style.display !== 'block';
+            if (isSettingsPanelOpen()) {
+                closeFloatingPanels();
+            } else {
+                openSettingsPanel();
+            }
+        });
+        optionsCloseBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
             closeFloatingPanels();
-            if (settingsPanel && nextVisible) {
-                settingsPanel.style.display = 'block';
+            settingsBtn?.focus?.();
+        });
+        settingsPanel?.addEventListener('click', (event) => {
+            // The menu is full-screen; keep clicks inside it from bubbling to the
+            // document-level dismiss handler.
+            event.stopPropagation();
+        });
+        settingsPanel?.addEventListener('keydown', trapSettingsFocus);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && isSettingsPanelOpen()) {
+                closeFloatingPanels();
+                settingsBtn?.focus?.();
             }
         });
         noteBtn?.addEventListener('click', () => {
@@ -7054,15 +7778,33 @@
         });
     }
 
+    // The bar sits below the selected word or sentence, which is what its arrow
+    // (pointing up at the text) is drawn for. It only flips above when there is
+    // no room below, and the arrow flips with it via `.is-above`.
     function positionSelectionToolbar(rect) {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
         toolbar.style.display = 'flex';
         global.requestAnimationFrame(() => {
-            const top = global.scrollY + rect.top - toolbar.offsetHeight - 8;
-            const left = global.scrollX + rect.left + (rect.width / 2) - (toolbar.offsetWidth / 2);
-            toolbar.style.top = `${top > 0 ? top : global.scrollY + rect.bottom + 8}px`;
-            toolbar.style.left = `${Math.max(8, left)}px`;
+            const margin = 8;
+            const width = toolbar.offsetWidth || 0;
+            const height = toolbar.offsetHeight || 0;
+            const viewportWidth = global.innerWidth || document.documentElement.clientWidth || 0;
+            const viewportHeight = global.innerHeight || document.documentElement.clientHeight || 0;
+
+            const below = rect.bottom + margin;
+            const above = rect.top - height - margin;
+            const fitsBelow = below + height <= viewportHeight - margin;
+            const isAbove = !fitsBelow && above >= margin;
+            let top = isAbove ? above : below;
+            top = Math.max(margin, Math.min(Math.max(margin, viewportHeight - height - margin), top));
+
+            let left = rect.left + (rect.width / 2) - (width / 2);
+            left = Math.max(margin, Math.min(Math.max(margin, viewportWidth - width - margin), left));
+
+            toolbar.classList.toggle('is-above', isAbove);
+            toolbar.style.top = `${Math.round(top)}px`;
+            toolbar.style.left = `${Math.round(left)}px`;
         });
     }
 
@@ -7255,7 +7997,7 @@
         interaction.currentHighlightNode = null;
         if (kind === 'note') {
             const note = ensureNoteForHighlight(span, normalizeNoteText(span.textContent), { sync: false });
-            if (note) openNoteEditor(note.id, { anchorNode: span, focusBody: true });
+            if (note) openNoteEditor(note.id, { anchorNode: span });
         }
         syncReadingAnnotation('highlight');
     }
@@ -7338,7 +8080,7 @@
             if (targetNode && text) {
                 const note = ensureNoteForHighlight(targetNode, text);
                 closeFloatingPanels();
-                if (note) openNoteEditor(note.id, { anchorNode: targetNode, focusBody: true });
+                if (note) openNoteEditor(note.id, { anchorNode: targetNode });
             }
         });
         document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
@@ -7760,7 +8502,7 @@
 
     function formatNotesForLegacyText(notes = state.notes) {
         return normalizeNotes(notes).map((note) => {
-            const parts = [`# ${String(note.title || '').trim() || 'Untitled note'}`];
+            const parts = [`# ${String(note.title || '').trim() || buildDefaultNoteTitle(note.quote)}`];
             if (note.quote) parts.push(`> ${normalizeNoteText(note.quote)}`);
             if (note.body) parts.push(note.body);
             return parts.join('\n');
@@ -7991,13 +8733,7 @@
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
-        if (Number.isFinite(Number(state.suite.activeStartedAtMs)) && state.suite.activeStartedAtMs > 0) {
-            const elapsedSeconds = Math.max(0, Math.round((Date.now() - state.suite.activeStartedAtMs) / 1000));
-            if (elapsedSeconds > 0) {
-                slot.durationSeconds = Math.max(0, Number(slot.durationSeconds) || 0) + elapsedSeconds;
-                state.suite.activeStartedAtMs = Date.now();
-            }
-        }
+        checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
         state.simulationDraftFingerprint = reason === 'activate'
             ? state.simulationDraftFingerprint
             : buildDraftFingerprint(draft);
@@ -8082,7 +8818,16 @@
                 draft: mergeDraft(existing?.draft, inheritedDraft),
                 navStatus: existing?.navStatus instanceof Map ? existing.navStatus : new Map(),
                 lastResults: existing?.lastResults || null,
-                durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
+                durationMs: existing?.durationMs !== null
+                    && existing?.durationMs !== undefined
+                    && Number.isFinite(Number(existing.durationMs))
+                    ? Math.max(0, Number(existing.durationMs))
+                    : Math.max(0, Number(existing?.durationSeconds) || 0) * 1000,
+                durationSeconds: existing?.durationMs !== null
+                    && existing?.durationMs !== undefined
+                    && Number.isFinite(Number(existing.durationMs))
+                    ? Math.max(0, Math.round(Number(existing.durationMs) / 1000))
+                    : (Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0)
             }));
         }));
         return true;
@@ -8184,7 +8929,7 @@
         }
         state.suite.activating = true;
         state.suite.activeExamId = targetExamId;
-        state.suite.activeStartedAtMs = Date.now();
+        state.suite.activeStartedAtMs = interaction.timerRunning ? Date.now() : null;
         state.examId = targetExamId;
         state.dataKey = slot.dataKey || targetExamId;
         state.dataset = slot.dataset;
@@ -8326,8 +9071,11 @@
             if (node.closest?.('.reading-display-toggle-group')) return;
             node.remove();
         });
-        const headerRight = document.querySelector('.header-right');
-        if (headerRight && !document.getElementById('reading-display-toggle-group')) {
+        // The paper UI keeps the header to status + Options only, so these display
+        // toggles live inside the Options menu. Fall back to the header if an older
+        // shell without #options-tools is in use.
+        const toolsHost = document.getElementById('options-tools') || document.querySelector('.header-right');
+        if (toolsHost && !document.getElementById('reading-display-toggle-group')) {
             const group = document.createElement('div');
             group.id = 'reading-display-toggle-group';
             group.className = 'reading-display-toggle-group';
@@ -8338,8 +9086,12 @@
                 '<button type="button" class="reading-display-toggle" data-highlight-toggle="highlights" title="显示/隐藏普通高亮">H</button>',
                 '<button type="button" class="reading-display-toggle" id="reading-question-nav-toggle" data-question-nav-toggle title="隐藏题卡" aria-pressed="true">Q</button>'
             ].join('');
-            const settingsButton = document.getElementById('settings-btn');
-            headerRight.insertBefore(group, settingsButton?.parentNode === headerRight ? settingsButton : null);
+            if (toolsHost.id === 'options-tools') {
+                toolsHost.appendChild(group);
+            } else {
+                const settingsButton = document.getElementById('settings-btn');
+                toolsHost.insertBefore(group, settingsButton?.parentNode === toolsHost ? settingsButton : null);
+            }
             group.addEventListener('click', (event) => {
                 const target = event.target instanceof HTMLElement ? event.target : null;
                 if (!target) return;
@@ -8387,7 +9139,10 @@
         const style = document.createElement('style');
         style.id = READING_NOTE_STYLE_ID;
         style.textContent = `
-            .hl[data-note-id]{position:relative;cursor:pointer;background:rgba(191,219,254,.78)!important;box-shadow:inset 0 -.52em rgba(147,197,253,.34)}
+            /* Noted text uses the reference's .note-anchor blue on white. The
+               page stylesheet sets the same pair; keeping it here too means a
+               note reads correctly before that sheet's rule wins the cascade. */
+            .hl[data-note-id]{position:relative;cursor:pointer;background:rgb(32,76,207)!important;color:#fff!important}
             .hl[data-note-id].reading-note-flash{outline:2px solid #60a5fa;outline-offset:2px}.reading-notes-btn{position:relative}
             .reading-note-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#16a34a;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;display:none}
             #reading-note-drawer{position:fixed;inset:0 0 0 auto;width:min(360px,92vw);background:#fff;border-left:1px solid #dbe4ef;box-shadow:-18px 0 36px rgba(15,23,42,.16);z-index:3600;transform:translateX(105%);transition:transform 180ms ease;display:flex;flex-direction:column}
@@ -8399,26 +9154,37 @@
             .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
             #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
             .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
-            .reading-note-title,.reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box}.reading-note-title{font-weight:700}.reading-note-body{min-height:190px;resize:vertical;flex:1}
+            .reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1}
             body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
             @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
         `;
         document.head.appendChild(style);
     }
 
+    // Notes live in the header as an icon button, declared in the page markup.
+    // The fallback build is only for hosts that predate that markup.
     function ensureReadingNotesButton() {
         let button = document.getElementById('notes-drawer-btn');
-        if (button) return button;
-        const headerRight = document.querySelector('.header-right');
-        if (!headerRight) return null;
-        button = document.createElement('button');
-        button.id = 'notes-drawer-btn';
-        button.type = 'button';
-        button.className = 'header-btn reading-notes-btn';
-        button.title = 'Notes';
-        button.innerHTML = 'Notes<span class="reading-note-count" aria-hidden="true">0</span>';
-        headerRight.insertBefore(button, headerRight.firstChild);
-        button.addEventListener('click', (event) => { event.stopPropagation(); toggleNotesDrawer(); });
+        if (!button) {
+            const host = document.querySelector('.header-right') || document.getElementById('options-tools');
+            if (!host) return null;
+            button = document.createElement('button');
+            button.id = 'notes-drawer-btn';
+            button.type = 'button';
+            button.className = 'header-btn reading-notes-btn';
+            button.title = 'Notes';
+            button.setAttribute('aria-label', 'Notes');
+            button.innerHTML = 'Notes<span class="reading-note-count" aria-hidden="true">0</span>';
+            host.insertBefore(button, host.lastElementChild || null);
+        }
+        if (button.dataset.notesBound === '1') return button;
+        button.dataset.notesBound = '1';
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            // Dismiss the Options overlay if it happens to be open.
+            closeFloatingPanels();
+            toggleNotesDrawer();
+        });
         return button;
     }
 
@@ -8449,12 +9215,10 @@
             editor = document.createElement('section');
             editor.id = 'reading-note-editor';
             editor.setAttribute('aria-hidden', 'true');
-            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close>×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><input class="reading-note-title" data-note-title type="text" placeholder="Title"><textarea class="reading-note-body" data-note-body placeholder="Write your note"></textarea></div>';
+            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close aria-label="关闭笔记">×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><textarea class="reading-note-body" data-note-body placeholder="Write your note" aria-label="Note body"></textarea></div>';
             document.body.appendChild(editor);
             editor.addEventListener('click', (event) => { if (event.target.closest?.('[data-note-editor-close]')) closeNoteEditor(); });
-            editor.querySelector('[data-note-title]')?.addEventListener('input', saveActiveNoteFromEditor);
             editor.querySelector('[data-note-body]')?.addEventListener('input', saveActiveNoteFromEditor);
-            editor.querySelector('[data-note-title]')?.addEventListener('change', flushActiveNoteFromEditor);
             editor.querySelector('[data-note-body]')?.addEventListener('change', flushActiveNoteFromEditor);
             attachNoteEditorDrag(editor);
         }
@@ -8493,7 +9257,7 @@
     }
 
     function renderNoteRow(note) {
-        const title = String(note.title || '').trim() || 'Untitled note';
+        const title = String(note.title || '').trim() || buildDefaultNoteTitle(note.quote);
         const editable = canEditReadingNotes();
         const disabled = editable ? '' : ' disabled';
         return `<div class="reading-note-row" draggable="${editable}" data-note-row="${escapeHtml(note.id)}"><button class="reading-note-open" type="button" data-note-open="${escapeHtml(note.id)}" title="${escapeHtml(title)}">${escapeHtml(title)}</button><button class="reading-note-drag-handle" type="button" data-note-drag-handle="${escapeHtml(note.id)}" aria-label="Move note"${disabled}>⋮⋮</button><button class="reading-note-delete" type="button" data-note-delete="${escapeHtml(note.id)}" aria-label="Delete note"${disabled}>×</button></div>`;
@@ -8772,19 +9536,17 @@
         if (!note) return;
         state.activeNoteId = note.id;
         const editor = document.getElementById('reading-note-editor');
-        const title = editor?.querySelector('[data-note-title]');
         const body = editor?.querySelector('[data-note-body]');
         const quote = editor?.querySelector('[data-note-quote]');
         if (!editor) return;
         const canEditNotes = canEditReadingNotes();
-        if (title) { title.value = note.title || ''; title.disabled = !canEditNotes; }
         if (body) { body.value = note.body || ''; body.disabled = !canEditNotes; }
         if (quote) { quote.textContent = note.quote || ''; quote.style.display = note.quote ? '' : 'none'; }
         editor.style.display = 'flex';
         editor.setAttribute('aria-hidden', 'false');
         global.requestAnimationFrame(() => {
             positionNoteEditor(options.anchorNode || findNoteHighlight(note.id));
-            (options.focusBody ? body : title)?.focus();
+            body?.focus();
         });
     }
 
@@ -8833,10 +9595,9 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
-        if (title === note.title && body === note.body) return;
-        Object.assign(note, { title, body, updatedAt: Date.now() });
+        if (body === note.body) return;
+        Object.assign(note, { body, updatedAt: Date.now() });
         state.noteDrawerDirty = true;
         state.noteHighlightMetaDirty = true;
         state.noteEditorPendingSync = true;
@@ -8850,12 +9611,11 @@
         const note = getNoteById(state.activeNoteId);
         if (!note) return;
         const editor = document.getElementById('reading-note-editor');
-        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
         const body = String(editor?.querySelector('[data-note-body]')?.value || '');
-        if (title === note.title && body === note.body && !state.noteEditorPendingSync) return;
+        if (body === note.body && !state.noteEditorPendingSync) return;
         clearNoteEditorSaveTimer();
         state.noteEditorPendingSync = false;
-        upsertNote({ ...note, title, body, updatedAt: Date.now() }, { forceUi: true, reason: 'note-edit' });
+        upsertNote({ ...note, body, updatedAt: Date.now() }, { forceUi: true, reason: 'note-edit' });
     }
 
     function createNoteAnchorSpan(note) {
@@ -11630,6 +12390,40 @@
         return lookup;
     }
 
+    function isCheckboxMultiChoiceGroup(questionGroup) {
+        if (
+            !questionGroup
+            || (questionGroup.kind !== 'multi_choice' && questionGroup.kind !== 'multiple_choice')
+            || !Array.isArray(questionGroup.questionIds)
+            || questionGroup.questionIds.length === 0
+        ) {
+            return false;
+        }
+
+        // Generated datasets historically used `multi_choice` for both one
+        // shared checkbox set and several independent radio questions. The
+        // input primitive in bodyHtml disambiguates those production shapes.
+        const bodyHtml = typeof questionGroup.bodyHtml === 'string' ? questionGroup.bodyHtml : '';
+        if (/\btype\s*=\s*(?:"checkbox"|'checkbox'|checkbox)(?=\s|\/?>)/i.test(bodyHtml)) {
+            return true;
+        }
+        if (/\btype\s*=\s*(?:"radio"|'radio'|radio)(?=\s|\/?>)/i.test(bodyHtml)) {
+            return false;
+        }
+
+        // Preserve compatibility for older/synthetic records that lack the
+        // source HTML: multi-choice groups were stored as checkbox sets.
+        return true;
+    }
+
+    function isSharedMultiChoiceGroup(questionGroup) {
+        return Boolean(
+            Array.isArray(questionGroup?.questionIds)
+            && questionGroup.questionIds.length > 1
+            && isCheckboxMultiChoiceGroup(questionGroup)
+        );
+    }
+
     function areAnswerTokensEquivalent(left, right) {
         const core = getAnswerMatchCore();
         if (core && typeof core.areTokensEquivalent === 'function') {
@@ -11738,12 +12532,7 @@
     function questionWeight(correctAnswer, questionGroup = null) {
         if (Array.isArray(correctAnswer)) {
             const normalized = normalizeAnswerValue(correctAnswer);
-            const isMultiChoiceGroup = Boolean(
-                questionGroup
-                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-                && Array.isArray(questionGroup.questionIds)
-            );
-            if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
+            if (isCheckboxMultiChoiceGroup(questionGroup) && Array.isArray(normalized) && normalized.length > 0) {
                 return normalized.length;
             }
             return 1;
@@ -11761,12 +12550,7 @@
         // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
         const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
         const questionGroup = buildQuestionGroupLookup(dataset).get(normalizedQuestionId) || null;
-        const isSplitMultiChoiceGroup = Boolean(
-            questionGroup
-            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-            && Array.isArray(questionGroup.questionIds)
-            && questionGroup.questionIds.length > 1
-        );
+        const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
         if (isSplitMultiChoiceGroup) {
             const answerKey = dataset?.answerKey || {};
             const expectedCount = questionGroup.questionIds
@@ -11807,16 +12591,13 @@
                 questionGroup
                 && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
             );
-            const isSplitMultiChoiceGroup = Boolean(
-                isMultiChoiceKind
-                && Array.isArray(questionGroup.questionIds)
-                && questionGroup.questionIds.length > 1
-            );
+            const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
             const isSingleKeyMultiChoiceGroup = Boolean(
                 isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length === 1
                 && Array.isArray(correctAnswer)
+                && isCheckboxMultiChoiceGroup(questionGroup)
             );
             let displayUserAnswer = userAnswer;
             let isCorrect = compareAnswers(userAnswer, correctAnswer);
@@ -12171,12 +12952,7 @@
                 return false;
             }
             const questionGroup = replayGroupLookup.get(questionId);
-            const isSplitMultiChoiceGroup = Boolean(
-                questionGroup
-                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
-                && Array.isArray(questionGroup.questionIds)
-                && questionGroup.questionIds.length > 1
-            );
+            const isSplitMultiChoiceGroup = isSharedMultiChoiceGroup(questionGroup);
             return !isSplitMultiChoiceGroup
                 || questionGroup.questionIds.every((groupQuestionId) => hasUsableCorrectAnswer(groupQuestionId));
         });
@@ -12197,11 +12973,51 @@
                     isCorrect: null
                 };
             });
+            const persistedScoreInfo = entry.scoreInfo && typeof entry.scoreInfo === 'object'
+                ? entry.scoreInfo
+                : (entry.realData?.scoreInfo && typeof entry.realData.scoreInfo === 'object'
+                    ? entry.realData.scoreInfo
+                    : {});
+            const persistedTotalForCompleteness = Number(
+                persistedScoreInfo.total ?? persistedScoreInfo.totalQuestions
+            );
+            const replayTotalForCompleteness = Number(
+                replayResults.scoreInfo?.total ?? replayResults.scoreInfo?.totalQuestions
+            );
+            const hasCompleteCorrectAnswerMap = questionIds.size > 0
+                && Array.from(questionIds).every((questionId) => hasUsableCorrectAnswer(questionId))
+                && (
+                    !Number.isFinite(persistedTotalForCompleteness)
+                    || !Number.isFinite(replayTotalForCompleteness)
+                    || persistedTotalForCompleteness <= replayTotalForCompleteness
+                );
+            const scoreInfo = hasCompleteCorrectAnswerMap
+                ? Object.assign({}, persistedScoreInfo, replayResults.scoreInfo)
+                : Object.assign({}, replayResults.scoreInfo, persistedScoreInfo);
+            if (!hasCompleteCorrectAnswerMap) {
+                const persistedCorrect = Number(persistedScoreInfo.correct ?? persistedScoreInfo.score);
+                const persistedTotal = Number(persistedScoreInfo.total ?? persistedScoreInfo.totalQuestions);
+                if (Number.isFinite(persistedCorrect) && persistedCorrect >= 0) {
+                    scoreInfo.correct = persistedCorrect;
+                }
+                if (Number.isFinite(persistedTotal) && persistedTotal >= 0) {
+                    scoreInfo.total = persistedTotal;
+                    scoreInfo.totalQuestions = persistedTotal;
+                }
+                const persistedAccuracy = Number(persistedScoreInfo.accuracy);
+                scoreInfo.accuracy = Number.isFinite(persistedAccuracy)
+                    ? persistedAccuracy
+                    : (scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0);
+                const persistedPercentage = Number(persistedScoreInfo.percentage);
+                scoreInfo.percentage = Number.isFinite(persistedPercentage)
+                    ? persistedPercentage
+                    : Math.round(scoreInfo.accuracy * 100);
+            }
             return {
                 answers: replayAnswers,
                 correctAnswers: normalizedCorrectAnswers,
                 answerComparison,
-                scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
+                scoreInfo
             };
         }
 
@@ -12216,7 +13032,11 @@
         });
 
         const totalQuestions = questionIds.size;
-        const scoreInfo = Object.assign({}, entry.scoreInfo || {});
+        const scoreInfo = Object.assign(
+            {},
+            (entry.realData?.scoreInfo && typeof entry.realData.scoreInfo === 'object') ? entry.realData.scoreInfo : {},
+            (entry.scoreInfo && typeof entry.scoreInfo === 'object') ? entry.scoreInfo : {}
+        );
         scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : 0;
         scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
         scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
@@ -12376,8 +13196,13 @@
             }
             dom.submitBtn.disabled = state.readOnly;
             const label = state.readOnly ? '回顾模式' : dom.submitBtn.dataset.defaultLabel;
-            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+            const submitIsIconOnly = Boolean(
+                dom.submitBtn.querySelector('.submit-btn-icon')
+                || dom.submitBtn.classList.contains('nav-submit-circle-btn')
+            );
+            if (submitIsIconOnly) {
                 dom.submitBtn.title = label;
+                dom.submitBtn.setAttribute('aria-label', label);
             } else {
                 dom.submitBtn.textContent = label;
             }
@@ -12618,6 +13443,13 @@
                 captureDom,
                 updateSelectionToolbar,
                 applySelectionHighlight,
+                attachUnifiedPanels,
+                ensureReadingNotesUi,
+                openNoteEditor,
+                closeNoteEditor,
+                applyReplayRecord,
+                setTimerRunning,
+                checkpointActiveSuiteDuration,
                 getSelectionHighlightTestState() {
                     return {
                         hasLastRange: Boolean(interaction.lastRange),
@@ -12634,6 +13466,8 @@
                 restoreDraftSubmissionState,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
+                attachActionListeners,
+                syncPrimaryActionButtons,
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -12738,10 +13572,38 @@
         }
     }
 
+    function canClearDraftAnswers() {
+        return Boolean(
+            state.submissionStatus === 'draft'
+            && !state.readOnly
+            && !state.submitted
+            && !state.reviewMode
+            && !state.memorizeMode
+            && !state.timerLocked
+        );
+    }
+
+    function syncOptionsClearAnswersAction() {
+        const section = document.getElementById('options-clear-answers-section');
+        const button = document.getElementById('options-clear-answers');
+        const visible = canClearDraftAnswers();
+        if (section) section.hidden = !visible;
+        if (button) {
+            button.hidden = !visible;
+            button.disabled = !visible;
+        }
+    }
+
     function syncPrimaryActionButtons() {
+        syncOptionsClearAnswersAction();
+        const submitIsIconOnly = Boolean(
+            dom.submitBtn
+            && (dom.submitBtn.querySelector('.submit-btn-icon')
+                || dom.submitBtn.classList.contains('nav-submit-circle-btn'))
+        );
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn')
-                ? 'Submit'
+            dom.submitBtn.dataset.defaultLabel = submitIsIconOnly
+                ? (dom.submitBtn.title || 'Submit')
                 : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
@@ -12759,8 +13621,10 @@
 
         const setSubmitLabel = (label) => {
             if (!dom.submitBtn) return;
-            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+            if (submitIsIconOnly) {
+                // Icon-only submit: never write textContent or the glyph is lost.
                 dom.submitBtn.title = label;
+                dom.submitBtn.setAttribute('aria-label', label);
             } else {
                 dom.submitBtn.textContent = label;
             }
@@ -12800,7 +13664,10 @@
                 dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
-                dom.resetBtn.style.display = '';
+                // Footer Reset is review/retake-only. Draft clearing lives in
+                // Options, and no reset path is exposed while an ACK is pending.
+                const shouldShowReset = canResetSubmittedSingle || state.reviewMode;
+                dom.resetBtn.style.display = shouldShowReset ? '' : 'none';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
@@ -13736,7 +14603,7 @@
                 title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
                 category: slot.category || entry.category || slot.dataset?.meta?.category || '',
                 dataKey: slot.dataKey || entry.dataKey || entry.examId,
-                duration: Math.max(0, Math.round(Number(slot.durationSeconds) || 0)),
+                duration: Math.max(0, Math.round(readSuiteSlotDurationMs(slot) / 1000)),
                 answers: results.answers || {},
                 answerComparison: results.answerComparison || {},
                 correctAnswers: results.correctAnswers || {},
@@ -13956,7 +14823,7 @@
             requestNormalPracticeRestart('retake-after-submit');
             return;
         }
-        if (state.readOnly || state.submitted) {
+        if (!canClearDraftAnswers()) {
             return;
         }
         closeReviewHighlightDictionary();
@@ -14005,6 +14872,7 @@
     function attachActionListeners() {
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
+        document.getElementById('options-clear-answers')?.addEventListener('click', handleReset);
         dom.exitBtn?.addEventListener('click', handleExitClick);
         document.addEventListener('change', () => updateNavStatuses());
         document.addEventListener('input', () => updateNavStatuses());
@@ -14461,6 +15329,8 @@
             if (!detail || typeof detail.running !== 'boolean') {
                 return;
             }
+            syncActiveSuiteTimer(detail.running, Date.now());
+            interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
         });
     }
@@ -14522,6 +15392,8 @@
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
     "js/data/v2/dataKernel.js",
+    "js/core/vocabScheduler.js",
+    "js/core/practiceReviewScheduler.js",
     "js/data/v2/appData.js",
     "js/runtime/readingExamRegistry.js",
     "js/runtime/readingExplanationRegistry.js",

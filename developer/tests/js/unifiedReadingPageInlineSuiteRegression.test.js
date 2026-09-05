@@ -239,6 +239,48 @@ async function testSuiteTimerModePrecedence() {
     assert.strictEqual(document.__timer.dataset.timerMode, 'countdown');
 }
 
+async function testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRows() {
+    const { hooks } = loadHooks();
+    const startedAtMs = 1000000;
+    const dataset = {
+        meta: { title: 'Timed Part' },
+        questionOrder: ['q1'],
+        answerKey: { q1: 'A' },
+        questionGroups: []
+    };
+    const results = hooks.buildResultsFromAnswers(dataset, { q1: 'A' });
+    hooks.setTestState({
+        dataset,
+        suite: {
+            inline: true,
+            activeExamId: 'timed-part',
+            activeStartedAtMs: startedAtMs,
+            sequence: [{ examId: 'timed-part', title: 'Timed Part' }],
+            slotsByExamId: new Map([['timed-part', {
+                examId: 'timed-part',
+                title: 'Timed Part',
+                dataset,
+                durationMs: 0,
+                durationSeconds: 0,
+                lastResults: results
+            }]])
+        }
+    });
+
+    for (let tick = 1; tick <= 50; tick += 1) {
+        hooks.checkpointActiveSuiteDuration(startedAtMs + tick * 1200, true);
+    }
+    let slot = hooks.getTestState().slotsByExamId[0][1];
+    assert.strictEqual(slot.durationMs, 60000, 'fifty 1.2-second checkpoints must retain the full minute');
+    assert.strictEqual(slot.durationSeconds, 60, 'part duration should round only after millisecond accumulation');
+
+    hooks.checkpointActiveSuiteDuration(startedAtMs + 50 * 1200 + 500, false);
+    const pausedDurationMs = hooks.getTestState().slotsByExamId[0][1].durationMs;
+    hooks.checkpointActiveSuiteDuration(startedAtMs + 70 * 1200, false);
+    slot = hooks.getTestState().slotsByExamId[0][1];
+    assert.strictEqual(slot.durationMs, pausedDurationMs, 'paused time must not accrue into the active part');
+}
+
 async function testInlineEnvelopeGuard() {
     const { hooks } = loadHooks();
 
@@ -872,6 +914,7 @@ async function testSubmitAcknowledgementStateMachine() {
 async function main() {
     await testDraftArbitration();
     await testSuiteTimerModePrecedence();
+    await testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRows();
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
     await testWindowSessionMessageGuard();
