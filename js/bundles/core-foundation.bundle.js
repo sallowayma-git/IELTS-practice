@@ -2816,6 +2816,32 @@
         return counts;
     }
 
+    function compactQuestionTypePerformance(source) {
+        const compact = {};
+        const entries = Object.entries(asObject(source && source.questionTypePerformance)).slice(0, 64);
+        for (const [type, value] of entries) {
+            const key = String(type || '').trim();
+            if (!key) continue;
+            const metrics = asObject(value);
+            const total = firstNonNegative(metrics.totalQuestions, metrics.total) ?? 0;
+            const correct = Math.min(total, firstNonNegative(metrics.correctAnswers, metrics.correct) ?? 0);
+            const timeSpent = firstNonNegative(
+                metrics.timeSpent,
+                metrics.duration,
+                metrics.durationSeconds,
+                metrics.elapsedSeconds
+            );
+            const summary = {
+                total,
+                correct,
+                accuracy: total > 0 ? correct / total : 0
+            };
+            if (timeSpent !== null) summary.timeSpent = timeSpent;
+            compact[key] = summary;
+        }
+        return compact;
+    }
+
     function canonicalizeRecord(input) {
         assertObject(input, 'practice record must be an object');
         const record = jsonValue(input, 'practice record');
@@ -2858,12 +2884,14 @@
             examId: entry.examId || metadata.examId || null,
             title: entry.title || entry.examTitle || metadata.examTitle || metadata.title || '',
             type: entry.type || metadata.type || fallbackType,
+            category: entry.category || metadata.category || null,
             date: entry.date || entry.completedAt || entry.timestamp || null,
             duration: Number(entry.duration ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
             totalQuestions,
             correctAnswers,
             accuracy,
             percentage,
+            questionTypePerformance: compactQuestionTypePerformance(entry),
             questionTypeErrorCounts: questionTypeErrorCounts(entry)
         }, 'suite entry light projection');
     }
@@ -2927,6 +2955,7 @@
             accuracy,
             percentage: Number(source.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0,
             score: source.score ?? scoreInfo.score ?? realScoreInfo.score ?? null,
+            questionTypePerformance: compactQuestionTypePerformance(source),
             questionTypeErrorCounts: questionTypeErrorCounts(source),
             // 缺失时必须留空而不是写 null：消费方按 `dataSource === 'real' || === undefined`
             // 过滤记录（js/main.js updatePracticeView），null 两者都不匹配会让记录整条消失。
@@ -2965,7 +2994,7 @@
         return first === undefined ? {} : clone(first);
     }
 
-    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypePerformance', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
 
     function withoutRawData(value) {

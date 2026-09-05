@@ -144,6 +144,9 @@
         noteDrawerDirty: true,
         noteHighlightMetaDirty: true,
         noteEditorPendingSync: false,
+        currentActiveQuestionId: '',
+        questionTimeSpentMs: {},
+        questionTimingStartedAtMs: null,
         optionsReturnFocus: null,
         optionsInertSiblings: [],
         reviewRecordId: '',
@@ -332,6 +335,62 @@
         } else if (!wasRunning && running && state.suite?.inline && getActiveSuiteSlot()) {
             state.suite.activeStartedAtMs = Number(nowMs) || Date.now();
         }
+    }
+
+    function getActiveQuestionTimingStore() {
+        if (state.suite?.inline) {
+            const slot = getActiveSuiteSlot();
+            if (slot) {
+                if (!slot.questionTimeSpentMs || typeof slot.questionTimeSpentMs !== 'object' || Array.isArray(slot.questionTimeSpentMs)) {
+                    slot.questionTimeSpentMs = {};
+                }
+                return slot.questionTimeSpentMs;
+            }
+        }
+        if (!state.questionTimeSpentMs || typeof state.questionTimeSpentMs !== 'object' || Array.isArray(state.questionTimeSpentMs)) {
+            state.questionTimeSpentMs = {};
+        }
+        return state.questionTimeSpentMs;
+    }
+
+    function checkpointActiveQuestionTiming(nowMs = Date.now(), keepRunning = interaction.timerRunning) {
+        const questionId = normalizeQuestionId(state.currentActiveQuestionId) || '';
+        const startedAtMs = Number(state.questionTimingStartedAtMs);
+        const checkpointMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+        if (questionId && Number.isFinite(startedAtMs) && startedAtMs > 0) {
+            const store = getActiveQuestionTimingStore();
+            store[questionId] = Math.max(0, Number(store[questionId]) || 0)
+                + Math.max(0, checkpointMs - startedAtMs);
+        }
+        const canContinue = keepRunning !== false
+            && questionId
+            && !state.readOnly
+            && !state.reviewMode
+            && !state.submitted;
+        state.questionTimingStartedAtMs = canContinue ? checkpointMs : null;
+        return questionId ? Math.max(0, Number(getActiveQuestionTimingStore()[questionId]) || 0) : 0;
+    }
+
+    function syncActiveQuestionTimer(nextRunning, nowMs = Date.now()) {
+        const running = nextRunning !== false;
+        const wasRunning = interaction.timerRunning !== false;
+        if (wasRunning && !running) {
+            checkpointActiveQuestionTiming(nowMs, false);
+        } else if (!wasRunning && running && state.currentActiveQuestionId && !state.readOnly && !state.reviewMode && !state.submitted) {
+            state.questionTimingStartedAtMs = Number(nowMs) || Date.now();
+        }
+    }
+
+    function resetActiveQuestionTiming() {
+        const store = getActiveQuestionTimingStore();
+        Object.keys(store).forEach((questionId) => delete store[questionId]);
+        state.questionTimingStartedAtMs = (
+            interaction.timerRunning !== false
+            && state.currentActiveQuestionId
+            && !state.readOnly
+            && !state.reviewMode
+            && !state.submitted
+        ) ? Date.now() : null;
     }
 
     function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
@@ -558,6 +617,7 @@
     function setTimerRunning(nextRunning) {
         const nowMs = Date.now();
         syncActiveSuiteTimer(Boolean(nextRunning), nowMs);
+        syncActiveQuestionTimer(Boolean(nextRunning), nowMs);
         interaction.timerRunning = !!nextRunning;
         syncPagePauseState(interaction.timerRunning);
         renderTimer();
@@ -1793,6 +1853,9 @@
                 draft: mergeDraft(existing?.draft, inheritedDraft),
                 navStatus: existing?.navStatus instanceof Map ? existing.navStatus : new Map(),
                 lastResults: existing?.lastResults || null,
+                questionTimeSpentMs: existing?.questionTimeSpentMs && typeof existing.questionTimeSpentMs === 'object'
+                    ? existing.questionTimeSpentMs
+                    : {},
                 durationMs: existing?.durationMs !== null
                     && existing?.durationMs !== undefined
                     && Number.isFinite(Number(existing.durationMs))
@@ -1899,6 +1962,7 @@
         }
         const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
         state.suite.activationGeneration = activationGeneration;
+        checkpointActiveQuestionTiming(Date.now(), false);
         if (!options.skipSave) {
             updateActiveSlotFromCurrentDom('deactivate');
         }
@@ -1909,12 +1973,15 @@
         state.dataKey = slot.dataKey || targetExamId;
         state.dataset = slot.dataset;
         state.lastResults = slot.lastResults || null;
+        state.currentActiveQuestionId = '';
+        state.questionTimingStartedAtMs = null;
         navStatus.clear();
         if (slot.navStatus instanceof Map) {
             slot.navStatus.forEach((value, key) => navStatus.set(key, value));
         }
         interaction.currentHighlightNode = null;
         renderDataset(slot.dataset);
+        updateActiveQuestionHighlight(Array.isArray(slot.dataset?.questionOrder) ? slot.dataset.questionOrder[0] : '');
         refreshDynamicQuestionEnhancements();
         clearCurrentAnswers();
         applyDraftToDom(slot.draft || buildEmptyDraft());
@@ -3434,9 +3501,20 @@
     }
 
     function updateActiveQuestionHighlight(qId) {
-        state.currentActiveQuestionId = qId;
+        const nextQuestionId = normalizeQuestionId(qId) || '';
+        if (nextQuestionId !== state.currentActiveQuestionId) {
+            checkpointActiveQuestionTiming(Date.now(), false);
+            state.currentActiveQuestionId = nextQuestionId;
+            state.questionTimingStartedAtMs = (
+                interaction.timerRunning !== false
+                && nextQuestionId
+                && !state.readOnly
+                && !state.reviewMode
+                && !state.submitted
+            ) ? Date.now() : null;
+        }
         document.querySelectorAll('.q-item').forEach((item) => {
-            if (item.dataset.questionId === qId) {
+            if (item.dataset.questionId === nextQuestionId) {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
@@ -5543,7 +5621,7 @@
         return hasAnswerInDataset(questionId, collectAnswers(), state.dataset);
     }
 
-    function buildResultsFromAnswers(dataset, answers = {}) {
+    function buildResultsFromAnswers(dataset, answers = {}, questionTimingMs = {}) {
         const answerKey = dataset?.answerKey || {};
         const questionOrder = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : Object.keys(answerKey);
         const questionTypeMap = buildQuestionTypeMap(dataset);
@@ -5562,6 +5640,10 @@
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
             const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
+            const questionTimeSpent = Math.max(
+                0,
+                Number(questionTimingMs?.[normalizedQuestionId] ?? questionTimingMs?.[questionId]) || 0
+            ) / 1000;
             const isMultiChoiceKind = (
                 questionGroup
                 && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
@@ -5608,11 +5690,14 @@
                 questionTypePerformance[questionType] = {
                     total: 0,
                     correct: 0,
-                    accuracy: 0
+                    accuracy: 0,
+                    timeSpent: 0,
+                    averageTime: 0
                 };
             }
             totalQuestions += weight;
             questionTypePerformance[questionType].total += weight;
+            questionTypePerformance[questionType].timeSpent += questionTimeSpent;
             if (partialCorrectCount > 0) {
                 correctCount += partialCorrectCount;
                 questionTypePerformance[questionType].correct += partialCorrectCount;
@@ -5623,6 +5708,7 @@
                 correctAnswer,
                 isCorrect,
                 questionType,
+                timeSpent: questionTimeSpent,
                 partialCorrectCount,
                 weight
             };
@@ -5632,6 +5718,7 @@
                 correctAnswer,
                 isCorrect,
                 questionType,
+                timeSpent: questionTimeSpent,
                 partialCorrectCount,
                 weight
             };
@@ -5640,6 +5727,7 @@
         Object.keys(questionTypePerformance).forEach((type) => {
             const performance = questionTypePerformance[type];
             performance.accuracy = performance.total > 0 ? performance.correct / performance.total : 0;
+            performance.averageTime = performance.total > 0 ? performance.timeSpent / performance.total : 0;
         });
 
         const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
@@ -5662,7 +5750,8 @@
     }
 
     function buildResults() {
-        return buildResultsFromAnswers(state.dataset, collectAnswers());
+        checkpointActiveQuestionTiming(Date.now(), interaction.timerRunning);
+        return buildResultsFromAnswers(state.dataset, collectAnswers(), getActiveQuestionTimingStore());
     }
 
     function renderResults(results) {
@@ -6425,6 +6514,8 @@
                 applyReplayRecord,
                 setTimerRunning,
                 checkpointActiveSuiteDuration,
+                checkpointActiveQuestionTiming,
+                updateActiveQuestionHighlight,
                 getSelectionHighlightTestState() {
                     return {
                         hasLastRange: Boolean(interaction.lastRange),
@@ -6767,6 +6858,7 @@
             }
         });
         disableDragInteractions();
+        resetActiveQuestionTiming();
         setTimerRunning(true);
         setExitButtonVisible(false);
         updateNavStatuses();
@@ -7523,12 +7615,16 @@
     function mergeQuestionTypePerformance(target, source = {}) {
         Object.entries(source || {}).forEach(([type, performance]) => {
             if (!target[type]) {
-                target[type] = { total: 0, correct: 0, accuracy: 0 };
+                target[type] = { total: 0, correct: 0, accuracy: 0, timeSpent: 0, averageTime: 0 };
             }
             target[type].total += Number(performance && performance.total) || 0;
             target[type].correct += Number(performance && performance.correct) || 0;
+            target[type].timeSpent += Math.max(0, Number(performance && performance.timeSpent) || 0);
             target[type].accuracy = target[type].total > 0
                 ? target[type].correct / target[type].total
+                : 0;
+            target[type].averageTime = target[type].total > 0
+                ? target[type].timeSpent / target[type].total
                 : 0;
         });
     }
@@ -7552,7 +7648,7 @@
                 return;
             }
             const draft = mergeDraft(slot.draft, {});
-            const results = buildResultsFromAnswers(slot.dataset, draft.answers || {});
+            const results = buildResultsFromAnswers(slot.dataset, draft.answers || {}, slot.questionTimeSpentMs || {});
             slot.lastResults = results;
             slot.navStatus = new Map();
             Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
@@ -8305,6 +8401,7 @@
                 return;
             }
             syncActiveSuiteTimer(detail.running, Date.now());
+            syncActiveQuestionTimer(detail.running, Date.now());
             interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
         });
@@ -8319,6 +8416,7 @@
         renderDataset(dataset);
         updateRedesignedSubHeader();
         buildQuestionNav();
+        updateActiveQuestionHighlight(Array.isArray(dataset?.questionOrder) ? dataset.questionOrder[0] : '');
         attachNavListeners();
         attachFloatingNavListeners();
         attachMemorizeLocatorListeners();

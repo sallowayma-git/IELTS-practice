@@ -8329,4 +8329,172 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+/* Learning-state browse filters and performance breakdowns */
+.browse-learning-filters {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 var(--space-md);
+    padding: 12px 14px;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--border-radius-lg);
+    background: color-mix(in srgb, var(--color-white) 88%, transparent);
+}
 
+.browse-filter-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.browse-filter-group__label {
+    min-width: 38px;
+    color: var(--color-gray-500);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+}
+
+.browse-state-chip {
+    border: 1px solid var(--color-gray-300);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.browse-state-chip:hover { border-color: var(--color-brand-primary); }
+
+.browse-state-chip.active,
+.browse-state-chip[aria-pressed="true"] {
+    border-color: var(--color-brand-primary);
+    background: var(--color-brand-primary);
+    color: var(--color-white);
+}
+
+.exam-favorite-btn {
+    min-width: 40px;
+    padding-inline: 10px;
+    color: var(--color-gray-500);
+}
+
+.exam-favorite-btn[aria-pressed="true"] {
+    border-color: #d49a00;
+    background: #fff6d8;
+    color: #9a6800;
+}
+
+.practice-performance-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+    gap: var(--space-xl);
+    margin-bottom: var(--space-2xl);
+}
+
+.practice-performance-panel {
+    min-width: 0;
+    padding: var(--space-xl);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--border-radius-xl);
+    background: var(--color-white);
+    box-shadow: var(--shadow-sm);
+}
+
+.practice-performance-panel__header h3 {
+    margin: 2px 0 var(--space-lg);
+    font-size: var(--font-size-lg);
+}
+
+.practice-performance-panel__eyebrow {
+    margin: 0;
+    color: var(--color-brand-primary);
+    font-size: 11px;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.question-type-performance-list {
+    display: grid;
+    gap: 8px;
+    max-height: 340px;
+    overflow: auto;
+}
+
+.performance-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: var(--border-radius-md);
+    background: var(--color-gray-50);
+}
+
+.performance-row__heading { display: grid; gap: 2px; }
+
+.performance-row__heading span,
+.practice-performance-panel__note,
+.category-performance-card p {
+    color: var(--color-gray-500);
+    font-size: var(--font-size-xs);
+}
+
+.performance-row__metrics { display: flex; gap: 16px; }
+
+.performance-row__metrics > span {
+    display: grid;
+    min-width: 68px;
+    text-align: right;
+}
+
+.performance-row__metrics strong { color: var(--color-gray-900); }
+.performance-row__metrics small { color: var(--color-gray-500); }
+
+.practice-performance-panel__note {
+    margin: 12px 0 0;
+    line-height: 1.55;
+}
+
+.category-performance-list { display: grid; gap: 10px; }
+
+.category-performance-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 14px;
+    padding: 14px;
+    border-left: 4px solid var(--color-brand-primary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-gray-50);
+}
+
+.category-performance-card h4,
+.category-performance-card p { margin: 0; }
+
+.category-performance-card__accuracy {
+    justify-self: end;
+    color: var(--color-brand-primary);
+}
+
+.category-performance-card p { grid-column: 1 / -1; }
+
+.category-performance-card.is-empty {
+    border-left-color: var(--color-gray-300);
+    opacity: .72;
+}
+
+.performance-empty {
+    margin: 0;
+    padding: 24px 12px;
+    color: var(--color-gray-500);
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .practice-performance-grid { grid-template-columns: 1fr; }
+    .performance-row { grid-template-columns: 1fr; }
+    .performance-row__metrics > span { text-align: left; }
+}

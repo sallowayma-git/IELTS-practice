@@ -219,6 +219,32 @@
                     </div>
                 </div>
 
+                <div class="browse-learning-filters" aria-label="学习状态筛选">
+                    <div
+                        id="browse-category-filter-buttons"
+                        class="browse-filter-group"
+                        aria-label="阅读分项"
+                    >
+                        <span class="browse-filter-group__label">分项</span>
+                        <button class="browse-state-chip active" type="button" aria-pressed="true" data-category-filter="all">全部</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-category-filter="P1">P1</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-category-filter="P2">P2</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-category-filter="P3">P3</button>
+                    </div>
+                    <div
+                        id="browse-progress-filter-buttons"
+                        class="browse-filter-group"
+                        aria-label="练习状态"
+                    >
+                        <span class="browse-filter-group__label">状态</span>
+                        <button class="browse-state-chip active" type="button" aria-pressed="true" data-progress-filter="all">全部</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-progress-filter="unattempted">未做</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-progress-filter="completed">已做</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-progress-filter="wrong">做错</button>
+                        <button class="browse-state-chip" type="button" aria-pressed="false" data-progress-filter="favorite">收藏</button>
+                    </div>
+                </div>
+
                 <div class="search-box">
                     <div class="search-row">
                         <div class="search-input-wrap">
@@ -296,6 +322,7 @@
                                 aria-label="题库排序"
                             >
                                 <option value="default">默认排序</option>
+                                <option value="recommended">智能推荐</option>
                                 <option value="frequency-desc">
                                     频率高→低
                                 </option>
@@ -374,6 +401,28 @@
                             <div class="hero-card__value" id="streak-days">0</div>
                             <div class="hero-card__meta">坚持天数</div>
                         </div>
+                    </div>
+
+                    <div class="practice-performance-grid">
+                        <section class="practice-performance-panel" aria-labelledby="question-type-performance-title">
+                            <div class="practice-performance-panel__header">
+                                <div>
+                                    <p class="practice-performance-panel__eyebrow">Question types</p>
+                                    <h3 id="question-type-performance-title">各题型正确率与平均耗时</h3>
+                                </div>
+                            </div>
+                            <div id="question-type-performance-list" class="question-type-performance-list"></div>
+                            <p id="question-type-time-note" class="practice-performance-panel__note"></p>
+                        </section>
+                        <section class="practice-performance-panel" aria-labelledby="category-performance-title">
+                            <div class="practice-performance-panel__header">
+                                <div>
+                                    <p class="practice-performance-panel__eyebrow">Passage parts</p>
+                                    <h3 id="category-performance-title">P1 / P2 / P3 分项表现</h3>
+                                </div>
+                            </div>
+                            <div id="category-performance-list" class="category-performance-list"></div>
+                        </section>
                     </div>
 
                     <div class="practice-insights-grid">

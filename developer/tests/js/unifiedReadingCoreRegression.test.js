@@ -659,6 +659,34 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
     assert.strictEqual(timer.textContent, '60 minutes remaining', 'empty suite timer limit should fall back instead of rendering 0 minutes remaining');
 }
 
+function testQuestionTypePerformanceIncludesActiveTiming() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        currentActiveQuestionId: 'q1',
+        questionTimingStartedAtMs: 1000,
+        questionTimeSpentMs: {}
+    });
+    assert.strictEqual(hooks.checkpointActiveQuestionTiming(6000, false), 5000, 'active question timing should checkpoint elapsed milliseconds');
+    const dataset = {
+        questionOrder: ['q1', 'q2', 'q3'],
+        answerKey: { q1: 'A', q2: 'B', q3: 'C' },
+        questionGroups: [
+            { kind: 'true_false_not_given', questionIds: ['q1', 'q2'] },
+            { kind: 'short_answer', questionIds: ['q3'] }
+        ]
+    };
+    const results = hooks.buildResultsFromAnswers(
+        dataset,
+        { q1: 'A', q2: 'X', q3: 'C' },
+        { q1: 12000, q2: 8000, q3: 15000 }
+    );
+
+    assert.strictEqual(results.questionTypePerformance['true-false-not-given'].timeSpent, 20);
+    assert.strictEqual(results.questionTypePerformance['true-false-not-given'].averageTime, 10);
+    assert.strictEqual(results.questionTypePerformance['short-answer'].timeSpent, 15);
+    assert.strictEqual(results.answerComparison.q3.timeSpent, 15);
+}
+
 async function main() {
     testClimateLogbookProductionAnswers();
     testWaterFilterProductionAnswersRemainSlotSpecific();
@@ -692,6 +720,7 @@ async function main() {
     testPersistedChoiceStringSplitsForHighlighting();
     testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
+    testQuestionTypePerformanceIncludesActiveTiming();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading submit/timer/scoring regressions covered'

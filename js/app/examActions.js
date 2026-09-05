@@ -116,9 +116,73 @@
         return list.filter((exam) => normalizeFrequencyBucket(exam) === filter);
     }
 
-    function applyExamSort(exams, sortMode) {
+    function normalizeBrowseProgressFilter(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        return ['unattempted', 'completed', 'wrong', 'favorite'].includes(raw) ? raw : 'all';
+    }
+
+    function resolveFavoriteExamIds(value) {
+        return new Set((Array.isArray(value) ? value : (global.__browseFavoriteExamIds || []))
+            .map((id) => String(id || '').trim())
+            .filter(Boolean));
+    }
+
+    function isFavoriteExam(exam, favoriteExamIds) {
+        return Boolean(exam && exam.id && resolveFavoriteExamIds(favoriteExamIds).has(String(exam.id)));
+    }
+
+    function resolveExamCompletionStatus(exam, resolver) {
+        const getStatus = typeof resolver === 'function'
+            ? resolver
+            : (typeof global.getBrowseCompletionStatus === 'function' ? global.getBrowseCompletionStatus : null);
+        if (!getStatus) return null;
+        try {
+            return getStatus(exam) || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function applyBrowseProgressFilter(exams, progressFilter, favoriteExamIds, completionResolver) {
+        const list = Array.isArray(exams) ? exams.slice() : [];
+        const filter = normalizeBrowseProgressFilter(progressFilter || global.__browseProgressFilter || 'all');
+        if (filter === 'all') return list;
+        const favorites = resolveFavoriteExamIds(favoriteExamIds);
+        if (filter === 'favorite') {
+            return list.filter((exam) => exam && exam.id && favorites.has(String(exam.id)));
+        }
+        return list.filter((exam) => {
+            const status = resolveExamCompletionStatus(exam, completionResolver);
+            if (filter === 'unattempted') return !status;
+            if (filter === 'completed') return Boolean(status);
+            return Boolean(status && Number(status.percentage) < 100);
+        });
+    }
+
+    function recommendationScore(exam, favoriteExamIds, completionResolver) {
+        const status = resolveExamCompletionStatus(exam, completionResolver);
+        let score = resolveFrequencyRank(exam) * 8;
+        if (!status) {
+            score += 120;
+        } else if (Number(status.percentage) < 100) {
+            score += 200 + Math.max(0, 100 - Number(status.percentage || 0));
+        }
+        if (isFavoriteExam(exam, favoriteExamIds)) score += 6;
+        const difficulty = resolveDifficultyScore(exam);
+        if (Number.isFinite(difficulty)) score += difficulty;
+        return score;
+    }
+
+    function applyExamSort(exams, sortMode, favoriteExamIds, completionResolver) {
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
+        if (mode === 'recommended') {
+            return list.sort((a, b) => {
+                const scoreDiff = recommendationScore(b, favoriteExamIds, completionResolver)
+                    - recommendationScore(a, favoriteExamIds, completionResolver);
+                return scoreDiff || compareByCategoryThenTitle(a, b);
+            });
+        }
         if (mode === 'difficulty-desc') {
             return list.sort((a, b) => {
                 const difficultyA = resolveDifficultyScore(a);
@@ -141,10 +205,16 @@
         });
     }
 
-    function applyBrowsePostFilters(exams, sortMode, frequencyFilter) {
+    function applyBrowsePostFilters(exams, sortMode, frequencyFilter, progressFilter, favoriteExamIds, completionResolver) {
         const deduplicated = deduplicateExams(exams);
         const frequencyFiltered = applyBrowseFrequencyFilter(deduplicated, frequencyFilter);
-        return applyExamSort(frequencyFiltered, sortMode);
+        const progressFiltered = applyBrowseProgressFilter(
+            frequencyFiltered,
+            progressFilter,
+            favoriteExamIds,
+            completionResolver
+        );
+        return applyExamSort(progressFiltered, sortMode, favoriteExamIds, completionResolver);
     }
 
     function hasListeningEntries(exams) {
@@ -191,6 +261,15 @@
         const frequencyFilter = normalizeBrowseFrequencyFilter(
             safeState.frequencyFilter || safeState.browseFrequencyFilter || global.__browseFrequencyFilter || 'all'
         );
+        const progressFilter = normalizeBrowseProgressFilter(
+            safeState.progressFilter || safeState.browseProgressFilter || global.__browseProgressFilter || 'all'
+        );
+        const favoriteExamIds = Array.isArray(safeState.favoriteExamIds)
+            ? safeState.favoriteExamIds
+            : global.__browseFavoriteExamIds;
+        const completionResolver = typeof safeState.completionResolver === 'function'
+            ? safeState.completionResolver
+            : null;
         const isFrequencyMode = filterMode !== 'default';
         const basePathFilter = isFrequencyMode
             && typeof safeState.basePathFilter === 'string'
@@ -236,7 +315,14 @@
             }
         }
 
-        return applyBrowsePostFilters(list, sortMode, frequencyFilter);
+        return applyBrowsePostFilters(
+            list,
+            sortMode,
+            frequencyFilter,
+            progressFilter,
+            favoriteExamIds,
+            completionResolver
+        );
     }
 
     function formatFrequencyLabel(frequency) {
@@ -1009,6 +1095,9 @@
         try {
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
+            if (typeof global.updateBrowseProgressButtons === 'function') {
+                global.updateBrowseProgressButtons('all');
+            }
             setBrowseFrequencyFilter('all');
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
@@ -1071,6 +1160,20 @@
                 }
             });
         }
+        ['browse-category-filter-buttons', 'browse-progress-filter-buttons'].forEach((containerId) => {
+            const container = document.getElementById(containerId);
+            if (!container || typeof container.querySelectorAll !== 'function') return;
+            container.querySelectorAll('button').forEach((button) => {
+                const value = button.dataset && (button.dataset.categoryFilter || button.dataset.progressFilter);
+                const active = value === 'all';
+                if (button.classList && typeof button.classList.toggle === 'function') {
+                    button.classList.toggle('active', active);
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                }
+            });
+        });
         return true;
     }
 
@@ -1114,6 +1217,7 @@
         try {
             await preferences.patchBrowse({
                 frequencyFilter: 'all',
+                progressFilter: 'all',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -1143,7 +1247,8 @@
     function isPersistedBrowseReset(browse, requireStateManager) {
         if (!browse || !isAllBrowseFilter(browse.lastFilter)
             || !isAllBrowseFilter(browse.filter)
-            || browse.frequencyFilter !== 'all') {
+            || browse.frequencyFilter !== 'all'
+            || (browse.progressFilter && browse.progressFilter !== 'all')) {
             return false;
         }
         if (!requireStateManager) {
@@ -1715,6 +1820,20 @@
             return item;
         }
 
+        if (!isSelecting) {
+            const favoriteBtn = document.createElement('button');
+            const favorite = isFavoriteExam(exam);
+            favoriteBtn.className = 'btn btn-outline exam-item-action-btn exam-favorite-btn';
+            favoriteBtn.type = 'button';
+            favoriteBtn.dataset.action = 'favorite';
+            if (exam.id) favoriteBtn.dataset.examId = exam.id;
+            favoriteBtn.textContent = favorite ? '★' : '☆';
+            favoriteBtn.title = favorite ? '取消收藏' : '收藏题目';
+            favoriteBtn.setAttribute('aria-label', (favorite ? '取消收藏 ' : '收藏 ') + (exam.title || ''));
+            favoriteBtn.setAttribute('aria-pressed', favorite ? 'true' : 'false');
+            actions.appendChild(favoriteBtn);
+        }
+
         const startBtn = document.createElement('button');
         startBtn.className = 'btn exam-item-action-btn';
         startBtn.type = 'button';
@@ -1794,6 +1913,13 @@
                 return;
             }
 
+            if (action === 'favorite') {
+                if (typeof global.toggleBrowseFavorite === 'function') {
+                    global.toggleBrowseFavorite(examId);
+                }
+                return;
+            }
+
             if (action === 'reading-memorize-select') {
                 launchReadingMemorizeExam(examId);
                 return;
@@ -1839,6 +1965,9 @@
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="generate"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="favorite"]', function (event) {
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
@@ -1995,7 +2124,10 @@
         applyExamSort,
         applyBrowsePostFilters,
         applyBrowseFrequencyFilter,
+        applyBrowseProgressFilter,
         normalizeBrowseFrequencyFilter,
+        normalizeBrowseProgressFilter,
+        isFavoriteExam,
         setBrowseFrequencyFilter,
         browseFilterStateOwner,
         resetBrowseFilterStateToAll,

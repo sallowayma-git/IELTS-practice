@@ -1461,8 +1461,12 @@ async function run() {
         suiteEntries: [{
             examId: 'reading-child',
             title: 'Child',
+            category: 'P2',
             correctAnswers: { q1: 'A', q2: 'B' },
             scoreInfo: { correct: 1, total: 2 },
+            questionTypePerformance: {
+                matching_headings: { total: 2, correct: 1, timeSpent: 90 }
+            },
             answers: { 1: 'A' },
             notes: { 1: 'private' },
             replay: { html: '<secret>' }
@@ -1473,6 +1477,10 @@ async function run() {
     assert.strictEqual(suiteLight.suiteEntrySummaries[0].totalQuestions, 2);
     assert.strictEqual(suiteLight.suiteEntrySummaries[0].accuracy, 0.5);
     assert.strictEqual(suiteLight.suiteEntrySummaries[0].type, 'reading');
+    assert.strictEqual(suiteLight.suiteEntrySummaries[0].category, 'P2');
+    assert.deepStrictEqual(suiteLight.suiteEntrySummaries[0].questionTypePerformance, {
+        matching_headings: { total: 2, correct: 1, accuracy: 0.5, timeSpent: 90 }
+    });
     assert(!JSON.stringify(suiteLight.suiteEntrySummaries).includes('answers'));
     assert(!JSON.stringify(suiteLight.suiteEntrySummaries).includes('private'));
     const insightRecord = app.practice.projectLight({
@@ -1488,6 +1496,10 @@ async function run() {
         { true_false_not_given: 2, short_answer: 1 },
         'light projection must retain compact error counts without answer content'
     );
+    assert.deepStrictEqual(insightRecord.questionTypePerformance, {
+        true_false_not_given: { total: 3, correct: 1, accuracy: 1 / 3 },
+        short_answer: { total: 2, correct: 1, accuracy: 0.5 }
+    }, 'light projection must retain compact accuracy metrics for the performance dashboard');
     const insightSuite = app.practice.projectLight({
         id: 'suite-insight',
         type: 'suite',

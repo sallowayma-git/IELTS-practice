@@ -257,10 +257,170 @@
         });
     }
 
+    function firstPerformanceNumber() {
+        for (var i = 0; i < arguments.length; i += 1) {
+            if (arguments[i] === undefined || arguments[i] === null || arguments[i] === '') {
+                continue;
+            }
+            var numeric = Number(arguments[i]);
+            if (isFinite(numeric) && numeric >= 0) {
+                return numeric;
+            }
+        }
+        return 0;
+    }
+
+    function resolvePerformanceCategory(record, exams) {
+        var metadata = record && record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var raw = record && (record.category || metadata.category) || '';
+        var matched = String(raw).toUpperCase().match(/P([1-3])/);
+        if (matched) {
+            return 'P' + matched[1];
+        }
+        var exam = ensureArray(exams).find(function findExam(item) {
+            return item && record && (
+                (record.examId && item.id === record.examId) ||
+                (record.title && item.title === record.title)
+            );
+        });
+        var examCategory = exam && String(exam.category || '').toUpperCase().match(/P([1-3])/);
+        return examCategory ? 'P' + examCategory[1] : '';
+    }
+
+    function expandPerformanceRecords(records) {
+        var expanded = [];
+        ensureArray(records).forEach(function expandRecord(record) {
+            var entries = ensureArray(record && record.suiteEntrySummaries);
+            if (!entries.length) {
+                entries = ensureArray(record && record.suiteEntries);
+            }
+            if (!entries.length) {
+                expanded.push(record);
+                return;
+            }
+            entries.forEach(function addEntry(entry) {
+                expanded.push(Object.assign({}, entry || {}, {
+                    date: (entry && entry.date) || (record && record.date),
+                    metadata: Object.assign({}, (record && record.metadata) || {}, (entry && entry.metadata) || {})
+                }));
+            });
+        });
+        return expanded.filter(Boolean);
+    }
+
+    function calculatePerformanceBreakdown(records, exams) {
+        var questionTypes = {};
+        var categories = {
+            P1: { category: 'P1', attempts: 0, total: 0, correct: 0, duration: 0 },
+            P2: { category: 'P2', attempts: 0, total: 0, correct: 0, duration: 0 },
+            P3: { category: 'P3', attempts: 0, total: 0, correct: 0, duration: 0 }
+        };
+
+        expandPerformanceRecords(records).forEach(function aggregateRecord(record) {
+            var performanceMap = record.questionTypePerformance ||
+                (record.realData && record.realData.questionTypePerformance) || {};
+            var duration = firstPerformanceNumber(record.duration);
+            var performanceTotal = Object.keys(performanceMap).reduce(function sumTypes(sum, type) {
+                var metrics = performanceMap[type] || {};
+                return sum + firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+            }, 0);
+            var explicitTimeTotal = Object.keys(performanceMap).reduce(function sumExplicitTime(sum, type) {
+                var metrics = performanceMap[type] || {};
+                return sum + firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+            }, 0);
+            var unallocatedQuestionTotal = Object.keys(performanceMap).reduce(function sumUnallocated(sum, type) {
+                var metrics = performanceMap[type] || {};
+                var explicit = firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+                return explicit > 0 ? sum : sum + firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+            }, 0);
+
+            Object.keys(performanceMap).forEach(function aggregateType(rawType) {
+                var metrics = performanceMap[rawType] || {};
+                var type = normalizeReadingQuestionType(rawType);
+                var total = firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+                var correct = Math.min(total, firstPerformanceNumber(metrics.correctAnswers, metrics.correct));
+                var explicitTime = firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+                var allocatedTime = explicitTime > 0
+                    ? explicitTime
+                    : (unallocatedQuestionTotal > 0
+                        ? Math.max(0, duration - explicitTimeTotal) * total / unallocatedQuestionTotal
+                        : 0);
+                if (!questionTypes[type]) {
+                    questionTypes[type] = {
+                        type: type,
+                        label: formatQuestionTypeStr(type),
+                        total: 0,
+                        correct: 0,
+                        duration: 0,
+                        estimatedTime: false
+                    };
+                }
+                questionTypes[type].total += total;
+                questionTypes[type].correct += correct;
+                questionTypes[type].duration += allocatedTime;
+                if (explicitTime <= 0 && allocatedTime > 0) {
+                    questionTypes[type].estimatedTime = true;
+                }
+            });
+
+            var category = resolvePerformanceCategory(record, exams);
+            if (categories[category]) {
+                var totalQuestions = firstPerformanceNumber(record.totalQuestions);
+                var correctAnswers = Math.min(totalQuestions, firstPerformanceNumber(record.correctAnswers));
+                if (totalQuestions <= 0 && performanceTotal > 0) {
+                    totalQuestions = performanceTotal;
+                    correctAnswers = Object.keys(performanceMap).reduce(function sumCorrect(sum, type) {
+                        var metrics = performanceMap[type] || {};
+                        return sum + firstPerformanceNumber(metrics.correctAnswers, metrics.correct);
+                    }, 0);
+                }
+                categories[category].attempts += 1;
+                categories[category].total += totalQuestions;
+                categories[category].correct += Math.min(totalQuestions, correctAnswers);
+                categories[category].duration += duration;
+            }
+        });
+
+        var typeRows = Object.keys(questionTypes).map(function finalizeType(type) {
+            var row = questionTypes[type];
+            row.accuracy = row.total > 0 ? row.correct / row.total : 0;
+            row.averageTime = row.total > 0 ? row.duration / row.total : 0;
+            return row;
+        }).sort(function sortTypes(a, b) {
+            var indexA = readingQuestionTypeOrder.indexOf(a.type);
+            var indexB = readingQuestionTypeOrder.indexOf(b.type);
+            return (indexA < 0 ? 999 : indexA) - (indexB < 0 ? 999 : indexB);
+        });
+
+        var categoryRows = ['P1', 'P2', 'P3'].map(function finalizeCategory(category) {
+            var row = categories[category];
+            row.accuracy = row.total > 0 ? row.correct / row.total : 0;
+            row.averageDuration = row.attempts > 0 ? row.duration / row.attempts : 0;
+            return row;
+        });
+        return { questionTypes: typeRows, categories: categoryRows };
+    }
+
     var PracticeStats = {
         calculateSummary: calculateSummary,
         sortByDateDesc: sortByDateDesc,
-        filterByExamType: filterByExamType
+        filterByExamType: filterByExamType,
+        calculatePerformanceBreakdown: calculatePerformanceBreakdown
     };
 
     // --- Practice dashboard view ---
@@ -297,6 +457,107 @@
             element.textContent = value;
         }
     };
+
+    function PracticePerformanceView(options) {
+        options = options || {};
+        this.questionTypeId = options.questionTypeId || 'question-type-performance-list';
+        this.categoryId = options.categoryId || 'category-performance-list';
+        this.noteId = options.noteId || 'question-type-time-note';
+    }
+
+    PracticePerformanceView.prototype.update = function update(data) {
+        if (typeof document === 'undefined') return;
+        data = data || { questionTypes: [], categories: [] };
+        this._renderQuestionTypes(ensureArray(data.questionTypes));
+        this._renderCategories(ensureArray(data.categories));
+        var note = document.getElementById(this.noteId);
+        if (note) {
+            var estimated = ensureArray(data.questionTypes).some(function hasEstimate(row) {
+                return row && row.estimatedTime;
+            });
+            note.textContent = estimated
+                ? '平均耗时按整场用时与各题型题数折算；新记录若含题型计时则优先使用实际值。'
+                : '平均耗时为每题实际或记录内可用耗时。';
+        }
+    };
+
+    PracticePerformanceView.prototype._renderQuestionTypes = function renderQuestionTypes(rows) {
+        var container = document.getElementById(this.questionTypeId);
+        if (!container) return;
+        container.textContent = '';
+        if (!rows.length) {
+            container.appendChild(this._empty('完成一次阅读练习后，这里会显示题型表现。'));
+            return;
+        }
+        rows.forEach(function renderRow(row) {
+            var item = document.createElement('div');
+            item.className = 'performance-row';
+            var heading = document.createElement('div');
+            heading.className = 'performance-row__heading';
+            var name = document.createElement('strong');
+            name.textContent = row.label;
+            var count = document.createElement('span');
+            count.textContent = Math.round(row.correct * 10) / 10 + ' / ' + Math.round(row.total * 10) / 10 + ' 题';
+            heading.appendChild(name);
+            heading.appendChild(count);
+            var metrics = document.createElement('div');
+            metrics.className = 'performance-row__metrics';
+            metrics.appendChild(this._metric('正确率', formatPercentage(row.accuracy * 100)));
+            metrics.appendChild(this._metric('平均耗时', formatPerformanceDuration(row.averageTime)));
+            item.appendChild(heading);
+            item.appendChild(metrics);
+            container.appendChild(item);
+        }, this);
+    };
+
+    PracticePerformanceView.prototype._renderCategories = function renderCategories(rows) {
+        var container = document.getElementById(this.categoryId);
+        if (!container) return;
+        container.textContent = '';
+        rows.forEach(function renderCategory(row) {
+            var item = document.createElement('article');
+            item.className = 'category-performance-card' + (row.attempts ? '' : ' is-empty');
+            var title = document.createElement('h4');
+            title.textContent = row.category;
+            var accuracy = document.createElement('strong');
+            accuracy.className = 'category-performance-card__accuracy';
+            accuracy.textContent = row.attempts ? formatPercentage(row.accuracy * 100) : '暂无记录';
+            var detail = document.createElement('p');
+            detail.textContent = row.attempts
+                ? row.attempts + ' 篇 · ' + (Math.round(row.correct * 10) / 10) + '/' + (Math.round(row.total * 10) / 10) + ' 题 · 平均 ' + formatPerformanceDuration(row.averageDuration) + '/篇'
+                : '完成对应分项后生成统计';
+            item.appendChild(title);
+            item.appendChild(accuracy);
+            item.appendChild(detail);
+            container.appendChild(item);
+        });
+    };
+
+    PracticePerformanceView.prototype._metric = function metric(label, value) {
+        var wrapper = document.createElement('span');
+        var strong = document.createElement('strong');
+        strong.textContent = value;
+        var text = document.createElement('small');
+        text.textContent = label;
+        wrapper.appendChild(strong);
+        wrapper.appendChild(text);
+        return wrapper;
+    };
+
+    PracticePerformanceView.prototype._empty = function empty(message) {
+        var element = document.createElement('p');
+        element.className = 'performance-empty';
+        element.textContent = message;
+        return element;
+    };
+
+    function formatPerformanceDuration(seconds) {
+        var value = Math.max(0, Number(seconds) || 0);
+        if (value < 60) return Math.round(value) + ' 秒';
+        var minutes = Math.floor(value / 60);
+        var remainder = Math.round(value % 60);
+        return remainder ? minutes + '分' + remainder + '秒' : minutes + ' 分钟';
+    }
 
     function formatPercentage(value) {
         if (typeof value !== 'number' || isNaN(value)) {
@@ -2822,6 +3083,20 @@
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
 
+        if (!isSelecting && !isMemorizeSelecting) {
+            var favoriteIds = Array.isArray(window.__browseFavoriteExamIds) ? window.__browseFavoriteExamIds : [];
+            var isFavorite = favoriteIds.map(String).indexOf(String(exam.id)) !== -1;
+            var favoriteBtn = this._createElement('button', {
+                className: 'btn btn-secondary exam-item-action-btn exam-favorite-btn',
+                dataset: { action: 'favorite', examId: exam.id },
+                type: 'button',
+                title: isFavorite ? '取消收藏' : '收藏题目'
+            }, isFavorite ? '★' : '☆');
+            favoriteBtn.setAttribute('aria-label', isFavorite ? '取消收藏 ' + (exam.title || '') : '收藏 ' + (exam.title || ''));
+            favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
+            actions.appendChild(favoriteBtn);
+        }
+
         var startBtn = this._createElement('button', {
             className: actionConfig.startClass,
             dataset: { action: actionConfig.startAction, examId: exam.id },
@@ -3423,6 +3698,14 @@
         };
     };
 
+    LegacyExamListView.prototype.getCompletionStatus = function getCompletionStatus(exam) {
+        return this._getCompletionStatus(exam);
+    };
+
+    global.getBrowseCompletionStatus = function getBrowseCompletionStatus(exam) {
+        return LegacyExamListView.prototype._getCompletionStatus.call(null, exam);
+    };
+
     global.prepareBrowseCompletionIndex = prepareBrowseCompletionIndex;
     global.isPreparedBrowseCompletionIndex = isPreparedBrowseCompletionIndex;
     global.commitBrowseCompletionIndex = commitBrowseCompletionIndex;
@@ -3977,6 +4260,7 @@
 
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
+    global.PracticePerformanceView = PracticePerformanceView;
     global.PracticeTrendRenderer = PracticeTrendRenderer;
     global.PracticePriorityRenderer = PracticePriorityRenderer;
     global.PracticeHistoryRenderer = historyRenderer;

@@ -260,10 +260,170 @@
         });
     }
 
+    function firstPerformanceNumber() {
+        for (var i = 0; i < arguments.length; i += 1) {
+            if (arguments[i] === undefined || arguments[i] === null || arguments[i] === '') {
+                continue;
+            }
+            var numeric = Number(arguments[i]);
+            if (isFinite(numeric) && numeric >= 0) {
+                return numeric;
+            }
+        }
+        return 0;
+    }
+
+    function resolvePerformanceCategory(record, exams) {
+        var metadata = record && record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var raw = record && (record.category || metadata.category) || '';
+        var matched = String(raw).toUpperCase().match(/P([1-3])/);
+        if (matched) {
+            return 'P' + matched[1];
+        }
+        var exam = ensureArray(exams).find(function findExam(item) {
+            return item && record && (
+                (record.examId && item.id === record.examId) ||
+                (record.title && item.title === record.title)
+            );
+        });
+        var examCategory = exam && String(exam.category || '').toUpperCase().match(/P([1-3])/);
+        return examCategory ? 'P' + examCategory[1] : '';
+    }
+
+    function expandPerformanceRecords(records) {
+        var expanded = [];
+        ensureArray(records).forEach(function expandRecord(record) {
+            var entries = ensureArray(record && record.suiteEntrySummaries);
+            if (!entries.length) {
+                entries = ensureArray(record && record.suiteEntries);
+            }
+            if (!entries.length) {
+                expanded.push(record);
+                return;
+            }
+            entries.forEach(function addEntry(entry) {
+                expanded.push(Object.assign({}, entry || {}, {
+                    date: (entry && entry.date) || (record && record.date),
+                    metadata: Object.assign({}, (record && record.metadata) || {}, (entry && entry.metadata) || {})
+                }));
+            });
+        });
+        return expanded.filter(Boolean);
+    }
+
+    function calculatePerformanceBreakdown(records, exams) {
+        var questionTypes = {};
+        var categories = {
+            P1: { category: 'P1', attempts: 0, total: 0, correct: 0, duration: 0 },
+            P2: { category: 'P2', attempts: 0, total: 0, correct: 0, duration: 0 },
+            P3: { category: 'P3', attempts: 0, total: 0, correct: 0, duration: 0 }
+        };
+
+        expandPerformanceRecords(records).forEach(function aggregateRecord(record) {
+            var performanceMap = record.questionTypePerformance ||
+                (record.realData && record.realData.questionTypePerformance) || {};
+            var duration = firstPerformanceNumber(record.duration);
+            var performanceTotal = Object.keys(performanceMap).reduce(function sumTypes(sum, type) {
+                var metrics = performanceMap[type] || {};
+                return sum + firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+            }, 0);
+            var explicitTimeTotal = Object.keys(performanceMap).reduce(function sumExplicitTime(sum, type) {
+                var metrics = performanceMap[type] || {};
+                return sum + firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+            }, 0);
+            var unallocatedQuestionTotal = Object.keys(performanceMap).reduce(function sumUnallocated(sum, type) {
+                var metrics = performanceMap[type] || {};
+                var explicit = firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+                return explicit > 0 ? sum : sum + firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+            }, 0);
+
+            Object.keys(performanceMap).forEach(function aggregateType(rawType) {
+                var metrics = performanceMap[rawType] || {};
+                var type = normalizeReadingQuestionType(rawType);
+                var total = firstPerformanceNumber(metrics.totalQuestions, metrics.total);
+                var correct = Math.min(total, firstPerformanceNumber(metrics.correctAnswers, metrics.correct));
+                var explicitTime = firstPerformanceNumber(
+                    metrics.timeSpent,
+                    metrics.duration,
+                    metrics.durationSeconds,
+                    metrics.elapsedSeconds
+                );
+                var allocatedTime = explicitTime > 0
+                    ? explicitTime
+                    : (unallocatedQuestionTotal > 0
+                        ? Math.max(0, duration - explicitTimeTotal) * total / unallocatedQuestionTotal
+                        : 0);
+                if (!questionTypes[type]) {
+                    questionTypes[type] = {
+                        type: type,
+                        label: formatQuestionTypeStr(type),
+                        total: 0,
+                        correct: 0,
+                        duration: 0,
+                        estimatedTime: false
+                    };
+                }
+                questionTypes[type].total += total;
+                questionTypes[type].correct += correct;
+                questionTypes[type].duration += allocatedTime;
+                if (explicitTime <= 0 && allocatedTime > 0) {
+                    questionTypes[type].estimatedTime = true;
+                }
+            });
+
+            var category = resolvePerformanceCategory(record, exams);
+            if (categories[category]) {
+                var totalQuestions = firstPerformanceNumber(record.totalQuestions);
+                var correctAnswers = Math.min(totalQuestions, firstPerformanceNumber(record.correctAnswers));
+                if (totalQuestions <= 0 && performanceTotal > 0) {
+                    totalQuestions = performanceTotal;
+                    correctAnswers = Object.keys(performanceMap).reduce(function sumCorrect(sum, type) {
+                        var metrics = performanceMap[type] || {};
+                        return sum + firstPerformanceNumber(metrics.correctAnswers, metrics.correct);
+                    }, 0);
+                }
+                categories[category].attempts += 1;
+                categories[category].total += totalQuestions;
+                categories[category].correct += Math.min(totalQuestions, correctAnswers);
+                categories[category].duration += duration;
+            }
+        });
+
+        var typeRows = Object.keys(questionTypes).map(function finalizeType(type) {
+            var row = questionTypes[type];
+            row.accuracy = row.total > 0 ? row.correct / row.total : 0;
+            row.averageTime = row.total > 0 ? row.duration / row.total : 0;
+            return row;
+        }).sort(function sortTypes(a, b) {
+            var indexA = readingQuestionTypeOrder.indexOf(a.type);
+            var indexB = readingQuestionTypeOrder.indexOf(b.type);
+            return (indexA < 0 ? 999 : indexA) - (indexB < 0 ? 999 : indexB);
+        });
+
+        var categoryRows = ['P1', 'P2', 'P3'].map(function finalizeCategory(category) {
+            var row = categories[category];
+            row.accuracy = row.total > 0 ? row.correct / row.total : 0;
+            row.averageDuration = row.attempts > 0 ? row.duration / row.attempts : 0;
+            return row;
+        });
+        return { questionTypes: typeRows, categories: categoryRows };
+    }
+
     var PracticeStats = {
         calculateSummary: calculateSummary,
         sortByDateDesc: sortByDateDesc,
-        filterByExamType: filterByExamType
+        filterByExamType: filterByExamType,
+        calculatePerformanceBreakdown: calculatePerformanceBreakdown
     };
 
     // --- Practice dashboard view ---
@@ -300,6 +460,107 @@
             element.textContent = value;
         }
     };
+
+    function PracticePerformanceView(options) {
+        options = options || {};
+        this.questionTypeId = options.questionTypeId || 'question-type-performance-list';
+        this.categoryId = options.categoryId || 'category-performance-list';
+        this.noteId = options.noteId || 'question-type-time-note';
+    }
+
+    PracticePerformanceView.prototype.update = function update(data) {
+        if (typeof document === 'undefined') return;
+        data = data || { questionTypes: [], categories: [] };
+        this._renderQuestionTypes(ensureArray(data.questionTypes));
+        this._renderCategories(ensureArray(data.categories));
+        var note = document.getElementById(this.noteId);
+        if (note) {
+            var estimated = ensureArray(data.questionTypes).some(function hasEstimate(row) {
+                return row && row.estimatedTime;
+            });
+            note.textContent = estimated
+                ? '平均耗时按整场用时与各题型题数折算；新记录若含题型计时则优先使用实际值。'
+                : '平均耗时为每题实际或记录内可用耗时。';
+        }
+    };
+
+    PracticePerformanceView.prototype._renderQuestionTypes = function renderQuestionTypes(rows) {
+        var container = document.getElementById(this.questionTypeId);
+        if (!container) return;
+        container.textContent = '';
+        if (!rows.length) {
+            container.appendChild(this._empty('完成一次阅读练习后，这里会显示题型表现。'));
+            return;
+        }
+        rows.forEach(function renderRow(row) {
+            var item = document.createElement('div');
+            item.className = 'performance-row';
+            var heading = document.createElement('div');
+            heading.className = 'performance-row__heading';
+            var name = document.createElement('strong');
+            name.textContent = row.label;
+            var count = document.createElement('span');
+            count.textContent = Math.round(row.correct * 10) / 10 + ' / ' + Math.round(row.total * 10) / 10 + ' 题';
+            heading.appendChild(name);
+            heading.appendChild(count);
+            var metrics = document.createElement('div');
+            metrics.className = 'performance-row__metrics';
+            metrics.appendChild(this._metric('正确率', formatPercentage(row.accuracy * 100)));
+            metrics.appendChild(this._metric('平均耗时', formatPerformanceDuration(row.averageTime)));
+            item.appendChild(heading);
+            item.appendChild(metrics);
+            container.appendChild(item);
+        }, this);
+    };
+
+    PracticePerformanceView.prototype._renderCategories = function renderCategories(rows) {
+        var container = document.getElementById(this.categoryId);
+        if (!container) return;
+        container.textContent = '';
+        rows.forEach(function renderCategory(row) {
+            var item = document.createElement('article');
+            item.className = 'category-performance-card' + (row.attempts ? '' : ' is-empty');
+            var title = document.createElement('h4');
+            title.textContent = row.category;
+            var accuracy = document.createElement('strong');
+            accuracy.className = 'category-performance-card__accuracy';
+            accuracy.textContent = row.attempts ? formatPercentage(row.accuracy * 100) : '暂无记录';
+            var detail = document.createElement('p');
+            detail.textContent = row.attempts
+                ? row.attempts + ' 篇 · ' + (Math.round(row.correct * 10) / 10) + '/' + (Math.round(row.total * 10) / 10) + ' 题 · 平均 ' + formatPerformanceDuration(row.averageDuration) + '/篇'
+                : '完成对应分项后生成统计';
+            item.appendChild(title);
+            item.appendChild(accuracy);
+            item.appendChild(detail);
+            container.appendChild(item);
+        });
+    };
+
+    PracticePerformanceView.prototype._metric = function metric(label, value) {
+        var wrapper = document.createElement('span');
+        var strong = document.createElement('strong');
+        strong.textContent = value;
+        var text = document.createElement('small');
+        text.textContent = label;
+        wrapper.appendChild(strong);
+        wrapper.appendChild(text);
+        return wrapper;
+    };
+
+    PracticePerformanceView.prototype._empty = function empty(message) {
+        var element = document.createElement('p');
+        element.className = 'performance-empty';
+        element.textContent = message;
+        return element;
+    };
+
+    function formatPerformanceDuration(seconds) {
+        var value = Math.max(0, Number(seconds) || 0);
+        if (value < 60) return Math.round(value) + ' 秒';
+        var minutes = Math.floor(value / 60);
+        var remainder = Math.round(value % 60);
+        return remainder ? minutes + '分' + remainder + '秒' : minutes + ' 分钟';
+    }
 
     function formatPercentage(value) {
         if (typeof value !== 'number' || isNaN(value)) {
@@ -2825,6 +3086,20 @@
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
 
+        if (!isSelecting && !isMemorizeSelecting) {
+            var favoriteIds = Array.isArray(window.__browseFavoriteExamIds) ? window.__browseFavoriteExamIds : [];
+            var isFavorite = favoriteIds.map(String).indexOf(String(exam.id)) !== -1;
+            var favoriteBtn = this._createElement('button', {
+                className: 'btn btn-secondary exam-item-action-btn exam-favorite-btn',
+                dataset: { action: 'favorite', examId: exam.id },
+                type: 'button',
+                title: isFavorite ? '取消收藏' : '收藏题目'
+            }, isFavorite ? '★' : '☆');
+            favoriteBtn.setAttribute('aria-label', isFavorite ? '取消收藏 ' + (exam.title || '') : '收藏 ' + (exam.title || ''));
+            favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
+            actions.appendChild(favoriteBtn);
+        }
+
         var startBtn = this._createElement('button', {
             className: actionConfig.startClass,
             dataset: { action: actionConfig.startAction, examId: exam.id },
@@ -3426,6 +3701,14 @@
         };
     };
 
+    LegacyExamListView.prototype.getCompletionStatus = function getCompletionStatus(exam) {
+        return this._getCompletionStatus(exam);
+    };
+
+    global.getBrowseCompletionStatus = function getBrowseCompletionStatus(exam) {
+        return LegacyExamListView.prototype._getCompletionStatus.call(null, exam);
+    };
+
     global.prepareBrowseCompletionIndex = prepareBrowseCompletionIndex;
     global.isPreparedBrowseCompletionIndex = isPreparedBrowseCompletionIndex;
     global.commitBrowseCompletionIndex = commitBrowseCompletionIndex;
@@ -3980,6 +4263,7 @@
 
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
+    global.PracticePerformanceView = PracticePerformanceView;
     global.PracticeTrendRenderer = PracticeTrendRenderer;
     global.PracticePriorityRenderer = PracticePriorityRenderer;
     global.PracticeHistoryRenderer = historyRenderer;
@@ -4311,9 +4595,73 @@
         return list.filter((exam) => normalizeFrequencyBucket(exam) === filter);
     }
 
-    function applyExamSort(exams, sortMode) {
+    function normalizeBrowseProgressFilter(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        return ['unattempted', 'completed', 'wrong', 'favorite'].includes(raw) ? raw : 'all';
+    }
+
+    function resolveFavoriteExamIds(value) {
+        return new Set((Array.isArray(value) ? value : (global.__browseFavoriteExamIds || []))
+            .map((id) => String(id || '').trim())
+            .filter(Boolean));
+    }
+
+    function isFavoriteExam(exam, favoriteExamIds) {
+        return Boolean(exam && exam.id && resolveFavoriteExamIds(favoriteExamIds).has(String(exam.id)));
+    }
+
+    function resolveExamCompletionStatus(exam, resolver) {
+        const getStatus = typeof resolver === 'function'
+            ? resolver
+            : (typeof global.getBrowseCompletionStatus === 'function' ? global.getBrowseCompletionStatus : null);
+        if (!getStatus) return null;
+        try {
+            return getStatus(exam) || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function applyBrowseProgressFilter(exams, progressFilter, favoriteExamIds, completionResolver) {
+        const list = Array.isArray(exams) ? exams.slice() : [];
+        const filter = normalizeBrowseProgressFilter(progressFilter || global.__browseProgressFilter || 'all');
+        if (filter === 'all') return list;
+        const favorites = resolveFavoriteExamIds(favoriteExamIds);
+        if (filter === 'favorite') {
+            return list.filter((exam) => exam && exam.id && favorites.has(String(exam.id)));
+        }
+        return list.filter((exam) => {
+            const status = resolveExamCompletionStatus(exam, completionResolver);
+            if (filter === 'unattempted') return !status;
+            if (filter === 'completed') return Boolean(status);
+            return Boolean(status && Number(status.percentage) < 100);
+        });
+    }
+
+    function recommendationScore(exam, favoriteExamIds, completionResolver) {
+        const status = resolveExamCompletionStatus(exam, completionResolver);
+        let score = resolveFrequencyRank(exam) * 8;
+        if (!status) {
+            score += 120;
+        } else if (Number(status.percentage) < 100) {
+            score += 200 + Math.max(0, 100 - Number(status.percentage || 0));
+        }
+        if (isFavoriteExam(exam, favoriteExamIds)) score += 6;
+        const difficulty = resolveDifficultyScore(exam);
+        if (Number.isFinite(difficulty)) score += difficulty;
+        return score;
+    }
+
+    function applyExamSort(exams, sortMode, favoriteExamIds, completionResolver) {
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
+        if (mode === 'recommended') {
+            return list.sort((a, b) => {
+                const scoreDiff = recommendationScore(b, favoriteExamIds, completionResolver)
+                    - recommendationScore(a, favoriteExamIds, completionResolver);
+                return scoreDiff || compareByCategoryThenTitle(a, b);
+            });
+        }
         if (mode === 'difficulty-desc') {
             return list.sort((a, b) => {
                 const difficultyA = resolveDifficultyScore(a);
@@ -4336,10 +4684,16 @@
         });
     }
 
-    function applyBrowsePostFilters(exams, sortMode, frequencyFilter) {
+    function applyBrowsePostFilters(exams, sortMode, frequencyFilter, progressFilter, favoriteExamIds, completionResolver) {
         const deduplicated = deduplicateExams(exams);
         const frequencyFiltered = applyBrowseFrequencyFilter(deduplicated, frequencyFilter);
-        return applyExamSort(frequencyFiltered, sortMode);
+        const progressFiltered = applyBrowseProgressFilter(
+            frequencyFiltered,
+            progressFilter,
+            favoriteExamIds,
+            completionResolver
+        );
+        return applyExamSort(progressFiltered, sortMode, favoriteExamIds, completionResolver);
     }
 
     function hasListeningEntries(exams) {
@@ -4386,6 +4740,15 @@
         const frequencyFilter = normalizeBrowseFrequencyFilter(
             safeState.frequencyFilter || safeState.browseFrequencyFilter || global.__browseFrequencyFilter || 'all'
         );
+        const progressFilter = normalizeBrowseProgressFilter(
+            safeState.progressFilter || safeState.browseProgressFilter || global.__browseProgressFilter || 'all'
+        );
+        const favoriteExamIds = Array.isArray(safeState.favoriteExamIds)
+            ? safeState.favoriteExamIds
+            : global.__browseFavoriteExamIds;
+        const completionResolver = typeof safeState.completionResolver === 'function'
+            ? safeState.completionResolver
+            : null;
         const isFrequencyMode = filterMode !== 'default';
         const basePathFilter = isFrequencyMode
             && typeof safeState.basePathFilter === 'string'
@@ -4431,7 +4794,14 @@
             }
         }
 
-        return applyBrowsePostFilters(list, sortMode, frequencyFilter);
+        return applyBrowsePostFilters(
+            list,
+            sortMode,
+            frequencyFilter,
+            progressFilter,
+            favoriteExamIds,
+            completionResolver
+        );
     }
 
     function formatFrequencyLabel(frequency) {
@@ -5204,6 +5574,9 @@
         try {
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
+            if (typeof global.updateBrowseProgressButtons === 'function') {
+                global.updateBrowseProgressButtons('all');
+            }
             setBrowseFrequencyFilter('all');
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
@@ -5266,6 +5639,20 @@
                 }
             });
         }
+        ['browse-category-filter-buttons', 'browse-progress-filter-buttons'].forEach((containerId) => {
+            const container = document.getElementById(containerId);
+            if (!container || typeof container.querySelectorAll !== 'function') return;
+            container.querySelectorAll('button').forEach((button) => {
+                const value = button.dataset && (button.dataset.categoryFilter || button.dataset.progressFilter);
+                const active = value === 'all';
+                if (button.classList && typeof button.classList.toggle === 'function') {
+                    button.classList.toggle('active', active);
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                }
+            });
+        });
         return true;
     }
 
@@ -5309,6 +5696,7 @@
         try {
             await preferences.patchBrowse({
                 frequencyFilter: 'all',
+                progressFilter: 'all',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -5338,7 +5726,8 @@
     function isPersistedBrowseReset(browse, requireStateManager) {
         if (!browse || !isAllBrowseFilter(browse.lastFilter)
             || !isAllBrowseFilter(browse.filter)
-            || browse.frequencyFilter !== 'all') {
+            || browse.frequencyFilter !== 'all'
+            || (browse.progressFilter && browse.progressFilter !== 'all')) {
             return false;
         }
         if (!requireStateManager) {
@@ -5910,6 +6299,20 @@
             return item;
         }
 
+        if (!isSelecting) {
+            const favoriteBtn = document.createElement('button');
+            const favorite = isFavoriteExam(exam);
+            favoriteBtn.className = 'btn btn-outline exam-item-action-btn exam-favorite-btn';
+            favoriteBtn.type = 'button';
+            favoriteBtn.dataset.action = 'favorite';
+            if (exam.id) favoriteBtn.dataset.examId = exam.id;
+            favoriteBtn.textContent = favorite ? '★' : '☆';
+            favoriteBtn.title = favorite ? '取消收藏' : '收藏题目';
+            favoriteBtn.setAttribute('aria-label', (favorite ? '取消收藏 ' : '收藏 ') + (exam.title || ''));
+            favoriteBtn.setAttribute('aria-pressed', favorite ? 'true' : 'false');
+            actions.appendChild(favoriteBtn);
+        }
+
         const startBtn = document.createElement('button');
         startBtn.className = 'btn exam-item-action-btn';
         startBtn.type = 'button';
@@ -5989,6 +6392,13 @@
                 return;
             }
 
+            if (action === 'favorite') {
+                if (typeof global.toggleBrowseFavorite === 'function') {
+                    global.toggleBrowseFavorite(examId);
+                }
+                return;
+            }
+
             if (action === 'reading-memorize-select') {
                 launchReadingMemorizeExam(examId);
                 return;
@@ -6034,6 +6444,9 @@
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="generate"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="favorite"]', function (event) {
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
@@ -6190,7 +6603,10 @@
         applyExamSort,
         applyBrowsePostFilters,
         applyBrowseFrequencyFilter,
+        applyBrowseProgressFilter,
         normalizeBrowseFrequencyFilter,
+        normalizeBrowseProgressFilter,
+        isFavoriteExam,
         setBrowseFrequencyFilter,
         browseFilterStateOwner,
         resetBrowseFilterStateToAll,
@@ -18174,6 +18590,7 @@ Object.defineProperty(window, 'examListViewInstance', {
 });
 
 let practiceDashboardViewInstance = null;
+let practicePerformanceViewInstance = null;
 let practiceTrendRendererInstance = null;
 let practicePriorityRendererInstance = null;
 let legacyNavigationController = null;
@@ -18338,6 +18755,13 @@ function ensurePracticeDashboardView() {
         });
     }
     return practiceDashboardViewInstance;
+}
+
+function ensurePracticePerformanceView() {
+    if (!practicePerformanceViewInstance && window.PracticePerformanceView) {
+        practicePerformanceViewInstance = new window.PracticePerformanceView();
+    }
+    return practicePerformanceViewInstance;
 }
 
 function ensurePracticeTrendRenderer() {
@@ -19988,6 +20412,11 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         applyPracticeSummaryFallback(summary);
     }
 
+    const performanceView = ensurePracticePerformanceView();
+    if (performanceView && stats && typeof stats.calculatePerformanceBreakdown === 'function') {
+        performanceView.update(stats.calculatePerformanceBreakdown(records, examIndex));
+    }
+
     // --- 3. Filter and Render History List ---
     const historyContainer = document.getElementById('practice-history-list') || document.getElementById('history-list');
     if (!historyContainer) {
@@ -20890,6 +21319,7 @@ async function applyBrowseFilter(
         // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
         browseInitialFilterHydrationConsumed = true;
         setBrowseFilterState(normalizedCategory, effectiveType);
+        updateBrowseCategoryButtons(normalizedCategory);
 
 
         setBrowseTitle(memorizeSelectionActive ? '阅读背题选题' : formatBrowseTitle(normalizedCategory, effectiveType));
@@ -21259,6 +21689,8 @@ async function setupBrowseControls(options = {}) {
                 updateBrowseFrequencyButtons(
                     browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
                 );
+                updateBrowseProgressButtons(browse.progressFilter || window.__browseProgressFilter || 'all');
+                window.__browseFavoriteExamIds = normalizeBrowseFavoriteIds(browse.favoriteExamIds);
             }
             browseControlsSeeded = true;
             browseControlsSeedPromise = null;
@@ -21270,6 +21702,7 @@ async function setupBrowseControls(options = {}) {
     }
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
+    setupBrowseLearningFilterControls();
     return true;
 }
 
@@ -21290,7 +21723,7 @@ function setupBrowseSortControl() {
     }
     const normalizeSortMode = (value) => {
         const mode = String(value || 'default').trim().toLowerCase();
-        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
+        return mode === 'frequency-desc' || mode === 'difficulty-desc' || mode === 'recommended' ? mode : 'default';
     };
     let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
     if (!savedMode) savedMode = 'default';
@@ -21356,6 +21789,94 @@ function filterByFrequency(filter) {
     persistBrowsePreference({ frequencyFilter: next }).catch(console.warn);
     updateBrowseFrequencyButtons(next);
     refreshBrowseResults({ foreground: true });
+}
+
+function normalizeBrowseProgressFilter(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return ['unattempted', 'completed', 'wrong', 'favorite'].includes(normalized)
+        ? normalized
+        : 'all';
+}
+
+function normalizeBrowseFavoriteIds(value) {
+    return Array.from(new Set((Array.isArray(value) ? value : [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)))
+        .slice(0, 2000);
+}
+
+function updateBrowseProgressButtons(filter) {
+    const active = normalizeBrowseProgressFilter(filter);
+    window.__browseProgressFilter = active;
+    const container = document.getElementById('browse-progress-filter-buttons');
+    if (container) {
+        container.querySelectorAll('[data-progress-filter]').forEach((button) => {
+            const selected = button.dataset.progressFilter === active;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+    }
+    return active;
+}
+
+function updateBrowseCategoryButtons(category) {
+    const active = /^P[1-3]$/.test(String(category || '').toUpperCase())
+        ? String(category).toUpperCase()
+        : 'all';
+    const container = document.getElementById('browse-category-filter-buttons');
+    if (container) {
+        container.querySelectorAll('[data-category-filter]').forEach((button) => {
+            const selected = button.dataset.categoryFilter === active;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+    }
+    return active;
+}
+
+function setupBrowseLearningFilterControls() {
+    const categoryContainer = document.getElementById('browse-category-filter-buttons');
+    if (categoryContainer && categoryContainer.dataset.bound !== 'true') {
+        categoryContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-category-filter]');
+            if (!button || !categoryContainer.contains(button)) return;
+            const category = updateBrowseCategoryButtons(button.dataset.categoryFilter);
+            applyBrowseFilter(category, getCurrentExamType());
+        });
+        categoryContainer.dataset.bound = 'true';
+    }
+    updateBrowseCategoryButtons(getCurrentCategory());
+
+    const progressContainer = document.getElementById('browse-progress-filter-buttons');
+    if (progressContainer && progressContainer.dataset.bound !== 'true') {
+        progressContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-progress-filter]');
+            if (!button || !progressContainer.contains(button)) return;
+            const requested = normalizeBrowseProgressFilter(button.dataset.progressFilter);
+            const current = normalizeBrowseProgressFilter(window.__browseProgressFilter);
+            const next = requested !== 'all' && requested === current ? 'all' : requested;
+            browseControlsMutationRevision += 1;
+            updateBrowseProgressButtons(next);
+            persistBrowsePreference({ progressFilter: next }).catch(console.warn);
+            refreshBrowseResults({ foreground: true });
+        });
+        progressContainer.dataset.bound = 'true';
+    }
+    updateBrowseProgressButtons(window.__browseProgressFilter || 'all');
+}
+
+function toggleBrowseFavorite(examId) {
+    const id = String(examId || '').trim();
+    if (!id) return false;
+    const favorites = new Set(normalizeBrowseFavoriteIds(window.__browseFavoriteExamIds));
+    const selected = !favorites.has(id);
+    if (selected) favorites.add(id);
+    else favorites.delete(id);
+    window.__browseFavoriteExamIds = normalizeBrowseFavoriteIds(Array.from(favorites));
+    browseControlsMutationRevision += 1;
+    persistBrowsePreference({ favoriteExamIds: window.__browseFavoriteExamIds }).catch(console.warn);
+    refreshBrowseResults({ foreground: true });
+    return selected;
 }
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
@@ -22150,7 +22671,9 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
             basePathFilter,
             browsePath: window.__browsePath,
             sortMode: window.__browseSortMode,
-            frequencyFilter: window.__browseFrequencyFilter
+            frequencyFilter: window.__browseFrequencyFilter,
+            progressFilter: window.__browseProgressFilter,
+            favoriteExamIds: window.__browseFavoriteExamIds
         });
     }
 
@@ -22168,7 +22691,9 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         list = window.ExamActions.applyBrowsePostFilters(
             list,
             window.__browseSortMode,
-            window.__browseFrequencyFilter
+            window.__browseFrequencyFilter,
+            window.__browseProgressFilter,
+            window.__browseFavoriteExamIds
         );
     }
     return list;
@@ -22990,6 +23515,7 @@ if (typeof window !== 'undefined') {
     window.switchLibraryConfig = switchLibraryConfig;
     window.deleteLibraryConfig = deleteLibraryConfig;
     window.setupBrowseControls = setupBrowseControls;
+    window.toggleBrowseFavorite = toggleBrowseFavorite;
 }
 
 

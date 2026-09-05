@@ -161,6 +161,45 @@ function testDifficultySort(service) {
     assert.strictEqual(result[result.length - 1].id, 'freq-b', '缺少 difficultyScore 的题目应排在最后');
 }
 
+function testLearningStateFiltersAndRecommendations(service) {
+    const exams = createExams();
+    const statuses = {
+        'p1-09': { percentage: 100 },
+        'r1-other': { percentage: 55 },
+        p2: { percentage: 80 }
+    };
+    const completionResolver = (exam) => statuses[exam.id] || null;
+
+    const unattempted = service.filterExams(exams, {
+        activeExamType: 'reading',
+        progressFilter: 'unattempted',
+        completionResolver
+    });
+    assert(unattempted.every((exam) => !statuses[exam.id]), '未做筛选只能保留没有练习记录的题目');
+
+    const wrong = service.filterExams(exams, {
+        activeExamType: 'reading',
+        progressFilter: 'wrong',
+        completionResolver
+    });
+    assert.deepStrictEqual(Array.from(wrong, (exam) => exam.id).sort(), ['p2', 'r1-other'], '做错筛选应保留最近正确率低于 100% 的题目');
+
+    const favorite = service.filterExams(exams, {
+        activeExamType: 'reading',
+        progressFilter: 'favorite',
+        favoriteExamIds: ['p2'],
+        completionResolver
+    });
+    assert.deepStrictEqual(Array.from(favorite, (exam) => exam.id), ['p2'], '收藏筛选应按持久化题目 id 过滤');
+
+    const recommended = service.filterExams(exams, {
+        activeExamType: 'reading',
+        sortMode: 'recommended',
+        completionResolver
+    });
+    assert.strictEqual(recommended[0].id, 'r1-other', '智能推荐应优先安排正确率较低的已做错题');
+}
+
 function testLoadExamListBindsBrowseControls() {
     const harness = createExamActionsHarness();
     assert(harness.window.ExamActions, 'ExamActions 应该挂到 window');
@@ -197,6 +236,7 @@ function main() {
     testFallbackCategoryInFrequencyMode(service);
     testFrequencySort(service);
     testDifficultySort(service);
+    testLearningStateFiltersAndRecommendations(service);
     testLoadExamListBindsBrowseControls();
     testInvalidInput(service);
     testExamFilterHostIsNotForwardOnlyStub();
