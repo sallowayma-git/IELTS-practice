@@ -23,13 +23,15 @@
 
 > **main** 适合所有用户直接使用；**feature/multi-device-easy-deploy** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
 
+| 关联仓库 | 说明 | 状态 | 完成度 | 技术特征 |
+|----------|------|------|--------|----------|
+| [IELTS-Project(IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | — | ![技术](https://img.shields.io/badge/技术-Docker_Compose_%2B_PostgreSQL-blue) |
+
 ## 项目概述
 
 IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
 
 系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
-
-当前准备发布版本：`0.6.2-fix`。
 
 ## 快速开始
 
