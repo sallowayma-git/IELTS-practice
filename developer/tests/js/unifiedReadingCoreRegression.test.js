@@ -206,6 +206,57 @@ function plain(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+function loadProductionExamHooks(examId) {
+    const { hooks, window, context } = loadHooks();
+    let dataset = null;
+    window.__READING_EXAM_DATA__ = {
+        register(registeredId, payload) {
+            if (registeredId === examId) dataset = payload;
+        }
+    };
+    loadScript(`assets/generated/reading-exams/${examId}.js`, context);
+    assert(dataset, `${examId} production fixture should register`);
+    return { hooks, dataset };
+}
+
+function testClimateLogbookProductionAnswers() {
+    const { hooks, dataset } = loadProductionExamHooks('p2-medium-245');
+    for (const [selection, expectedCredit] of [
+        [['C', 'E'], 2],
+        [['E', 'C'], 2],
+        [['C', 'D'], 1],
+        [['D', 'C'], 1]
+    ]) {
+        for (const answers of [
+            { q9: selection[0], q10: selection[1] },
+            { q9: selection, q10: selection }
+        ]) {
+            const results = hooks.buildResultsFromAnswers(dataset, answers);
+            assert.strictEqual(results.scoreInfo.correct, expectedCredit, `${selection} must receive ${expectedCredit}/2 for Q22–23`);
+            assert.strictEqual(results.scoreInfo.totalQuestions, 13, 'the complete exam must retain its denominator');
+            assert.strictEqual(results.answerComparison.q9.isCorrect, true, 'C must earn the first point');
+            assert.strictEqual(results.answerComparison.q10.isCorrect, expectedCredit === 2, 'only E must earn the second point');
+            assert.strictEqual(results.answerComparison.q9.weight + results.answerComparison.q10.weight, 2);
+        }
+    }
+}
+
+function testWaterFilterProductionAnswersRemainSlotSpecific() {
+    const { hooks, dataset } = loadProductionExamHooks('p2-low-64');
+    for (const [answers, expectedCredit] of [
+        [{ q1: 'clay', q2: 'water', q3: 'straw', q4: 'cow manure' }, 4],
+        [{ q1: 'water', q2: 'clay', q3: 'cow manure', q4: 'straw' }, 0]
+    ]) {
+        const results = hooks.buildResultsFromAnswers(dataset, answers);
+        assert.strictEqual(results.scoreInfo.correct, expectedCredit, 'Q14–17 must retain their fixed answer slots');
+        assert.strictEqual(results.scoreInfo.totalQuestions, 13, 'the complete exam must retain its denominator');
+        for (const questionId of ['q1', 'q2', 'q3', 'q4']) {
+            assert.strictEqual(results.answerComparison[questionId].isCorrect, expectedCredit === 4, questionId);
+            assert.strictEqual(results.answerComparison[questionId].weight, 1, questionId);
+        }
+    }
+}
+
 async function testSubmitPostsBeforeExplanationRenderFinishes() {
     const { hooks, window } = loadHooks();
     const messages = [];
@@ -609,6 +660,8 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 }
 
 async function main() {
+    testClimateLogbookProductionAnswers();
+    testWaterFilterProductionAnswersRemainSlotSpecific();
     if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
         testGroupedCheckboxSingleKeyArrayScoresPartially();
         testAcceptedAnswerArraysStaySinglePoint();

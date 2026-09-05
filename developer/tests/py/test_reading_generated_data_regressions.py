@@ -235,6 +235,53 @@ class ReadingGeneratedDataRegressionTest(unittest.TestCase):
                             question_id,
                         )
 
+    def test_climate_logbook_explanation_supports_the_accepted_pair(self) -> None:
+        exam = self.exam_payloads["p2-medium-245"][1]
+        explanation = self.explanation_payloads["p2-medium-245"][1]
+        group = next(group for group in exam["questionGroups"] if group["questionIds"] == ["q9", "q10"])
+        options = extract_checkbox_options(group["bodyHtml"])
+        section = next(
+            section for section in explanation["questionExplanations"]
+            if any(item.get("questionId") == "q10" for item in section.get("items") or [])
+        )
+        self.assertEqual(section["text"], "\n\n".join(item["text"] for item in section["items"]))
+        for question_id, expected_answer in (("q9", "C"), ("q10", "E")):
+            with self.subTest(question_id=question_id):
+                self.assertEqual(exam["answerKey"][question_id], expected_answer)
+                item = next(item for item in section["items"] if item["questionId"] == question_id)
+                answer_match = ANSWER_WITH_OPTION_RE.search(item["text"])
+                self.assertIsNotNone(answer_match)
+                assert answer_match is not None
+                self.assertEqual(answer_match.group(1), expected_answer)
+                self.assertEqual(normalise_visible_text(answer_match.group(2)), options[expected_answer])
+        q23 = next(item["text"] for item in section["items"] if item["questionId"] == "q10")
+        self.assertIn("定位：第8段", q23)
+        evidence = re.search(r"(?:^|\n)原文：([^\n]+)", q23)
+        self.assertIsNotNone(evidence)
+        assert evidence is not None
+        self.assertIn("naval and merchant vessels", evidence.group(1))
+        passage = normalise_visible_text(" ".join(block["html"] for block in exam["passage"]["blocks"]))
+        self.assertIn(normalise_visible_text(evidence.group(1)), passage)
+
+    def test_water_filter_explanations_declare_one_answer_per_slot(self) -> None:
+        exam = self.exam_payloads["p2-low-64"][1]
+        explanation = self.explanation_payloads["p2-low-64"][1]
+        section = next(
+            section for section in explanation["questionExplanations"]
+            if any(item.get("questionId") == "q1" for item in section.get("items") or [])
+        )
+        self.assertEqual(section["text"], "\n\n".join(item["text"] for item in section["items"]))
+        self.assertNotRegex(section["text"], r"顺序不限|任意顺序|either order|any order")
+        expected_answers = {"q1": "clay", "q2": "water", "q3": "straw", "q4": "cow manure"}
+        for question_id, expected_answer in expected_answers.items():
+            with self.subTest(question_id=question_id):
+                self.assertEqual(exam["answerKey"][question_id], expected_answer)
+                item = next(item for item in section["items"] if item["questionId"] == question_id)
+                answer_match = re.search(r"(?:^|\n)答案[：:]\s*([^\n]+)", item["text"])
+                self.assertIsNotNone(answer_match)
+                assert answer_match is not None
+                self.assertEqual(answer_match.group(1).strip(), expected_answer)
+
     def test_issue_130_p3_low_219_keeps_combined_answer_range(self) -> None:
         exam = self.exam_payloads["p3-low-219"][1]
         explanation = self.explanation_payloads["p3-low-219"][1]
