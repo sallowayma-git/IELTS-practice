@@ -712,6 +712,28 @@ function testDropzoneTimingTargetsDroppedQuestion() {
     assert.strictEqual(hooks.checkpointActiveQuestionTiming(5000, false), 3000, '拖拽耗时应归入目标题');
 }
 
+function testGroupedCheckboxFocusTargetsQuestionTiming() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: {
+            questionOrder: ['q9', 'q10', 'q11'],
+            answerKey: { q9: 'A', q10: 'B', q11: 'C' },
+            questionGroups: [{ kind: 'multi_choice', questionIds: ['q10', 'q11'] }]
+        },
+        currentActiveQuestionId: 'q9',
+        questionTimingStartedAtMs: 1000,
+        questionTimeSpentMs: {},
+        readOnly: false,
+        reviewMode: false,
+        submitted: false
+    });
+    hooks.setTestInteraction({ timerRunning: true });
+
+    assert.strictEqual(hooks.resolveNamedControlQuestionId('q10_11'), 'q10');
+    assert.strictEqual(hooks.activateQuestionTimingForNamedControl('q10_11', 3000), true);
+    assert.strictEqual(hooks.checkpointActiveQuestionTiming(5000, false), 2000, '组合多选计时应切换到题组内题目');
+}
+
 async function main() {
     testClimateLogbookProductionAnswers();
     testWaterFilterProductionAnswersRemainSlotSpecific();
@@ -747,6 +769,7 @@ async function main() {
     testSuiteTimerIgnoresEmptyLimitValues();
     testQuestionTypePerformanceIncludesActiveTiming();
     testDropzoneTimingTargetsDroppedQuestion();
+    testGroupedCheckboxFocusTargetsQuestionTiming();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading submit/timer/scoring regressions covered'

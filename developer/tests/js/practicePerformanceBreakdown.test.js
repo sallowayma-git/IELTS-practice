@@ -57,6 +57,19 @@ const records = [
         questionTypePerformance: {
             general: { total: 10, correct: 10, timeSpent: 600 }
         }
+    },
+    {
+        type: 'listening-suite',
+        suiteEntrySummaries: [
+            {
+                examId: 'legacy-listening-child',
+                category: 'P2',
+                duration: 300,
+                questionTypePerformance: {
+                    general: { total: 5, correct: 5, timeSpent: 300 }
+                }
+            }
+        ]
     }
 ];
 

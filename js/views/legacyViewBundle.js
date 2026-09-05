@@ -326,6 +326,12 @@
             }
             entries.forEach(function addEntry(entry) {
                 expanded.push(Object.assign({}, entry || {}, {
+                    type: (entry && (
+                        entry.type ||
+                        entry.examType ||
+                        (entry.metadata && (entry.metadata.type || entry.metadata.examType))
+                    )) ||
+                        (record && (record.type || record.examType)) || '',
                     date: (entry && entry.date) || (record && record.date),
                     metadata: Object.assign({}, (record && record.metadata) || {}, (entry && entry.metadata) || {})
                 }));

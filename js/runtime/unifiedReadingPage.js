@@ -4034,6 +4034,23 @@
         }
     }
 
+    function resolveNamedControlQuestionId(name) {
+        const order = Array.isArray(state.dataset?.questionOrder)
+            ? state.dataset.questionOrder.map((questionId) => normalizeQuestionId(questionId)).filter(Boolean)
+            : [];
+        const candidates = resolveCheckboxQuestionIds(name);
+        return candidates.find((questionId) => order.includes(normalizeQuestionId(questionId))) || '';
+    }
+
+    function activateQuestionTimingForNamedControl(name, nowMs = Date.now()) {
+        const questionId = resolveNamedControlQuestionId(name);
+        if (!questionId) {
+            return false;
+        }
+        updateActiveQuestionHighlight(questionId, nowMs);
+        return true;
+    }
+
     function attachNavListeners() {
         const handler = (event) => {
             const section = event.currentTarget;
@@ -4064,15 +4081,7 @@
             if (!input) return;
             const name = input.getAttribute('name');
             if (name) {
-                const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
-                const cleanName = name.replace(/^q/i, '');
-                const matched = order.find(qId => {
-                    const cleanQId = qId.replace(/^q/i, '');
-                    return cleanQId === cleanName;
-                });
-                if (matched) {
-                    updateActiveQuestionHighlight(matched);
-                }
+                activateQuestionTimingForNamedControl(name);
             }
         });
     }
@@ -6581,6 +6590,8 @@
                 checkpointActiveQuestionTiming,
                 buildInlineSuiteSubmissionSnapshot,
                 updateActiveQuestionHighlight,
+                resolveNamedControlQuestionId,
+                activateQuestionTimingForNamedControl,
                 resolveDropzoneQuestionId,
                 activateQuestionTimingForDropzone,
                 getSelectionHighlightTestState() {
