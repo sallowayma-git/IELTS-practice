@@ -1218,7 +1218,7 @@ class PracticeRecorder {
     async endPracticeSession(examId, reason = 'completed') {
         if (!this.activeSessions.has(examId)) return false;
 
-        let session = this.activeSessions.get(examId);
+        const session = this.activeSessions.get(examId);
         let sessionEntityId;
         try {
             sessionEntityId = this.activeSessionEntityId(session);
@@ -1260,6 +1260,13 @@ class PracticeRecorder {
             }
         }
 
+        // The interrupted save may outlive a replacement or an in-place host
+        // rebind. Only the original object and identity still own this cleanup.
+        if (this.activeSessions.get(examId) !== session
+            || this.activeSessionEntityId(session) !== sessionEntityId) {
+            return true;
+        }
+
         // 清理会话
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
@@ -1267,6 +1274,11 @@ class PracticeRecorder {
             await window.AppData.recovery.discardActiveSession(sessionEntityId);
         } catch (error) {
             console.error('[PracticeRecorder] 清理活动会话失败:', error);
+        }
+
+        // A new session can also start while the old checkpoint is discarded.
+        if (this.activeSessions.has(examId)) {
+            return true;
         }
 
         console.log(`Practice session ended: ${examId} (${reason})`);
