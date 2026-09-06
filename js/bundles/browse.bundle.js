@@ -18131,6 +18131,145 @@ window.BrowseStateManager = BrowseStateManager;
 })(typeof window !== "undefined" ? window : globalThis);
 
 
+/* ===== js/components/interruptedPracticeHistory.js ===== */
+/** Read-only presentation of recovery records, kept separate from scored history. */
+(function (global) {
+    'use strict';
+
+    function scalarText(value) {
+        return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+            ? String(value)
+            : '';
+    }
+
+    function answerText(value) {
+        if (Array.isArray(value)) {
+            return value.map(scalarText).filter(Boolean).join(', ');
+        }
+        return scalarText(value);
+    }
+
+    // Never pass recovery payloads through scored-answer or replay normalizers:
+    // their fallbacks may substitute a correct answer for a missing user answer.
+    function savedAnswers(record) {
+        const answers = record.answers;
+        const entries = Array.isArray(answers)
+            ? answers.map((entry, index) => {
+                if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                    return [entry.questionId == null ? index + 1 : entry.questionId,
+                        Object.prototype.hasOwnProperty.call(entry, 'userAnswer') ? entry.userAnswer : entry.answer];
+                }
+                return [index + 1, entry];
+            })
+            : (answers && typeof answers === 'object' ? Object.entries(answers) : []);
+
+        return entries.map(([questionId, value]) => {
+            const userAnswer = value && typeof value === 'object' && !Array.isArray(value)
+                ? value.userAnswer
+                : value;
+            return { questionId: scalarText(questionId), userAnswer: answerText(userAnswer) };
+        }).filter(entry => entry.questionId && entry.userAnswer.trim());
+    }
+
+    function create(document, tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+    }
+
+    function render(options) {
+        const { container, error, onDelete, onRetry } = options;
+        if (!container) return;
+        const document = container.ownerDocument || global.document;
+        const records = Array.isArray(options.records) ? options.records : [];
+        const expanded = new Set(Array.from(container.querySelectorAll('details[data-interrupted-id]'))
+            .filter(details => details.open).map(details => details.dataset.interruptedId));
+        const fragment = document.createDocumentFragment();
+        const heading = create(document, 'div', 'hero-panel__header');
+        const title = create(document, 'h3', 'hero-panel__title', '未完成 / 中断');
+        title.id = 'interrupted-practice-history-title';
+        container.setAttribute('aria-labelledby', title.id);
+        heading.appendChild(title);
+        heading.appendChild(create(document, 'span', 'interrupted-history__count', error ? '读取失败' : `${records.length} 条`));
+        fragment.appendChild(heading);
+        fragment.appendChild(create(document, 'p', 'hero-panel__muted interrupted-history__note',
+            '中断记录保留 30 天；保存新记录时最多保留 100 条。未提交成绩，不计入正式练习统计。'));
+
+        if (error) {
+            const failure = create(document, 'div', 'interrupted-history__message');
+            const message = create(document, 'p', '', '未完成记录读取失败，请重试。');
+            message.setAttribute('role', 'alert');
+            failure.appendChild(message);
+            if (typeof onRetry === 'function') {
+                const retry = create(document, 'button', 'btn btn-secondary', '重试');
+                retry.type = 'button';
+                retry.addEventListener('click', () => onRetry());
+                failure.appendChild(retry);
+            }
+            fragment.appendChild(failure);
+        } else if (!records.length) {
+            const empty = create(document, 'p', 'interrupted-history__message', '暂无未完成 / 中断记录');
+            empty.setAttribute('role', 'status');
+            fragment.appendChild(empty);
+        } else {
+            const list = create(document, 'ul', 'interrupted-history__list');
+            records.forEach(record => {
+                const item = create(document, 'li', 'interrupted-history__item');
+                const metadata = record.metadata || {};
+                const recordTitle = scalarText(record.title) || scalarText(metadata.examTitle)
+                    || scalarText(metadata.title) || scalarText(record.examId) || '未知练习';
+                const rowHeader = create(document, 'div', 'interrupted-history__row-header');
+                rowHeader.appendChild(create(document, 'h4', 'interrupted-history__title', recordTitle));
+                rowHeader.appendChild(create(document, 'span', 'interrupted-history__status', '中断'));
+                item.appendChild(rowHeader);
+
+                const date = new Date(record.endTime || record.createdAt || record.startTime || NaN);
+                const time = create(document, 'time', 'interrupted-history__meta',
+                    Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN') : '时间未知');
+                if (Number.isFinite(date.getTime())) time.dateTime = date.toISOString();
+                item.appendChild(time);
+                const reasons = { timeout: '会话超时', window_closed: '练习窗口已关闭',
+                    user_closed: '练习窗口已关闭', page_unload: '练习页面已离开' };
+                const reason = scalarText(record.reason);
+                item.appendChild(create(document, 'p', 'interrupted-history__meta',
+                    `中断原因：${Object.prototype.hasOwnProperty.call(reasons, reason) ? reasons[reason] : (reason || '未记录')}`));
+
+                const answers = savedAnswers(record);
+                const details = create(document, 'details', 'interrupted-history__details');
+                details.dataset.interruptedId = scalarText(record.id);
+                details.open = expanded.has(details.dataset.interruptedId);
+                details.appendChild(create(document, 'summary', '', `查看已保存答案（${answers.length}）`));
+                if (!answers.length) {
+                    details.appendChild(create(document, 'p', 'interrupted-history__empty-answers',
+                        '此记录没有保存的答案。阅读草稿单独保存，重新打开同一篇阅读可尝试恢复草稿。'));
+                } else {
+                    const answerList = create(document, 'dl', 'interrupted-history__answers');
+                    answers.forEach(answer => {
+                        answerList.appendChild(create(document, 'dt', '', `题号 ${answer.questionId}`));
+                        answerList.appendChild(create(document, 'dd', '', answer.userAnswer));
+                    });
+                    details.appendChild(answerList);
+                }
+                item.appendChild(details);
+                if (typeof onDelete === 'function' && scalarText(record.id)) {
+                    const remove = create(document, 'button', 'btn btn-secondary interrupted-history__delete', '删除中断记录');
+                    remove.type = 'button';
+                    remove.setAttribute('aria-label', `删除中断记录：${recordTitle}`);
+                    remove.addEventListener('click', () => onDelete(record.id));
+                    item.appendChild(remove);
+                }
+                list.appendChild(item);
+            });
+            fragment.appendChild(list);
+        }
+        container.replaceChildren(fragment);
+    }
+
+    global.InterruptedPracticeHistory = { render };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/main.js ===== */
 // Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
@@ -18444,6 +18583,48 @@ let lastPracticeRecordsSignature = null;
 // the Practice-history single-flight contract below.
 let browsePracticeProjectionInvocationSequence = 0;
 let browsePracticeProjectionGeneration = 0;
+let interruptedPracticeHistoryRenderGeneration = 0;
+let interruptedPracticeHistoryReadError = null;
+
+async function loadInterruptedPracticeHistory() {
+    try {
+        const records = await window.AppData.recovery.listInterrupted();
+        return { records: Array.isArray(records) ? records : [], error: null };
+    } catch (error) {
+        console.warn('[PracticeHistory] 读取中断记录失败:', error);
+        return { records: [], error };
+    }
+}
+
+function updateInterruptedPracticeHistory(snapshot, examIndex) {
+    const container = document.getElementById('interrupted-practice-history');
+    const renderer = window.InterruptedPracticeHistory;
+    if (!container || !renderer) return;
+
+    const examType = getCurrentExamType();
+    const query = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
+    const records = snapshot.records.filter((record) => {
+        if (!record) return false;
+        if (examType !== 'all' && !recordMatchesExamType(record, examType, examIndex)) return false;
+        if (!query) return true;
+        return [record.title, record.examId, record.category, record.frequency,
+            record.metadata && record.metadata.examTitle, record.startTime,
+            record.endTime, record.date].some((field) => String(field || '').toLowerCase().includes(query));
+    }).sort((left, right) =>
+        (Date.parse(right.endTime || right.createdAt || right.startTime) || 0)
+        - (Date.parse(left.endTime || left.createdAt || left.startTime) || 0));
+    renderer.render({
+        container,
+        records,
+        error: snapshot.error,
+        onDelete: deleteInterruptedRecord,
+        onRetry: () => ensurePracticeRecordsSync('interrupted-retry', {
+            forceRender: true,
+            requirePostCommitRead: true
+        })
+    });
+}
+
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
@@ -18453,10 +18634,11 @@ async function syncPracticeRecords(options = {}) {
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
-    let [records, insightRecords, examIndex] = await Promise.all([
+    let [records, insightRecords, examIndex, interruptedSnapshot] = await Promise.all([
         listCanonicalPracticeRecordSummaries(),
         window.AppData.practice.listInsights({ limit: 10 }),
-        resolveActiveExamIndex()
+        resolveActiveExamIndex(),
+        loadInterruptedPracticeHistory()
     ]);
     const insightsById = new Map((Array.isArray(insightRecords) ? insightRecords : [])
         .filter((record) => record && record.id)
@@ -18546,6 +18728,13 @@ async function syncPracticeRecords(options = {}) {
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
         updatePracticeView(records, examIndex);
+    }
+    // Recovery is a separate view, never a formal score or completion projection.
+    // Always render its fresh read, even when canonical history has not changed.
+    if (practiceProjectionInvocation >= interruptedPracticeHistoryRenderGeneration) {
+        interruptedPracticeHistoryRenderGeneration = practiceProjectionInvocation;
+        interruptedPracticeHistoryReadError = interruptedSnapshot.error;
+        updateInterruptedPracticeHistory(interruptedSnapshot, examIndex);
     }
     return records;
 }
@@ -20328,6 +20517,19 @@ function ensurePracticeSessionSyncListener() {
             forceRender: true
         });
     });
+    const refreshInterruptedHistory = (event) => {
+        const detail = event && event.detail;
+        if (!detail || detail.reason === 'completed' || detail.interruptedRecordSaved !== true) return;
+        startPracticeRecordsSyncInBackground('session-interrupted', {
+            mode: 'summary',
+            forceRender: true,
+            requirePostCommitRead: true
+        });
+    };
+    document.addEventListener('practiceSessionEnded', refreshInterruptedHistory);
+    // A saved old attempt must refresh history even if a replacement session
+    // owns the exam and therefore must not receive a session-ended event.
+    document.addEventListener('practiceInterruptedRecordSaved', refreshInterruptedHistory);
 }
 
 // Phase 3: 练习统计计算 - 保留在 main.js（数据处理逻辑，暂不迁移）
@@ -22353,19 +22555,68 @@ async function deleteRecord(recordId) {
     }
 }
 
+async function refreshPracticeHistoryAfterMutation(trigger) {
+    try {
+        await ensurePracticeRecordsSync(trigger, { forceRender: true, requirePostCommitRead: true });
+        return !interruptedPracticeHistoryReadError;
+    } catch (error) {
+        console.warn('[PracticeHistory] 操作后刷新失败:', error);
+        return false;
+    }
+}
+
+async function deleteInterruptedRecord(recordId) {
+    if (!recordId) return false;
+    if (!confirm('确定要删除这条未完成 / 中断记录及其中保存的作答吗？阅读草稿将保留。此操作不可恢复。')) return false;
+    let mutationError = null;
+    try {
+        const result = await window.AppData.recovery.discardInterrupted(recordId);
+        if (result && result.committed === false) throw new Error('Interrupted deletion was not committed');
+    } catch (error) {
+        mutationError = error;
+        console.warn('[PracticeHistory] 删除中断记录失败:', error);
+    }
+    const refreshed = await refreshPracticeHistoryAfterMutation('interrupted-delete');
+    if (mutationError) {
+        showMessage(refreshed
+            ? '未能确认中断记录已删除，请查看刷新后的记录并重试。'
+            : '未能确认中断记录已删除，且记录刷新失败，请重试。', 'error');
+    } else {
+        showMessage(refreshed ? '中断记录已删除' : '中断记录已删除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return !mutationError && refreshed;
+}
+
 async function clearPracticeData() {
-    if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        await window.AppData.practice.clear();
-        await syncPracticeRecords({ forceRender: true, trigger: 'clear-all' });
-        if (window.AppData && window.AppData.recovery && typeof window.AppData.recovery.clear === 'function') {
-            await window.AppData.recovery.clear();
+    if (!confirm('确定要清除所有正式练习记录和未完成 / 中断记录吗？阅读草稿、活动会话及其他恢复数据将保留。此操作不可恢复。')) return false;
+
+    // Both scopes are explicitly selected by this history action. A failure in
+    // one must not hide a committed change in the other, or clear unrelated recovery.
+    const scopes = ['正式练习记录', '未完成 / 中断记录'];
+    const results = await Promise.allSettled([
+        Promise.resolve().then(() => window.AppData.practice.clear()),
+        Promise.resolve().then(() => window.AppData.recovery.clearInterrupted())
+    ]);
+    const failedScopes = [];
+    results.forEach((result, index) => {
+        if (result.status === 'rejected' || (result.value && result.value.committed === false)) {
+            failedScopes.push(scopes[index]);
+            console.warn(`[PracticeHistory] 清除${scopes[index]}失败:`, result.reason || result.value);
         }
+    });
+    if (!failedScopes.includes(scopes[0])) {
         processedSessions.clear();
         clearSelectedRecordsState();
         setBulkDeleteModeState(false);
         refreshBulkDeleteButton();
-        showMessage('练习记录已清除', 'success');
     }
+    const refreshed = await refreshPracticeHistoryAfterMutation('clear-all');
+    if (failedScopes.length) {
+        showMessage(`未能确认清除：${failedScopes.join('、')}。${refreshed ? '已刷新当前记录，请重试。' : '记录刷新也失败，请重试。'}`, 'error');
+    } else {
+        showMessage(refreshed ? '正式练习记录和中断记录已清除' : '练习记录已清除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return failedScopes.length === 0 && refreshed;
 }
 
 async function clearCache() {
@@ -23122,6 +23373,7 @@ ensurePracticeSessionSyncListener();
     "js/utils/answerMatchCore.js",
     "js/utils/answerComparisonUtils.js",
     "js/utils/BrowsePreferencesUtils.js",
+    "js/components/interruptedPracticeHistory.js",
     "js/main.js"
 ]);
     }

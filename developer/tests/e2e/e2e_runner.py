@@ -25,6 +25,7 @@ if hasattr(sys.stderr, "reconfigure"):
 E2E_CASES = [
     "browse_preference_toggle_flow.py",
     "reading_single_flow.py",
+    "interrupted_history_flow.py",
     "listening_practice_flow.py",
     "suite_practice_flow.py",
     "practice_submit_file_flow.py",

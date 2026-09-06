@@ -3681,6 +3681,7 @@
         async getInterrupted(id) { return readRecovery('interrupted', id); },
         async saveInterrupted(value, options) { return saveRecovery('interrupted', value, options); },
         async discardInterrupted(id, options) { return discardRecovery('interrupted', id, options); },
+        async clearInterrupted(options = {}) { return clearRecovery('interrupted', options); },
         async listRejectedCompletions() { return readRecovery('rejectedCompletion'); },
         async getRejectedCompletion(id) { return readRecovery('rejectedCompletion', id); },
         async saveRejectedCompletion(value, options) { return saveRecovery('rejectedCompletion', value, options); },

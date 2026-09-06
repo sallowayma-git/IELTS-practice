@@ -1400,7 +1400,92 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(signedTimestampReplay.endTime, '2026-08-15T10:50:00.000Z');
 }
 
+async function testClearInterruptedRecoveryIsolation() {
+    const { app, shared } = harness();
+    await app.ready;
+    await app.practice.completeAttempt({
+        operationId: 'recovery-clear-canonical',
+        record: {
+            id: 'canonical-to-retain', examId: 'reading-recovery', type: 'reading',
+            totalQuestions: 1, correctAnswers: 1, answers: { 1: 'A' },
+            notes: { 1: 'Retain this annotation' }
+        }
+    });
+    await app.recovery.saveActiveSession({ id: 'active-to-retain', answers: { 1: 'B' } });
+    await app.recovery.saveDraft({ id: 'draft-to-retain', answers: { 1: 'C' } });
+    await app.recovery.saveRejectedCompletion({ id: 'rejected-to-retain', answers: { 1: 'D' } });
+    await app.recovery.saveInterrupted({ id: 'interrupted-one', answers: { 1: 'E' } });
+    await app.recovery.saveInterrupted({ id: 'interrupted-two', answers: { 1: 'F' } });
+
+    const interruptedBefore = clone(shared.docs.get('recovery.interrupted'));
+    const retainedKeys = ['recovery.activeSessions', 'recovery.drafts', 'recovery.rejectedCompletions'];
+    const retainedBefore = retainedKeys.map((key) => clone(shared.docs.get(key)));
+    const canonicalBefore = clone(shared.entities);
+    await assert.rejects(
+        () => app.recovery.clearInterrupted({ expectedRevision: interruptedBefore.revision - 1 }),
+        { code: 'CONFLICT' },
+        'a stale revision must not clear interrupted recovery'
+    );
+    assert.deepStrictEqual(shared.docs.get('recovery.interrupted'), interruptedBefore,
+        'a rejected clear must preserve interrupted data and revision');
+
+    const receipt = await app.recovery.clearInterrupted({
+        expectedRevision: interruptedBefore.revision,
+        operationId: 'clear-only-interrupted'
+    });
+    assert.strictEqual(receipt.committed, true);
+    assert.strictEqual(receipt.operationId, 'clear-only-interrupted');
+    assert.deepStrictEqual(Object.keys(receipt.revisions), ['recovery.interrupted']);
+    assert.strictEqual(shared.docs.get('recovery.interrupted').state, 'cleared');
+    assert.deepStrictEqual(await app.recovery.listInterrupted(), []);
+    assert.strictEqual(await app.recovery.getInterrupted('interrupted-one'), null);
+    assert.deepStrictEqual(retainedKeys.map((key) => shared.docs.get(key)), retainedBefore,
+        'clearing interrupted recovery must leave active sessions, drafts, and rejected completions unchanged');
+    assert.deepStrictEqual(shared.entities, canonicalBefore,
+        'clearing interrupted recovery must leave canonical summaries, details, and annotations unchanged');
+
+    await app.recovery.saveInterrupted({ id: 'interrupted-default-options' });
+    await app.recovery.clearInterrupted();
+    assert.deepStrictEqual(await app.recovery.listInterrupted(), [],
+        'clearInterrupted must also support callers without mutation options');
+}
+
+async function testRecoveryThirtyDayTtlBoundary() {
+    const { app, shared, envelope, sandbox } = harness();
+    await app.ready;
+    const fixedNow = Date.parse('2026-09-07T12:00:00.000Z');
+    const cutoff = fixedNow - 30 * 24 * 60 * 60 * 1000;
+    sandbox.Date = class extends Date { static now() { return fixedNow; } };
+    const recoveryLists = [
+        ['recovery.activeSessions', 'listActiveSessions'],
+        ['recovery.drafts', 'listDrafts'],
+        ['recovery.interrupted', 'listInterrupted'],
+        ['recovery.rejectedCompletions', 'listRejectedCompletions']
+    ];
+    for (const [key, listMethod] of recoveryLists) {
+        shared.docs.set(key, envelope(key, [
+            { id: 'older-than-thirty-days', updatedAt: new Date(cutoff - 1).toISOString() },
+            { id: 'exactly-thirty-days', updatedAt: new Date(cutoff).toISOString() },
+            { id: 'within-thirty-days', updatedAt: new Date(cutoff + 1).toISOString() },
+            { id: 'legacy-timestamp', timestamp: new Date(cutoff + 1).toISOString() },
+            { id: 'unknown-timestamp', updatedAt: 'invalid-date' }
+        ]));
+        assert.deepStrictEqual(
+            (await app.recovery[listMethod]()).map((item) => item.id),
+            ['within-thirty-days', 'legacy-timestamp', 'unknown-timestamp'],
+            `${key} must expire records at the existing 30-day boundary and retain newer or undated recovery`
+        );
+        assert.deepStrictEqual(
+            shared.docs.get(key).data.map((item) => item.id),
+            ['within-thirty-days', 'legacy-timestamp', 'unknown-timestamp'],
+            `${key} must persist TTL cleanup`
+        );
+    }
+}
+
 async function run() {
+    await testClearInterruptedRecoveryIsolation();
+    await testRecoveryThirtyDayTtlBoundary();
     await testVocabPhoneticMutationProtection();
     await testAtomicVocabPhoneticBackfill();
     await testReplaceProgressPhoneticProtection();
@@ -1949,6 +2034,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 52 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 54 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
