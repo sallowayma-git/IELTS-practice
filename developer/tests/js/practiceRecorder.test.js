@@ -13,11 +13,17 @@ function clone(value) {
     return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
+function deferred() {
+    let resolve;
+    const promise = new Promise((complete) => { resolve = complete; });
+    return { promise, resolve };
+}
+
 function loadScript(relativePath, context) {
     vm.runInContext(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'), context, { filename: relativePath });
 }
 
-function createHarness() {
+function createHarness({ now = null } = {}) {
     const state = {
         records: [],
         drafts: [{
@@ -30,6 +36,11 @@ function createHarness() {
         }],
         commands: [],
         backupCalls: [],
+        activeCheckpoints: new Map(),
+        interruptedRecords: [],
+        discardedSessionIds: [],
+        intervals: new Set(),
+        events: [],
         failCompleteAttempts: 0
     };
     const quietConsole = { log() {}, warn() {}, error() {}, info() {}, debug() {} };
@@ -61,6 +72,22 @@ function createHarness() {
             }
         },
         recovery: {
+            async saveActiveSession(session) {
+                state.activeCheckpoints.set(session.id, clone(session));
+                return { committed: true };
+            },
+            async discardActiveSession(id) {
+                state.discardedSessionIds.push(id);
+                state.activeCheckpoints.delete(id);
+                return { committed: true };
+            },
+            async saveInterrupted(record) {
+                state.interruptedRecords.push(clone(record));
+                return { committed: true };
+            },
+            async listInterrupted() {
+                return clone(state.interruptedRecords);
+            },
             async listDrafts() {
                 return clone(state.drafts);
             },
@@ -146,9 +173,33 @@ function createHarness() {
         console: quietConsole,
         setTimeout,
         clearTimeout,
-        setInterval,
-        clearInterval,
-        Date,
+        setInterval() {
+            const timer = Symbol('session listener');
+            state.intervals.add(timer);
+            return timer;
+        },
+        clearInterval(timer) {
+            state.intervals.delete(timer);
+        },
+        navigator: { userAgent: 'PracticeRecorder test' },
+        screen: { width: 1280, height: 720 },
+        CustomEvent: class {
+            constructor(type, options) {
+                this.type = type;
+                this.detail = options.detail;
+            }
+        },
+        document: {
+            dispatchEvent(event) {
+                state.events.push({ type: event.type, detail: clone(event.detail) });
+            }
+        },
+        Date: now === null ? Date : class extends Date {
+            constructor(...args) {
+                super(...(args.length ? args : [now]));
+            }
+            static now() { return now; }
+        },
         Math,
         JSON
     };
@@ -157,6 +208,9 @@ function createHarness() {
     loadScript('js/core/practiceCore.js', context);
     loadScript('js/core/practiceRecorder.js', context);
     const recorder = Object.create(windowStub.PracticeRecorder.prototype);
+    recorder.activeSessions = new Map();
+    recorder.sessionListeners = new Map();
+    recorder.sessionStartGenerations = new WeakMap();
     recorder.wait = async () => {};
     return { recorder, state, windowStub };
 }
@@ -343,33 +397,198 @@ async function main() {
             assert.deepStrictEqual(state.backupCalls.map((call) => call.method), ['previewImport']);
         });
 
-        await record('failed interrupted save keeps the active checkpoint', async () => {
-            const { recorder, windowStub } = createHarness();
-            const session = {
-                id: 'active-session:session-interrupted',
-                sessionId: 'session-interrupted',
-                examId: 'reading-p1',
-                startTime: '2026-07-26T00:00:00.000Z',
-                status: 'active',
-                progress: { currentQuestion: 4 },
-                answers: { q1: 'A' },
-                metadata: {}
+        for (const mode of ['replacement', 'identity rebind', 'same-id replacement', 'same-id identity rebind']) {
+            await record(`delayed interrupted save preserves the session after ${mode}`, async () => {
+                const { recorder, state, windowStub } = createHarness({ now: Date.parse('2026-09-05T00:00:00.000Z') });
+                const examId = 'reading-p1';
+                const original = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
+                recorder.handleSessionStarted({ examId, sessionId: 'session-A' });
+                recorder.handleSessionProgress({
+                    examId,
+                    progress: { currentQuestion: 4 },
+                    answers: { q1: 'A' }
+                });
+                await recorder.saveActiveSessions();
+                const originalStatus = original.status;
+                const originalActivity = original.lastActivity;
+
+                const saveGate = deferred();
+                const saveInterrupted = windowStub.AppData.recovery.saveInterrupted;
+                windowStub.AppData.recovery.saveInterrupted = async (value) => {
+                    await saveGate.promise;
+                    return saveInterrupted(value);
+                };
+                const ending = recorder.endPracticeSession(examId, 'timeout');
+                assert.strictEqual(state.interruptedRecords.length, 0);
+
+                const sessionId = mode.startsWith('same-id') ? 'session-A' : 'session-B';
+                if (mode.endsWith('identity rebind')) {
+                    recorder.handleSessionStarted({ examId, sessionId });
+                    assert.strictEqual(recorder.activeSessions.get(examId), original);
+                } else {
+                    recorder.startPracticeSession(examId, { sessionId });
+                    assert.notStrictEqual(recorder.activeSessions.get(examId), original);
+                }
+                const replacement = recorder.activeSessions.get(examId);
+                const listener = recorder.sessionListeners.get(examId);
+                if (mode === 'same-id identity rebind') {
+                    assert.strictEqual(replacement.sessionId, 'session-A');
+                    assert.strictEqual(replacement.status, originalStatus);
+                    assert.strictEqual(replacement.lastActivity, originalActivity,
+                        'a restart must supersede cleanup even within the same clock tick');
+                } else {
+                    recorder.handleSessionProgress({
+                        examId,
+                        progress: { currentQuestion: 5 },
+                        answers: { q1: 'B' }
+                    });
+                }
+                await recorder.saveActiveSessions();
+                const checkpoint = clone(state.activeCheckpoints.get(replacement.id));
+                assert.strictEqual(checkpoint.sessionId, sessionId);
+
+                saveGate.resolve();
+                assert.strictEqual(await ending, true);
+
+                assert.strictEqual(state.interruptedRecords.length, 1);
+                assert.strictEqual(state.interruptedRecords[0].sessionId, 'session-A');
+                assert.strictEqual(state.interruptedRecords[0].reason, 'timeout');
+                assert.strictEqual(state.interruptedRecords[0].progress.currentQuestion, 4);
+                assert.deepStrictEqual(state.interruptedRecords[0].answers, { q1: 'A' });
+                assert.strictEqual(recorder.activeSessions.get(examId), replacement,
+                    'the superseded end call must preserve the current session');
+                assert.strictEqual(recorder.sessionListeners.get(examId), listener);
+                assert(state.intervals.has(listener), 'the current listener must remain scheduled');
+                assert.deepStrictEqual(state.activeCheckpoints.get(replacement.id), checkpoint);
+                assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
+
+                recorder.handleSessionProgress({
+                    examId,
+                    progress: { currentQuestion: 6 },
+                    answers: { q1: 'C' }
+                });
+                await recorder.saveActiveSessions();
+                assert.strictEqual(replacement.progress.currentQuestion, 6);
+                assert.deepStrictEqual(clone(replacement.answers), { q1: 'C' });
+                assert.strictEqual(state.activeCheckpoints.get(replacement.id).progress.currentQuestion, 6);
+                assert.deepStrictEqual(state.activeCheckpoints.get(replacement.id).answers, { q1: 'C' });
+            });
+        }
+
+        await record('a host start for another exam does not supersede the ending session', async () => {
+            const { recorder, state, windowStub } = createHarness();
+            const examId = 'reading-p1';
+            const original = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
+            recorder.handleSessionStarted({ examId, sessionId: 'session-A' });
+            await recorder.saveActiveSessions();
+
+            const saveGate = deferred();
+            const saveInterrupted = windowStub.AppData.recovery.saveInterrupted;
+            windowStub.AppData.recovery.saveInterrupted = async (value) => {
+                await saveGate.promise;
+                return saveInterrupted(value);
             };
-            recorder.activeSessions = new Map([['reading-p1', session]]);
-            recorder.cleanupSessionListener = () => {};
-            recorder.dispatchSessionEvent = () => {};
-            recorder.saveInterruptedRecord = async () => {
+            const ending = recorder.endPracticeSession(examId, 'timeout');
+            recorder.handleSessionStarted({ examId: 'reading-p2', sessionId: 'session-B' });
+            recorder.handleSessionStarted({ examId: 'reading-p2', sessionId: 'session-B' });
+            const otherSession = recorder.activeSessions.get('reading-p2');
+            const otherListener = recorder.sessionListeners.get('reading-p2');
+            await recorder.saveActiveSessions();
+
+            saveGate.resolve();
+            assert.strictEqual(await ending, true);
+            assert.strictEqual(recorder.activeSessions.has(examId), false);
+            assert.strictEqual(recorder.sessionListeners.has(examId), false);
+            assert.strictEqual(state.activeCheckpoints.has(original.id), false);
+            assert.strictEqual(state.interruptedRecords[0].sessionId, 'session-A');
+            assert.strictEqual(recorder.activeSessions.get('reading-p2'), otherSession);
+            assert.strictEqual(recorder.sessionListeners.get('reading-p2'), otherListener);
+            assert(state.intervals.has(otherListener));
+            assert.strictEqual(state.activeCheckpoints.get(otherSession.id).sessionId, 'session-B');
+            assert.deepStrictEqual(
+                state.events.filter((event) => event.type === 'practicesessionEnded'),
+                [{ type: 'practicesessionEnded', detail: { examId, reason: 'timeout' } }]
+            );
+        });
+
+        for (const reason of ['completed', 'timeout']) {
+            await record(`normal ${reason} cleanup removes the session and emits one end event`, async () => {
+                const { recorder, state } = createHarness();
+                const examId = 'reading-p1';
+                const session = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
+                recorder.handleSessionStarted({ examId, sessionId: 'session-A' });
+                const listener = recorder.sessionListeners.get(examId);
+                await recorder.saveActiveSessions();
+
+                assert.strictEqual(await recorder.endPracticeSession(examId, reason), true);
+                assert.strictEqual(recorder.activeSessions.has(examId), false);
+                assert.strictEqual(recorder.sessionListeners.has(examId), false);
+                assert.strictEqual(state.intervals.has(listener), false);
+                assert.strictEqual(state.activeCheckpoints.has(session.id), false);
+                assert.deepStrictEqual(state.discardedSessionIds, [session.id]);
+                assert.strictEqual(state.interruptedRecords.length, reason === 'timeout' ? 1 : 0);
+                assert.deepStrictEqual(
+                    state.events.filter((event) => event.type === 'practicesessionEnded'),
+                    [{ type: 'practicesessionEnded', detail: { examId, reason } }]
+                );
+                assert.strictEqual(await recorder.endPracticeSession(examId, reason), false);
+            });
+
+            await record(`delayed ${reason} checkpoint cleanup does not announce a replacement as ended`, async () => {
+                const { recorder, state, windowStub } = createHarness();
+                const examId = 'reading-p1';
+                const original = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
+                await recorder.saveActiveSessions();
+
+                const discardStarted = deferred();
+                const discardGate = deferred();
+                const discardActiveSession = windowStub.AppData.recovery.discardActiveSession;
+                windowStub.AppData.recovery.discardActiveSession = async (id) => {
+                    assert.strictEqual(id, original.id);
+                    discardStarted.resolve();
+                    await discardGate.promise;
+                    return discardActiveSession(id);
+                };
+                const ending = recorder.endPracticeSession(examId, reason);
+                await discardStarted.promise;
+                const replacement = recorder.startPracticeSession(examId, { sessionId: 'session-B' });
+                const listener = recorder.sessionListeners.get(examId);
+                await recorder.saveActiveSessions();
+
+                discardGate.resolve();
+                assert.strictEqual(await ending, true);
+                assert.strictEqual(recorder.activeSessions.get(examId), replacement);
+                assert.strictEqual(recorder.sessionListeners.get(examId), listener);
+                assert(state.intervals.has(listener));
+                assert.strictEqual(state.activeCheckpoints.has(original.id), false);
+                assert.strictEqual(state.activeCheckpoints.get(replacement.id).sessionId, 'session-B');
+                assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
+            });
+        }
+
+        await record('failed interrupted save keeps the active checkpoint and listener', async () => {
+            const { recorder, state, windowStub } = createHarness();
+            const examId = 'reading-p1';
+            const session = recorder.startPracticeSession(examId, { sessionId: 'session-interrupted' });
+            const listener = recorder.sessionListeners.get(examId);
+            await recorder.saveActiveSessions();
+            const checkpoint = clone(state.activeCheckpoints.get(session.id));
+            windowStub.AppData.recovery.saveInterrupted = async () => {
                 const error = new Error('quota exceeded');
                 error.code = 'QUOTA_EXCEEDED';
                 throw error;
             };
-            let discardCalls = 0;
-            windowStub.AppData.recovery.discardActiveSession = async () => { discardCalls += 1; };
 
-            const ended = await recorder.endPracticeSession('reading-p1', 'timeout');
+            const ended = await recorder.endPracticeSession(examId, 'timeout');
             assert.strictEqual(ended, false);
-            assert.strictEqual(recorder.activeSessions.get('reading-p1'), session);
-            assert.strictEqual(discardCalls, 0, 'the only durable checkpoint must not be discarded after save failure');
+            assert.strictEqual(recorder.activeSessions.get(examId), session);
+            assert.strictEqual(recorder.sessionListeners.get(examId), listener);
+            assert(state.intervals.has(listener));
+            assert.deepStrictEqual(state.activeCheckpoints.get(session.id), checkpoint);
+            assert.strictEqual(state.discardedSessionIds.length, 0,
+                'the only durable checkpoint must not be discarded after save failure');
+            assert.strictEqual(state.interruptedRecords.length, 0);
+            assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
         });
 
         await record('backup create and restore delegate to the backups domain', async () => {

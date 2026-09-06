@@ -992,6 +992,65 @@ async function testBindingExistingBackupRequiresRestoreBeforeAnyWrite() {
     assert.equal(directory.files.get('ielts-atlas-backup-latest.json'), originalText);
 }
 
+async function testBindingUnrecognizedLatestPreservesBytesAcrossWritesAndReload() {
+    const latestFilename = 'ielts-atlas-backup-latest.json';
+    const unrecognizedBackups = [
+        '  {\r\n  "backup": "未完成",\r\n',
+        JSON.stringify({
+            ...makeSnapshot('fnv1a-future-schema', 'future'),
+            schemaVersion: 3
+        }, null, 2) + '\n'
+    ];
+
+    for (const originalText of unrecognizedBackups) {
+        for (const writeNow of [true, false]) {
+            const directory = createDirectory();
+            directory.files.set(latestFilename, originalText);
+            const originalFiles = new Map(directory.files);
+            const harness = createHarness({ directory });
+            await harness.ready();
+
+            const bound = await harness.service.bindDirectory({ writeNow });
+            assert.equal(bound.existingBackupFound, true,
+                'an unrecognized latest file is still an existing backup');
+            assert.equal(bound.writeResult, null);
+            assert.equal(harness.service.getStatus().awaitingRestore, true);
+            assert.equal(harness.indexedDB.values.get('metadata').awaitingRestore, true);
+            assert.deepEqual(directory.files, originalFiles,
+                'binding must preserve every byte and must not create a fallback generation');
+
+            await assert.rejects(
+                () => harness.service.restoreFromLatest({ confirmed: true }),
+                /未找到有效的 v2 本地备份文件/
+            );
+            assert.equal(harness.calls.commit.length, 0);
+            assert.equal(harness.service.getStatus().awaitingRestore, true,
+                'a failed restore must not clear the overwrite guard');
+
+            for (const reload of [false, true]) {
+                const active = reload
+                    ? createHarness({ indexedDB: harness.indexedDB, directory })
+                    : harness;
+                await active.ready();
+                assert.equal(active.service.getStatus().awaitingRestore, true);
+                active.setSnapshot(makeSnapshot('fnv1a-later-commit', 'later'));
+                active.emitCommitted();
+                await active.flushTimers();
+
+                const automaticWrite = await active.service.flushSilentlyIfPermitted();
+                assert.equal(automaticWrite.success, false);
+                assert.equal(automaticWrite.reason, 'restore_required');
+                const manualWrite = await active.service.writeNow();
+                assert.equal(manualWrite.success, false);
+                assert.equal(manualWrite.reason, 'restore_required');
+                assert.equal(active.service.getStatus().dirty, true);
+                assert.deepEqual(directory.files, originalFiles,
+                    'later writes and reloads must preserve the unrecognized backup byte for byte');
+            }
+        }
+    }
+}
+
 async function testFullResetWorksWhenAppDataReadyRejects() {
     const harness = createHarness({
         appDataReady: Promise.reject(new Error('corrupt AppData initialization'))
@@ -1319,6 +1378,7 @@ async function main() {
     await testFullResetSuspendsWritesAndPreservesDiskFiles();
     await testFullResetPublicLockAndRollbackContract();
     await testBindingExistingBackupRequiresRestoreBeforeAnyWrite();
+    await testBindingUnrecognizedLatestPreservesBytesAcrossWritesAndReload();
     await testFullResetWorksWhenAppDataReadyRejects();
     await testFullResetAllowsDirtyStateWhenNoDirectoryIsBound();
     await testFullResetWriteFailurePreservesBindingState();

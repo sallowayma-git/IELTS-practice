@@ -1712,6 +1712,540 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/core/vocabScheduler.js ===== */
+(function(window) {
+    // SuperMemo SM-2 算法常量
+    const SM2_CONSTANTS = Object.freeze({
+        MIN_EASE_FACTOR: 1.3,
+        MAX_EASE_FACTOR: 3.0,
+        DEFAULT_EASE_FACTOR: 2.5,
+        INITIAL_INTERVAL_DAYS: 1,
+        SECOND_INTERVAL_DAYS: 6,
+        MAX_INTRA_CYCLES: 12
+    });
+
+    // 三档起始难度因子
+    const INITIAL_EASE_FACTORS = Object.freeze({
+        easy: 2.8,    // 简单：高起始难度因子，间隔长
+        good: 2.5,    // 一般：标准起始难度因子
+        hard: 1.8     // 困难：低起始难度因子，间隔短，需要更多复习
+    });
+
+    // 轮内循环的EF调整
+    const INTRA_EF_ADJUSTMENTS = Object.freeze({
+        easy: 0.15,   // 简单：提升难度因子
+        good: 0.05,   // 一般：小幅提升
+        hard: -0.10   // 困难：降低难度因子
+    });
+
+    // 质量评分映射（简化为 3 档）
+    const QUALITY_RATINGS = Object.freeze({
+        wrong: 0,      // 完全错误
+        hard: 3,       // 正确但很困难
+        good: 4,       // 正确但有犹豫
+        easy: 5        // 完美回忆（秒答）
+    });
+
+    // 向后兼容：旧的 Leitner 箱号
+    const MAX_BOX = 5;
+    const MIN_BOX = 1;
+
+    function toDate(input, fallback = new Date()) {
+        if (!input) {
+            return new Date(fallback);
+        }
+        if (input instanceof Date) {
+            return new Date(input.getTime());
+        }
+        const parsed = new Date(input);
+        if (Number.isNaN(parsed.getTime())) {
+            return new Date(fallback);
+        }
+        return parsed;
+    }
+
+    /**
+     * SM-2 算法：计算难度因子
+     * @param {number} oldEF - 旧难度因子
+     * @param {number} quality - 质量评分 (0-5)
+     * @returns {number} 新难度因子 (1.3-2.5)
+     */
+    function calculateEaseFactor(oldEF, quality) {
+        const q = Math.max(0, Math.min(5, Number(quality) || 0));
+        const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
+        const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+
+        // 限制在 [1.3, 2.5] 范围内
+        return Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, newEF)
+        );
+    }
+
+    /**
+     * SM-2 算法：计算下次复习间隔（天）
+     * @param {number} repetitions - 连续正确次数
+     * @param {number} oldInterval - 旧间隔（天）
+     * @param {number} easeFactor - 难度因子
+     * @returns {number} 新间隔（天）
+     */
+    function calculateInterval(repetitions, oldInterval, easeFactor) {
+        const reps = Number(repetitions) || 0;
+        const interval = Number(oldInterval) || 0;
+        const ef = easeFactor || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        if (reps === 0) {
+            return SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        }
+        if (reps === 1) {
+            return SM2_CONSTANTS.SECOND_INTERVAL_DAYS;
+        }
+        // reps >= 2: 间隔 = 上次间隔 × 难度因子
+        return Math.round(interval * ef);
+    }
+
+    /**
+     * 计算下次复习时间
+     * @param {number} intervalDays - 间隔天数
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Date} 下次复习时间
+     */
+    function calculateNextReview(intervalDays, referenceTime) {
+        const base = toDate(referenceTime, new Date());
+        const days = Math.max(0, Number(intervalDays) || 0);
+        const next = new Date(base.getTime());
+        next.setDate(next.getDate() + days);
+        return next;
+    }
+
+    /**
+     * 归一化词条数据
+     * @param {Object} word - 词条对象
+     * @returns {Object} 归一化后的词条
+     */
+    function normalizeWord(word) {
+        if (!word || typeof word !== 'object') {
+            return null;
+        }
+
+        // SM-2 字段
+        const easeFactor = typeof word.easeFactor === 'number'
+            ? word.easeFactor
+            : null; // 新词没有EF，将根据首次判断设置
+
+        const interval = typeof word.interval === 'number'
+            ? word.interval
+            : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+
+        const repetitions = typeof word.repetitions === 'number'
+            ? word.repetitions
+            : 0;
+
+        // 轮内循环状态
+        const intraCycles = typeof word.intraCycles === 'number'
+            ? word.intraCycles
+            : 0;
+
+        return {
+            ...word,
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles
+        };
+    }
+
+    /**
+     * 设置新词的起始难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} initialQuality - 首次认识质量 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function setInitialEaseFactor(word, initialQuality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
+
+        return {
+            ...normalized,
+            easeFactor: initialEF,
+            intraCycles: initialQuality === 'easy' ? 0 : 1 // easy不进入轮内循环
+        };
+    }
+
+    /**
+     * 轮内循环调整难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function adjustIntraCycleEF(word, quality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const adjustment = INTRA_EF_ADJUSTMENTS[quality] || 0;
+        const newEF = Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, normalized.easeFactor + adjustment)
+        );
+
+        const newCycles = normalized.intraCycles + 1;
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            intraCycles: newCycles
+        };
+    }
+
+    /**
+     * SM-2 算法：根据回忆质量更新词条
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('wrong'|'hard'|'good'|'easy')
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Object} 更新后的词条
+     */
+    function scheduleAfterResult(word, quality, referenceTime = new Date()) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        // 如果是新词（没有EF），设置起始难度因子
+        if (normalized.easeFactor === null) {
+            return setInitialEaseFactor(normalized, quality);
+        }
+
+        const q = QUALITY_RATINGS[quality] !== undefined
+            ? QUALITY_RATINGS[quality]
+            : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
+
+        const reviewedAt = toDate(referenceTime, new Date()).toISOString();
+
+        // 质量评分 < 3 视为失败，重置进度
+        if (q < 3) {
+            return {
+                ...normalized,
+                easeFactor: Math.max(
+                    SM2_CONSTANTS.MIN_EASE_FACTOR,
+                    normalized.easeFactor - 0.2
+                ),
+                interval: SM2_CONSTANTS.INITIAL_INTERVAL_DAYS,
+                repetitions: 0,
+                intraCycles: 1, // 重新进入轮内循环
+                correctCount: 0,
+                lastReviewed: reviewedAt,
+                nextReview: calculateNextReview(SM2_CONSTANTS.INITIAL_INTERVAL_DAYS, reviewedAt).toISOString()
+            };
+        }
+
+        // 质量评分 >= 3，更新难度因子和间隔
+        const newEF = calculateEaseFactor(normalized.easeFactor, q);
+        const newReps = normalized.repetitions + 1;
+        const newInterval = calculateInterval(newReps, normalized.interval, newEF);
+        const nextReviewDate = calculateNextReview(newInterval, reviewedAt);
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            interval: newInterval,
+            repetitions: newReps,
+            intraCycles: 0, // 完成学习，退出轮内循环
+            correctCount: (normalized.correctCount || 0) + 1,
+            lastReviewed: reviewedAt,
+            nextReview: nextReviewDate.toISOString()
+        };
+    }
+
+    /**
+     * 向后兼容：旧的 promote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'good') 替代
+     */
+    function promote(word) {
+        return scheduleAfterResult(word, 'good');
+    }
+
+    /**
+     * 向后兼容：旧的 demote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'wrong') 替代
+     */
+    function demote(word) {
+        return scheduleAfterResult(word, 'wrong');
+    }
+
+    function pickDailyTask(allWords, limit = 100, options = {}) {
+        const words = Array.isArray(allWords) ? allWords.slice() : [];
+        const reviewLimit = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : 100;
+        const newLimit = typeof options.newLimit === 'number' && options.newLimit >= 0 ? Math.floor(options.newLimit) : 20;
+        const now = toDate(options.now, new Date());
+
+        const dueWords = [];
+        const newWords = [];
+
+        words.forEach((word) => {
+            if (!word) {
+                return;
+            }
+            const nextReview = word.nextReview ? new Date(word.nextReview) : null;
+            const lastReviewed = word.lastReviewed ? new Date(word.lastReviewed) : null;
+            if (nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= now) {
+                dueWords.push(word);
+                return;
+            }
+            if (!lastReviewed || Number.isNaN(lastReviewed.getTime())) {
+                newWords.push(word);
+            }
+        });
+
+        const sortByDue = (a, b) => {
+            const nextA = a.nextReview ? new Date(a.nextReview).getTime() : 0;
+            const nextB = b.nextReview ? new Date(b.nextReview).getTime() : 0;
+            if (Number.isNaN(nextA) && Number.isNaN(nextB)) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            if (Number.isNaN(nextA)) {
+                return -1;
+            }
+            if (Number.isNaN(nextB)) {
+                return 1;
+            }
+            if (nextA === nextB) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            return nextA - nextB;
+        };
+
+        dueWords.sort(sortByDue);
+
+        const tasks = dueWords.slice(0, reviewLimit);
+        if (tasks.length < reviewLimit && newLimit > 0) {
+            const remaining = Math.min(newLimit, reviewLimit - tasks.length);
+            const sortedNew = newWords.sort((a, b) => {
+                const freqA = typeof a.freq === 'number' ? a.freq : 0;
+                const freqB = typeof b.freq === 'number' ? b.freq : 0;
+                if (freqA === freqB) {
+                    return (a.word || '').localeCompare(b.word || '');
+                }
+                return freqB - freqA;
+            });
+            for (let i = 0; i < sortedNew.length && tasks.length < reviewLimit && i < remaining; i += 1) {
+                tasks.push(sortedNew[i]);
+            }
+        }
+
+        return tasks;
+    }
+
+    const api = Object.freeze({
+        // SM-2 算法核心
+        SM2_CONSTANTS,
+        QUALITY_RATINGS,
+        INITIAL_EASE_FACTORS,
+        INTRA_EF_ADJUSTMENTS,
+        calculateEaseFactor,
+        calculateInterval,
+        calculateNextReview,
+        scheduleAfterResult,
+        normalizeWord,
+        setInitialEaseFactor,
+        adjustIntraCycleEF,
+
+        // 任务生成
+        pickDailyTask,
+
+        // 向后兼容（已废弃）
+        promote,
+        demote,
+        MAX_BOX,
+        MIN_BOX
+    });
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else {
+        window.VocabScheduler = api;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/practiceReviewScheduler.js ===== */
+(function initPracticeReviewScheduler(global) {
+    'use strict';
+
+    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v2 === true) return;
+
+    const vocabScheduler = global.VocabScheduler;
+    if (!vocabScheduler
+        || typeof vocabScheduler.calculateEaseFactor !== 'function'
+        || typeof vocabScheduler.calculateNextReview !== 'function') {
+        throw new Error('PracticeReviewScheduler requires VocabScheduler');
+    }
+
+    const QUALITY_VALUES = Object.freeze({ hard: 2, good: 4, easy: 5 });
+    const VALID_QUALITIES = Object.freeze(Object.keys(QUALITY_VALUES));
+
+    function validIso(value, label) {
+        const time = new Date(value).getTime();
+        if (!Number.isFinite(time)) throw new TypeError(`${label || 'date'} must be a valid date`);
+        return new Date(time).toISOString();
+    }
+
+    function normalizeAppliedAttemptIds(value) {
+        if (value === undefined) return [];
+        if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
+        const normalized = [];
+        const seen = new Set();
+        for (const rawAttemptId of value) {
+            if (typeof rawAttemptId !== 'string') {
+                throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            }
+            const attemptId = rawAttemptId.trim();
+            if (!attemptId) throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            if (seen.has(attemptId)) continue;
+            seen.add(attemptId);
+            normalized.push(attemptId);
+        }
+        return normalized;
+    }
+
+    function createInitialState(referenceTime) {
+        const nextReview = validIso(referenceTime || new Date(), 'referenceTime');
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            reviewCount: 0,
+            lapseCount: 0,
+            lastReviewed: null,
+            nextReview,
+            lastQuality: null,
+            lastReviewAttemptId: null,
+            appliedReviewAttemptIds: [],
+            updatedAt: nextReview
+        };
+    }
+
+    function normalizeState(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) {
+            throw new TypeError('reviewState must be an object');
+        }
+        if (Number(input.schemaVersion) !== 1
+            || input.algorithm !== 'sm2-practice'
+            || Number(input.algorithmVersion) !== 1) {
+            throw new TypeError('Unsupported practice review state');
+        }
+        const easeFactor = Number(input.easeFactor);
+        const interval = Number(input.interval);
+        const repetitions = Number(input.repetitions);
+        const reviewCount = Number(input.reviewCount);
+        const lapseCount = Number(input.lapseCount);
+        if (!Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 3) throw new TypeError('Invalid easeFactor');
+        if (!Number.isFinite(interval) || interval < 0) throw new TypeError('Invalid interval');
+        if (![repetitions, reviewCount, lapseCount].every((value) => Number.isInteger(value) && value >= 0)) {
+            throw new TypeError('Invalid review counters');
+        }
+        const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
+        const nextReview = validIso(input.nextReview, 'nextReview');
+        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
+        if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
+        const normalizedLastAttemptId = input.lastReviewAttemptId == null
+            ? ''
+            : String(input.lastReviewAttemptId).trim();
+        const lastReviewAttemptId = normalizedLastAttemptId || null;
+        const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
+        if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
+            appliedReviewAttemptIds.push(lastReviewAttemptId);
+        }
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor,
+            interval,
+            repetitions,
+            reviewCount,
+            lapseCount,
+            lastReviewed,
+            nextReview,
+            lastQuality,
+            lastReviewAttemptId,
+            appliedReviewAttemptIds,
+            updatedAt
+        };
+    }
+
+    function scheduleOutcome(input, quality, reviewedAt, reviewAttemptId) {
+        const current = normalizeState(input);
+        const normalizedQuality = String(quality || '').toLowerCase();
+        if (!VALID_QUALITIES.includes(normalizedQuality)) throw new TypeError('quality must be hard, good, or easy');
+        const attemptId = String(reviewAttemptId || '').trim();
+        if (!attemptId) throw new TypeError('reviewAttemptId is required');
+        if (current.appliedReviewAttemptIds.includes(attemptId)) return current;
+        const timestamp = validIso(reviewedAt || new Date(), 'reviewedAt');
+        const nextEaseFactor = vocabScheduler.calculateEaseFactor(current.easeFactor, QUALITY_VALUES[normalizedQuality]);
+        let repetitions;
+        let interval;
+        let lapseCount = current.lapseCount;
+
+        if (normalizedQuality === 'hard') {
+            repetitions = 0;
+            interval = 1;
+            lapseCount += 1;
+        } else if (normalizedQuality === 'easy' && current.repetitions === 0) {
+            repetitions = 2;
+            interval = 6;
+        } else if (current.repetitions === 0) {
+            repetitions = 1;
+            interval = 1;
+        } else if (current.repetitions === 1) {
+            repetitions = 2;
+            interval = 6;
+        } else {
+            repetitions = current.repetitions + 1;
+            interval = Math.max(1, Math.round(current.interval * nextEaseFactor));
+        }
+
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: nextEaseFactor,
+            interval,
+            repetitions,
+            reviewCount: current.reviewCount + 1,
+            lapseCount,
+            lastReviewed: timestamp,
+            nextReview: vocabScheduler.calculateNextReview(interval, timestamp).toISOString(),
+            lastQuality: normalizedQuality,
+            lastReviewAttemptId: attemptId,
+            appliedReviewAttemptIds: current.appliedReviewAttemptIds.concat(attemptId),
+            updatedAt: timestamp
+        };
+    }
+
+    global.PracticeReviewScheduler = Object.freeze({
+        __v1: true,
+        __v2: true,
+        QUALITY_VALUES,
+        VALID_QUALITIES,
+        createInitialState,
+        normalizeState,
+        scheduleOutcome
+    });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/data/v2/appData.js ===== */
 (function installAppData(global) {
     'use strict';
@@ -1859,8 +2393,14 @@
 
     function firstNonNegative(...values) {
         for (const value of values) {
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            const numeric = Number(value);
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) continue;
+            } else if (typeof candidate !== 'number') {
+                continue;
+            }
+            const numeric = Number(candidate);
             if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
@@ -2024,7 +2564,33 @@
             date: source.date || source.completedAt || source.timestamp || null,
             startTime: source.startTime || null,
             endTime: source.endTime || null,
-            duration: Number(source.duration ?? source.durationSeconds ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            // canonicalizeRecord validates an explicit root duration first.
+            // Legacy aliases still need individual validation so a malformed
+            // earlier alias cannot mask a later valid value or persist a
+            // negative canonical summary.
+            duration: firstNonNegative(
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                scoreInfo.duration,
+                scoreInfo.durationSeconds,
+                scoreInfo.duration_seconds,
+                scoreInfo.elapsedSeconds,
+                scoreInfo.elapsed_seconds,
+                scoreInfo.timeSpent,
+                scoreInfo.time_spent,
+                realScoreInfo.duration,
+                realScoreInfo.durationSeconds,
+                realScoreInfo.duration_seconds,
+                realScoreInfo.elapsedSeconds,
+                realScoreInfo.elapsed_seconds,
+                realScoreInfo.timeSpent,
+                realScoreInfo.time_spent
+            ) ?? 0,
             totalQuestions,
             correctAnswers,
             accuracy,
@@ -2092,7 +2658,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
@@ -5586,6 +6156,8 @@
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
     "js/data/v2/dataKernel.js",
+    "js/core/vocabScheduler.js",
+    "js/core/practiceReviewScheduler.js",
     "js/data/v2/appData.js",
     "js/utils/practiceTimerPreferences.js",
     "js/listeningUnifiedWrapper.js"
