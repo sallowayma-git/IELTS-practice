@@ -3572,6 +3572,374 @@
             return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
+        _normalizeReplayNonNegativeNumber(value) {
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) return null;
+            } else if (typeof candidate !== 'number') {
+                return null;
+            }
+            const numeric = Number(candidate);
+            return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+        },
+
+        _resolveReplaySourceScoreInfo(entry, record, isSuiteEntry = false, allowSingleEntryParentFallback = false) {
+            const scoreInfo = {};
+            const counterSourceGroups = [];
+            const metricSourceGroups = [];
+            // Number of leading groups collected from the aggregate parent
+            // record. Groups are collected parent-first, then iterated
+            // backwards (entry first), so a group index below these counts
+            // comes from the parent rather than the entry itself.
+            let counterParentGroupCount = 0;
+            let metricParentGroupCount = 0;
+            const mergeScoreInfo = (source) => {
+                if (!this._isReplayObject(source)) return;
+                Object.assign(scoreInfo, this._cloneReviewData(source));
+            };
+            const normalizeNonNegative = value => this._normalizeReplayNonNegativeNumber(value);
+            const normalizeAccuracy = (value) => {
+                const numeric = normalizeNonNegative(value);
+                if (numeric === null || numeric > 100) return null;
+                return numeric > 1 ? numeric / 100 : numeric;
+            };
+            const normalizePercentage = (value) => {
+                const numeric = normalizeNonNegative(value);
+                return numeric !== null && numeric <= 100 ? numeric : null;
+            };
+            const hasCounterAlias = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                return ['correct', 'correctAnswers', 'score', 'total', 'totalQuestions']
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+            };
+            const hasMetricAlias = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                return normalizeAccuracy(source.accuracy) !== null
+                    || normalizePercentage(source.percentage) !== null;
+            };
+            const hasCompleteCounters = (source) => {
+                if (!this._isReplayObject(source)) return false;
+                const hasCorrect = ['correct', 'correctAnswers', 'score']
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+                const hasTotal = ['total', 'totalQuestions']
+                    .some(key => normalizeNonNegative(source[key]) !== null);
+                return hasCorrect && hasTotal;
+            };
+            const entrySources = [
+                entry.rawData,
+                entry.rawData?.scoreInfo,
+                entry.realData,
+                entry.realData?.scoreInfo,
+                entry,
+                entry.scoreInfo
+            ];
+            const entryHasCompleteCounters = entrySources.some(hasCompleteCounters);
+            const entryHasMetric = entrySources.some(hasMetricAlias);
+
+            // Split the gates: counters and metrics fall back independently
+            const includeParentCounters = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasCompleteCounters);
+            const includeParentMetrics = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasMetric);
+            // The wholesale parent scoreInfo merge stays gated on the child
+            // having no usable score of its own, matching the pre-split
+            // semantics. Field-level fallback flows through the source
+            // groups below, so a partial child never inherits the parent's
+            // non-canonical scoreInfo keys (source, score, duration, ...).
+            const entryHasUsableScore = entrySources.some(
+                source => hasCounterAlias(source) || hasMetricAlias(source)
+            );
+            const includeParentScoreInfo = !isSuiteEntry
+                || (allowSingleEntryParentFallback && !entryHasUsableScore);
+            const resolveFromAliasSource = (source, keys, normalize = normalizeNonNegative) => {
+                if (!this._isReplayObject(source)) return null;
+                for (const key of keys) {
+                    const normalized = normalize(source[key]);
+                    if (normalized === null) continue;
+                    return normalized;
+                }
+                return null;
+            };
+            const describeScoreAliases = (source) => {
+                if (!this._isReplayObject(source)) return null;
+                const nested = this._isReplayObject(source.scoreInfo) ? source.scoreInfo : null;
+                const rootCorrect = normalizeNonNegative(source.correctAnswers);
+                const rootTotal = normalizeNonNegative(source.totalQuestions);
+                const rootAccuracy = normalizeAccuracy(source.accuracy);
+                const rootPercentage = normalizePercentage(source.percentage);
+                const nestedCanonicalCorrect = resolveFromAliasSource(nested, ['correct', 'correctAnswers']);
+                const nestedLegacyScore = resolveFromAliasSource(nested, ['score']);
+                const hasAppDataProjectionShape = ['correctAnswers', 'totalQuestions', 'accuracy', 'percentage']
+                    .every(key => Object.prototype.hasOwnProperty.call(source, key))
+                    && Object.prototype.hasOwnProperty.call(source, 'score');
+                const rootLegacyScore = resolveFromAliasSource(source, ['score']);
+                const generatedLegacyCorrect = hasAppDataProjectionShape
+                    && rootCorrect === 0
+                    && nestedCanonicalCorrect === null
+                    && nestedLegacyScore !== null
+                    && nestedLegacyScore > 0
+                    && rootLegacyScore === nestedLegacyScore;
+                const nestedHasNonZeroScore = [
+                    nestedCanonicalCorrect,
+                    nestedLegacyScore,
+                    resolveFromAliasSource(nested, ['total', 'totalQuestions']),
+                    resolveFromAliasSource(nested, ['accuracy'], normalizeAccuracy),
+                    resolveFromAliasSource(nested, ['percentage'], normalizePercentage)
+                ].some(value => value !== null && value > 0);
+                const generatedEmptySummary = hasAppDataProjectionShape
+                    && source.score === null
+                    && rootCorrect === 0
+                    && rootTotal === 0
+                    && rootAccuracy === 0
+                    && rootPercentage === 0
+                    && nestedHasNonZeroScore;
+                return {
+                    root: source,
+                    nested,
+                    generatedEmptySummary,
+                    generatedLegacyCorrect,
+                    generatedMetricPair: generatedEmptySummary || (
+                        generatedLegacyCorrect
+                        && rootAccuracy === 0
+                        && rootPercentage === 0
+                    )
+                };
+            };
+            const collectCounterAliases = (source) => {
+                const group = describeScoreAliases(source);
+                if (group) counterSourceGroups.push(group);
+            };
+            const collectMetricAliases = (source) => {
+                const group = describeScoreAliases(source);
+                if (group) metricSourceGroups.push(group);
+            };
+            const resolvePreferredCounter = ({ canonicalRootKey, nestedKeys, rootLegacyKeys }) => {
+                let generatedRootZero = null;
+                for (let sourceIndex = counterSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    // A generated child zero may keep probing the child's own
+                    // provenance chain, but must never cross into the parent
+                    // aggregate groups.
+                    if (generatedRootZero !== null && sourceIndex < counterParentGroupCount) {
+                        break;
+                    }
+                    const group = counterSourceGroups[sourceIndex];
+                    const { root, nested } = group;
+                    const normalized = normalizeNonNegative(root[canonicalRootKey]);
+                    if (normalized !== null) {
+                        const generatedCanonicalZero = normalized === 0 && (
+                            group.generatedEmptySummary
+                            || (canonicalRootKey === 'correctAnswers' && group.generatedLegacyCorrect)
+                        );
+                        if (!generatedCanonicalZero) return normalized;
+                        if (generatedRootZero === null) generatedRootZero = 0;
+                    }
+
+                    const nestedCounter = resolveFromAliasSource(nested, nestedKeys);
+                    if (nestedCounter !== null) return nestedCounter;
+
+                    const rootLegacyCounter = resolveFromAliasSource(root, rootLegacyKeys);
+                    if (rootLegacyCounter !== null) return rootLegacyCounter;
+                }
+                return generatedRootZero;
+            };
+
+            if (includeParentScoreInfo) {
+                mergeScoreInfo(record.rawData?.scoreInfo);
+                mergeScoreInfo(record.realData?.scoreInfo);
+                mergeScoreInfo(record.scoreInfo);
+            }
+            mergeScoreInfo(entry.rawData?.scoreInfo);
+            mergeScoreInfo(entry.realData?.scoreInfo);
+            mergeScoreInfo(entry.scoreInfo);
+
+            // AppData's canonical/light records expose numeric score totals at
+            // the entry root. Parent provenances stay out of suite children
+            // except for the structurally equivalent one-entry suite, where
+            // each field family (counters, metrics) falls back to the parent
+            // independently of the other.
+            if (includeParentCounters) {
+                collectCounterAliases(record.rawData);
+                collectCounterAliases(record.realData);
+                collectCounterAliases(record);
+                counterParentGroupCount = counterSourceGroups.length;
+            }
+            collectCounterAliases(entry.rawData);
+            collectCounterAliases(entry.realData);
+            collectCounterAliases(entry);
+
+            if (includeParentMetrics) {
+                collectMetricAliases(record.rawData);
+                collectMetricAliases(record.realData);
+                collectMetricAliases(record);
+                metricParentGroupCount = metricSourceGroups.length;
+            }
+            collectMetricAliases(entry.rawData);
+            collectMetricAliases(entry.realData);
+            collectMetricAliases(entry);
+
+            // Resolve each provenance atomically so an authoritative value
+            // cannot be replaced by a stale alias from a lower-priority source.
+            delete scoreInfo.correct;
+            delete scoreInfo.total;
+            delete scoreInfo.totalQuestions;
+            delete scoreInfo.accuracy;
+            delete scoreInfo.percentage;
+            const correct = resolvePreferredCounter({
+                canonicalRootKey: 'correctAnswers',
+                nestedKeys: ['correct', 'correctAnswers', 'score'],
+                rootLegacyKeys: ['correct', 'score']
+            });
+            const total = resolvePreferredCounter({
+                canonicalRootKey: 'totalQuestions',
+                nestedKeys: ['total', 'totalQuestions'],
+                rootLegacyKeys: ['total']
+            });
+            const resolveMetricPair = () => {
+                for (let sourceIndex = metricSourceGroups.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+                    const group = metricSourceGroups[sourceIndex];
+                    const fromParent = sourceIndex < metricParentGroupCount;
+                    const sources = group.generatedMetricPair
+                        ? [group.nested]
+                        : [group.root, group.nested];
+                    for (const source of sources) {
+                        const accuracy = resolveFromAliasSource(source, ['accuracy'], normalizeAccuracy);
+                        const percentage = resolveFromAliasSource(source, ['percentage'], normalizePercentage);
+                        if (accuracy === null && percentage === null) continue;
+
+                        // Keep the metric pair atomic within one source. Root
+                        // fields outrank nested scoreInfo unless the root pair
+                        // is a recognized AppData-generated projection.
+                        if (accuracy !== null && percentage === null) {
+                            return { accuracy, percentage: Math.round(accuracy * 100), fromParent };
+                        }
+                        if (percentage !== null && accuracy === null) {
+                            return { accuracy: percentage / 100, percentage, fromParent };
+                        }
+                        return { accuracy, percentage, fromParent };
+                    }
+                    // Generated metrics with retained counters must be
+                    // re-derived from the resolved counters, not replaced by
+                    // stale metrics from a lower provenance.
+                    if (group.generatedMetricPair && hasCounterAlias(group.nested)) {
+                        return { accuracy: null, percentage: null, fromParent };
+                    }
+                }
+                return { accuracy: null, percentage: null, fromParent: false };
+            };
+
+            let { accuracy, percentage, fromParent } = resolveMetricPair();
+            // Coherence guard: a metric pair borrowed from the parent
+            // aggregate must describe the same score as the resolved entry
+            // counters. A parent pair that contradicts the child counters
+            // describes the aggregate, not this entry — drop it and let
+            // _deriveReplayScoreInfo derive the pair from the counters.
+            if (fromParent && correct !== null && total !== null) {
+                const counterPercentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+                const accuracyCoherent = accuracy === null
+                    || Math.round(accuracy * 100) === counterPercentage;
+                const percentageCoherent = percentage === null
+                    || Math.round(percentage) === counterPercentage;
+                if (!accuracyCoherent || !percentageCoherent) {
+                    accuracy = null;
+                    percentage = null;
+                }
+            }
+            if (correct !== null) scoreInfo.correct = correct;
+            if (total !== null) {
+                scoreInfo.total = total;
+                scoreInfo.totalQuestions = total;
+            }
+            if (accuracy !== null) scoreInfo.accuracy = accuracy;
+            if (percentage !== null) scoreInfo.percentage = percentage;
+            return scoreInfo;
+        },
+
+        _resolveReplayTimestampValue(...values) {
+            for (const value of values) {
+                if (value === null || value === undefined || value === '') continue;
+                let timestampMs = null;
+                if (typeof value === 'number' || /^[+-]?\d+(?:\.\d+)?$/.test(String(value).trim())) {
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric) && numeric > 0) {
+                        timestampMs = numeric < 100000000000
+                            ? Math.round(numeric * 1000)
+                            : Math.round(numeric);
+                    }
+                } else {
+                    const parsed = Date.parse(String(value));
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                        timestampMs = parsed;
+                    }
+                }
+                if (timestampMs !== null && Number.isFinite(new Date(timestampMs).getTime())) {
+                    return value;
+                }
+            }
+            return null;
+        },
+
+        _collectReplayDurationAliases(source) {
+            if (!this._isReplayObject(source)) return [];
+            return [
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                source.scoreInfo?.duration,
+                source.scoreInfo?.durationSeconds,
+                source.scoreInfo?.duration_seconds,
+                source.scoreInfo?.elapsedSeconds,
+                source.scoreInfo?.elapsed_seconds,
+                source.scoreInfo?.timeSpent,
+                source.scoreInfo?.time_spent,
+                source.realData?.duration,
+                source.realData?.durationSeconds,
+                source.realData?.duration_seconds,
+                source.realData?.elapsedSeconds,
+                source.realData?.elapsed_seconds,
+                source.realData?.timeSpent,
+                source.realData?.time_spent,
+                source.realData?.scoreInfo?.duration,
+                source.realData?.scoreInfo?.durationSeconds,
+                source.realData?.scoreInfo?.duration_seconds,
+                source.realData?.scoreInfo?.elapsedSeconds,
+                source.realData?.scoreInfo?.elapsed_seconds,
+                source.realData?.scoreInfo?.timeSpent,
+                source.realData?.scoreInfo?.time_spent,
+                source.rawData?.duration,
+                source.rawData?.durationSeconds,
+                source.rawData?.duration_seconds,
+                source.rawData?.elapsedSeconds,
+                source.rawData?.elapsed_seconds,
+                source.rawData?.timeSpent,
+                source.rawData?.time_spent,
+                source.rawData?.scoreInfo?.duration,
+                source.rawData?.scoreInfo?.durationSeconds,
+                source.rawData?.scoreInfo?.duration_seconds,
+                source.rawData?.scoreInfo?.elapsedSeconds,
+                source.rawData?.scoreInfo?.elapsed_seconds,
+                source.rawData?.scoreInfo?.timeSpent,
+                source.rawData?.scoreInfo?.time_spent
+            ];
+        },
+
+        _resolveReplayDurationValue(...groups) {
+            const provenanceGroups = groups.every(Array.isArray) ? groups : [groups];
+            for (const values of provenanceGroups) {
+                // AppData promotes legacy aliases when a canonical duration is
+                // missing, so field order can preserve an explicit root zero.
+                for (const value of values) {
+                    const numeric = this._normalizeReplayNonNegativeNumber(value);
+                    if (numeric !== null) return numeric;
+                }
+            }
+            return null;
+        },
+
         _collectReplayQuestionIds(entry) {
             const keys = new Set();
             const collect = (source) => {
@@ -3670,7 +4038,12 @@
                 }
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
-                const sourceScoreInfo = entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo;
+                const sourceScoreInfo = this._resolveReplaySourceScoreInfo(
+                    entry,
+                    record,
+                    hasSuiteEntries,
+                    hasSuiteEntries && baseEntries.length === 1
+                );
                 const scoreInfo = this._deriveReplayScoreInfo(
                     sourceScoreInfo,
                     comparison,
@@ -3728,9 +4101,44 @@
                     answerComparison: comparison,
                     scoreInfo,
                     allQuestionIds: [],
-                    startTime: entry.startTime || record.startTime || record.date || null,
-                    endTime: entry.endTime || record.endTime || record.date || null,
-                    duration: Number(entry.duration ?? record.duration) || 0,
+                    startTime: entry.startTime
+                        || entry.realData?.startTime
+                        || entry.rawData?.startTime
+                        || record.startTime
+                        || record.realData?.startTime
+                        || record.rawData?.startTime
+                        || record.date
+                        || null,
+                    endTime: this._resolveReplayTimestampValue(
+                        entry.endTime,
+                        entry.completedAt,
+                        entry.timestamp,
+                        entry.date,
+                        entry.realData?.endTime,
+                        entry.realData?.completedAt,
+                        entry.realData?.timestamp,
+                        entry.realData?.date,
+                        entry.rawData?.endTime,
+                        entry.rawData?.completedAt,
+                        entry.rawData?.timestamp,
+                        entry.rawData?.date,
+                        record.endTime,
+                        record.completedAt,
+                        record.timestamp,
+                        record.date,
+                        record.realData?.endTime,
+                        record.realData?.completedAt,
+                        record.realData?.timestamp,
+                        record.realData?.date,
+                        record.rawData?.endTime,
+                        record.rawData?.completedAt,
+                        record.rawData?.timestamp,
+                        record.rawData?.date
+                    ),
+                    duration: this._resolveReplayDurationValue(
+                        this._collectReplayDurationAliases(entry),
+                        this._collectReplayDurationAliases(record)
+                    ) ?? 0,
                     markedQuestions: Array.isArray(entry.markedQuestions)
                         ? entry.markedQuestions.slice()
                         : (Array.isArray(entryMetadata.markedQuestions)

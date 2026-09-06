@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="136" height="44" viewBox="0 0 136 44" role="img" aria-label="技术：Docker Compose、PostgreSQL">
+  <title>技术：Docker Compose、PostgreSQL</title>
+  <!-- Static Shields.io badges share one viewBox to preserve equal heights and original proportions when the README table resizes. -->
+  <svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="136" height="20" role="img" aria-label="技术: Docker Compose">
+  <title>技术: Docker Compose</title>
+  <filter id="docker-blur">
+  <feGaussianBlur stdDeviation="16"/>
+  </filter>
+  <linearGradient id="docker-s" x2="0" y2="100%">
+  <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+  <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="docker-r">
+  <rect width="136" height="20" rx="3"/>
+  </clipPath>
+  <g clip-path="url(#docker-r)">
+  <rect width="33" height="20" fill="#555"/>
+  <rect x="33" width="103" height="20" fill="#007ec6"/>
+  <rect width="136" height="20" fill="url(#docker-s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+  <g transform="scale(.1)">
+  <g aria-hidden="true" fill="#010101">
+  <text x="175" y="150" fill-opacity=".8" filter="url(#docker-blur)" textLength="230">技术</text>
+  <text x="175" y="150" fill-opacity=".3" textLength="230">技术</text>
+  </g>
+  <text x="175" y="140" textLength="230">技术</text>
+  </g>
+  <g transform="scale(.1)">
+  <g aria-hidden="true" fill="#010101">
+  <text x="835" y="150" fill-opacity=".8" filter="url(#docker-blur)" textLength="930">Docker Compose</text>
+  <text x="835" y="150" fill-opacity=".3" textLength="930">Docker Compose</text>
+  </g>
+  <text x="835" y="140" textLength="930">Docker Compose</text>
+  </g>
+  </g>
+  </svg>
+  <svg x="0" y="24" xmlns="http://www.w3.org/2000/svg" width="106" height="20" role="img" aria-label="技术: PostgreSQL">
+  <title>技术: PostgreSQL</title>
+  <filter id="postgresql-blur">
+  <feGaussianBlur stdDeviation="16"/>
+  </filter>
+  <linearGradient id="postgresql-s" x2="0" y2="100%">
+  <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+  <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="postgresql-r">
+  <rect width="106" height="20" rx="3"/>
+  </clipPath>
+  <g clip-path="url(#postgresql-r)">
+  <rect width="33" height="20" fill="#555"/>
+  <rect x="33" width="73" height="20" fill="#007ec6"/>
+  <rect width="106" height="20" fill="url(#postgresql-s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+  <g transform="scale(.1)">
+  <g aria-hidden="true" fill="#010101">
+  <text x="175" y="150" fill-opacity=".8" filter="url(#postgresql-blur)" textLength="230">技术</text>
+  <text x="175" y="150" fill-opacity=".3" textLength="230">技术</text>
+  </g>
+  <text x="175" y="140" textLength="230">技术</text>
+  </g>
+  <g transform="scale(.1)">
+  <g aria-hidden="true" fill="#010101">
+  <text x="685" y="150" fill-opacity=".8" filter="url(#postgresql-blur)" textLength="630">PostgreSQL</text>
+  <text x="685" y="150" fill-opacity=".3" textLength="630">PostgreSQL</text>
+  </g>
+  <text x="685" y="140" textLength="630">PostgreSQL</text>
+  </g>
+  </g>
+  </svg>
+</svg>

@@ -2043,6 +2043,540 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/core/vocabScheduler.js ===== */
+(function(window) {
+    // SuperMemo SM-2 算法常量
+    const SM2_CONSTANTS = Object.freeze({
+        MIN_EASE_FACTOR: 1.3,
+        MAX_EASE_FACTOR: 3.0,
+        DEFAULT_EASE_FACTOR: 2.5,
+        INITIAL_INTERVAL_DAYS: 1,
+        SECOND_INTERVAL_DAYS: 6,
+        MAX_INTRA_CYCLES: 12
+    });
+
+    // 三档起始难度因子
+    const INITIAL_EASE_FACTORS = Object.freeze({
+        easy: 2.8,    // 简单：高起始难度因子，间隔长
+        good: 2.5,    // 一般：标准起始难度因子
+        hard: 1.8     // 困难：低起始难度因子，间隔短，需要更多复习
+    });
+
+    // 轮内循环的EF调整
+    const INTRA_EF_ADJUSTMENTS = Object.freeze({
+        easy: 0.15,   // 简单：提升难度因子
+        good: 0.05,   // 一般：小幅提升
+        hard: -0.10   // 困难：降低难度因子
+    });
+
+    // 质量评分映射（简化为 3 档）
+    const QUALITY_RATINGS = Object.freeze({
+        wrong: 0,      // 完全错误
+        hard: 3,       // 正确但很困难
+        good: 4,       // 正确但有犹豫
+        easy: 5        // 完美回忆（秒答）
+    });
+
+    // 向后兼容：旧的 Leitner 箱号
+    const MAX_BOX = 5;
+    const MIN_BOX = 1;
+
+    function toDate(input, fallback = new Date()) {
+        if (!input) {
+            return new Date(fallback);
+        }
+        if (input instanceof Date) {
+            return new Date(input.getTime());
+        }
+        const parsed = new Date(input);
+        if (Number.isNaN(parsed.getTime())) {
+            return new Date(fallback);
+        }
+        return parsed;
+    }
+
+    /**
+     * SM-2 算法：计算难度因子
+     * @param {number} oldEF - 旧难度因子
+     * @param {number} quality - 质量评分 (0-5)
+     * @returns {number} 新难度因子 (1.3-2.5)
+     */
+    function calculateEaseFactor(oldEF, quality) {
+        const q = Math.max(0, Math.min(5, Number(quality) || 0));
+        const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
+        const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+
+        // 限制在 [1.3, 2.5] 范围内
+        return Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, newEF)
+        );
+    }
+
+    /**
+     * SM-2 算法：计算下次复习间隔（天）
+     * @param {number} repetitions - 连续正确次数
+     * @param {number} oldInterval - 旧间隔（天）
+     * @param {number} easeFactor - 难度因子
+     * @returns {number} 新间隔（天）
+     */
+    function calculateInterval(repetitions, oldInterval, easeFactor) {
+        const reps = Number(repetitions) || 0;
+        const interval = Number(oldInterval) || 0;
+        const ef = easeFactor || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        if (reps === 0) {
+            return SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        }
+        if (reps === 1) {
+            return SM2_CONSTANTS.SECOND_INTERVAL_DAYS;
+        }
+        // reps >= 2: 间隔 = 上次间隔 × 难度因子
+        return Math.round(interval * ef);
+    }
+
+    /**
+     * 计算下次复习时间
+     * @param {number} intervalDays - 间隔天数
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Date} 下次复习时间
+     */
+    function calculateNextReview(intervalDays, referenceTime) {
+        const base = toDate(referenceTime, new Date());
+        const days = Math.max(0, Number(intervalDays) || 0);
+        const next = new Date(base.getTime());
+        next.setDate(next.getDate() + days);
+        return next;
+    }
+
+    /**
+     * 归一化词条数据
+     * @param {Object} word - 词条对象
+     * @returns {Object} 归一化后的词条
+     */
+    function normalizeWord(word) {
+        if (!word || typeof word !== 'object') {
+            return null;
+        }
+
+        // SM-2 字段
+        const easeFactor = typeof word.easeFactor === 'number'
+            ? word.easeFactor
+            : null; // 新词没有EF，将根据首次判断设置
+
+        const interval = typeof word.interval === 'number'
+            ? word.interval
+            : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+
+        const repetitions = typeof word.repetitions === 'number'
+            ? word.repetitions
+            : 0;
+
+        // 轮内循环状态
+        const intraCycles = typeof word.intraCycles === 'number'
+            ? word.intraCycles
+            : 0;
+
+        return {
+            ...word,
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles
+        };
+    }
+
+    /**
+     * 设置新词的起始难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} initialQuality - 首次认识质量 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function setInitialEaseFactor(word, initialQuality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
+
+        return {
+            ...normalized,
+            easeFactor: initialEF,
+            intraCycles: initialQuality === 'easy' ? 0 : 1 // easy不进入轮内循环
+        };
+    }
+
+    /**
+     * 轮内循环调整难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function adjustIntraCycleEF(word, quality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const adjustment = INTRA_EF_ADJUSTMENTS[quality] || 0;
+        const newEF = Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, normalized.easeFactor + adjustment)
+        );
+
+        const newCycles = normalized.intraCycles + 1;
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            intraCycles: newCycles
+        };
+    }
+
+    /**
+     * SM-2 算法：根据回忆质量更新词条
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('wrong'|'hard'|'good'|'easy')
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Object} 更新后的词条
+     */
+    function scheduleAfterResult(word, quality, referenceTime = new Date()) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        // 如果是新词（没有EF），设置起始难度因子
+        if (normalized.easeFactor === null) {
+            return setInitialEaseFactor(normalized, quality);
+        }
+
+        const q = QUALITY_RATINGS[quality] !== undefined
+            ? QUALITY_RATINGS[quality]
+            : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
+
+        const reviewedAt = toDate(referenceTime, new Date()).toISOString();
+
+        // 质量评分 < 3 视为失败，重置进度
+        if (q < 3) {
+            return {
+                ...normalized,
+                easeFactor: Math.max(
+                    SM2_CONSTANTS.MIN_EASE_FACTOR,
+                    normalized.easeFactor - 0.2
+                ),
+                interval: SM2_CONSTANTS.INITIAL_INTERVAL_DAYS,
+                repetitions: 0,
+                intraCycles: 1, // 重新进入轮内循环
+                correctCount: 0,
+                lastReviewed: reviewedAt,
+                nextReview: calculateNextReview(SM2_CONSTANTS.INITIAL_INTERVAL_DAYS, reviewedAt).toISOString()
+            };
+        }
+
+        // 质量评分 >= 3，更新难度因子和间隔
+        const newEF = calculateEaseFactor(normalized.easeFactor, q);
+        const newReps = normalized.repetitions + 1;
+        const newInterval = calculateInterval(newReps, normalized.interval, newEF);
+        const nextReviewDate = calculateNextReview(newInterval, reviewedAt);
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            interval: newInterval,
+            repetitions: newReps,
+            intraCycles: 0, // 完成学习，退出轮内循环
+            correctCount: (normalized.correctCount || 0) + 1,
+            lastReviewed: reviewedAt,
+            nextReview: nextReviewDate.toISOString()
+        };
+    }
+
+    /**
+     * 向后兼容：旧的 promote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'good') 替代
+     */
+    function promote(word) {
+        return scheduleAfterResult(word, 'good');
+    }
+
+    /**
+     * 向后兼容：旧的 demote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'wrong') 替代
+     */
+    function demote(word) {
+        return scheduleAfterResult(word, 'wrong');
+    }
+
+    function pickDailyTask(allWords, limit = 100, options = {}) {
+        const words = Array.isArray(allWords) ? allWords.slice() : [];
+        const reviewLimit = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : 100;
+        const newLimit = typeof options.newLimit === 'number' && options.newLimit >= 0 ? Math.floor(options.newLimit) : 20;
+        const now = toDate(options.now, new Date());
+
+        const dueWords = [];
+        const newWords = [];
+
+        words.forEach((word) => {
+            if (!word) {
+                return;
+            }
+            const nextReview = word.nextReview ? new Date(word.nextReview) : null;
+            const lastReviewed = word.lastReviewed ? new Date(word.lastReviewed) : null;
+            if (nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= now) {
+                dueWords.push(word);
+                return;
+            }
+            if (!lastReviewed || Number.isNaN(lastReviewed.getTime())) {
+                newWords.push(word);
+            }
+        });
+
+        const sortByDue = (a, b) => {
+            const nextA = a.nextReview ? new Date(a.nextReview).getTime() : 0;
+            const nextB = b.nextReview ? new Date(b.nextReview).getTime() : 0;
+            if (Number.isNaN(nextA) && Number.isNaN(nextB)) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            if (Number.isNaN(nextA)) {
+                return -1;
+            }
+            if (Number.isNaN(nextB)) {
+                return 1;
+            }
+            if (nextA === nextB) {
+                return (Number(a.correctCount) || 0) - (Number(b.correctCount) || 0);
+            }
+            return nextA - nextB;
+        };
+
+        dueWords.sort(sortByDue);
+
+        const tasks = dueWords.slice(0, reviewLimit);
+        if (tasks.length < reviewLimit && newLimit > 0) {
+            const remaining = Math.min(newLimit, reviewLimit - tasks.length);
+            const sortedNew = newWords.sort((a, b) => {
+                const freqA = typeof a.freq === 'number' ? a.freq : 0;
+                const freqB = typeof b.freq === 'number' ? b.freq : 0;
+                if (freqA === freqB) {
+                    return (a.word || '').localeCompare(b.word || '');
+                }
+                return freqB - freqA;
+            });
+            for (let i = 0; i < sortedNew.length && tasks.length < reviewLimit && i < remaining; i += 1) {
+                tasks.push(sortedNew[i]);
+            }
+        }
+
+        return tasks;
+    }
+
+    const api = Object.freeze({
+        // SM-2 算法核心
+        SM2_CONSTANTS,
+        QUALITY_RATINGS,
+        INITIAL_EASE_FACTORS,
+        INTRA_EF_ADJUSTMENTS,
+        calculateEaseFactor,
+        calculateInterval,
+        calculateNextReview,
+        scheduleAfterResult,
+        normalizeWord,
+        setInitialEaseFactor,
+        adjustIntraCycleEF,
+
+        // 任务生成
+        pickDailyTask,
+
+        // 向后兼容（已废弃）
+        promote,
+        demote,
+        MAX_BOX,
+        MIN_BOX
+    });
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else {
+        window.VocabScheduler = api;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/practiceReviewScheduler.js ===== */
+(function initPracticeReviewScheduler(global) {
+    'use strict';
+
+    if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v2 === true) return;
+
+    const vocabScheduler = global.VocabScheduler;
+    if (!vocabScheduler
+        || typeof vocabScheduler.calculateEaseFactor !== 'function'
+        || typeof vocabScheduler.calculateNextReview !== 'function') {
+        throw new Error('PracticeReviewScheduler requires VocabScheduler');
+    }
+
+    const QUALITY_VALUES = Object.freeze({ hard: 2, good: 4, easy: 5 });
+    const VALID_QUALITIES = Object.freeze(Object.keys(QUALITY_VALUES));
+
+    function validIso(value, label) {
+        const time = new Date(value).getTime();
+        if (!Number.isFinite(time)) throw new TypeError(`${label || 'date'} must be a valid date`);
+        return new Date(time).toISOString();
+    }
+
+    function normalizeAppliedAttemptIds(value) {
+        if (value === undefined) return [];
+        if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
+        const normalized = [];
+        const seen = new Set();
+        for (const rawAttemptId of value) {
+            if (typeof rawAttemptId !== 'string') {
+                throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            }
+            const attemptId = rawAttemptId.trim();
+            if (!attemptId) throw new TypeError('appliedReviewAttemptIds must contain non-empty strings');
+            if (seen.has(attemptId)) continue;
+            seen.add(attemptId);
+            normalized.push(attemptId);
+        }
+        return normalized;
+    }
+
+    function createInitialState(referenceTime) {
+        const nextReview = validIso(referenceTime || new Date(), 'referenceTime');
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            reviewCount: 0,
+            lapseCount: 0,
+            lastReviewed: null,
+            nextReview,
+            lastQuality: null,
+            lastReviewAttemptId: null,
+            appliedReviewAttemptIds: [],
+            updatedAt: nextReview
+        };
+    }
+
+    function normalizeState(input) {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) {
+            throw new TypeError('reviewState must be an object');
+        }
+        if (Number(input.schemaVersion) !== 1
+            || input.algorithm !== 'sm2-practice'
+            || Number(input.algorithmVersion) !== 1) {
+            throw new TypeError('Unsupported practice review state');
+        }
+        const easeFactor = Number(input.easeFactor);
+        const interval = Number(input.interval);
+        const repetitions = Number(input.repetitions);
+        const reviewCount = Number(input.reviewCount);
+        const lapseCount = Number(input.lapseCount);
+        if (!Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 3) throw new TypeError('Invalid easeFactor');
+        if (!Number.isFinite(interval) || interval < 0) throw new TypeError('Invalid interval');
+        if (![repetitions, reviewCount, lapseCount].every((value) => Number.isInteger(value) && value >= 0)) {
+            throw new TypeError('Invalid review counters');
+        }
+        const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
+        const nextReview = validIso(input.nextReview, 'nextReview');
+        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
+        if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
+        const normalizedLastAttemptId = input.lastReviewAttemptId == null
+            ? ''
+            : String(input.lastReviewAttemptId).trim();
+        const lastReviewAttemptId = normalizedLastAttemptId || null;
+        const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
+        if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
+            appliedReviewAttemptIds.push(lastReviewAttemptId);
+        }
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor,
+            interval,
+            repetitions,
+            reviewCount,
+            lapseCount,
+            lastReviewed,
+            nextReview,
+            lastQuality,
+            lastReviewAttemptId,
+            appliedReviewAttemptIds,
+            updatedAt
+        };
+    }
+
+    function scheduleOutcome(input, quality, reviewedAt, reviewAttemptId) {
+        const current = normalizeState(input);
+        const normalizedQuality = String(quality || '').toLowerCase();
+        if (!VALID_QUALITIES.includes(normalizedQuality)) throw new TypeError('quality must be hard, good, or easy');
+        const attemptId = String(reviewAttemptId || '').trim();
+        if (!attemptId) throw new TypeError('reviewAttemptId is required');
+        if (current.appliedReviewAttemptIds.includes(attemptId)) return current;
+        const timestamp = validIso(reviewedAt || new Date(), 'reviewedAt');
+        const nextEaseFactor = vocabScheduler.calculateEaseFactor(current.easeFactor, QUALITY_VALUES[normalizedQuality]);
+        let repetitions;
+        let interval;
+        let lapseCount = current.lapseCount;
+
+        if (normalizedQuality === 'hard') {
+            repetitions = 0;
+            interval = 1;
+            lapseCount += 1;
+        } else if (normalizedQuality === 'easy' && current.repetitions === 0) {
+            repetitions = 2;
+            interval = 6;
+        } else if (current.repetitions === 0) {
+            repetitions = 1;
+            interval = 1;
+        } else if (current.repetitions === 1) {
+            repetitions = 2;
+            interval = 6;
+        } else {
+            repetitions = current.repetitions + 1;
+            interval = Math.max(1, Math.round(current.interval * nextEaseFactor));
+        }
+
+        return {
+            schemaVersion: 1,
+            algorithm: 'sm2-practice',
+            algorithmVersion: 1,
+            easeFactor: nextEaseFactor,
+            interval,
+            repetitions,
+            reviewCount: current.reviewCount + 1,
+            lapseCount,
+            lastReviewed: timestamp,
+            nextReview: vocabScheduler.calculateNextReview(interval, timestamp).toISOString(),
+            lastQuality: normalizedQuality,
+            lastReviewAttemptId: attemptId,
+            appliedReviewAttemptIds: current.appliedReviewAttemptIds.concat(attemptId),
+            updatedAt: timestamp
+        };
+    }
+
+    global.PracticeReviewScheduler = Object.freeze({
+        __v1: true,
+        __v2: true,
+        QUALITY_VALUES,
+        VALID_QUALITIES,
+        createInitialState,
+        normalizeState,
+        scheduleOutcome
+    });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/data/v2/appData.js ===== */
 (function installAppData(global) {
     'use strict';
@@ -2190,8 +2724,14 @@
 
     function firstNonNegative(...values) {
         for (const value of values) {
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            const numeric = Number(value);
+            let candidate = value;
+            if (typeof candidate === 'string') {
+                candidate = candidate.trim();
+                if (!candidate) continue;
+            } else if (typeof candidate !== 'number') {
+                continue;
+            }
+            const numeric = Number(candidate);
             if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
@@ -2355,7 +2895,33 @@
             date: source.date || source.completedAt || source.timestamp || null,
             startTime: source.startTime || null,
             endTime: source.endTime || null,
-            duration: Number(source.duration ?? source.durationSeconds ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            // canonicalizeRecord validates an explicit root duration first.
+            // Legacy aliases still need individual validation so a malformed
+            // earlier alias cannot mask a later valid value or persist a
+            // negative canonical summary.
+            duration: firstNonNegative(
+                source.duration,
+                source.durationSeconds,
+                source.duration_seconds,
+                source.elapsedSeconds,
+                source.elapsed_seconds,
+                source.timeSpent,
+                source.time_spent,
+                scoreInfo.duration,
+                scoreInfo.durationSeconds,
+                scoreInfo.duration_seconds,
+                scoreInfo.elapsedSeconds,
+                scoreInfo.elapsed_seconds,
+                scoreInfo.timeSpent,
+                scoreInfo.time_spent,
+                realScoreInfo.duration,
+                realScoreInfo.durationSeconds,
+                realScoreInfo.duration_seconds,
+                realScoreInfo.elapsedSeconds,
+                realScoreInfo.elapsed_seconds,
+                realScoreInfo.timeSpent,
+                realScoreInfo.time_spent
+            ) ?? 0,
             totalQuestions,
             correctAnswers,
             accuracy,
@@ -2423,7 +2989,11 @@
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
-                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                for (const replayKey of [
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
+                    'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
+                ]) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
@@ -5404,9 +5974,11 @@
                 throw new Error('本地备份服务刚刚开始重置，请重新选择文件夹');
             }
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            var existingLatest = await readValidatedV2File(handle, LATEST_FILENAME, V2_SCHEMA_VERSION);
-            var existingGeneration = existingLatest ? null : await findLatestDatedGeneration(handle);
-            existingBackupFound = Boolean(existingLatest || existingGeneration);
+            // An unreadable or unsupported latest file must remain protected even
+            // when this version cannot restore it and no valid generation exists.
+            var existingLatestFound = await fileExists(handle, LATEST_FILENAME);
+            var existingGeneration = existingLatestFound ? null : await findLatestDatedGeneration(handle);
+            existingBackupFound = existingLatestFound || Boolean(existingGeneration);
             meta = cloneMeta({
                 directoryName: handle.name || 'backup',
                 lastWriteAt: null,
@@ -8944,7 +9516,7 @@
     "script": "./p3-high-03.js",
     "title": "What makes a musical expert_ 音乐天赋",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/100. P3 - What makes a musical expert_ 音乐天赋【高】/",
     "filename": "100. P3 - What makes a musical expert_ 音乐天赋【高】.html",
@@ -8959,8 +9531,8 @@
     "script": "./p3-high-04.js",
     "title": "Yawning 打呵欠",
     "category": "P3",
-    "frequency": "高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/",
     "filename": "101. P3 - Yawning 打呵欠【高】.html",
     "hasHtml": true,
@@ -8989,8 +9561,8 @@
     "script": "./p2-low-06.js",
     "title": "Biomimicry 仿生学",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
     "filename": "103. P2 - Biomimicry 仿生学.html",
     "hasHtml": true,
@@ -9004,7 +9576,7 @@
     "script": "./p3-low-07.js",
     "title": "Star Performers 明星员工",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/",
     "filename": "104. P3 - Star Performers 明星员工.html",
@@ -9035,7 +9607,7 @@
     "title": "Early Approaches to Organisational Design 组织设计",
     "category": "P2",
     "frequency": "高频",
-    "difficultyScore": null,
+    "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/106. P2 - Early Approaches to Organisational Design 组织设计【高】/",
     "filename": "106. P2 - Early Approaches to Organisational Design 组织设计【高】.html",
     "hasHtml": true,
@@ -9124,7 +9696,7 @@
     "script": "./p3-high-15.js",
     "title": "Whale Culture 鲸鱼文化",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/111. P3 - Whale Culture 鲸鱼文化【高】/",
     "filename": "111. P3 - Whale Culture 鲸鱼文化【高】.html",
@@ -9139,7 +9711,7 @@
     "script": "./p2-high-16.js",
     "title": "The Importance of Law 法律的意义",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
     "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
@@ -9154,7 +9726,7 @@
     "script": "./p2-high-17.js",
     "title": "Herbal Medicines 新西兰草药",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
     "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
@@ -9214,7 +9786,7 @@
     "script": "./p2-high-21.js",
     "title": "Stress Less 工作压力",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/",
     "filename": "117. P2 - Stress Less 工作压力【高】.html",
@@ -9229,7 +9801,7 @@
     "script": "./p3-medium-22.js",
     "title": "Neanderthal Technology 尼安德特人的生存技艺",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
     "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
@@ -9304,7 +9876,7 @@
     "script": "./p3-low-28.js",
     "title": "Images and Places 风景与印记",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/",
     "filename": "123. P3 - Images and Places 风景与印记.html",
@@ -9319,8 +9891,8 @@
     "script": "./p1-medium-29.js",
     "title": "The extinction of the cave bear 洞熊的灭绝",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
     "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
     "hasHtml": true,
@@ -9334,7 +9906,7 @@
     "script": "./p1-low-30.js",
     "title": "Investing in the Future 投资未来",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/",
     "filename": "125. P1 - Investing in the Future 投资未来.html",
@@ -9394,7 +9966,7 @@
     "script": "./p1-low-34.js",
     "title": "The Slow Food Organization 慢食运动组织",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
     "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
@@ -9469,7 +10041,7 @@
     "script": "./p2-low-39.js",
     "title": "How to be Happy 如何获得幸福",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/",
     "filename": "133. P2 - How to be Happy 如何获得幸福.html",
@@ -9484,7 +10056,7 @@
     "script": "./p1-low-40.js",
     "title": "Dyes and fabric dyeing 染料的历史",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/",
     "filename": "134. P1 - Dyes and fabric dyeing 染料的历史.html",
@@ -9499,7 +10071,7 @@
     "script": "./p2-low-41.js",
     "title": "The Myth of the Eight-hour Sleep 八小时睡眠",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/",
     "filename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
@@ -9514,7 +10086,7 @@
     "script": "./p3-low-42.js",
     "title": "The peopling of Patagonia 巴塔哥尼亚的人类迁徙",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/",
     "filename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
@@ -9619,8 +10191,8 @@
     "script": "./p2-low-49.js",
     "title": "Born to Trade 交易的本能",
     "category": "P2",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
     "filename": "142. P2 - Born to Trade 交易的本能.html",
     "hasHtml": true,
@@ -9664,8 +10236,8 @@
     "script": "./p1-low-52.js",
     "title": "Caral an ancient South American city 卡拉尔古城",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
     "filename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
     "hasHtml": true,
@@ -9739,7 +10311,7 @@
     "script": "./p1-medium-57.js",
     "title": "The Blockbuster Phenomenon 博物馆爆款现象",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/",
     "filename": "15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
@@ -9754,8 +10326,8 @@
     "script": "./p2-medium-58.js",
     "title": "Insect Decision-Making 昆虫决策",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/",
     "filename": "150. P2 - Insect Decision-Making 昆虫决策【次】.html",
     "hasHtml": true,
@@ -9769,8 +10341,8 @@
     "script": "./p3-low-59.js",
     "title": "Inside the mind of a fan 观赛心境",
     "category": "P3",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/",
     "filename": "151. P3 - Inside the mind of a fan 观赛心境.html",
     "hasHtml": true,
@@ -9799,7 +10371,7 @@
     "script": "./p1-low-61.js",
     "title": "Carnivorous plants 食虫植物",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
     "filename": "153. P1 - Carnivorous plants 食虫植物.html",
@@ -9844,7 +10416,7 @@
     "script": "./p2-low-64.js",
     "title": "New filter promises clean water for millions 新型泥土净水器",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/",
     "filename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
@@ -9874,7 +10446,7 @@
     "script": "./p3-medium-66.js",
     "title": "Mercator - The Map Maker 地理制图师",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
     "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
@@ -9889,8 +10461,8 @@
     "script": "./p1-low-67.js",
     "title": "Scented Plants 植物的味道",
     "category": "P1",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
     "filename": "159. P1 - Scented Plants 植物的味道.html",
     "hasHtml": true,
@@ -9904,8 +10476,8 @@
     "script": "./p1-low-68.js",
     "title": "The Clipper Races 帆船竞速",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/",
     "filename": "16. P1 - The Clipper Races 帆船竞速.html",
     "hasHtml": true,
@@ -9919,7 +10491,7 @@
     "script": "./p1-low-69.js",
     "title": "An important language development 楔形文字",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
     "filename": "160. P1 - An important language development 楔形文字.html",
@@ -9934,8 +10506,8 @@
     "script": "./p1-low-70.js",
     "title": "Fluorescence Deep sea discovery深海发光生物研究",
     "category": "P1",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/",
     "filename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
     "hasHtml": true,
@@ -9949,7 +10521,7 @@
     "script": "./p3-low-71.js",
     "title": "Sea Change for Salinity 土地盐碱化",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
     "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
@@ -9964,7 +10536,7 @@
     "script": "./p1-low-72.js",
     "title": "How to find your way out of a food desert 城市食物荒漠",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/",
     "filename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
@@ -9979,7 +10551,7 @@
     "script": "./p2-low-73.js",
     "title": "The Power of Smell 嗅觉的力量",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/",
     "filename": "164. P2 - The Power of Smell 嗅觉的力量.html",
@@ -10039,8 +10611,8 @@
     "script": "./p2-low-77.js",
     "title": "Mammoth Kill 猛犸象的灭绝",
     "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/",
     "filename": "168. P2 - Mammoth Kill 猛犸象的灭绝.html",
     "hasHtml": true,
@@ -10054,8 +10626,8 @@
     "script": "./p3-low-78.js",
     "title": "The Costs of Brand Loyalty 品牌忠诚的代价",
     "category": "P3",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/",
     "filename": "169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
     "hasHtml": true,
@@ -10069,7 +10641,7 @@
     "script": "./p1-high-79.js",
     "title": "The Development of The Silk Industry 丝绸产业发展",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/",
     "filename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
@@ -10084,8 +10656,8 @@
     "script": "./p1-low-80.js",
     "title": "The unsung sense 被低估的嗅觉",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/",
     "filename": "170. P1 - The unsung sense 被低估的嗅觉.html",
     "hasHtml": true,
@@ -10114,8 +10686,8 @@
     "script": "./p1-high-82.js",
     "title": "Think Small 微观科学",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
     "filename": "172. P1 - Think Small 微观科学.html",
     "hasHtml": true,
@@ -10144,7 +10716,7 @@
     "script": "./p1-low-84.js",
     "title": "Why good ideas fail TF公司",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
     "filename": "174. P1 - Why good ideas fail TF公司.html",
@@ -10219,7 +10791,7 @@
     "script": "./p3-high-89.js",
     "title": "Looking at daily life in ancient Rome  古罗马的日常",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
     "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
@@ -10264,7 +10836,7 @@
     "script": "./p1-high-92.js",
     "title": "Dust and the American West 美国西部尘埃",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/",
     "filename": "181. P1 - Dust and the American West 美国西部尘埃.html",
@@ -10279,8 +10851,8 @@
     "script": "./p2-medium-93.js",
     "title": "Antarctic research 南极考察",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
     "filename": "182. P2 - Antarctic research 南极考察.html",
     "hasHtml": true,
@@ -10294,7 +10866,7 @@
     "script": "./p2-low-94.js",
     "title": "The importance of being playful 玩耍的重要性",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/",
     "filename": "183. P2 - The importance of being playful 玩耍的重要性.html",
@@ -10309,7 +10881,7 @@
     "script": "./p3-low-95.js",
     "title": "The strange world of sight 奇异的视觉世界",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
     "filename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
@@ -10354,7 +10926,7 @@
     "script": "./p3-low-98.js",
     "title": "Petrol power an eco-revolution 交通的革命",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
     "filename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
@@ -10474,7 +11046,7 @@
     "script": "./p1-low-106.js",
     "title": "The Importance of Business Cards 名片的重要性",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/",
     "filename": "20. P1 - The Importance of Business Cards 名片的重要性.html",
@@ -10489,8 +11061,8 @@
     "script": "./p1-low-107.js",
     "title": "The life of Beatrix Potter 彼得兔作家",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/",
     "filename": "21. P1 - The life of Beatrix Potter 彼得兔作家.html",
     "hasHtml": true,
@@ -10519,7 +11091,7 @@
     "script": "./p1-low-109.js",
     "title": "The Origin of Paper 造纸术起源",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/",
     "filename": "23. P1 - The Origin of Paper 造纸术起源.html",
@@ -10549,8 +11121,8 @@
     "script": "./p1-low-111.js",
     "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
     "category": "P1",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
     "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
     "hasHtml": true,
@@ -10565,7 +11137,7 @@
     "title": "The Tuatara of New Zealand 新西兰蜥蜴",
     "category": "P1",
     "frequency": "low",
-    "difficultyScore": null,
+    "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/",
     "filename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
     "hasHtml": true,
@@ -10579,8 +11151,8 @@
     "script": "./p1-low-113.js",
     "title": "Thomas Young The last man who knew everything 托马斯·杨",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/",
     "filename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
     "hasHtml": true,
@@ -10594,8 +11166,8 @@
     "script": "./p1-low-114.js",
     "title": "Triumph of the City 城市的胜利",
     "category": "P1",
-    "frequency": "次高频",
-    "difficultyScore": 1.5,
+    "frequency": "中频",
+    "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
     "filename": "28. P1 - Triumph of the City 城市的胜利.html",
     "hasHtml": true,
@@ -10684,8 +11256,8 @@
     "script": "./p2-high-120.js",
     "title": "A new look for Talbot Park 奥克兰社区改造",
     "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 3,
+    "frequency": "中频",
+    "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
     "filename": "ai_studio_code (9).html",
     "hasHtml": true,
@@ -10714,7 +11286,7 @@
     "script": "./p2-low-122.js",
     "title": "Biophilic Design 亲自然设计",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
     "filename": "35. P2 - Biophilic Design 亲自然设计.html",
@@ -10744,8 +11316,8 @@
     "script": "./p2-high-124.js",
     "title": "Corporate Social Responsibility  企业社会责任",
     "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/37. P2 - Corporate Social Responsibility  企业社会责任【高】/",
     "filename": "37. P2 - Corporate Social Responsibility  企业社会责任【高】.html",
     "hasHtml": true,
@@ -10789,7 +11361,7 @@
     "script": "./p1-low-127.js",
     "title": "Ambergris 龙涎香",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/",
     "filename": "4. P1 - Ambergris 龙涎香.html",
@@ -10819,7 +11391,7 @@
     "script": "./p2-medium-129.js",
     "title": "Intelligent behaviour in birds 鸟类智慧行为",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/",
     "filename": "41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
@@ -10834,8 +11406,8 @@
     "script": "./p2-high-130.js",
     "title": "Investment in shares versus investment in other assets 回报数据分析",
     "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】/",
     "filename": "42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html",
     "hasHtml": true,
@@ -10924,7 +11496,7 @@
     "script": "./p2-high-136.js",
     "title": "Solving the problem of waste disposal 垃圾处理",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/",
     "filename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
@@ -10939,8 +11511,8 @@
     "script": "./p2-high-137.js",
     "title": "Surviving city life 动物适应城市",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
     "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
     "hasHtml": true,
@@ -10969,7 +11541,7 @@
     "script": "./p2-high-139.js",
     "title": "The conquest of malaria in Italy 意大利疟疾防治",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】/",
     "filename": "50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.html",
@@ -10985,7 +11557,7 @@
     "title": "The dingo debate 澳洲野犬",
     "category": "P2",
     "frequency": "low",
-    "difficultyScore": null,
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/",
     "filename": "51. P2 - The dingo debate 澳洲野犬.html",
     "hasHtml": true,
@@ -11014,7 +11586,7 @@
     "script": "./p2-low-142.js",
     "title": "The fashion industry 时尚产业",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
     "filename": "53. P2 - The fashion industry 时尚产业.html",
@@ -11029,8 +11601,8 @@
     "script": "./p2-low-143.js",
     "title": "The impact of invasive species 入侵物种的影响",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/",
     "filename": "54. P2 - The impact of invasive species 入侵物种的影响.html",
     "hasHtml": true,
@@ -11044,7 +11616,7 @@
     "script": "./p2-medium-144.js",
     "title": "The plan to bring an asteroid to Earth 捕获小行星",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】/",
     "filename": "55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html",
@@ -11059,7 +11631,7 @@
     "script": "./p2-high-145.js",
     "title": "The return of monkey life 猴群回归",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/",
     "filename": "56. P2 - The return of monkey life 猴群回归【高】.html",
@@ -11149,7 +11721,7 @@
     "script": "./p3-low-151.js",
     "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "低频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/",
     "filename": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
@@ -11209,7 +11781,7 @@
     "script": "./p3-medium-155.js",
     "title": "Does class size matter_ 课堂规模",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/65. P3 - Does class size matter_ 课堂规模【次】/",
     "filename": "65. P3 - Does class size matter_ 课堂规模【次】.html",
@@ -11299,7 +11871,7 @@
     "script": "./p3-high-161.js",
     "title": "Insect-inspired robots 昆虫机器人",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
     "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
@@ -11314,7 +11886,7 @@
     "script": "./p3-medium-162.js",
     "title": "Jean Piaget (1896–1980) 让·皮亚杰",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/",
     "filename": "71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html",
@@ -11404,7 +11976,7 @@
     "script": "./p3-medium-168.js",
     "title": "Marketing and the information age 信息时代营销",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
     "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
@@ -11435,7 +12007,7 @@
     "title": "Pacific Navigation and Voyaging 太平洋航海",
     "category": "P3",
     "frequency": "low",
-    "difficultyScore": null,
+    "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/",
     "filename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
     "hasHtml": true,
@@ -11614,7 +12186,7 @@
     "script": "./p1-medium-182.js",
     "title": "Listening to the Ocean 海洋探测",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/",
     "filename": "9. P1 - Listening to the Ocean 海洋探测【次】.html",
@@ -11660,7 +12232,7 @@
     "title": "The Pirahã people of Brazil  巴西皮拉罕部落语言",
     "category": "P3",
     "frequency": "low",
-    "difficultyScore": null,
+    "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】/",
     "filename": "92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html",
     "hasHtml": true,
@@ -11824,7 +12396,7 @@
     "script": "./p1-high-194.js",
     "title": "The history of the British wool industry 英国羊毛产业的历史",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "三月/2.P1 次高频/",
     "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
@@ -11854,7 +12426,7 @@
     "script": "./p1-low-223.js",
     "title": "Effect and Cause 湖泊海啸研究",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "三月/",
     "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
@@ -11884,8 +12456,8 @@
     "script": "./p2-medium-217.js",
     "title": "A mechanical friend for children 孩子的机器人朋友",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 3.5,
     "path": "三月/3.P2 高频/",
     "filename": "217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.html",
     "hasHtml": true,
@@ -11899,7 +12471,7 @@
     "script": "./p2-high-192.js",
     "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "三月/4.P2 次高频/",
     "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
@@ -11914,8 +12486,8 @@
     "script": "./p2-medium-209.js",
     "title": "Decision Fatigue 决策疲劳",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "三月/4.P2 次高频/",
     "filename": "209. P2 - Decision Fatigue 决策疲劳【次】.html",
     "hasHtml": true,
@@ -11959,8 +12531,8 @@
     "script": "./p2-medium-058.js",
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 4,
     "path": "三月/4.P2 次高频/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
     "hasHtml": true,
@@ -12019,7 +12591,7 @@
     "script": "./p3-high-218.js",
     "title": "The Causes of Linguistic Change 语音的演变",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "三月/5.P3 高频/",
     "filename": "218. P3 - The Causes of Linguistic Change 语音的演变【高】.html",
@@ -12049,7 +12621,7 @@
     "script": "./p3-low-999.js",
     "title": "Risk taking",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "三月/5.P3 高频/",
     "filename": "P3 - Risk taking.html",
@@ -12064,7 +12636,7 @@
     "script": "./p3-medium-197.js",
     "title": "Australia’s Megafauna Controversy 巨兽灭绝",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "三月/6.P3 次高频/",
     "filename": "197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.html",
@@ -12079,7 +12651,7 @@
     "script": "./p3-low-198.js",
     "title": "Child’s Play in Medieval England 中世纪的游戏",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "三月/6.P3 次高频/",
     "filename": "198. P3 - Child’s Play in Medieval England 中世纪的游戏.html",
@@ -12244,8 +12816,8 @@
     "script": "./p3-high-221.js",
     "title": "The Animal Connection 动物联结",
     "category": "P3",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "低频",
+    "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "221. P3 - The Animal Connection 动物联结.pdf",
     "hasHtml": true,
@@ -12259,8 +12831,8 @@
     "script": "./p2-high-235.js",
     "title": "The return of the black-footed ferret 黑足鼬",
     "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3,
     "path": "ReadingPractice/PDF/",
     "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "hasHtml": true,
@@ -12274,8 +12846,8 @@
     "script": "./p2-high-236.js",
     "title": "War of the Plants 植物的战争",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 4,
     "path": "",
     "filename": "",
     "hasHtml": true,
@@ -12290,7 +12862,7 @@
     "title": "All in the family 兄弟姐妹的影响",
     "category": "P3",
     "frequency": "高频",
-    "difficultyScore": null,
+    "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "hasHtml": true,
@@ -12304,8 +12876,8 @@
     "script": "./p2-high-239.js",
     "title": "Nanotechnology: the science of the very small 纳米科技",
     "category": "P2",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "ReadingPractice/PDF/",
     "filename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "hasHtml": true,
@@ -12319,8 +12891,8 @@
     "script": "./p2-low-240.js",
     "title": "Coins - the first form of money 硬币起源",
     "category": "P2",
-    "frequency": "次高频",
-    "difficultyScore": null,
+    "frequency": "中频",
+    "difficultyScore": 3.5,
     "path": "assets/generated/reading-exams/",
     "filename": "reading-practice-unified.html",
     "hasHtml": true,
@@ -12335,7 +12907,7 @@
     "title": "The Origins of Weather Forecasting 天气预报",
     "category": "P1",
     "frequency": "高频",
-    "difficultyScore": null,
+    "difficultyScore": 2.5,
     "path": "ReadingPractice/PDF/",
     "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "hasHtml": true,
@@ -12350,7 +12922,7 @@
     "title": "Walking and shoes in eighteenth-century London 伦敦鞋子的发展史",
     "category": "P2",
     "frequency": "高频",
-    "difficultyScore": null,
+    "difficultyScore": 3.5,
     "path": "ReadingPractice/PDF/",
     "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "hasHtml": true,
@@ -12379,8 +12951,8 @@
     "script": "./p3-medium-241.js",
     "title": "Who looks after the children in today's Britain? 育儿分工",
     "category": "P3",
-    "frequency": "low",
-    "difficultyScore": null,
+    "frequency": "高频",
+    "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - Who looks after the children in today's Britain.pdf",
     "hasHtml": true,
@@ -12394,7 +12966,7 @@
     "script": "./p2-medium-243.js",
     "title": "The internal body clock 生物钟",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
@@ -12409,13 +12981,73 @@
     "script": "./p3-medium-244.js",
     "title": "Look who was talking 语言的起源",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "",
     "filename": "",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-245": {
+    "examId": "p2-medium-245",
+    "dataKey": "p2-medium-245",
+    "script": "./p2-medium-245.js",
+    "title": "Understanding climate change 理解气候变化",
+    "category": "P2",
+    "frequency": "中频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-246": {
+    "examId": "p1-medium-246",
+    "dataKey": "p1-medium-246",
+    "script": "./p1-medium-246.js",
+    "title": "Socotra Island 索科特拉岛",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 2.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-247": {
+    "examId": "p1-medium-247",
+    "dataKey": "p1-medium-247",
+    "script": "./p1-medium-247.js",
+    "title": "Building a castle 建造城堡",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 3,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-248": {
+    "examId": "p2-medium-248",
+    "dataKey": "p2-medium-248",
+    "script": "./p2-medium-248.js",
+    "title": "Introduction to a book about the assessment of carbon footprints 碳足迹",
+    "category": "P2",
+    "frequency": "中频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
     "sourceKind": "generated-reading"
   }
 
@@ -14791,6 +15423,8 @@
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
     "js/data/v2/dataKernel.js",
+    "js/core/vocabScheduler.js",
+    "js/core/practiceReviewScheduler.js",
     "js/data/v2/appData.js",
     "js/core/externalBackupService.js",
     "js/core/siteDataReset.js",

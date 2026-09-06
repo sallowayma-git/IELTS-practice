@@ -199,11 +199,62 @@ function loadHooks() {
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, document, timer };
+    return { hooks, window, document, timer, context };
 }
 
 function plain(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+function loadProductionExamHooks(examId) {
+    const { hooks, window, context } = loadHooks();
+    let dataset = null;
+    window.__READING_EXAM_DATA__ = {
+        register(registeredId, payload) {
+            if (registeredId === examId) dataset = payload;
+        }
+    };
+    loadScript(`assets/generated/reading-exams/${examId}.js`, context);
+    assert(dataset, `${examId} production fixture should register`);
+    return { hooks, dataset };
+}
+
+function testClimateLogbookProductionAnswers() {
+    const { hooks, dataset } = loadProductionExamHooks('p2-medium-245');
+    for (const [selection, expectedCredit] of [
+        [['C', 'E'], 2],
+        [['E', 'C'], 2],
+        [['C', 'D'], 1],
+        [['D', 'C'], 1]
+    ]) {
+        for (const answers of [
+            { q9: selection[0], q10: selection[1] },
+            { q9: selection, q10: selection }
+        ]) {
+            const results = hooks.buildResultsFromAnswers(dataset, answers);
+            assert.strictEqual(results.scoreInfo.correct, expectedCredit, `${selection} must receive ${expectedCredit}/2 for Q22–23`);
+            assert.strictEqual(results.scoreInfo.totalQuestions, 13, 'the complete exam must retain its denominator');
+            assert.strictEqual(results.answerComparison.q9.isCorrect, true, 'C must earn the first point');
+            assert.strictEqual(results.answerComparison.q10.isCorrect, expectedCredit === 2, 'only E must earn the second point');
+            assert.strictEqual(results.answerComparison.q9.weight + results.answerComparison.q10.weight, 2);
+        }
+    }
+}
+
+function testWaterFilterProductionAnswersRemainSlotSpecific() {
+    const { hooks, dataset } = loadProductionExamHooks('p2-low-64');
+    for (const [answers, expectedCredit] of [
+        [{ q1: 'clay', q2: 'water', q3: 'straw', q4: 'cow manure' }, 4],
+        [{ q1: 'water', q2: 'clay', q3: 'cow manure', q4: 'straw' }, 0]
+    ]) {
+        const results = hooks.buildResultsFromAnswers(dataset, answers);
+        assert.strictEqual(results.scoreInfo.correct, expectedCredit, 'Q14–17 must retain their fixed answer slots');
+        assert.strictEqual(results.scoreInfo.totalQuestions, 13, 'the complete exam must retain its denominator');
+        for (const questionId of ['q1', 'q2', 'q3', 'q4']) {
+            assert.strictEqual(results.answerComparison[questionId].isCorrect, expectedCredit === 4, questionId);
+            assert.strictEqual(results.answerComparison[questionId].weight, 1, questionId);
+        }
+    }
 }
 
 async function testSubmitPostsBeforeExplanationRenderFinishes() {
@@ -506,6 +557,76 @@ function testSplitCheckboxRequiresExpectedSelectionCount() {
     );
 }
 
+function testIndependentRadioMultiChoiceUsesProductionFixture() {
+    const { hooks, window, context } = loadHooks();
+    let fixtureDataset = null;
+    window.__READING_EXAM_DATA__ = {
+        register(examId, dataset) {
+            if (examId === 'p3-high-221') fixtureDataset = dataset;
+        }
+    };
+    loadScript('assets/generated/reading-exams/p3-high-221.js', context);
+    assert(fixtureDataset, 'p3-high-221 production fixture should register');
+
+    const answers = {
+        q11: 'A',
+        q12: 'A',
+        q13: 'A',
+        q14: 'A'
+    };
+    const results = hooks.buildResultsFromAnswers(fixtureDataset, answers);
+    assert.strictEqual(results.scoreInfo.correct, 1, 'independent radio answers must be scored per question');
+    assert.strictEqual(results.scoreInfo.totalQuestions, 14, 'the production fixture total must remain intact');
+
+    const acceptedAlternativeDataset = plain(fixtureDataset);
+    acceptedAlternativeDataset.answerKey.q11 = ['B', 'A'];
+    const perfectAnswers = Object.fromEntries(acceptedAlternativeDataset.questionOrder.map((questionId) => {
+        const correctAnswer = acceptedAlternativeDataset.answerKey[questionId];
+        return [questionId, Array.isArray(correctAnswer) ? correctAnswer[0] : correctAnswer];
+    }));
+    const perfectResults = hooks.buildResultsFromAnswers(acceptedAlternativeDataset, perfectAnswers);
+    assert.strictEqual(perfectResults.scoreInfo.correct, 14, 'accepted radio alternatives must still award one point');
+    assert.strictEqual(perfectResults.scoreInfo.totalQuestions, 14, 'accepted radio alternatives must not add score weight');
+    assert.strictEqual(perfectResults.answerComparison.q11.weight, 1, 'an independent radio question must remain single-weight');
+}
+
+function testPartialReplayPreservesPersistedTotals() {
+    const { hooks } = loadHooks();
+    const dataset = {
+        questionGroups: [],
+        questionOrder: ['q1', 'q2', 'q3']
+    };
+    hooks.setTestState({ dataset });
+    const results = hooks.buildReplayResults({
+        answers: { q1: 'A', q2: 'B', q3: 'C' },
+        correctAnswerMap: { q1: 'A' },
+        allQuestionIds: ['q1', 'q2', 'q3'],
+        scoreInfo: {
+            correct: 2,
+            total: 3,
+            totalQuestions: 3,
+            accuracy: 2 / 3,
+            percentage: 67
+        }
+    });
+
+    assert.strictEqual(results.answerComparison.q1.isCorrect, true, 'known legacy keys should remain gradable');
+    assert.strictEqual(results.answerComparison.q2.isCorrect, null, 'missing legacy keys should remain ungraded');
+    assert.strictEqual(results.answerComparison.q3.isCorrect, null, 'all missing legacy keys should remain ungraded');
+    assert.strictEqual(results.scoreInfo.correct, 2, 'partial keys must not truncate the persisted score');
+    assert.strictEqual(results.scoreInfo.total, 3, 'partial keys must preserve the persisted total');
+    assert.strictEqual(results.scoreInfo.totalQuestions, 3, 'partial keys must preserve the completion denominator');
+
+    const sparseLegacy = hooks.buildReplayResults({
+        answers: { q1: 'A' },
+        correctAnswerMap: { q1: 'A' },
+        scoreInfo: { correct: 2, total: 3, percentage: 67 }
+    });
+    assert.strictEqual(sparseLegacy.scoreInfo.correct, 2, 'sparse legacy records must retain their persisted score');
+    assert.strictEqual(sparseLegacy.scoreInfo.total, 3, 'persisted totals larger than the gradable subset signal a partial key map');
+    assert.strictEqual(sparseLegacy.scoreInfo.totalQuestions, 3, 'sparse legacy completion must retain the persisted denominator');
+}
+
 function testPersistedChoiceStringSplitsForHighlighting() {
     const { hooks } = loadHooks();
     assert.deepStrictEqual(
@@ -539,12 +660,16 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 }
 
 async function main() {
+    testClimateLogbookProductionAnswers();
+    testWaterFilterProductionAnswersRemainSlotSpecific();
     if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
         testGroupedCheckboxSingleKeyArrayScoresPartially();
         testAcceptedAnswerArraysStaySinglePoint();
         testReplaySplitCheckboxStringScoresByToken();
         testReplayKeepsMissingCorrectAnswersUnknown();
         testSplitCheckboxRequiresExpectedSelectionCount();
+        testIndependentRadioMultiChoiceUsesProductionFixture();
+        testPartialReplayPreservesPersistedTotals();
         testPersistedChoiceStringSplitsForHighlighting();
         testJudgementChoicesRemainAvailableForHighlighting();
         process.stdout.write(JSON.stringify({
@@ -562,6 +687,8 @@ async function main() {
     testReplaySplitCheckboxStringScoresByToken();
     testReplayKeepsMissingCorrectAnswersUnknown();
     testSplitCheckboxRequiresExpectedSelectionCount();
+    testIndependentRadioMultiChoiceUsesProductionFixture();
+    testPartialReplayPreservesPersistedTotals();
     testPersistedChoiceStringSplitsForHighlighting();
     testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
