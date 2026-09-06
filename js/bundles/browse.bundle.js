@@ -18136,6 +18136,8 @@ window.BrowseStateManager = BrowseStateManager;
 (function (global) {
     'use strict';
 
+    const renderGenerations = new WeakMap();
+
     function scalarText(value) {
         return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
             ? String(value)
@@ -18178,9 +18180,92 @@ window.BrowseStateManager = BrowseStateManager;
         return element;
     }
 
+    function createDetails(document, recordId, expanded, onLoadDetails, isCurrentRender) {
+        const details = create(document, 'details', 'interrupted-history__details');
+        details.dataset.interruptedId = scalarText(recordId);
+        const summary = create(document, 'summary', '', '查看已保存答案');
+        const content = create(document, 'div', 'interrupted-history__detail-content');
+        let requestGeneration = 0;
+
+        function clearDetails() {
+            requestGeneration += 1;
+            summary.textContent = '查看已保存答案';
+            content.replaceChildren();
+            content.setAttribute('aria-busy', 'false');
+        }
+
+        async function loadDetails() {
+            if (!details.open || !isCurrentRender()) return;
+            clearDetails();
+            const request = requestGeneration;
+            const isCurrentRequest = () => request === requestGeneration && details.open && isCurrentRender();
+            const loading = create(document, 'p', 'interrupted-history__message', '正在读取已保存答案…');
+            loading.setAttribute('role', 'status');
+            content.appendChild(loading);
+            content.setAttribute('aria-busy', 'true');
+            try {
+                if (typeof onLoadDetails !== 'function') throw new Error('Interrupted record reader unavailable');
+                const currentRecord = await onLoadDetails(recordId);
+                if (!isCurrentRequest()) return;
+                if (currentRecord != null && scalarText(currentRecord.id) !== scalarText(recordId)) {
+                    throw new Error('Interrupted record identity mismatch');
+                }
+                content.replaceChildren();
+                content.setAttribute('aria-busy', 'false');
+                if (currentRecord == null) {
+                    const missing = create(document, 'p', 'interrupted-history__message',
+                        '此中断记录已删除或超过保留期限，无法查看已保存答案。');
+                    missing.setAttribute('role', 'status');
+                    content.appendChild(missing);
+                    return;
+                }
+                const answers = savedAnswers(currentRecord);
+                summary.textContent = `查看已保存答案（${answers.length}）`;
+                if (!answers.length) {
+                    content.appendChild(create(document, 'p', 'interrupted-history__empty-answers',
+                        '此记录没有保存的答案。阅读草稿单独保存，重新打开同一篇阅读可尝试恢复草稿。'));
+                } else {
+                    const answerList = create(document, 'dl', 'interrupted-history__answers');
+                    answers.forEach(answer => {
+                        answerList.appendChild(create(document, 'dt', '', `题号 ${answer.questionId}`));
+                        answerList.appendChild(create(document, 'dd', '', answer.userAnswer));
+                    });
+                    content.appendChild(answerList);
+                }
+            } catch (_error) {
+                if (!isCurrentRequest()) return;
+                content.replaceChildren();
+                content.setAttribute('aria-busy', 'false');
+                const failure = create(document, 'p', 'interrupted-history__message', '未完成记录详情读取失败，请重试。');
+                failure.setAttribute('role', 'alert');
+                content.appendChild(failure);
+                const retry = create(document, 'button', 'btn btn-secondary interrupted-history__detail-retry', '重试读取答案');
+                retry.type = 'button';
+                retry.addEventListener('click', loadDetails);
+                content.appendChild(retry);
+            }
+        }
+
+        // Invalidate synchronously on native summary activation as toggle events
+        // are queued. A pending read must not survive a rapid close/reopen click.
+        summary.addEventListener('click', clearDetails);
+        details.addEventListener('toggle', () => {
+            if (details.open) loadDetails();
+            else clearDetails();
+        });
+        details.appendChild(summary);
+        details.appendChild(content);
+        // Native toggle also reloads rows whose expansion survives a list render.
+        details.open = expanded;
+        return details;
+    }
+
     function render(options) {
-        const { container, error, onDelete, onRetry } = options;
+        const { container, error, onDelete, onRetry, onLoadDetails } = options;
         if (!container) return;
+        const generation = {};
+        renderGenerations.set(container, generation);
+        const isCurrentRender = () => renderGenerations.get(container) === generation;
         const document = container.ownerDocument || global.document;
         const records = Array.isArray(options.records) ? options.records : [];
         const expanded = new Set(Array.from(container.querySelectorAll('details[data-interrupted-id]'))
@@ -18235,23 +18320,8 @@ window.BrowseStateManager = BrowseStateManager;
                 item.appendChild(create(document, 'p', 'interrupted-history__meta',
                     `中断原因：${Object.prototype.hasOwnProperty.call(reasons, reason) ? reasons[reason] : (reason || '未记录')}`));
 
-                const answers = savedAnswers(record);
-                const details = create(document, 'details', 'interrupted-history__details');
-                details.dataset.interruptedId = scalarText(record.id);
-                details.open = expanded.has(details.dataset.interruptedId);
-                details.appendChild(create(document, 'summary', '', `查看已保存答案（${answers.length}）`));
-                if (!answers.length) {
-                    details.appendChild(create(document, 'p', 'interrupted-history__empty-answers',
-                        '此记录没有保存的答案。阅读草稿单独保存，重新打开同一篇阅读可尝试恢复草稿。'));
-                } else {
-                    const answerList = create(document, 'dl', 'interrupted-history__answers');
-                    answers.forEach(answer => {
-                        answerList.appendChild(create(document, 'dt', '', `题号 ${answer.questionId}`));
-                        answerList.appendChild(create(document, 'dd', '', answer.userAnswer));
-                    });
-                    details.appendChild(answerList);
-                }
-                item.appendChild(details);
+                item.appendChild(createDetails(document, record.id, expanded.has(scalarText(record.id)),
+                    onLoadDetails, isCurrentRender));
                 if (typeof onDelete === 'function' && scalarText(record.id)) {
                     const remove = create(document, 'button', 'btn btn-secondary interrupted-history__delete', '删除中断记录');
                     remove.type = 'button';
@@ -18586,14 +18656,56 @@ let browsePracticeProjectionGeneration = 0;
 let interruptedPracticeHistoryRenderGeneration = 0;
 let interruptedPracticeHistoryReadError = null;
 
+function resolveInterruptedPracticeType(record) {
+    const metadata = record && record.metadata || {};
+    const candidates = record ? [record.type, record.examType, record.practiceType,
+        metadata.type, metadata.examType, metadata.practiceType, record.pageType, metadata.pageType] : [];
+    for (const candidate of candidates) {
+        const type = normalizeRecordType(candidate);
+        if (type === 'reading' || type === 'listening') return type;
+    }
+    return null;
+}
+
 async function loadInterruptedPracticeHistory() {
     try {
         const records = await window.AppData.recovery.listInterrupted();
-        return { records: Array.isArray(records) ? records : [], error: null };
+        const libraryReads = new Map();
+        const manager = getLibraryManager();
+        const resolvedRecords = await Promise.all((Array.isArray(records) ? records : []).map(async (record) => {
+            if (!record || resolveInterruptedPracticeType(record)) return record;
+            if (!manager || typeof manager.resolveIndexForRecord !== 'function') return record;
+            // Older snapshots may have provenance but no type. Resolve only the
+            // saved source library, using the shared default/unknown-source policy.
+            // A different active library can reuse the same exam IDs.
+            const provenance = manager.getRecordLibraryProvenance(record);
+            const key = JSON.stringify(provenance);
+            if (!libraryReads.has(key)) {
+                libraryReads.set(key, Promise.resolve().then(() => manager.resolveIndexForRecord(record))
+                    .catch((error) => {
+                        console.warn('[PracticeHistory] 读取中断记录来源题库失败:', error);
+                        return [];
+                    }));
+            }
+            const sourceIndex = await libraryReads.get(key);
+            const exam = (Array.isArray(sourceIndex) ? sourceIndex : [])
+                .find((entry) => entry && String(entry.id) === String(record.examId));
+            const type = resolveInterruptedPracticeType(exam);
+            return type ? Object.assign({}, record, { type }) : record;
+        }));
+        return { records: resolvedRecords, error: null };
     } catch (error) {
         console.warn('[PracticeHistory] 读取中断记录失败:', error);
         return { records: [], error };
     }
+}
+
+function interruptedRecordMatchesExamType(record, targetType) {
+    const target = normalizeRecordType(targetType);
+    if (!target || target === 'all') return true;
+    // Unidentifiable legacy attempts remain in All, rather than being presented
+    // as both reading and listening. Canonical history keeps its existing policy.
+    return resolveInterruptedPracticeType(record) === target;
 }
 
 function updateInterruptedPracticeHistory(snapshot, examIndex) {
@@ -18605,7 +18717,7 @@ function updateInterruptedPracticeHistory(snapshot, examIndex) {
     const query = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     const records = snapshot.records.filter((record) => {
         if (!record) return false;
-        if (examType !== 'all' && !recordMatchesExamType(record, examType, examIndex)) return false;
+        if (examType !== 'all' && !interruptedRecordMatchesExamType(record, examType)) return false;
         if (!query) return true;
         return [record.title, record.examId, record.category, record.frequency,
             record.metadata && record.metadata.examTitle, record.startTime,
@@ -18617,6 +18729,7 @@ function updateInterruptedPracticeHistory(snapshot, examIndex) {
         container,
         records,
         error: snapshot.error,
+        onLoadDetails: (recordId) => window.AppData.recovery.getInterrupted(recordId),
         onDelete: deleteInterruptedRecord,
         onRetry: () => ensurePracticeRecordsSync('interrupted-retry', {
             forceRender: true,

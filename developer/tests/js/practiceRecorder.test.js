@@ -363,6 +363,83 @@ async function main() {
             assert.deepStrictEqual(state.drafts.map((draft) => draft.id), ['reading-draft:reading-p2']);
         });
 
+        for (const scenario of [
+            { name: 'launch type with an unknown ready page', launch: { type: 'LISTENING' }, ready: { metadata: { type: 'practice', pageType: 'suite-placeholder' } }, expected: 'listening' },
+            { name: 'unified listening ready page', launch: {}, ready: { metadata: { type: 'unknown', pageType: 'unified-listening' } }, expected: 'listening' },
+            { name: 'unified reading ready page', launch: {}, ready: { metadata: { pageType: 'unified-reading' } }, expected: 'reading' },
+            { name: 'known launch examType behind an unknown type', launch: { type: 'unknown', examType: 'reading' }, ready: { metadata: { pageType: 'practice' } }, expected: 'reading' }
+        ]) {
+            await record(`timeout retains ${scenario.name} without the source library`, async () => {
+                const now = Date.parse('2026-09-07T12:00:00.000Z');
+                const { recorder, state, windowStub } = createHarness({ now });
+                const examId = 'opaque-shared-exam';
+                let libraryReads = 0;
+                windowStub.resolveActiveLibraryIndex = async () => {
+                    libraryReads += 1;
+                    return [{ id: examId, type: scenario.expected === 'reading' ? 'listening' : 'reading' }];
+                };
+                const session = recorder.startPracticeSession(examId, {
+                    ...scenario.launch,
+                    sessionId: 'typed-attempt',
+                    title: 'Original library title',
+                    libraryConfigurationId: 'removed-library'
+                });
+                recorder.handleSessionStarted({ ...scenario.ready, examId, sessionId: session.sessionId });
+                recorder.handleSessionProgress({ examId, progress: { currentQuestion: 2 }, answers: { q1: 'B' } });
+                await recorder.saveActiveSessions();
+                assert.strictEqual(session.type, scenario.expected);
+                assert.strictEqual(session.metadata.type, scenario.expected);
+                assert.strictEqual(state.activeCheckpoints.get(session.id).type, scenario.expected);
+                windowStub.resolveActiveLibraryIndex = async () => {
+                    libraryReads += 1;
+                    return [];
+                };
+
+                let ending;
+                const endPracticeSession = recorder.endPracticeSession.bind(recorder);
+                recorder.endPracticeSession = (...args) => {
+                    ending = endPracticeSession(...args);
+                    return ending;
+                };
+                session.lastActivity = new Date(now - 31 * 60 * 1000).toISOString();
+                recorder.checkSessionActivity(examId);
+                assert(ending, 'the original timeout path must run');
+                assert.strictEqual(await ending, true);
+
+                const saved = state.interruptedRecords[0];
+                assert.strictEqual(saved.type, scenario.expected);
+                assert.strictEqual(saved.metadata.type, scenario.expected);
+                assert.strictEqual(saved.metadata.libraryConfigurationId, 'removed-library');
+                assert.strictEqual(saved.metadata.examTitle, 'Original library title');
+                assert.deepStrictEqual(saved.answers, { q1: 'B' });
+                assert.strictEqual(libraryReads, 0, 'attempt type must come from the session, independent of the active library');
+            });
+        }
+
+        for (const pageType of ['unified-reading', 'listening']) {
+            await record(`host-only ${pageType} handshake preserves type in interruption`, async () => {
+                const { recorder, state, windowStub } = createHarness();
+                windowStub.resolveActiveLibraryIndex = async () => [];
+                const examId = 'host-only-opaque-id';
+                recorder.handleSessionStarted({
+                    examId,
+                    sessionId: 'host-created-attempt',
+                    metadata: { pageType, libraryConfigurationId: 'inactive-library', examTitle: 'Host title' }
+                });
+                const session = recorder.activeSessions.get(examId);
+                await recorder.saveActiveSessions();
+                const expected = pageType === 'unified-reading' ? 'reading' : 'listening';
+                assert.strictEqual(session.type, expected);
+                assert.strictEqual(session.metadata.type, expected);
+                assert.strictEqual(session.metadata.pageType, pageType);
+                assert.strictEqual(state.activeCheckpoints.get(session.id).metadata.type, expected);
+                assert.strictEqual(await recorder.endPracticeSession(examId, 'timeout'), true);
+                assert.strictEqual(state.interruptedRecords[0].type, expected);
+                assert.strictEqual(state.interruptedRecords[0].metadata.type, expected);
+                assert.strictEqual(state.interruptedRecords[0].metadata.libraryConfigurationId, 'inactive-library');
+            });
+        }
+
         await record('JSON export is a catalog-governed v2 practice snapshot', async () => {
             const { recorder, state } = createHarness();
             state.records.push(makeRecord('record-export'));
@@ -414,8 +491,10 @@ async function main() {
             await record(`delayed interrupted save preserves the session after ${mode}`, async () => {
                 const { recorder, state, windowStub } = createHarness({ now: Date.parse('2026-09-05T00:00:00.000Z') });
                 const examId = 'reading-p1';
-                const original = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
-                recorder.handleSessionStarted({ examId, sessionId: 'session-A' });
+                const original = recorder.startPracticeSession(examId, {
+                    sessionId: 'session-A', type: 'listening', title: 'Original listening title', libraryConfigurationId: 'original-library'
+                });
+                recorder.handleSessionStarted({ examId, sessionId: 'session-A', metadata: { pageType: 'unified-listening' } });
                 recorder.handleSessionProgress({
                     examId,
                     progress: { currentQuestion: 4 },
@@ -436,10 +515,14 @@ async function main() {
 
                 const sessionId = mode.startsWith('same-id') ? 'session-A' : 'session-B';
                 if (mode.endsWith('identity rebind')) {
-                    recorder.handleSessionStarted({ examId, sessionId });
+                    recorder.handleSessionStarted({ examId, sessionId, metadata: {
+                        pageType: 'unified-reading', examTitle: 'Replacement reading title', libraryConfigurationId: 'replacement-library'
+                    } });
                     assert.strictEqual(recorder.activeSessions.get(examId), original);
                 } else {
-                    recorder.startPracticeSession(examId, { sessionId });
+                    recorder.startPracticeSession(examId, {
+                        sessionId, type: 'reading', title: 'Replacement reading title', libraryConfigurationId: 'replacement-library'
+                    });
                     assert.notStrictEqual(recorder.activeSessions.get(examId), original);
                 }
                 const replacement = recorder.activeSessions.get(examId);
@@ -466,6 +549,13 @@ async function main() {
                 assert.strictEqual(state.interruptedRecords.length, 1);
                 assert.strictEqual(state.interruptedRecords[0].sessionId, 'session-A');
                 assert.strictEqual(state.interruptedRecords[0].reason, 'timeout');
+                assert.strictEqual(state.interruptedRecords[0].type, 'listening');
+                assert.strictEqual(state.interruptedRecords[0].metadata.type, 'listening');
+                assert.strictEqual(state.interruptedRecords[0].metadata.examTitle, 'Original listening title');
+                assert.strictEqual(state.interruptedRecords[0].metadata.libraryConfigurationId, 'original-library');
+                assert.strictEqual(replacement.type, 'reading');
+                assert.strictEqual(replacement.metadata.type, 'reading');
+                assert.strictEqual(replacement.metadata.libraryConfigurationId, 'replacement-library');
                 assert.strictEqual(state.interruptedRecords[0].progress.currentQuestion, 4);
                 assert.deepStrictEqual(state.interruptedRecords[0].answers, { q1: 'A' });
                 assert.strictEqual(recorder.activeSessions.get(examId), replacement,

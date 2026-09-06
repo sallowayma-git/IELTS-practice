@@ -35,6 +35,18 @@ class PracticeRecorder {
         return null;
     }
 
+    resolveSessionPracticeType(...sources) {
+        for (const source of sources) {
+            if (!source || typeof source !== 'object') continue;
+            const metadata = source.metadata || {};
+            for (const candidate of [source.type, source.examType, metadata.type, metadata.examType, source.pageType, metadata.pageType]) {
+                const type = this.normalizePracticeType(candidate);
+                if (type) return type;
+            }
+        }
+        return null;
+    }
+
     getCoreContracts() {
         return window.PracticeCore && window.PracticeCore.contracts
             ? window.PracticeCore.contracts
@@ -729,11 +741,13 @@ class PracticeRecorder {
         const previousEntityId = existing
             ? this.activeSessionEntityId(existing)
             : null;
+        const type = this.resolveSessionPracticeType(examData, existing);
 
         const sessionData = {
             id: this.activeSessionEntityId(sessionId),
             sessionId,
             examId,
+            type,
             startTime,
             lastActivity: new Date().toISOString(),
             status: existing ? (existing.status || 'started') : 'started',
@@ -748,6 +762,7 @@ class PracticeRecorder {
                 examTitle: examData.title || '',
                 category: examData.category || '',
                 frequency: examData.frequency || '',
+                pageType: examData.pageType || examData.metadata?.pageType || null,
                 userAgent: navigator.userAgent,
                 screenResolution: `${screen.width}x${screen.height}`,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -764,6 +779,7 @@ class PracticeRecorder {
         if (examData && examData.title) {
             sessionData.metadata.examTitle = examData.title;
         }
+        if (type) sessionData.metadata.type = type;
 
         // 存储会话
         this.activeSessions.set(examId, sessionData);
@@ -802,6 +818,8 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) {
             this.startPracticeSession(examId, Object.assign({}, metadata || {}, {
                 sessionId,
+                type: this.resolveSessionPracticeType(data),
+                pageType: data.pageType || metadata?.pageType || null,
                 title: metadata && (metadata.title || metadata.examTitle) || '',
                 category: metadata && metadata.category || '',
                 frequency: metadata && metadata.frequency || '',
@@ -820,6 +838,7 @@ class PracticeRecorder {
 
         let session = this.activeSessions.get(examId);
         const previousEntityId = this.activeSessionEntityId(session);
+        const type = this.resolveSessionPracticeType(data, session);
         // A host start supersedes pending cleanup even if its ID, status, and
         // timestamp are unchanged. Keep this generation out of stored sessions.
         this.sessionStartGenerations.set(session, (this.sessionStartGenerations.get(session) || 0) + 1);
@@ -830,6 +849,10 @@ class PracticeRecorder {
 
         if (metadata) {
             session.metadata = { ...session.metadata, ...metadata };
+        }
+        if (type) {
+            session.type = type;
+            session.metadata = { ...session.metadata, type };
         }
 
         this.activeSessions.set(examId, session);
@@ -1239,11 +1262,13 @@ class PracticeRecorder {
         if (reason !== 'completed' && session.status !== 'completed') {
             const endTime = new Date().toISOString();
             const duration = new Date(endTime) - new Date(session.startTime);
+            const type = this.resolveSessionPracticeType(session);
 
             const interruptedRecord = {
                 id: `interrupted_${sessionId}`,
                 examId,
                 sessionId,
+                type,
                 startTime: session.startTime,
                 endTime,
                 duration: Math.floor(duration / 1000),
@@ -1251,7 +1276,7 @@ class PracticeRecorder {
                 reason,
                 progress: session.progress,
                 answers: session.answers,
-                metadata: session.metadata,
+                metadata: Object.assign({}, session.metadata, type ? { type } : {}),
                 createdAt: endTime
             };
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -93,6 +94,101 @@ def observe_timeout(page: Page, exam_id: str) -> str:
     return record_id
 
 
+def verify_fresh_details_and_type_filters(page: Page, url: str) -> None:
+    """Reproduce PR #147's stale detail and retired-source filtering cases."""
+    exam_id = "removed-source-147"
+    session_id = "fresh-detail-session-147"
+    record_id = f"interrupted_{session_id}"
+    legacy_id = "legacy-page-type-147"
+
+    # These neutral IDs/titles cannot supply a type through naming conventions or
+    # the active library. The recorder must retain the start metadata itself.
+    assert page.evaluate(
+        """async () => !(await window.resolveActiveLibraryIndex()).some(record =>
+            ['interrupted-history-saved-143', 'removed-source-147', 'retired-source-147'].includes(record.id))"""
+    )
+    page.evaluate(
+        """async ({examId, sessionId}) => {
+            const recorder = window.app.components.practiceRecorder;
+            recorder.handleSessionStarted({
+                examId, sessionId,
+                metadata: {title: 'Fresh detail probe', type: 'listening', pageType: 'unified-listening'}
+            });
+            recorder.handleSessionProgress({examId, answers: {'1': 'stale-answer-147'}});
+            await recorder.saveActiveSessions();
+        }""",
+        {"examId": exam_id, "sessionId": session_id},
+    )
+    assert observe_timeout(page, exam_id) == record_id
+    assert page.evaluate(
+        "async id => (await window.AppData.recovery.getInterrupted(id)).metadata.type", record_id
+    ) == "listening"
+
+    # An older recovery payload has no normalized type, only page provenance.
+    page.evaluate(
+        """async id => {
+            await window.AppData.recovery.saveInterrupted({
+                id, examId: 'retired-source-147', status: 'interrupted', reason: 'timeout',
+                createdAt: new Date().toISOString(), answers: {},
+                metadata: {examTitle: 'Legacy recovery', pageType: 'unified-reading'}
+            });
+        }""",
+        legacy_id,
+    )
+    details = page.locator(f"{HISTORY} details[data-interrupted-id='{record_id}']")
+    legacy_details = page.locator(f"{HISTORY} details[data-interrupted-id='{legacy_id}']")
+    saved_details = page.locator(f"{HISTORY} details[data-interrupted-id='{SAVED_RECORD_ID}']")
+    page.locator("#record-type-filter-buttons [data-filter-type='reading']").click()
+    expect(legacy_details).to_be_visible()
+    expect(saved_details).to_be_visible()
+    expect(details).to_have_count(0)
+    page.locator("#record-type-filter-buttons [data-filter-type='listening']").click()
+    expect(details).to_be_visible()
+    expect(legacy_details).to_have_count(0)
+    expect(saved_details).to_have_count(0)
+    assert details.evaluate("node => node.open") is False
+    expect(details.locator("summary")).to_have_text("查看已保存答案")
+    expect(details.locator("dd")).to_have_count(0)
+    assert "stale-answer-147" not in details.text_content()
+
+    # Tab B is a fresh AppData instance created after A rendered its collapsed
+    # row. Opening A must query persisted data rather than its earlier list item.
+    peer = page.context.new_page()
+    peer.goto(url, wait_until="load", timeout=60_000)
+    ready(peer)
+    peer.evaluate(
+        """async id => {
+            const record = await window.AppData.recovery.getInterrupted(id);
+            if (!record) throw new Error('Cross-tab update target is missing');
+            await window.AppData.recovery.saveInterrupted({
+                ...record, answers: {'1': 'fresh-answer-147'}
+            });
+        }""",
+        record_id,
+    )
+    details.locator("summary").click()
+    expect(details.locator("dd")).to_have_text("fresh-answer-147")
+    assert "stale-answer-147" not in details.text_content()
+    details.locator("summary").click()
+    expect(details).not_to_have_attribute("open", "")
+    peer.evaluate(
+        "async id => { await window.AppData.recovery.discardInterrupted(id); }", record_id
+    )
+    details.locator("summary").click()
+    expect(details).to_contain_text(re.compile(r"已.*(?:删除|过期)"))
+    expect(details.locator("dd")).to_have_count(0)
+    assert "stale-answer-147" not in details.text_content()
+    assert "fresh-answer-147" not in details.text_content()
+    peer.evaluate(
+        "async id => { await window.AppData.recovery.discardInterrupted(id); }", legacy_id
+    )
+    peer.close()
+    page.locator("#record-type-filter-buttons [data-filter-type='all']").click()
+    expect(saved_details).to_be_visible()
+    expect(details).to_have_count(0)
+    expect(legacy_details).to_have_count(0)
+
+
 def main() -> None:
     server = ThreadingHTTPServer(
         ("127.0.0.1", 0), partial(QuietHandler, directory=str(REPO_ROOT))
@@ -131,7 +227,8 @@ def main() -> None:
                 """async ({examId, sessionId}) => {
                     const recorder = window.app.components.practiceRecorder;
                     recorder.startPracticeSession(examId, {
-                        sessionId, title: 'Recorder timeout with saved answers', totalQuestions: 3
+                        sessionId, title: 'Recorder timeout with saved answers', totalQuestions: 3,
+                        type: 'reading'
                     });
                     recorder.handleSessionProgress({
                         examId, progress: {answeredQuestions: 1, totalQuestions: 3},
@@ -142,12 +239,18 @@ def main() -> None:
                 {"examId": SAVED_EXAM_ID, "sessionId": SAVED_SESSION_ID},
             )
             assert observe_timeout(page, SAVED_EXAM_ID) == SAVED_RECORD_ID
+            assert page.evaluate(
+                "async id => (await window.AppData.recovery.getInterrupted(id)).metadata.type", SAVED_RECORD_ID
+            ) == "reading"
             saved_details = page.locator(f"{HISTORY} details[data-interrupted-id='{SAVED_RECORD_ID}']")
             saved_row = saved_details.locator("..")
             expect(saved_row).to_be_visible(timeout=15_000)
             expect(saved_row).to_contain_text("Recorder timeout with saved answers")
             expect(saved_row).to_contain_text("超时")
             assert canonical_snapshot(page) == baseline
+            expect(saved_details.locator("summary")).to_have_text("查看已保存答案")
+            expect(saved_details.locator("dd")).to_have_count(0)
+            assert "saved-answer-143" not in saved_details.text_content()
 
             saved_details.locator("summary").click()
             expect(saved_details.locator("dd")).to_have_text("saved-answer-143")
@@ -161,6 +264,9 @@ def main() -> None:
             ready(page)
             show_history(page)
             expect(saved_row).to_be_visible(timeout=15_000)
+            assert canonical_snapshot(page) == baseline
+
+            verify_fresh_details_and_type_filters(page, url)
             assert canonical_snapshot(page) == baseline
 
             # Default reading inputs sync a separate draft. The timeout history must
@@ -190,6 +296,9 @@ def main() -> None:
             ) == 0
             show_history(page)
             empty_record_id = observe_timeout(page, READING_EXAM_ID)
+            assert page.evaluate(
+                "async id => (await window.AppData.recovery.getInterrupted(id)).metadata.type", empty_record_id
+            ) == "reading"
             empty_details = page.locator(f"{HISTORY} details[data-interrupted-id='{empty_record_id}']")
             empty_row = empty_details.locator("..")
             expect(empty_row).to_be_visible(timeout=15_000)
@@ -205,6 +314,7 @@ def main() -> None:
                 output.mkdir(parents=True, exist_ok=True)
                 expect(page.get_by_text("正在打开题目:", exact=False)).to_be_hidden(timeout=15_000)
                 saved_details.evaluate("node => { node.open = true; }")
+                expect(saved_details.locator("dd")).to_have_text("saved-answer-143")
                 page.locator(HISTORY).screenshot(path=str(output / "interrupted-history-desktop.png"))
                 page.set_viewport_size({"width": 390, "height": 844})
                 page.locator(HISTORY).screenshot(path=str(output / "interrupted-history-mobile.png"))

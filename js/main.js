@@ -313,14 +313,56 @@ let browsePracticeProjectionGeneration = 0;
 let interruptedPracticeHistoryRenderGeneration = 0;
 let interruptedPracticeHistoryReadError = null;
 
+function resolveInterruptedPracticeType(record) {
+    const metadata = record && record.metadata || {};
+    const candidates = record ? [record.type, record.examType, record.practiceType,
+        metadata.type, metadata.examType, metadata.practiceType, record.pageType, metadata.pageType] : [];
+    for (const candidate of candidates) {
+        const type = normalizeRecordType(candidate);
+        if (type === 'reading' || type === 'listening') return type;
+    }
+    return null;
+}
+
 async function loadInterruptedPracticeHistory() {
     try {
         const records = await window.AppData.recovery.listInterrupted();
-        return { records: Array.isArray(records) ? records : [], error: null };
+        const libraryReads = new Map();
+        const manager = getLibraryManager();
+        const resolvedRecords = await Promise.all((Array.isArray(records) ? records : []).map(async (record) => {
+            if (!record || resolveInterruptedPracticeType(record)) return record;
+            if (!manager || typeof manager.resolveIndexForRecord !== 'function') return record;
+            // Older snapshots may have provenance but no type. Resolve only the
+            // saved source library, using the shared default/unknown-source policy.
+            // A different active library can reuse the same exam IDs.
+            const provenance = manager.getRecordLibraryProvenance(record);
+            const key = JSON.stringify(provenance);
+            if (!libraryReads.has(key)) {
+                libraryReads.set(key, Promise.resolve().then(() => manager.resolveIndexForRecord(record))
+                    .catch((error) => {
+                        console.warn('[PracticeHistory] 读取中断记录来源题库失败:', error);
+                        return [];
+                    }));
+            }
+            const sourceIndex = await libraryReads.get(key);
+            const exam = (Array.isArray(sourceIndex) ? sourceIndex : [])
+                .find((entry) => entry && String(entry.id) === String(record.examId));
+            const type = resolveInterruptedPracticeType(exam);
+            return type ? Object.assign({}, record, { type }) : record;
+        }));
+        return { records: resolvedRecords, error: null };
     } catch (error) {
         console.warn('[PracticeHistory] 读取中断记录失败:', error);
         return { records: [], error };
     }
+}
+
+function interruptedRecordMatchesExamType(record, targetType) {
+    const target = normalizeRecordType(targetType);
+    if (!target || target === 'all') return true;
+    // Unidentifiable legacy attempts remain in All, rather than being presented
+    // as both reading and listening. Canonical history keeps its existing policy.
+    return resolveInterruptedPracticeType(record) === target;
 }
 
 function updateInterruptedPracticeHistory(snapshot, examIndex) {
@@ -332,7 +374,7 @@ function updateInterruptedPracticeHistory(snapshot, examIndex) {
     const query = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     const records = snapshot.records.filter((record) => {
         if (!record) return false;
-        if (examType !== 'all' && !recordMatchesExamType(record, examType, examIndex)) return false;
+        if (examType !== 'all' && !interruptedRecordMatchesExamType(record, examType)) return false;
         if (!query) return true;
         return [record.title, record.examId, record.category, record.frequency,
             record.metadata && record.metadata.examTitle, record.startTime,
@@ -344,6 +386,7 @@ function updateInterruptedPracticeHistory(snapshot, examIndex) {
         container,
         records,
         error: snapshot.error,
+        onLoadDetails: (recordId) => window.AppData.recovery.getInterrupted(recordId),
         onDelete: deleteInterruptedRecord,
         onRetry: () => ensurePracticeRecordsSync('interrupted-retry', {
             forceRender: true,
