@@ -31,7 +31,7 @@ try:
     from playwright.async_api import async_playwright  # type: ignore[import-untyped]
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
-    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    venv_python = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     current_prefix = Path(sys.prefix).resolve()
     if venv_python.exists() and current_prefix != venv_dir:
         completed = subprocess.run([str(venv_python), str(Path(__file__).resolve())], cwd=str(REPO_ROOT))
@@ -212,11 +212,8 @@ async def ensure_fixed_suite_index(page) -> None:
                 if (window.EnvironmentDetector && typeof window.EnvironmentDetector.disableTestEnvironment === 'function') {
                     window.EnvironmentDetector.disableTestEnvironment();
                 }
-                if (window.localStorage) {
-                    window.localStorage.removeItem('__ielts_test_env__');
-                }
             } catch (_) {
-                // ignore storage errors
+                // ignore environment detector reset errors
             }
             const app = window.app;
             if (!app || typeof app._fetchSuiteExamIndex !== 'function') {
@@ -249,28 +246,20 @@ async def ensure_fixed_suite_index(page) -> None:
 
 
 async def dismiss_license_modal_if_present(page) -> None:
-    await page.evaluate(
-        """() => {
-            try {
-                if (typeof window.acceptGplLicense === 'function') {
-                    window.acceptGplLicense();
-                    return;
-                }
-                if (window.localStorage) {
-                    window.localStorage.setItem('hasSeenGplLicense', 'true');
-                }
-            } catch (_) {
-                // ignore storage errors
+    accepted = await page.evaluate(
+        """async () => {
+            if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+                throw new Error('LicenseModal.accept is unavailable');
             }
-            const modal = document.getElementById('license-modal');
-            if (modal) {
-                modal.classList.remove('show');
-            }
+            return window.LicenseModal.accept();
         }"""
     )
-    modal = page.locator("#license-modal.show")
-    if await modal.count() > 0:
-        await page.wait_for_timeout(150)
+    if not accepted:
+        raise RuntimeError("GPL license consent was not committed")
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=5000,
+    )
 
 
 async def run() -> Dict[str, Any]:

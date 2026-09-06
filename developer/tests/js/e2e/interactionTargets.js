@@ -7,6 +7,7 @@
       "practice-settings-entry-btn",
       "library-manager-btn",
       "show-onboarding-btn",
+      "external-backup-entry-btn",
       "create-backup-btn",
       "backup-list-btn",
       "export-data-btn",

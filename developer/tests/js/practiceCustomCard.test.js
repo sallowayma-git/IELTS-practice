@@ -33,6 +33,7 @@ function loadCustomCardCalculators(source) {
         [
             'global.__testCalculateReadingRadarData = calculateReadingRadarData;',
             'global.__testCalculatePracticeHeatmapData = calculatePracticeHeatmapData;',
+            'global.__testFilterByExamType = filterByExamType;',
             '})(window);'
         ].join('\n')
     );
@@ -54,7 +55,8 @@ function loadCustomCardCalculators(source) {
     vm.runInContext(injected, context, { filename: 'legacyViewBundle.js' });
     return {
         calculateReadingRadarData: sandboxWindow.__testCalculateReadingRadarData,
-        calculatePracticeHeatmapData: sandboxWindow.__testCalculatePracticeHeatmapData
+        calculatePracticeHeatmapData: sandboxWindow.__testCalculatePracticeHeatmapData,
+        filterByExamType: sandboxWindow.__testFilterByExamType
     };
 }
 
@@ -106,7 +108,9 @@ try {
     assertContains(source, 'function loadPersistedPracticeWidget()', '自定义卡片应提供读取持久化组件的函数');
     assertContains(source, 'function persistPracticeWidget(widget)', '自定义卡片应提供写入持久化组件的函数');
     assertContains(source, "persistPracticeWidget(widget);", '切换组件时应写回持久化，刷新后才能保持选中');
-    assertContains(source, "var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';", '持久化组件应使用固定的 localStorage 键');
+    assertContains(source, 'window.AppData.preferences.getPracticeWidget()', '自定义卡片应通过 AppData.preferences 读取组件偏好');
+    assertContains(source, 'window.AppData.preferences.setPracticeWidget(widget)', '自定义卡片应通过 AppData.preferences 保存组件偏好');
+    assertNotContains(source, 'practice_custom_widget', '运行期组件偏好不能继续持有 v1 物理 key');
     assertContains(source, 'function calculatePracticeHeatmapData(records, monthDate)', '热力图数据聚合函数应存在');
     assertContains(source, 'aggregatePracticeHeatmapSets(records, monthStart)', '热力图应按套数聚合练习记录');
     assertContains(source, "event.target.closest('[data-practice-heatmap-month]')", '月份按钮事件应单独绑定');
@@ -127,7 +131,7 @@ try {
     assertContains(source, 'event.stopPropagation();', '整卡其他区域点击应阻止冒泡且不翻转');
     record('自定义卡片业务逻辑守卫');
 
-    const { calculateReadingRadarData, calculatePracticeHeatmapData } = loadCustomCardCalculators(source);
+    const { calculateReadingRadarData, calculatePracticeHeatmapData, filterByExamType } = loadCustomCardCalculators(source);
     assert.strictEqual(typeof calculatePracticeHeatmapData, 'function', '热力图聚合函数应可被测试提取');
     const heatmapData = calculatePracticeHeatmapData([
         { id: 'h1', date: '2026-05-01T08:00:00', totalQuestions: 13 },
@@ -207,12 +211,69 @@ try {
     assert.strictEqual(radarData.totalErrors, 2, '雷达应只统计两道错题');
     record('雷达题型映射回归守卫');
 
+    const lightRadarData = calculateReadingRadarData([{
+        id: 'light-reading',
+        type: 'reading',
+        date: '2026-05-25T00:00:00.000Z',
+        questionTypeErrorCounts: {
+            true_false_not_given: 2,
+            sentence_completion: 1
+        }
+    }, {
+        id: 'light-suite',
+        type: 'suite',
+        date: '2026-05-26T00:00:00.000Z',
+        suiteEntrySummaries: [{
+            examId: 'suite-reading-child',
+            type: 'reading',
+            date: '2026-05-26T00:00:00.000Z',
+            questionTypeErrorCounts: { short_answer: 3 }
+        }, {
+            examId: 'suite-listening-child',
+            type: 'listening',
+            date: '2026-05-26T00:00:00.000Z',
+            questionTypeErrorCounts: { other: 9 }
+        }]
+    }]);
+    const lightRadarCounts = Object.fromEntries(lightRadarData.dataPoints.map((point) => [point.label, point.value]));
+    assert.strictEqual(lightRadarCounts['判断题'], 2, 'light summary 的判断题错题应进入雷达');
+    assert.strictEqual(lightRadarCounts['句子填空'], 1, 'light summary 的句子填空错题应进入雷达');
+    assert.strictEqual(lightRadarCounts['简答题'], 3, '套题 reading entry 的轻量错题应进入雷达');
+    assert.strictEqual(lightRadarData.totalErrors, 6, 'listening entry 不得污染阅读雷达');
+    record('雷达消费 v2 轻量错题投影回归守卫');
+
+    const suiteFilterRecords = [{
+        id: 'reading-only-suite',
+        type: 'suite',
+        suiteEntrySummaries: [{ type: 'reading' }]
+    }, {
+        id: 'listening-only-suite',
+        type: 'suite',
+        suiteEntrySummaries: [{ type: 'listening' }]
+    }, {
+        id: 'mixed-suite',
+        type: 'suite',
+        suiteEntrySummaries: [{ type: 'reading' }, { type: 'listening' }]
+    }];
+    assert.deepStrictEqual(
+        filterByExamType(suiteFilterRecords, [], 'reading').map((record) => record.id),
+        ['reading-only-suite', 'mixed-suite'],
+        '类型筛选必须直接消费 suiteEntrySummaries 的 reading 类型'
+    );
+    assert.deepStrictEqual(
+        filterByExamType(suiteFilterRecords, [], 'listening').map((record) => record.id),
+        ['listening-only-suite', 'mixed-suite'],
+        '类型筛选必须直接消费 suiteEntrySummaries 的 listening 类型'
+    );
+    record('套题类型筛选消费 v2 轻量 entry 投影');
+
     [
         "this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap'",
         'function loadPersistedPracticeWidget()',
         'function persistPracticeWidget(widget)',
         'persistPracticeWidget(widget);',
-        "var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';",
+        'window.AppData.preferences.getPracticeWidget()',
+        'window.AppData.preferences.setPracticeWidget(widget)',
         'function calculatePracticeHeatmapData(records, monthDate)',
         'aggregatePracticeHeatmapSets(records, monthStart)',
         'averageSetsPerActiveDay',

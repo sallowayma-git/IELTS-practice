@@ -11,6 +11,10 @@
 
     const DEFAULT_EXPORT_VERSION = '0.6.2-fix';
 
+    function isPlainObject(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function normalizeFrequency(value) {
         if (value == null || value === '') {
             return null;
@@ -24,6 +28,13 @@
         }
         const clamped = Math.min(1, Math.max(0, numeric));
         return Math.round(clamped * 1000) / 1000;
+    }
+
+    function normalizePhonetic(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
     }
 
     function normalizeCategory(value, fallback = null) {
@@ -83,26 +94,28 @@
     }
 
     function cloneProgressEntry(raw) {
-        if (!raw || typeof raw !== 'object') {
+        if (!isPlainObject(raw)) {
             return null;
         }
-        if (!raw.word || !raw.meaning) {
+        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
+        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        if (!word || !meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
-        });
-        return clone;
+        const entry = { ...raw, word, meaning };
+        const phonetic = normalizePhonetic(raw.phonetic);
+        if (phonetic) {
+            entry.phonetic = phonetic;
+        } else {
+            delete entry.phonetic;
+        }
+        return entry;
     }
 
     function buildImportResult(type, entries, meta = {}) {
         const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
         const normalizedMeta = { ...meta };
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
-        if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
-        }
         return {
             type,
             entries: safeEntries,
@@ -120,6 +133,7 @@
             return null;
         }
         const example = typeof raw.example === 'string' ? raw.example.trim() : '';
+        const phonetic = normalizePhonetic(raw.phonetic);
         const freq = normalizeFrequency(raw.freq);
         const normalized = {
             word,
@@ -128,6 +142,9 @@
         };
         if (freq !== null) {
             normalized.freq = freq;
+        }
+        if (phonetic) {
+            normalized.phonetic = phonetic;
         }
         return normalized;
     }
@@ -144,65 +161,111 @@
     }
 
     function selectDelimiter(headerLine) {
-        if (headerLine.includes(',')) {
-            return ',';
+        let inQuotes = false;
+        const found = new Set();
+        for (let i = 0; i < headerLine.length; i += 1) {
+            const char = headerLine[i];
+            if (char === '"') {
+                if (inQuotes && headerLine[i + 1] === '"') {
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (!inQuotes && (char === ',' || char === ';' || char === '\t')) {
+                found.add(char);
+            }
         }
-        if (headerLine.includes(';')) {
-            return ';';
-        }
-        if (headerLine.includes('\t')) {
-            return '\t';
-        }
+        if (found.has(',')) return ',';
+        if (found.has(';')) return ';';
+        if (found.has('\t')) return '\t';
         return ',';
     }
 
-    function splitCsvLine(line, delimiter) {
-        const result = [];
+    function parseCsvRows(text, delimiter) {
+        const rows = [];
+        let row = [];
         let current = '';
         let inQuotes = false;
-        for (let i = 0; i < line.length; i += 1) {
-            const char = line[i];
+        let rowTouched = false;
+        const source = String(text || '');
+
+        const pushRow = () => {
+            row.push(current.trim());
+            if (rowTouched && row.some((cell) => cell !== '')) {
+                rows.push(row);
+            }
+            row = [];
+            current = '';
+            rowTouched = false;
+        };
+
+        for (let i = 0; i < source.length; i += 1) {
+            const char = source[i];
             if (char === '"') {
-                if (inQuotes && line[i + 1] === '"') {
+                rowTouched = true;
+                if (inQuotes && source[i + 1] === '"') {
                     current += '"';
                     i += 1;
                 } else {
                     inQuotes = !inQuotes;
                 }
             } else if (!inQuotes && char === delimiter) {
-                result.push(current.trim());
+                rowTouched = true;
+                row.push(current.trim());
                 current = '';
+            } else if (char === '\r' || char === '\n') {
+                if (char === '\r' && source[i + 1] === '\n') {
+                    i += 1;
+                }
+                if (inQuotes) {
+                    current += '\n';
+                    rowTouched = true;
+                } else {
+                    pushRow();
+                }
             } else {
                 current += char;
+                if (!/\s/.test(char)) {
+                    rowTouched = true;
+                }
             }
         }
-        result.push(current.trim());
-        return result;
+
+        if (inQuotes) {
+            throw new Error('CSV 包含未闭合的引号字段');
+        }
+        if (rowTouched || row.length || current.trim()) {
+            pushRow();
+        }
+        return rows;
     }
 
     function parseCsv(text) {
-        const lines = String(text || '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length);
-        if (!lines.length) {
+        const source = String(text || '');
+        const firstContentLine = source
+            .split(/\r\n|\r|\n/)
+            .find((line) => line.replace(/^\uFEFF/, '').trim()) || '';
+        const delimiter = selectDelimiter(firstContentLine.replace(/^\uFEFF/, ''));
+        const rows = parseCsvRows(source, delimiter);
+        if (!rows.length) {
             return buildImportResult('wordlist', [], { format: 'csv' });
         }
-        const delimiter = selectDelimiter(lines[0]);
-        const headerCells = splitCsvLine(lines[0], delimiter).map((cell) => cell.toLowerCase());
+        const headerCells = rows[0].map((cell) => cell.replace(/^\uFEFF/, '').toLowerCase());
         const columnIndex = {
             word: headerCells.indexOf('word'),
             meaning: headerCells.indexOf('meaning'),
             example: headerCells.indexOf('example'),
+            phonetic: headerCells.indexOf('phonetic'),
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
-        for (let i = 1; i < lines.length; i += 1) {
-            const cells = splitCsvLine(lines[i], delimiter);
+        for (let i = 1; i < rows.length; i += 1) {
+            const cells = rows[i];
             const candidate = {
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
                 meaning: columnIndex.meaning >= 0 ? cells[columnIndex.meaning] : cells[1],
                 example: columnIndex.example >= 0 ? cells[columnIndex.example] : '',
+                phonetic: columnIndex.phonetic >= 0 ? cells[columnIndex.phonetic] : '',
                 freq: columnIndex.freq >= 0 ? cells[columnIndex.freq] : null
             };
             const normalized = normalizeEntry(candidate);
@@ -212,7 +275,7 @@
         }
         return buildImportResult('wordlist', entries, {
             format: 'csv',
-            originalLength: Math.max(lines.length - 1, 0)
+            originalLength: Math.max(rows.length - 1, 0)
         });
     }
 
@@ -226,19 +289,39 @@
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
             const metaCategory = extractCategory(payload.meta, null);
-            const category = extractCategory(payload, metaCategory || 'external');
-            const looksProgress = typeof payload.version === 'string'
-                || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+            const declaredType = typeof payload.type === 'string' ? payload.type.trim().toLowerCase() : '';
+            const explicitProgress = declaredType === 'progress' || declaredType === 'progress-backup';
+            const hasListId = typeof payload.listId === 'string' && payload.listId.trim();
+            const hasV2ProgressEnvelope = typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && hasListId;
+            const legacyProgressEnvelope = !declaredType
+                && typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && Array.isArray(payload.reviewQueue)
+                && !hasListId;
+            if (legacyProgressEnvelope) {
+                throw new Error('不支持 v1 进度备份，请使用 v2 格式重新导出');
+            }
+            if (explicitProgress && !hasV2ProgressEnvelope) {
+                throw new Error('进度备份缺少 v2 词表或配置数据');
+            }
+            const looksProgress = (explicitProgress || !declaredType) && hasV2ProgressEnvelope;
+            const category = extractCategory(payload, metaCategory || (looksProgress ? 'user' : 'external'));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = payload.words.map(cloneProgressEntry);
+                if (entries.some((entry) => !entry)) {
+                    throw new Error('进度备份包含无效词汇数据');
+                }
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
+                    listId: typeof payload.listId === 'string' && payload.listId.trim()
+                        ? payload.listId.trim()
+                        : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
-                    reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
+                    config: isPlainObject(payload.config) ? { ...payload.config } : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -308,18 +391,29 @@
         return normalizedResult;
     }
 
-    async function exportProgress() {
-        const store = window.VocabStore;
-        if (!store || typeof store.init !== 'function') {
-            throw new Error('VocabStore 未加载');
+    async function exportProgress(words) {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        await window.AppData.ready;
+        const config = await window.AppData.vocab.getConfig();
+        const listId = config.activeListId || 'default';
+        let entries;
+        if (Array.isArray(words)) {
+            entries = words.map(cloneProgressEntry);
+        } else {
+            const list = await window.AppData.vocab.readList(listId);
+            const listWords = Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : []);
+            entries = listWords.map(cloneProgressEntry);
         }
-        await store.init();
+        if (entries.some((entry) => !entry)) {
+            throw new Error('当前词表包含无效词汇数据');
+        }
         const payload = {
+            type: 'progress',
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
-            config: store.getConfig(),
-            words: store.getWords(),
-            reviewQueue: store.getReviewQueue()
+            listId,
+            config,
+            words: entries
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }

@@ -11,14 +11,22 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const source = fs.readFileSync(path.join(repoRoot, 'js/utils/practiceTimerPreferences.js'), 'utf8');
 
 function loadPreferences() {
-    const store = new Map();
+    const persisted = { reading: null, listening: null };
+    const calls = [];
+    let writeFailure = null;
     const window = {
-        localStorage: {
-            getItem(key) {
-                return store.has(key) ? store.get(key) : null;
-            },
-            setItem(key, value) {
-                store.set(key, String(value));
+        AppData: {
+            ready: Promise.resolve(true),
+            preferences: {
+                async getTimer() {
+                    return JSON.parse(JSON.stringify(persisted));
+                },
+                async setTimer(scope, value) {
+                    if (writeFailure) throw writeFailure;
+                    const normalized = JSON.parse(JSON.stringify(value));
+                    calls.push({ scope, value: normalized });
+                    persisted[scope] = normalized;
+                }
             }
         }
     };
@@ -30,18 +38,54 @@ function loadPreferences() {
         Math,
         JSON,
         String,
-        Boolean
+        Boolean,
+        console
     };
     vm.runInNewContext(source, context, { filename: 'practiceTimerPreferences.js' });
-    return { manager: window.PracticeTimerPreferences, store };
+    return {
+        manager: window.PracticeTimerPreferences,
+        calls,
+        persisted,
+        failWrites(error) { writeFailure = error; }
+    };
 }
 
-const { manager, store } = loadPreferences();
+async function testHydrationRetriesAfterAppDataInstall() {
+    const window = {};
+    const context = {
+        window,
+        globalThis: window,
+        Object,
+        Number,
+        Math,
+        JSON,
+        String,
+        Boolean,
+        console
+    };
+    vm.runInNewContext(source, context, { filename: 'practiceTimerPreferences-before-appdata.js' });
+    assert.equal(await window.PracticeTimerPreferences.ready, false);
+    window.AppData = {
+        ready: Promise.resolve(true),
+        preferences: {
+            async getTimer() {
+                return { reading: { mode: 'countdown', countdownMinutes: 12 }, listening: { expiryAction: 'lock' } };
+            }
+        }
+    };
+    assert.equal(await window.PracticeTimerPreferences.ready, true);
+    assert.equal(window.PracticeTimerPreferences.read('reading').countdownMinutes, 12);
+    assert.equal(window.PracticeTimerPreferences.read('listening').expiryAction, 'lock');
+}
 
-assert.equal(manager.READING_KEY, 'ielts_reading_timer_preferences_v2');
-assert.equal(manager.LISTENING_KEY, 'ielts_listening_timer_preferences_v1');
+await testHydrationRetriesAfterAppDataInstall();
 
-assert.deepEqual(manager.read('reading'), {
+const { manager, calls, persisted, failWrites } = loadPreferences();
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+assert.equal(await manager.ready, true);
+
+assert.deepEqual(plain(manager.read('reading')), {
     version: 1,
     mode: 'elapsed',
     countdownMinutes: 60,
@@ -50,7 +94,7 @@ assert.deepEqual(manager.read('reading'), {
     expiryAction: 'warn'
 });
 
-const reading = manager.save('reading', {
+const reading = await manager.save('reading', {
     mode: 'countdown',
     countdownMinutes: 999,
     limitEnabled: true,
@@ -63,7 +107,7 @@ assert.equal(reading.limitEnabled, true);
 assert.equal(reading.limitMinutes, 1);
 assert.equal(reading.expiryAction, 'auto-submit');
 
-const listening = manager.save('listening', {
+const listening = await manager.save('listening', {
     mode: 'invalid',
     countdownMinutes: '30',
     limitEnabled: false,
@@ -76,13 +120,20 @@ assert.equal(listening.limitEnabled, false);
 assert.equal(listening.limitMinutes, 60);
 assert.equal(listening.expiryAction, 'lock');
 
-assert.notEqual(manager.keyFor('reading'), manager.keyFor('listening'));
-assert(store.has(manager.READING_KEY), 'reading preferences should be persisted');
-assert(store.has(manager.LISTENING_KEY), 'listening preferences should be persisted');
+assert.deepEqual(calls.map((entry) => entry.scope), ['reading', 'listening']);
+assert.deepEqual(persisted.reading, plain(reading));
+assert.deepEqual(persisted.listening, plain(listening));
 assert.equal(manager.read('reading').expiryAction, 'auto-submit');
 assert.equal(manager.read('listening').expiryAction, 'lock');
 
+failWrites(new Error('timer persistence unavailable'));
+await assert.rejects(
+    manager.save('reading', { mode: 'elapsed', expiryAction: 'warn' }),
+    /timer persistence unavailable/
+);
+assert.equal(manager.read('reading').expiryAction, 'auto-submit', 'failed writes must not change the cached preference');
+
 process.stdout.write(JSON.stringify({
     status: 'pass',
-    detail: 'practice timer preferences sanitize and persist independently'
+    detail: 'practice timer preferences sanitize and persist through AppData independently'
 }));

@@ -12,8 +12,11 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
 const results = [];
 
-function loadExporter() {
+function loadExporter(options = {}) {
     const windowStub = {};
+    if (typeof options.resolveExamForPracticeRecord === 'function') {
+        windowStub.resolveExamForPracticeRecord = options.resolveExamForPracticeRecord;
+    }
     const sandbox = {
         window: windowStub,
         document: {
@@ -143,11 +146,44 @@ async function testCanonicalCorrectAnswerMapWins() {
     });
 }
 
+async function testHistoricalMetadataWinsDuringExport() {
+    const exporter = loadExporter({
+        async resolveExamForPracticeRecord() {
+            return {
+                id: 'shared-id',
+                title: 'Current library title',
+                category: 'P4',
+                frequency: 'current'
+            };
+        }
+    });
+    const grouped = await exporter.groupRecordsByDateAsync([{
+        id: 'history-1',
+        examId: 'shared-id',
+        date: '2026-07-25T10:00:00.000Z',
+        title: 'Saved title',
+        metadata: {
+            libraryConfigurationId: 'library_original',
+            category: 'P1',
+            frequency: 'saved'
+        }
+    }]);
+    const exported = grouped['2026-07-25'][0];
+    assert.strictEqual(exported.title, 'Saved title', '导出不得用解析出的题目覆盖历史标题');
+    assert.strictEqual(exported.category, 'P1', '导出不得用解析出的题目覆盖历史分类');
+    assert.strictEqual(exported.frequency, 'saved', '导出不得用解析出的题目覆盖历史频次');
+    recordResult('historical metadata wins over resolved library metadata during export', true, {
+        title: exported.title,
+        category: exported.category
+    });
+}
+
 async function runAllTests() {
     const tests = [
         testNumericCorrectAnswersAreNotAnswerMaps,
         testPlainCorrectAnswerMapsStillWork,
-        testCanonicalCorrectAnswerMapWins
+        testCanonicalCorrectAnswerMapWins,
+        testHistoricalMetadataWinsDuringExport
     ];
     for (const testFn of tests) {
         try {

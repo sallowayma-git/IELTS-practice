@@ -21,6 +21,8 @@
             this.dropdownVisible = false;
             this.currentListId = null;
             this.previousListId = null; // 用于错误回退
+            this.switchRequestId = 0;
+            this.switchTail = Promise.resolve();
             
             // 绑定事件处理器
             this.handleMenuButtonClick = this.handleMenuButtonClick.bind(this);
@@ -128,6 +130,22 @@
             if (nameEl) {
                 nameEl.textContent = currentList.name;
             }
+        }
+
+        /**
+         * 当词表由导入/恢复等外部流程切换时，同步组件内部状态与显示。
+         * @returns {boolean} 是否完成同步
+         */
+        syncFromStore() {
+            const activeListId = this.vocabStore.getActiveListId();
+            if (!activeListId || !this.vocabStore.VOCAB_LISTS[activeListId]) {
+                return false;
+            }
+            this.currentListId = activeListId;
+            this.previousListId = activeListId;
+            this.updateCurrentListDisplay();
+            this.refreshListOptions();
+            return true;
         }
 
         /**
@@ -262,20 +280,32 @@
          * 切换词表
          * @param {string} listId - 词表 ID
          */
-        async switchList(listId) {
+        switchList(listId) {
             if (!listId || typeof listId !== 'string') {
                 console.error('[VocabListSwitcher] Invalid list ID:', listId);
-                return;
+                return Promise.resolve(false);
             }
 
             const lists = this.vocabStore.VOCAB_LISTS;
             if (!lists[listId]) {
                 console.error('[VocabListSwitcher] Unknown list ID:', listId);
-                return;
+                return Promise.resolve(false);
             }
 
-            // 保存当前词表 ID（用于错误回退）
-            this.previousListId = this.currentListId;
+            const requestId = ++this.switchRequestId;
+            const run = () => this.performSwitch(listId, requestId);
+            const pending = this.switchTail.then(run, run);
+            this.switchTail = pending.catch(() => false);
+            return pending;
+        }
+
+        async performSwitch(listId, requestId) {
+            if (requestId !== this.switchRequestId) {
+                return false;
+            }
+
+            const previousListId = this.currentListId;
+            this.previousListId = previousListId;
 
             try {
                 // 显示加载状态
@@ -284,10 +314,15 @@
                 // 加载新词表
                 const list = await this.vocabStore.loadList(listId);
 
+                if (requestId !== this.switchRequestId) {
+                    return false;
+                }
+
                 if (!list) {
                     // 词表为空或加载失败
                     this.showEmptyListMessage(listId);
-                    return;
+                    await this.rollbackToPreviousList(previousListId, requestId);
+                    return false;
                 }
 
                 // 切换到新词表
@@ -295,6 +330,11 @@
 
                 if (!success) {
                     throw new Error('Failed to set active list');
+                }
+
+                // 若激活过程中出现了更新的选择，让排队中的最新请求负责最终状态。
+                if (requestId !== this.switchRequestId) {
+                    return false;
                 }
 
                 // 更新当前词表 ID
@@ -311,15 +351,22 @@
                 this.dispatchSwitchEvent(listId, list);
 
                 console.log('[VocabListSwitcher] 切换词表成功:', listId);
+                return true;
 
             } catch (error) {
+                if (requestId !== this.switchRequestId) {
+                    return false;
+                }
                 console.error('[VocabListSwitcher] 切换词表失败:', error);
                 
                 // 回退到上一个词表
-                await this.rollbackToPreviousList();
+                await this.rollbackToPreviousList(previousListId, requestId);
                 
                 // 显示错误提示
-                this.showErrorMessage('词表加载失败，请重试');
+                if (requestId === this.switchRequestId) {
+                    this.showErrorMessage('词表加载失败，请重试');
+                }
+                return false;
             }
         }
 
@@ -354,20 +401,25 @@
         /**
          * 回退到上一个词表
          */
-        async rollbackToPreviousList() {
-            if (!this.previousListId) return;
+        async rollbackToPreviousList(previousListId = this.previousListId, requestId = this.switchRequestId) {
+            if (!previousListId || requestId !== this.switchRequestId) return false;
 
             try {
-                const previousList = await this.vocabStore.loadList(this.previousListId);
-                if (previousList) {
+                const previousList = await this.vocabStore.loadList(previousListId);
+                if (previousList && requestId === this.switchRequestId) {
                     await this.vocabStore.setActiveList(previousList);
-                    this.currentListId = this.previousListId;
+                    if (requestId !== this.switchRequestId) {
+                        return false;
+                    }
+                    this.currentListId = previousListId;
                     this.updateCurrentListDisplay();
                     this.refreshListOptions();
+                    return true;
                 }
             } catch (error) {
                 console.error('[VocabListSwitcher] 回退失败:', error);
             }
+            return false;
         }
 
         /**
@@ -438,8 +490,6 @@
             // 显示提示消息
             this.showToast(message, 'info');
 
-            // 回退到上一个词表
-            this.rollbackToPreviousList();
         }
 
         /**

@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_URL = f"{(REPO_ROOT / 'index.html').as_uri()}?test_env=1&optional_listening_e2e=1"
 BRIDGE_PATH = REPO_ROOT / "js" / "listeningRecordBridge.js"
 SPELLING_COLLECTOR_PATH = REPO_ROOT / "js" / "app" / "spellingErrorCollector.js"
+SAFE_OBJECT_LITERAL_PARSER_PATH = REPO_ROOT / "js" / "utils" / "safeObjectLiteralParser.js"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_FILE = REPORT_DIR / "listening-bridge-optional-report.json"
 
@@ -60,6 +61,7 @@ def collect_console(page: Page, store: List[ConsoleEntry]) -> None:
 
 async def inject_bridge_fixture_scripts(page: Page) -> None:
     await page.add_script_tag(path=str(SPELLING_COLLECTOR_PATH))
+    await page.add_script_tag(path=str(SAFE_OBJECT_LITERAL_PARSER_PATH))
     await page.add_script_tag(path=str(BRIDGE_PATH))
 
 
@@ -84,17 +86,19 @@ async def ensure_app_ready(page: Page) -> None:
 
 
 async def dismiss_overlays(page: Page) -> None:
-    await page.evaluate(
-        """
-        () => {
-            try { localStorage.setItem('hasSeenGplLicense', 'true'); } catch (_) {}
-            if (typeof window.acceptGplLicense === 'function') {
-                try { window.acceptGplLicense(); } catch (_) {}
+    accepted = await page.evaluate(
+        """async () => {
+            if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+                throw new Error('LicenseModal.accept is unavailable');
             }
-            const modal = document.getElementById('license-modal');
-            if (modal) modal.classList.remove('show');
-        }
-        """
+            return window.LicenseModal.accept();
+        }"""
+    )
+    if not accepted:
+        raise RuntimeError("GPL license consent was not committed")
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=5000,
     )
 
 
@@ -108,9 +112,10 @@ async def validate_listening_index(page: Page) -> dict[str, Any]:
             const invalidPaths = rows
                 .filter(row => !row || !/^P[1-4]\\//.test(String(row.path || '')) || String(row.path || '').startsWith('ListeningPractice/'))
                 .map(row => row && { id: row.examId || row.id, path: row.path });
-            const activeIndex = window.appStateService && typeof window.appStateService.getExamIndex === 'function'
-                ? window.appStateService.getExamIndex()
-                : (window.app && window.app.state ? window.app.state.examIndex : []);
+            if (typeof window.resolveActiveLibraryIndex !== 'function') {
+                throw new Error('resolveActiveLibraryIndex is unavailable');
+            }
+            const activeIndex = await window.resolveActiveLibraryIndex();
             const activeListeningCount = Array.isArray(activeIndex)
                 ? activeIndex.filter(row => row && row.type === 'listening').length
                 : 0;
@@ -221,13 +226,6 @@ async def validate_bridge_completion(page: Page) -> dict[str, Any]:
         """
         () => {
             window.__BRIDGE_MESSAGES = [];
-            window.storage = {
-                ready: Promise.resolve(),
-                setNamespace() {},
-                async get() { return null; },
-                async set() { return true; },
-                async remove() { return true; }
-            };
             Object.defineProperty(window, 'opener', {
                 configurable: true,
                 value: {
@@ -617,8 +615,8 @@ async def validate_real_parent_listening_persistence(page: Page, console_log: Li
             if (!window.app || typeof window.app.openExam !== 'function') {
                 throw new Error('app_open_exam_missing_for_real_parent_probe');
             }
-            if (!window.storage || typeof window.storage.get !== 'function') {
-                throw new Error('storage_missing_for_real_parent_probe');
+            if (!window.AppData || !window.AppData.practice || !window.AppData.vocab || !window.AppData.backups) {
+                throw new Error('app_data_missing_for_real_parent_probe');
             }
             if (!window.spellingErrorCollector || typeof window.spellingErrorCollector.saveErrors !== 'function') {
                 throw new Error('parent_spelling_collector_missing_after_browse_runtime');
@@ -632,23 +630,6 @@ async def validate_real_parent_listening_persistence(page: Page, console_log: Li
                 throw new Error('no_real_listening_target');
             }
 
-            const backupKeys = ['practice_records', 'vocab_list_p1_errors', 'vocab_list_master_errors'];
-            window.__REAL_LISTENING_PERSISTENCE_BACKUP = {};
-            for (const key of backupKeys) {
-                window.__REAL_LISTENING_PERSISTENCE_BACKUP[key] = await window.storage.get(key, null);
-            }
-            const previousRecords = window.__REAL_LISTENING_PERSISTENCE_BACKUP.practice_records;
-            const filteredRecords = Array.isArray(previousRecords)
-                ? previousRecords.filter(record => record && record.examId !== target.id)
-                : [];
-            await window.storage.set('practice_records', filteredRecords);
-            for (const key of ['vocab_list_p1_errors', 'vocab_list_master_errors']) {
-                if (typeof window.storage.remove === 'function') {
-                    await window.storage.remove(key);
-                } else {
-                    await window.storage.set(key, null);
-                }
-            }
             return {
                 id: target.id,
                 title: target.title,
@@ -661,7 +642,44 @@ async def validate_real_parent_listening_persistence(page: Page, console_log: Li
     )
 
     child_page = None
+    isolation_backup_id = None
     try:
+        isolation_backup_id = await page.evaluate(
+            """
+            async (target) => {
+                const backup = await window.AppData.backups.create({
+                    type: 'e2e-isolation',
+                    label: 'real-listening-parent'
+                });
+                try {
+                    const [records, collections] = await Promise.all([
+                        window.AppData.practice.list(),
+                        window.AppData.vocab.listCollections()
+                    ]);
+                    const recordIds = records
+                        .filter(record => record && record.examId === target.id)
+                        .map(record => record.id)
+                        .filter(Boolean);
+                    if (recordIds.length) {
+                        await window.AppData.practice.deleteMany({
+                            recordIds,
+                            operationId: `e2e-listening-clear:${target.id}`
+                        });
+                    }
+                    await window.AppData.vocab.saveCollections({
+                        'spelling-errors-p1': Object.assign({}, collections['spelling-errors-p1'] || {}, { id: 'spelling-errors-p1', words: [] }),
+                        'spelling-errors-master': Object.assign({}, collections['spelling-errors-master'] || {}, { id: 'spelling-errors-master', words: [] })
+                    }, { operationId: `e2e-listening-vocab-clear:${target.id}` });
+                    return backup.id;
+                } catch (error) {
+                    await window.AppData.backups.restore(backup.id);
+                    await window.AppData.backups.delete(backup.id);
+                    throw error;
+                }
+            }
+            """,
+            target,
+        )
         async with page.expect_popup(timeout=20000) as popup_wait:
             await page.evaluate("(examId) => window.app.openExam(examId)", target["id"])
         child_page = await popup_wait.value
@@ -741,9 +759,11 @@ async def validate_real_parent_listening_persistence(page: Page, console_log: Li
                 """
                 async ({ examId, expectedWord, expectedInput }) => {
                     const normalize = value => String(value || '').trim().toLowerCase();
-                    const records = await window.storage.get('practice_records', []);
-                    const p1 = await window.storage.get('vocab_list_p1_errors', null);
-                    const master = await window.storage.get('vocab_list_master_errors', null);
+                    const [records, p1, master] = await Promise.all([
+                        window.AppData.practice.list(),
+                        window.AppData.vocab.readList('spelling-errors-p1'),
+                        window.AppData.vocab.readList('spelling-errors-master')
+                    ]);
                     const record = Array.isArray(records)
                         ? records.find(item => item && item.examId === examId)
                         : null;
@@ -804,24 +824,14 @@ async def validate_real_parent_listening_persistence(page: Page, console_log: Li
     finally:
         if child_page and not child_page.is_closed():
             await child_page.close()
-        await page.evaluate(
-            """
-            async () => {
-                const backup = window.__REAL_LISTENING_PERSISTENCE_BACKUP || {};
-                for (const [key, value] of Object.entries(backup)) {
-                    if (value === null || value === undefined) {
-                        if (typeof window.storage.remove === 'function') {
-                            await window.storage.remove(key);
-                        } else {
-                            await window.storage.set(key, null);
-                        }
-                    } else {
-                        await window.storage.set(key, value);
-                    }
-                }
-            }
-            """
-        )
+        if isolation_backup_id:
+            await page.evaluate(
+                """async (backupId) => {
+                    await window.AppData.backups.restore(backupId);
+                    await window.AppData.backups.delete(backupId);
+                }""",
+                isolation_backup_id,
+            )
 
 
 async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_log: List[ConsoleEntry]) -> dict[str, Any]:
@@ -836,8 +846,8 @@ async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_
             if (!window.app || typeof window.app.openExam !== 'function') {
                 throw new Error('app_open_exam_missing_for_file_origin_probe');
             }
-            if (!window.storage || typeof window.storage.get !== 'function') {
-                throw new Error('storage_missing_for_file_origin_probe');
+            if (!window.AppData || !window.AppData.practice) {
+                throw new Error('app_data_missing_for_file_origin_probe');
             }
             const rows = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
             const target = rows.find(row => row && row.id && /8\\. P2 Plan of Community Center \\(VIP\\)/i.test(String(row.path || row.filename || row.title || '')))
@@ -845,13 +855,6 @@ async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_
             if (!target) {
                 throw new Error('p2_community_center_target_missing');
             }
-
-            window.__FILE_ORIGIN_STATIC_BRIDGE_BACKUP = await window.storage.get('practice_records', null);
-            const previousRecords = window.__FILE_ORIGIN_STATIC_BRIDGE_BACKUP;
-            const filteredRecords = Array.isArray(previousRecords)
-                ? previousRecords.filter(record => record && record.examId !== target.id)
-                : [];
-            await window.storage.set('practice_records', filteredRecords);
 
             return {
                 id: target.id,
@@ -864,7 +867,25 @@ async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_
     )
 
     child_page = None
+    practice_snapshot = None
     try:
+        practice_snapshot = await page.evaluate("async () => window.AppData.backups.export({ domains: ['practice'] })")
+        await page.evaluate(
+            """async (examId) => {
+                const records = await window.AppData.practice.list();
+                const recordIds = records
+                    .filter(record => record && record.examId === examId)
+                    .map(record => record.id)
+                    .filter(Boolean);
+                if (recordIds.length) {
+                    await window.AppData.practice.deleteMany({
+                        recordIds,
+                        operationId: `e2e-file-origin-clear:${examId}`
+                    });
+                }
+            }""",
+            target["id"],
+        )
         async with page.expect_popup(timeout=20000) as popup_wait:
             await page.evaluate("(examId) => window.app.openExam(examId)", target["id"])
         child_page = await popup_wait.value
@@ -901,7 +922,7 @@ async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_
             result = await page.evaluate(
                 """
                 async (examId) => {
-                    const records = await window.storage.get('practice_records', []);
+                    const records = await window.AppData.practice.list();
                     const record = Array.isArray(records)
                         ? records.find(item => item && item.examId === examId)
                         : null;
@@ -953,22 +974,16 @@ async def validate_file_origin_static_bridge_p2_persistence(page: Page, console_
     finally:
         if child_page and not child_page.is_closed():
             await child_page.close()
-        await page.evaluate(
-            """
-            async () => {
-                const value = window.__FILE_ORIGIN_STATIC_BRIDGE_BACKUP;
-                if (value === null || value === undefined) {
-                    if (typeof window.storage.remove === 'function') {
-                        await window.storage.remove('practice_records');
-                    } else {
-                        await window.storage.set('practice_records', null);
-                    }
-                } else {
-                    await window.storage.set('practice_records', value);
-                }
-            }
-            """
-        )
+        if practice_snapshot is not None:
+            await page.evaluate(
+                """async (snapshot) => {
+                    const preview = await window.AppData.backups.previewImport(snapshot, { practiceMode: 'replace' });
+                    await window.AppData.backups.commitImport(preview.id, {
+                        operationId: 'e2e-file-origin-restore'
+                    });
+                }""",
+                practice_snapshot,
+            )
 
 
 async def run() -> int:

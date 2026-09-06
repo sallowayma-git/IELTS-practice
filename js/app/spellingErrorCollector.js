@@ -61,12 +61,11 @@
             // 错误缓存，用于临时存储检测到的错误
             this.errorCache = new Map();
             
-            // 词表存储键配置
-            this.storageKeys = {
-                p1: 'vocab_list_p1_errors',
-                p4: 'vocab_list_p4_errors',
-                master: 'vocab_list_master_errors',
-                custom: 'vocab_list_custom'
+            this.collectionIds = {
+                p1: 'spelling-errors-p1',
+                p4: 'spelling-errors-p4',
+                master: 'spelling-errors-master',
+                custom: 'custom'
             };
 
             this.lexiconCache = null;
@@ -84,17 +83,8 @@
          */
         async init() {
             try {
-                // 等待存储系统就绪
-                if (window.storage && window.storage.ready) {
-                    await window.storage.ready;
-                }
-                
-                // 设置命名空间
-                if (window.storage && typeof window.storage.setNamespace === 'function') {
-                    window.storage.setNamespace('exam_system');
-                    console.log('[SpellingErrorCollector] 存储命名空间已设置');
-                }
-                
+                if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab is unavailable');
+                await window.AppData.ready;
                 this.initialized = true;
                 console.log('[SpellingErrorCollector] 初始化完成');
             } catch (error) {
@@ -462,14 +452,9 @@
             try {
                 await this.ensureInitialized();
                 
-                const storageKey = this.storageKeys[listId] || listId;
-                
-                if (!window.storage) {
-                    console.warn('[SpellingErrorCollector] 存储系统不可用');
-                    return null;
-                }
-                
-                const list = await window.storage.get(storageKey);
+                const collectionId = this.collectionIds[listId] || listId;
+                const collections = await window.AppData.vocab.listCollections();
+                const list = collections[collectionId];
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
                 
                 if (normalizedList) {
@@ -481,7 +466,7 @@
                 return null;
             } catch (error) {
                 console.error(`[SpellingErrorCollector] 加载词表失败: ${listId}`, error);
-                return null;
+                throw error;
             }
         }
 
@@ -493,31 +478,10 @@
         async saveVocabList(vocabList) {
             try {
                 await this.ensureInitialized();
-                
-                if (!vocabList || !vocabList.id) {
-                    console.error('[SpellingErrorCollector] 无效的词表对象');
-                    return false;
-                }
-                
-                if (!Array.isArray(vocabList.words)) {
-                    vocabList.words = [];
-                }
-
-                vocabList = this.normalizeVocabListShape(vocabList, vocabList.id, vocabList.source) || vocabList;
-
-                // 更新统计信息
-                vocabList.stats = vocabList.stats || {};
-                vocabList.stats.totalWords = vocabList.words.length;
-                vocabList.updatedAt = Date.now();
-                
-                const storageKey = this.storageKeys[vocabList.id] || vocabList.id;
-                
-                if (!window.storage) {
-                    console.warn('[SpellingErrorCollector] 存储系统不可用');
-                    return false;
-                }
-                
-                await window.storage.set(storageKey, vocabList);
+                vocabList = this.prepareVocabList(vocabList);
+                if (!vocabList) return false;
+                const collectionId = this.collectionIds[vocabList.id] || vocabList.id;
+                await window.AppData.vocab.saveCollection(collectionId, vocabList);
                 console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
                 
                 return true;
@@ -525,6 +489,19 @@
                 console.error('[SpellingErrorCollector] 保存词表失败:', error);
                 return false;
             }
+        }
+
+        prepareVocabList(vocabList) {
+            if (!vocabList || !vocabList.id) {
+                console.error('[SpellingErrorCollector] 无效的词表对象');
+                return null;
+            }
+            if (!Array.isArray(vocabList.words)) vocabList.words = [];
+            const normalized = this.normalizeVocabListShape(vocabList, vocabList.id, vocabList.source) || vocabList;
+            normalized.stats = normalized.stats || {};
+            normalized.stats.totalWords = normalized.words.length;
+            normalized.updatedAt = Date.now();
+            return normalized;
         }
 
         /**
@@ -538,7 +515,7 @@
                 return list ? list.words.length : 0;
             } catch (error) {
                 console.error(`[SpellingErrorCollector] 获取词表单词数失败: ${listId}`, error);
-                return 0;
+                throw error;
             }
         }
 
@@ -1108,17 +1085,25 @@
             try {
                 await this.ensureInitialized();
                 await this.ensureCoreLexicon();
-                
-                // 按来源分组错误
                 const errorsBySource = this.groupErrorsBySource(errors);
-                
-                // 保存到各个来源的词表
+                const pendingCollections = {};
                 for (const [source, sourceErrors] of Object.entries(errorsBySource)) {
-                    await this.saveErrorsToList(source, sourceErrors);
+                    let vocabList = await this.loadVocabList(source);
+                    if (!vocabList) vocabList = this.createEmptyList(source, source);
+                    this.mergeErrorsToList(vocabList, sourceErrors);
+                    const prepared = this.prepareVocabList(vocabList);
+                    if (!prepared) throw new Error(`生成 ${source} 错词词表失败`);
+                    pendingCollections[this.collectionIds[source] || source] = prepared;
                 }
-                
-                // 同步到综合词表
-                await this.syncToMasterList(errors);
+
+                let masterList = await this.loadVocabList('master');
+                if (!masterList) masterList = this.createEmptyList('master', 'all');
+                this.mergeErrorsToList(masterList, errors);
+                const preparedMaster = this.prepareVocabList(masterList);
+                if (!preparedMaster) throw new Error('生成综合错词词表失败');
+                pendingCollections[this.collectionIds.master] = preparedMaster;
+
+                await window.AppData.vocab.saveCollections(pendingCollections);
                 
                 console.log(`[SpellingErrorCollector] 保存完成，共保存 ${errors.length} 个错误`);
                 return true;
@@ -1269,7 +1254,9 @@
                 );
                 
                 if (vocabList.words.length < originalLength) {
-                    await this.saveVocabList(vocabList);
+                    if (!await this.saveVocabList(vocabList)) {
+                        return false;
+                    }
                     console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
                     return true;
                 } else {
@@ -1299,7 +1286,9 @@
                 vocabList.words = [];
                 vocabList.updatedAt = Date.now();
                 
-                await this.saveVocabList(vocabList);
+                if (!await this.saveVocabList(vocabList)) {
+                    return false;
+                }
                 console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
                 
                 return true;

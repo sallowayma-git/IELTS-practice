@@ -4,6 +4,7 @@ import fs from 'fs';
 import vm from 'vm';
 import assert from 'assert';
 import { fileURLToPath } from 'url';
+import { webcrypto } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ function createStubWindow(name) {
     const stub = {
         name,
         closed: false,
-        location: { href: 'about:blank' },
+        location: { href: 'http://localhost/exam.html' },
         document: { title: '', addEventListener() {}, removeEventListener() {} },
         focus() { this._focused = true; },
         close() { this.closed = true; },
@@ -51,19 +52,8 @@ function createStubWindow(name) {
 }
 
 async function main() {
-    const storageState = new Map();
     const practiceRecords = [];
-    const storage = {
-        async get(key, fallback = undefined) {
-            if (storageState.has(key)) {
-                return deepClone(storageState.get(key));
-            }
-            return deepClone(fallback);
-        },
-        async set(key, value) {
-            storageState.set(key, deepClone(value));
-        }
-    };
+    const windowSessions = new Map();
 
     const documentStub = {
         title: '',
@@ -82,7 +72,8 @@ async function main() {
         },
         addEventListener() {},
         removeEventListener() {},
-        location: { href: 'http://localhost/' },
+        location: { href: 'http://localhost/', origin: 'http://localhost' },
+        crypto: webcrypto,
         screen: { availWidth: 1920, availHeight: 1080 },
         document: documentStub,
         practicePageManager: {
@@ -97,57 +88,57 @@ async function main() {
         }
     };
 
-    windowStub.storage = storage;
-    windowStub.PracticeRecordAPI = {
-        async list() {
-            return deepClone(practiceRecords);
-        },
-        async saveRecord(record) {
-            practiceRecords.unshift(deepClone(record));
-            return deepClone(record);
-        },
-        async deleteMany(ids) {
-            const targets = new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)));
-            let deleted = 0;
-            for (let index = practiceRecords.length - 1; index >= 0; index -= 1) {
-                const record = practiceRecords[index];
-                if (record && targets.has(String(record.id || record.sessionId || ''))) {
-                    practiceRecords.splice(index, 1);
-                    deleted += 1;
+    windowStub.resolveActiveLibraryIndex = async () => deepClone(examIndex);
+    windowStub.AppData = {
+        ready: Promise.resolve(),
+        practice: {
+            async list() { return deepClone(practiceRecords); },
+            async getStats() { return { totalPractices: practiceRecords.length }; },
+            async finalizeSuite({ record, childSessionIds = [] }) {
+                const targets = new Set(childSessionIds.map(String));
+                for (let index = practiceRecords.length - 1; index >= 0; index -= 1) {
+                    const current = practiceRecords[index];
+                    if (targets.has(String(current && (current.id || current.sessionId) || ''))) {
+                        practiceRecords.splice(index, 1);
+                    }
                 }
+                const identity = String(record && (record.id || record.sessionId) || '');
+                const existing = practiceRecords.findIndex((item) => String(item && (item.id || item.sessionId) || '') === identity);
+                if (existing >= 0) practiceRecords[existing] = deepClone(record);
+                else practiceRecords.unshift(deepClone(record));
+                return { committed: true, operationId: `suite-${identity}`, record: deepClone(record), derived: { status: 'ready', pending: [] }, warnings: [] };
             }
-            return { deleted };
         },
-        async recalculateStats() {
-            return { totalPractices: practiceRecords.length };
+        recovery: {
+            windowSession: {
+                save(name, value) { windowSessions.set(String(name), deepClone(value)); return true; },
+                get(name) { return deepClone(windowSessions.get(String(name)) || null); },
+                discard(name) { windowSessions.delete(String(name)); return true; }
+            },
+            async listDrafts() { return []; },
+            async listActiveSessions() { return []; },
+            async saveActiveSession() { return { committed: true }; },
+            async discardActiveSession() { return { committed: true }; }
         }
     };
     windowStub.CustomEvent = function CustomEvent(type, init = {}) {
         return { type, detail: init.detail || null };
     };
 
-    const sessionStorageStub = new Map();
-    const sessionStorageObj = {
-        getItem(key) { return sessionStorageStub.get(key) || null; },
-        setItem(key, value) { sessionStorageStub.set(key, String(value)); },
-        removeItem(key) { sessionStorageStub.delete(key); },
-        clear() { sessionStorageStub.clear(); }
-    };
-
     const sandbox = {
         window: windowStub,
-        storage,
         console,
         setTimeout,
         clearTimeout,
         setInterval,
         clearInterval,
         Math,
+        crypto: webcrypto,
+        URL,
         document: documentStub,
         CustomEvent: windowStub.CustomEvent
     };
     sandbox.globalThis = sandbox.window;
-    sandbox.window.sessionStorage = sessionStorageObj;
 
     const context = vm.createContext(sandbox);
 
@@ -183,10 +174,6 @@ async function main() {
             hasHtml: true
         }
     ];
-
-    await storage.set('exam_index', examIndex);
-    await storage.set('active_exam_index_key', 'exam_index');
-    await storage.set('active_sessions', []);
 
     const mixins = windowStub.ExamSystemAppMixins;
     if (!mixins || !mixins.examSession || !mixins.suitePractice) {
@@ -226,6 +213,10 @@ async function main() {
     const windowsMap = new Map();
     const openCalls = [];
     let openAttempt = 0;
+    app._postExamMessage = (examId, targetWindow, type, data = {}) => {
+        targetWindow.postMessage({ type, data: { ...data, examId } }, 'http://localhost');
+        return true;
+    };
 
     app.openExam = async function openExamStub(examId, options = {}) {
         openAttempt += 1;
@@ -342,13 +333,37 @@ async function main() {
     const failureMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('无法继续套题练习'));
     assert.strictEqual(failureMessage, undefined, '不应出现无法继续的警告');
 
-    const handledP3 = await app.handleSuitePracticeComplete(thirdExam.examId, practicePayload);
-    assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
-    assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
+    const finalWindow = app.currentSuiteSession.windowRef;
+    const finalPayload = {
+        ...practicePayload,
+        submissionId: 'submission-p3',
+        sessionId: 'session-reading-p3',
+        suiteSessionId: session.id
+    };
+    const handledP3 = await app.handleSuitePracticeComplete(thirdExam.examId, finalPayload, finalWindow);
+    assert.strictEqual(handledP3.handled, true, 'P3 完成后应进入提交收尾');
+    assert.strictEqual(handledP3.committed, true, 'P3 结果应在 ACK 前完成持久化');
+    assert.strictEqual(app.currentSuiteSession, session, 'ACK 前应保留套题会话以支持回执重放');
+    assert.strictEqual(finalWindow.closed, false, 'ACK 前不应关闭子窗口');
 
-    const savedPracticeRecords = await windowStub.PracticeRecordAPI.list();
+    const savedPracticeRecords = await windowStub.AppData.practice.list();
     assert.strictEqual(savedPracticeRecords.length, 1, '应只生成一条套题练习记录');
     assert.strictEqual(savedPracticeRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
+
+    assert.strictEqual(
+        app._announcePracticeSubmitOutcome(thirdExam.examId, finalPayload, finalWindow, true),
+        true,
+        '持久化完成后应向子窗口发送 ACK'
+    );
+    const submitAck = finalWindow._messages.find(msg => msg && msg.type === 'PRACTICE_SUBMIT_ACK');
+    assert(submitAck, '子窗口应收到最终提交 ACK');
+    assert.strictEqual(app.currentSuiteSession, session, 'ACK 后、延迟清理前仍应保留套题会话');
+    assert.strictEqual(finalWindow.closed, false, 'ACK 后由子页自行退出，宿主不应立即强制关闭');
+    assert.strictEqual(app._scheduleSuiteSubmitTeardown(handledP3.teardownSession), true, '应调度延迟清理兜底');
+    assert(session.submitReceiptTeardownTimer, '延迟清理计时器应已注册');
+    assert.strictEqual(await app._teardownSuiteSession(session), true, '执行延迟清理应成功');
+    assert.strictEqual(app.currentSuiteSession, null, '延迟清理后应释放套题会话');
+    assert.strictEqual(finalWindow.closed, true, '延迟清理兜底应关闭仍存活的子窗口');
 
     const completionMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('套题练习已完成'));
     assert(completionMessage, '应提示套题练习完成');
@@ -378,7 +393,7 @@ async function main() {
         return win;
     };
 
-    sessionStorageStub.clear();
+    windowStub.AppData.recovery.windowSession.discard('simulation');
     await appSim.startSuitePractice({ flowMode: 'simulation' });
     const simSession = appSim.currentSuiteSession;
     assert(simSession, '模拟会话应被创建');
@@ -393,10 +408,9 @@ async function main() {
     assert.strictEqual(simSession.currentIndex, 1, '应前进到第二篇');
     assert(simSession.draftsByExam[simP1.examId], 'P1 draft 应被保存');
 
-    // 验证 sessionStorage 镜像
-    const stored = sessionStorageStub.get('ielts_sim_session');
-    assert(stored, 'sessionStorage 应包含会话镜像');
-    const snapshot = JSON.parse(stored);
+    // 验证窗口级 recovery 领域镜像
+    const snapshot = windowStub.AppData.recovery.windowSession.get('simulation');
+    assert(snapshot, 'recovery.windowSession 应包含会话镜像');
     assert.strictEqual(snapshot.id, simSession.id, '镜像 id 应匹配');
     assert.strictEqual(snapshot.currentIndex, 1, '镜像 currentIndex 应为 1');
 
@@ -410,7 +424,7 @@ async function main() {
     const simNavOob = await appSim._handleSimulationNavigate(simP1.examId, { direction: 'prev' }, simSession.windowRef);
     assert.strictEqual(simNavOob, false, 'P1 向前导航应失败');
 
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: '模拟模式按顺序串联三篇题目并生成单条记录，导航与 sessionStorage 镜像正常' }));
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: '模拟模式按顺序串联三篇题目并生成单条记录，导航与 recovery.windowSession 镜像正常' }));
 }
 
 main().catch(error => {

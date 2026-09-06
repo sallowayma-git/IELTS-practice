@@ -196,6 +196,39 @@ async function testPracticeEnhancerSubmissionPayloadCarriesCorrectAnswerMap() {
     });
 }
 
+async function testPracticeEnhancerCompletionAddsSubmissionContract() {
+    const enhancer = loadEnhancer();
+    const messages = [];
+    enhancer.parentWindow = {
+        postMessage(message, targetOrigin) {
+            messages.push({ message, targetOrigin });
+        }
+    };
+    enhancer.parentOrigin = 'https://host.example';
+    enhancer.sessionId = 'enhancer-session';
+    enhancer.examId = 'enhancer-exam';
+    enhancer.windowSessionToken = 'enhancer-token';
+
+    const payload = { answers: { q1: 'A' } };
+    assert.strictEqual(enhancer.sendMessage('PRACTICE_COMPLETE', payload), true);
+    assert.strictEqual(messages.length, 1);
+    assert.strictEqual(messages[0].targetOrigin, 'https://host.example');
+    assert.strictEqual(messages[0].message.data.sessionId, 'enhancer-session');
+    assert.strictEqual(messages[0].message.data.windowSessionToken, 'enhancer-token');
+    assert.match(messages[0].message.data.submissionId, /^practice-submit-/);
+    assert.strictEqual(payload.submissionId, messages[0].message.data.submissionId);
+
+    enhancer.sendMessage('PRACTICE_COMPLETE', payload);
+    assert.strictEqual(
+        messages[1].message.data.submissionId,
+        messages[0].message.data.submissionId,
+        'retrying the same payload must reuse its submissionId'
+    );
+    recordResult('practice enhancer completion adds submission correlation', true, {
+        submissionId: payload.submissionId
+    });
+}
+
 async function testUnifiedReadingReplayRefusesComparisonCorrectAnswerFallback() {
     const windowStub = {
         __IELTS_READING_PAGE_TEST_HOOKS__: true,
@@ -205,7 +238,6 @@ async function testUnifiedReadingReplayRefusesComparisonCorrectAnswerFallback() 
         CSS: { escape(value) { return String(value); } },
         addEventListener() {},
         removeEventListener() {},
-        localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
         AnswerMatchCore: {
             compareAnswers(userAnswer, correctAnswer) {
                 return String(userAnswer == null ? '' : userAnswer).trim().toLowerCase()
@@ -266,7 +298,6 @@ async function testUnifiedReadingReplayCanonicalMapWins() {
         CSS: { escape(value) { return String(value); } },
         addEventListener() {},
         removeEventListener() {},
-        localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
         AnswerMatchCore: {
             compareAnswers(userAnswer, correctAnswer) {
                 return String(userAnswer == null ? '' : userAnswer).trim().toLowerCase()
@@ -332,6 +363,7 @@ async function runAllTests() {
         testPracticeEnhancerReplayCanonicalMapWins,
         testPracticeEnhancerReplayIgnoresNumericCorrectAnswersAsMap,
         testPracticeEnhancerSubmissionPayloadCarriesCorrectAnswerMap,
+        testPracticeEnhancerCompletionAddsSubmissionContract,
         testUnifiedReadingReplayCanonicalMapWins,
         testUnifiedReadingReplayRefusesComparisonCorrectAnswerFallback
     ];

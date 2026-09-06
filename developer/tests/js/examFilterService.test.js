@@ -86,9 +86,6 @@ function createExamActionsHarness() {
         document: documentStub,
         setupBrowseControls() {
             setupCalls += 1;
-        },
-        getExamIndexState() {
-            return [];
         }
     };
     const silentConsole = { log() {}, warn() {}, error() {}, info() {} };
@@ -169,7 +166,7 @@ function testLoadExamListBindsBrowseControls() {
     assert(harness.window.ExamActions, 'ExamActions 应该挂到 window');
     assert.strictEqual(typeof harness.window.ExamActions.loadExamList, 'function', 'loadExamList 应为函数');
 
-    harness.window.ExamActions.loadExamList();
+    harness.window.ExamActions.loadExamList([]);
     assert.strictEqual(harness.getSetupCalls(), 1, 'ExamActions.loadExamList 必须先绑定浏览控件');
 }
 

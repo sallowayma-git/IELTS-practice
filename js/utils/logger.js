@@ -8,8 +8,6 @@
         return;
     }
 
-    const STORAGE_KEY = 'exam_system_log_config_v2';
-
     // Default configuration
     const DEFAULT_CONFIG = {
         level: 'info',
@@ -19,7 +17,7 @@
             'PerformanceOptimizer': 'warn',
             'System': 'info',
             'PracticeRecorder': 'info',
-            'ScoreStorage': 'info'
+            'DataKernel': 'warn'
         }
     };
 
@@ -45,6 +43,7 @@
             this.debug = this.debug.bind(this);
 
             this.overrideConsole();
+            Promise.resolve().then(() => this.hydrateConfig());
 
             // Output initialization message
             this.internalLog('info', 'Logger initialized', {
@@ -54,41 +53,47 @@
         }
 
         /**
-         * Load configuration from localStorage or use defaults
+         * Build configuration from defaults and explicit bootstrap overrides.
          */
         loadConfig(externalConfig) {
-            let storedConfig = {};
-            try {
-                const stored = global.localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    storedConfig = JSON.parse(stored);
-                }
-            } catch (e) {
-                // Ignore storage errors
-            }
-
             return {
-                level: externalConfig.level || storedConfig.level || DEFAULT_CONFIG.level,
+                level: externalConfig.level || DEFAULT_CONFIG.level,
                 categories: {
                     ...DEFAULT_CONFIG.categories,
-                    ...(storedConfig.categories || {}),
                     ...(externalConfig.categories || {})
                 }
             };
         }
 
+        async hydrateConfig() {
+            try {
+                if (!global.AppData) return;
+                await global.AppData.ready;
+                const storedConfig = await global.AppData.preferences.getLogConfig();
+                if (!storedConfig || typeof storedConfig !== 'object') return;
+                this.config = {
+                    level: storedConfig.level || this.config.level,
+                    categories: { ...this.config.categories, ...(storedConfig.categories || {}) }
+                };
+            } catch (error) {
+                this.nativeConsole.warn('[AppLogger] 无法读取日志配置:', error);
+            }
+        }
+
         /**
-         * Save current configuration to localStorage
+         * Save current configuration through the preferences domain.
          */
         saveConfig() {
-            try {
-                global.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            if (!global.AppData) return Promise.resolve(false);
+            return global.AppData.ready.then(() =>
+                global.AppData.preferences.setLogConfig({
                     level: this.config.level,
                     categories: this.config.categories
-                }));
-            } catch (e) {
-                // Ignore storage errors
-            }
+                })
+            ).then(() => true).catch((error) => {
+                this.nativeConsole.warn('[AppLogger] 无法保存日志配置:', error);
+                return false;
+            });
         }
 
         /**

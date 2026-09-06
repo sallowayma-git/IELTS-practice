@@ -25,27 +25,27 @@
     },
     {
       "label": "Paragraph 3",
-      "text": "1331年，国王爱德华三世鼓励来自佛兰德（今比利时地区）的熟练织工到英格兰定居。这些佛兰德织工及其后代在英格兰布料的最终发展中发挥了作用。原毛出口贸易得以恢复，十四世纪上半叶是该产业日益繁荣的时期。随后，1347年至1350年间，欧洲爆发了一场严重的腺鼠疫疫情，这场疫情因贸易中断而严重打击了羊毛产业，且优先级也随之改变。然而，在英格兰，大规模的养羊业从十四世纪中叶起反而有所增长。"
+      "text": "1331年，国王爱德华三世鼓励来自佛兰德（今比利时地区）的熟练织工到英格兰定居。这些佛兰德织工及其后代推动了英格兰布料的发展。原毛出口贸易恢复，十四世纪上半叶英格兰养羊农户较为繁荣；但长期对法战争和1349年的黑死病造成严重影响，许多村庄人口大量死亡。由于劳动力不足，土地无法继续大量种植农作物，羊群数量反而增加。"
     },
     {
       "label": "Paragraph 4",
-      "text": "十五世纪，英格兰从原毛出口国转变为羊毛布料的制造国和出口国。对外国客户而言，从英格兰购买羊毛布料比购买原毛并在自己国内支付可观的布料加工成本更为便宜。英格兰的西郡和东盎格利亚地区——最初是通过普利茅斯和金斯林港口从事原毛贸易的中心——开始生产羊毛布料；随后，英格兰其他地区也加入其中。"
+      "text": "尽管经历挫折，原毛出口继续扩大，羊毛织物制造也随之发展，并逐渐呈现专业化和地域化。西郡拥有大片牧羊草地、可用于洗毛和染色的软水，以及可驱动机器的水力；约克郡和兰开夏的丘陵地区也有软水和急流，可为缩绒磨坊提供动力。"
     },
     {
       "label": "Paragraph 5",
-      "text": "十六世纪期间，许多欧洲织工为逃避宗教迫害而移民英格兰。除了这些新工人的技艺之外，导致布料生产增长的其他因素还包括水力资源的便利获取（因为英格兰东部大部分地区地势平坦，水力可以用于驱动生产布料的机器）。该产业的进步还得益于英格兰境内丰富的煤炭供应。"
+      "text": "东盎格利亚有软水，但缺少丘陵和急流，不能为缩绒磨坊提供动力。当地利用本地绵羊产出的长而细的羊毛，生产一种不需要缩绒工艺的布料，也就是后来以 Worstead 村命名的 worsted（精纺毛布）。东盎格利亚凭借1331年佛兰德移民传承下来的技术，主导精纺毛布贸易长达四百年。"
     },
     {
       "label": "Paragraph 6",
-      "text": "羊毛布料的生产直到十八世纪末工业革命之前，始终是英格兰最重要的产业。到十七世纪末，羊毛产品约占英格兰出口总额的三分之二。1730年至1740年间，一种新型羊毛布料被开发出来：此后，“精纺毛布”的产量不断增加。精纺毛布在英格兰北部的约克郡得到了特别的发展，直至十八世纪末，约克郡的五个主要制造业城镇生产了全英格兰55%的精纺毛布。"
+      "text": "英国羊毛布料很快获得国际声誉。十四、十五世纪，英格兰从以出口原毛为主转向制造并出口布料；十五世纪末，英格兰被认为很大程度上是一个由养羊农户和布料制造者组成的国家。十六世纪，受宗教迫害的法国织工来到英格兰并带来技术；到十七世纪末，羊毛制造业已占英格兰出口价值的三分之二。到1770年，约克郡的精纺毛布产量追平东盎格利亚，利兹、布拉德福德等主要城镇推动了当地布料制造区的发展。"
     },
     {
       "label": "Paragraph 7",
-      "text": "1750年以后，羊毛产业发生了巨大变化。机器——最初用于生产棉布（比生产羊毛简单得多），随后越来越多地用于羊毛——被发明出来。机器的引入给羊毛产业带来了危机：1820年至1830年间，英格兰手工业男女工匠的人数减少了一半以上。1812年，抗议者在约克郡的利兹镇摧毁了机器。尽管如此，机械化的发展意味着十九世纪成为羊毛生产的第二个伟大时期。在约克郡，由于廉价煤炭的可获得性——这是蒸汽驱动机械所必需的——扩张尤为显著。"
+      "text": "1750年至1850年的工业革命带来了新的变化。源自兰开夏棉纺织业的新发明使纺纱和织布过程机械化并大幅加速，长期未变的生产方法被取代。机械化曾遭到反对，1812年的大规模动乱导致抗议者破坏设备，但最终机器仍然取代了旧方式。"
     },
     {
       "label": "Paragraph 8",
-      "text": "另一方面，机器使用的增加导致了羊毛布料制造的专业化程度提高。约克郡专门生产一种布料——精纺毛布；苏格兰专门生产另一种——粗花呢；而西英格兰则专门生产第三种——地毯。因此，到1900年，英格兰的布料产业已与两百年前具有完全不同的特征。"
+      "text": "十九世纪期间，东盎格利亚等老工业区永久衰落，约克郡因更容易接受机械化而赶超并保持领先。约克郡的发展得到廉价煤炭供应的支持，这些煤炭可用于蒸汽以及后来的电力。其他地区形成专门化生产：苏格兰以粗花呢闻名，西郡则专注生产高质量机织地毯。"
     }
   ],
   "questionExplanations": [
@@ -70,12 +70,12 @@
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：An outbreak of bubonic plague led to a sharp fall in sheep numbers.\n题目翻译：一场腺鼠疫的爆发导致绵羊数量急剧下降。\n答案：FALSE\n解析：定位 Paragraph 3 中 “there was a serious epidemic of bubonic plague... which hit the wool industry badly... In England, however, large-scale sheep farming increased from the mid-fourteenth century onwards”。原文明确说鼠疫严重打击了羊毛产业，但在英格兰，大规模的养羊业反而从十四世纪中叶起有所增长。绵羊数量并未急剧下降，反而增加了，因此题干与原文矛盾，答案为 FALSE。",
+          "text": "（4）题目 4：An outbreak of bubonic plague led to a sharp fall in sheep numbers.\n题目翻译：一场腺鼠疫的爆发导致绵羊数量急剧下降。\n答案：FALSE\n解析：定位 Paragraph 3 中 “bubonic plague (the Black Death), which in 1349 caused devastation” 以及 “This led to an increase of the sheep flocks”。原文说明黑死病造成大量人口死亡，但其结果是羊群数量增加，因为剩余劳动力不足以继续耕种农作物。因此题干所说“绵羊数量急剧下降”与原文相反，答案为 FALSE。",
           "questionId": "q4"
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：Worsted cloth was cheaper to produce than other types of woollen fabric.\n题目翻译：精纺毛布的生产成本比其他类型的羊毛布料更低。\n答案：NOT GIVEN\n解析：定位 Paragraph 6–8，原文多次提及精纺毛布（worsted），但只描述了它的开发时间（1730–1740年间）、产地（约克郡）和专业化发展，未在任何地方将其生产成本与其他类型的羊毛布料进行比较，因此题干信息在文中未被提及，答案为 NOT GIVEN。",
+          "text": "（5）题目 5：Worsted cloth was cheaper to produce than other types of woollen fabric.\n题目翻译：精纺毛布的生产成本比其他类型的羊毛布料更低。\n答案：NOT GIVEN\n解析：定位 Paragraph 5 中 “produce a cloth which did not require the fulling process” 以及 Paragraph 6 中 “output of worsted from Yorkshire equalled that of East Anglia”。原文说明精纺毛布不需要缩绒工艺，并提到约克郡产量追平东盎格利亚，但没有比较精纺毛布与其他羊毛布料的生产成本，因此答案为 NOT GIVEN。",
           "questionId": "q5"
         }
       ],
@@ -83,7 +83,7 @@
         "start": 1,
         "end": 5
       },
-      "text": "题目翻译：将羊毛制成布料的工艺是由罗马人传入英国的。\n答案：FALSE\n解析：定位 Paragraph 1 中 “By the time the Romans invaded in 55 BC the Britons had developed a wool industry”。原文明确说明在公元前55年罗马人入侵时，不列颠人已经发展出了羊毛产业，也就是说，在罗马人到来之前，不列颠人已经掌握了将羊毛制成布料的工艺，而非罗马人传入的，因此题干与原文矛盾，答案为 FALSE。\n题目翻译：在十二世纪，出口羊毛布料不如出口原毛利润高。\n答案：TRUE\n解析：定位 Paragraph 1 中 “By the twelfth century... cloth making was widespread... But the greatest wealth came from exports of raw wool”。原文指出在十二世纪，虽然布料制作已普及，但最大的财富来自原毛出口。这说明原毛出口比布料出口更赚钱，即布料出口不如原毛出口利润高，与题干表述一致，答案为 TRUE。\n题目翻译：统治者对羊毛产业的成功有经济利益。\n答案：TRUE\n解析：定位 Paragraph 2 中 “Kings and their ministers welcomed the revenue that resulted from exports and export taxes”。国王及其大臣们乐于接受出口和出口税所带来的财政收入，这说明统治者的收入直接来自羊毛产业的出口收益，他们对羊毛产业的成功有着明确的经济利益，与题干完全一致，答案为 TRUE。\n题目翻译：一场腺鼠疫的爆发导致绵羊数量急剧下降。\n答案：FALSE\n解析：定位 Paragraph 3 中 “there was a serious epidemic of bubonic plague... which hit the wool industry badly... In England, however, large-scale sheep farming increased from the mid-fourteenth century onwards”。原文明确说鼠疫严重打击了羊毛产业，但在英格兰，大规模的养羊业反而从十四世纪中叶起有所增长。绵羊数量并未急剧下降，反而增加了，因此题干与原文矛盾，答案为 FALSE。\n题目翻译：精纺毛布的生产成本比其他类型的羊毛布料更低。\n答案：NOT GIVEN\n解析：定位 Paragraph 6–8，原文多次提及精纺毛布（worsted），但只描述了它的开发时间（1730–1740年间）、产地（约克郡）和专业化发展，未在任何地方将其生产成本与其他类型的羊毛布料进行比较，因此题干信息在文中未被提及，答案为 NOT GIVEN。"
+      "text": "题目翻译：将羊毛制成布料的工艺是由罗马人传入英国的。\n答案：FALSE\n解析：定位 Paragraph 1 中 “By the time the Romans invaded in 55 BC the Britons had developed a wool industry”。原文明确说明在公元前55年罗马人入侵时，不列颠人已经发展出了羊毛产业，也就是说，在罗马人到来之前，不列颠人已经掌握了将羊毛制成布料的工艺，而非罗马人传入的，因此题干与原文矛盾，答案为 FALSE。\n题目翻译：在十二世纪，出口羊毛布料不如出口原毛利润高。\n答案：TRUE\n解析：定位 Paragraph 1 中 “By the twelfth century... cloth making was widespread... But the greatest wealth came from exports of raw wool”。原文指出在十二世纪，虽然布料制作已普及，但最大的财富来自原毛出口。这说明原毛出口比布料出口更赚钱，即布料出口不如原毛出口利润高，与题干表述一致，答案为 TRUE。\n题目翻译：统治者对羊毛产业的成功有经济利益。\n答案：TRUE\n解析：定位 Paragraph 2 中 “Kings and their ministers welcomed the revenue that resulted from exports and export taxes”。国王及其大臣们乐于接受出口和出口税所带来的财政收入，这说明统治者的收入直接来自羊毛产业的出口收益，他们对羊毛产业的成功有着明确的经济利益，与题干完全一致，答案为 TRUE。\n题目翻译：一场腺鼠疫的爆发导致绵羊数量急剧下降。\n答案：FALSE\n解析：定位 Paragraph 3 中 “bubonic plague (the Black Death), which in 1349 caused devastation” 以及 “This led to an increase of the sheep flocks”。原文说明黑死病造成大量人口死亡，但其结果是羊群数量增加，因为剩余劳动力不足以继续耕种农作物。因此题干所说“绵羊数量急剧下降”与原文相反，答案为 FALSE。\n题目翻译：精纺毛布的生产成本比其他类型的羊毛布料更低。\n答案：NOT GIVEN\n解析：定位 Paragraph 5 中 “produce a cloth which did not require the fulling process” 以及 Paragraph 6 中 “output of worsted from Yorkshire equalled that of East Anglia”。原文说明精纺毛布不需要缩绒工艺，并提到约克郡产量追平东盎格利亚，但没有比较精纺毛布与其他羊毛布料的生产成本，因此答案为 NOT GIVEN。"
     },
     {
       "sectionTitle": "2. 笔记填空题（Questions 6–13）",
@@ -91,42 +91,42 @@
       "items": [
         {
           "questionNumber": 6,
-          "text": "（1）题目 6：16th century: skilled ________ emigrated to England\n题目翻译：16世纪：熟练的________移民到英格兰\n答案：weavers（织工）\n解析：定位 Paragraph 5 中 “During the sixteenth century, many European weavers fled from religious persecution and emigrated to England”。十六世纪，许多欧洲织工为逃避宗教迫害而移民英格兰，与题干时间（16世纪）、事件（emigrated to England）完全对应，修饰词 “skilled” 对应原文中 “weavers” 的职业特性，答案为 weavers。",
+          "text": "（1）题目 6：16th century: skilled ________ emigrated to England\n题目翻译：16世纪：熟练的________移民到英格兰\n答案：weavers（织工）\n解析：定位 Paragraph 6 中 “In the sixteenth century, French weavers, persecuted for their Protestant religion, sought refuge in England and took their skills with them”。原文说明十六世纪法国织工因宗教迫害来到英格兰，并把技术带了过去；题干中的 skilled 对应 “took their skills with them”，空格应填职业 weavers。",
           "questionId": "q6"
         },
         {
           "questionNumber": 7,
-          "text": "（2）题目 7：end 17th century: majority of English ________ were wool products\n题目翻译：17世纪末：英国________的大部分是羊毛产品\n答案：exports（出口）\n解析：定位 Paragraph 6 中 “By the late seventeenth century woollen products accounted for about two-thirds of English exports”。到十七世纪末，羊毛产品占英国出口总额的三分之二，即英国出口的大部分是羊毛产品。题干中 “majority” 对应原文的 “about two-thirds”，答案为 exports。",
+          "text": "（2）题目 7：end 17th century: majority of English ________ were wool products\n题目翻译：17世纪末：英国________的大部分是羊毛产品\n答案：exports（出口）\n解析：定位 Paragraph 6 中 “by the end of the seventeenth century it comprised two-thirds of the value of its exports”。这里 it 指前文的羊毛制造业，说明到十七世纪末，羊毛产品占英格兰出口价值的三分之二，即英国出口的大部分是羊毛产品，答案为 exports。",
           "questionId": "q7"
         },
         {
           "questionNumber": 8,
-          "text": "（3）题目 8：18th century: production of worsted cloth increased in Yorkshire – growth of five key manufacturing ________\n题目翻译：18世纪：约克郡精纺毛布产量增加——五个关键制造业________的增长\n答案：towns（城镇）\n解析：定位 Paragraph 6 中 “until the end of the eighteenth century the five main manufacturing towns in Yorkshire produced 55% of all English worsteds”。十八世纪末前，约克郡五个主要制造业城镇生产了全英格兰55%的精纺毛布，与题干中 “five key manufacturing ________” 完全对应，答案为 towns。",
+          "text": "（3）题目 8：18th century: production of worsted cloth increased in Yorkshire – growth of five key manufacturing ________\n题目翻译：18世纪：约克郡精纺毛布产量增加——五个关键制造业________的增长\n答案：towns（城镇）\n解析：定位 Paragraph 6 中 “By 1770, output of worsted from Yorkshire equalled that of East Anglia” 以及 “with the expansion of major towns: Leeds, Bradford, Halifax, Huddersfield, and Wakefield”。1770年属于十八世纪，原文说明约克郡精纺毛布产量增长，并列出五个主要城镇，因此答案为 towns。",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "（4）题目 9：1750–1850: new machinery was developed – initially for the production of ________\n题目翻译：1750–1850年：新机器被开发出来——最初用于生产________\n答案：cotton（棉布）\n解析：定位 Paragraph 7 中 “Machines - first for producing cotton (much simpler than producing wool), then increasingly for wool – were invented”。机器最初用于生产棉布，之后才越来越多地用于羊毛生产，与题干中 “initially for the production of” 完全对应，答案为 cotton。",
+          "text": "（4）题目 9：1750–1850: new machinery was developed – initially for the production of ________\n题目翻译：1750–1850年：新机器被开发出来——最初用于生产________\n答案：cotton（棉布）\n解析：定位 Paragraph 7 中 “new inventions stemming from the Lancashire cotton industry, to mechanize and speed dramatically the processes of spinning and weaving”。原文说明工业革命带来的新发明源自兰开夏棉纺织业，之后才推动纺纱和织布机械化；题干问这些新机械最初用于生产什么，答案为 cotton。",
           "questionId": "q9"
         },
         {
           "questionNumber": 10,
-          "text": "（5）题目 10：1812: protests resulted in the ________ of machinery\n题目翻译：1812年：抗议导致了机器的________\n答案：destruction（摧毁）\n解析：定位 Paragraph 7 中 “Machinery was destroyed by protesters in the Yorkshire town of Leeds in 1812”。1812年，抗议者在约克郡的利兹镇摧毁了机器，与题干时间（1812）、事件（protests resulted in...）完全对应，抗议导致的结果是机器的 destruction（摧毁），答案为 destruction。",
+          "text": "（5）题目 10：1812: protests resulted in the ________ of machinery\n题目翻译：1812年：抗议导致了机器的________\n答案：destruction（摧毁）\n解析：定位 Paragraph 7 中 “The widespread unrest of 1812 led to the destruction of equipment by bands of rioters”。原文说明1812年的大规模动乱导致暴动者破坏设备；题干中的 machinery 对应 equipment，空格应填 destruction。",
           "questionId": "q10"
         },
         {
           "questionNumber": 11,
-          "text": "（6）题目 11：19th century: in Yorkshire mechanisation increased, aided by the availability of cheap ________\n题目翻译：19世纪：约克郡机械化程度提高，得益于廉价________的可获得性\n答案：coal（煤炭）\n解析：定位 Paragraph 7 中 “In Yorkshire, the expansion was particularly great because of the availability of cheap coal, which was necessary for the steam-driven machines”。约克郡的扩张尤为显著，原因在于廉价煤炭的可获得性——这是蒸汽驱动机械所必需的，与题干中 “availability of cheap ________” 完全对应，答案为 coal。",
+          "text": "（6）题目 11：19th century: in Yorkshire mechanisation increased, aided by the availability of cheap ________\n题目翻译：19世纪：约克郡机械化程度提高，得益于廉价________的可获得性\n答案：coal（煤炭）\n解析：定位 Paragraph 8 中 “They were overtaken by Yorkshire, where machinery was more readily accepted” 以及 “supported by abundant supplies of inexpensive coal”。原文说明约克郡更容易接受机械化，并受到充足廉价煤炭供应的支持；cheap 对应 inexpensive，答案为 coal。",
           "questionId": "q11"
         },
         {
           "questionNumber": 12,
-          "text": "（7）题目 12：Scotland – specialised in ________\n题目翻译：苏格兰——专门生产________\n答案：tweeds（粗花呢）\n解析：定位 Paragraph 8 中 “Scotland specialised in another type – tweeds”。苏格兰专门生产粗花呢，与题干 “Scotland – specialised in” 完全对应，答案为 tweeds。",
+          "text": "（7）题目 12：Scotland – specialised in ________\n题目翻译：苏格兰——专门生产________\n答案：tweeds（粗花呢）\n解析：定位 Paragraph 8 中 “Other specialised types of manufacturing developed in Scotland, famed for its tweeds”。原文说明苏格兰发展出专门化制造，并以 tweeds 闻名，因此答案为 tweeds。",
           "questionId": "q12"
         },
         {
           "questionNumber": 13,
-          "text": "（8）题目 13：West Country – specialised in ________\n题目翻译：西郡——专门生产________\n答案：carpets（地毯）\n解析：定位 Paragraph 8 中 “the West of England in a third type – carpets”。西英格兰专门生产地毯，与题干 “West Country – specialised in” 完全对应，答案为 carpets。",
+          "text": "（8）题目 13：West Country – specialised in ________\n题目翻译：西郡——专门生产________\n答案：carpets（地毯）\n解析：定位 Paragraph 8 中 “the West Country, which focused on the production of high-quality, woven carpets”。原文说明西郡专注生产高质量机织地毯，因此答案为 carpets。",
           "questionId": "q13"
         }
       ],
@@ -134,7 +134,7 @@
         "start": 6,
         "end": 13
       },
-      "text": "题目翻译：16世纪：熟练的________移民到英格兰\n答案：weavers（织工）\n解析：定位 Paragraph 5 中 “During the sixteenth century, many European weavers fled from religious persecution and emigrated to England”。十六世纪，许多欧洲织工为逃避宗教迫害而移民英格兰，与题干时间（16世纪）、事件（emigrated to England）完全对应，修饰词 “skilled” 对应原文中 “weavers” 的职业特性，答案为 weavers。\n题目翻译：17世纪末：英国________的大部分是羊毛产品\n答案：exports（出口）\n解析：定位 Paragraph 6 中 “By the late seventeenth century woollen products accounted for about two-thirds of English exports”。到十七世纪末，羊毛产品占英国出口总额的三分之二，即英国出口的大部分是羊毛产品。题干中 “majority” 对应原文的 “about two-thirds”，答案为 exports。\n题目翻译：18世纪：约克郡精纺毛布产量增加——五个关键制造业________的增长\n答案：towns（城镇）\n解析：定位 Paragraph 6 中 “until the end of the eighteenth century the five main manufacturing towns in Yorkshire produced 55% of all English worsteds”。十八世纪末前，约克郡五个主要制造业城镇生产了全英格兰55%的精纺毛布，与题干中 “five key manufacturing ________” 完全对应，答案为 towns。\n题目翻译：1750–1850年：新机器被开发出来——最初用于生产________\n答案：cotton（棉布）\n解析：定位 Paragraph 7 中 “Machines - first for producing cotton (much simpler than producing wool), then increasingly for wool – were invented”。机器最初用于生产棉布，之后才越来越多地用于羊毛生产，与题干中 “initially for the production of” 完全对应，答案为 cotton。\n题目翻译：1812年：抗议导致了机器的________\n答案：destruction（摧毁）\n解析：定位 Paragraph 7 中 “Machinery was destroyed by protesters in the Yorkshire town of Leeds in 1812”。1812年，抗议者在约克郡的利兹镇摧毁了机器，与题干时间（1812）、事件（protests resulted in...）完全对应，抗议导致的结果是机器的 destruction（摧毁），答案为 destruction。\n题目翻译：19世纪：约克郡机械化程度提高，得益于廉价________的可获得性\n答案：coal（煤炭）\n解析：定位 Paragraph 7 中 “In Yorkshire, the expansion was particularly great because of the availability of cheap coal, which was necessary for the steam-driven machines”。约克郡的扩张尤为显著，原因在于廉价煤炭的可获得性——这是蒸汽驱动机械所必需的，与题干中 “availability of cheap ________” 完全对应，答案为 coal。\n题目翻译：苏格兰——专门生产________\n答案：tweeds（粗花呢）\n解析：定位 Paragraph 8 中 “Scotland specialised in another type – tweeds”。苏格兰专门生产粗花呢，与题干 “Scotland – specialised in” 完全对应，答案为 tweeds。\n题目翻译：西郡——专门生产________\n答案：carpets（地毯）\n解析：定位 Paragraph 8 中 “the West of England in a third type – carpets”。西英格兰专门生产地毯，与题干 “West Country – specialised in” 完全对应，答案为 carpets。"
+      "text": "题目翻译：16世纪：熟练的________移民到英格兰\n答案：weavers（织工）\n解析：定位 Paragraph 6 中 “In the sixteenth century, French weavers, persecuted for their Protestant religion, sought refuge in England and took their skills with them”。原文说明十六世纪法国织工因宗教迫害来到英格兰，并把技术带了过去；题干中的 skilled 对应 “took their skills with them”，空格应填职业 weavers。\n题目翻译：17世纪末：英国________的大部分是羊毛产品\n答案：exports（出口）\n解析：定位 Paragraph 6 中 “by the end of the seventeenth century it comprised two-thirds of the value of its exports”。这里 it 指前文的羊毛制造业，说明到十七世纪末，羊毛产品占英格兰出口价值的三分之二，即英国出口的大部分是羊毛产品，答案为 exports。\n题目翻译：18世纪：约克郡精纺毛布产量增加——五个关键制造业________的增长\n答案：towns（城镇）\n解析：定位 Paragraph 6 中 “By 1770, output of worsted from Yorkshire equalled that of East Anglia” 以及 “with the expansion of major towns: Leeds, Bradford, Halifax, Huddersfield, and Wakefield”。1770年属于十八世纪，原文说明约克郡精纺毛布产量增长，并列出五个主要城镇，因此答案为 towns。\n题目翻译：1750–1850年：新机器被开发出来——最初用于生产________\n答案：cotton（棉布）\n解析：定位 Paragraph 7 中 “new inventions stemming from the Lancashire cotton industry, to mechanize and speed dramatically the processes of spinning and weaving”。原文说明工业革命带来的新发明源自兰开夏棉纺织业，之后才推动纺纱和织布机械化；题干问这些新机械最初用于生产什么，答案为 cotton。\n题目翻译：1812年：抗议导致了机器的________\n答案：destruction（摧毁）\n解析：定位 Paragraph 7 中 “The widespread unrest of 1812 led to the destruction of equipment by bands of rioters”。原文说明1812年的大规模动乱导致暴动者破坏设备；题干中的 machinery 对应 equipment，空格应填 destruction。\n题目翻译：19世纪：约克郡机械化程度提高，得益于廉价________的可获得性\n答案：coal（煤炭）\n解析：定位 Paragraph 8 中 “They were overtaken by Yorkshire, where machinery was more readily accepted” 以及 “supported by abundant supplies of inexpensive coal”。原文说明约克郡更容易接受机械化，并受到充足廉价煤炭供应的支持；cheap 对应 inexpensive，答案为 coal。\n题目翻译：苏格兰——专门生产________\n答案：tweeds（粗花呢）\n解析：定位 Paragraph 8 中 “Other specialised types of manufacturing developed in Scotland, famed for its tweeds”。原文说明苏格兰发展出专门化制造，并以 tweeds 闻名，因此答案为 tweeds。\n题目翻译：西郡——专门生产________\n答案：carpets（地毯）\n解析：定位 Paragraph 8 中 “the West Country, which focused on the production of high-quality, woven carpets”。原文说明西郡专注生产高质量机织地毯，因此答案为 carpets。"
     }
   ]
 }

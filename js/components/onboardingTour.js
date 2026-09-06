@@ -4,7 +4,7 @@
  * 兼容 file:// 协议
  *
  * 数据层约定（0.6.2-fix 之后）：
- * - 示例记录必须经 PracticeRecordAPI.saveRecord，且具备 canonical examId
+ * - 示例记录必须经 AppData.practice.completeAttempt，且具备 canonical examId
  * - 回放依赖 realData.answers（object map）+ correctAnswerMap
  * - 引导状态键使用 exam_system_ 前缀，并兼容迁移旧键
  */
@@ -38,19 +38,6 @@
     frequency: '高频',
     type: 'reading'
   });
-
-  // 存储键名（带前缀；读取时兼容旧键）
-  const STORAGE_KEYS = {
-    COMPLETED: 'exam_system_onboarding_completed',
-    CURRENT_STEP: 'exam_system_onboarding_step',
-    LAST_SHOWN: 'exam_system_onboarding_last_shown'
-  };
-
-  const LEGACY_STORAGE_KEYS = {
-    COMPLETED: 'onboardingCompleted',
-    CURRENT_STEP: 'onboardingStep',
-    LAST_SHOWN: 'onboardingLastShown'
-  };
 
   const HISTORY_ITEM_SELECTOR =
     `#history-list .history-item.history-record-item[data-record-id="${DEMO_RECORD_ID}"]`;
@@ -243,16 +230,6 @@
           nextText: '下一步',
           lockScroll: true,
           disableHighlightPointer: true
-        },
-        {
-          id: 'local-backup',
-          target: '#external-backup-entry-btn',
-          title: '💾 本地磁盘备份',
-          content: '若浏览器支持，可绑定本地文件夹做磁盘备份，与导出 JSON 互为补充。',
-          position: 'top',
-          nextText: '下一步',
-          lockScroll: true,
-          disableHighlightPointer: true
         }
       ]
     },
@@ -302,71 +279,51 @@
   // 状态管理器
   class TourStateManager {
     constructor() {
-      this._storage = this._getStorage();
-      this._migrateLegacyKeys();
+      this._state = { completed: false, currentStep: 0, lastShown: null };
+      this.ready = this._load();
     }
 
-    _getStorage() {
-      try {
-        localStorage.setItem('__test__', '1');
-        localStorage.removeItem('__test__');
-        return localStorage;
-      } catch (e) {
-        const mem = {};
-        return {
-          getItem: (k) => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null),
-          setItem: (k, v) => { mem[k] = String(v); },
-          removeItem: (k) => { delete mem[k]; }
-        };
-      }
+    async _load() {
+      if (!global.AppData || !global.AppData.preferences) return;
+      await global.AppData.ready;
+      const stored = await global.AppData.preferences.getOnboarding();
+      this._state = {
+        completed: stored.completed === true || stored.completed === 'true',
+        currentStep: Number.isFinite(Number(stored.currentStep)) ? Number(stored.currentStep) : 0,
+        lastShown: stored.lastShown || null
+      };
     }
 
-    _migrateLegacyKeys() {
-      Object.keys(STORAGE_KEYS).forEach((name) => {
-        const nextKey = STORAGE_KEYS[name];
-        const legacyKey = LEGACY_STORAGE_KEYS[name];
-        if (!legacyKey) return;
-        try {
-          const current = this._storage.getItem(nextKey);
-          if (current !== null && current !== undefined && current !== '') return;
-          const legacy = this._storage.getItem(legacyKey);
-          if (legacy === null || legacy === undefined || legacy === '') return;
-          this._storage.setItem(nextKey, legacy);
-          this._storage.removeItem(legacyKey);
-        } catch (_) {
-          // ignore migration failures
-        }
+    _persist() {
+      if (!global.AppData || !global.AppData.preferences) return;
+      global.AppData.preferences.setOnboarding(this._state).catch((error) => {
+        console.warn('[Onboarding] 保存引导状态失败:', error);
       });
     }
 
     isCompleted() {
-      return this._storage.getItem(STORAGE_KEYS.COMPLETED) === 'true';
+      return this._state.completed === true;
     }
 
     getCurrentStep() {
-      const step = this._storage.getItem(STORAGE_KEYS.CURRENT_STEP);
-      return step ? parseInt(step, 10) : 0;
+      return this._state.currentStep || 0;
     }
 
     setStep(step) {
-      this._storage.setItem(STORAGE_KEYS.CURRENT_STEP, String(step));
-      this._storage.setItem(STORAGE_KEYS.LAST_SHOWN, String(Date.now()));
+      this._state.currentStep = Number(step) || 0;
+      this._state.lastShown = Date.now();
+      this._persist();
     }
 
     markCompleted() {
-      this._storage.setItem(STORAGE_KEYS.COMPLETED, 'true');
-      this._storage.removeItem(STORAGE_KEYS.CURRENT_STEP);
+      this._state.completed = true;
+      this._state.currentStep = 0;
+      this._persist();
     }
 
     reset() {
-      this._storage.removeItem(STORAGE_KEYS.COMPLETED);
-      this._storage.removeItem(STORAGE_KEYS.CURRENT_STEP);
-      this._storage.removeItem(STORAGE_KEYS.LAST_SHOWN);
-      try {
-        this._storage.removeItem(LEGACY_STORAGE_KEYS.COMPLETED);
-        this._storage.removeItem(LEGACY_STORAGE_KEYS.CURRENT_STEP);
-        this._storage.removeItem(LEGACY_STORAGE_KEYS.LAST_SHOWN);
-      } catch (_) {}
+      this._state = { completed: false, currentStep: 0, lastShown: null };
+      this._persist();
     }
   }
 
@@ -587,8 +544,9 @@
     destroy() {
       this.clearHighlight();
       if (this._overlay) {
-        this._overlay.classList.remove('is-active');
-        setTimeout(() => this._overlay?.remove(), 300);
+        const overlay = this._overlay;
+        overlay.classList.remove('is-active');
+        setTimeout(() => overlay.remove(), 300);
         this._overlay = null;
       }
       if (this._holeEl) {
@@ -596,8 +554,9 @@
         this._holeEl = null;
       }
       if (this._tooltip) {
-        this._tooltip.classList.remove('is-visible');
-        setTimeout(() => this._tooltip?.remove(), 300);
+        const tooltip = this._tooltip;
+        tooltip.classList.remove('is-visible');
+        setTimeout(() => tooltip.remove(), 300);
         this._tooltip = null;
       }
     }
@@ -615,7 +574,11 @@
       this._boundKeyHandler = null;
       this._currentSubStep = 0;
       this._inSubSteps = false;
-      this._demoInjectPromise = null;
+      this._demoInjectTask = null;
+      this._demoCleanupPromise = null;
+      this._lifecycleToken = 0;
+      this._startTimer = null;
+      this._selectorWaiters = new Set();
       this._lastDemoInjectResult = null;
       this._clickWaitCleanup = null;
       this._scrollBlocked = false;
@@ -625,12 +588,14 @@
       this._savedScrollTop = 0;
     }
 
-    init() {
+    async init() {
+      await this._stateManager.ready;
       if (this._stateManager.isCompleted()) {
         return;
       }
 
-      setTimeout(() => {
+      this._startTimer = setTimeout(() => {
+        this._startTimer = null;
         this.start();
       }, 1500);
     }
@@ -641,6 +606,7 @@
       // 每次启动使用步骤副本，避免限级回放补丁污染默认配置
       this._steps = cloneSteps(this._baseSteps);
       this._currentStep = fromBeginning ? 0 : this._stateManager.getCurrentStep();
+      this._lifecycleToken += 1;
       this._isActive = true;
       this._inSubSteps = false;
       this._currentSubStep = 0;
@@ -664,6 +630,14 @@
 
     stop() {
       this._isActive = false;
+      this._lifecycleToken += 1;
+      if (this._startTimer !== null) {
+        clearTimeout(this._startTimer);
+        this._startTimer = null;
+      }
+      this._cancelSelectorWaits();
+      this._clearDemoRecordPreview();
+      void this._cleanupDemoRecord();
       this._clearClickWait();
       this._unlockScroll();
       this._unlockPointer();
@@ -966,8 +940,10 @@
       };
 
       if (subStep.action === 'injectDemoRecord') {
+        const lifecycleToken = this._lifecycleToken;
         Promise.resolve(this._injectDemoRecord())
           .then((result) => {
+            if (!this._isDemoLifecycleCurrent(lifecycleToken)) return;
             this._lastDemoInjectResult = result;
             if (!result || !result.ok) {
               this._showInjectFailureSubStep(parentStep, result);
@@ -980,6 +956,7 @@
             proceed();
           })
           .catch((err) => {
+            if (!this._isDemoLifecycleCurrent(lifecycleToken)) return;
             console.error('[Onboarding] 注入示例记录失败:', err);
             this._lastDemoInjectResult = { ok: false, reason: 'exception', error: err };
             this._showInjectFailureSubStep(parentStep, this._lastDemoInjectResult);
@@ -1167,28 +1144,8 @@
       let list = [];
 
       try {
-        if (typeof global.getExamIndexState === 'function') {
-          list = global.getExamIndexState();
-        } else if (Array.isArray(global.examIndex)) {
-          list = global.examIndex;
-        }
-      } catch (_) {}
-
-      if (!Array.isArray(list) || list.length === 0) {
-        try {
-          const storage = global.persistentStore || global.storage;
-          if (storage && typeof storage.get === 'function') {
-            let activeKey = 'exam_index';
-            try {
-              activeKey = await storage.get('active_exam_index_key', 'exam_index') || 'exam_index';
-            } catch (_) {}
-            list = await storage.get(activeKey, []) || [];
-            if ((!Array.isArray(list) || list.length === 0) && activeKey !== 'exam_index') {
-              list = await storage.get('exam_index', []) || [];
-            }
-          }
-        } catch (_) {}
-      }
+        list = await global.resolveActiveLibraryIndex();
+      } catch (_) { }
 
       if (!Array.isArray(list)) list = [];
 
@@ -1357,44 +1314,82 @@
       }));
     }
 
-    _waitForSelector(selector, maxWait = 4000) {
+    _waitForSelector(selector, maxWait = 4000, lifecycleToken = this._lifecycleToken) {
       return new Promise((resolve) => {
         const startTime = Date.now();
+        const waiter = { timer: null, settle: null };
+        const settle = (value) => {
+          if (!this._selectorWaiters.has(waiter)) return;
+          if (waiter.timer !== null) clearTimeout(waiter.timer);
+          this._selectorWaiters.delete(waiter);
+          resolve(value);
+        };
         const check = () => {
+          waiter.timer = null;
+          if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+            settle(null);
+            return;
+          }
           const el = document.querySelector(selector);
           if (el) {
-            resolve(el);
+            settle(el);
             return;
           }
           if (Date.now() - startTime > maxWait) {
-            resolve(null);
+            settle(null);
             return;
           }
-          setTimeout(check, 120);
+          waiter.timer = setTimeout(check, 120);
         };
+        waiter.settle = settle;
+        this._selectorWaiters.add(waiter);
         check();
       });
     }
 
+    _cancelSelectorWaits() {
+      for (const waiter of Array.from(this._selectorWaiters)) {
+        waiter.settle(null);
+      }
+    }
+
+    _isDemoLifecycleCurrent(token) {
+      return this._isActive && token === this._lifecycleToken;
+    }
+
     async _injectDemoRecord() {
-      if (this._demoInjectPromise) {
-        return this._demoInjectPromise;
+      const lifecycleToken = this._lifecycleToken;
+      if (this._demoInjectTask && this._demoInjectTask.token === lifecycleToken) {
+        return this._demoInjectTask.promise;
       }
 
-      this._demoInjectPromise = (async () => {
-        const api = global.PracticeRecordAPI;
-        if (!api || typeof api.saveRecord !== 'function') {
-          return { ok: false, reason: 'PracticeRecordAPI unavailable' };
+      const injectPromise = (async () => {
+        const api = global.AppData && global.AppData.practice;
+        if (!api || typeof api.completeAttempt !== 'function') {
+          return { ok: false, reason: 'AppData.practice unavailable' };
         }
 
         const examContext = await this._resolveDemoExamContext();
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          return { ok: false, reason: 'cancelled' };
+        }
+        if (this._demoCleanupPromise) await this._demoCleanupPromise;
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          return { ok: false, reason: 'cancelled' };
+        }
         const demoRecordObj = this._buildDemoRecord(examContext);
 
+        // 演示记录带 metadata.source = 'onboarding-demo'，会被统一的来源判定
+        // （js/data/practiceRecordSource.js）排除在练习记录列表、成绩统计与成就之外。
+        // 引导需要用户看见这一行，所以显式为这一个 id 申请"视图层预览"许可：
+        // 只放行渲染，投影器读不到该白名单，统计与成就仍然不会被演示数据污染。
+        this._allowDemoRecordPreview();
+
         try {
-          // 避免污染 user_stats
-          await api.saveRecord(demoRecordObj, { updateStats: false });
+          await api.completeAttempt({ record: demoRecordObj });
         } catch (err) {
           console.error('[Onboarding] 注入示例记录失败:', err);
+          this._clearDemoRecordPreview();
           return {
             ok: false,
             reason: err && err.message ? err.message : 'saveRecord failed',
@@ -1402,8 +1397,24 @@
           };
         }
 
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
+
         await this._refreshPracticeHistory();
-        const row = await this._waitForSelector(HISTORY_ITEM_SELECTOR, 5000);
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
+        const row = await this._waitForSelector(HISTORY_ITEM_SELECTOR, 5000, lifecycleToken);
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
         if (!row) {
           return {
             ok: false,
@@ -1422,33 +1433,70 @@
           recordId: DEMO_RECORD_ID
         };
       })();
+      this._demoInjectTask = { token: lifecycleToken, promise: injectPromise };
 
       try {
-        return await this._demoInjectPromise;
+        return await injectPromise;
       } finally {
-        this._demoInjectPromise = null;
+        if (this._demoInjectTask && this._demoInjectTask.promise === injectPromise) {
+          this._demoInjectTask = null;
+        }
       }
     }
 
-    async _cleanupDemoRecord() {
-      const api = global.PracticeRecordAPI;
-      if (!api || typeof api.deleteById !== 'function') {
+    /**
+     * 申请/撤销演示记录的"视图层预览"许可。
+     * 见 js/data/practiceRecordSource.js 的引导预览白名单说明：许可只影响练习记录列表渲染，
+     * practice.stats 与 achievements.progress 投影器永远按"演示数据"排除这条记录。
+     */
+    _allowDemoRecordPreview() {
+      const classifier = global.PracticeRecordSource;
+      if (classifier && typeof classifier.allowPreviewRecordId === 'function') {
+        classifier.allowPreviewRecordId(DEMO_RECORD_ID);
+      }
+    }
+
+    _clearDemoRecordPreview() {
+      const classifier = global.PracticeRecordSource;
+      if (classifier && typeof classifier.clearPreviewRecordId === 'function') {
+        classifier.clearPreviewRecordId(DEMO_RECORD_ID);
+      }
+    }
+
+    async _cleanupDemoRecord(options = {}) {
+      // 先撤销预览许可再删除并重渲染：即使删除失败，这条演示记录也不会继续留在列表里。
+      this._clearDemoRecordPreview();
+
+      if (this._demoCleanupPromise) return this._demoCleanupPromise;
+
+      const api = global.AppData && global.AppData.practice;
+      if (!api || typeof api.delete !== 'function') {
         return;
       }
 
-      try {
-        await api.deleteById(DEMO_RECORD_ID, { updateStats: false });
-        if (typeof global.syncPracticeRecords === 'function') {
-          await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
-        } else if (global.app && typeof global.app.renderPracticeHistory === 'function') {
-          await Promise.resolve(global.app.renderPracticeHistory());
-        } else {
-          global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
-            detail: { source: 'onboarding-cleanup' }
-          }));
+      const refresh = options.refresh !== false;
+      const cleanupPromise = (async () => {
+        try {
+          await api.delete({ recordId: DEMO_RECORD_ID });
+          if (!refresh) return;
+          if (typeof global.syncPracticeRecords === 'function') {
+            await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
+          } else if (global.app && typeof global.app.renderPracticeHistory === 'function') {
+            await Promise.resolve(global.app.renderPracticeHistory());
+          } else {
+            global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+              detail: { source: 'onboarding-cleanup' }
+            }));
+          }
+        } catch (err) {
+          console.warn('[Onboarding] 清理示例记录失败:', err);
         }
-      } catch (err) {
-        console.warn('[Onboarding] 清理示例记录失败:', err);
+      })();
+      this._demoCleanupPromise = cleanupPromise;
+      try {
+        await cleanupPromise;
+      } finally {
+        if (this._demoCleanupPromise === cleanupPromise) this._demoCleanupPromise = null;
       }
     }
 
@@ -1578,7 +1626,6 @@
     }
 
     _complete() {
-      this._cleanupDemoRecord();
       this._stateManager.markCompleted();
       this.stop();
     }

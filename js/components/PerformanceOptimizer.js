@@ -440,6 +440,7 @@ class PerformanceOptimizer {
         return function executedFunction(...args) {
             const later = () => {
                 clearTimeout(timeout);
+                timeout = null;
                 func(...args);
             };
             clearTimeout(timeout);

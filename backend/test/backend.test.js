@@ -1,10 +1,14 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const test = require('node:test');
 
 const { MemoryStore } = require('express-session');
 const { createApp } = require('../src/app');
 const { MemoryAuthStore } = require('../src/auth');
 const { MemoryPracticeRecordStore } = require('../src/practiceRecords');
+
+const repoRoot = path.resolve(__dirname, '..', '..');
 
 async function createClient(options = {}) {
     const authStore = options.authStore || new MemoryAuthStore();
@@ -14,7 +18,7 @@ async function createClient(options = {}) {
         practiceStore,
         sessionStore: new MemoryStore(),
         sessionSecret: 'test-session-secret-with-at-least-32-characters',
-        repoRoot: process.cwd(),
+        repoRoot,
         registrationMode: options.registrationMode || 'first-user'
     });
     const server = await new Promise((resolve) => {
@@ -48,8 +52,10 @@ async function createClient(options = {}) {
             else cookieJar.delete(name);
         }
         const text = await response.text();
-        const json = text ? JSON.parse(text) : null;
-        return { response, json };
+        const json = text && response.headers.get('content-type')?.includes('application/json')
+            ? JSON.parse(text)
+            : null;
+        return { response, json, text };
     }
 
     return {
@@ -121,6 +127,106 @@ test('practice records require authentication and csrf on writes', async () => {
 
         const blocked = await client.request('PUT', '/api/practice-records', { records: [] });
         assert.equal(blocked.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('independent device sessions preserve full practice replay and suite annotations', async () => {
+    const authStore = new MemoryAuthStore();
+    const practiceStore = new MemoryPracticeRecordStore();
+    const first = await createClient({ authStore, practiceStore });
+    const second = await createClient({ authStore, practiceStore });
+    try {
+        const credentials = { username: 'multi_device', password: 'StrongPass1' };
+        const registered = await first.request('POST', '/api/auth/register', credentials, {
+            'X-CSRF-Token': await first.csrf()
+        });
+        assert.equal(registered.response.status, 201);
+
+        const record = {
+            id: 'v2-suite-record',
+            sessionId: 'v2-suite-session',
+            examId: 'reading-suite',
+            type: 'reading',
+            mode: 'suite',
+            title: 'Reading suite',
+            totalQuestions: 2,
+            correctAnswers: 1,
+            score: 50,
+            accuracy: 0.5,
+            duration: 120,
+            completedAt: '2026-09-06T00:00:00.000Z',
+            answers: { 1: 'A', 2: 'C' },
+            correctAnswerMap: { 1: 'A', 2: 'B' },
+            answerComparison: { 1: { isCorrect: true }, 2: { isCorrect: false } },
+            markedQuestions: ['2'],
+            highlights: [{ text: 'Supporting evidence', start: 10, end: 29 }],
+            notes: { 2: 'Review the supporting paragraph.' },
+            metadata: { libraryConfigurationId: 'personal-reading-library' },
+            suiteEntries: [{
+                id: 'v2-child-record',
+                sessionId: 'v2-child-session',
+                examId: 'reading-child',
+                type: 'reading',
+                answers: { 1: 'A', 2: 'C' },
+                correctAnswerMap: { 1: 'A', 2: 'B' },
+                scoreInfo: { total: 2, correct: 1, percentage: 50 },
+                highlights: [{ text: 'Child evidence', start: 0, end: 14 }],
+                notes: { 2: 'Check the child passage.' },
+                markedQuestions: ['2']
+            }]
+        };
+        const saved = await first.request('PUT', '/api/practice-records', { records: [record] }, {
+            'X-CSRF-Token': registered.json.csrfToken
+        });
+        assert.equal(saved.response.status, 200);
+        assert.deepEqual(saved.json.records, [record]);
+
+        const anonymous = await second.request('GET', '/api/practice-records');
+        assert.equal(anonymous.response.status, 401);
+        const loggedIn = await second.request('POST', '/api/auth/login', credentials, {
+            'X-CSRF-Token': await second.csrf()
+        });
+        assert.equal(loggedIn.response.status, 200);
+        assert.equal(loggedIn.json.user.id, registered.json.user.id);
+
+        const listed = await second.request('GET', '/api/practice-records');
+        assert.equal(listed.response.status, 200);
+        assert.deepEqual(listed.json.records, [record]);
+
+        const updated = structuredClone(record);
+        updated.notes['2'] = 'Reviewed on the second device.';
+        updated.suiteEntries[0].notes['2'] = 'Child passage reviewed on the second device.';
+        const updatedResult = await second.request('PUT', '/api/practice-records', { records: [updated] }, {
+            'X-CSRF-Token': loggedIn.json.csrfToken
+        });
+        assert.equal(updatedResult.response.status, 200);
+        const refreshed = await first.request('GET', '/api/practice-records');
+        assert.equal(refreshed.response.status, 200);
+        assert.deepEqual(refreshed.json.records, [updated]);
+    } finally {
+        await Promise.all([first.close(), second.close()]);
+    }
+});
+
+test('deployment serves the current homepage, bundles, and practice resources', async () => {
+    const client = await createClient();
+    try {
+        const resources = [
+            ['/', 'index.html'],
+            ['/index.html', 'index.html'],
+            ['/css/main.css', 'css/main.css'],
+            ['/js/bundles/core-foundation.bundle.js', 'js/bundles/core-foundation.bundle.js'],
+            ['/assets/generated/reading-exams/reading-practice-unified.html', 'assets/generated/reading-exams/reading-practice-unified.html'],
+            ['/templates/exam-placeholder.html', 'templates/exam-placeholder.html']
+        ];
+        for (const [url, relativePath] of resources) {
+            const result = await client.request('GET', url);
+            assert.equal(result.response.status, 200, `${url} should be served`);
+            const expected = await fs.readFile(path.join(repoRoot, relativePath), 'utf8');
+            assert.ok(result.text === expected, `${url} should serve the current repository resource`);
+        }
     } finally {
         await client.close();
     }

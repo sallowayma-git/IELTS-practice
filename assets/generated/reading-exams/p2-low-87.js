@@ -34,10 +34,7 @@
         "q3",
         "q4",
         "q5",
-        "q6",
-        "q14",
-        "q15",
-        "q16"
+        "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i How sounds and physical contact strengthen social connections</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii A cross-cultural study of superficial interaction</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii An experiment that led to surprising results</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv A study that categorised types of spoken exchanges</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v The personality types that find small talk more difficult</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi The effect of social media on conversation skills</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii Some occupations involve little or no interesting conversation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii A campaign to improve interaction in the workplace</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix A range of common situations that were enhanced by small talk</div>\n                    </div>\n                </div>\n            </div>",
       "allowOptionReuse": false,

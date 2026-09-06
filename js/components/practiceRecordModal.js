@@ -15,7 +15,8 @@ class PracticeRecordModal {
 
     show(record) {
         try {
-            const replayRecord = this.cloneRecord(record);
+            // 详情展示用 medium；回顾时再按 id 拉 full，避免把注解灌进 modal 缓存。
+            const displayRecord = record;
             let processedRecord = record;
 
             if (window.DataConsistencyManager) {
@@ -29,7 +30,8 @@ class PracticeRecordModal {
             const modalHtml = this.createModalHtml(processedRecord);
 
             this.hide();
-            this.currentRecord = replayRecord;
+            this.currentRecord = this.cloneRecord(displayRecord);
+            this.currentRecordId = (displayRecord && (displayRecord.id || displayRecord.sessionId)) || null;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
@@ -70,6 +72,7 @@ class PracticeRecordModal {
         this.modalElement = null;
         this.currentRecord = null;
         this.isVisible = false;
+        this.currentRecordId = null;
     }
 
     teardownEventListeners() {
@@ -124,8 +127,10 @@ class PracticeRecordModal {
         if (replayTrigger) {
             this.replayTriggerElement = replayTrigger;
             const launchReplay = async () => {
-                const replayRecord = this.currentRecord;
-                if (!replayRecord) {
+                const recordId = this.currentRecordId
+                    || (this.currentRecord && (this.currentRecord.id || this.currentRecord.sessionId))
+                    || null;
+                if (!recordId && !this.currentRecord) {
                     if (typeof window.showMessage === 'function') {
                         window.showMessage('未找到可回放记录', 'error');
                     }
@@ -140,6 +145,23 @@ class PracticeRecordModal {
 
                 closeModal();
                 try {
+                    // 回顾必须 full：重新按 id 拉取含 highlights/notes 的完整记录。
+                    // 当前详情多为 medium，full 失败时不得回退 detail（缺注解）。
+                    let replayRecord = null;
+                    if (window.AppData && recordId) {
+                        replayRecord = await window.AppData.practice.get(recordId, { projection: 'full' });
+                    } else if (this.currentRecord && (
+                        Array.isArray(this.currentRecord.highlights)
+                        || Array.isArray(this.currentRecord.notes)
+                        || this.currentRecord.realData
+                        || this.currentRecord.rawData
+                    )) {
+                        // 无 API 时仅允许已是 full 形态的 currentRecord。
+                        replayRecord = this.currentRecord;
+                    }
+                    if (!replayRecord) {
+                        throw new Error('无法加载完整记录用于回顾');
+                    }
                     await window.app.openPracticeRecordReplay(replayRecord);
                 } catch (error) {
                     console.error('[PracticeRecordModal] 启动回放失败:', error);
@@ -248,12 +270,12 @@ class PracticeRecordModal {
         `;
     }
 
-    prepareRecordForDisplay(record) {
+    prepareRecordForDisplay(record, examDefinition = null) {
         if (!record) {
             return record;
         }
         if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.withEnrichedMetadata === 'function') {
-            return window.AnswerComparisonUtils.withEnrichedMetadata(record);
+            return window.AnswerComparisonUtils.withEnrichedMetadata(record, examDefinition);
         }
         return record;
     }
@@ -411,7 +433,10 @@ class PracticeRecordModal {
                     if (record.multiSuite === true && entry.scoreInfo) {
                         const correct = entry.scoreInfo.correct || 0;
                         const total = entry.scoreInfo.total || 0;
-                        const percentage = entry.scoreInfo.percentage || 0;
+                        const rawPercentage = Number(entry.scoreInfo.percentage);
+                        const percentage = Number.isFinite(rawPercentage)
+                            ? (Math.round(rawPercentage * 10) / 10).toFixed(1)
+                            : '0.0';
                         scoreInfo = `<div class="suite-score-info">得分: ${correct}/${total} (${percentage}%)</div>`;
                     }
 
@@ -1133,36 +1158,26 @@ class PracticeRecordModal {
         try {
             const normalise = (value) => (value == null ? '' : String(value));
             const targetId = normalise(recordId);
-            const api = window.PracticeRecordAPI || null;
             let record = null;
 
-            if (api && typeof api.getById === 'function') {
-                record = await api.getById(targetId);
-            }
-
-            if (!record && api && typeof api.list === 'function') {
-                const records = await api.list();
-                if (Array.isArray(records)) {
-                    record = records.find(r => normalise(r.id) === targetId) ||
-                        records.find(r => normalise(r.sessionId) === targetId);
-                }
-            }
+            record = await window.AppData.practice.get(targetId, { projection: 'full' });
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');
             }
 
             const exporter = new MarkdownExporter();
-            const examIndex = await window.storage.get('exam_index', []);
-            const exam = Array.isArray(examIndex) ? examIndex.find(e => e.id === record.examId) : null;
+            const exam = typeof window.resolveExamForPracticeRecord === 'function'
+                ? await window.resolveExamForPracticeRecord(record)
+                : null;
 
             const enrichedRecord = this.prepareRecordForDisplay({
                 ...record,
                 examInfo: exam || {},
-                title: exam?.title || record.title || record.examId || '\u672a\u77e5\u9898\u76ee',
-                category: exam?.category || record.category || '\u672a\u77e5\u5206\u7c7b',
-                frequency: exam?.frequency || record.frequency || '\u672a\u77e5\u9891\u7387'
-            });
+                title: record.title || record.metadata?.examTitle || exam?.title || record.examId || '\u672a\u77e5\u9898\u76ee',
+                category: record.category || record.metadata?.category || exam?.category || '\u672a\u77e5\u5206\u7c7b',
+                frequency: record.frequency || record.metadata?.frequency || exam?.frequency || '\u672a\u77e5\u9891\u7387'
+            }, exam);
 
             const markdown = exporter.generateRecordMarkdown(enrichedRecord);
 
@@ -1195,20 +1210,9 @@ if (!window.practiceRecordModal.showById) {
         try {
             const normalise = (value) => (value == null ? '' : String(value));
             const targetId = normalise(recordId);
-            const api = window.PracticeRecordAPI || null;
             let record = null;
 
-            if (api && typeof api.getById === 'function') {
-                record = await api.getById(targetId);
-            }
-
-            if (!record && api && typeof api.list === 'function') {
-                const records = await api.list();
-                if (Array.isArray(records)) {
-                    record = records.find(r => normalise(r.id) === targetId) ||
-                        records.find(r => normalise(r.sessionId) === targetId);
-                }
-            }
+            record = await window.AppData.practice.get(targetId, { projection: 'detail' });
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');

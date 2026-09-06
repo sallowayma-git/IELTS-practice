@@ -32,10 +32,9 @@ function ensureDir(dirPath) {
 
 async function ensureAppReady(page) {
   await page.waitForLoadState('load');
-  await page.waitForFunction(
-    () => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function',
-    { timeout: 60_000 }
-  );
+  await page.waitForFunction(() => !!window.AppData, null, { timeout: 60_000 });
+  await page.evaluate(async () => { await window.AppData.ready; });
+  await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60_000 });
 }
 
 async function clickNav(page, view) {
@@ -194,14 +193,15 @@ async function run() {
     await clickNav(page, 'practice');
     await page.waitForTimeout(2000);
 
-    await page.waitForFunction(() => {
-      return window.app && window.app.state && window.app.state.practice &&
-        Array.isArray(window.app.state.practice.records) &&
-        window.app.state.practice.records.length > 0;
+    await page.waitForFunction(async () => {
+      const records = await window.AppData.practice.list({ projection: 'light' });
+      return Array.isArray(records) && records.length > 0;
     }, { timeout: 30_000 });
 
-    await page.evaluate(() => {
-      if (typeof window.updatePracticeView === 'function') window.updatePracticeView();
+    await page.evaluate(async () => {
+      if (typeof window.syncPracticeRecords === 'function') {
+        await window.syncPracticeRecords({ forceRender: true });
+      }
     });
     await page.waitForTimeout(500);
 
@@ -212,9 +212,7 @@ async function run() {
     const recordId = await suiteRecord.getAttribute('data-record-id');
     if (!recordId) throw new Error('Suite practice record not found in history list');
     const suiteDuration = await page.evaluate(async (id) => {
-      if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') return -1;
-      const records = await window.PracticeRecordAPI.list();
-      const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;
+      const target = await window.AppData.practice.get(id);
       return target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;
     }, recordId);
     if (suiteDuration < 2) {
@@ -222,11 +220,8 @@ async function run() {
     }
 
     const recordCountBefore = await page.evaluate(async () => {
-      if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-        const records = await window.PracticeRecordAPI.list();
-        return Array.isArray(records) ? records.length : 0;
-      }
-      return document.querySelectorAll('#history-list .history-record-item').length;
+      const records = await window.AppData.practice.list({ projection: 'light' });
+      return records.length;
     });
 
     const titleText = await page.evaluate((id) => {
@@ -337,11 +332,8 @@ async function run() {
     await page.waitForTimeout(800);
 
     const recordCountAfter = await page.evaluate(async () => {
-      if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-        const records = await window.PracticeRecordAPI.list();
-        return Array.isArray(records) ? records.length : 0;
-      }
-      return document.querySelectorAll('#history-list .history-record-item').length;
+      const records = await window.AppData.practice.list({ projection: 'light' });
+      return records.length;
     });
     if (recordCountAfter !== recordCountBefore) {
       throw new Error(`Replay should not create new records: before=${recordCountBefore}, after=${recordCountAfter}`);

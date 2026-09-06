@@ -12,6 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,14 +27,27 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Rebuild JS bundles and check for drift
+      - name: Install Playwright (Chromium)
+        run: |
+          npm ci --prefix developer
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+
+      - name: Check JS bundle drift
         # The committed files under js/bundles/ must match what the build script
         # produces from the committed sources. If this step fails, a source file
         # was edited without rebuilding its bundle (run `node scripts/build-bundles.mjs`).
-        run: node scripts/build-bundles.mjs && git diff --exit-code -- js/bundles/
+        run: node scripts/build-bundles.mjs --check
 
-      - name: Run JS test (practiceTimerPreferences)
-        run: node developer/tests/js/practiceTimerPreferences.test.js
+      - name: Run JavaScript unit and regression tests
+        run: npm test --prefix developer
 
-      - name: Run Python tests (listening asset quality)
-        run: python -m unittest developer.tests.py.test_listening_generate_assets_quality
+      - name: Run Python unit tests
+        run: python -m unittest discover -s developer/tests/py -p "test_*.py"
+
+      - name: Check reading data integrity
+        run: python developer/tests/ci/check_reading_data_integrity.py
+
+      - name: Run unified E2E suite (file:// capable)
+        run: python developer/tests/e2e/e2e_runner.py

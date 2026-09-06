@@ -9,7 +9,8 @@
     var settingsPrefetchPromise = null;
     var indexInteractionsInitialized = false;
     var licenseModalInitialized = false;
-    var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
+    var licenseModalInitializationPromise = null;
+    var licenseModalRenderToken = 0;
 
     function ensureBrowse() {
         if (browsePrefetched) {
@@ -44,22 +45,14 @@
     }
 
 function ensureSettings() {
-        if (settingsPrefetched) {
-            return (settingsPrefetchPromise || Promise.resolve()).then(function () {
-                if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
-                    try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
-                }
-            });
+    if (settingsPrefetched) {
+        return settingsPrefetchPromise || Promise.resolve();
         }
         settingsPrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
             ? global.AppEntry.ensureSettingsToolsGroup
             : function fallback() { return Promise.resolve(); };
-        settingsPrefetchPromise = loader().then(function () {
-            if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
-                try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
-            }
-        }).catch(function swallow(error) {
+        settingsPrefetchPromise = loader().catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
             console.warn('[IndexInteractions] 预加载 settings 失败:', error);
@@ -67,8 +60,8 @@ function ensureSettings() {
         return settingsPrefetchPromise;
     }
 
-    function startListeningSprint() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startListeningSprint() {
+        var list = await global.resolveActiveLibraryIndex();
         var listeningExams = Array.isArray(list) ? list.filter(function (exam) { return exam && exam.type === 'listening'; }) : [];
         if (!listeningExams.length) {
             if (typeof global.showMessage === 'function') {
@@ -87,8 +80,8 @@ function ensureSettings() {
         }
     }
 
-    function startInstantLaunch() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startInstantLaunch() {
+        var list = await global.resolveActiveLibraryIndex();
         if (!Array.isArray(list) || !list.length) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('题库尚未加载', 'error');
@@ -252,6 +245,13 @@ function ensureSettings() {
                 return global.OnboardingTour && typeof global.OnboardingTour.start === 'function'
                     ? global.OnboardingTour.start(true)
                     : undefined;
+            }],
+            ['external-backup-entry-btn', function () {
+                return ensureSettings().then(function () {
+                    return global.ExternalBackupService && typeof global.ExternalBackupService.openModal === 'function'
+                        ? global.ExternalBackupService.openModal()
+                        : undefined;
+                });
             }],
             ['create-backup-btn', function () {
                 return ensureSettings().then(function () {
@@ -672,12 +672,20 @@ function ensureSettings() {
         return global.document ? global.document.getElementById('license-modal') : null;
     }
 
-    function hasAcceptedLicense() {
-        try {
-            return global.localStorage && global.localStorage.getItem(LICENSE_STORAGE_KEY) === 'true';
-        } catch (_) {
-            return true;
+    function getConsentPreferences() {
+        var preferences = global.AppData && global.AppData.preferences;
+        if (!preferences || typeof preferences.getConsent !== 'function' || typeof preferences.setConsent !== 'function') {
+            throw new Error('AppData preferences consent API is unavailable');
         }
+        return preferences;
+    }
+
+    function hasAcceptedLicense() {
+        return Promise.resolve().then(function () {
+            return getConsentPreferences().getConsent();
+        }).then(function (consent) {
+            return !!(consent && consent.hasSeenGplLicense === true);
+        });
     }
 
     function showLicenseModal() {
@@ -685,14 +693,19 @@ function ensureSettings() {
         if (!modal) {
             return;
         }
+        var renderToken = ++licenseModalRenderToken;
         global.requestAnimationFrame(function () {
             global.requestAnimationFrame(function () {
+                if (renderToken !== licenseModalRenderToken) {
+                    return;
+                }
                 modal.classList.add('show');
             });
         });
     }
 
     function hideLicenseModal() {
+        licenseModalRenderToken += 1;
         var modal = getLicenseModal();
         if (modal) {
             modal.classList.remove('show');
@@ -700,24 +713,37 @@ function ensureSettings() {
     }
 
     function acceptGplLicense() {
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
-            }
-        } catch (error) {
-            console.warn('LocalStorage error:', error);
-        }
-        hideLicenseModal();
+        var preferences;
+        return Promise.resolve().then(function () {
+            preferences = getConsentPreferences();
+            return preferences.getConsent();
+        }).then(function (consent) {
+            return preferences.setConsent(Object.assign({}, consent || {}, {
+                hasSeenGplLicense: true
+            }));
+        }).then(function () {
+            hideLicenseModal();
+            return true;
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to save GPL license consent:', error);
+            return false;
+        });
     }
 
     function initLicenseModal() {
         if (licenseModalInitialized) {
-            return;
+            return licenseModalInitializationPromise || Promise.resolve();
         }
         licenseModalInitialized = true;
-        if (!hasAcceptedLicense()) {
+        licenseModalInitializationPromise = hasAcceptedLicense().then(function (accepted) {
+            if (!accepted) {
+                showLicenseModal();
+            }
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to load GPL license consent:', error);
             showLicenseModal();
-        }
+        });
+        return licenseModalInitializationPromise;
     }
 
     global.LicenseModal = Object.assign({}, global.LicenseModal || {}, {

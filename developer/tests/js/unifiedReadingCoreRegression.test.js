@@ -15,22 +15,6 @@ function loadScript(relativePath, context) {
     vm.runInContext(code, context, { filename: relativePath });
 }
 
-function createSessionStorageStub() {
-    const store = new Map();
-    return {
-        store,
-        getItem(key) {
-            return store.has(key) ? store.get(key) : null;
-        },
-        setItem(key, value) {
-            store.set(key, String(value));
-        },
-        removeItem(key) {
-            store.delete(key);
-        }
-    };
-}
-
 function createClassList() {
     return {
         add() {},
@@ -51,7 +35,6 @@ function createContext() {
     HTMLSelectElement.prototype = Object.create(HTMLElement.prototype);
     HTMLSelectElement.prototype.constructor = HTMLSelectElement;
 
-    const sessionStorage = createSessionStorageStub();
     const timer = {
         textContent: '',
         style: {},
@@ -74,6 +57,7 @@ function createContext() {
     });
     const document = {
         title: 'Unified Reading Test',
+        referrer: 'http://localhost/',
         body: {
             dataset: {},
             classList: createClassList()
@@ -121,11 +105,11 @@ function createContext() {
     const window = {
         location: {
             href: 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1',
-            search: '?examId=reading-p1'
+            search: '?examId=reading-p1',
+            protocol: 'http:'
         },
         history: { replaceState() {} },
         document,
-        sessionStorage,
         opener: null,
         parent: null,
         addEventListener() {},
@@ -195,7 +179,6 @@ function createContext() {
         HTMLSelectElement,
         CustomEvent: window.CustomEvent,
         CSS: window.CSS,
-        sessionStorage,
         location: window.location
     };
     sandbox.globalThis = window;
@@ -235,8 +218,10 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
     hooks.setTestState({
         examId: 'reading-p1',
         dataKey: 'reading-p1',
+        sessionId: 'session-reading-p1',
         practiceMode: 'single',
         parentWindow: hostWindow,
+        expectedParentOrigin: 'http://localhost',
         pageStartTime: Date.now() - 1000,
         dataset: {
             meta: {
@@ -249,22 +234,90 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
         }
     });
 
-    let releaseExplanation = null;
-    hooks.setTestOverride('renderExplanations', () => new Promise((resolve) => {
-        releaseExplanation = resolve;
-    }));
+    let explanationStarted = false;
+    hooks.setTestOverride('renderExplanations', () => {
+        explanationStarted = true;
+        return Promise.resolve();
+    });
 
-    const submitPromise = hooks.handleSubmit();
+    let submitError = null;
+    const submitPromise = hooks.handleSubmit().catch((error) => {
+        submitError = error;
+    });
     await Promise.resolve();
 
+    assert.ifError(submitError);
     assert.strictEqual(messages.length, 1, 'submit should notify host before explanation rendering completes');
     assert.strictEqual(messages[0].type, 'PRACTICE_COMPLETE', 'submit should post a practice completion message');
     assert.strictEqual(messages[0].data?.answers?.q1, 'A', 'posted submission should include the current answer');
+    assert.strictEqual(explanationStarted, false, 'results and explanations must wait for a matching host ACK');
 
-    releaseExplanation();
     await submitPromise;
+    assert.ifError(submitError);
+    const pendingState = hooks.getTestState();
+    const accepted = await hooks.acceptSubmissionAcknowledgement({
+        submissionId: pendingState.submissionId,
+        sessionId: pendingState.sessionId,
+        examId: pendingState.examId
+    });
+    assert.strictEqual(accepted, true, 'matching ACK should finalize the pending submission');
+    assert.strictEqual(explanationStarted, true, 'matching ACK should render the result explanation');
     hooks.setTestOverride('renderExplanations', null);
     assert.strictEqual(window.__UNIFIED_READING_SIMULATION_MODE__, false, 'submit regression harness should remain in non-simulation mode');
+}
+
+function testDraftBearingInitIsNotSuppressed() {
+    const { hooks } = loadHooks();
+    const baseData = {
+        examId: 'reading-p1',
+        sessionId: 'session-init',
+        windowSessionToken: 'token-init',
+        messageIssuedAtMs: 1000
+    };
+    const noDraftSignature = hooks.buildInitSignature(baseData);
+    const draftData = {
+        ...baseData,
+        draft: { answers: { q1: 'A' }, updatedAt: 2000 }
+    };
+    const draftSignature = hooks.buildInitSignature(draftData);
+    assert.notStrictEqual(
+        draftSignature,
+        noDraftSignature,
+        'a later draft-bearing INIT must not be suppressed by an earlier no-draft INIT'
+    );
+    assert.strictEqual(
+        hooks.buildInitSignature(draftData),
+        draftSignature,
+        'repeated INITs carrying the same draft should still be deduplicated'
+    );
+}
+
+function testSuiteReviewAnnotationsUseDraftChannel() {
+    const { hooks } = loadHooks();
+    const messages = [];
+    const hostWindow = {
+        postMessage(payload) {
+            messages.push(payload);
+        }
+    };
+    hooks.setTestState({
+        examId: 'reading-suite-review',
+        sessionId: 'session-suite-review',
+        suiteSessionId: 'suite-review',
+        simulationMode: true,
+        suiteReviewMode: true,
+        reviewMode: true,
+        readOnly: true,
+        parentWindow: hostWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost'
+    });
+
+    hooks.syncReadingAnnotation('note-edit');
+
+    assert.strictEqual(messages.length, 1, 'suite review annotation should emit one persistence message');
+    assert.strictEqual(messages[0].type, 'SIMULATION_DRAFT_SYNC', 'suite review annotation must use the suite draft channel');
+    assert.strictEqual(messages[0].data?.examId, 'reading-suite-review', 'suite draft sync must retain the active exam id');
 }
 
 function testGroupedCheckboxSplitKeysScorePartially() {
@@ -301,7 +354,7 @@ function testGroupedCheckboxSplitKeysScorePartially() {
 
 function testGroupedCheckboxSingleKeyArrayScoresPartially() {
     const { hooks } = loadHooks();
-    const results = hooks.buildResultsFromAnswers({
+    const dataset = {
         questionGroups: [{
             groupId: 'mc-array',
             kind: 'multi_choice',
@@ -311,19 +364,40 @@ function testGroupedCheckboxSingleKeyArrayScoresPartially() {
         answerKey: {
             q11: ['B', 'C', 'D']
         }
-    }, {
+    };
+    const partialAnswers = {
         q11: ['A', 'B', 'C']
-    });
+    };
+    const results = hooks.buildResultsFromAnswers(dataset, partialAnswers);
 
     assert.strictEqual(results.scoreInfo.correct, 2, 'single-key grouped checkbox arrays should award overlap credit');
     assert.strictEqual(results.scoreInfo.totalQuestions, 3, 'single-key grouped checkbox arrays should keep three-point total');
     assert.strictEqual(results.answerComparison.q11.isCorrect, false, 'partial grouped checkbox selections should still show non-perfect row status');
     assert.strictEqual(results.answerComparison.q11.partialCorrectCount, 2, 'partial grouped checkbox row should record matched option count');
+
+    hooks.setTestState({ dataset });
+    const partialReplay = hooks.buildReplayResults({
+        answers: partialAnswers,
+        correctAnswerMap: dataset.answerKey,
+        allQuestionIds: dataset.questionOrder
+    });
+    assert.strictEqual(partialReplay.scoreInfo.correct, 2, 'single-key replay should retain partial option credit');
+    assert.strictEqual(partialReplay.scoreInfo.totalQuestions, 3, 'single-key replay should retain option-weighted total');
+    assert.strictEqual(partialReplay.answerComparison.q11.partialCorrectCount, 2, 'single-key replay should retain matched option count');
+
+    const perfectReplay = hooks.buildReplayResults({
+        answers: { q11: ['B', 'C', 'D'] },
+        correctAnswerMap: dataset.answerKey,
+        allQuestionIds: dataset.questionOrder
+    });
+    assert.strictEqual(perfectReplay.scoreInfo.correct, 3, 'perfect single-key replay should retain all option points');
+    assert.strictEqual(perfectReplay.scoreInfo.totalQuestions, 3, 'perfect single-key replay should keep option-weighted total');
+    assert.strictEqual(perfectReplay.answerComparison.q11.isCorrect, true, 'perfect single-key replay should remain fully correct');
 }
 
 function testAcceptedAnswerArraysStaySinglePoint() {
     const { hooks } = loadHooks();
-    const results = hooks.buildResultsFromAnswers({
+    const dataset = {
         questionGroups: [{
             groupId: 'text-alt',
             kind: 'sentence_completion',
@@ -333,13 +407,121 @@ function testAcceptedAnswerArraysStaySinglePoint() {
         answerKey: {
             q8: ['a panoramic camera', 'panoramic camera']
         }
-    }, {
+    };
+    const answers = {
         q8: 'panoramic camera'
-    });
+    };
+    const results = hooks.buildResultsFromAnswers(dataset, answers);
 
     assert.strictEqual(results.scoreInfo.correct, 1, 'accepted textual alternatives should count as one correct answer');
     assert.strictEqual(results.scoreInfo.totalQuestions, 1, 'accepted textual alternatives must not inflate total score weight');
     assert.strictEqual(results.answerComparison.q8.isCorrect, true, 'accepted textual alternative should still match');
+
+    hooks.setTestState({ dataset });
+    const replay = hooks.buildReplayResults({
+        answers,
+        correctAnswerMap: dataset.answerKey,
+        allQuestionIds: dataset.questionOrder
+    });
+    assert.strictEqual(replay.scoreInfo.correct, 1, 'accepted textual alternative replay should remain correct');
+    assert.strictEqual(replay.scoreInfo.totalQuestions, 1, 'accepted textual alternatives should remain one point in replay');
+}
+
+function testReplaySplitCheckboxStringScoresByToken() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: {
+            questionGroups: [{
+                groupId: 'mc-replay-string',
+                kind: 'multi_choice',
+                questionIds: ['q8', 'q9']
+            }]
+        }
+    });
+    const results = hooks.buildReplayResults({
+        answers: {
+            q8: 'A,B',
+            q9: 'A,B'
+        },
+        correctAnswerMap: {
+            q8: 'A',
+            q9: 'C'
+        },
+        allQuestionIds: ['q8', 'q9']
+    });
+
+    assert.strictEqual(results.scoreInfo.correct, 1, 'one correct split choice should retain half credit');
+    assert.strictEqual(results.scoreInfo.totalQuestions, 2, 'split choices should remain independently weighted');
+    assert.strictEqual(results.answerComparison.q8.isCorrect, true, 'first persisted choice should match its split key');
+    assert.strictEqual(results.answerComparison.q9.isCorrect, false, 'wrong split choice should not erase the correct option credit');
+}
+
+function testReplayKeepsMissingCorrectAnswersUnknown() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: {
+            questionGroups: [],
+            questionOrder: ['q1', 'q2']
+        }
+    });
+    const results = hooks.buildReplayResults({
+        answerComparison: {
+            q1: { userAnswer: 'A' },
+            q2: { userAnswer: 'B' }
+        },
+        correctAnswerMap: { q1: 'A' },
+        allQuestionIds: ['q1', 'q2']
+    });
+
+    assert.strictEqual(results.answerComparison.q1.isCorrect, true, 'available canonical answers should still be scored');
+    assert.strictEqual(results.answerComparison.q2.isCorrect, null, 'questions missing a canonical correct answer must remain unknown');
+    assert.strictEqual(results.scoreInfo.correct, 1);
+    assert.strictEqual(results.scoreInfo.totalQuestions, 1, 'unknown questions must not inflate the scored denominator');
+    assert.deepStrictEqual(plain(results.answers), { q1: 'A', q2: 'B' }, 'comparison-only records must still replay user answers into the DOM');
+}
+
+function testSplitCheckboxRequiresExpectedSelectionCount() {
+    const { hooks } = loadHooks();
+    const dataset = {
+        questionGroups: [{
+            groupId: 'mc-inline-count',
+            kind: 'multiple_choice',
+            questionIds: ['q8', 'q9']
+        }],
+        answerKey: {
+            q8: 'A',
+            q9: 'C'
+        }
+    };
+
+    assert.strictEqual(
+        hooks.hasAnswerInDataset('q8', { q8: ['A'], q9: ['A'] }, dataset),
+        false,
+        'one selected token must not mark every split question answered'
+    );
+    assert.strictEqual(
+        hooks.hasAnswerInDataset('q8', { q8: ['A', 'C'], q9: ['A', 'C'] }, dataset),
+        true,
+        'the split group should count as answered after the expected selections are present'
+    );
+}
+
+function testPersistedChoiceStringSplitsForHighlighting() {
+    const { hooks } = loadHooks();
+    assert.deepStrictEqual(
+        plain(hooks.normalizeChoiceTokenList('A,B')),
+        ['A', 'B'],
+        'persisted split choices should expose each selected option for review highlighting'
+    );
+}
+
+function testJudgementChoicesRemainAvailableForHighlighting() {
+    const { hooks } = loadHooks();
+    assert.deepStrictEqual(
+        plain(hooks.normalizeChoiceTokenList(['TRUE', 'FALSE', 'NOT GIVEN'])),
+        ['false', 'NOT GIVEN', 'true'],
+        'judgement answers should not be discarded by letter-choice normalization'
+    );
 }
 
 function testSuiteTimerIgnoresEmptyLimitValues() {
@@ -357,10 +539,31 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 }
 
 async function main() {
+    if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
+        testGroupedCheckboxSingleKeyArrayScoresPartially();
+        testAcceptedAnswerArraysStaySinglePoint();
+        testReplaySplitCheckboxStringScoresByToken();
+        testReplayKeepsMissingCorrectAnswersUnknown();
+        testSplitCheckboxRequiresExpectedSelectionCount();
+        testPersistedChoiceStringSplitsForHighlighting();
+        testJudgementChoicesRemainAvailableForHighlighting();
+        process.stdout.write(JSON.stringify({
+            status: 'pass',
+            detail: 'unified reading replay regression covered'
+        }));
+        return;
+    }
     await testSubmitPostsBeforeExplanationRenderFinishes();
+    testDraftBearingInitIsNotSuppressed();
+    testSuiteReviewAnnotationsUseDraftChannel();
     testGroupedCheckboxSplitKeysScorePartially();
     testGroupedCheckboxSingleKeyArrayScoresPartially();
     testAcceptedAnswerArraysStaySinglePoint();
+    testReplaySplitCheckboxStringScoresByToken();
+    testReplayKeepsMissingCorrectAnswersUnknown();
+    testSplitCheckboxRequiresExpectedSelectionCount();
+    testPersistedChoiceStringSplitsForHighlighting();
+    testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
     process.stdout.write(JSON.stringify({
         status: 'pass',

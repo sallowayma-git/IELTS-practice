@@ -120,7 +120,20 @@
 
     function compareAnswers(userAnswer, correctAnswer) {
         const expected = splitAnswerTokens(correctAnswer);
-        const actual = splitAnswerTokens(userAnswer);
+        let actual = splitAnswerTokens(userAnswer);
+
+        if (
+            expected.length === 1
+            && /^[A-Z]$/.test(expected[0])
+            && actual.length === 1
+            && !/^[A-Z]$/.test(actual[0])
+            && typeof userAnswer === 'string'
+        ) {
+            const labeledOption = userAnswer.trim().match(/^([A-Z])\s+\S/);
+            if (labeledOption) {
+                actual = [labeledOption[1]];
+            }
+        }
 
         if (expected.length === 0 && actual.length === 0) {
             return null;

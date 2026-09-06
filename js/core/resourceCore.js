@@ -3,8 +3,6 @@
 
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
-    const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-    const BASE_PREFIX_STORAGE_KEY = 'resource.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
@@ -171,10 +169,6 @@
         return result;
     }
 
-    function getPathMapStorageKey(key) {
-        return PATH_MAP_STORAGE_PREFIX + key;
-    }
-
     function setActivePathMap(map) {
         const normalized = normalizePathMap(map);
         try { global.__activeLibraryPathMap = normalized; } catch (_) { }
@@ -193,14 +187,10 @@
     }
 
     async function loadPathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.get !== 'function') {
-            return clonePathMap(DEFAULT_PATH_MAP);
-        }
+        if (!key || !global.AppData || !global.AppData.library) return clonePathMap(DEFAULT_PATH_MAP);
         try {
-            const stored = await global.storage.get(getPathMapStorageKey(key));
-            if (stored && typeof stored === 'object') {
-                return normalizePathMap(stored, DEFAULT_PATH_MAP);
-            }
+            const index = await global.AppData.library.getIndex(key);
+            return index.length ? derivePathMapFromIndex(index, DEFAULT_PATH_MAP) : clonePathMap(DEFAULT_PATH_MAP);
         } catch (error) {
             console.warn('[ResourceCore] 读取路径映射失败:', error);
         }
@@ -217,14 +207,6 @@
             ? normalizePathMap(overrideMap, fallback)
             : derivePathMapFromIndex(exams, fallback);
 
-        if (global.storage && typeof global.storage.set === 'function') {
-            try {
-                await global.storage.set(getPathMapStorageKey(key), derived);
-            } catch (error) {
-                console.warn('[ResourceCore] 写入路径映射失败:', error);
-            }
-        }
-
         if (options.setActive) {
             setActivePathMap(derived);
         }
@@ -232,25 +214,16 @@
     }
 
     async function deletePathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.remove !== 'function') {
-            return false;
-        }
-        try {
-            await global.storage.remove(getPathMapStorageKey(key));
-            return true;
-        } catch (error) {
-            console.warn('[ResourceCore] 删除路径映射失败:', error);
-            return false;
-        }
+        return Boolean(key);
     }
 
     async function refreshPathMap() {
-        if (!global.storage || typeof global.storage.get !== 'function') {
+        if (!global.AppData || !global.AppData.library) {
             return setActivePathMap(getPathMap());
         }
         try {
-            const key = await global.storage.get('active_exam_index_key', 'exam_index');
-            const next = await loadPathMapForConfiguration(key || 'exam_index');
+            const key = await global.AppData.library.getActive();
+            const next = await loadPathMapForConfiguration(key);
             return setActivePathMap(next);
         } catch (error) {
             console.warn('[ResourceCore] 刷新路径映射失败:', error);
@@ -376,22 +349,13 @@
         return null;
     }
 
-    function loadStoredBasePrefix() {
-        try {
-            return localStorage.getItem(BASE_PREFIX_STORAGE_KEY) || '';
-        } catch (_) {
-            return '';
-        }
-    }
+    let storedBasePrefix = '';
 
     function storeBasePrefix(value) {
-        try {
-            if (value) {
-                localStorage.setItem(BASE_PREFIX_STORAGE_KEY, value);
-            } else {
-                localStorage.removeItem(BASE_PREFIX_STORAGE_KEY);
-            }
-        } catch (_) { }
+        storedBasePrefix = value || '';
+        if (global.AppData && global.AppData.preferences) {
+            global.AppData.preferences.setResourceBasePrefix(storedBasePrefix).catch(() => {});
+        }
     }
 
     function getBasePrefix() {
@@ -400,7 +364,7 @@
             return direct;
         }
 
-        const stored = normalizeBasePrefix(loadStoredBasePrefix());
+        const stored = normalizeBasePrefix(storedBasePrefix);
         if (stored && stored !== './') {
             global.RESOURCE_BASE_PREFIX = stored;
             return stored;
@@ -420,6 +384,13 @@
         global.RESOURCE_BASE_PREFIX = normalized;
         storeBasePrefix(normalized === './' ? '' : normalized);
         return normalized;
+    }
+
+    if (global.AppData && global.AppData.preferences) {
+        global.AppData.preferences.getResourceBasePrefix().then((value) => {
+            storedBasePrefix = value || '';
+            if (!global.RESOURCE_BASE_PREFIX && storedBasePrefix) global.RESOURCE_BASE_PREFIX = normalizeBasePrefix(storedBasePrefix);
+        }).catch(() => {});
     }
 
     function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
@@ -656,14 +627,12 @@
         version: '0.6.2-fix',
         RAW_DEFAULT_PATH_MAP,
         DEFAULT_PATH_MAP,
-        PATH_MAP_STORAGE_PREFIX,
         PATH_FALLBACK_ORDER,
         clonePathMap,
         normalizePathRoot,
         mergeRootWithFallback,
         buildOverridePathMap,
         derivePathMapFromIndex,
-        getPathMapStorageKey,
         getPathMap,
         setActivePathMap,
         loadPathMapForConfiguration,

@@ -1,8 +1,6 @@
 (function initPracticeTimerPreferences(global) {
     'use strict';
 
-    var READING_KEY = 'ielts_reading_timer_preferences_v2';
-    var LISTENING_KEY = 'ielts_listening_timer_preferences_v1';
     var VERSION = 1;
     var DEFAULTS = {
         version: VERSION,
@@ -39,26 +37,38 @@
         };
     }
 
-    function keyFor(scope) {
-        return String(scope || '').toLowerCase() === 'listening' ? LISTENING_KEY : READING_KEY;
+    var cache = Object.create(null);
+    var hydrationPromise = null;
+    function normalizeScope(scope) { return String(scope || '').toLowerCase() === 'listening' ? 'listening' : 'reading'; }
+    function hydrateTimerPreferences() {
+        if (cache.reading && cache.listening) return Promise.resolve(true);
+        if (hydrationPromise) return hydrationPromise;
+        if (!global.AppData || !global.AppData.preferences) return Promise.resolve(false);
+        hydrationPromise = Promise.resolve().then(async function loadTimerPreferences() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getTimer();
+            cache.reading = normalize(stored && stored.reading);
+            cache.listening = normalize(stored && stored.listening);
+            return true;
+        }).catch(function onTimerPreferenceLoadError(error) {
+            hydrationPromise = null;
+            console.warn('[PracticeTimerPreferences] 加载失败:', error);
+            return false;
+        });
+        return hydrationPromise;
     }
 
     function read(scope) {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(keyFor(scope));
-            return normalize(raw ? JSON.parse(raw) : null);
-        } catch (_) {
-            return normalize(null);
-        }
+        return normalize(cache[normalizeScope(scope)]);
     }
 
-    function save(scope, preferences) {
+    async function save(scope, preferences) {
+        await hydrateTimerPreferences();
+        if (!global.AppData || !global.AppData.preferences) throw new Error('AppData.preferences is unavailable');
+        var normalizedScope = normalizeScope(scope);
         var next = normalize(preferences);
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(keyFor(scope), JSON.stringify(next));
-            }
-        } catch (_) { }
+        await global.AppData.preferences.setTimer(normalizedScope, next);
+        cache[normalizedScope] = next;
         return next;
     }
 
@@ -66,15 +76,14 @@
         return clampMinutes(value, DEFAULTS.countdownMinutes) * 60;
     }
 
-    global.PracticeTimerPreferences = {
+    var api = {
         VERSION: VERSION,
-        READING_KEY: READING_KEY,
-        LISTENING_KEY: LISTENING_KEY,
         DEFAULTS: Object.freeze(Object.assign({}, DEFAULTS)),
         normalize: normalize,
         read: read,
         save: save,
-        keyFor: keyFor,
         minutesToSeconds: minutesToSeconds
     };
+    Object.defineProperty(api, 'ready', { enumerable: true, get: hydrateTimerPreferences });
+    global.PracticeTimerPreferences = api;
 })(typeof window !== 'undefined' ? window : globalThis);

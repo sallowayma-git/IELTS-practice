@@ -70,7 +70,11 @@ def main() -> int:
         else:
             seen[key] = exam_id or path.stem
 
-        payload = extract_registered_payload(path)
+        try:
+            payload = extract_registered_payload(path)
+        except json.JSONDecodeError:
+            parse_failures.append(exam_id or path.stem)
+            continue
         if payload is None:
             parse_failures.append(exam_id or path.stem)
             continue

@@ -118,7 +118,6 @@ function createApp(options = {}) {
         const root = path.join(repoRoot, dir);
         app.use(`/${dir}`, createStaticBoundary(root), express.static(root, staticOptions));
     }
-    app.use('/src/styles', createStaticBoundary(path.join(repoRoot, 'src', 'styles')), express.static(path.join(repoRoot, 'src', 'styles'), staticOptions));
 
     app.get(['/', '/index.html'], (_req, res) => {
         res.sendFile(path.join(repoRoot, 'index.html'));

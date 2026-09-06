@@ -5,51 +5,38 @@
             id: 'default',
             name: 'IELTS 核心词表',
             icon: '📚',
-            source: 'builtin',
-            storageKey: 'vocab_words'
+            source: 'builtin'
         },
         'spelling-errors-p1': {
             id: 'spelling-errors-p1',
             name: 'P1 拼写错误',
             icon: '📝',
-            source: 'p1',
-            storageKey: 'vocab_list_p1_errors'
+            source: 'p1'
         },
         'spelling-errors-p4': {
             id: 'spelling-errors-p4',
             name: 'P4 拼写错误',
             icon: '📝',
-            source: 'p4',
-            storageKey: 'vocab_list_p4_errors'
+            source: 'p4'
         },
         'spelling-errors-master': {
             id: 'spelling-errors-master',
             name: '综合错误词表',
             icon: '📚',
-            source: 'all',
-            storageKey: 'vocab_list_master_errors'
+            source: 'all'
         },
         'custom': {
             id: 'custom',
             name: '自定义词表',
             icon: '✏️',
-            source: 'user',
-            storageKey: 'vocab_list_custom'
+            source: 'user'
         },
         'reading-highlights': {
             id: 'reading-highlights',
             name: '阅读高亮生词',
             icon: '📖',
-            source: 'reading-highlight',
-            storageKey: 'vocab_list_reading_highlights'
+            source: 'reading-highlight'
         }
-    });
-
-    const STORAGE_KEYS = Object.freeze({
-        WORDS: 'vocab_words',
-        CONFIG: 'vocab_user_config',
-        REVIEW_QUEUE: 'vocab_review_queue',
-        ACTIVE_LIST: 'vocab_active_list_id'
     });
 
     const DEFAULT_CONFIG = Object.freeze({
@@ -60,28 +47,40 @@
         notify: true
     });
 
-    const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
+    const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const CONFIG_LIMITS = Object.freeze({
+        dailyNew: { min: 0, max: 200 },
+        reviewLimit: { min: 1, max: 300 },
+        masteryCount: { min: 1, max: 10 }
+    });
+    const VALID_THEMES = new Set(['auto', 'light', 'dark']);
 
     const state = {
-        repositories: null,
-        metaRepo: null,
-        storageManager: null,
         words: [],
         wordIndex: new Map(),
         config: { ...DEFAULT_CONFIG },
-        reviewQueue: DEFAULT_REVIEW_QUEUE.slice(),
         ready: false,
         readyPromise: null,
         readyResolvers: [],
         loadingPromise: null,
-        registryUnsubscribe: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
-        listCache: new Map()
+        listCache: new Map(),
+        bundledPhoneticIndex: null,
+        commitSubscriptionAttached: false,
+        activeRefreshToken: 0
     };
+
+    function cloneValue(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') {
+            try { return structuredClone(value); } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
 
     function emitReady(value) {
         if (state.ready) {
@@ -128,6 +127,49 @@
         return `${base}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
+
+    function normalizePhoneticLookupKey(word) {
+        return String(word || '').trim().toLowerCase();
+    }
+
+    function getBundledPhonetic(word) {
+        if (!state.bundledPhoneticIndex) {
+            const index = new Map();
+            const embedded = window.__EMBEDDED_WORDLISTS__;
+            const entries = embedded && Array.isArray(embedded.ielts_core)
+                ? embedded.ielts_core
+                : [];
+            entries.forEach((entry) => {
+                const key = normalizePhoneticLookupKey(entry && entry.word);
+                const phonetic = normalizePhoneticValue(entry && entry.phonetic);
+                if (key && phonetic && !index.has(key)) {
+                    index.set(key, phonetic);
+                }
+            });
+            state.bundledPhoneticIndex = index;
+        }
+        return state.bundledPhoneticIndex.get(normalizePhoneticLookupKey(word)) || '';
+    }
+
+    function getBundledPhoneticEntries() {
+        getBundledPhonetic('');
+        return Array.from(state.bundledPhoneticIndex.entries()).map(([word, phonetic]) => ({ word, phonetic }));
+    }
+
+    function resolveWordPhonetic(record) {
+        if (!record || normalizePhoneticValue(record.phonetic)) {
+            return record;
+        }
+        const phonetic = getBundledPhonetic(record.word);
+        return phonetic ? { ...record, phonetic } : record;
+    }
+
     function normalizeWordRecord(entry) {
         if (!entry || typeof entry !== 'object') {
             return null;
@@ -141,6 +183,7 @@
         const example = typeof entry.example === 'string' ? entry.example.trim() : '';
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
         const source = typeof entry.source === 'string' ? entry.source.trim() : '';
+        const phonetic = normalizePhoneticValue(entry.phonetic);
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
         
         // SM-2 字段
@@ -202,6 +245,9 @@
         if (source) {
             record.source = source;
         }
+        if (phonetic) {
+            record.phonetic = phonetic;
+        }
         [
             'userInput',
             'questionId',
@@ -252,9 +298,9 @@
         const embeddedCore = embedded && Array.isArray(embedded.ielts_core)
             ? embedded.ielts_core
             : [];
-        const cacheDefault = state.listCache.get(DEFAULT_LIST_ID);
-        const cachedWords = cacheDefault && cacheDefault.data && Array.isArray(cacheDefault.data.words)
-            ? cacheDefault.data.words
+        const cacheDefault = getFreshCachedList(DEFAULT_LIST_ID);
+        const cachedWords = cacheDefault && Array.isArray(cacheDefault.words)
+            ? cacheDefault.words
             : [];
         const sources = [embeddedCore, cachedWords, state.words];
 
@@ -281,69 +327,50 @@
         });
     }
 
-    async function persist(key, value) {
-        try {
-            if (state.metaRepo && typeof state.metaRepo.set === 'function') {
-                await state.metaRepo.set(key, value, { clone: true });
-                return true;
-            }
-            if (state.storageManager && typeof state.storageManager.set === 'function') {
-                await state.storageManager.set(key, value);
-                return true;
-            }
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(key, JSON.stringify(value));
-                return true;
-            }
-        } catch (error) {
-            console.error('[VocabStore] persist error:', error);
-        }
-        return false;
+    async function requireVocabData() {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab is unavailable');
+        await window.AppData.ready;
+        return window.AppData.vocab;
     }
 
-    async function read(key, defaultValue) {
-        if (state.metaRepo && typeof state.metaRepo.get === 'function') {
-            try {
-                const value = await state.metaRepo.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
-            }
-        }
-        if (state.storageManager && typeof state.storageManager.get === 'function') {
-            try {
-                const value = await state.storageManager.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
-            }
-        }
-        if (typeof localStorage !== 'undefined') {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) {
-                    return defaultValue;
-                }
-                return JSON.parse(raw);
-            } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
-            }
-        }
-        return defaultValue;
+    async function readListData(listId) {
+        const vocab = await requireVocabData();
+        if (listId === DEFAULT_LIST_ID) return vocab.listWords();
+        const collections = await vocab.listCollections();
+        return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
+    }
+
+    async function saveListData(listId, value) {
+        const vocab = await requireVocabData();
+        const words = value && typeof value === 'object' && Array.isArray(value.words) ? value.words : value;
+        await vocab.replaceListWords({ listId, words: Array.isArray(words) ? words : [] });
+        return true;
+    }
+
+    async function saveConfigData(configPatch = state.config) {
+        const vocab = await requireVocabData();
+        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
+        return true;
     }
 
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
-        if (config && typeof config === 'object') {
-            Object.keys(DEFAULT_CONFIG).forEach((key) => {
-                if (typeof config[key] !== 'undefined') {
-                    base[key] = config[key];
-                }
-            });
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            return base;
+        }
+        Object.keys(CONFIG_LIMITS).forEach((key) => {
+            const value = config[key];
+            const limits = CONFIG_LIMITS[key];
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return;
+            }
+            base[key] = Math.min(limits.max, Math.max(limits.min, Math.floor(value)));
+        });
+        if (typeof config.theme === 'string' && VALID_THEMES.has(config.theme)) {
+            base.theme = config.theme;
+        }
+        if (typeof config.notify === 'boolean') {
+            base.notify = config.notify;
         }
         return base;
     }
@@ -353,24 +380,120 @@
         rebuildIndex();
     }
 
-    function getStorageKeyForListId(listId) {
-        const targetId = typeof listId === 'string' && VOCAB_LISTS[listId] ? listId : DEFAULT_LIST_ID;
-        return VOCAB_LISTS[targetId].storageKey;
+    function getFreshCachedList(listId) {
+        const cached = state.listCache.get(listId);
+        if (!cached) {
+            return null;
+        }
+        if (!cached.timestamp || (Date.now() - cached.timestamp) >= LIST_CACHE_TTL_MS) {
+            state.listCache.delete(listId);
+            return null;
+        }
+        return cached.data || cached;
     }
 
-    function getActiveStorageKey() {
-        return getStorageKeyForListId(state.activeListId);
+    function refreshActiveListFromStorage() {
+        const refreshToken = ++state.activeRefreshToken;
+        const listId = state.activeListId;
+        Promise.resolve()
+            .then(() => readListData(listId))
+            .then((storedData) => {
+                if (refreshToken !== state.activeRefreshToken || listId !== state.activeListId) {
+                    return;
+                }
+                setWordsInternal(normalizeStoredListWords(storedData, listId));
+                state.lastLoadSource = 'appData-v2-commit';
+            })
+            .catch((error) => {
+                console.error('[VocabStore] 提交后刷新激活词表失败:', error);
+            });
+    }
+
+    function handleDataCommitted(event) {
+        const logicalKeys = new Set((event && Array.isArray(event.targets) ? event.targets : [])
+            .map((target) => (typeof target === 'string' ? target : target && target.logicalKey))
+            .filter(Boolean));
+        let shouldRefreshActiveList = false;
+
+        if (logicalKeys.has('vocab.words')) {
+            state.listCache.delete(DEFAULT_LIST_ID);
+            shouldRefreshActiveList = state.activeListId === DEFAULT_LIST_ID;
+        }
+        if (logicalKeys.has('vocab.lists')) {
+            Array.from(state.listCache.keys()).forEach((listId) => {
+                if (listId !== DEFAULT_LIST_ID) {
+                    state.listCache.delete(listId);
+                }
+            });
+            shouldRefreshActiveList = shouldRefreshActiveList || state.activeListId !== DEFAULT_LIST_ID;
+        }
+
+        if (shouldRefreshActiveList) {
+            refreshActiveListFromStorage();
+        }
+    }
+
+    function ensureCommitSubscription() {
+        if (state.commitSubscriptionAttached) {
+            return;
+        }
+        const backups = window.AppData && window.AppData.backups;
+        if (!backups || typeof backups.onDataCommitted !== 'function') {
+            return;
+        }
+        backups.onDataCommitted(handleDataCommitted);
+        state.commitSubscriptionAttached = true;
     }
 
     function isSpellingErrorList(listId) {
         return SPELLING_ERROR_LIST_IDS.has(listId);
     }
 
-    function normalizeListEntry(entry, listId) {
-        if (isSpellingErrorList(listId)) {
-            return convertSpellingErrorToWord(entry, listId) || normalizeWordRecord(entry);
+    function projectLegacyReadingHighlightPhonetic(entry, listId) {
+        if (listId !== 'reading-highlights' || !entry || normalizePhoneticValue(entry.phonetic)) {
+            return entry;
         }
-        return normalizeWordRecord(entry);
+        const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+        const match = /^音标[:：]\s*([^；]+)(?:；|$)/.exec(note);
+        const phonetic = normalizePhoneticValue(match && match[1]);
+        return phonetic ? { ...entry, phonetic } : entry;
+    }
+
+    function isSpellingErrorEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return false;
+        }
+        if (isSpellingFallbackMeaning(entry.meaning)) {
+            return true;
+        }
+        return [
+            'userInput',
+            'questionId',
+            'examId',
+            'errorCount',
+            'spellingNote',
+            'acceptedAnswers',
+            'canonicalAnswer',
+            'reasonCode'
+        ].some((key) => Object.prototype.hasOwnProperty.call(entry, key));
+    }
+
+    function normalizeListEntry(entry, listId) {
+        const projectedEntry = projectLegacyReadingHighlightPhonetic(entry, listId);
+        const normalized = isSpellingErrorList(listId) && isSpellingErrorEntry(projectedEntry)
+            ? (convertSpellingErrorToWord(projectedEntry, listId) || normalizeWordRecord(projectedEntry))
+            : normalizeWordRecord(projectedEntry);
+        return resolveWordPhonetic(normalized);
+    }
+
+    function normalizeMutationWord(entry, listId) {
+        return listId === 'reading-highlights'
+            ? normalizeListEntry(entry, listId)
+            : resolveWordPhonetic(normalizeWordRecord(entry));
+    }
+
+    function normalizeMutationInputWord(entry, listId) {
+        return normalizeWordRecord(projectLegacyReadingHighlightPhonetic(entry, listId));
     }
 
     function normalizeStoredListWords(storedData, listId = DEFAULT_LIST_ID) {
@@ -475,29 +598,26 @@
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedConfig, storedQueue, storedActiveList] = await Promise.all([
-                read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
-                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
-                read(STORAGE_KEYS.ACTIVE_LIST, DEFAULT_LIST_ID)
-            ]);
+            const vocab = await requireVocabData();
+            const storedConfig = await vocab.getConfig();
+            const storedActiveList = storedConfig && storedConfig.activeListId;
 
             state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
                 ? storedActiveList
                 : DEFAULT_LIST_ID;
 
-            const activeStorageKey = getStorageKeyForListId(state.activeListId);
-            const storedWords = await read(activeStorageKey, []);
+            const storedWords = await readListData(state.activeListId);
             const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
-                state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
+                state.lastLoadSource = 'appData-v2';
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
+                throw error;
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -507,15 +627,52 @@
 
     async function ensureDefaultLexicon() {
         try {
-            const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
-            const storedDefault = await read(defaultStorageKey, []);
+            const storedDefault = await readListData(DEFAULT_LIST_ID);
+            const storedDefaultWords = storedDefault && typeof storedDefault === 'object' && Array.isArray(storedDefault.words)
+                ? storedDefault.words
+                : (Array.isArray(storedDefault) ? storedDefault : []);
             const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
-                if (state.activeListId === DEFAULT_LIST_ID && !state.words.length) {
-                    setWordsInternal(normalizedStored);
+                let backfilled = normalizedStored.map((word) => {
+                    if (normalizePhoneticValue(word.phonetic)) {
+                        return word;
+                    }
+                    const bundledPhonetic = getBundledPhonetic(word.word);
+                    return bundledPhonetic ? { ...word, phonetic: bundledPhonetic } : word;
+                });
+                const hasBackfill = storedDefaultWords.some((word) => (
+                    !normalizePhoneticValue(word && word.phonetic)
+                    && Boolean(getBundledPhonetic(word && word.word))
+                ));
+                let backfillPersisted = false;
+                if (hasBackfill) {
+                    const vocab = await requireVocabData();
+                    if (typeof vocab.backfillListWordPhonetics === 'function') {
+                        try {
+                            const receipt = await vocab.backfillListWordPhonetics({
+                                listId: DEFAULT_LIST_ID,
+                                entries: getBundledPhoneticEntries()
+                            });
+                            backfilled = normalizeStoredListWords(receipt.words, DEFAULT_LIST_ID);
+                            backfillPersisted = true;
+                        } catch (error) {
+                            console.warn('[VocabStore] 默认词表音标持久化回填失败，当前会话继续使用内存补全:', error);
+                        }
+                    } else {
+                        console.warn('[VocabStore] AppData 音标回填接口不可用，当前会话仅使用内存补全');
+                    }
+                    state.listCache.delete(DEFAULT_LIST_ID);
                 }
-                return normalizedStored;
+                if (state.activeListId === DEFAULT_LIST_ID) {
+                    setWordsInternal(backfilled);
+                    if (hasBackfill) {
+                        state.lastLoadSource = backfillPersisted
+                            ? 'appData-v2-phonetic-backfill'
+                            : 'appData-v2-phonetic-runtime';
+                    }
+                }
+                return backfilled;
             }
             if (pollutedBySpellingList) {
                 console.warn('[VocabStore] 检测到默认词表被错词快照污染，正在恢复 IELTS 核心词表');
@@ -526,7 +683,7 @@
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            await persist(defaultStorageKey, normalized);
+            await saveListData(DEFAULT_LIST_ID, normalized);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);
                 state.lastLoadSource = 'default';
@@ -548,8 +705,8 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
-            return [];
+            console.error('[VocabStore] 默认词库加载失败:', error);
+            throw error;
         }
     }
 
@@ -559,87 +716,48 @@
         emitReady(true);
     }
 
-    function connectToProviders() {
-        if (state.registryUnsubscribe || state.repositories || state.storageManager) {
-            return;
-        }
-        const registry = window.StorageProviderRegistry;
-        if (registry && typeof registry.onProvidersReady === 'function') {
-            state.registryUnsubscribe = registry.onProvidersReady((payload) => {
-                if (payload && payload.repositories) {
-                    attachRepositories(payload.repositories);
-                }
-                if (payload && payload.storageManager) {
-                    state.storageManager = payload.storageManager;
-                }
-            });
-            const current = typeof registry.getCurrentProviders === 'function' ? registry.getCurrentProviders() : null;
-            if (current) {
-                if (current.repositories) {
-                    attachRepositories(current.repositories);
-                }
-                if (current.storageManager) {
-                    state.storageManager = current.storageManager;
-                }
-            }
-            return;
-        }
-        if (window.dataRepositories) {
-            attachRepositories(window.dataRepositories);
-        }
-        if (window.storage) {
-            state.storageManager = window.storage;
-        }
-    }
-
-    async function attachRepositories(repositories) {
-        if (!repositories || state.repositories === repositories) {
-            return;
-        }
-        state.repositories = repositories;
-        state.metaRepo = repositories.meta || null;
-        await loadState();
-        if (!state.words.length) {
-            await ensureDefaultLexicon();
-        }
-        await persist(getActiveStorageKey(), state.words);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        emitReady(true);
-    }
-
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneValue(state.words);
     }
 
-    async function setWords(words) {
+    async function mergeWords(words) {
         const normalized = Array.isArray(words)
-            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            ? words.map((word) => normalizeMutationInputWord(word, state.activeListId)).filter(Boolean)
             : [];
-        setWordsInternal(normalized);
-        await persist(getActiveStorageKey(), normalized);
+        const vocab = await requireVocabData();
+        const receipt = await vocab.mergeListWords({ listId: state.activeListId, words: normalized });
+        const committedWords = Array.isArray(receipt.words) ? receipt.words : [];
+        setWordsInternal(committedWords.map((word) => normalizeMutationWord(word, state.activeListId)).filter(Boolean));
         state.listCache.delete(state.activeListId);
-        return getWords();
+        return {
+            words: getWords(),
+            addedCount: Number(receipt.addedCount) || 0,
+            updatedCount: Number(receipt.updatedCount) || 0
+        };
     }
 
     async function updateWord(id, patch = {}) {
         if (!id || !state.wordIndex.has(id)) {
             return null;
         }
-        const original = state.wordIndex.get(id);
-        const updated = normalizeWordRecord({
-            ...original,
-            ...patch,
-            id,
-            updatedAt: getNow()
-        });
+        const vocab = await requireVocabData();
+        const normalizedPatch = { ...patch };
+        if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'phonetic')) {
+            const phonetic = normalizePhoneticValue(normalizedPatch.phonetic);
+            if (phonetic) {
+                normalizedPatch.phonetic = phonetic;
+            } else {
+                delete normalizedPatch.phonetic;
+            }
+        }
+        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch: normalizedPatch });
+        const updated = normalizeMutationWord(receipt.word, state.activeListId);
         const index = state.words.findIndex((word) => word.id === id);
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneValue(updated);
         }
         return null;
     }
@@ -649,19 +767,34 @@
     }
 
     async function setConfig(config) {
-        state.config = mergeConfig(config);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
+        const next = mergeConfig(config);
+        await saveConfigData(next);
+        state.config = next;
         return getConfig();
     }
 
-    function getReviewQueue() {
-        return state.reviewQueue.slice();
-    }
-
-    async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        return getReviewQueue();
+    async function replaceProgress(words, config, listId) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('进度备份缺少有效配置');
+        }
+        const requestedListId = typeof listId === 'string' ? listId.trim() : '';
+        if (!requestedListId || !VOCAB_LISTS[requestedListId]) {
+            throw new Error('进度备份包含未知词表');
+        }
+        const normalized = Array.isArray(words)
+            ? words.map((word) => normalizeMutationInputWord(word, requestedListId)).filter(Boolean)
+            : [];
+        const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
+        const vocab = await requireVocabData();
+        const receipt = await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        const committedWords = Array.isArray(receipt && receipt.words)
+            ? receipt.words.map((word) => normalizeMutationWord(word, requestedListId)).filter(Boolean)
+            : normalized;
+        state.config = nextConfig;
+        state.activeListId = requestedListId;
+        setWordsInternal(committedWords);
+        state.listCache.delete(requestedListId);
+        return { words: getWords(), config: getConfig() };
     }
 
     function getDueWords(referenceTime = new Date()) {
@@ -793,15 +926,14 @@
         }
 
         // 检查缓存（带TTL）
-        const cached = state.listCache.get(listId);
-        if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+        const cached = getFreshCachedList(listId);
+        if (cached) {
             console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
-            return cached.data;
+            return cached;
         }
 
         try {
-            const storageKey = listConfig.storageKey;
-            let storedData = await read(storageKey, null);
+            let storedData = await readListData(listId);
             if (listId === DEFAULT_LIST_ID && (!storedData || (Array.isArray(storedData) && storedData.length === 0))) {
                 const ensured = await ensureDefaultLexicon();
                 storedData = ensured;
@@ -836,7 +968,7 @@
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -861,25 +993,11 @@
         }
 
         try {
-            // 保存当前词表到存储（如果有修改）
-            if (state.activeListId && state.words.length > 0) {
-                const currentConfig = VOCAB_LISTS[state.activeListId];
-                if (currentConfig) {
-                    await persist(currentConfig.storageKey, state.words);
-                }
-            }
-
-            // 切换到新词表
+            const vocab = await requireVocabData();
+            await vocab.activateList(listId);
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-            
-            // 保存激活的词表 ID
-            await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
-
-            // 清空复习队列（新词表需要重新生成队列）
-            state.reviewQueue = [];
-            await persist(STORAGE_KEYS.REVIEW_QUEUE, []);
 
             return true;
         } catch (error) {
@@ -899,16 +1017,14 @@
         }
 
         // 尝试从缓存获取
-        if (state.listCache.has(listId)) {
-            const cached = state.listCache.get(listId);
-            const data = cached.data || cached;
-            return data.words ? data.words.length : 0;
+        const cached = getFreshCachedList(listId);
+        if (cached) {
+            return cached.words ? cached.words.length : 0;
         }
 
         // 从存储读取
         try {
-            const listConfig = VOCAB_LISTS[listId];
-            const storedData = await read(listConfig.storageKey, null);
+            const storedData = await readListData(listId);
             
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
@@ -920,7 +1036,7 @@
             return 0;
         } catch (error) {
             console.error('[VocabStore] getListWordCount 失败:', error);
-            return 0;
+            throw error;
         }
     }
 
@@ -950,7 +1066,6 @@
             ? payload.meaning.trim()
             : (typeof payload.definition === 'string' && payload.definition.trim() ? payload.definition.trim() : '待补充释义');
         const noteParts = [
-            payload.phonetic ? `音标: ${String(payload.phonetic).trim()}` : '',
             payload.partOfSpeech ? `词性: ${String(payload.partOfSpeech).trim()}` : '',
             selectedText && selectedText !== word ? `原高亮: ${selectedText}` : '',
             payload.sourceLabel ? `来源: ${String(payload.sourceLabel).trim()}` : '',
@@ -967,6 +1082,7 @@
             id: generateId(`reading-highlight:${word}`),
             word,
             meaning,
+            phonetic: normalizePhoneticValue(payload.phonetic),
             example: typeof payload.example === 'string' ? payload.example.trim() : '',
             note: noteParts.join('；'),
             easeFactor: null,
@@ -988,34 +1104,44 @@
         }
         await init();
         const listId = 'reading-highlights';
-        const listConfig = VOCAB_LISTS[listId];
-        const storedData = await read(listConfig.storageKey, []);
+        const storedData = await readListData(listId);
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
+        let committedWord = normalized;
         if (existingIndex >= 0) {
             const existing = words[existingIndex];
-            words.splice(existingIndex, 1, normalizeWordRecord({
+            committedWord = normalizeWordRecord({
                 ...existing,
                 ...normalized,
                 id: existing.id || normalized.id,
                 createdAt: existing.createdAt || normalized.createdAt,
+                note: existing.note || normalized.note,
+                easeFactor: existing.easeFactor,
+                interval: existing.interval,
+                repetitions: existing.repetitions,
+                intraCycles: existing.intraCycles,
+                correctCount: existing.correctCount,
+                lastReviewed: existing.lastReviewed,
+                nextReview: existing.nextReview,
                 updatedAt: getNow()
-            }));
+            });
+            words.splice(existingIndex, 1, committedWord);
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        await saveListData(listId, words.filter(Boolean));
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
-            setWordsInternal(words.filter(Boolean));
+            setWordsInternal(words.map((word) => resolveWordPhonetic(word)).filter(Boolean));
         }
-        return normalized;
+        return cloneValue(resolveWordPhonetic(committedWord));
     }
 
     async function init() {
         ensureReadyPromise();
-        connectToProviders();
+        // 先订阅再读取，避免初始化读取与外部提交之间出现丢失更新窗口。
+        ensureCommitSubscription();
         if (!state.ready) {
             await bootstrap();
         }
@@ -1025,12 +1151,11 @@
     const api = {
         init,
         getWords,
-        setWords,
+        mergeWords,
         updateWord,
         getConfig,
         setConfig,
-        getReviewQueue,
-        setReviewQueue,
+        replaceProgress,
         getDueWords,
         getNewWords,
         loadList,

@@ -5,60 +5,21 @@
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
-    async function getActiveExamIndexSnapshot() {
-        const stateGetters = [
-            () => (typeof global.getExamIndexState === 'function') ? global.getExamIndexState() : null,
-            () => (typeof getExamIndexState === 'function') ? getExamIndexState : null
-        ];
-
-        for (const getterFactory of stateGetters) {
-            try {
-                const getter = getterFactory();
-                if (typeof getter === 'function') {
-                    const state = getter();
-                    if (Array.isArray(state) && state.length) {
-                        return state.slice();
-                    }
-                }
-            } catch (_) { }
-        }
-
-        let activeKey = 'exam_index';
+    function getAssetVersion() {
         try {
-            if (typeof global.getActiveLibraryConfigurationKey === 'function') {
-                const resolved = await global.getActiveLibraryConfigurationKey();
-                if (resolved && typeof resolved === 'string' && resolved.trim()) {
-                    activeKey = resolved.trim();
-                }
-            } else {
-                const storedKey = await storage.get('active_exam_index_key', 'exam_index');
-                if (storedKey && typeof storedKey === 'string' && storedKey.trim()) {
-                    activeKey = storedKey.trim();
-                }
-            }
+            const params = new URLSearchParams(global.location?.search || '');
+            return String(params.get('v') || '').trim();
         } catch (_) {
-            try {
-                const storedKey = await storage.get('active_exam_index_key', 'exam_index');
-                if (storedKey && typeof storedKey === 'string' && storedKey.trim()) {
-                    activeKey = storedKey.trim();
-                }
-            } catch (_) { }
+            return '';
         }
+    }
 
-        let dataset = await storage.get(activeKey, []) || [];
-        if ((!Array.isArray(dataset) || dataset.length === 0) && activeKey !== 'exam_index') {
-            dataset = await storage.get('exam_index', []) || [];
+    async function getActiveExamIndexSnapshot() {
+        if (typeof global.resolveActiveLibraryIndex !== 'function') {
+            throw new Error('LibraryManager.resolveActiveIndex is unavailable');
         }
-        if (!Array.isArray(dataset) || dataset.length === 0) {
-            if (Array.isArray(global.examIndex) && global.examIndex.length) {
-                dataset = global.examIndex.slice();
-            } else if (typeof global.getReadingExamIndex === 'function') {
-                dataset = global.getReadingExamIndex();
-            } else if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
-                dataset = global.__READING_EXAM_INDEX__.slice();
-            }
-        }
-        return Array.isArray(dataset) ? dataset : [];
+        const dataset = await global.resolveActiveLibraryIndex();
+        return Array.isArray(dataset) ? dataset.slice() : [];
     }
 
     async function findExamDefinition(examId) {
@@ -69,20 +30,6 @@
         const match = list.find(entry => entry && entry.id === examId);
         if (match) {
             return match;
-        }
-
-        const fallbacks = [
-            Array.isArray(global.examIndex) ? global.examIndex : null,
-            typeof global.getReadingExamIndex === 'function' ? global.getReadingExamIndex() : null,
-            Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : null,
-            Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
-        ];
-        for (const fallback of fallbacks) {
-            if (!Array.isArray(fallback)) continue;
-            const found = fallback.find(entry => entry && entry.id === examId);
-            if (found) {
-                return found;
-            }
         }
 
         return null;
@@ -284,6 +231,10 @@
                 params.set('practiceMode', 'memorize');
                 params.set('mode', 'memorize');
             }
+            const assetVersion = getAssetVersion();
+            if (assetVersion) {
+                params.set('v', assetVersion);
+            }
             const query = params.toString();
             const url = query
                 ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
@@ -315,6 +266,10 @@
             const params = new URLSearchParams();
             params.set('examId', String(exam.id));
             params.set('sourceUrl', resolvedSourceUrl);
+            const assetVersion = getAssetVersion();
+            if (assetVersion) {
+                params.set('v', assetVersion);
+            }
             const url = `assets/generated/listening-exams/listening-practice-unified.html?${params.toString()}`;
             return typeof this._ensureAbsoluteUrl === 'function'
                 ? this._ensureAbsoluteUrl(url)
@@ -364,14 +319,178 @@
             };
         },
 
+        _beginExamOpenGeneration(examId, options = {}) {
+            if (!this._examOpenGenerations) this._examOpenGenerations = new Map();
+            if (!this._examOpenWindowGenerations) this._examOpenWindowGenerations = new WeakMap();
+            this._examOpenGenerationSequence = Math.max(0, Number(this._examOpenGenerationSequence) || 0) + 1;
+
+            const normalizedExamId = String(examId || '').trim();
+            const targetNames = [`exam_${normalizedExamId}`, `pdf_${normalizedExamId}`];
+            if (typeof options.windowName === 'string') {
+                targetNames.push(options.windowName.trim());
+            }
+            const names = Object.freeze(Array.from(new Set(targetNames.filter(name => name && !name.startsWith('_')))));
+            const generation = Object.freeze({
+                examId: normalizedExamId,
+                sequence: this._examOpenGenerationSequence,
+                targetNames: names,
+                hasReuseWindow: Boolean(options.reuseWindow)
+            });
+            this._examOpenGenerations.set(`exam:${normalizedExamId}`, generation);
+            names.forEach(name => this._examOpenGenerations.set(`target:${name}`, generation));
+            if (options.reuseWindow) {
+                this._examOpenWindowGenerations.set(options.reuseWindow, generation);
+            }
+            return generation;
+        },
+
+        _isExamOpenGenerationCurrent(generation, targetWindow = null) {
+            if (!generation || !this._examOpenGenerations
+                || this._examOpenGenerations.get(`exam:${generation.examId}`) !== generation) {
+                return false;
+            }
+            if (generation.targetNames.some(name => this._examOpenGenerations.get(`target:${name}`) !== generation)) {
+                return false;
+            }
+            if (generation.hasReuseWindow) {
+                if (!targetWindow || !this._examOpenWindowGenerations
+                    || this._examOpenWindowGenerations.get(targetWindow) !== generation) {
+                    return false;
+                }
+            }
+            return true;
+        },
+
+        _recordExamWindowNavigation(targetWindow) {
+            if (!targetWindow || (typeof targetWindow !== 'object' && typeof targetWindow !== 'function')) {
+                return 0;
+            }
+            if (!this._examWindowNavigationEpochs) this._examWindowNavigationEpochs = new WeakMap();
+            const epoch = Math.max(0, Number(this._examWindowNavigationEpochs.get(targetWindow)) || 0) + 1;
+            this._examWindowNavigationEpochs.set(targetWindow, epoch);
+            return epoch;
+        },
+
+        _isExamWindowNavigationCurrent(targetWindow, epoch) {
+            return Boolean(targetWindow && epoch && this._examWindowNavigationEpochs
+                && this._examWindowNavigationEpochs.get(targetWindow) === epoch);
+        },
+
+        _captureExamSessionRegistration(examId, windowInfo = null) {
+            const info = windowInfo || (this.examWindows && this.examWindows.get(examId)) || null;
+            if (!info || !info.window || !Number.isInteger(info.registrationId)) return null;
+            return Object.freeze({
+                examId: String(examId || ''),
+                window: info.window,
+                windowInfo: info,
+                registrationId: info.registrationId,
+                sessionGeneration: Number(info.sessionGeneration) || 0,
+                navigationEpoch: Number(info.navigationEpoch) || 0,
+                suiteSessionId: Object.prototype.hasOwnProperty.call(info, 'suiteSessionId')
+                    ? (info.suiteSessionId || null)
+                    : undefined
+            });
+        },
+
+        _isExamSessionRegistrationCurrent(examId, registration) {
+            const current = this.examWindows && this.examWindows.get(examId);
+            return Boolean(
+                registration
+                && current
+                && current === registration.windowInfo
+                && current.window === registration.window
+                && current.registrationId === registration.registrationId
+                && Number(current.sessionGeneration || 0) === Number(registration.sessionGeneration || 0)
+            );
+        },
+
+        _installExamNavigationRegistration(examId, examWindow, exam, options, generation) {
+            if (!examWindow || !this._isExamOpenGenerationCurrent(generation, options.reuseWindow || null)) {
+                return null;
+            }
+            if (!this.examWindows) this.examWindows = new Map();
+            const previous = this.examWindows.get(examId) || null;
+            if (previous && previous.closeMonitor) {
+                try { clearInterval(previous.closeMonitor); } catch (_) {}
+            }
+            if (this.messageHandlers && this.messageHandlers.has(examId)) {
+                try { window.removeEventListener('message', this.messageHandlers.get(examId)); } catch (_) {}
+                this.messageHandlers.delete(examId);
+            }
+            if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+                try { clearInterval(this._handshakeTimers.get(examId)); } catch (_) {}
+                this._handshakeTimers.delete(examId);
+            }
+
+            const endpoint = this._resolveExamMessageEndpoint(options.expectedUrl || (exam ? this.buildExamUrl(exam) : ''));
+            this._examRegistrationSequence = Math.max(0, Number(this._examRegistrationSequence) || 0) + 1;
+            const windowInfo = {
+                window: examWindow,
+                startTime: Date.now(),
+                status: 'opening',
+                expectedSessionId: this.generateSessionId(examId),
+                windowSessionToken: null,
+                windowSessionTokenSessionId: null,
+                expectedUrl: endpoint.expectedUrl,
+                expectedOrigin: endpoint.expectedOrigin,
+                allowOpaqueOrigin: endpoint.allowOpaqueOrigin,
+                observedOrigin: '',
+                suiteSessionId: options.suiteSessionId || null,
+                suiteFlowMode: options.suiteFlowMode ? String(options.suiteFlowMode) : null,
+                reviewMode: Boolean(options.reviewMode),
+                reviewSessionId: options.reviewSessionId ? String(options.reviewSessionId) : null,
+                reviewEntryIndex: Number.isInteger(options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                practiceMode: typeof options.practiceMode === 'string' ? options.practiceMode.trim().toLowerCase() : null,
+                readOnly: Object.prototype.hasOwnProperty.call(options, 'readOnly')
+                    ? Boolean(options.readOnly)
+                    : Boolean(options.reviewMode),
+                sessionGeneration: Math.max(0, Number(previous && previous.sessionGeneration) || 0) + 1,
+                registrationId: this._examRegistrationSequence,
+                navigationEpoch: Number(options.navigationEpoch) || 0,
+                launchProvisional: true,
+                closeMonitor: null
+            };
+            this._refreshExamWindowToken(examId, windowInfo);
+            this.examWindows.set(examId, windowInfo);
+            return this._captureExamSessionRegistration(examId, windowInfo);
+        },
+
+        async _abortExamOpen(examId, registration) {
+            if (!this._isExamSessionRegistrationCurrent(examId, registration)) return false;
+            const targetWindow = registration.window;
+            const navigationEpoch = registration.navigationEpoch;
+            await this.cleanupExamSession(examId, { expectedRegistration: registration });
+            const reassigned = Boolean(this.examWindows && Array.from(this.examWindows.values())
+                .some(info => info && info.window === targetWindow));
+            if (!reassigned && targetWindow !== window
+                && this._isExamWindowNavigationCurrent(targetWindow, navigationEpoch)) {
+                try {
+                    if (!targetWindow.closed && typeof targetWindow.close === 'function') targetWindow.close();
+                } catch (_) {}
+            }
+            return true;
+        },
+
         /**
           * 打开指定题目进行练习
           */
         async openExam(examId, options = {}) {
-            const examIndex = await getActiveExamIndexSnapshot();
-            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
-            const exam = list.find(e => e.id === examId);
+            const openGeneration = this._beginExamOpenGeneration(examId, options);
             const reviewMode = Boolean(options && options.reviewMode);
+            let examWindow = null;
+            let launchRegistration = null;
+            let exam = options && options.examDefinition && typeof options.examDefinition === 'object'
+                ? options.examDefinition
+                : null;
+            if (!exam) {
+                if (options && options.requireRecordProvenance) {
+                    throw new Error('历史记录的题库来源不可用');
+                }
+                const examIndex = await getActiveExamIndexSnapshot();
+                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                const list = Array.isArray(examIndex) ? examIndex : [];
+                exam = list.find(e => e.id === examId);
+            }
             const practiceMode = options && typeof options.practiceMode === 'string'
                 ? options.practiceMode.trim().toLowerCase()
                 : '';
@@ -382,13 +501,15 @@
                 return;
             }
 
+            if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+
             try {
                 const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
                     ? this.resolveReadingLaunchDescriptor(exam, options)
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
-                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, options);
+                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, { ...options, openGeneration });
                 }
 
                 // 若无HTML，直接打开PDF
@@ -397,10 +518,10 @@
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
-                    return this._openPdfWindow(exam, resolvedPdfUrl, options);
+                    return this._openPdfWindow(exam, resolvedPdfUrl, { ...options, openGeneration });
                 }
 
-                const guardOptions = { ...options, examId };
+                const guardOptions = { ...options, examId, openGeneration };
                 // 测试环境的套题练习统一使用占位页，避免因题目资源差异导致 E2E 不稳定
                 let examUrl = (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url)
                     ? readingLaunch.url
@@ -414,29 +535,81 @@
                 if (guardOptions.suiteSessionId && readingLaunch && readingLaunch.mode === 'unified_html') {
                     examUrl = this._appendSuiteContextToExamUrl(examUrl, guardOptions);
                 }
-                let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
+                if (guardOptions.endlessMode) {
+                    examUrl = this._appendEndlessContextToExamUrl(examUrl);
+                }
+                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                examWindow = this.openExamWindow(examUrl, exam, guardOptions);
+                if (!examWindow || !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                launchRegistration = this._installExamNavigationRegistration(examId, examWindow, exam, {
+                    ...guardOptions,
+                    expectedUrl: this._ensureAbsoluteUrl(examUrl)
+                }, openGeneration);
+                if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
 
                 try {
                     const guardedWindow = this._guardExamWindowContent(examWindow, exam, guardOptions);
                     if (guardedWindow) {
                         examWindow = guardedWindow;
+                        if (!guardOptions.navigationEpoch) {
+                            guardOptions.navigationEpoch = this._recordExamWindowNavigation(examWindow);
+                        }
+                        launchRegistration = this._installExamNavigationRegistration(examId, examWindow, exam, {
+                            ...guardOptions,
+                            expectedUrl: this._ensureAbsoluteUrl(examUrl)
+                        }, openGeneration);
                     }
                 } catch (guardError) {
                     console.warn('[App] 题目窗口占位页守护失败:', guardError);
                 }
+                if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
                 if (guardOptions.reuseWindow && examWindow && !examWindow.closed && typeof this._cleanupReusedWindowSessions === 'function') {
-                    await this._cleanupReusedWindowSessions(examWindow, examId);
+                    await this._cleanupReusedWindowSessions(examWindow, examId, launchRegistration);
+                    if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
                 }
 
-                // 再进行会话记录与脚本注入
-                if (!reviewMode && !memorizeMode) {
-                    await this.startPracticeSession(examId);
+                // 在启动窗口前捕获激活的题库配置 ID，确保后续练习记录 metadata 来源
+                // 一律按"启动时"的题库写入，避免用户在考试过程中切换题库导致提交时来源不一致。
+                if (!reviewMode) {
+                    try {
+                        await this._captureLaunchLibraryConfigurationId(examId, {
+                            commitGuard: () => this._isExamSessionRegistrationCurrent(examId, launchRegistration)
+                        });
+                    } catch (captureError) {
+                        console.warn('[App] 捕获启动题库配置 ID 失败:', captureError);
+                    }
+                    if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
                 }
-                this.injectDataCollectionScript(examWindow, examId, exam);
-                this.setupExamWindowManagement(examWindow, examId, exam, options);
+
+                // Register the window first so the host expectedSessionId exists, then start the
+                // recorder with that same id.  Starting the recorder before window setup used
+                // to mint a second session id that never matched INIT/COMPLETE.
+                launchRegistration = this.setupExamWindowManagement(examWindow, examId, exam, {
+                    ...options,
+                    expectedRegistration: launchRegistration,
+                    navigationEpoch: guardOptions.navigationEpoch,
+                    skipContentGuard: true,
+                    deferInitialHandshake: !reviewMode && !memorizeMode,
+                    expectedUrl: this._ensureAbsoluteUrl(examUrl)
+                });
+                if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
+                if (!reviewMode && !memorizeMode) {
+                    const startResult = await this.startPracticeSession(examId, {
+                        examDefinition: exam,
+                        expectedRegistration: launchRegistration
+                    });
+                    if (!startResult || startResult.owned !== true
+                        || !this._isExamSessionRegistrationCurrent(examId, startResult.registration)) {
+                        await this._abortExamOpen(examId, launchRegistration);
+                        return null;
+                    }
+                    launchRegistration = startResult.registration;
+                    this.restartExamHandshake(examWindow, examId, launchRegistration);
+                }
 
                 if (options && options.suiteSessionId) {
-                    const sessionInfo = this.ensureExamWindowSession(examId, examWindow);
+                    if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
+                    const sessionInfo = launchRegistration.windowInfo;
                     sessionInfo.suiteSessionId = options.suiteSessionId;
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
@@ -465,7 +638,11 @@
                         sessionInfo.suiteSequenceTotal = options.sequenceTotal;
                     }
                     this.examWindows && this.examWindows.set(examId, sessionInfo);
+                    launchRegistration = this._captureExamSessionRegistration(examId, sessionInfo);
                 }
+
+                if (!this._isExamSessionRegistrationCurrent(examId, launchRegistration)) return null;
+                this.injectDataCollectionScript(examWindow, examId, exam, { expectedRegistration: launchRegistration });
 
                 if (reviewMode && typeof this._bindReviewWindowRef === 'function') {
                     this._bindReviewWindowRef(options.reviewSessionId, examWindow);
@@ -476,20 +653,29 @@
                     'info'
                 );
 
-                return examWindow;
+                return options.returnLaunchContext === true
+                    ? Object.freeze({ window: examWindow, registration: launchRegistration })
+                    : examWindow;
 
             } catch (error) {
                 console.error('Failed to open exam:', error);
                 window.showMessage('打开题目失败，请重试', 'error');
+                if (launchRegistration) await this._abortExamOpen(examId, launchRegistration);
+                return null;
             }
         },
 
         _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
+            const openGeneration = options.openGeneration || null;
 
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
+                    if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow)) {
+                        return null;
+                    }
                     options.reuseWindow.location.href = resolvedPdfUrl;
+                    options.navigationEpoch = this._recordExamWindowNavigation(options.reuseWindow);
                     options.reuseWindow.focus();
                     pdfWin = options.reuseWindow;
                 } catch (reuseError) {
@@ -498,6 +684,7 @@
             }
 
             if (!pdfWin) {
+                if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
                 if (options.target === 'tab') {
                     try {
                         pdfWin = window.open(resolvedPdfUrl, '_blank');
@@ -507,11 +694,13 @@
                         pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
                     } catch (_) { }
                 }
+                if (pdfWin) options.navigationEpoch = this._recordExamWindowNavigation(pdfWin);
             }
 
             if (!pdfWin) {
                 try {
                     window.location.href = resolvedPdfUrl;
+                    options.navigationEpoch = this._recordExamWindowNavigation(window);
                     return window;
                 } catch (error) {
                     throw new Error('无法打开PDF窗口，请检查弹窗设置');
@@ -559,10 +748,15 @@
          */
         openExamWindow(examUrl, exam, options = {}) {
             const reuseWindow = options.reuseWindow;
+            const openGeneration = options.openGeneration || null;
             const finalUrl = this._ensureAbsoluteUrl(examUrl);
             if (reuseWindow && !reuseWindow.closed) {
                 try {
+                    if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, reuseWindow)) {
+                        return null;
+                    }
                     reuseWindow.location.href = finalUrl;
+                    options.navigationEpoch = this._recordExamWindowNavigation(reuseWindow);
                     reuseWindow.focus();
                     return reuseWindow;
                 } catch (error) {
@@ -576,7 +770,9 @@
                     ? options.windowName.trim()
                     : '_blank';
                 try {
+                    if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, reuseWindow || null)) return null;
                     tabWindow = window.open(finalUrl, requestedName);
+                    if (tabWindow) options.navigationEpoch = this._recordExamWindowNavigation(tabWindow);
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
@@ -593,17 +789,20 @@
             // 打开新窗口
             let examWindow = null;
             try {
+                if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, reuseWindow || null)) return null;
                 examWindow = window.open(
                     finalUrl,
                     `exam_${exam.id}`,
                     windowFeatures
                 );
+                if (examWindow) options.navigationEpoch = this._recordExamWindowNavigation(examWindow);
             } catch (_) { }
 
             // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
             if (!examWindow) {
                 try {
                     window.location.href = finalUrl;
+                    options.navigationEpoch = this._recordExamWindowNavigation(window);
                     return window; // 以当前窗口作为返回引用
                 } catch (e) {
                     throw new Error('无法打开题目页面，请检查弹窗/文件路径设置');
@@ -632,6 +831,126 @@
                 console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
                 return rawUrl;
             }
+        },
+
+        _resolveExamMessageEndpoint(rawUrl) {
+            const href = this._ensureAbsoluteUrl(rawUrl);
+            if (!href) {
+                return { expectedUrl: '', expectedOrigin: '', allowOpaqueOrigin: false };
+            }
+            try {
+                const parsed = new URL(href, window.location.href);
+                // Chromium reports URL.origin as "file://" while postMessage events
+                // between file pages use the opaque origin "null".
+                if (parsed.protocol === 'file:') {
+                    return {
+                        expectedUrl: parsed.href,
+                        expectedOrigin: 'null',
+                        allowOpaqueOrigin: true
+                    };
+                }
+                if (parsed.origin && parsed.origin !== 'null') {
+                    return {
+                        expectedUrl: parsed.href,
+                        expectedOrigin: parsed.origin,
+                        allowOpaqueOrigin: false
+                    };
+                }
+            } catch (_) {
+                // An unparseable launch URL must never degrade to wildcard messaging.
+            }
+            return { expectedUrl: '', expectedOrigin: '', allowOpaqueOrigin: false };
+        },
+
+        _reportExamMessageRejected(examId, type, reason, event = null) {
+            if (!this._examMessageRejectionCounts) this._examMessageRejectionCounts = new Map();
+            const key = `${String(reason || 'unknown')}:${String(type || 'unknown')}`;
+            const count = Number(this._examMessageRejectionCounts.get(key) || 0) + 1;
+            this._examMessageRejectionCounts.set(key, count);
+            const incomingOrigin = event && typeof event.origin === 'string' ? event.origin : '';
+            const originClass = incomingOrigin === 'null'
+                ? 'opaque'
+                : (incomingOrigin && window.location && incomingOrigin === window.location.origin ? 'same-origin' : (incomingOrigin ? 'cross-origin' : 'missing'));
+            const detail = {
+                reason: String(reason || 'unknown'),
+                messageType: String(type || 'unknown'),
+                examId: String(examId || ''),
+                originClass,
+                count
+            };
+            if (count === 1 || count % 10 === 0) {
+                console.debug('[ExamMessage] rejected', detail);
+            }
+            try {
+                window.dispatchEvent(new CustomEvent('ielts-atlas:message-rejected', { detail }));
+            } catch (_) {
+                // Telemetry must never affect the security decision.
+            }
+            return false;
+        },
+
+        // examWindows 以 examId 建键，但套题模拟模式下多篇复用同一个子窗口，
+        // 只有首篇会拿到真实注册。若回包时直接用消息里的 examId 兜底建注册，
+        // ensureExamWindowSession 会新铸一个子页面并不持有的 windowSessionToken，
+        // 回包随即被子页面的信任校验静默丢弃。因此先解析“真正持有该窗口”的注册键，
+        // 仅在没有任何注册持有该窗口时才沿用传入 examId（保持新窗口的既有行为）。
+        _resolveExamWindowSessionKey(examId, targetWindow) {
+            if (!targetWindow || !this.examWindows || typeof this.examWindows.forEach !== 'function') {
+                return examId;
+            }
+            const exactInfo = typeof this.examWindows.get === 'function'
+                ? this.examWindows.get(examId)
+                : null;
+            if (exactInfo && exactInfo.window === targetWindow) {
+                return examId;
+            }
+            let ownerExamId = null;
+            let ownerInfo = null;
+            this.examWindows.forEach((info, registeredExamId) => {
+                // 仅做引用比较，绝不读取可能跨域/已关闭的 WindowProxy 上的属性。
+                if (!info || info.window !== targetWindow) {
+                    return;
+                }
+                if (!ownerInfo
+                    || (Number(info.registrationId) || 0) >= (Number(ownerInfo.registrationId) || 0)) {
+                    ownerExamId = registeredExamId;
+                    ownerInfo = info;
+                }
+            });
+            return ownerInfo ? ownerExamId : examId;
+        },
+
+        _resolveExamWindowSessionForTarget(examId, targetWindow) {
+            const resolvedExamId = this._resolveExamWindowSessionKey(examId, targetWindow);
+            return {
+                examId: resolvedExamId,
+                windowInfo: this.ensureExamWindowSession(resolvedExamId, targetWindow)
+            };
+        },
+
+        _postExamMessage(examId, targetWindow, type, data = {}) {
+            if (!targetWindow || targetWindow.closed || typeof targetWindow.postMessage !== 'function') {
+                return false;
+            }
+            const windowInfo = this._resolveExamWindowSessionForTarget(examId, targetWindow).windowInfo;
+            const targetOrigin = windowInfo.expectedOrigin && windowInfo.expectedOrigin !== 'null'
+                ? windowInfo.expectedOrigin
+                : (windowInfo.allowOpaqueOrigin ? '*' : '');
+            if (!targetOrigin) {
+                console.warn('[App] 拒绝向未绑定可信 origin 的题目窗口发送消息:', type, examId);
+                return false;
+            }
+            const payload = Object.assign({}, data || {}, {
+                examId: data && data.examId != null ? data.examId : examId,
+                windowSessionToken: windowInfo.windowSessionToken
+            });
+            targetWindow.postMessage({
+                type,
+                data: payload,
+                source: 'exam_host',
+                timestamp: Date.now()
+            }, targetOrigin);
+            return true;
         },
 
         _appendSuiteContextToExamUrl(rawUrl, options = {}) {
@@ -665,6 +984,19 @@
                 if (Number.isInteger(options.sequenceTotal)) {
                     parsed.searchParams.set('suiteSequenceTotal', String(options.sequenceTotal));
                 }
+                return parsed.toString();
+            } catch (_) {
+                return rawUrl;
+            }
+        },
+
+        _appendEndlessContextToExamUrl(rawUrl) {
+            if (!rawUrl) {
+                return rawUrl;
+            }
+            try {
+                const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                parsed.searchParams.set('endless', '1');
                 return parsed.toString();
             } catch (_) {
                 return rawUrl;
@@ -835,6 +1167,14 @@
             if (!examWindow || examWindow.closed) {
                 return examWindow;
             }
+            // Separate file:// documents have opaque origins. Reading a child
+            // window's location is forbidden even when both files are local,
+            // and the launch URL has already been resolved by openExam().
+            if (typeof window !== 'undefined'
+                && window.location
+                && window.location.protocol === 'file:') {
+                return examWindow;
+            }
 
             const resolveHref = (targetWindow) => {
                 try {
@@ -882,6 +1222,7 @@
                         } else {
                             examWindow.location.href = placeholderUrl;
                         }
+                        retryOptions.navigationEpoch = this._recordExamWindowNavigation(examWindow);
                         return examWindow;
                     } catch (forceError) {
                         console.warn('[App] 套题模式强制跳转占位页失败，继续使用原窗口:', forceError);
@@ -937,9 +1278,11 @@
             try {
                 if (examWindow.location && typeof examWindow.location.replace === 'function') {
                     examWindow.location.replace(placeholderUrl);
+                    retryOptions.navigationEpoch = this._recordExamWindowNavigation(examWindow);
                     return examWindow;
                 }
                 examWindow.location.href = placeholderUrl;
+                retryOptions.navigationEpoch = this._recordExamWindowNavigation(examWindow);
                 return examWindow;
             } catch (navigationError) {
                 console.warn('[App] 题目窗口导航占位页失败，尝试重新打开:', navigationError);
@@ -949,6 +1292,7 @@
                         : (examWindow.name || '_blank');
                     const reopened = window.open(placeholderUrl, windowName);
                     if (reopened) {
+                        retryOptions.navigationEpoch = this._recordExamWindowNavigation(reopened);
                         return reopened;
                     }
                 } catch (openError) {
@@ -962,6 +1306,7 @@
         _buildExamPlaceholderUrl(exam = null, options = {}) {
             const basePath = 'templates/exam-placeholder.html';
             const params = new URLSearchParams();
+            params.set('suite_test', '1');
 
             const safeSet = (key, value) => {
                 if (value == null) {
@@ -1038,7 +1383,13 @@
         /**
          * 注入数据采集脚本到练习页面
          */
-        injectDataCollectionScript(examWindow, examId, exam = null) {
+        injectDataCollectionScript(examWindow, examId, exam = null, options = {}) {
+            const expectedRegistration = options && options.expectedRegistration || null;
+            const ownsRegistration = () => !expectedRegistration
+                || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
+            if (!ownsRegistration()) {
+                return false;
+            }
             if (this._isUnifiedReadingExam(exam)) {
                 return;
             }
@@ -1067,6 +1418,9 @@
             };
             const injectScript = () => {
                 try {
+                    if (!ownsRegistration()) {
+                        return false;
+                    }
                     if (!examWindow || examWindow.closed) {
                         console.warn('[DataInjection] 目标窗口已关闭');
                         return;
@@ -1076,7 +1430,7 @@
                         ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
                         : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
                     if (bridgeReady) {
-                        this.initializePracticeSession(examWindow, examId);
+                        this.initializePracticeSession(examWindow, examId, expectedRegistration);
                         return;
                     }
 
@@ -1090,6 +1444,11 @@
 
                     if (!doc || (!doc.head && !doc.body)) {
                         console.warn('[DataInjection] 题目页尚未准备好');
+                        return;
+                    }
+
+                    if (isListeningExam && doc.documentElement
+                        && doc.documentElement.dataset.listeningWrapper === 'true') {
                         return;
                     }
 
@@ -1108,12 +1467,15 @@
                         : (host && typeof host.querySelector === 'function' ? host.querySelector(existingSelector) : null);
                     if (existingEnhancerScript) {
                         if (isListeningExam && (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)) {
-                            this.initializePracticeSession(examWindow, examId);
+                            this.initializePracticeSession(examWindow, examId, expectedRegistration);
                         }
                         return;
                     }
                     let enhancerInjected = false;
                     const appendEnhancer = () => {
+                        if (!ownsRegistration()) {
+                            return false;
+                        }
                         const alreadyReady = isListeningExam
                             ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
                             : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
@@ -1128,9 +1490,15 @@
                         scriptEl.src = ensureScriptUrl();
 
                         scriptEl.onload = () => {
+                            if (!ownsRegistration()) {
+                                return;
+                            }
                             setTimeout(() => {
+                                if (!ownsRegistration()) {
+                                    return;
+                                }
                                 try {
-                                    this.initializePracticeSession(examWindow, examId);
+                                    this.initializePracticeSession(examWindow, examId, expectedRegistration);
                                 } catch (sessionError) {
                                     console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
                                 }
@@ -1138,27 +1506,40 @@
                         };
 
                         scriptEl.onerror = (loadError) => {
+                            if (!ownsRegistration()) {
+                                return;
+                            }
                             console.warn('[DataInjection] 加载增强器失败:', loadError);
                             scriptEl.remove();
                             if (!isListeningExam) {
-                                this.injectInlineScript(examWindow, examId);
+                                this.injectInlineScript(examWindow, examId, expectedRegistration);
                             }
                         };
 
+                        if (!ownsRegistration()) {
+                            return false;
+                        }
                         host.appendChild(scriptEl);
+                        return true;
                     };
 
-                    appendEnhancer();
+                    return appendEnhancer();
                 } catch (error) {
+                    if (!ownsRegistration()) {
+                        return false;
+                    }
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
                     if (!isListeningExam) {
-                        this.injectInlineScript(examWindow, examId);
+                        this.injectInlineScript(examWindow, examId, expectedRegistration);
                     }
                 }
             };
 
             const checkAndInject = () => {
                 try {
+                    if (!ownsRegistration()) {
+                        return;
+                    }
                     if (!examWindow || examWindow.closed) {
                         return;
                     }
@@ -1166,7 +1547,7 @@
                     const doc = examWindow.document;
                     if (doc && (doc.readyState === 'interactive' || doc.readyState === 'complete')) {
                         injectScript();
-                    } else {
+                    } else if (ownsRegistration()) {
                         setTimeout(checkAndInject, 200);
                     }
                 } catch (error) {
@@ -1174,19 +1555,28 @@
                 }
             };
 
-            setTimeout(checkAndInject, 300);
+            if (ownsRegistration()) {
+                setTimeout(checkAndInject, 300);
+            }
         },
 
         /**
          * 内联脚本注入（备用方案）
          */
-        injectInlineScript(examWindow, examId) {
+        injectInlineScript(examWindow, examId, expectedRegistration = null) {
+            const ownsRegistration = () => !expectedRegistration
+                || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
             try {
+                if (!ownsRegistration()) {
+                    return false;
+                }
                 if (!examWindow || !examWindow.document || !examWindow.document.head) {
                     throw new Error('inline_target_unavailable');
                 }
 
                 const sessionToken = `${examId}_${Date.now()}`;
+                // 备用方案注入时同步读取 host 端启动时捕获的题库配置 ID，确保 enhancer 也能拿到来源。
+                const launchLibraryConfigurationId = this._readLaunchLibraryConfigurationId(examId);
                 const inlineScript = examWindow.document.createElement('script');
                 inlineScript.type = 'text/javascript';
                 inlineScript.textContent = `
@@ -1202,7 +1592,26 @@
                             examId: ${JSON.stringify(examId)},
                             startTime: Date.now(),
                             answers: {},
-                            suite: {
+                            // 启动时 host 端捕获的题库配置 ID；每条 INIT_SESSION 还会再次以
+                            // initData.libraryConfigurationId 同步更新，确保即使延迟加载也能拿到正确来源。
+                            libraryConfigurationId: ${JSON.stringify(launchLibraryConfigurationId || null)},
+                            expectedParentOrigin: (function() {
+                                try {
+                                    if (!document.referrer) return '';
+                                    var parsed = new URL(document.referrer, window.location.href);
+                                    // Chromium: file URL.origin is "file://", postMessage event.origin is "null".
+                                    if (parsed.protocol === 'file:') return '';
+                                    if (!parsed.origin || parsed.origin === 'null' || parsed.origin === 'file://') return '';
+                                    return parsed.origin;
+                                } catch (_) {
+                                    return '';
+                                }
+                            })(),
+                             parentOrigin: '',
+                             parentOriginIsOpaque: false,
+                             windowSessionToken: '',
+                             submissionId: '',
+                             suite: {
                                 active: false,
                                 sessionId: null,
                                 guarded: false,
@@ -1211,12 +1620,40 @@
                             }
                         };
 
+                        function createSubmissionId() {
+                            try {
+                                if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                                    return 'inline-submit-' + window.crypto.randomUUID();
+                                }
+                            } catch (_) {}
+                            return 'inline-submit-' + (state.sessionId || state.examId || 'session') + '-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                        }
+
                         function sendMessage(type, data) {
                             if (!parentWindow || typeof parentWindow.postMessage !== 'function') {
                                 return;
                             }
                             try {
-                                parentWindow.postMessage({ type: type, data: data || {} }, '*');
+                                var targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
+                                    ? state.parentOrigin
+                                    : (state.expectedParentOrigin || (window.location.protocol === 'file:' ? '*' : ''));
+                                if (!targetOrigin) return;
+                                var payload = Object.assign({}, data || {});
+                                if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
+                                    if (!state.submissionId) {
+                                        state.submissionId = payload.submissionId || createSubmissionId();
+                                    }
+                                    payload.sessionId = payload.sessionId || state.sessionId || null;
+                                    payload.submissionId = payload.submissionId || state.submissionId;
+                                }
+                                parentWindow.postMessage({
+                                    type: type,
+                                    data: Object.assign(payload, {
+                                        windowSessionToken: state.windowSessionToken || null
+                                    }),
+                                    source: 'inline_collector',
+                                    timestamp: Date.now()
+                                }, targetOrigin);
                             } catch (error) {
                                 console.warn('[InlineEnhancer] 无法发送消息:', error);
                             }
@@ -1333,10 +1770,20 @@
                         function handleInitSession(message) {
                             var initData = message && message.data ? message.data : {};
                             if (initData.sessionId) {
+                                if (state.sessionId && String(state.sessionId) !== String(initData.sessionId)) {
+                                    state.submissionId = '';
+                                }
                                 state.sessionId = initData.sessionId;
                             }
                             if (initData.examId) {
                                 state.examId = initData.examId;
+                            }
+                            // host 启动时捕获并随 INIT_SESSION 携带的题库配置 ID；这里同步更新 state，
+                            // 在 enhancer 回传完成结果时一并透传，避免后续提交再读当前激活题库。
+                            if (typeof initData.libraryConfigurationId !== 'undefined'
+                                && initData.libraryConfigurationId !== null
+                                && initData.libraryConfigurationId !== '') {
+                                state.libraryConfigurationId = initData.libraryConfigurationId;
                             }
                             if (initData.suiteSessionId) {
                                 state.suite.active = true;
@@ -1359,7 +1806,52 @@
                             }
 
                             if (message.type === 'INIT_SESSION') {
+                                var initData = message.data || {};
+                                var incomingOrigin = event && typeof event.origin === 'string' ? event.origin : '';
+                                var declaredOrigin = typeof initData.parentOrigin === 'string' ? initData.parentOrigin : '';
+                                var incomingToken = typeof initData.windowSessionToken === 'string'
+                                    ? initData.windowSessionToken.trim()
+                                    : '';
+                                if (!event || event.source !== parentWindow || message.source !== 'exam_host' || !incomingToken) return;
+                                var expectedParentOrigin = state.expectedParentOrigin
+                                    && state.expectedParentOrigin !== 'file://'
+                                    && String(state.expectedParentOrigin).indexOf('file:') !== 0
+                                    ? state.expectedParentOrigin
+                                    : '';
+                                if (expectedParentOrigin) {
+                                    if (incomingOrigin !== expectedParentOrigin || declaredOrigin !== expectedParentOrigin) return;
+                                    state.parentOrigin = expectedParentOrigin;
+                                    state.parentOriginIsOpaque = false;
+                                } else if (window.location.protocol === 'file:') {
+                                    var trustedFileOrigin = (incomingOrigin === 'null' || incomingOrigin === 'file://')
+                                        && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
+                                    if (!trustedFileOrigin) return;
+                                    state.parentOrigin = 'null';
+                                    state.parentOriginIsOpaque = true;
+                                } else {
+                                    var trustedWebOrigin = !!incomingOrigin
+                                        && incomingOrigin !== 'null'
+                                        && incomingOrigin !== 'file://'
+                                        && declaredOrigin === incomingOrigin;
+                                    if (!trustedWebOrigin) return;
+                                    state.parentOrigin = incomingOrigin;
+                                    state.parentOriginIsOpaque = false;
+                                }
+                                state.windowSessionToken = incomingToken;
                                 handleInitSession(message);
+                                return;
+                            }
+
+                            var messageData = message.data || {};
+                            var messageToken = typeof messageData.windowSessionToken === 'string'
+                                ? messageData.windowSessionToken.trim()
+                                : '';
+                            var messageOrigin = event && typeof event.origin === 'string' ? event.origin : '';
+                            var originMatches = state.parentOriginIsOpaque
+                                ? (messageOrigin === 'null' || messageOrigin === 'file://')
+                                : Boolean(state.parentOrigin && messageOrigin === state.parentOrigin);
+                            if (!event || event.source !== parentWindow || message.source !== 'exam_host'
+                                || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) {
                                 return;
                             }
 
@@ -1424,7 +1916,9 @@
                                     examId: state.examId,
                                     duration: Math.round((Date.now() - state.startTime) / 1000),
                                     answers: state.answers,
-                                    source: 'inline_collector'
+                                    source: 'inline_collector',
+                                    // 透传启动时捕获的题库配置 ID，便于 host 端 completeAttempt 写入 metadata 来源。
+                                    libraryConfigurationId: state.libraryConfigurationId || null
                                 });
                             }
                         };
@@ -1441,35 +1935,49 @@
                     })();
                 `;
 
+                if (!ownsRegistration()) {
+                    return false;
+                }
                 examWindow.document.head.appendChild(inlineScript);
 
                 setTimeout(() => {
-                    this.initializePracticeSession(examWindow, examId);
+                    if (!ownsRegistration()) {
+                        return;
+                    }
+                    this.initializePracticeSession(examWindow, examId, expectedRegistration);
                 }, 300);
 
             } catch (error) {
+                if (!ownsRegistration()) {
+                    return false;
+                }
                 console.error('[DataInjection] 内联脚本注入失败:', error);
                 this.handleInjectionError(examId, error);
             }
+            return true;
         },
 
         /**
          * 初始化练习会话
          */
-        initializePracticeSession(examWindow, examId) {
+        initializePracticeSession(examWindow, examId, expectedRegistration = null) {
             try {
+                if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                    return false;
+                }
                 const now = Date.now();
 
-                let existingInfo = null;
-                if (this.examWindows && this.examWindows.has(examId)) {
+                let existingInfo = expectedRegistration ? expectedRegistration.windowInfo : null;
+                if (!existingInfo && this.examWindows && this.examWindows.has(examId)) {
                     existingInfo = this.examWindows.get(examId) || null;
                 }
 
-                let suiteSessionId = existingInfo && existingInfo.suiteSessionId
-                    ? existingInfo.suiteSessionId
-                    : null;
+                const hasExplicitSuiteBinding = Boolean(
+                    existingInfo && Object.prototype.hasOwnProperty.call(existingInfo, 'suiteSessionId')
+                );
+                let suiteSessionId = hasExplicitSuiteBinding ? (existingInfo.suiteSessionId || null) : null;
 
-                if (!suiteSessionId && this.currentSuiteSession) {
+                if (!hasExplicitSuiteBinding && !suiteSessionId && this.currentSuiteSession) {
                     const activeMatch = this.currentSuiteSession.activeExamId === examId;
                     const sequenceIndex = Number.isInteger(this.currentSuiteSession.currentIndex)
                         ? this.currentSuiteSession.currentIndex
@@ -1484,8 +1992,10 @@
                     }
                 }
 
-                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                if (suiteSessionId && !windowInfo.suiteSessionId) {
+                const windowInfo = expectedRegistration
+                    ? expectedRegistration.windowInfo
+                    : this.ensureExamWindowSession(examId, examWindow);
+                if (suiteSessionId && !Object.prototype.hasOwnProperty.call(windowInfo, 'suiteSessionId')) {
                     windowInfo.suiteSessionId = suiteSessionId;
                 }
                 const timerContext = this._resolveSuiteTimerContext({}, windowInfo);
@@ -1502,10 +2012,7 @@
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, { timestamp: now });
 
                 // 发送会话初始化消息
-                examWindow.postMessage({
-                    type: 'INIT_SESSION',
-                    data: initPayload
-                }, '*');
+                this._postExamMessage(examId, examWindow, 'INIT_SESSION', initPayload);
 
                 // 存储会话信息
                 if (!this.examWindows) {
@@ -1516,7 +2023,7 @@
                     existingInfo.sessionId = initPayload.sessionId;
                     existingInfo.initTime = now;
                     existingInfo.status = 'initialized';
-                    if (suiteSessionId && !existingInfo.suiteSessionId) {
+                    if (suiteSessionId && !Object.prototype.hasOwnProperty.call(existingInfo, 'suiteSessionId')) {
                         existingInfo.suiteSessionId = suiteSessionId;
                     }
                     if (!existingInfo.window || existingInfo.window.closed) {
@@ -1534,8 +2041,11 @@
                     }));
                 }
 
+                return true;
+
             } catch (error) {
                 console.error('[DataInjection] 会话初始化失败:', error);
+                return false;
             }
         },
 
@@ -1553,13 +2063,7 @@
                 type: 'script_injection_error'
             };
 
-            // 保存错误日志到本地存储
-            const errorLogs = await storage.get('injection_errors', []);
-            errorLogs.push(errorInfo);
-            if (errorLogs.length > 50) {
-                errorLogs.splice(0, errorLogs.length - 50); // 保留最近50条错误
-            }
-            await storage.set('injection_errors', errorLogs);
+            console.warn('[DataInjection] 诊断信息:', errorInfo);
 
             // 不显示错误给用户，静默处理
             console.warn('[DataInjection] 将使用模拟数据模式');
@@ -1571,16 +2075,23 @@
         setupExamWindowManagement(examWindow, examId, exam = null, options = {}) {
             if (!examWindow) {
                 console.warn('[App] 缺少题目窗口引用，无法完成窗口管理');
-                return;
+                return null;
             }
 
-            try {
-                const guardedWindow = this._guardExamWindowContent(examWindow, exam, { ...options, examId });
-                if (guardedWindow) {
-                    examWindow = guardedWindow;
+            const expectedRegistration = options && options.expectedRegistration || null;
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return null;
+            }
+
+            if (!(options && options.skipContentGuard)) {
+                try {
+                    const guardedWindow = this._guardExamWindowContent(examWindow, exam, { ...options, examId });
+                    if (guardedWindow) {
+                        examWindow = guardedWindow;
+                    }
+                } catch (guardError) {
+                    console.warn('[App] 守护题目窗口内容失败:', guardError);
                 }
-            } catch (guardError) {
-                console.warn('[App] 守护题目窗口内容失败:', guardError);
             }
 
             // 存储窗口引用
@@ -1588,12 +2099,32 @@
                 this.examWindows = new Map();
             }
 
-            this.examWindows.set(examId, {
+            const previousWindowInfo = this.examWindows.get(examId);
+            if (previousWindowInfo && previousWindowInfo.closeMonitor) {
+                try {
+                    clearInterval(previousWindowInfo.closeMonitor);
+                } catch (_) {}
+            }
+
+            const endpoint = this._resolveExamMessageEndpoint(
+                options && options.expectedUrl
+                    ? options.expectedUrl
+                    : (exam ? this.buildExamUrl(exam) : '')
+            );
+            this._examRegistrationSequence = Math.max(0, Number(this._examRegistrationSequence) || 0) + 1;
+            const windowInfo = {
                 window: examWindow,
                 startTime: Date.now(),
                 status: 'active',
-                expectedSessionId: null,
-                origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                expectedSessionId: expectedRegistration && expectedRegistration.windowInfo.expectedSessionId
+                    ? String(expectedRegistration.windowInfo.expectedSessionId)
+                    : null,
+                windowSessionToken: expectedRegistration && expectedRegistration.windowInfo.windowSessionToken || null,
+                windowSessionTokenSessionId: expectedRegistration && expectedRegistration.windowInfo.windowSessionTokenSessionId || null,
+                expectedUrl: endpoint.expectedUrl,
+                expectedOrigin: endpoint.expectedOrigin,
+                allowOpaqueOrigin: endpoint.allowOpaqueOrigin,
+                observedOrigin: '',
                 suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null,
                 suiteFlowMode: (options && options.suiteFlowMode) ? String(options.suiteFlowMode) : null,
                 suiteSequenceIndex: Number.isInteger(options && options.sequenceIndex) ? options.sequenceIndex : null,
@@ -1606,8 +2137,24 @@
                     : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
-                    : Boolean(options && options.reviewMode)
-            });
+                    : Boolean(options && options.reviewMode),
+                // Async INIT/draft work must be tied to this exact registration.
+                // Reusing an exam ID replaces the map entry even when the browser
+                // keeps the same WindowProxy alive.
+                sessionGeneration: expectedRegistration
+                    ? expectedRegistration.sessionGeneration
+                    : (previousWindowInfo && Number.isFinite(previousWindowInfo.sessionGeneration)
+                        ? previousWindowInfo.sessionGeneration + 1
+                        : 1),
+                registrationId: this._examRegistrationSequence,
+                navigationEpoch: Number(options && options.navigationEpoch)
+                    || Number(expectedRegistration && expectedRegistration.navigationEpoch)
+                    || 0,
+                closeMonitor: null
+            };
+            this.examWindows.set(examId, windowInfo);
+            this._refreshExamWindowToken(examId, windowInfo);
+            const registration = this._captureExamSessionRegistration(examId, windowInfo);
 
             // 监听窗口关闭事件
             let checkClosed = null;
@@ -1616,43 +2163,92 @@
                     try {
                         if (examWindow.closed) {
                             clearInterval(checkClosed);
-                            this.handleExamWindowClosed(examId);
+                            if (windowInfo.closeMonitor === checkClosed) {
+                                windowInfo.closeMonitor = null;
+                            }
+                            this.handleExamWindowClosed(examId, examWindow, registration);
                         }
                     } catch (monitorError) {
                         clearInterval(checkClosed);
                         console.warn('[App] 无法检测题目窗口状态:', monitorError);
                     }
                 }, 1000);
+                windowInfo.closeMonitor = checkClosed;
             } catch (error) {
                 console.warn('[App] 启动窗口关闭监控失败:', error);
             }
 
             // 设置窗口通信
             try {
-                this.setupExamWindowCommunication(examWindow, examId, exam, options);
+                this.setupExamWindowCommunication(examWindow, examId, exam, {
+                    ...options,
+                    expectedRegistration: registration
+                });
             } catch (error) {
                 console.warn('[App] 初始化题目窗口通信失败:', error);
             }
 
             // 启动与练习页的会话握手（file:// 下更可靠）
-            try {
-                this.startExamHandshake(examWindow, examId);
-            } catch (e) {
-                console.warn('[App] 启动握手失败:', e);
+            if (!(options && options.deferInitialHandshake)) {
+                try {
+                    this.startExamHandshake(examWindow, examId, registration);
+                } catch (e) {
+                    console.warn('[App] 启动握手失败:', e);
+                }
             }
 
-            const emitInitEnvelope = () => {
-                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+            const emitInitEnvelope = async () => {
+                if (!this._isExamSessionRegistrationCurrent(examId, registration)) return;
+                const windowInfo = registration.windowInfo;
+                const generation = windowInfo && windowInfo.sessionGeneration;
+                const expectedSessionId = windowInfo && windowInfo.expectedSessionId;
+                // 让最早到达的 INIT 即携带 draft，避免无 draft 的 envelope 先被去重守卫登记，
+                // 从而使后续携带 draft 的 INIT 被当作重复而丢弃、草稿无法恢复。
+                if (
+                    windowInfo
+                    && !windowInfo.reviewMode
+                    && !windowInfo.suiteSessionId
+                    && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
+                    && typeof this.getReadingDraftForExam === 'function'
+                ) {
+                    try {
+                        const restoredDraft = await this.getReadingDraftForExam(examId, {
+                            sessionId: windowInfo.expectedSessionId
+                        });
+                        if (restoredDraft) {
+                            windowInfo.lastReadingDraft = restoredDraft;
+                            this.examWindows && this.examWindows.set(examId, windowInfo);
+                        }
+                    } catch (_) {
+                        // draft restore is best-effort
+                    }
+                }
+                // The exam may have been reopened while draft restoration was
+                // pending. Never let the old continuation post its session into
+                // the replacement registration.
+                const currentWindowInfo = this.examWindows && this.examWindows.get(examId);
+                if (
+                    !windowInfo
+                    || !this._isExamSessionRegistrationCurrent(examId, registration)
+                    || currentWindowInfo !== windowInfo
+                    || windowInfo.window !== examWindow
+                    || windowInfo.sessionGeneration !== generation
+                    || windowInfo.expectedSessionId !== expectedSessionId
+                ) {
+                    return;
+                }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    this._postExamMessage(examId, examWindow, 'INIT_SESSION', initPayload);
+                    this._postExamMessage(examId, examWindow, 'init_exam_session', initPayload);
                 } catch (postError) {
                     console.warn('[App] 跨源初始化题目窗口失败:', postError);
                 }
             };
 
-            if (!isFileProtocol) {
+            if (options && options.deferInitialHandshake) {
+                // startPracticeSession owns the first INIT for managed practice launches.
+            } else if (!isFileProtocol) {
                 try {
                     examWindow.addEventListener('load', emitInitEnvelope);
                 } catch (error) {
@@ -1667,12 +2263,25 @@
             if (!(options && options.reviewMode)) {
                 this.updateExamStatus(examId, 'in-progress');
             }
+            return registration;
         },
 
         /**
          * 设置题目窗口通信
          */
         setupExamWindowCommunication(examWindow, examId, exam = null, options = {}) {
+            let expectedRegistration = options && options.expectedRegistration || null;
+            if (!expectedRegistration) {
+                const fallbackWindowInfo = this.ensureExamWindowSession(examId, examWindow);
+                if (!Object.prototype.hasOwnProperty.call(fallbackWindowInfo, 'suiteSessionId')) {
+                    fallbackWindowInfo.suiteSessionId = options && options.suiteSessionId || null;
+                }
+                expectedRegistration = this._captureExamSessionRegistration(
+                    examId,
+                    fallbackWindowInfo
+                );
+            }
+            const ownsRegistration = () => this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
                 try {
@@ -1713,6 +2322,9 @@
                     'SUITE_CONFIG_UPDATE',
                     'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
+                    'READING_DRAFT_SYNC',
+                    'READING_ANNOTATION_SYNC',
+                    'PRACTICE_RECORD_SAVED',
                     'SIMULATION_NAVIGATE',
                     'SIMULATION_ACTIVE_EXAM_CHANGE',
                     'SIMULATION_SUBMIT'
@@ -1835,36 +2447,53 @@
             };
 
             const messageHandler = async (event) => {
-                // 取得当前题目窗口引用（可能在 handshake 期间被更新）
-                const storedInfo = (this.examWindows && this.examWindows.get(examId)) || {};
-                const expectedWindow = storedInfo.window || examWindow;
+                if (!ownsRegistration()) {
+                    this._reportExamMessageRejected(examId, '', 'stale-registration', event);
+                    return;
+                }
+                const expectedWindow = expectedRegistration.window;
                 const sourceWindow = event ? (event.source || null) : null;
 
                 // 缺少来源窗口直接拒绝
                 if (!sourceWindow || !expectedWindow) {
+                    this._reportExamMessageRejected(examId, '', 'missing-window', event);
                     return;
-                }
-
-                // 校验来源域，允许 file:// (origin 为 null) 与同源页面
-                if (event.origin && event.origin !== 'null') {
-                    const allowedOrigin = window.location && window.location.origin;
-                    if (allowedOrigin && event.origin !== allowedOrigin) {
-                        return;
-                    }
                 }
 
                 const normalized = normalizeMessage(event.data);
                 if (!normalized) {
+                    this._reportExamMessageRejected(examId, '', 'invalid-envelope', event);
                     return;
                 }
 
-                const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
+                const windowInfo = expectedRegistration.windowInfo;
                 const expectedSessionId = windowInfo.expectedSessionId || '';
+                // Most messages must still come from the exact exam window.  A small
+                // suite/listening compatibility path below can prove an equivalent
+                // source with the window token and full session scope; do not reject
+                // before those constraints have been evaluated.
+                const sourceMatched = sourceWindow === expectedWindow;
+                const incomingOrigin = event && typeof event.origin === 'string' ? event.origin : '';
+                if (windowInfo.expectedOrigin && windowInfo.expectedOrigin !== 'null') {
+                    if (incomingOrigin !== windowInfo.expectedOrigin) {
+                        this._reportExamMessageRejected(examId, normalized.type, 'origin-mismatch', event);
+                        return;
+                    }
+                } else if (windowInfo.allowOpaqueOrigin) {
+                    if (incomingOrigin !== 'null' && incomingOrigin !== 'file://') {
+                        this._reportExamMessageRejected(examId, normalized.type, 'opaque-origin-mismatch', event);
+                        return;
+                    }
+                } else {
+                    this._reportExamMessageRejected(examId, normalized.type, 'origin-unbound', event);
+                    return;
+                }
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
                 const src = normalized.sourceTag || '';
                 const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder', 'listening_record_bridge']);
-                if (src && !allowedSources.has(src)) {
+                if (!src || !allowedSources.has(src)) {
+                    this._reportExamMessageRejected(examId, normalized.type, 'source-tag-mismatch', event);
                     return; // 非预期来源的消息忽略
                 }
 
@@ -1914,6 +2543,16 @@
                 const expectedWindowSessionToken = windowInfo && typeof windowInfo.windowSessionToken === 'string'
                     ? windowInfo.windowSessionToken.trim()
                     : '';
+                const permitsPreInitWithoutToken = type === 'REQUEST_INIT'
+                    || (type === 'SESSION_READY' && data.initialized !== true);
+                if (!permitsPreInitWithoutToken && (
+                    !expectedWindowSessionToken
+                    || !payloadWindowSessionToken
+                    || payloadWindowSessionToken !== expectedWindowSessionToken
+                )) {
+                    this._reportExamMessageRejected(examId, type, 'token-mismatch', event);
+                    return;
+                }
                 const canRoutePayloadExamInActiveSuite = Boolean(
                     suiteRoutableMessageTypes.has(type)
                     && isPayloadExamInActiveSuite
@@ -1921,7 +2560,106 @@
                     && payloadSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
                 );
-                const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const isReadingAnnotationSync = type === 'READING_ANNOTATION_SYNC';
+                const isReadingDraftSync = type === 'READING_DRAFT_SYNC';
+                if (isReadingAnnotationSync) {
+                    const expectedReviewSessionId = windowInfo && windowInfo.reviewSessionId
+                        ? String(windowInfo.reviewSessionId)
+                        : '';
+                    const payloadReviewSessionId = data && data.reviewSessionId != null
+                        ? String(data.reviewSessionId)
+                        : '';
+                    const payloadRecordId = data && data.recordId != null ? String(data.recordId) : '';
+                    const hasStrictSessionBinding = Boolean(
+                        expectedSessionId
+                        && payloadSessionId
+                        && payloadSessionId === expectedSessionId
+                    );
+                    const hasStrictWindowToken = Boolean(
+                        expectedWindowSessionToken
+                        && payloadWindowSessionToken
+                        && payloadWindowSessionToken === expectedWindowSessionToken
+                    );
+                    const hasStrictReviewBinding = Boolean(
+                        windowInfo
+                        && windowInfo.reviewMode
+                        && expectedReviewSessionId
+                        && payloadReviewSessionId === expectedReviewSessionId
+                    );
+                    // 单篇阅读 final-submit 后，结果页以已存档 recordId 发送标注同步：
+                    // 不在 review 回放态，但 windowInfo.submittedRecordId 必须与 payload
+                    // recordId 严格匹配，并仍受 source/会话/窗口 token/题号约束。
+                    const hasSubmittedRecordBinding = Boolean(
+                        windowInfo
+                        && !windowInfo.reviewMode
+                        && windowInfo.submittedRecordId
+                        && payloadRecordId
+                        && payloadRecordId === String(windowInfo.submittedRecordId)
+                    );
+                    if (
+                        !sourceMatched
+                        || !hasStrictSessionBinding
+                        || !hasStrictWindowToken
+                        || (!hasStrictReviewBinding && !hasSubmittedRecordBinding)
+                        || !payloadExamId
+                        || payloadExamId !== expectedExamId
+                    ) {
+                        return;
+                    }
+                }
+                if (isReadingDraftSync) {
+                    const hasStrictSessionBinding = Boolean(
+                        expectedSessionId
+                        && payloadSessionId
+                        && payloadSessionId === expectedSessionId
+                    );
+                    const hasStrictWindowToken = Boolean(
+                        expectedWindowSessionToken
+                        && payloadWindowSessionToken
+                        && payloadWindowSessionToken === expectedWindowSessionToken
+                    );
+                    const isLivePracticeWindow = Boolean(
+                        windowInfo
+                        && !windowInfo.reviewMode
+                        && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
+                    );
+                    if (
+                        !sourceMatched
+                        || !hasStrictSessionBinding
+                        || !hasStrictWindowToken
+                        || !isLivePracticeWindow
+                        || !payloadExamId
+                        || payloadExamId !== expectedExamId
+                    ) {
+                        return;
+                    }
+                }
+                if (type === 'SIMULATION_DRAFT_SYNC' && isExamInActiveSuite) {
+                    const incomingUpdatedAt = Number(data && (data.draftUpdatedAt
+                        ?? (data.draft && data.draft.updatedAt)
+                        ?? data.updatedAt));
+                    const suiteWindowBound = Boolean(
+                        windowInfo
+                        && windowInfo.suiteSessionId
+                        && String(windowInfo.suiteSessionId) === activeSuiteSessionId
+                    );
+                    const exactSuiteDraftBinding = Boolean(
+                        sourceMatched
+                        && suiteWindowBound
+                        && payloadSuiteSessionId === activeSuiteSessionId
+                        && isPayloadExamInActiveSuite
+                        && expectedWindowSessionToken
+                        && payloadWindowSessionToken === expectedWindowSessionToken
+                        && Number.isFinite(incomingUpdatedAt)
+                        && incomingUpdatedAt > 0
+                        && this.currentSuiteSession
+                        && ['active', 'initializing'].includes(this.currentSuiteSession.status)
+                    );
+                    if (!exactSuiteDraftBinding) {
+                        this._reportExamMessageRejected(examId, type, 'suite-draft-binding-mismatch', event);
+                        return;
+                    }
+                }
                 const payloadWindowInfo = payloadExamId && payloadExamId !== expectedExamId && this.examWindows
                     ? this.examWindows.get(payloadExamId)
                     : null;
@@ -1970,22 +2708,28 @@
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
+                    && payloadSessionId
+                    && expectedSessionId
+                    && payloadSessionId === expectedSessionId
                     && payloadTokenMatchesExpectedWindow
                     && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
-                    && (
-                        (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
-                        || isExamInActiveSuite
-                    )
+                    && payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
                 );
                 const allowListeningSourceFallback = Boolean(
                     !sourceMatched
                     && isListeningBridgeProtocolMessage
-                    && (
-                        (payloadExamId && payloadExamId === expectedExamId)
-                        || (payloadSessionId && expectedSessionId && payloadSessionId === expectedSessionId)
-                    )
+                    && payloadTokenMatchesExpectedWindow
+                    && payloadExamId
+                    && payloadExamId === expectedExamId
+                    && payloadSessionId
+                    && expectedSessionId
+                    && payloadSessionId === expectedSessionId
+                    && (!payloadSuiteSessionId || !activeSuiteSessionId || payloadSuiteSessionId === activeSuiteSessionId)
                 );
                 if (!sourceMatched && !allowSuiteSourceFallback && !allowListeningSourceFallback) {
+                    this._reportExamMessageRejected(examId, type, 'window-mismatch', event);
                     return;
                 }
                 if (windowInfo && sourceWindow && (sourceMatched || !expectedWindow || expectedWindow.closed)) {
@@ -2068,8 +2812,19 @@
                 if (!data.sessionId && expectedSessionId) {
                     data.sessionId = expectedSessionId;
                 }
+                if (
+                    (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT')
+                    && (
+                        !String(data.submissionId || '').trim()
+                        || !String(data.sessionId || '').trim()
+                        || !String(payloadWindowSessionToken || '').trim()
+                    )
+                ) {
+                    this._reportExamMessageRejected(examId, type, 'missing-submission-contract', event);
+                    return;
+                }
 
-                windowInfo.origin = event.origin;
+                windowInfo.observedOrigin = event.origin;
                 windowInfo.lastMessageAt = Date.now();
                 windowInfo.lastMessageType = type;
                 if (payloadWindowSessionToken) {
@@ -2089,7 +2844,7 @@
                         break;
                     // 新增：处理数据采集器的消息
                     case 'SESSION_READY':
-                        this.handleSessionReady(examId, data);
+                        this.handleSessionReady(examId, data, expectedRegistration);
                         if (typeof this._maybeRestoreSuiteReviewState === 'function') {
                             this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
                                 console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
@@ -2112,11 +2867,14 @@
                             console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录:', examId);
                             break;
                         }
-                        if (data && data.suiteSessionId && windowInfo) {
+                        if (data && data.suiteSessionId && windowInfo
+                            && !Object.prototype.hasOwnProperty.call(windowInfo, 'suiteSessionId')) {
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow, {
+                            expectedRegistration
+                        });
                         break;
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
@@ -2125,7 +2883,7 @@
                         sendInitEnvelope(sourceWindow || examWindow);
                         break;
                     case 'PRACTICE_RESET_REQUEST':
-                        await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow, expectedRegistration);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
@@ -2141,18 +2899,34 @@
                             window.practiceConfig.suite = {};
                         }
                         window.practiceConfig.suite.autoAdvanceAfterSubmit = autoAdvance;
-                        try {
-                            if (window.localStorage) {
-                                window.localStorage.setItem('suite_auto_advance_after_submit', String(autoAdvance));
-                            }
-                        } catch (_) {
-                            // ignore storage write failures
-                        }
+                        await window.AppData.preferences.patchSuite({ autoAdvanceAfterSubmit: autoAdvance });
                         break;
                     }
                     case 'VOCAB_HIGHLIGHT_SAVE':
-                        if (typeof window.saveReadingHighlightVocab === 'function') {
-                            await window.saveReadingHighlightVocab(data);
+                        if (!data || !String(data.requestId || '').trim()) {
+                            this._reportExamMessageRejected(examId, type, 'missing-request-id', event);
+                            break;
+                        }
+                        try {
+                            const saved = typeof window.saveReadingHighlightVocab === 'function'
+                                ? await window.saveReadingHighlightVocab(data)
+                                : null;
+                            this._announceVocabHighlightOutcome(
+                                examId,
+                                data,
+                                sourceWindow || expectedWindow,
+                                Boolean(saved),
+                                saved ? '' : 'save_failed'
+                            );
+                        } catch (saveError) {
+                            console.warn('[VocabStore] 阅读高亮生词保存异常:', saveError);
+                            this._announceVocabHighlightOutcome(
+                                examId,
+                                data,
+                                sourceWindow || expectedWindow,
+                                false,
+                                'save_failed'
+                            );
                         }
                         break;
                     case 'REVIEW_NAVIGATE':
@@ -2183,37 +2957,15 @@
                         await this.handleReviewReplayNavigate(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'SIMULATION_DRAFT_SYNC':
-                        if (this.currentSuiteSession && data && data.draft) {
-                            const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                            const previousDraft = this.currentSuiteSession.draftsByExam[routedExamId] || null;
-                            const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
-                            const shouldAcceptDraft = !(
-                                previousDraft
-                                && Number.isFinite(previousUpdatedAt)
-                                && Number.isFinite(incomingUpdatedAt)
-                                && incomingUpdatedAt < previousUpdatedAt
-                            );
-                            if (shouldAcceptDraft) {
-                                this.currentSuiteSession.draftsByExam[routedExamId] = {
-                                    ...data.draft,
-                                    updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
-                                };
-                            }
-                            if (Number.isFinite(Number(data.elapsed))) {
-                                if (typeof this._deriveSuiteExamElapsedSeconds === 'function') {
-                                    this.currentSuiteSession.elapsedByExam[routedExamId] = this._deriveSuiteExamElapsedSeconds(
-                                        this.currentSuiteSession,
-                                        routedExamId,
-                                        Number(data.elapsed)
-                                    );
-                                } else {
-                                    this.currentSuiteSession.elapsedByExam[routedExamId] = Math.max(0, Number(data.elapsed));
-                                }
-                            }
-                            if (typeof this._mirrorSessionToStorage === 'function') {
-                                this._mirrorSessionToStorage(this.currentSuiteSession);
-                            }
+                        if (typeof this._handleSuiteDraftSync === 'function') {
+                            await this._handleSuiteDraftSync(routedExamId, data, windowInfo, sourceWindow || expectedWindow);
                         }
+                        break;
+                    case 'READING_DRAFT_SYNC':
+                        await this._queueReadingDraftSync(routedExamId, data, windowInfo);
+                        break;
+                    case 'READING_ANNOTATION_SYNC':
+                        await this._queueReadingAnnotationSync(routedExamId, data, windowInfo);
                         break;
                     case 'SIMULATION_NAVIGATE':
                         if (typeof this._handleSimulationNavigate === 'function') {
@@ -2259,7 +3011,9 @@
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
-                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow, {
+                            expectedRegistration: routedExamId === examId ? expectedRegistration : null
+                        });
                         break;
                     default:
                 }
@@ -2284,17 +3038,12 @@
             }
             this.messageHandlers.set(examId, messageHandler);
 
-            // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
-            const sendInitEnvelope = (targetWindow) => {
-                try {
-                    const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
-                    const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-                } catch (initError) {
-                    console.warn('[App] 发送初始化消息失败:', initError);
-                }
-            };
+            const sendInitEnvelope = (targetWindow) => this._sendExamInitEnvelope(
+                examId,
+                targetWindow,
+                {},
+                expectedRegistration
+            );
 
             const tryAttachInitHandler = (targetWindow) => {
                 if (!targetWindow || isFileProtocol) {
@@ -2311,7 +3060,7 @@
                 return false;
             };
 
-            let initAttached = tryAttachInitHandler(examWindow);
+            let initAttached = Boolean(options && options.deferInitialHandshake);
 
             if (!initAttached) {
                 try {
@@ -2328,12 +3077,13 @@
             if (!initAttached) {
                 sendInitEnvelope(examWindow);
             }
+            return expectedRegistration;
         },
 
         /**
          * 与练习页建立握手（重复发送 INIT_SESSION，直到收到 SESSION_READY）
          */
-        startExamHandshake(examWindow, examId) {
+        startExamHandshake(examWindow, examId, expectedRegistration = null) {
             if (!this._handshakeTimers) this._handshakeTimers = new Map();
 
             // 避免重复握手
@@ -2341,17 +3091,21 @@
 
             let attempts = 0;
             const maxAttempts = 30; // ~9s
-            const tick = () => {
+            const tick = async () => {
+                if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                    clearInterval(timer);
+                    if (this._handshakeTimers.get(examId) === timer) this._handshakeTimers.delete(examId);
+                    return;
+                }
                 if (examWindow && !examWindow.closed) {
                     try {
-                        const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                        const initPayload = this._buildExamInitPayload(examId, windowInfo);
+                        const windowInfo = expectedRegistration
+                            ? expectedRegistration.windowInfo
+                            : this.ensureExamWindowSession(examId, examWindow);
                         windowInfo.handshakeAttempts = attempts + 1;
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
-                        // 直接发送两种事件名，确保增强器任何实现都能收到
-                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        await this._sendExamInitEnvelope(examId, examWindow, {}, expectedRegistration);
                     } catch (_) { /* 忽略 */ }
                 }
                 attempts++;
@@ -2361,92 +3115,10 @@
                     console.warn('[App] 握手超时，练习页可能未加载增强器');
                 }
             };
-            const timer = setInterval(tick, 300);
+            const timer = setInterval(() => { tick(); }, 300);
             this._handshakeTimers.set(examId, timer);
             // 立即发送一次
             tick();
-        },
-
-        /**
-         * 创建降级记录器
-         */
-        createFallbackRecorder() {
-            return {
-                handleRealPracticeData: async (examId, realData) => {
-                    try {
-                        // 获取题目信息
-                        const exam = await findExamDefinition(examId);
-
-                        if (!exam) {
-                            console.error('[FallbackRecorder] 无法找到题目信息:', examId);
-                            return null;
-                        }
-
-                        const api = window.PracticeRecordAPI;
-                        if (!api || typeof api.saveCompletion !== 'function') {
-                            throw new Error('统一练习记录 API 未就绪');
-                        }
-                        const practiceRecord = await api.saveCompletion(realData, {
-                            examId,
-                            sessionId: realData && realData.sessionId ? realData.sessionId : null,
-                            examEntry: exam,
-                            metadata: {
-                                examId,
-                                examTitle: exam.title || realData?.title || '',
-                                category: exam.category || realData?.category || 'unknown',
-                                frequency: exam.frequency || realData?.frequency || 'unknown',
-                                type: exam.type || realData?.type || null
-                            }
-                        });
-
-                        // 检查成就
-                        if (window.AchievementManager) {
-                            window.AchievementManager.check(practiceRecord).catch(console.warn);
-                        }
-
-                        return practiceRecord;
-                    } catch (error) {
-                        console.error('[FallbackRecorder] 保存失败:', error);
-                        return null;
-                    }
-                },
-
-                startSession: (examId) => {
-                    // 简单的会话管理
-                    return {
-                        examId: examId,
-                        startTime: new Date().toISOString(),
-                        sessionId: this.generateSessionId(examId),
-                        status: 'started'
-                    };
-                },
-
-                getPracticeRecords: async (filters = {}) => {
-                    try {
-                        const records = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                            ? await window.PracticeRecordAPI.list()
-                            : [];
-
-                        if (Object.keys(filters).length === 0) {
-                            return records;
-                        }
-
-                        return records.filter(record => {
-                            if (filters.examId && record.examId !== filters.examId) return false;
-                            if (filters.category && record.category !== filters.category) return false;
-                            if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
-                            if (filters.endDate && new Date(record.startTime) > new Date(filters.endDate)) return false;
-                            if (filters.minAccuracy && record.accuracy < filters.minAccuracy) return false;
-                            if (filters.maxAccuracy && record.accuracy > filters.maxAccuracy) return false;
-
-                            return true;
-                        });
-                    } catch (error) {
-                        console.error('[FallbackRecorder] 获取记录失败:', error);
-                        return [];
-                    }
-                }
-            };
         },
 
         // ExamBrowser组件已移除，使用内置的题目列表功能
@@ -2568,7 +3240,15 @@
         },
 
         generateWindowSessionToken(examId) {
-            const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+            const cryptoApi = global.crypto;
+            if (!cryptoApi || typeof cryptoApi.getRandomValues !== 'function') {
+                throw new Error('Secure random generator is required for window session tokens');
+            }
+            const bytes = new Uint8Array(24);
+            cryptoApi.getRandomValues(bytes);
+            const suffix = Array.from(bytes)
+                .map(byte => byte.toString(16).padStart(2, '0'))
+                .join('');
             const normalizedExamId = typeof examId === 'string'
                 ? examId.trim().replace(/\s+/g, '-')
                 : (examId != null ? String(examId).trim().replace(/\s+/g, '-') : '');
@@ -2753,14 +3433,46 @@
                 || ''
             ).trim();
             const allowUnprefixed = config.allowUnprefixed !== false;
+            // Suite entries persist answerComparison but historically dropped
+            // correctAnswerMap, so derive from the comparison as a last resort.
             return this._mergeReplayAnswerMapsFirstWins({},
                 targetExamId,
                 allowUnprefixed,
                 entry.correctAnswerMap,
                 realData.correctAnswerMap,
                 rawData.correctAnswerMap,
-                rawRealData.correctAnswerMap
+                rawRealData.correctAnswerMap,
+                this._deriveCorrectAnswerMapFromComparison(entry.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(realData.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(rawData.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(rawRealData.answerComparison)
             );
+        },
+
+        _deriveCorrectAnswerMapFromComparison(comparison) {
+            if (!this._isReplayObject(comparison)) {
+                return null;
+            }
+            const derived = {};
+            Object.entries(comparison).forEach(([questionId, detail]) => {
+                if (!this._isReplayObject(detail)) {
+                    return;
+                }
+                const correctAnswer = detail.correctAnswer;
+                // Only real answers: a blank or empty value must stay unknown so
+                // the comparison degrades to isCorrect: null instead of guessing.
+                if (correctAnswer == null) {
+                    return;
+                }
+                if (typeof correctAnswer === 'string' && !correctAnswer.trim()) {
+                    return;
+                }
+                if (Array.isArray(correctAnswer) && !correctAnswer.length) {
+                    return;
+                }
+                derived[questionId] = correctAnswer;
+            });
+            return Object.keys(derived).length ? derived : null;
         },
 
         _finalizeReplayComparison(answers, correctAnswers, comparison) {
@@ -2971,6 +3683,27 @@
                         : (Array.isArray(entry.realData?.highlights)
                             ? entry.realData.highlights.slice()
                             : (Array.isArray(record.realData?.highlights) ? record.realData.highlights.slice() : [])));
+                const noteText = typeof entry.noteText === 'string'
+                    ? entry.noteText
+                    : (typeof entry.rawData?.noteText === 'string'
+                        ? entry.rawData.noteText
+                        : (typeof entry.realData?.noteText === 'string'
+                            ? entry.realData.noteText
+                            : (typeof record.realData?.noteText === 'string' ? record.realData.noteText : '')));
+                const notes = Array.isArray(entry.notes)
+                    ? this._cloneReviewData(entry.notes)
+                    : (Array.isArray(entry.rawData?.notes)
+                        ? this._cloneReviewData(entry.rawData.notes)
+                        : (Array.isArray(entry.realData?.notes)
+                            ? this._cloneReviewData(entry.realData.notes)
+                            : (Array.isArray(record.realData?.notes) ? this._cloneReviewData(record.realData.notes) : [])));
+                const noteOutlines = Array.isArray(entry.noteOutlines)
+                    ? this._cloneReviewData(entry.noteOutlines)
+                    : (Array.isArray(entry.rawData?.noteOutlines)
+                        ? this._cloneReviewData(entry.rawData.noteOutlines)
+                        : (Array.isArray(entry.realData?.noteOutlines)
+                            ? this._cloneReviewData(entry.realData.noteOutlines)
+                            : (Array.isArray(record.realData?.noteOutlines) ? this._cloneReviewData(record.realData.noteOutlines) : [])));
                 const scrollY = Number.isFinite(Number(entry.scrollY))
                     ? Number(entry.scrollY)
                     : (Number.isFinite(Number(entry.rawData?.scrollY))
@@ -3004,6 +3737,9 @@
                             ? entryMetadata.markedQuestions.slice()
                             : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
                     highlights,
+                    noteText,
+                    notes,
+                    noteOutlines,
                     scrollY,
                     metadata: mergedMetadata
                 };
@@ -3020,6 +3756,22 @@
             return this.reviewReplaySessions;
         },
 
+        async _resolveReviewExamDefinition(entry) {
+            if (!entry || typeof entry !== 'object' || !entry.examId) {
+                throw new Error('历史记录缺少题目标识');
+            }
+            if (typeof window.resolveExamForPracticeRecord !== 'function') {
+                throw new Error('历史记录题库解析器不可用');
+            }
+            const exam = await window.resolveExamForPracticeRecord(entry);
+            if (exam) return exam;
+            // resolveExamForPracticeRecord 在记录缺 provenance 时已回退到当前活动题库解析
+            // （见 libraryManager.resolveIndexForRecord）。走到这里说明 examId 在可解析的题库中
+            // 确实不存在——统一按“题目不可用”处理，不再因缺少 libraryConfigurationId 而拒绝回放，
+            // 那会误伤所有 v1 迁移来、迁移时无法唯一判定来源的旧记录。
+            throw new Error('该记录对应的题目在当前题库中不存在，可能题库已被删除或切换');
+        },
+
         _buildReviewSession(record) {
             const entries = this._buildReviewReplayEntriesFromRecord(record);
             const validEntries = entries.filter((entry) => entry && entry.examId);
@@ -3028,11 +3780,547 @@
             }
             return {
                 sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+                recordId: record && record.id != null ? String(record.id) : '',
                 entries: validEntries,
                 currentIndex: 0,
                 windowRef: null,
                 readOnly: true
             };
+        },
+
+        _cloneReadingDraftValue(value) {
+            if (value == null) {
+                return value;
+            }
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                if (Array.isArray(value)) {
+                    return value.slice();
+                }
+                if (value && typeof value === 'object') {
+                    return Object.assign({}, value);
+                }
+                return value;
+            }
+        },
+
+        _readingDraftId(examId, libraryConfigurationId = null) {
+            const normalizedExamId = String(examId || '').trim();
+            const normalizedConfigurationId = libraryConfigurationId == null
+                ? ''
+                : String(libraryConfigurationId).trim();
+            return normalizedConfigurationId
+                ? `reading-draft:${normalizedExamId}:${normalizedConfigurationId}`
+                : `reading-draft:${normalizedExamId}`;
+        },
+
+        _buildReadingDraftSnapshot(examId, data = {}, windowInfo = null) {
+            const source = data && data.draft && typeof data.draft === 'object' && !Array.isArray(data.draft)
+                ? data.draft
+                : (data && typeof data === 'object' ? data : {});
+            const answers = source.answers && typeof source.answers === 'object' && !Array.isArray(source.answers)
+                ? this._cloneReadingDraftValue(source.answers)
+                : {};
+            const highlights = Array.isArray(source.highlights) ? this._cloneReadingDraftValue(source.highlights) : [];
+            const notes = Array.isArray(source.notes) ? this._cloneReadingDraftValue(source.notes) : [];
+            const noteOutlines = Array.isArray(source.noteOutlines) ? this._cloneReadingDraftValue(source.noteOutlines) : [];
+            const markedQuestions = Array.isArray(source.markedQuestions)
+                ? this._cloneReadingDraftValue(source.markedQuestions)
+                : [];
+            const noteText = typeof source.noteText === 'string' ? source.noteText : '';
+            const scrollY = Number.isFinite(Number(source.scrollY)) ? Math.max(0, Number(source.scrollY)) : 0;
+            const updatedAt = Number(data.draftUpdatedAt ?? source.updatedAt);
+            const sessionId = data.sessionId != null
+                ? String(data.sessionId)
+                : (windowInfo && windowInfo.expectedSessionId ? String(windowInfo.expectedSessionId) : '');
+            const libraryConfigurationId = this._readLaunchLibraryConfigurationId(examId, windowInfo);
+            return {
+                id: this._readingDraftId(examId, libraryConfigurationId),
+                examId: String(examId),
+                libraryConfigurationId: libraryConfigurationId == null ? null : String(libraryConfigurationId),
+                sessionId,
+                answers,
+                highlights,
+                notes,
+                noteOutlines,
+                markedQuestions,
+                noteText,
+                scrollY,
+                updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+                status: 'in_progress',
+                kind: 'reading_draft'
+            };
+        },
+
+        async _readReadingDraftStore() {
+            const drafts = await window.AppData.recovery.listDrafts();
+            const store = {};
+            (Array.isArray(drafts) ? drafts : []).forEach((draft) => {
+                if (draft && draft.kind === 'reading_draft' && draft.examId) {
+                    const id = draft.id || this._readingDraftId(draft.examId, draft.libraryConfigurationId);
+                    store[String(id)] = draft;
+                }
+            });
+            return store;
+        },
+
+        async _writeReadingDraftStore(store, changedDraft = null) {
+            try {
+                if (changedDraft) {
+                    await window.AppData.recovery.saveDraft(changedDraft);
+                }
+                const drafts = await window.AppData.recovery.listDrafts();
+                const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                for (const draft of Array.isArray(drafts) ? drafts : []) {
+                    const numericUpdatedAt = Number(draft && draft.updatedAt);
+                    const draftUpdatedAt = Number.isFinite(numericUpdatedAt)
+                        ? numericUpdatedAt
+                        : Date.parse(draft && draft.updatedAt);
+                    if (
+                        draft
+                        && draft.kind === 'reading_draft'
+                        && draft.id !== changedDraft?.id
+                        && (!Number.isFinite(draftUpdatedAt) || draftUpdatedAt < cutoff)
+                    ) {
+                        await window.AppData.recovery.discardDraft(draft.id);
+                    }
+                }
+                return true;
+            } catch (error) {
+                console.warn('[ReadingDraftGateway] 写入草稿失败:', error);
+                return false;
+            }
+        },
+
+        async handleReadingDraftSync(examId, data = {}, windowInfo = null) {
+            const info = windowInfo || (this.examWindows && this.examWindows.get(examId));
+            if (!info || info.reviewMode) {
+                return false;
+            }
+            if (windowInfo && this.examWindows && this.examWindows.get(examId) !== info) {
+                return false;
+            }
+            if (String(info.practiceMode || '').toLowerCase() === 'memorize') {
+                return false;
+            }
+            // 用“本窗口的 suite 绑定”判断是否套题草稿，而不是看全局 currentSuiteSession：
+            // 否则当任意套题会话仍活跃时，普通独立阅读窗口（windowInfo.suiteSessionId 为空）
+            // 的草稿也会被拒绝，关闭该窗口会丢失该题的在做答案/笔记。
+            if (info.suiteSessionId) {
+                return typeof this._handleSuiteDraftSync === 'function'
+                    ? this._handleSuiteDraftSync(examId, data, info, info.window)
+                    : false;
+            }
+            const expectedSessionId = info.expectedSessionId ? String(info.expectedSessionId) : '';
+            const payloadSessionId = data && data.sessionId != null ? String(data.sessionId) : '';
+            if (!expectedSessionId || !payloadSessionId || payloadSessionId !== expectedSessionId) {
+                return false;
+            }
+            const draft = this._buildReadingDraftSnapshot(examId, data, info);
+            if (!draft.sessionId) {
+                return false;
+            }
+            const isCurrentRegistration = () => {
+                const current = this.examWindows && this.examWindows.get(examId);
+                return current === info
+                    && (!current.window || !current.window.closed)
+                    && (!Number.isInteger(data.windowSessionGeneration)
+                        || !Number.isInteger(info.sessionGeneration)
+                        || Number(data.windowSessionGeneration) === Number(info.sessionGeneration));
+            };
+            if (!isCurrentRegistration()) {
+                return false;
+            }
+            // 必须在写队列里重新读取最新 store 再合并，否则并发不同 exam 的 write 会互相覆盖、
+            // 后写者会丢掉前者的草稿（整个 map 是同一个存储 key，read-modify-write 非原子）。
+            const store = await this._readReadingDraftStore();
+            if (!isCurrentRegistration()) {
+                return false;
+            }
+            const previous = store[String(draft.id)] || null;
+            const previousNumericUpdatedAt = Number(previous && previous.updatedAt);
+            const previousUpdatedAt = Number.isFinite(previousNumericUpdatedAt)
+                ? previousNumericUpdatedAt
+                : Date.parse(previous && previous.updatedAt);
+            const nextNumericUpdatedAt = Number(draft.updatedAt);
+            const nextUpdatedAt = Number.isFinite(nextNumericUpdatedAt)
+                ? nextNumericUpdatedAt
+                : Date.parse(draft.updatedAt);
+            if (
+                previous
+                && previous.sessionId === draft.sessionId
+                && Number.isFinite(previousUpdatedAt)
+                && Number.isFinite(nextUpdatedAt)
+                && nextUpdatedAt < previousUpdatedAt
+            ) {
+                return false;
+            }
+            store[String(draft.id)] = draft;
+            if (!isCurrentRegistration()) {
+                return false;
+            }
+            if (!await this._writeReadingDraftStore(store, draft)) {
+                return false;
+            }
+            if (!isCurrentRegistration()) {
+                return false;
+            }
+            info.lastReadingDraft = draft;
+            info.lastReadingDraftAt = Date.now();
+            if (this.examWindows) {
+                this.examWindows.set(examId, info);
+            }
+            return true;
+        },
+
+        async _queueReadingDraftSync(examId, data = {}, windowInfo = null) {
+            // 同一宿主窗口内保持事件顺序；跨标签并发由 AppData/kernel CAS 处理。
+            if (!this._readingDraftStoreQueue || typeof this._readingDraftStoreQueue.then !== 'function') {
+                this._readingDraftStoreQueue = Promise.resolve();
+            }
+            const queued = this._readingDraftStoreQueue
+                .catch(() => undefined)
+                .then(() => {
+                    const currentWindowInfo = this.examWindows && this.examWindows.get(examId);
+                    if (
+                        windowInfo
+                        && (
+                            currentWindowInfo !== windowInfo
+                            || currentWindowInfo.window !== windowInfo.window
+                            || currentWindowInfo.sessionGeneration !== windowInfo.sessionGeneration
+                        )
+                    ) {
+                        return false;
+                    }
+                    return this.handleReadingDraftSync(examId, data, windowInfo);
+                });
+            this._readingDraftStoreQueue = queued.catch(() => undefined).then(() => {
+                if (this._readingDraftStoreQueue === queued) {
+                    this._readingDraftStoreQueue = Promise.resolve();
+                }
+            });
+            return queued;
+        },
+
+        async getReadingDraftForExam(examId, options = {}) {
+            const normalizedExamId = examId != null ? String(examId).trim() : '';
+            if (!normalizedExamId) {
+                return null;
+            }
+            const libraryConfigurationId = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? options.libraryConfigurationId
+                : this._readLaunchLibraryConfigurationId(normalizedExamId, options.windowInfo);
+            const store = await this._readReadingDraftStore();
+            const draft = store[this._readingDraftId(normalizedExamId, libraryConfigurationId)] || null;
+            if (!draft || typeof draft !== 'object') {
+                return null;
+            }
+            // 仅用于“恢复未完成草稿”：跨开窗/重启时 expectedSessionId 会重新生成，
+            // 旧 draft 的 sessionId 必然与之不同；读取不写入任何数据，无跨会话覆盖风险，
+            // 因此这里不再用 sessionId 拦截，把旧草稿透传给调用方，由其在新 session 里继续答题。
+            // 写/清路径仍保留严格校验，避免跨会话误覆盖或误删。
+            const cloned = this._cloneReadingDraftValue(draft);
+            const expectedSessionId = options.sessionId != null ? String(options.sessionId) : '';
+            if (expectedSessionId && String(cloned.sessionId || '') !== expectedSessionId) {
+                cloned.sessionId = expectedSessionId;
+            }
+            return cloned;
+        },
+
+        async clearReadingDraftForExam(examId, options = {}) {
+            const normalizedExamId = examId != null ? String(examId).trim() : '';
+            if (!normalizedExamId) {
+                return false;
+            }
+            const libraryConfigurationId = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? options.libraryConfigurationId
+                : this._readLaunchLibraryConfigurationId(normalizedExamId, options.windowInfo);
+            const run = async () => {
+                const store = await this._readReadingDraftStore();
+                const existing = store[this._readingDraftId(normalizedExamId, libraryConfigurationId)] || null;
+                if (!existing) {
+                    return false;
+                }
+                const expectedSessionId = options.sessionId != null ? String(options.sessionId) : '';
+                // completion 路径用 acceptResumeSessionId=true 调用：若用户是在恢复的草稿上继续答题，
+                // 存档里仍是恢复前的旧 sessionId，而完成事件带的是新 session id；
+                // 这里已由完成事件本身做过严格的 message/session 校验，可直接删除该题草稿，
+                // 避免已提交的答案在重开 SAME 题时被旧草稿复活。
+                if (expectedSessionId && String(existing.sessionId || '') !== expectedSessionId && !options.acceptResumeSessionId) {
+                    return false;
+                }
+                await window.AppData.recovery.discardDraft(existing.id);
+                return true;
+            };
+            // 与当前窗口的 draft sync 顺序一致，物理并发控制仍由 kernel 负责。
+            if (!this._readingDraftStoreQueue || typeof this._readingDraftStoreQueue.then !== 'function') {
+                this._readingDraftStoreQueue = Promise.resolve();
+            }
+            const queued = this._readingDraftStoreQueue
+                .catch(() => undefined)
+                .then(run);
+            this._readingDraftStoreQueue = queued.catch(() => undefined).then(() => {
+                if (this._readingDraftStoreQueue === queued) {
+                    this._readingDraftStoreQueue = Promise.resolve();
+                }
+            });
+            return queued;
+        },
+
+        async _isPracticeCompletionPersisted(record) {
+            const identityFields = ['id', 'examId', 'sessionId'];
+            const completionTime = (value) => value && (
+                value.endTime || value.completedAt || value.timestamp || value.date
+            );
+            if (!record || typeof record !== 'object'
+                || identityFields.some((key) => record[key] == null || String(record[key]).trim() === '')
+                || !completionTime(record)) {
+                return false;
+            }
+            try {
+                const persisted = await window.AppData.practice.get(String(record.id), { projection: 'light' });
+                if (!persisted || typeof persisted !== 'object') {
+                    return false;
+                }
+                return identityFields.every((key) => String(persisted[key] ?? '') === String(record[key]))
+                    && String(completionTime(persisted) || '') === String(completionTime(record));
+            } catch (error) {
+                console.warn('[ReadingDraftGateway] 无法确认完成记录已落库，保留草稿:', error);
+                return false;
+            }
+        },
+
+        async handleReadingAnnotationSync(examId, data = {}, windowInfo = null) {
+            const info = windowInfo || (this.examWindows && this.examWindows.get(examId));
+            if (!info) {
+                return false;
+            }
+            // 两条来源均可落库标注：①review 回放态，按 reviewSessionId 解析 recordId；
+            // ②单篇阅读 final-submit 后的结果页，按 windowInfo.submittedRecordId 直连
+            // 已存档的练习记录。两者都需要 payload.recordId 与解析出的 recordId 严格匹配。
+            let recordId = '';
+            if (info.reviewMode && info.reviewSessionId) {
+                const reviewSessionId = String(info.reviewSessionId);
+                const sessions = this._ensureReviewReplayStore();
+                const reviewSession = sessions.get(reviewSessionId);
+                if (!reviewSession || !reviewSession.recordId) {
+                    return false;
+                }
+                recordId = String(reviewSession.recordId);
+            } else if (info.submittedRecordId) {
+                recordId = String(info.submittedRecordId);
+            } else {
+                return false;
+            }
+            if (data.recordId == null || String(data.recordId) !== recordId) {
+                return false;
+            }
+
+            const source = data.annotations && typeof data.annotations === 'object' && !Array.isArray(data.annotations)
+                ? data.annotations
+                : data;
+            const annotationPatch = {};
+            ['highlights', 'notes', 'noteOutlines', 'markedQuestions'].forEach((key) => {
+                if (Object.prototype.hasOwnProperty.call(source, key) && Array.isArray(source[key])) {
+                    annotationPatch[key] = this._cloneReviewData(source[key]);
+                }
+            });
+            if (Object.prototype.hasOwnProperty.call(source, 'noteText') && typeof source.noteText === 'string') {
+                annotationPatch.noteText = source.noteText;
+            }
+            if (Object.prototype.hasOwnProperty.call(source, 'scrollY')) {
+                const scrollY = Number(source.scrollY);
+                if (Number.isFinite(scrollY)) {
+                    annotationPatch.scrollY = Math.max(0, scrollY);
+                }
+            }
+            if (Object.keys(annotationPatch).length === 0) {
+                return false;
+            }
+
+            const normalizedExamId = String(examId);
+            await window.AppData.practice.updateAnnotations({
+                recordId,
+                examId: normalizedExamId,
+                patch: annotationPatch,
+                operationId: data.operationId || data.messageId || undefined
+            });
+
+            // 只有 review 回放分支需要同时更新内存中的 reviewSession.entries；
+            // 单篇 submitted 直连已存档记录的分支不持有 reviewSession，跳过。
+            if (info.reviewMode && info.reviewSessionId) {
+                const reviewSessionId = String(info.reviewSessionId);
+                const sessions = this._ensureReviewReplayStore();
+                const reviewSession = sessions.get(reviewSessionId);
+                if (reviewSession && Array.isArray(reviewSession.entries)) {
+                    reviewSession.entries = reviewSession.entries.map((entry) => (
+                        entry && String(entry.examId) === normalizedExamId
+                            ? Object.assign({}, entry, annotationPatch)
+                            : entry
+                    ));
+                    sessions.set(reviewSessionId, reviewSession);
+                }
+            }
+            return true;
+        },
+
+        async _queueReadingAnnotationSync(examId, data = {}, windowInfo = null) {
+            return this.handleReadingAnnotationSync(examId, data, windowInfo);
+        },
+
+        // 单篇阅读 final-submit 落库成功后，把已存档 recordId 写入 windowInfo 并
+        // postMessage 回结果页，使结果页笔记改动能以 READING_ANNOTATION_SYNC
+        // 持久化回该练习记录。套题流程不会走到这里（已在 handleSuitePracticeComplete 早退）。
+        _announceSubmittedReadingRecord(examId, savedRecord, completionData, sourceWindow) {
+            try {
+                const recordId = savedRecord && savedRecord.id != null ? String(savedRecord.id).trim() : '';
+                if (!recordId) {
+                    return false;
+                }
+                const sessionId = completionData && completionData.sessionId != null
+                    ? String(completionData.sessionId)
+                    : '';
+                const targetWindow = (sourceWindow && !sourceWindow.closed) ? sourceWindow : null;
+                if (!targetWindow) {
+                    return false;
+                }
+                const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                if (windowInfo) {
+                    windowInfo.submittedRecordId = recordId;
+                    windowInfo.window = targetWindow;
+                    windowInfo.status = 'completed';
+                    windowInfo.completedAt = windowInfo.completedAt || Date.now();
+                    this.examWindows && this.examWindows.set(examId, windowInfo);
+                }
+                this._postExamMessage(examId, targetWindow, 'PRACTICE_RECORD_SAVED', {
+                    examId,
+                    recordId,
+                    sessionId: sessionId || null
+                });
+                return true;
+            } catch (_) {
+                // annotation persistence hint is best-effort
+                return false;
+            }
+        },
+
+        _announcePracticeSubmitOutcome(examId, completionData, sourceWindow, succeeded, details = {}) {
+            const submissionId = completionData && completionData.submissionId != null
+                ? String(completionData.submissionId).trim()
+                : '';
+            const sessionId = completionData && completionData.sessionId != null
+                ? String(completionData.sessionId).trim()
+                : '';
+            const targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : null;
+            if (!submissionId || !sessionId || !targetWindow) {
+                return false;
+            }
+            try {
+                const type = succeeded ? 'PRACTICE_SUBMIT_ACK' : 'PRACTICE_SUBMIT_FAILED';
+                const payload = {
+                    examId,
+                    submissionId,
+                    sessionId,
+                    suiteSessionId: completionData && completionData.suiteSessionId
+                        ? String(completionData.suiteSessionId)
+                        : null,
+                    errorCode: succeeded ? null : String(details.errorCode || 'save_failed')
+                };
+                const delivered = this._postExamMessage(examId, targetWindow, type, payload);
+                if (succeeded) {
+                    const resolvedSession = this._resolveExamWindowSessionForTarget(examId, targetWindow);
+                    const windowInfo = resolvedSession.windowInfo;
+                    const receiptKey = `${sessionId}:${submissionId}`;
+                    const receipts = windowInfo.practiceSubmitReceipts && typeof windowInfo.practiceSubmitReceipts === 'object'
+                        ? windowInfo.practiceSubmitReceipts
+                        : {};
+                    receipts[receiptKey] = Object.assign({}, payload, { examId, succeeded: true });
+                    const keys = Object.keys(receipts);
+                    keys.slice(0, Math.max(0, keys.length - 8)).forEach((key) => delete receipts[key]);
+                    windowInfo.practiceSubmitReceipts = receipts;
+                    this.examWindows && this.examWindows.set(resolvedSession.examId, windowInfo);
+                }
+                return delivered;
+            } catch (error) {
+                console.warn('[DataCollection] 提交结果回执发送失败:', error);
+                return false;
+            }
+        },
+
+        _announceVocabHighlightOutcome(examId, requestData, sourceWindow, succeeded, errorCode = '') {
+            const requestId = requestData && requestData.requestId != null
+                ? String(requestData.requestId).trim()
+                : '';
+            const sessionId = requestData && requestData.sessionId != null
+                ? String(requestData.sessionId).trim()
+                : '';
+            const targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : null;
+            if (!requestId || !sessionId || !targetWindow) {
+                return false;
+            }
+            return this._postExamMessage(
+                examId,
+                targetWindow,
+                succeeded ? 'VOCAB_HIGHLIGHT_SAVE_ACK' : 'VOCAB_HIGHLIGHT_SAVE_FAILED',
+                {
+                    examId,
+                    sessionId,
+                    requestId,
+                    errorCode: succeeded ? null : String(errorCode || 'save_failed')
+                }
+            );
+        },
+
+        _replayPracticeSubmitReceipt(examId, completionData, sourceWindow) {
+            const submissionId = completionData && completionData.submissionId != null
+                ? String(completionData.submissionId).trim()
+                : '';
+            const sessionId = completionData && completionData.sessionId != null
+                ? String(completionData.sessionId).trim()
+                : '';
+            if (!submissionId || !sessionId || !sourceWindow || sourceWindow.closed) {
+                return false;
+            }
+            // 回执重放只做查询：它在 handlePracticeComplete 最前面执行，若在此兜底
+            // 新建以 examId 为键的空注册，随后的回包就会误认为该注册持有窗口。
+            const resolvedExamId = this._resolveExamWindowSessionKey(examId, sourceWindow);
+            const windowInfo = this.examWindows && this.examWindows.get(resolvedExamId);
+            const receipt = windowInfo
+                && windowInfo.practiceSubmitReceipts
+                && windowInfo.practiceSubmitReceipts[`${sessionId}:${submissionId}`];
+            if (!receipt || receipt.succeeded !== true) {
+                return false;
+            }
+            this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, true);
+            return true;
+        },
+
+        _scheduleSuiteSubmitTeardown(session) {
+            if (!session || typeof this._teardownSuiteSession !== 'function') {
+                return false;
+            }
+            // The receipt replay window intentionally keeps the completed suite alive for
+            // 30 seconds.  Capture the registrations owned by that suite now: a user may
+            // start a fresh standalone attempt for the same exam before the timer fires,
+            // and teardown must never delete that replacement registration/handler.
+            if (typeof this._captureSuiteTeardownRegistrations === 'function') {
+                this._captureSuiteTeardownRegistrations(session);
+            }
+            if (session.submitReceiptTeardownTimer) {
+                clearTimeout(session.submitReceiptTeardownTimer);
+            }
+            const timer = setTimeout(() => {
+                session.submitReceiptTeardownTimer = null;
+                this._teardownSuiteSession(session).catch((teardownError) => {
+                    console.warn('[SuitePractice] 提交回执重放窗口结束后清理套题会话失败:', teardownError);
+                });
+            }, 30000);
+            session.submitReceiptTeardownTimer = timer;
+            if (timer && typeof timer.unref === 'function') {
+                timer.unref();
+            }
+            return true;
         },
 
         _bindReviewWindowRef(reviewSessionId, windowRef) {
@@ -3076,14 +4364,15 @@
             }
             const replayPayload = {
                 reviewSessionId: session.sessionId,
+                recordId: session.recordId || null,
                 reviewEntryIndex: safeIndex,
                 readOnly: session.readOnly !== false,
                 entry: this._cloneReviewData(entry)
             };
             const contextPayload = this._buildReviewContextPayload(session, safeIndex);
             try {
-                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, '*');
-                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                this._postExamMessage(examId, targetWindow, 'REPLAY_PRACTICE_RECORD', replayPayload);
+                this._postExamMessage(examId, targetWindow, 'REVIEW_CONTEXT', contextPayload);
                 return true;
             } catch (error) {
                 console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
@@ -3178,12 +4467,15 @@
                 console.warn('[ReviewReplay] 清理旧题目会话失败:', error);
             }
 
+            const examDefinition = await this._resolveReviewExamDefinition(nextEntry);
             await this.openExam(nextEntry.examId, {
                 reviewMode: true,
                 readOnly: true,
                 reviewSessionId: sessionId,
                 reviewEntryIndex: nextIndex,
-                reuseWindow: session.windowRef || null
+                reuseWindow: session.windowRef || null,
+                examDefinition,
+                requireRecordProvenance: true
             });
         },
 
@@ -3201,11 +4493,14 @@
                 throw new Error('无法解析首题题目标识');
             }
 
+            const examDefinition = await this._resolveReviewExamDefinition(firstEntry);
             const openedWindow = await this.openExam(firstEntry.examId, {
                 reviewMode: true,
                 readOnly: true,
                 reviewSessionId: session.sessionId,
-                reviewEntryIndex: 0
+                reviewEntryIndex: 0,
+                examDefinition,
+                requireRecordProvenance: true
             });
             if (!openedWindow) {
                 store.delete(session.sessionId);
@@ -3221,9 +4516,19 @@
                 info.expectedSessionId = this.generateSessionId(examId);
             }
             this._refreshExamWindowToken(examId, info);
-            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                ? this._resolveSuiteSessionId(examId, info)
-                : (info.suiteSessionId || null);
+            const suiteSessionId = Object.prototype.hasOwnProperty.call(info, 'suiteSessionId')
+                ? (info.suiteSessionId || null)
+                : (typeof this._resolveSuiteSessionId === 'function'
+                    ? this._resolveSuiteSessionId(examId, info)
+                    : null);
+            const activeSuite = suiteSessionId
+                && this.currentSuiteSession
+                && String(this.currentSuiteSession.id || '') === String(suiteSessionId)
+                ? this.currentSuiteSession
+                : null;
+            const autoAdvanceAfterSubmit = activeSuite && typeof activeSuite.autoAdvanceAfterSubmit === 'boolean'
+                ? activeSuite.autoAdvanceAfterSubmit
+                : (typeof info.autoAdvanceAfterSubmit === 'boolean' ? info.autoAdvanceAfterSubmit : null);
             const timerContext = typeof this._resolveSuiteTimerContext === 'function'
                 ? this._resolveSuiteTimerContext({}, info)
                 : {
@@ -3235,14 +4540,21 @@
                 ? Math.floor(Number(extras.messageIssuedAtMs ?? extras.timestamp))
                 : Date.now();
             info.lastInitMessageAt = messageIssuedAtMs;
+            // 启动时捕获的题库配置 ID：优先用 windowInfo 上预存值（启动时埋下），
+            // 否则从 mixin 私有 Map 兜底读，确保随 INIT_SESSION 携带到考试窗口。
+            const launchLibraryConfigurationId = Object.prototype.hasOwnProperty.call(info, 'libraryConfigurationId')
+                ? info.libraryConfigurationId
+                : this._readLaunchLibraryConfigurationId(examId);
             const payload = {
                 examId: examId,
-                parentOrigin: window.location.origin,
+                parentOrigin: info.allowOpaqueOrigin ? 'null' : window.location.origin,
                 sessionId: info.expectedSessionId,
                 windowSessionToken: info.windowSessionToken || null,
+                windowSessionGeneration: Number.isInteger(info.sessionGeneration) ? info.sessionGeneration : 0,
                 messageIssuedAtMs,
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
+                autoAdvanceAfterSubmit,
                 suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
                 globalTimerAnchorMs: timerContext.globalTimerAnchorMs || null,
                 suiteTimerMode: timerContext.suiteTimerMode || null,
@@ -3262,23 +4574,70 @@
                 reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
                 readOnly: Object.prototype.hasOwnProperty.call(info, 'readOnly')
                     ? Boolean(info.readOnly)
-                    : Boolean(info.reviewMode)
+                    : Boolean(info.reviewMode),
+                libraryConfigurationId: launchLibraryConfigurationId
             };
+            if (
+                !payload.reviewMode
+                && !suiteSessionId
+                && !payload.suiteFlowMode
+                && info.lastReadingDraft
+                && typeof info.lastReadingDraft === 'object'
+                && String(info.lastReadingDraft.sessionId || '') === String(info.expectedSessionId || '')
+            ) {
+                payload.draft = this._cloneReadingDraftValue(info.lastReadingDraft);
+            }
             if (extras && typeof extras === 'object') {
                 Object.assign(payload, extras);
+            }
+            // extras 显式提供 libraryConfigurationId 时不被覆盖；若 extras 显式带
+            // undefined/null（不应出现），保留启动捕获值以免丢失题库来源。
+            if (extras && typeof extras === 'object'
+                && Object.prototype.hasOwnProperty.call(extras, 'libraryConfigurationId')) {
+                payload.libraryConfigurationId = extras.libraryConfigurationId;
+            } else if (payload.libraryConfigurationId === undefined) {
+                payload.libraryConfigurationId = launchLibraryConfigurationId;
             }
             return payload;
         },
 
-        _sendExamInitEnvelope(examId, targetWindow, extras = {}) {
+        async _sendExamInitEnvelope(examId, targetWindow, extras = {}, expectedRegistration = null) {
             if (!targetWindow || targetWindow.closed) {
                 return null;
             }
             try {
-                const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                    return null;
+                }
+                const windowInfo = expectedRegistration
+                    ? expectedRegistration.windowInfo
+                    : this.ensureExamWindowSession(examId, targetWindow);
+                if (
+                    windowInfo
+                    && !windowInfo.reviewMode
+                    && !windowInfo.suiteSessionId
+                    && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
+                    && typeof this.getReadingDraftForExam === 'function'
+                    && !(extras && Object.prototype.hasOwnProperty.call(extras, 'draft'))
+                ) {
+                    try {
+                        const restoredDraft = await this.getReadingDraftForExam(examId, {
+                            sessionId: windowInfo.expectedSessionId
+                        });
+                        if (restoredDraft) {
+                            windowInfo.lastReadingDraft = restoredDraft;
+                            this.examWindows && this.examWindows.set(examId, windowInfo);
+                        }
+                    } catch (_) {
+                        // draft restore is best-effort
+                    }
+                }
+                if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                    return null;
+                }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
-                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                this._postExamMessage(examId, targetWindow, 'INIT_SESSION', initPayload);
+                this._postExamMessage(examId, targetWindow, 'init_exam_session', initPayload);
                 return initPayload;
             } catch (initError) {
                 console.warn('[App] 发送初始化消息失败:', initError);
@@ -3286,7 +4645,7 @@
             }
         },
 
-        restartExamHandshake(examWindow, examId) {
+        restartExamHandshake(examWindow, examId, expectedRegistration = null) {
             if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
                 try {
                     clearInterval(this._handshakeTimers.get(examId));
@@ -3295,7 +4654,7 @@
                 }
                 this._handshakeTimers.delete(examId);
             }
-            this.startExamHandshake(examWindow, examId);
+            this.startExamHandshake(examWindow, examId, expectedRegistration);
         },
 
         ensureExamWindowSession(examId, examWindow = null) {
@@ -3311,7 +4670,10 @@
                     expectedSessionId: this.generateSessionId(examId),
                     windowSessionToken: null,
                     windowSessionTokenSessionId: null,
-                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    expectedUrl: '',
+                    expectedOrigin: '',
+                    allowOpaqueOrigin: false,
+                    observedOrigin: '',
                     suiteTimerAnchorMs: null,
                     globalTimerAnchorMs: null,
                     suiteTimerMode: null,
@@ -3323,14 +4685,45 @@
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
-                    readOnly: false
+                    readOnly: false,
+                    sessionGeneration: 1,
+                    submittedRecordId: ''
                 });
             }
 
             const windowInfo = this.examWindows.get(examId);
 
+            if (!Number.isInteger(windowInfo.registrationId)) {
+                this._examRegistrationSequence = Math.max(0, Number(this._examRegistrationSequence) || 0) + 1;
+                windowInfo.registrationId = this._examRegistrationSequence;
+            }
+            if (!Number.isInteger(windowInfo.sessionGeneration)) windowInfo.sessionGeneration = 1;
+            if (!Number.isInteger(windowInfo.navigationEpoch)) windowInfo.navigationEpoch = 0;
+
             if (examWindow && (!windowInfo.window || windowInfo.window.closed || windowInfo.window !== examWindow)) {
                 windowInfo.window = examWindow;
+            }
+
+            if (!windowInfo.expectedOrigin && examWindow) {
+                try {
+                    const currentHref = examWindow.location && typeof examWindow.location.href === 'string'
+                        ? examWindow.location.href
+                        : '';
+                    const endpoint = this._resolveExamMessageEndpoint(currentHref);
+                    const hostOrigin = window.location && window.location.origin;
+                    const isTrustedSameOrigin = endpoint.expectedOrigin
+                        && endpoint.expectedOrigin !== 'null'
+                        && hostOrigin
+                        && endpoint.expectedOrigin === hostOrigin;
+                    const isTrustedLocalFile = endpoint.allowOpaqueOrigin && isFileProtocol;
+                    if (isTrustedSameOrigin || isTrustedLocalFile) {
+                        windowInfo.expectedUrl = endpoint.expectedUrl;
+                        windowInfo.expectedOrigin = endpoint.expectedOrigin;
+                        windowInfo.allowOpaqueOrigin = endpoint.allowOpaqueOrigin;
+                    }
+                } catch (_) {
+                    // Cross-origin WindowProxy locations are intentionally not probed further.
+                }
             }
 
             if (!windowInfo.expectedSessionId) {
@@ -3356,17 +4749,97 @@
             return windowInfo;
         },
 
+        /**
+         * 在考试启动时捕获当前激活的题库配置 ID，写入 windowInfo 与 mixin 私有 Map，
+         * 供后续 INIT_SESSION payload 以及 completeAttempt 路径使用，避免提交时再读取
+         * 当前激活题库而拿到不一致的来源。
+         * 该方法为 async：必要时调用方需 await。
+         */
+        async _captureLaunchLibraryConfigurationId(examId, options = {}) {
+            if (!examId) return null;
+            if (!this._launchLibraryConfigurationIds) {
+                this._launchLibraryConfigurationIds = new Map();
+            }
+            let configurationId = null;
+            try {
+                if (window.AppData && window.AppData.library
+                    && typeof window.AppData.library.getActive === 'function') {
+                    configurationId = await window.AppData.library.getActive();
+                }
+            } catch (captureError) {
+                console.warn('[ExamSession] 捕获启动题库配置 ID 失败:', captureError);
+                configurationId = null;
+            }
+            const normalized = (configurationId === undefined || configurationId === null)
+                ? null
+                : configurationId;
+            if (typeof options.commitGuard === 'function' && options.commitGuard() !== true) {
+                return null;
+            }
+            this._launchLibraryConfigurationIds.set(String(examId), normalized);
+            // 同步作用中 windowInfo：避免后续 _buildExamInitPayload 等同步路径漏读
+            try {
+                if (this.examWindows && this.examWindows.has(examId)) {
+                    const windowInfo = this.examWindows.get(examId);
+                    if (windowInfo && typeof windowInfo === 'object'
+                        && !Object.prototype.hasOwnProperty.call(windowInfo, 'libraryConfigurationId')) {
+                        windowInfo.libraryConfigurationId = normalized;
+                    }
+                }
+            } catch (_) { /* 忽略：windowInfo 不存在不影响捕获 */ }
+            return normalized;
+        },
+
+        /**
+         * 同步读取指定 examId 启动时捕获的题库配置 ID；若无捕获返回 null。
+         * 优先取实时注入（realData.metadata / payload 显式传入）的值，再回退到启动时捕获值。
+         */
+        _readLaunchLibraryConfigurationId(examId, ...fromSources) {
+            for (const source of fromSources) {
+                if (source !== undefined && source !== null && typeof source === 'object') {
+                    const metadata = source.metadata;
+                    const direct = Object.prototype.hasOwnProperty.call(source, 'libraryConfigurationId')
+                        ? source.libraryConfigurationId
+                        : (metadata && Object.prototype.hasOwnProperty.call(metadata, 'libraryConfigurationId'))
+                            ? metadata.libraryConfigurationId
+                            : undefined;
+                    if (direct !== undefined && direct !== null) {
+                        return direct;
+                    }
+                }
+            }
+            if (!this._launchLibraryConfigurationIds) {
+                return null;
+            }
+            return this._launchLibraryConfigurationIds.get(String(examId)) || null;
+        },
+
+        /**
+         * 清除指定 examId 启动时捕获的题库配置 ID（窗口关闭后调用）。
+         */
+        _discardLaunchLibraryConfigurationId(examId) {
+            if (this._launchLibraryConfigurationIds && examId) {
+                this._launchLibraryConfigurationIds.delete(String(examId));
+            }
+        },
+
         _syncRecorderSessionStarted(examId, windowInfo, metadata = {}) {
             const recorder = this.components && this.components.practiceRecorder;
             if (!recorder || typeof recorder.handleSessionStarted !== 'function') {
                 return;
             }
             const sessionId = (windowInfo && windowInfo.expectedSessionId) || this.generateSessionId(examId);
+            // 注入启动时捕获的题库配置 ID，确保 recorder 会话上携带来源。
+            const mergedMetadata = Object.assign({}, metadata);
+            if (!Object.prototype.hasOwnProperty.call(mergedMetadata, 'libraryConfigurationId')) {
+                mergedMetadata.libraryConfigurationId =
+                    this._readLaunchLibraryConfigurationId(examId, windowInfo, metadata);
+            }
             try {
                 recorder.handleSessionStarted({
                     examId,
                     sessionId,
-                    metadata
+                    metadata: mergedMetadata
                 });
             } catch (recorderError) {
                 console.warn('[PracticeRecorder] 重置后同步会话状态失败:', recorderError);
@@ -3375,14 +4848,29 @@
 
         async _removeActiveExamSessionMetadata(examId) {
             try {
-                const activeSessions = await storage.get('active_sessions', []);
-                const updatedSessions = Array.isArray(activeSessions)
-                    ? activeSessions.filter(session => session && session.examId !== examId)
-                    : [];
-                await storage.set('active_sessions', updatedSessions);
+                await this._discardActiveSessionsForExam(examId);
             } catch (error) {
                 console.warn('[App] 清理活动会话元数据失败:', error);
             }
+        },
+
+        async _discardActiveSessionsForExam(examId, options = {}) {
+            const activeSessions = await window.AppData.recovery.listActiveSessions();
+            if (typeof options.commitGuard === 'function' && options.commitGuard() !== true) return 0;
+            const expectedSessionId = String(options.expectedSessionId || '').trim();
+            const matches = (Array.isArray(activeSessions) ? activeSessions : [])
+                .filter((session) => session && session.examId === examId)
+                .filter((session) => !expectedSessionId
+                    || String(session.sessionId || '') === expectedSessionId
+                    || String(session.id || '').endsWith(`:${expectedSessionId}`));
+            for (const session of matches) {
+                if (typeof options.commitGuard === 'function' && options.commitGuard() !== true) break;
+                const entityId = session.id || session.sessionId || session.recordId;
+                if (entityId) {
+                    await window.AppData.recovery.discardActiveSession(entityId);
+                }
+            }
+            return matches.length;
         },
 
         _isResetCapableUnifiedReadingCompletion(data, sourceWindow = null) {
@@ -3404,8 +4892,13 @@
             return renderMode === 'unified-reading' || pageType === 'unified-reading';
         },
 
-        async retainExamWindowAfterCompletion(examId, sourceWindow, data = {}) {
-            const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
+        async retainExamWindowAfterCompletion(examId, sourceWindow, data = {}, expectedRegistration = null) {
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return false;
+            }
+            const windowInfo = expectedRegistration
+                ? expectedRegistration.windowInfo
+                : this.ensureExamWindowSession(examId, sourceWindow);
             windowInfo.window = sourceWindow || windowInfo.window || null;
             windowInfo.status = 'completed';
             windowInfo.completedAt = Date.now();
@@ -3415,10 +4908,14 @@
             windowInfo.readOnly = false;
             this.examWindows && this.examWindows.set(examId, windowInfo);
             await this._removeActiveExamSessionMetadata(examId);
+            return !expectedRegistration || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
         },
 
-        async handlePracticeResetRequest(examId, data = {}, sourceWindow = null) {
-            const targetWindow = sourceWindow
+        async handlePracticeResetRequest(examId, data = {}, sourceWindow = null, expectedRegistration = null) {
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return false;
+            }
+            const targetWindow = (expectedRegistration && expectedRegistration.window) || sourceWindow
                 || (this.examWindows && this.examWindows.has(examId) ? this.examWindows.get(examId).window : null);
             if (!targetWindow || targetWindow.closed) {
                 window.showMessage && window.showMessage('题目窗口已关闭，无法重置测试', 'warning');
@@ -3428,7 +4925,9 @@
             const payload = data && typeof data === 'object' ? data : {};
             const reason = String(payload.reason || '').trim().toLowerCase();
             const fromPracticeMode = String(payload.fromPracticeMode || payload.practiceMode || '').trim().toLowerCase();
-            const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+            const windowInfo = expectedRegistration
+                ? expectedRegistration.windowInfo
+                : this.ensureExamWindowSession(examId, targetWindow);
             const shouldReopenAsNormal = reason === 'memorize-start-test'
                 || fromPracticeMode === 'memorize'
                 || windowInfo.practiceMode === 'memorize';
@@ -3438,6 +4937,7 @@
                 windowInfo.reviewMode = false;
                 windowInfo.readOnly = false;
                 windowInfo.status = 'active';
+                windowInfo.submittedRecordId = '';
                 this.examWindows && this.examWindows.set(examId, windowInfo);
                 await this.openExam(examId, {
                     target: 'tab',
@@ -3451,19 +4951,39 @@
             windowInfo.status = 'active';
             windowInfo.startTime = Date.now();
             windowInfo.completedAt = null;
+            windowInfo.sessionGeneration = Math.max(0, Number(windowInfo.sessionGeneration) || 0) + 1;
             windowInfo.expectedSessionId = this.generateSessionId(examId);
+            this._refreshExamWindowToken(examId, windowInfo);
             windowInfo.sessionId = null;
             windowInfo.practiceMode = null;
             windowInfo.reviewMode = false;
             windowInfo.reviewSessionId = null;
             windowInfo.reviewEntryIndex = 0;
             windowInfo.readOnly = false;
+            windowInfo.submittedRecordId = '';
             windowInfo.dataCollectorReady = false;
             windowInfo.lastResetAt = Date.now();
             windowInfo.lastResetReason = reason || 'reset';
             this.examWindows && this.examWindows.set(examId, windowInfo);
 
-            await this.startPracticeSession(examId);
+            let resetRegistration = this._captureExamSessionRegistration(examId, windowInfo);
+            if (!this._isExamSessionRegistrationCurrent(examId, resetRegistration)) {
+                return false;
+            }
+            resetRegistration = this.setupExamWindowCommunication(targetWindow, examId, null, {
+                expectedRegistration: resetRegistration,
+                deferInitialHandshake: true,
+                skipContentGuard: true
+            }) || resetRegistration;
+
+            const startResult = await this.startPracticeSession(examId, {
+                expectedRegistration: resetRegistration
+            });
+            if (!startResult || startResult.owned !== true
+                || !this._isExamSessionRegistrationCurrent(examId, startResult.registration)) {
+                return false;
+            }
+            resetRegistration = startResult.registration;
             this._syncRecorderSessionStarted(examId, windowInfo, {
                 pageType: 'unified-reading',
                 url: payload.normalUrl || payload.url || null,
@@ -3471,69 +4991,125 @@
                 resetReason: reason || 'reset'
             });
 
-            this._sendExamInitEnvelope(examId, targetWindow, {
+            await this._sendExamInitEnvelope(examId, targetWindow, {
                 practiceMode: null,
                 reviewMode: false,
                 readOnly: false
-            });
-            this.restartExamHandshake(targetWindow, examId);
+            }, resetRegistration);
+            if (!this._isExamSessionRegistrationCurrent(examId, resetRegistration)) {
+                return false;
+            }
+            this.restartExamHandshake(targetWindow, examId, resetRegistration);
             this.updateExamStatus(examId, 'in-progress');
+            return true;
         },
 
         /**
          * 开始练习会话
          */
-        async startPracticeSession(examId) {
-            const exam = await findExamDefinition(examId);
+        async startPracticeSession(examId, options = {}) {
+            const expectedRegistration = options && options.expectedRegistration || null;
+            const ownsRegistration = () => !expectedRegistration
+                || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
+            const exam = options && options.examDefinition
+                ? options.examDefinition
+                : await findExamDefinition(examId);
+            if (!ownsRegistration()) return { owned: false, sessionId: null, registration: expectedRegistration };
             if (!exam) {
                 console.error('Exam not found:', examId);
                 window.showMessage && window.showMessage('题目索引未加载，请重试或重新导入题库。', 'error');
-                return;
+                return expectedRegistration
+                    ? { owned: false, sessionId: null, registration: expectedRegistration }
+                    : undefined;
             }
 
             try {
+                const windowInfo = expectedRegistration
+                    ? expectedRegistration.windowInfo
+                    : (this.examWindows && this.examWindows.get(examId));
+                const hostSessionId = windowInfo && windowInfo.expectedSessionId
+                    ? String(windowInfo.expectedSessionId)
+                    : this.generateSessionId(examId);
+                if (windowInfo && !windowInfo.expectedSessionId) {
+                    windowInfo.expectedSessionId = hostSessionId;
+                    this.examWindows.set(examId, windowInfo);
+                }
+
                 // 优先使用新的练习页面管理器
                 if (window.practicePageManager) {
                     const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
+                    if (!ownsRegistration()) return { owned: false, sessionId: null, registration: expectedRegistration };
 
                     // 更新题目状态
                     this.updateExamStatus(examId, 'in-progress');
-                    return sessionId;
+                    return expectedRegistration
+                        ? { owned: true, sessionId, registration: this._captureExamSessionRegistration(examId, windowInfo) }
+                        : sessionId;
                 }
 
                 // 使用练习记录器开始会话
                 if (this.components.practiceRecorder) {
+                    // 把启动时捕获的题库配置 ID 透传给 recorder，确保会话 metadata 来源稳定。
+                    const launchLibraryConfigurationId = this._readLaunchLibraryConfigurationId(examId);
+                    const startPayload = Object.assign({}, exam, {
+                        sessionId: hostSessionId,
+                        libraryConfigurationId: launchLibraryConfigurationId
+                    });
                     let sessionData;
                     if (typeof this.components.practiceRecorder.startPracticeSession === 'function') {
-                        sessionData = this.components.practiceRecorder.startPracticeSession(examId, exam);
+                        sessionData = this.components.practiceRecorder.startPracticeSession(
+                            examId,
+                            startPayload
+                        );
                     } else if (typeof this.components.practiceRecorder.startSession === 'function') {
-                        sessionData = this.components.practiceRecorder.startSession(examId, exam);
+                        sessionData = this.components.practiceRecorder.startSession(
+                            examId,
+                            startPayload
+                        );
                     } else {
                         console.warn('[App] PracticeRecorder没有可用的启动方法');
                         sessionData = null;
                     }
+                    if (sessionData && sessionData.sessionId && windowInfo
+                        && windowInfo.expectedSessionId !== sessionData.sessionId) {
+                        // Keep host token/session aligned with whatever the recorder accepted.
+                        windowInfo.expectedSessionId = String(sessionData.sessionId);
+                        this._refreshExamWindowToken(examId, windowInfo);
+                        this.examWindows.set(examId, windowInfo);
+                    }
                 } else {
                     // 降级处理
+                    const sessionId = hostSessionId;
                     const sessionData = {
+                        id: `active-session:${sessionId}`,
                         examId: examId,
                         startTime: new Date().toISOString(),
                         status: 'started',
-                        sessionId: this.generateSessionId(examId)
+                        sessionId
                     };
 
-                    const activeSessions = await storage.get('active_sessions', []);
-                    activeSessions.push(sessionData);
-                    await storage.set('active_sessions', activeSessions);
+                    await window.AppData.recovery.saveActiveSession(sessionData);
+                    if (!ownsRegistration()) return { owned: false, sessionId: null, registration: expectedRegistration };
                 }
 
                 // 更新题目状态
                 this.updateExamStatus(examId, 'in-progress');
+                if (expectedRegistration) {
+                    return {
+                        owned: ownsRegistration(),
+                        sessionId: windowInfo && windowInfo.expectedSessionId || hostSessionId,
+                        registration: this._captureExamSessionRegistration(examId, windowInfo)
+                    };
+                }
 
             } catch (error) {
                 console.error('[App] 启动练习会话失败:', error);
 
                 // 最终降级方案
-                this.startPracticeSessionFallback(examId, exam);
+                if (expectedRegistration) {
+                    return { owned: false, sessionId: null, registration: expectedRegistration };
+                }
+                await this.startPracticeSessionFallback(examId, exam);
             }
         },
 
@@ -3541,17 +5117,16 @@
          * 降级启动练习会话
          */
         async startPracticeSessionFallback(examId, exam) {
-
+            const sessionId = this.generateSessionId(examId);
             const sessionData = {
+                id: `active-session:${sessionId}`,
                 examId: examId,
                 startTime: new Date().toISOString(),
                 status: 'started',
-                sessionId: this.generateSessionId(examId)
+                sessionId
             };
 
-            const activeSessions = await storage.get('active_sessions', []);
-            activeSessions.push(sessionData);
-            await storage.set('active_sessions', activeSessions);
+            await window.AppData.recovery.saveActiveSession(sessionData);
 
             // 更新题目状态
             this.updateExamStatus(examId, 'in-progress');
@@ -3601,20 +5176,25 @@
         /**
          * 处理数据采集器会话就绪
          */
-        handleSessionReady(examId, data) {
+        handleSessionReady(examId, data, expectedRegistration = null) {
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return false;
+            }
             const payload = data && typeof data === 'object' ? data : {};
             const isListeningBridgeReady = payload.source === 'listening_record_bridge'
                 || payload.metadata?.source === 'listening_record_bridge'
                 || payload.pageType === 'listening'
                 || payload.type === 'listening';
-            const isPreInitListeningReady = Boolean(
-                isListeningBridgeReady
-                && payload.initialized === false
+            const isPreInitReady = (isListeningBridgeReady && payload.initialized === false) || (
+                !String(payload.windowSessionToken || '').trim()
+                && payload.pageType === 'suite-placeholder'
             );
 
             // 更新会话状态
             let windowInfo = null;
-            if (this.examWindows && this.examWindows.has(examId)) {
+            if (expectedRegistration) {
+                windowInfo = expectedRegistration.windowInfo;
+            } else if (this.examWindows && this.examWindows.has(examId)) {
                 windowInfo = this.examWindows.get(examId);
             } else {
                 windowInfo = this.ensureExamWindowSession(examId);
@@ -3623,18 +5203,19 @@
             if (windowInfo) {
                 if (isListeningBridgeReady) {
                     windowInfo.listeningBridgeSeen = true;
-                    windowInfo.listeningBridgeInitialized = !isPreInitListeningReady;
+                    windowInfo.listeningBridgeInitialized = !isPreInitReady;
                 }
-                if (!isPreInitListeningReady) {
+                if (!isPreInitReady) {
                     windowInfo.dataCollectorReady = true;
                 }
                 if (payload.pageType) {
                     windowInfo.pageType = payload.pageType;
                 }
-                if (!isPreInitListeningReady && payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
+                if (!isPreInitReady && payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
                     windowInfo.expectedSessionId = payload.sessionId;
                 }
-                if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
+                if (payload.suiteSessionId
+                    && !Object.prototype.hasOwnProperty.call(windowInfo, 'suiteSessionId')) {
                     windowInfo.suiteSessionId = payload.suiteSessionId;
                 }
                 if (payload.suiteFlowMode && !windowInfo.suiteFlowMode) {
@@ -3655,16 +5236,16 @@
                 this.examWindows && this.examWindows.set(examId, windowInfo);
             }
 
-            if (isPreInitListeningReady) {
+            if (isPreInitReady) {
                 try {
                     const targetWindow = (windowInfo && windowInfo.window) || null;
                     if (targetWindow && typeof targetWindow.postMessage === 'function') {
                         const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
-                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        this._postExamMessage(examId, targetWindow, 'INIT_SESSION', initPayload);
+                        this._postExamMessage(examId, targetWindow, 'init_exam_session', initPayload);
                     }
                 } catch (initError) {
-                    console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
+                    console.warn('[App] 预初始化 ready 后补发 INIT_SESSION 失败:', initError);
                 }
                 return;
             }
@@ -3674,6 +5255,25 @@
                     this._handleSuiteSessionReady(examId);
                 } catch (suiteReadyError) {
                     console.warn('[SuitePractice] 标记套题页面就绪失败:', suiteReadyError);
+                }
+            }
+
+            // 手动回看模式的页面可能先以普通 P1/P2 页面类型上报 SESSION_READY，
+            // 不应依赖 suiteExamMap/页面类型白名单才能补发回看上下文。
+            const activeSuite = this.currentSuiteSession;
+            const stationarySuiteExam = Boolean(
+                activeSuite
+                && activeSuite.status === 'active'
+                && activeSuite.flowMode === 'stationary'
+                && Array.isArray(activeSuite.sequence)
+                && activeSuite.sequence.some(item => item && item.examId === examId)
+            );
+            if (stationarySuiteExam && typeof this._sendSuiteReviewState === 'function') {
+                const targetWindow = windowInfo && windowInfo.window ? windowInfo.window : null;
+                try {
+                    this._sendSuiteReviewState(activeSuite, examId, targetWindow);
+                } catch (suiteContextError) {
+                    console.warn('[SuitePractice] 手动回看页面 ready 后补发上下文失败:', suiteContextError);
                 }
             }
 
@@ -3690,7 +5290,11 @@
                             pageType: payload.pageType || null,
                             url: payload.url || null,
                             title: payload.title || null,
-                            suiteSessionId: payload.suiteSessionId || null
+                            suiteSessionId: Object.prototype.hasOwnProperty.call(windowInfo || {}, 'suiteSessionId')
+                                ? (windowInfo.suiteSessionId || null)
+                                : (payload.suiteSessionId || null),
+                            // 此处是练习页 SESSION_READY 后同步会话状态的时刻，注入启动时捕获的题库配置 ID。
+                            libraryConfigurationId: this._readLaunchLibraryConfigurationId(examId, payload, windowInfo)
                         }
                     });
                 } catch (recorderError) {
@@ -3753,11 +5357,7 @@
             return signals.includes('listening_record_bridge') || signals.includes('listening');
         },
 
-        _ensureRecorderSessionForListeningCompletion(examId, data) {
-            if (!this._isListeningBridgeCompletionPayload(data)) {
-                return;
-            }
-
+        _ensureRecorderSessionForPracticeCompletion(examId, data, sourceWindow = null, defaults = {}) {
             const recorder = this.components && this.components.practiceRecorder;
             if (!recorder) {
                 return;
@@ -3783,18 +5383,35 @@
                 && typeof recorder.activeSessions.has === 'function'
                 && recorder.activeSessions.has(examId)
             );
+            const pageType = defaults.pageType
+                || data?.pageType
+                || data?.metadata?.pageType
+                || data?.metadata?.type
+                || data?.type
+                || 'practice';
+            const practiceType = defaults.type
+                || data?.type
+                || data?.metadata?.type
+                || data?.metadata?.examType
+                || pageType;
+            const source = defaults.source
+                || data?.source
+                || data?.metadata?.source
+                || 'practice_page';
 
             if (!hasActiveSession && typeof recorder.startPracticeSession === 'function') {
                 try {
                     recorder.startPracticeSession(examId, {
+                        sessionId,
                         title: data?.title || data?.metadata?.examTitle || '',
                         category: data?.category || data?.pageType || data?.metadata?.category || '',
                         frequency: data?.frequency || data?.metadata?.frequency || '',
-                        type: 'listening',
-                        totalQuestions: data?.scoreInfo?.total || data?.totalQuestions || 0
+                        type: practiceType,
+                        totalQuestions: data?.scoreInfo?.total || data?.totalQuestions || 0,
+                        libraryConfigurationId: this._readLaunchLibraryConfigurationId(examId, data, windowInfo)
                     });
                 } catch (startError) {
-                    console.warn('[PracticeRecorder] 听力完成前补建会话失败:', startError);
+                    console.warn('[PracticeRecorder] 完成前补建会话失败:', startError);
                 }
             }
 
@@ -3804,19 +5421,21 @@
                         examId,
                         sessionId,
                         metadata: {
-                            pageType: data?.pageType || 'listening',
-                            type: 'listening',
-                            examType: 'listening',
+                            pageType,
+                            type: practiceType,
+                            examType: defaults.examType || practiceType,
                             url: data?.url || data?.metadata?.url || null,
                             title: data?.title || data?.metadata?.examTitle || null,
                             suiteSessionId: data?.suiteSessionId || data?.metadata?.suiteSessionId || null,
-                            source: data?.source || data?.metadata?.source || 'listening_record_bridge'
+                            source,
+                            libraryConfigurationId: this._readLaunchLibraryConfigurationId(examId, data, windowInfo)
                         }
                     });
                 } catch (startedError) {
-                    console.warn('[PracticeRecorder] 听力完成前同步会话状态失败:', startedError);
+                    console.warn('[PracticeRecorder] 完成前同步会话状态失败:', startedError);
                 }
             }
+            return true;
         },
 
         _normalizeListeningSpellingErrors(examId, data) {
@@ -3848,13 +5467,20 @@
         /**
          * 处理练习完成（真实数据）
          */
-        async handlePracticeComplete(examId, data, sourceWindow = null) {
+        async handlePracticeComplete(examId, data, sourceWindow = null, options = {}) {
+            const expectedRegistration = options && options.expectedRegistration || null;
+            const ownsRegistration = () => !expectedRegistration
+                || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
+            if (!ownsRegistration()) return false;
             if (data && !data.sessionId) {
                 data.sessionId = `${examId}_${Date.now()}`;
             }
             if (String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize') {
                 console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
                 return;
+            }
+            if (this._replayPracticeSubmitReceipt(examId, data, sourceWindow)) {
+                return true;
             }
 
             // 听力桥返回的填空答案直接按 answerComparison 检测，不能依赖题源目录名必须包含 P1/P4。
@@ -3897,6 +5523,10 @@
                 console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
             }
             this._normalizeListeningSpellingErrors(examId, data);
+            // Reading/placeholder completions need the same active-session rebind that
+            // listening already performed: hot-upgraded PracticeRecorder instances otherwise
+            // reject production saves when activeSessions was empty.
+            this._ensureRecorderSessionForPracticeCompletion(examId, data, sourceWindow);
 
             let suiteHandlerDeclined = false;
             const payloadSuiteSessionId = (
@@ -3904,52 +5534,133 @@
                 && typeof data === 'object'
                 && typeof data.suiteSessionId === 'string'
             ) ? data.suiteSessionId.trim() : '';
-            const hasMappedSuiteExam = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
-            const hasActiveSuiteSession = Boolean(
-                this.currentSuiteSession
-                && this.currentSuiteSession.status === 'active'
-                && (!payloadSuiteSessionId || this.currentSuiteSession.id === payloadSuiteSessionId)
-            );
-            const shouldDelegateToSuiteHandler = Boolean(
+            const payloadSuiteId = (
                 data
                 && typeof data === 'object'
                 && typeof data.suiteId === 'string'
-                && data.suiteId.trim()
-            ) || hasMappedSuiteExam || Boolean(payloadSuiteSessionId) || hasActiveSuiteSession;
+            ) ? data.suiteId.trim() : '';
+            const registeredWindowInfo = expectedRegistration && expectedRegistration.windowInfo
+                ? expectedRegistration.windowInfo
+                : (this.examWindows && this.examWindows.get(examId));
+            const registrationOwnsSource = Boolean(
+                registeredWindowInfo
+                // A current expectedRegistration already passed the message handler's
+                // source/token checks.  Direct callers without that proof still need an
+                // exact source-window match before registration metadata can route them.
+                && (expectedRegistration || !sourceWindow || registeredWindowInfo.window === sourceWindow)
+            );
+            const registeredSuiteSessionId = registrationOwnsSource
+                && typeof registeredWindowInfo.suiteSessionId === 'string'
+                ? registeredWindowInfo.suiteSessionId.trim()
+                : '';
+            const declaredPracticeMode = String(
+                data?.practiceMode || data?.metadata?.practiceMode || ''
+            ).trim().toLowerCase();
+            const shouldDelegateToSuiteHandler = Boolean(
+                payloadSuiteId
+                || payloadSuiteSessionId
+                || registeredSuiteSessionId
+                || data?.suiteSubmission === true
+                || declaredPracticeMode === 'suite'
+            );
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
-                    const handled = await this.handleSuitePracticeComplete(examId, data, sourceWindow);
+                    const suiteOutcome = await this.handleSuitePracticeComplete(examId, data, sourceWindow);
+                    if (!ownsRegistration()) return false;
+                    const handled = suiteOutcome === true || Boolean(suiteOutcome && suiteOutcome.handled);
                     if (handled) {
-                        return;
+                        const committed = !suiteOutcome || typeof suiteOutcome !== 'object' || suiteOutcome.committed !== false;
+                        this._announcePracticeSubmitOutcome(examId, data, sourceWindow, committed, {
+                            errorCode: suiteOutcome && suiteOutcome.errorCode
+                        });
+                        if (committed && suiteOutcome && suiteOutcome.teardownSession && typeof this._teardownSuiteSession === 'function') {
+                            try {
+                                this._scheduleSuiteSubmitTeardown(suiteOutcome.teardownSession);
+                            } catch (teardownError) {
+                                console.warn('[SuitePractice] 套题已提交，但延迟清理调度失败:', teardownError);
+                            }
+                        }
+                        return committed;
                     }
                     suiteHandlerDeclined = true;
                 } catch (suiteError) {
-                    console.error('[SuitePractice] 处理套题结果失败，回退至普通流程:', suiteError);
-                    window.showMessage && window.showMessage('套题模式出现异常，记录将以单篇形式保存。', 'warning');
+                    console.error('[SuitePractice] 处理套题结果失败，保留 v2 恢复快照:', suiteError);
+                    window.showMessage && window.showMessage('套题模式出现异常，恢复快照已保留，请稍后重试。', 'error');
                     suiteHandlerDeclined = true;
                 }
             }
 
-            const recorder = this.components && this.components.practiceRecorder;
-            const completionData = suiteHandlerDeclined
-                ? Object.assign({}, data, {
-                    allowStandaloneSave: true,
-                    metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteRecovery: true })
-                })
-                : data;
-            this._ensureRecorderSessionForListeningCompletion(examId, completionData);
+            if (suiteHandlerDeclined && shouldDelegateToSuiteHandler) {
+                return false;
+            }
+            if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete !== 'function') {
+                return false;
+            }
 
+            const recorder = this.components && this.components.practiceRecorder;
+            const completionData = data;
+            // The generic completion rebind above already covers listening payloads.
+
+            let completionCommitted = false;
+            let completedViaFallback = false;
             try {
+                let persistedRecord = null;
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        await recorder.handleSessionCompleted(completionData);
+                        persistedRecord = await recorder.handleSessionCompleted(completionData);
                     } catch (recErr) {
                         console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
-                        await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                        persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                        completedViaFallback = true;
                     }
                 } else {
-                    await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                    persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                    completedViaFallback = true;
+                }
+
+                if (!persistedRecord || typeof persistedRecord !== 'object' || !String(persistedRecord.id || '').trim()) {
+                    throw new Error('Practice completion returned without a committed record');
+                }
+                if (!ownsRegistration()) return false;
+
+                let completionReadable = false;
+                if (typeof this._isPracticeCompletionPersisted === 'function') {
+                    try {
+                        completionReadable = await this._isPracticeCompletionPersisted(persistedRecord);
+                    } catch (verificationError) {
+                        console.warn('[DataCollection] 练习记录提交后回读失败，不影响已提交结果:', verificationError);
+                    }
+                }
+                if (!completionReadable) {
+                    throw new Error('Practice completion could not be verified in canonical storage');
+                }
+                if (!ownsRegistration()) return false;
+                completionCommitted = true;
+
+                if (completedViaFallback && recorder && typeof recorder.endPracticeSession === 'function') {
+                    recorder.endPracticeSession(examId);
+                }
+
+                // 单篇阅读 final-submit 落库成功后，把已存档 recordId 回传给结果页，
+                // 使其可以在只读提交态编辑笔记并以 READING_ANNOTATION_SYNC 持久化回该记录。
+                // 套题流程在上方的 handleSuitePracticeComplete 分支已 return，不会走到这里。
+                this._announceSubmittedReadingRecord(examId, persistedRecord, completionData, sourceWindow);
+                this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, true);
+
+                if (typeof this.clearReadingDraftForExam === 'function') {
+                    try {
+                        await this.clearReadingDraftForExam(examId, {
+                            sessionId: completionData && completionData.sessionId
+                                ? String(completionData.sessionId)
+                                : null,
+                            // 完成事件已通过严格的 message/session 校验，删除该题草稿时
+                            // 允许命中“恢复前的旧 session id”的存档，避免已提交答案被复活。
+                            acceptResumeSessionId: true
+                        });
+                    } catch (_) {
+                        // draft cleanup is best-effort
+                    }
                 }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
@@ -3957,9 +5668,17 @@
                 try {
                     if (typeof window.syncPracticeRecords === 'function') {
                         await window.syncPracticeRecords({ forceRender: true });
-                    } else if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                        const latest = await window.PracticeRecordAPI.list();
-                        this.setState('practice.records', Array.isArray(latest) ? latest : []);
+                    } else {
+                        const [latest, index] = await Promise.all([
+                            window.AppData.practice.list({ projection: 'light' }),
+                            window.resolveActiveLibraryIndex()
+                        ]);
+                        if (typeof window.refreshBrowseProgressFromRecords === 'function') {
+                            window.refreshBrowseProgressFromRecords(latest, index);
+                        }
+                        if (typeof window.updatePracticeView === 'function') {
+                            window.updatePracticeView(latest, index);
+                        }
                     }
                 } catch (syncErr) {
                     console.error('[DataCollection] 刷新练习记录失败（数据已保存，不影响落库结果）:', syncErr);
@@ -3982,26 +5701,36 @@
                 // 显示完成通知（使用真实数据）
                 await this.showRealCompletionNotification(examId, data);
 
-                // 检查成就
+                // 检查成就（解锁判定由 achievements.progress projector 负责，这里只读取差异并提示）
                 if (window.AchievementManager) {
-                    window.AchievementManager.check(data?.realData).catch(console.warn);
-                }
-
-                // 刷新练习记录显示
-                if (typeof updatePracticeView === 'function') {
-                    updatePracticeView();
+                    window.AchievementManager.check().catch(console.warn);
                 }
 
             } catch (error) {
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
                 window.showMessage && window.showMessage('练习记录保存失败，请稍后重试', 'error');
+                this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
+                    errorCode: 'save_failed'
+                });
             } finally {
-                if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
-                    await this.retainExamWindowAfterCompletion(examId, sourceWindow, completionData);
-                } else {
-                    this.cleanupExamSession(examId);
+                if (completionCommitted) {
+                    try {
+                        if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
+                            await this.retainExamWindowAfterCompletion(
+                                examId,
+                                sourceWindow,
+                                completionData,
+                                expectedRegistration
+                            );
+                        } else {
+                            await this.cleanupExamSession(examId, { expectedRegistration });
+                        }
+                    } catch (cleanupError) {
+                        console.warn('[DataCollection] 练习已提交，但会话清理失败:', cleanupError);
+                    }
                 }
             }
+            return completionCommitted;
         },
 
         /**
@@ -4018,12 +5747,7 @@
                 type: 'data_collection_error'
             };
 
-            const errorLogs = await storage.get('collection_errors', []);
-            errorLogs.push(errorInfo);
-            if (errorLogs.length > 50) {
-                errorLogs.splice(0, errorLogs.length - 50);
-            }
-            await storage.set('collection_errors', errorLogs);
+            console.warn('[DataCollection] 诊断信息:', errorInfo);
 
             // 标记该会话使用模拟数据
             if (this.examWindows && this.examWindows.has(examId)) {
@@ -4102,17 +5826,16 @@
                     throw new Error(`无法找到题目信息: ${examId}`);
                 }
 
-                const api = window.PracticeRecordAPI;
-                if (!api || typeof api.saveCompletion !== 'function') {
-                    throw new Error('统一练习记录 API 未就绪');
-                }
-
                 const metadata = Object.assign({}, realData?.metadata || {}, {
                     examId,
                     examTitle: exam.title || realData?.title || '',
                     category: exam.category || realData?.category || realData?.metadata?.category || 'unknown',
                     frequency: exam.frequency || realData?.frequency || realData?.metadata?.frequency || 'unknown',
-                    type: exam.type || realData?.type || realData?.practiceType || null
+                    type: exam.type || realData?.type || realData?.practiceType || null,
+                    // 启动时捕获的题库配置 ID；优先取 realData.metadata 显式值，再回退到启动时
+                    // 在 openExam 捕获的 mixin 私有 Map 值，最后显式随 metadata 写入为 null，
+                    // 让记录来源稳定不受到提交时当前激活题库的影响。
+                    libraryConfigurationId: this._readLaunchLibraryConfigurationId(examId, realData)
                 });
 
                 const payload = Object.assign({}, realData, {
@@ -4124,19 +5847,17 @@
                     metadata
                 });
 
-                const savedRecord = await api.saveCompletion(payload, {
-                    examId,
-                    sessionId: payload.sessionId || realData?.sessionId || null,
-                    examEntry: exam,
-                    metadata
-                }, exam, {
-                    currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0',
-                    maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000,
-                    updateStats: true
+                const receipt = await window.AppData.practice.completeAttempt({
+                    record: payload,
+                    operationId: payload.operationId
+                        || payload.messageId
+                        || (payload.submissionId
+                            ? `practice-complete:${String(payload.examId || examId)}:${String(payload.sessionId || 'session')}:${String(payload.submissionId)}`
+                            : undefined)
                 });
 
                 console.log('[DataCollection] 练习完成数据已保存到 canonical store');
-                return savedRecord;
+                return receipt.record;
             } catch (error) {
                 console.error('[DataCollection] 保存真实数据失败:', error);
                 throw error;
@@ -4189,22 +5910,52 @@
         /**
          * 处理题目窗口关闭
          */
-        handleExamWindowClosed(examId) {
+        handleExamWindowClosed(examId, closedWindow = null, expectedRegistration = null) {
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return false;
+            }
+            const info = this.examWindows && this.examWindows.get(examId);
+            const expectedWindow = info && info.window ? info.window : null;
+            if (closedWindow && expectedWindow && closedWindow !== expectedWindow) {
+                return false;
+            }
+            if (info && info.closeMonitor) {
+                try { clearInterval(info.closeMonitor); } catch (_) {}
+                info.closeMonitor = null;
+            }
 
-            if (this.suiteExamMap && this.suiteExamMap.has(examId) && this.currentSuiteSession && this.currentSuiteSession.status === 'active' && this.suiteExamMap.get(examId) === this.currentSuiteSession.id) {
-                window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
-                if (typeof this._abortSuiteSession === 'function') {
-                    this._abortSuiteSession(this.currentSuiteSession, {}).catch(error => {
-                        console.error('[SuitePractice] 中断套题失败:', error);
-                    });
+            const suite = this.currentSuiteSession;
+            const isSuiteExam = Boolean(
+                suite
+                && this.suiteExamMap
+                && this.suiteExamMap.get(examId) === suite.id
+                && suite.status === 'active'
+            );
+            if (isSuiteExam) {
+                if (String(suite.activeExamId || '') !== String(examId)) {
+                    return false;
+                }
+                if (closedWindow && suite.windowRef && closedWindow !== suite.windowRef) {
+                    return false;
+                }
+                suite.windowRef = null;
+                suite.status = 'active';
+                suite.lastUpdate = Date.now();
+                const persisted = typeof this._mirrorSessionToStorage === 'function'
+                    ? this._mirrorSessionToStorage(suite)
+                    : false;
+                if (persisted) {
+                    window.showMessage && window.showMessage('套题练习窗口已关闭，当前进度已暂停并保留，可从套题模式继续。', 'warning');
+                } else {
+                    window.showMessage && window.showMessage('套题窗口已关闭，但恢复快照保存失败，请勿关闭主页面。', 'error');
                 }
             }
 
-            // 更新题目状态
             this.updateExamStatus(examId, 'interrupted');
-
-            // 清理会话
-            this.cleanupExamSession(examId);
+            if (typeof this.cleanupExamSession === 'function') {
+                this.cleanupExamSession(examId, { expectedRegistration });
+            }
+            return true;
         },
 
         /**
@@ -4350,32 +6101,43 @@
         /**
          * 清理题目会话
          */
-        async _cleanupReusedWindowSessions(targetWindow, keepExamId = null) {
+        async _cleanupReusedWindowSessions(targetWindow, keepExamId = null, keepRegistration = null) {
             if (!targetWindow || !this.examWindows || typeof this.cleanupExamSession !== 'function') {
                 return [];
             }
             const normalizedKeepExamId = keepExamId != null ? String(keepExamId).trim() : '';
-            const staleExamIds = [];
+            const staleRegistrations = [];
             this.examWindows.forEach((windowInfo, candidateExamId) => {
                 const normalizedCandidateExamId = candidateExamId != null ? String(candidateExamId).trim() : '';
                 if (!normalizedCandidateExamId || (normalizedKeepExamId && normalizedCandidateExamId === normalizedKeepExamId)) {
                     return;
                 }
                 if (windowInfo && windowInfo.window === targetWindow) {
-                    staleExamIds.push(normalizedCandidateExamId);
+                    staleRegistrations.push({
+                        examId: normalizedCandidateExamId,
+                        registration: this._captureExamSessionRegistration(normalizedCandidateExamId, windowInfo)
+                    });
                 }
             });
-            for (const staleExamId of staleExamIds) {
+            for (const stale of staleRegistrations) {
                 try {
-                    await this.cleanupExamSession(staleExamId);
+                    if (keepRegistration && !this._isExamSessionRegistrationCurrent(keepExamId, keepRegistration)) break;
+                    await this.cleanupExamSession(stale.examId, { expectedRegistration: stale.registration });
                 } catch (error) {
-                    console.warn('[App] 清理复用窗口旧题目会话失败:', staleExamId, error);
+                    console.warn('[App] 清理复用窗口旧题目会话失败:', stale.examId, error);
                 }
             }
-            return staleExamIds;
+            return staleRegistrations.map(item => item.examId);
         },
 
-        async cleanupExamSession(examId) {
+        async cleanupExamSession(examId, options = {}) {
+            const expectedRegistration = options && options.expectedRegistration || null;
+            if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return false;
+            }
+            const expectedSessionId = expectedRegistration && expectedRegistration.windowInfo.expectedSessionId
+                ? String(expectedRegistration.windowInfo.expectedSessionId)
+                : '';
             // 清理窗口引用
             if (this.examWindows && this.examWindows.has(examId)) {
                 this.examWindows.delete(examId);
@@ -4389,9 +6151,11 @@
             }
 
             // 清理活动会话
-            const activeSessions = await storage.get('active_sessions', []);
-            const updatedSessions = activeSessions.filter(session => session.examId !== examId);
-            await storage.set('active_sessions', updatedSessions);
+            await this._discardActiveSessionsForExam(examId, {
+                expectedSessionId,
+                commitGuard: () => !(this.examWindows && this.examWindows.has(examId))
+            });
+            return true;
         },
 
         /**
@@ -4573,7 +6337,7 @@
          * 显示活动会话详情
          */
         async showActiveSessionsDetails() {
-            const activeSessions = await storage.get('active_sessions', []);
+            const activeSessions = await window.AppData.recovery.listActiveSessions();
             const examIndex = await getActiveExamIndexSnapshot();
 
             if (activeSessions.length === 0) {
@@ -4664,7 +6428,7 @@
          * 关闭所有题目会话
          */
         async closeAllExamSessions() {
-            const activeSessions = await storage.get('active_sessions', []);
+            const activeSessions = await window.AppData.recovery.listActiveSessions();
 
             activeSessions.forEach(session => {
                 this.closeExamSession(session.examId);

@@ -865,13 +865,52 @@
       }
     }
 
-    // 主题切换功能
-    function toggleTheme() {
-      document.body.classList.toggle('dark');
-      const isDark = document.body.classList.contains('dark');
-      localStorage.setItem('darkMode', isDark);
+    function resolveThemeAppData() {
+      const candidates = [window.opener, window.parent !== window ? window.parent : null, window];
+      for (const candidate of candidates) {
+        try {
+          if (candidate && candidate.AppData && candidate.AppData.preferences) {
+            return candidate.AppData;
+          }
+        } catch (_) {
+          // Cross-origin parents are not valid data hosts.
+        }
+      }
+      return null;
+    }
+
+    function applyDarkTheme(isDark) {
+      document.body.classList.toggle('dark', Boolean(isDark));
       const themeButton = document.querySelector('.theme-toggle');
       themeButton.textContent = isDark ? '☀️' : '🌙';
+    }
+
+    // 主题切换功能
+    async function toggleTheme() {
+      const isDark = !document.body.classList.contains('dark');
+      applyDarkTheme(isDark);
+      const appData = resolveThemeAppData();
+      if (!appData) return;
+      try {
+        await appData.ready;
+        await appData.preferences.setTheme(isDark ? 'dark' : 'default');
+      } catch (error) {
+        console.warn('[Theme] 保存主题失败:', error);
+      }
+    }
+
+    async function loadThemePreference() {
+      const appData = resolveThemeAppData();
+      if (appData) {
+        try {
+          await appData.ready;
+          applyDarkTheme((await appData.preferences.getTheme()) === 'dark');
+          return;
+        } catch (error) {
+          console.warn('[Theme] 加载主题失败:', error);
+        }
+      }
+      applyDarkTheme(Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
     }
 
     // 拖拽分栏功能
@@ -1197,15 +1236,10 @@
     }
 
     // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', async function () {
       startTimer();
       updateAnswerStatus(); // 初始化答题状态
-
-      // 加载保存的主题
-      if (localStorage.getItem('darkMode') === 'true') {
-        document.body.classList.add('dark');
-        document.querySelector('.theme-toggle').textContent = '☀️';
-      }
+      await loadThemePreference();
     });
 
     // 监听答案变化
@@ -1214,39 +1248,6 @@
 
     // 练习页面增强脚本集成
     function loadPracticePageEnhancer() {
-      if (window.storage && window.storage.ready) {
-        window.storage.ready.then(() => {
-          if (typeof window.storage.setNamespace === 'function') {
-            window.storage.setNamespace('exam_system');
-            console.log('练习页面已设置共享命名空间: exam_system');
-
-            // 验证命名空间设置是否生效
-            setTimeout(async () => {
-              const testKey = 'namespace_test_practice';
-              const testValue = 'test_value_practice_' + Date.now();
-              try {
-                await window.storage.set(testKey, testValue);
-                const retrievedValue = await window.storage.get(testKey);
-                if (retrievedValue === testValue) {
-                  console.log('✅ 练习页面命名空间设置验证成功: 存储和读取正常');
-                } else {
-                  console.warn('❌ 练习页面命名空间设置验证失败: 读取值不匹配');
-                }
-                await window.storage.remove(testKey);
-              } catch (error) {
-                console.error('❌ 练习页面命名空间设置验证失败', error);
-              }
-            }, 1000);
-          } else {
-            console.warn('存储管理器未加载或setNamespace方法不可用');
-          }
-        }).catch((error) => {
-          console.error('存储初始化失败，无法设置命名空间', error);
-        });
-      } else {
-        console.warn('存储管理器未加载或未暴露初始化状态');
-      }
-
       const script = document.createElement('script');
       script.src = '../../../js/bundles/practice-page-enhancer.bundle.js';
       script.onload = function () {
@@ -1274,9 +1275,45 @@
 
         setupCommunication: function () {
           this.parentWindow = window.opener || window.parent;
+          try {
+            const parsedReferrer = document.referrer ? new URL(document.referrer, window.location.href) : null;
+            this.expectedParentOrigin = parsedReferrer
+              && parsedReferrer.protocol !== 'file:'
+              && parsedReferrer.origin !== 'null'
+              && parsedReferrer.origin !== 'file://'
+              ? parsedReferrer.origin
+              : '';
+          } catch (_) {
+            this.expectedParentOrigin = '';
+          }
+          this.parentOrigin = '';
+          this.parentOriginIsOpaque = false;
+          this.windowSessionToken = '';
           window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'INIT_SESSION') {
-              this.sessionId = event.data.data.sessionId;
+              const envelope = event.data;
+              const initData = envelope.data || {};
+              const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+              const declaredOrigin = typeof initData.parentOrigin === 'string' ? initData.parentOrigin : '';
+              const incomingToken = typeof initData.windowSessionToken === 'string'
+                ? initData.windowSessionToken.trim()
+                : '';
+              if (event.source !== this.parentWindow || envelope.source !== 'exam_host' || !incomingToken) return;
+              if (this.expectedParentOrigin) {
+                if (incomingOrigin !== this.expectedParentOrigin || declaredOrigin !== this.expectedParentOrigin) return;
+                this.parentOrigin = this.expectedParentOrigin;
+                this.parentOriginIsOpaque = false;
+              } else {
+                if (incomingOrigin !== 'null' || declaredOrigin !== 'null' || window.location.protocol !== 'file:') return;
+                this.parentOrigin = 'null';
+                this.parentOriginIsOpaque = true;
+              }
+              this.windowSessionToken = incomingToken;
+              if (this.sessionId && String(this.sessionId) !== String(initData.sessionId)) {
+                this.submissionId = '';
+              }
+              this.sessionId = initData.sessionId;
+              this.examId = initData.examId || this.examId || null;
               this.sendMessage('SESSION_READY', {
                 pageType: this.detectPageType(),
                 url: window.location.href
@@ -1366,13 +1403,37 @@
           return null;
         },
 
+        createSubmissionId: function () {
+          try {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+              return `template-submit-${window.crypto.randomUUID()}`;
+            }
+          } catch (_) {
+            // Fall through to a session-bound identifier.
+          }
+          return `template-submit-${this.sessionId || this.examId || 'session'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        },
+
         sendMessage: function (type, data) {
           if (this.parentWindow) {
+            const targetOrigin = this.parentOrigin && this.parentOrigin !== 'null'
+              ? this.parentOrigin
+              : (this.expectedParentOrigin || (window.location.protocol === 'file:' ? '*' : ''));
+            if (!targetOrigin) return;
+            const payload = Object.assign({}, data || {});
+            if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
+              this.submissionId = payload.submissionId || this.submissionId || this.createSubmissionId();
+              payload.sessionId = payload.sessionId || this.sessionId || null;
+              payload.submissionId = this.submissionId;
+            }
             this.parentWindow.postMessage({
               type: type,
-              data: data,
+              data: Object.assign(payload, {
+                examId: this.examId || null,
+                windowSessionToken: this.windowSessionToken || null
+              }),
               source: 'practice_page'
-            }, '*');
+            }, targetOrigin);
           }
         }
       };

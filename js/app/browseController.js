@@ -72,29 +72,15 @@
         }
     };
 
-    function getActiveExamIndex() {
-        try {
-            if (typeof global.getExamIndexState === 'function') {
-                const state = global.getExamIndexState();
-                return Array.isArray(state) ? state : [];
-            }
-        } catch (_) { }
-        return Array.isArray(global.examIndex) ? global.examIndex : null;
-    }
-
     function hasListeningEntries(index) {
         return (Array.isArray(index) ? index : []).some((exam) => {
             return exam && exam.type === 'listening';
         });
     }
 
-    function hasActiveListeningLibrary() {
+    function hasActiveListeningLibrary(index) {
         if (typeof global.hasActiveListeningLibrary === 'function') {
-            return global.hasActiveListeningLibrary();
-        }
-        const index = getActiveExamIndex();
-        if (index === null) {
-            return true;
+            return global.hasActiveListeningLibrary(index);
         }
         return hasListeningEntries(index);
     }
@@ -118,13 +104,14 @@
             this.currentMode = 'default';
             this.activeFilter = 'all';
             this.buttonContainer = null;
+            this.filterInteractionId = 0;
         }
 
         /**
          * 初始化控制器
          * @param {string} containerId - 按钮容器的DOM ID
          */
-        initialize(containerId = 'type-filter-buttons') {
+        initialize(containerId = 'type-filter-buttons', examIndex = []) {
             this.buttonContainer = document.getElementById(containerId);
             if (!this.buttonContainer) {
                 console.warn('[BrowseController] 按钮容器未找到:', containerId);
@@ -132,10 +119,10 @@
             }
 
             // 从全局状态恢复模式
-            this.restoreMode();
+            this.restoreMode(examIndex);
 
             // 渲染初始按钮
-            this.renderFilterButtons();
+            this.renderFilterButtons(examIndex);
 
             return true;
         }
@@ -144,7 +131,7 @@
          * 设置浏览模式
          * @param {string} mode - 模式ID (default | frequency-p1 | frequency-p4)
          */
-        setMode(mode) {
+        setMode(mode, examIndex = [], renderRequestId = null, options = {}) {
             if (isReadingMemorizeBrowseMode()) {
                 mode = 'default';
             }
@@ -153,7 +140,7 @@
                 return;
             }
 
-            const nextMode = isListeningMode(mode) && !hasActiveListeningLibrary()
+            const nextMode = isListeningMode(mode) && !hasActiveListeningLibrary(examIndex)
                 ? 'default'
                 : mode;
             this.currentMode = nextMode;
@@ -163,10 +150,13 @@
             this.saveMode();
 
             // 重新渲染按钮
-            this.renderFilterButtons();
+            this.renderFilterButtons(examIndex);
 
             // 应用筛选
-            this.applyFilter(this.activeFilter);
+            if (!options.skipApply) {
+                return this.applyFilter(this.activeFilter, examIndex, renderRequestId, options);
+            }
+            return undefined;
         }
 
         /**
@@ -180,13 +170,13 @@
         /**
          * 渲染筛选按钮
          */
-        renderFilterButtons() {
+        renderFilterButtons(examIndex = []) {
             if (!this.buttonContainer) {
                 return;
             }
 
             const config = this.getCurrentModeConfig();
-            const filters = this.getVisibleFilters(config);
+            const filters = this.getVisibleFilters(config, examIndex);
             if (!filters.some((filter) => filter.id === this.activeFilter)) {
                 this.activeFilter = filters.length ? filters[0].id : 'all';
             }
@@ -218,8 +208,39 @@
                 button.setAttribute('aria-pressed', filter.id === this.activeFilter ? 'true' : 'false');
 
                 // 绑定点击事件
-                button.addEventListener('click', () => {
-                    this.handleFilterClick(filter.id);
+                button.addEventListener('click', async () => {
+                    const interactionId = ++this.filterInteractionId;
+                    const renderRequestId = typeof global.__beginBrowseUserResultsRequest === 'function'
+                        ? global.__beginBrowseUserResultsRequest()
+                        : (typeof global.__beginBrowseResultsRequest === 'function'
+                            ? global.__beginBrowseResultsRequest()
+                            : null);
+                    const foregroundEpoch = typeof global.__captureBrowseForegroundRenderEpoch === 'function'
+                        ? global.__captureBrowseForegroundRenderEpoch()
+                        : null;
+                    try {
+                        const index = await global.resolveActiveLibraryIndex();
+                        if (interactionId !== this.filterInteractionId) {
+                            return;
+                        }
+                        if (renderRequestId != null
+                            && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                            && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                            return;
+                        }
+                        await Promise.resolve(this.handleFilterClick(
+                            filter.id,
+                            index,
+                            renderRequestId,
+                            { foregroundEpoch }
+                        ));
+                    } catch (error) {
+                        console.error('[BrowseController] 读取活动题库失败:', error);
+                    } finally {
+                        if (typeof global.__endBrowseUserResultsRequest === 'function') {
+                            global.__endBrowseUserResultsRequest(renderRequestId);
+                        }
+                    }
                 });
 
                 this.buttonContainer.appendChild(button);
@@ -231,16 +252,16 @@
             }
         }
 
-        getVisibleFilters(config) {
+        getVisibleFilters(config, examIndex = []) {
             const normalized = config || this.getCurrentModeConfig();
             const filters = Array.isArray(normalized.filters) ? normalized.filters : [];
             if (isReadingMemorizeBrowseMode()) {
                 return BROWSE_MODES.default.filters.filter((filter) => filter.type === 'reading');
             }
-            if (normalized.id === 'default' && !hasActiveListeningLibrary()) {
+            if (normalized.id === 'default' && !hasActiveListeningLibrary(examIndex)) {
                 return filters.filter((filter) => filter.type !== 'listening');
             }
-            if (isListeningMode(normalized.id) && !hasActiveListeningLibrary()) {
+            if (isListeningMode(normalized.id) && !hasActiveListeningLibrary(examIndex)) {
                 return BROWSE_MODES.default.filters.filter((filter) => filter.type !== 'listening');
             }
             return filters.slice();
@@ -250,14 +271,14 @@
          * 处理筛选按钮点击
          * @param {string} filterId - 筛选器ID
          */
-        handleFilterClick(filterId) {
+        handleFilterClick(filterId, examIndex = [], renderRequestId = null, options = {}) {
             this.activeFilter = filterId;
 
             // 更新按钮激活状态
             this.updateButtonStates();
 
             // 应用筛选
-            this.applyFilter(filterId);
+            return this.applyFilter(filterId, examIndex, renderRequestId, options);
         }
 
         /**
@@ -285,36 +306,38 @@
          * 应用筛选
          * @param {string} filterId - 筛选器ID
          */
-        applyFilter(filterId) {
+        applyFilter(filterId, examIndex = [], renderRequestId = null, options = {}) {
             const config = this.getCurrentModeConfig();
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                this.filterByType(filterId);
+                return this.filterByType(filterId, examIndex, renderRequestId, options);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                this.filterByFolder(filterId);
+                return this.filterByFolder(filterId, examIndex, renderRequestId, options);
             }
+            return undefined;
         }
 
         /**
          * 按类型筛选（默认模式）
          * @param {string} type - 类型 (all | reading | listening)
          */
-        filterByType(type) {
+        filterByType(type, examIndex = [], renderRequestId = null, options = {}) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                global.filterByType(type);
+                return global.filterByType(type, examIndex, renderRequestId, options);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
+            return undefined;
         }
 
         /**
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId) {
+        filterExamsByFolder(examIndex = [], filterId = this.activeFilter) {
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -322,15 +345,10 @@
             // 允许“全部”入口只按 basePath 过滤（frequency-p1 无全量按钮）
             const isAllFilter = filterId === 'all';
             if (!folders && !isAllFilter) {
-                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
-                return;
+                return null;
             }
 
-            // 获取题库索引
-            const examIndex = this.getExamIndex();
-
-            // 筛选题目
-            const filtered = examIndex.filter(exam => {
+            return (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
                 if (!exam || !exam.path) {
                     return false;
                 }
@@ -349,40 +367,70 @@
                     return exam.path.includes(folder);
                 });
             });
-
-            // 显示筛选结果
-            this.displayFilteredExams(filtered);
         }
 
-
-
-        /**
-         * 获取题库索引
-         * @returns {Array} 题库数组
-         */
-        getExamIndex() {
-            // 优先使用全局状态服务
-            if (typeof global.getExamIndexState === 'function') {
-                return global.getExamIndexState();
+        filterByFolder(filterId, examIndex = [], renderRequestId = null, options = {}) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
+            const filtered = this.filterExamsByFolder(examIndex, filterId);
+            if (!Array.isArray(filtered)) {
+                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
+                return;
             }
 
-            // 回退到全局变量
-            return Array.isArray(global.examIndex) ? global.examIndex : [];
+            // 活动搜索必须继续约束当前文件夹结果；无查询时在控制器层终止
+            // 渲染，避免 main -> ExamActions -> controller -> main 的递归刷新。
+            const searchInput = document.getElementById('exam-search-input')
+                || (typeof document.querySelector === 'function'
+                    ? document.querySelector('.search-input')
+                    : null);
+            const hasActiveQuery = !!(searchInput
+                && typeof searchInput.value === 'string'
+                && searchInput.value.trim());
+            if (hasActiveQuery && typeof global.__renderBrowseResultsForState === 'function') {
+                return global.__renderBrowseResultsForState(filtered, renderRequestId, {
+                    foregroundEpoch: options.foregroundEpoch
+                });
+            }
+            if (!options.recoveryManaged
+                && renderRequestId != null
+                && typeof global.__commitForegroundBrowseResults === 'function') {
+                return global.__commitForegroundBrowseResults(
+                    renderRequestId,
+                    options.foregroundEpoch,
+                    (commitReceipt) => {
+                        const committed = this.displayFilteredExams(filtered, { commitReceipt });
+                        return committed === false ? false : filtered;
+                    }
+                );
+            }
+            const committed = this.displayFilteredExams(filtered, {
+                commitReceipt: options.commitReceipt
+            });
+            if (committed === false) {
+                return false;
+            }
+            return filtered;
         }
-
         /**
          * 显示筛选后的题目
          * @param {Array} exams - 题目数组
          */
-        displayFilteredExams(exams) {
-            // 更新筛选状态
-            if (typeof global.setFilteredExamsState === 'function') {
-                global.setFilteredExamsState(exams);
+        displayFilteredExams(exams, options = {}) {
+            // DOM commit is the authority. Do not publish filtered state or
+            // post-render effects when no renderer/container accepted it.
+            const displayed = typeof global.displayExams === 'function'
+                ? global.displayExams(exams, { commitReceipt: options.commitReceipt })
+                : false;
+            if (displayed !== true) {
+                return false;
             }
 
-            // 显示题目
-            if (typeof global.displayExams === 'function') {
-                global.displayExams(exams);
+            if (typeof global.setFilteredExamsState === 'function') {
+                global.setFilteredExamsState(exams);
             }
 
             // 处理渲染后逻辑
@@ -391,6 +439,7 @@
                 const type = global.getCurrentExamType ? global.getCurrentExamType() : 'all';
                 global.handlePostExamListRender(exams, { category, type });
             }
+            return true;
         }
 
         /**
@@ -407,11 +456,11 @@
         /**
          * 从全局状态恢复模式
          */
-        restoreMode() {
+        restoreMode(examIndex = []) {
             try {
                 const savedMode = global.__browseFilterMode;
                 if (savedMode && BROWSE_MODES[savedMode]) {
-                    this.currentMode = isListeningMode(savedMode) && !hasActiveListeningLibrary()
+                    this.currentMode = isListeningMode(savedMode) && !hasActiveListeningLibrary(examIndex)
                         ? 'default'
                         : savedMode;
                 }
@@ -423,8 +472,8 @@
         /**
          * 重置为默认模式
          */
-        resetToDefault() {
-            this.setMode('default');
+        resetToDefault(examIndex = [], renderRequestId = null, options = {}) {
+            return this.setMode('default', examIndex, renderRequestId, options);
         }
 
         // ============================================================================
@@ -547,10 +596,8 @@
 
             // 4. 调用 ExamActions.loadExamList 来执行真正的筛选和渲染
             // 这确保了所有逻辑（包括频率模式、置顶等）都由 ExamActions 统一处理
-            if (global.ExamActions && typeof global.ExamActions.loadExamList === 'function') {
-                global.ExamActions.loadExamList();
-            } else if (typeof global.loadExamList === 'function') {
-                global.loadExamList();
+            if (typeof global.loadExamList === 'function') {
+                global.loadExamList(normalizedOptions.examIndex || null);
             } else {
                 console.warn('[BrowseController] 无法加载题库列表: loadExamList 未定义');
             }
@@ -575,9 +622,8 @@
     global.BrowseController = BrowseController;
     global.BROWSE_MODES = BROWSE_MODES;
     global.refreshListeningAvailabilityUI = function refreshListeningAvailabilityUI(index) {
-        const listeningAvailable = Array.isArray(index)
-            ? hasListeningEntries(index)
-            : hasActiveListeningLibrary();
+        const examIndex = Array.isArray(index) ? index : [];
+        const listeningAvailable = hasListeningEntries(examIndex);
         const controller = global.browseController || null;
 
         if (controller && isListeningMode(controller.currentMode) && !listeningAvailable) {
@@ -598,7 +644,7 @@
         }
 
         if (controller && controller.buttonContainer) {
-            controller.renderFilterButtons();
+            controller.renderFilterButtons(examIndex);
         } else {
             const container = global.document && global.document.getElementById('type-filter-buttons');
             const listeningButtons = container

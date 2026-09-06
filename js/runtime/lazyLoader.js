@@ -9,6 +9,33 @@
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
+    var optionalListeningExamDataPromise = null;
+    var assetVersion = resolveAssetVersion();
+
+    function resolveAssetVersion() {
+        try {
+            var params = new URLSearchParams(global.location && global.location.search ? global.location.search : '');
+            return String(params.get('v') || '').trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function versionScriptUrl(url) {
+        if (!url || !assetVersion) {
+            return url;
+        }
+        try {
+            var resolved = new URL(url, document.baseURI);
+            if (resolved.origin !== global.location.origin) {
+                return url;
+            }
+            resolved.searchParams.set('v', assetVersion);
+            return resolved.href;
+        } catch (_) {
+            return url;
+        }
+    }
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -42,9 +69,7 @@
             'js/bundles/theme.bundle.js'
         ];
 
-        manifest['settings-tools'] = [
-            'js/bundles/settings.bundle.js'
-        ];
+        manifest['settings-tools'] = [];
 
         manifest['diagnostics-tools'] = [
             'js/bundles/diagnostics.bundle.js'
@@ -53,13 +78,16 @@
         dependencies['state-core'] = [];
         dependencies['exam-data'] = [];
         dependencies['practice-suite'] = ['state-core'];
-        dependencies['browse-runtime'] = ['state-core'];
-        dependencies['browse-view'] = ['state-core'];
+        // Browsing is also the entry point for starting a practice session.
+        // Keep the real recorder ready before a user can open an exam; the
+        // bootstrap fallback cannot own the full submit/persist round trip.
+        dependencies['browse-runtime'] = ['state-core', 'practice-suite'];
+        dependencies['browse-view'] = ['state-core', 'practice-suite'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['settings-tools'] = ['state-core'];
-        dependencies['more-tools'] = ['state-core', 'settings-tools'];
+        dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
-        dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
+        dependencies['diagnostics-tools'] = ['state-core'];
     }
 
     function setBuiltInListeningAvailability(available, reason) {
@@ -74,7 +102,7 @@
             return '';
         }
         try {
-            return new URL(url, document.baseURI).href;
+            return new URL(versionScriptUrl(url), document.baseURI).href;
         } catch (_) {
             return String(url);
         }
@@ -139,7 +167,8 @@
             return scriptStatus[url];
         }
 
-        var existing = findExistingScriptTag(url);
+        var requestUrl = versionScriptUrl(url);
+        var existing = findExistingScriptTag(requestUrl);
         if (existing) {
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
@@ -147,7 +176,7 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
                 scriptStatus[url] = 'loaded';
@@ -190,8 +219,11 @@
     }
 
     function ensureOptionalListeningExamData() {
+        if (optionalListeningExamDataPromise) {
+            return optionalListeningExamDataPromise;
+        }
         setBuiltInListeningAvailability(false, 'pending-manifest');
-        return loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
+        optionalListeningExamDataPromise = loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
             .then(function afterManifestLoaded(loaded) {
                 if (!loaded || !hasListeningManifest()) {
                     setBuiltInListeningAvailability(false, loaded ? 'manifest-empty' : 'manifest-missing');
@@ -208,6 +240,7 @@
                         return undefined;
                     });
             });
+        return optionalListeningExamDataPromise;
     }
 
     function loadBatch(batch) {

@@ -80,7 +80,53 @@ function it(name, fn) {
     }
 }
 
+describe('LegacyExamListView.render commit contract', () => {
+    it('fails closed when its container is unavailable', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+
+        assert.strictEqual(view.render([]), false);
+    });
+
+    it('reports success only after committing the empty state', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const container = {};
+        let emptyStateCommits = 0;
+        view._getContainer = () => container;
+        view._getLoadingIndicator = () => null;
+        view._renderEmptyState = (target) => {
+            assert.strictEqual(target, container);
+            emptyStateCommits += 1;
+        };
+        view._hideLoading = () => {};
+
+        assert.strictEqual(view.render([]), true);
+        assert.strictEqual(emptyStateCommits, 1);
+    });
+});
+
 describe('LegacyExamListView._getCompletionStatus', () => {
+    it('keeps a prepared completion map invisible until commit', () => {
+        const { windowStub, LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const exam = { id: 'staged-reading', title: 'Staged Reading' };
+        const prepared = windowStub.prepareBrowseCompletionIndex([{
+            examId: 'staged-reading',
+            title: 'Staged Reading',
+            percentage: 77,
+            date: '2026-08-23T00:00:00.000Z'
+        }]);
+
+        assert.strictEqual(
+            view._getCompletionStatus(exam),
+            null,
+            'preparation alone must not replace the accepted completion map'
+        );
+        assert.strictEqual(windowStub.commitBrowseCompletionIndex(prepared), true);
+        assert.strictEqual(view._getCompletionStatus(exam).percentage, 77);
+    });
+
     it('reads score and timestamp from matching suite child entries', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();
         const view = new LegacyExamListView();
@@ -89,7 +135,7 @@ describe('LegacyExamListView._getCompletionStatus', () => {
             title: 'Passage 2',
             path: 'Reading/P2/passage-2.html'
         };
-        windowStub.getPracticeRecordsState = () => ([
+        const records = [
             {
                 id: 'suite-record-1',
                 examId: 'suite-suite-record-1',
@@ -104,7 +150,8 @@ describe('LegacyExamListView._getCompletionStatus', () => {
                     }
                 ]
             }
-        ]);
+        ];
+        windowStub.rebuildBrowseCompletionIndex(records);
 
         const status = view._getCompletionStatus(exam);
 
@@ -113,37 +160,37 @@ describe('LegacyExamListView._getCompletionStatus', () => {
         assert.strictEqual(status.date, '2026-07-01T09:58:00.000Z', '应优先读取 suiteEntries 子条目的时间');
     });
 
-    it('uses suite child scoreInfo and parent timestamp fallback for lightweight summaries', () => {
+    it('uses suiteEntrySummaries score and parent timestamp fallback for light records', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();
         const view = new LegacyExamListView();
         const exam = {
             id: 'reading-p3',
             title: 'Passage 3'
         };
-        windowStub.getPracticeRecordsState = () => ([
+        const records = [
             {
                 id: 'suite-record-2',
                 examId: 'suite-suite-record-2',
                 title: '2026-07-02 套题',
                 date: '2026-07-02T12:30:00.000Z',
-                suiteEntries: [
+                suiteEntrySummaries: [
                     {
                         examId: 'reading-p3',
                         title: 'Passage 3',
-                        scoreInfo: {
-                            correct: 9,
-                            total: 10,
-                            percentage: 90
-                        }
+                        correctAnswers: 9,
+                        totalQuestions: 10,
+                        accuracy: 0.9,
+                        percentage: 90
                     }
                 ]
             }
-        ]);
+        ];
+        windowStub.rebuildBrowseCompletionIndex(records);
 
         const status = view._getCompletionStatus(exam);
 
-        assert(status, '轻量 suiteEntries 子条目也应产生完成状态');
-        assert.strictEqual(status.percentage, 90, '应从 suiteEntries.scoreInfo 读取分数');
+        assert(status, 'light.suiteEntrySummaries 子条目也应产生完成状态');
+        assert.strictEqual(status.percentage, 90, '应从 suiteEntrySummaries 读取分数');
         assert.strictEqual(status.date, '2026-07-02T12:30:00.000Z', '子条目缺失时间时应回退到父记录时间');
     });
 });

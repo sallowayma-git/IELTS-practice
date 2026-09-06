@@ -1,4 +1,5 @@
 # IELTS Atlas / IELTS Practice
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
 ## 分支用途与范围说明
 
@@ -37,6 +38,18 @@
 为保证项目能够长期稳定存在，请遵循以下原则：**自行部署，个人使用，控制传播范围，不以项目或其题源牟利。**
 
 代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
+
+## 分支概览
+
+本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+
+| 分支 | 说明 | 状态 | 完成度 | 技术特征 |
+|------|------|------|--------|----------|
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版，纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
+| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
+| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
+
+> **main** 适合所有用户直接使用；**feature/multi-device-easy-deploy** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
 
 ## 项目概述
 
@@ -223,7 +236,7 @@ assets/generated/listening-exams/listening-index.compat.js
 
 系统管理能力：
 
-- 清除缓存：清理部分运行缓存并刷新状态。
+- 清除全部本地数据：删除浏览器中的练习、题库、词汇、设置、应用内备份和本地文件夹绑定，刷新后回到首次启动并重新显示 GPL 协议；外部文件夹中的 JSON 备份不会删除。
 - 加载题库：导入阅读或听力题库目录。
 - 主题切换：切换当前界面的背景与视觉主题。
 - 题库配置切换：查看、切换或管理题库配置。
@@ -237,7 +250,7 @@ assets/generated/listening-exams/listening-index.compat.js
 - 导入数据：从外部 JSON 数据恢复或合并历史记录。
 - 完整性检查：对导入数据和本地数据进行基础校验。
 
-系统数据优先写入 IndexedDB，并通过 localStorage、sessionStorage 和内存存储提供降级路径。不同浏览器、不同协议和不同域名下的数据互相隔离。
+核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
 
 ### 更多工具
 
@@ -407,6 +420,7 @@ assets/generated/listening-exams/listening-index.compat.js
 
 ```bash
 python developer/tests/ci/run_static_suite.py
+python developer/tests/e2e/full_reset_flow.py
 python developer/tests/e2e/suite_practice_flow.py
 ```
 
@@ -446,12 +460,11 @@ js/bundles/legacy-app.bundle.js
 
 ### 数据存储
 
-系统采用多层本地存储策略：
+系统按数据用途使用本地存储：
 
-- IndexedDB：优先存储结构化数据。
-- localStorage：兼容和跨标签页同步场景。
-- sessionStorage：会话级降级存储。
-- 内存存储：持久化不可用时的兜底方案。
+- IndexedDB：存储练习记录、词汇、设置、题库配置和备份等核心持久化数据，并提供事务与修订冲突检测。
+- localStorage：仅保留旧版数据迁移和少量兼容状态。
+- sessionStorage：存储会话级草稿，不作为核心数据降级后端。
 
 主要数据包括：
 
@@ -533,7 +546,7 @@ ReadingPractice/
 - 浏览器阻止跨窗口通信。
 - 练习页资源加载失败。
 - 用户在隐私模式中运行，存储被限制。
-- IndexedDB 或 localStorage 被禁用。
+- IndexedDB 被禁用、配额耗尽或后端事务失败。
 - 使用了不同协议或不同域名，导致查看的是另一份本地数据。
 
 处理步骤：

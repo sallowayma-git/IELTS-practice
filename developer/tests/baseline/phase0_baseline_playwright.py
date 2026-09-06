@@ -145,11 +145,11 @@ class Phase0BaselineTest:
         try:
             # 检查 examIndex 是否加载
             exam_index_loaded = await self.page.evaluate(
-                "() => window.examIndex && Array.isArray(window.examIndex)"
+                "async () => Array.isArray(await window.resolveActiveLibraryIndex())"
             )
             
             if exam_index_loaded:
-                exam_count = await self.page.evaluate("() => window.examIndex.length")
+                exam_count = await self.page.evaluate("async () => (await window.resolveActiveLibraryIndex()).length")
                 self.log_result("examIndex 加载", True, f"已加载 {exam_count} 个题目")
             else:
                 self.log_result("examIndex 加载", False, "examIndex 未加载或格式错误")

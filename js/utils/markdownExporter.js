@@ -98,22 +98,11 @@ class MarkdownExporter {
         }
         return comparison;
     }
-    constructor() {
-        this.storage = window.storage;
-    }
-
     async getPracticeRecordsUnified() {
-        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-            try {
-                const records = await window.PracticeRecordAPI.list();
-                return Array.isArray(records) ? records : [];
-            } catch (error) {
-                console.warn('[MarkdownExporter] 从 PracticeRecordAPI 获取练习记录失败:', error);
-                return [];
-            }
-        }
-
-        return [];
+        if (!window.AppData || !window.AppData.practice) throw new Error('AppData.practice is unavailable');
+        await window.AppData.ready;
+        const records = await window.AppData.practice.list({ projection: 'full' });
+        return Array.isArray(records) ? records : [];
     }
 
     /**
@@ -166,30 +155,15 @@ class MarkdownExporter {
      */
     async performExport() {
         try {
-            // 尝试从不同的数据源获取记录
             let practiceRecords = [];
-            let examIndex = [];
             
             this.updateProgress('正在加载数据...');
             
             // 让出控制权
             await new Promise(resolve => setTimeout(resolve, 10));
             
-            // 只使用统一 PracticeRecordAPI 数据
+            // 只使用统一 practice domain 数据
             practiceRecords = await this.getPracticeRecordsUnified();
-
-            // examIndex 仍从存储/全局读取
-            if (this.storage && typeof this.storage.get === 'function') {
-                try {
-                    const idx = await this.storage.get('exam_index', []);
-                    examIndex = Array.isArray(idx) ? idx : [];
-                } catch (_) {
-                    examIndex = [];
-                }
-            }
-            if ((!Array.isArray(examIndex) || examIndex.length === 0) && window.examIndex) {
-                examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
-            }
             
             if (practiceRecords.length === 0) {
                 throw new Error('没有练习记录可导出');
@@ -224,7 +198,7 @@ class MarkdownExporter {
             await new Promise(resolve => setTimeout(resolve, 10));
             
             // 按日期分组记录
-            const recordsByDate = await this.groupRecordsByDateAsync(practiceRecords, examIndex);
+            const recordsByDate = await this.groupRecordsByDateAsync(practiceRecords);
             
             // 生成 Markdown 内容
             const markdownContent = await this.generateMarkdownContentAsync(recordsByDate);
@@ -280,7 +254,27 @@ class MarkdownExporter {
     /**
      * 异步按日期分组记录
      */
-    async groupRecordsByDateAsync(practiceRecords, examIndex) {
+    async resolveExamForRecord(record) {
+        if (typeof window.resolveExamForPracticeRecord !== 'function') {
+            return null;
+        }
+        return window.resolveExamForPracticeRecord(record);
+    }
+
+    enhanceRecordForExport(record, exam = null) {
+        const metadata = record && record.metadata && typeof record.metadata === 'object'
+            ? record.metadata
+            : {};
+        return {
+            ...record,
+            examInfo: exam || {},
+            title: record.title || metadata.examTitle || exam?.title || '未知题目',
+            category: record.category || metadata.category || exam?.category || 'Unknown',
+            frequency: record.frequency || metadata.frequency || exam?.frequency || 'unknown'
+        };
+    }
+
+    async groupRecordsByDateAsync(practiceRecords) {
         const grouped = {};
         
         for (let i = 0; i < practiceRecords.length; i++) {
@@ -293,15 +287,8 @@ class MarkdownExporter {
                 grouped[date] = [];
             }
             
-            // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
-            const enhancedRecord = {
-                ...record,
-                examInfo: exam || {},
-                title: exam?.title || record.title || '未知题目',
-                category: exam?.category || record.category || 'Unknown',
-                frequency: exam?.frequency || record.frequency || 'unknown'
-            };
+            const exam = await this.resolveExamForRecord(record);
+            const enhancedRecord = this.enhanceRecordForExport(record, exam);
             
             grouped[date].push(enhancedRecord);
             
@@ -317,7 +304,7 @@ class MarkdownExporter {
     /**
      * 按日期分组记录（同步版本，保持兼容性）
      */
-    groupRecordsByDate(practiceRecords, examIndex) {
+    groupRecordsByDate(practiceRecords) {
         const grouped = {};
         
         practiceRecords.forEach(record => {
@@ -328,15 +315,7 @@ class MarkdownExporter {
                 grouped[date] = [];
             }
             
-            // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
-            const enhancedRecord = {
-                ...record,
-                examInfo: exam || {},
-                title: exam?.title || record.title || '未知题目',
-                category: exam?.category || record.category || 'Unknown',
-                frequency: exam?.frequency || record.frequency || 'unknown'
-            };
+            const enhancedRecord = this.enhanceRecordForExport(record);
             
             grouped[date].push(enhancedRecord);
         });

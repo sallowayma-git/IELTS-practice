@@ -4,12 +4,38 @@
     const MESSAGE_SOURCE = 'practice_page';
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
+    const READING_DRAFT_SYNC_MS = 1500;
+    const SUBMIT_ACK_TIMEOUT_MS = 10000;
+    const NOTE_EDITOR_SAVE_DEBOUNCE_MS = 450;
+    const NOTE_ROW_LONG_PRESS_MS = 100;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
+    const READING_NOTE_STYLE_ID = 'reading-note-style';
+    const READING_DISPLAY_CONTROL_STYLE_ID = 'reading-display-control-style';
+    const OPTION_CONSUMED_STYLE_ID = 'reading-option-consumed-style';
+    // 候选池容器/选项 class 不统一，统一选择器覆盖所有变体。
+    // .headings-pool 当前都包裹 .pool-items 但作为防御一并纳入。
+    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
+    const POOL_CONTAINER_SELECTOR = '.pool-items, #word-options, .options-pool, .option-pool, .cardpool, .headings-pool, .pool';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
-    const READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
     const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    const HOST_MESSAGE_SOURCE = 'exam_host';
+    let readingCandidateCodeCache = { mode: 'auto', customCode: '' };
+
+    function deriveReferrerOrigin() {
+        try {
+            if (!document.referrer) return '';
+            const parsed = new URL(document.referrer, global.location.href);
+            // File-page refs do not provide a usable web origin, so bind them through
+            // the opaque/file message-origin handling below instead of pinning file://.
+            if (parsed.protocol === 'file:') return '';
+            if (!parsed.origin || parsed.origin === 'null' || parsed.origin === 'file://') return '';
+            return parsed.origin;
+        } catch (_) {
+            return '';
+        }
+    }
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -26,6 +52,7 @@
     const navStatus = new Map();
     const scriptCache = new Map();
     const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
+    const LOCATOR_OVERLAP_SELECTOR = '.reading-locator-overlap';
     function getAnswerMatchCore() {
         const core = global.AnswerMatchCore;
         if (!core || typeof core !== 'object') {
@@ -79,6 +106,10 @@
         timerLocked: false,
         ready: false,
         submitted: false,
+        submissionStatus: 'draft',
+        submissionId: '',
+        submissionAckTimer: null,
+        pendingSubmissionPresentation: null,
         initTimer: null,
         manifestLoaded: false,
         dataset: null,
@@ -96,16 +127,45 @@
             currentIndex: 0,
             activeStartedAtMs: null,
             slotsByExamId: new Map(),
-            activating: false
+            activating: false,
+            activationGeneration: 0
         },
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
+        readingDraftSyncTimer: null,
+        readingDraftFingerprint: '',
+        notes: [],
+        noteOutlines: [],
+        markedQuestions: [],
+        activeNoteId: '',
+        noteEditorPosition: null,
+        noteUiInitialized: false,
+        noteEditorSaveTimer: null,
+        noteDrawerDirty: true,
+        noteHighlightMetaDirty: true,
+        noteEditorPendingSync: false,
+        reviewRecordId: '',
+        // 单篇阅读 final-submit 成功后，宿主通过 PRACTICE_RECORD_SAVED 回传的已存档
+        // practice record id。持有该 id 时，笔记编辑在只读提交页仍然可写，并且
+        // syncReadingAnnotation 会以该 recordId 发送 READING_ANNOTATION_SYNC，把
+        // 结果页上的笔记改动持久化回已存档的练习记录。
+        submittedRecordId: '',
+        highlightVisibility: {
+            locators: true,
+            notes: true,
+            highlights: true
+        },
+        questionNavCollapsed: false,
         lastInitSignature: '',
         lastReplaySignature: '',
         sessionReadySent: false,
         parentWindow: global.opener || global.parent || null,
+        expectedParentOrigin: deriveReferrerOrigin(),
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
         windowSessionToken: '',
-        windowSessionIssuedAtMs: 0
+        windowSessionIssuedAtMs: 0,
+        windowSessionGeneration: 0
     };
 
     const dom = {
@@ -128,7 +188,10 @@
         timerInterval: null,
         lastRange: null,
         currentHighlightNode: null,
-        keepToolbar: false
+        keepToolbar: false,
+        noteDragFrame: null,
+        noteListDragging: false,
+        noteSuppressClickUntil: 0
     };
     const testOverrides = {
         renderExplanations: null
@@ -297,6 +360,10 @@
                 control.disabled = locked || state.readOnly;
             }
         });
+        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly;
+        document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
+            if ('disabled' in control) control.disabled = locked;
+        });
         disableDragInteractions();
     }
 
@@ -333,20 +400,15 @@
     }
 
     function readReadingCandidateCodePreferences() {
-        try {
-            const raw = global.localStorage?.getItem(READING_CANDIDATE_CODE_PREF_KEY);
-            const parsed = raw ? JSON.parse(raw) : null;
-            const mode = parsed?.mode === 'custom' ? 'custom' : 'auto';
-            const customCode = typeof parsed?.customCode === 'string'
-                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
-                : '';
-            return {
-                mode,
-                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
-            };
-        } catch (_) {
-            return { mode: 'auto', customCode: '' };
-        }
+        return { ...readingCandidateCodeCache };
+    }
+
+    async function loadReadingCandidateCodePreferences() {
+        await global.AppData.ready;
+        const stored = await global.AppData.preferences.getCandidateCode();
+        const mode = stored?.mode === 'custom' ? 'custom' : 'auto';
+        const customCode = typeof stored?.customCode === 'string' ? stored.customCode.replace(/\D/g, '').slice(0, 6) : '';
+        readingCandidateCodeCache = { mode, customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : '' };
     }
 
     function resolveReadingCandidateCode() {
@@ -364,9 +426,15 @@
         var displaySeconds;
         var elapsed = getPageElapsedSeconds();
         var limitSeconds;
+        const isSuiteTimer = Boolean(state.suiteSessionId);
+        const suiteTimerMode = isSuiteTimer && state.suiteTimerMode === 'elapsed'
+            ? 'elapsed'
+            : (isSuiteTimer ? 'countdown' : '');
         const rawLimitSeconds = Number(state.suiteTimerLimitSeconds);
         if (Number.isFinite(rawLimitSeconds) && rawLimitSeconds > 0) {
             limitSeconds = Math.floor(rawLimitSeconds);
+        } else if (state.suiteSessionId && state.suiteTimerMode === 'countdown') {
+            limitSeconds = minutesToSeconds(60, 60);
         } else if (preferences.limitEnabled) {
             limitSeconds = minutesToSeconds(preferences.limitMinutes, 60);
         } else {
@@ -382,21 +450,26 @@
             }
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
+        } else if (suiteTimerMode === 'countdown') {
+            displaySeconds = Math.max(0, Number(limitSeconds || 0) - elapsed);
+            var suiteRemainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = suiteRemainingMinutes + ' minutes remaining';
+        } else if (suiteTimerMode === 'elapsed') {
+            displaySeconds = elapsed;
+            timer.textContent = formatTimerSeconds(displaySeconds);
         } else if (preferences.mode === 'countdown') {
             const countdownSeconds = minutesToSeconds(preferences.countdownMinutes, 60);
             displaySeconds = Math.max(0, countdownSeconds - elapsed);
             timer.textContent = formatTimerSeconds(displaySeconds);
-        } else if (state.suiteSessionId && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0) {
-            displaySeconds = Math.max(0, limitSeconds - elapsed);
-            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
-            timer.textContent = remainingMinutes + ' minutes remaining';
         } else {
             displaySeconds = elapsed;
             timer.textContent = formatTimerSeconds(displaySeconds);
         }
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
-        var countdownExpired = preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
-        var limitExpired = Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds);
+        var countdownExpired = !isSuiteTimer && preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
+        var limitExpired = suiteTimerMode === 'countdown'
+            ? Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds)
+            : (!isSuiteTimer && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds));
         var expired = Boolean(countdownExpired || limitExpired);
         state.timerExpired = expired;
         if (expired) {
@@ -404,11 +477,19 @@
         }
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.classList.toggle('timer-expired', expired);
-        timer.dataset.timerMode = preferences.mode;
-        timer.dataset.expiryAction = preferences.expiryAction;
+        if (timer.dataset) {
+            timer.dataset.timerMode = suiteTimerMode || preferences.mode;
+            timer.dataset.expiryAction = preferences.expiryAction;
+        }
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
         var _warnRemaining = !hasEndlessCountdown
-            && (preferences.mode === 'countdown' || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0))
+            && (
+                suiteTimerMode === 'countdown'
+                || (!isSuiteTimer && (
+                    preferences.mode === 'countdown'
+                    || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0)
+                ))
+            )
             && Number.isFinite(Number(displaySeconds))
             ? Math.max(0, Number(displaySeconds))
             : null;
@@ -530,9 +611,96 @@
         });
     }
 
+    function getNonEmptyTextNodes(root) {
+        const textNodes = [];
+        if (!(root instanceof Node)) {
+            return textNodes;
+        }
+        const ownerDocument = root.ownerDocument || document;
+        const nodeFilter = ownerDocument.defaultView?.NodeFilter || global.NodeFilter;
+        if (!nodeFilter) {
+            return textNodes;
+        }
+        const walker = ownerDocument.createTreeWalker(root, nodeFilter.SHOW_TEXT);
+        let textNode = walker.nextNode();
+        while (textNode) {
+            if ((textNode.data || '').length > 0) {
+                textNodes.push(textNode);
+            }
+            textNode = walker.nextNode();
+        }
+        return textNodes;
+    }
+
+    function rangeHasPositiveTextOverlap(range, node) {
+        if (!range || range.collapsed || !(node instanceof Node)) {
+            return false;
+        }
+        const textNodes = getNonEmptyTextNodes(node);
+        if (!textNodes.length) {
+            return false;
+        }
+        const ownerDocument = node.ownerDocument || document;
+        const rangeType = ownerDocument.defaultView?.Range || global.Range;
+        if (!rangeType || typeof range.compareBoundaryPoints !== 'function') {
+            return false;
+        }
+        try {
+            const nodeTextRange = ownerDocument.createRange();
+            nodeTextRange.setStart(textNodes[0], 0);
+            const lastTextNode = textNodes[textNodes.length - 1];
+            nodeTextRange.setEnd(lastTextNode, lastTextNode.data.length);
+            return range.compareBoundaryPoints(rangeType.START_TO_END, nodeTextRange) > 0
+                && range.compareBoundaryPoints(rangeType.END_TO_START, nodeTextRange) < 0;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isAtomicPrimaryHighlightSelection(range, highlightNode) {
+        if (
+            !range
+            || range.collapsed
+            || !(highlightNode instanceof HTMLElement)
+            || !highlightNode.matches('.hl')
+            || !highlightNode.isConnected
+            || highlightNode.dataset.hlLevel === 'secondary'
+            || typeof range.comparePoint !== 'function'
+        ) {
+            return false;
+        }
+
+        const textNodes = getNonEmptyTextNodes(highlightNode);
+        if (!textNodes.length) {
+            return false;
+        }
+
+        try {
+            const ownerDocument = highlightNode.ownerDocument || document;
+            const scope = highlightNode.closest('#left, #right') || ownerDocument;
+            const intersectedHighlights = Array.from(scope.querySelectorAll('.hl'))
+                .filter((node) => rangeHasPositiveTextOverlap(range, node));
+            if (intersectedHighlights.length !== 1 || intersectedHighlights[0] !== highlightNode) {
+                return false;
+            }
+
+            const firstTextNode = textNodes[0];
+            const lastTextNode = textNodes[textNodes.length - 1];
+            return range.comparePoint(firstTextNode, 0) === 0
+                && range.comparePoint(lastTextNode, lastTextNode.data.length) === 0
+                && range.toString() === String(highlightNode.textContent || '');
+        } catch (_) {
+            return false;
+        }
+    }
+
     function updateSelectionToolbar() {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
+        if (!canEditReadingNotes()) {
+            toolbar.style.display = 'none';
+            return;
+        }
         const selection = global.getSelection();
         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
             if (!interaction.keepToolbar && !interaction.currentHighlightNode) {
@@ -562,13 +730,7 @@
                 const hls = containerElement.querySelectorAll('.hl');
                 for (let i = 0; i < hls.length; i++) {
                     const hl = hls[i];
-                    let intersects = false;
-                    if (typeof range.intersectsNode === 'function') {
-                        intersects = range.intersectsNode(hl);
-                    } else if (selection && typeof selection.containsNode === 'function') {
-                        intersects = selection.containsNode(hl, true);
-                    }
-                    if (intersects) {
+                    if (rangeHasPositiveTextOverlap(range, hl)) {
                         hasHighlight = true;
                         finalHighlightNode = hl;
                         break;
@@ -594,8 +756,32 @@
 
     function applySelectionHighlight(kind = 'highlight') {
         const toolbar = document.getElementById('selbar');
+        if (!canEditReadingNotes()) {
+            if (toolbar) toolbar.style.display = 'none';
+            return;
+        }
         const selection = global.getSelection();
-        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+        if (!interaction.lastRange || interaction.lastRange.collapsed) {
+            return;
+        }
+        if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
+            const shouldPromote = isAtomicPrimaryHighlightSelection(
+                interaction.lastRange,
+                interaction.currentHighlightNode
+            );
+            if (shouldPromote) {
+                interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            }
+            selection?.removeAllRanges();
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+            if (shouldPromote) {
+                syncReadingAnnotation('highlight');
+            }
+            return;
+        }
+        if (interaction.currentHighlightNode) {
             return;
         }
         const span = document.createElement('span');
@@ -612,11 +798,19 @@
         if (toolbar) toolbar.style.display = 'none';
         interaction.lastRange = null;
         interaction.currentHighlightNode = null;
-        syncSimulationDraftSnapshot('highlight');
+        if (kind === 'note') {
+            const note = ensureNoteForHighlight(span, normalizeNoteText(span.textContent), { sync: false });
+            if (note) openNoteEditor(note.id, { anchorNode: span, focusBody: true });
+        }
+        syncReadingAnnotation('highlight');
     }
 
     function removeSelectionHighlight() {
         const toolbar = document.getElementById('selbar');
+        if (!canEditReadingNotes()) {
+            if (toolbar) toolbar.style.display = 'none';
+            return;
+        }
         const selection = global.getSelection();
         let target = interaction.currentHighlightNode;
         if (!target && interaction.lastRange) {
@@ -625,6 +819,7 @@
                 ? ancestor.parentElement?.closest('.hl')
                 : ancestor.closest?.('.hl');
         }
+        const removedNoteId = target instanceof HTMLElement ? String(target.dataset.noteId || '') : '';
         if (target && target.parentNode) {
             const parent = target.parentNode;
             while (target.firstChild) {
@@ -637,7 +832,8 @@
         if (toolbar) toolbar.style.display = 'none';
         interaction.lastRange = null;
         interaction.currentHighlightNode = null;
-        syncSimulationDraftSnapshot('unhighlight');
+        if (removedNoteId) deleteNote(removedNoteId, { sync: false });
+        syncReadingAnnotation('unhighlight');
     }
 
     function attachSelectionHighlightToolbar() {
@@ -654,13 +850,13 @@
         });
         document.getElementById('btnHL')?.addEventListener('click', () => applySelectionHighlight('highlight'));
         document.getElementById('btnNote')?.addEventListener('click', () => {
+            if (!canEditReadingNotes()) return;
             let targetNode = interaction.currentHighlightNode;
             let text = '';
 
             if (targetNode) {
                 if (targetNode.dataset.hlType !== 'note') {
                     targetNode.dataset.hlType = 'note';
-                    syncSimulationDraftSnapshot('highlight');
                 }
                 text = (targetNode.textContent || '').trim();
             } else if (interaction.lastRange && !interaction.lastRange.collapsed) {
@@ -684,18 +880,10 @@
             interaction.lastRange = null;
             interaction.currentHighlightNode = null;
 
-            if (text) {
-                const noteArea = document.querySelector('#notes-panel textarea');
-                if (noteArea) {
-                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text + '\n';
-                    noteArea.scrollTop = noteArea.scrollHeight;
-                    noteArea.focus();
-                }
+            if (targetNode && text) {
+                const note = ensureNoteForHighlight(targetNode, text);
                 closeFloatingPanels();
-                const notesPanel = document.getElementById('notes-panel');
-                const overlay = document.querySelector('.overlay');
-                if (notesPanel) notesPanel.style.display = 'flex';
-                if (overlay) overlay.style.display = 'block';
+                if (note) openNoteEditor(note.id, { anchorNode: targetNode, focusBody: true });
             }
         });
         document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
@@ -874,18 +1062,30 @@
         if (!url) {
             return Promise.reject(new Error('reading_exam_script_missing'));
         }
-        if (scriptCache.has(url)) {
-            return scriptCache.get(url);
+        let requestUrl = url;
+        try {
+            const params = new URLSearchParams(global.location?.search || '');
+            const assetVersion = String(params.get('v') || '').trim();
+            if (assetVersion) {
+                const resolved = new URL(url, document.baseURI);
+                if (resolved.origin === global.location.origin) {
+                    resolved.searchParams.set('v', assetVersion);
+                    requestUrl = resolved.href;
+                }
+            }
+        } catch (_) { }
+        if (scriptCache.has(requestUrl)) {
+            return scriptCache.get(requestUrl);
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.defer = true;
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${url}`));
+            script.onerror = () => reject(new Error(`reading_exam_script_failed:${requestUrl}`));
             document.head.appendChild(script);
         });
-        scriptCache.set(url, promise);
+        scriptCache.set(requestUrl, promise);
         return promise;
     }
 
@@ -983,6 +1183,9 @@
     }
 
     function getNotesText() {
+        if (state.noteUiInitialized) {
+            return formatNotesForLegacyText(state.notes);
+        }
         const noteArea = document.querySelector('#notes-panel textarea');
         return noteArea ? String(noteArea.value || '') : '';
     }
@@ -994,11 +1197,164 @@
         }
     }
 
+    function generateNoteId() {
+        return `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function generateNoteOutlineId() {
+        return `outline_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function normalizeNoteText(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function buildDefaultNoteTitle(quote = '') {
+        const text = normalizeNoteText(quote);
+        if (!text) return 'Untitled note';
+        return text.length > 36 ? `${text.slice(0, 36)}...` : text;
+    }
+
+    function compareNoteOrder(a, b) {
+        const orderA = Number.isFinite(Number(a?.order)) ? Number(a.order) : 0;
+        const orderB = Number.isFinite(Number(b?.order)) ? Number(b.order) : 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return Number(a?.createdAt || 0) - Number(b?.createdAt || 0);
+    }
+
+    function normalizeNotes(rawNotes) {
+        const seen = new Set();
+        return (Array.isArray(rawNotes) ? rawNotes : []).map((entry, index) => {
+            if (!entry || typeof entry !== 'object') return null;
+            let id = entry.id != null ? String(entry.id).trim() : '';
+            if (!id || seen.has(id)) id = generateNoteId();
+            seen.add(id);
+            const createdAt = Number.isFinite(Number(entry.createdAt)) ? Number(entry.createdAt) : Date.now();
+            return {
+                id,
+                title: entry.title != null ? String(entry.title) : '',
+                body: entry.body != null ? String(entry.body) : '',
+                quote: entry.quote != null ? String(entry.quote) : '',
+                outlineId: entry.outlineId != null ? String(entry.outlineId).trim() : '',
+                order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : index,
+                createdAt,
+                updatedAt: Number.isFinite(Number(entry.updatedAt)) ? Number(entry.updatedAt) : createdAt
+            };
+        }).filter(Boolean);
+    }
+
+    function normalizeNoteOutlines(rawOutlines) {
+        const seen = new Set();
+        return (Array.isArray(rawOutlines) ? rawOutlines : []).map((entry, index) => {
+            if (!entry || typeof entry !== 'object') return null;
+            let id = entry.id != null ? String(entry.id).trim() : '';
+            if (!id || seen.has(id)) id = generateNoteOutlineId();
+            seen.add(id);
+            const createdAt = Number.isFinite(Number(entry.createdAt)) ? Number(entry.createdAt) : Date.now();
+            return {
+                id,
+                title: String(entry.title || '').trim() || 'New outline',
+                order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : index,
+                collapsed: Boolean(entry.collapsed),
+                createdAt,
+                updatedAt: Number.isFinite(Number(entry.updatedAt)) ? Number(entry.updatedAt) : createdAt
+            };
+        }).filter(Boolean).sort(compareNoteOrder);
+    }
+
+    function sanitizeNotesWithOutlines(rawNotes, rawOutlines) {
+        const noteOutlines = normalizeNoteOutlines(rawOutlines);
+        const validIds = new Set(noteOutlines.map((outline) => outline.id));
+        const notes = normalizeNotes(rawNotes).map((note, index) => ({
+            ...note,
+            outlineId: validIds.has(note.outlineId) ? note.outlineId : '',
+            order: Number.isFinite(Number(note.order)) ? Number(note.order) : index
+        }));
+        return { notes, noteOutlines };
+    }
+
+    function collectNotes() {
+        return normalizeNotes(state.notes);
+    }
+
+    function collectNoteOutlines() {
+        return normalizeNoteOutlines(state.noteOutlines);
+    }
+
+    function getNoteById(noteId) {
+        const id = String(noteId || '').trim();
+        return id ? state.notes.find((note) => note && note.id === id) || null : null;
+    }
+
+    function getValidNoteOutlineId(outlineId) {
+        const id = String(outlineId || '').trim();
+        return id && state.noteOutlines.some((outline) => outline.id === id) ? id : '';
+    }
+
+    function sortNotesForDrawer(notes = state.notes) {
+        return (Array.isArray(notes) ? notes : []).filter(Boolean).slice().sort(compareNoteOrder);
+    }
+
+    function getNextNoteOrder(outlineId = '') {
+        const id = getValidNoteOutlineId(outlineId);
+        const matching = state.notes.filter((note) => (note?.outlineId || '') === id);
+        return matching.length
+            ? Math.max(...matching.map((note) => Number.isFinite(Number(note.order)) ? Number(note.order) : 0)) + 1
+            : 0;
+    }
+
+    function formatNotesForLegacyText(notes = state.notes) {
+        return normalizeNotes(notes).map((note) => {
+            const parts = [`# ${String(note.title || '').trim() || 'Untitled note'}`];
+            if (note.quote) parts.push(`> ${normalizeNoteText(note.quote)}`);
+            if (note.body) parts.push(note.body);
+            return parts.join('\n');
+        }).join('\n\n');
+    }
+
+    function syncNotesToLegacyText() {
+        setNotesText(formatNotesForLegacyText(state.notes));
+    }
+
+    function normalizeMarkedQuestions(rawQuestions) {
+        const seen = new Set();
+        return (Array.isArray(rawQuestions) ? rawQuestions : []).map((entry) => (
+            normalizeQuestionId(entry) || String(entry || '').trim().toLowerCase()
+        )).filter(Boolean).filter((entry) => {
+            if (seen.has(entry)) return false;
+            seen.add(entry);
+            return true;
+        });
+    }
+
+    function getCurrentMarkedQuestions() {
+        let marks = [];
+        let hostResolved = false;
+        if (typeof global.getPracticeMarkedQuestions === 'function') {
+            try {
+                const raw = global.getPracticeMarkedQuestions();
+                hostResolved = raw != null;
+                marks = normalizeMarkedQuestions(raw);
+            } catch (_) { marks = []; }
+        }
+        // 只有当 host 没有 give 出结果时（函数不存在或抛错）才回退到缓存；
+        // 用户清空最后一个标记时 host 会返回 []，这是有效空集，不能再被 state.markedQuestions 复活，
+        // 否则清空无法持久，并会在后续 draft/annotation sync 中重新写入旧标记。
+        if (!hostResolved && !marks.length) {
+            marks = normalizeMarkedQuestions(state.markedQuestions);
+        }
+        state.markedQuestions = marks.slice();
+        return marks;
+    }
+
     function buildEmptyDraft() {
         return {
             answers: {},
             highlights: [],
             noteText: '',
+            notes: [],
+            noteOutlines: [],
+            markedQuestions: [],
             scrollY: 0,
             updatedAt: Date.now()
         };
@@ -1016,6 +1372,9 @@
             noteText: typeof source.noteText === 'string'
                 ? source.noteText
                 : '',
+            notes: normalizeNotes(source.notes),
+            noteOutlines: normalizeNoteOutlines(source.noteOutlines),
+            markedQuestions: normalizeMarkedQuestions(source.markedQuestions),
             scrollY: Number.isFinite(Number(source.scrollY))
                 ? Number(source.scrollY)
                 : 0,
@@ -1029,8 +1388,8 @@
         const baseUpdatedAt = Number(baseDraft && baseDraft.updatedAt);
         const nextUpdatedAt = Number(nextDraft && nextDraft.updatedAt);
         return Number.isFinite(baseUpdatedAt)
-            && Number.isFinite(nextUpdatedAt)
-            && nextUpdatedAt < baseUpdatedAt;
+            && baseUpdatedAt > 0
+            && (!Number.isFinite(nextUpdatedAt) || nextUpdatedAt <= baseUpdatedAt);
     }
 
     function mergeDraft(baseDraft, nextDraft) {
@@ -1044,7 +1403,7 @@
         const mergedUpdatedAt = Number.isFinite(Number(next.updatedAt))
             ? Number(next.updatedAt)
             : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now());
-        return Object.assign(buildEmptyDraft(), base, next, {
+        const merged = Object.assign(buildEmptyDraft(), base, next, {
             answers: next.answers && typeof next.answers === 'object'
                 ? { ...next.answers }
                 : { ...base.answers },
@@ -1054,11 +1413,22 @@
             noteText: typeof next.noteText === 'string'
                 ? next.noteText
                 : base.noteText,
+            notes: Array.isArray(nextDraft?.notes) ? normalizeNotes(next.notes) : normalizeNotes(base.notes),
+            noteOutlines: Array.isArray(nextDraft?.noteOutlines)
+                ? normalizeNoteOutlines(next.noteOutlines)
+                : normalizeNoteOutlines(base.noteOutlines),
+            markedQuestions: Array.isArray(nextDraft?.markedQuestions)
+                ? normalizeMarkedQuestions(next.markedQuestions)
+                : normalizeMarkedQuestions(base.markedQuestions),
             scrollY: Number.isFinite(Number(next.scrollY))
                 ? Number(next.scrollY)
                 : base.scrollY,
             updatedAt: mergedUpdatedAt
         });
+        const sanitized = sanitizeNotesWithOutlines(merged.notes, merged.noteOutlines);
+        merged.notes = sanitized.notes;
+        merged.noteOutlines = sanitized.noteOutlines;
+        return merged;
     }
 
     function mergeSuiteDraftPayload(data = {}) {
@@ -1157,6 +1527,9 @@
             answers: collectAnswers(),
             highlights: collectHighlights(),
             noteText: getNotesText(),
+            notes: collectNotes(),
+            noteOutlines: collectNoteOutlines(),
+            markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
             updatedAt: Date.now()
         });
@@ -1261,14 +1634,14 @@
     }
 
     function initDragPools() {
-        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+        document.querySelectorAll(POOL_CONTAINER_SELECTOR).forEach((pool, index) => {
             if (!pool.id) {
                 pool.id = `practice-pool-${index}`;
             }
         });
-        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+        document.querySelectorAll(`${POOL_CONTAINER_SELECTOR} ${POOL_ITEM_SELECTOR}`).forEach((item) => {
             if (!item.dataset.originPool) {
-                const pool = item.closest('.pool-items');
+                const pool = item.closest(POOL_CONTAINER_SELECTOR);
                 if (pool?.id) {
                     item.dataset.originPool = pool.id;
                 }
@@ -1292,6 +1665,54 @@
         initDragPools();
     }
 
+    function isCurrentSuiteActivation(examId, activationGeneration) {
+        return Boolean(
+            state.suite?.inline
+            && state.suite.activationGeneration === activationGeneration
+            && state.suite.activeExamId === examId
+            && state.examId === examId
+        );
+    }
+
+    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration) {
+        const targetExamId = String(slot?.examId || '').trim();
+        const isCurrentActivation = () => isCurrentSuiteActivation(targetExamId, activationGeneration);
+        if (!isCurrentActivation()) {
+            return false;
+        }
+        const shouldShowResults = Boolean(
+            slot?.lastResults
+            && (state.readOnly || state.reviewMode || state.submitted)
+        );
+        if (shouldShowResults) {
+            renderResults(slot.lastResults);
+            await renderExplanations({
+                dataKey: slot.dataKey || targetExamId,
+                examId: targetExamId,
+                isCurrent: isCurrentActivation
+            });
+            if (!isCurrentActivation()) {
+                return false;
+            }
+            applyHighlights(Array.isArray(slot.draft?.highlights) ? slot.draft.highlights : []);
+            refreshNoteHighlightAttributes();
+            restoreMissingNoteAnchors();
+            applyMemorizeLocatorHighlights();
+            enhanceReviewHighlights();
+        }
+        updateNavStatuses(shouldShowResults ? slot.lastResults : null);
+        if (state.readOnly) {
+            setReadOnlyMode(true, state.readOnlyReason);
+        }
+        if (state.timerLocked) {
+            setTimerLockMode(true);
+        } else {
+            disableDragInteractions();
+        }
+        syncPrimaryActionButtons();
+        return true;
+    }
+
     async function activateSuiteSlot(examId, options = {}) {
         if (!state.suite?.inline) {
             return false;
@@ -1301,6 +1722,8 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
+        state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
             updateActiveSlotFromCurrentDom('deactivate');
         }
@@ -1320,14 +1743,20 @@
         refreshDynamicQuestionEnhancements();
         clearCurrentAnswers();
         applyDraftToDom(slot.draft || buildEmptyDraft());
-        setNotesText(slot.draft?.noteText || '');
         syncSimulationCtxForActiveSlot();
         syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
-        updateNavStatuses(slot.lastResults || null);
-        syncPrimaryActionButtons();
-        state.suite.activating = false;
+        try {
+            await restoreActiveSuiteSlotPresentation(slot, activationGeneration);
+        } finally {
+            if (isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+                state.suite.activating = false;
+            }
+        }
+        if (!isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+            return false;
+        }
         if (Number.isFinite(Number(slot.draft?.scrollY))) {
             global.scrollTo(0, Number(slot.draft.scrollY) || 0);
         }
@@ -1352,7 +1781,890 @@
         return global.__READING_EXPLANATION_MANIFEST__ || {};
     }
 
-    async function ensureExplanationDataset() {
+    function ensureReadingDisplayControlStyles() {
+        if (document.getElementById(READING_DISPLAY_CONTROL_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = READING_DISPLAY_CONTROL_STYLE_ID;
+        style.textContent = `
+            .reading-display-toggle-group{display:inline-flex;align-items:center;gap:4px;padding:2px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc}
+            .reading-display-toggle{border:0;border-radius:6px;min-width:30px;height:28px;padding:0 8px;cursor:pointer;color:#64748b;background:transparent;font-size:12px;font-weight:700}
+            .reading-display-toggle:hover{background:#eef2f7;color:#0f172a}.reading-display-toggle.is-on{background:#dbeafe;color:#1d4ed8}
+            body.hide-reading-locators .reading-locator-highlight{background:transparent!important;box-shadow:none!important;outline:none!important}
+            body.hide-reading-locators .reading-locator-overlap{text-decoration:none!important;outline:none!important}
+            body.hide-reading-locators .reading-passage-locator-target.is-review-jump-target{background:transparent!important;outline:none!important}
+            body.hide-reading-notes .hl[data-hl-type="note"],body.hide-reading-notes .hl[data-note-id]{background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important;pointer-events:none}
+            body.hide-reading-highlights .hl:not([data-hl-type="note"]):not([data-note-id]){background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important}
+            body.reading-question-nav-collapsed .practice-nav{display:none}
+            body.dark-mode .reading-display-toggle-group{background:#1e293b;border-color:#475569;color:#cbd5e1}
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureOptionConsumedStyles() {
+        if (document.getElementById(OPTION_CONSUMED_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = OPTION_CONSUMED_STYLE_ID;
+        style.textContent = `
+            .drag-item.option-consumed,
+            .draggable-word.option-consumed,
+            .card.option-consumed {
+                opacity: 0.45 !important;
+                cursor: not-allowed !important;
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #94a3b8 !important;
+                pointer-events: none !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function saveReadingDisplayPreferences() {
+        global.AppData.preferences.setReadingDisplay({
+            highlightVisibility: state.highlightVisibility,
+            questionNavCollapsed: state.questionNavCollapsed
+        }).catch((error) => console.warn('[ReadingDisplay] 保存失败:', error));
+    }
+
+    async function loadReadingDisplayPreferences() {
+        try {
+            const saved = await global.AppData.preferences.getReadingDisplay();
+            if (saved?.highlightVisibility) {
+                state.highlightVisibility = {
+                    locators: saved.highlightVisibility.locators !== false,
+                    notes: saved.highlightVisibility.notes !== false,
+                    highlights: saved.highlightVisibility.highlights !== false
+                };
+            }
+            state.questionNavCollapsed = Boolean(saved?.questionNavCollapsed);
+        } catch (_) { /* Ignore invalid preference payloads. */ }
+        applyReadingDisplayState();
+    }
+
+    function applyReadingDisplayState() {
+        if (!document.body) return;
+        document.body.classList.toggle('hide-reading-locators', state.highlightVisibility.locators === false);
+        document.body.classList.toggle('hide-reading-notes', state.highlightVisibility.notes === false);
+        document.body.classList.toggle('hide-reading-highlights', state.highlightVisibility.highlights === false);
+        document.body.classList.toggle('reading-question-nav-collapsed', state.questionNavCollapsed);
+        document.querySelectorAll('[data-highlight-toggle]').forEach((button) => {
+            const key = button.getAttribute('data-highlight-toggle');
+            const enabled = state.highlightVisibility[key] !== false;
+            button.classList.toggle('is-on', enabled);
+            button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        });
+        const navToggle = document.getElementById('reading-question-nav-toggle');
+        if (navToggle) {
+            const collapsed = state.questionNavCollapsed;
+            // is-on means the question card bar is currently visible.
+            navToggle.classList.toggle('is-on', !collapsed);
+            navToggle.setAttribute('aria-pressed', collapsed ? 'false' : 'true');
+            navToggle.title = collapsed ? '显示题卡' : '隐藏题卡';
+            navToggle.textContent = 'Q';
+        }
+    }
+
+    function ensureReadingDisplayControls() {
+        ensureReadingDisplayControlStyles();
+        // Remove the legacy floating bottom-right nav toggle if an older session left one behind.
+        document.querySelectorAll('body > #reading-question-nav-toggle, body > .reading-question-nav-toggle').forEach((node) => {
+            if (node.closest?.('.reading-display-toggle-group')) return;
+            node.remove();
+        });
+        const headerRight = document.querySelector('.header-right');
+        if (headerRight && !document.getElementById('reading-display-toggle-group')) {
+            const group = document.createElement('div');
+            group.id = 'reading-display-toggle-group';
+            group.className = 'reading-display-toggle-group';
+            group.setAttribute('aria-label', '阅读显示控制');
+            group.innerHTML = [
+                '<button type="button" class="reading-display-toggle" data-highlight-toggle="locators" title="显示/隐藏答案定位">A</button>',
+                '<button type="button" class="reading-display-toggle" data-highlight-toggle="notes" title="显示/隐藏笔记高亮">N</button>',
+                '<button type="button" class="reading-display-toggle" data-highlight-toggle="highlights" title="显示/隐藏普通高亮">H</button>',
+                '<button type="button" class="reading-display-toggle" id="reading-question-nav-toggle" data-question-nav-toggle title="隐藏题卡" aria-pressed="true">Q</button>'
+            ].join('');
+            const settingsButton = document.getElementById('settings-btn');
+            headerRight.insertBefore(group, settingsButton?.parentNode === headerRight ? settingsButton : null);
+            group.addEventListener('click', (event) => {
+                const target = event.target instanceof HTMLElement ? event.target : null;
+                if (!target) return;
+                const navButton = target.closest('[data-question-nav-toggle]');
+                if (navButton) {
+                    state.questionNavCollapsed = !state.questionNavCollapsed;
+                    applyReadingDisplayState();
+                    saveReadingDisplayPreferences();
+                    return;
+                }
+                const button = target.closest('[data-highlight-toggle]');
+                if (!button) return;
+                const key = button.getAttribute('data-highlight-toggle');
+                if (!Object.prototype.hasOwnProperty.call(state.highlightVisibility, key)) return;
+                state.highlightVisibility[key] = state.highlightVisibility[key] === false;
+                applyReadingDisplayState();
+                saveReadingDisplayPreferences();
+            });
+        } else {
+            // If the group already exists without the nav toggle (hot reload / partial DOM), attach it.
+            const group = document.getElementById('reading-display-toggle-group');
+            if (group && !document.getElementById('reading-question-nav-toggle')) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'reading-display-toggle';
+                button.id = 'reading-question-nav-toggle';
+                button.setAttribute('data-question-nav-toggle', '');
+                button.title = '隐藏题卡';
+                button.setAttribute('aria-pressed', 'true');
+                button.textContent = 'Q';
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    state.questionNavCollapsed = !state.questionNavCollapsed;
+                    applyReadingDisplayState();
+                    saveReadingDisplayPreferences();
+                });
+                group.appendChild(button);
+            }
+        }
+        applyReadingDisplayState();
+    }
+
+    function ensureReadingNoteStyles() {
+        if (document.getElementById(READING_NOTE_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = READING_NOTE_STYLE_ID;
+        style.textContent = `
+            .hl[data-note-id]{position:relative;cursor:pointer;background:rgba(191,219,254,.78)!important;box-shadow:inset 0 -.52em rgba(147,197,253,.34)}
+            .hl[data-note-id].reading-note-flash{outline:2px solid #60a5fa;outline-offset:2px}.reading-notes-btn{position:relative}
+            .reading-note-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#16a34a;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;display:none}
+            #reading-note-drawer{position:fixed;inset:0 0 0 auto;width:min(360px,92vw);background:#fff;border-left:1px solid #dbe4ef;box-shadow:-18px 0 36px rgba(15,23,42,.16);z-index:3600;transform:translateX(105%);transition:transform 180ms ease;display:flex;flex-direction:column}
+            #reading-note-drawer.open{transform:translateX(0)}.reading-note-drawer-head,.reading-note-editor-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e2e8f0}
+            .reading-note-drawer-title{display:flex;align-items:center;gap:8px}.reading-note-drawer-head h3,.reading-note-editor-head h3{margin:0;font-size:16px}.reading-note-list{padding:10px;overflow:auto;flex:1}
+            .reading-note-outline{border:1px solid #dbeafe;border-radius:8px;margin-bottom:10px;overflow:hidden;background:#f8fbff}.reading-note-outline-head{display:grid;grid-template-columns:30px 1fr 30px;align-items:center;padding:5px;background:#eff6ff}.reading-note-outline.collapsed .reading-note-outline-body{display:none}
+            .reading-note-outline-body,.reading-note-loose-list{min-height:26px;padding:4px 8px}.reading-note-row{display:grid;grid-template-columns:1fr 28px 30px;align-items:center;gap:4px;border-bottom:1px solid #edf2f7}.reading-note-row.dragging{opacity:.45}.reading-note-row.drag-over{box-shadow:inset 0 2px #2563eb}
+            .reading-note-open,.reading-note-outline-title{border:0;background:transparent;color:#0f172a;text-align:left;padding:9px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.reading-note-open:hover{background:#eff6ff;color:#1d4ed8}
+            .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
+            #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
+            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
+            .reading-note-title,.reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box}.reading-note-title{font-weight:700}.reading-note-body{min-height:190px;resize:vertical;flex:1}
+            body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
+            @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureReadingNotesButton() {
+        let button = document.getElementById('notes-drawer-btn');
+        if (button) return button;
+        const headerRight = document.querySelector('.header-right');
+        if (!headerRight) return null;
+        button = document.createElement('button');
+        button.id = 'notes-drawer-btn';
+        button.type = 'button';
+        button.className = 'header-btn reading-notes-btn';
+        button.title = 'Notes';
+        button.innerHTML = 'Notes<span class="reading-note-count" aria-hidden="true">0</span>';
+        headerRight.insertBefore(button, headerRight.firstChild);
+        button.addEventListener('click', (event) => { event.stopPropagation(); toggleNotesDrawer(); });
+        return button;
+    }
+
+    function ensureReadingNotesUi() {
+        ensureReadingNoteStyles();
+        ensureReadingNotesButton();
+        const legacyPanel = document.getElementById('notes-panel');
+        const legacyButton = document.getElementById('note-btn');
+        if (legacyPanel) { legacyPanel.style.display = 'none'; legacyPanel.setAttribute('aria-hidden', 'true'); }
+        if (legacyButton) { legacyButton.style.display = 'none'; legacyButton.setAttribute('aria-hidden', 'true'); }
+        let drawer = document.getElementById('reading-note-drawer');
+        if (!drawer) {
+            drawer = document.createElement('aside');
+            drawer.id = 'reading-note-drawer';
+            drawer.setAttribute('aria-hidden', 'true');
+            drawer.innerHTML = '<div class="reading-note-drawer-head"><div class="reading-note-drawer-title"><h3>Notes</h3><button class="reading-note-outline-add" type="button" data-note-outline-add title="New outline">+</button></div><button class="reading-note-close" type="button" data-note-drawer-close>×</button></div><div class="reading-note-list" data-note-list></div>';
+            document.body.appendChild(drawer);
+            drawer.addEventListener('click', handleNoteDrawerClick);
+            drawer.addEventListener('keydown', handleNoteDrawerKeydown);
+            drawer.addEventListener('focusout', handleNoteDrawerFocusOut);
+            drawer.addEventListener('dragstart', handleNoteDragStart);
+            drawer.addEventListener('dragover', handleNoteDragOver);
+            drawer.addEventListener('drop', handleNoteDrop);
+            drawer.addEventListener('dragend', clearNoteDragIndicators);
+        }
+        let editor = document.getElementById('reading-note-editor');
+        if (!editor) {
+            editor = document.createElement('section');
+            editor.id = 'reading-note-editor';
+            editor.setAttribute('aria-hidden', 'true');
+            editor.innerHTML = '<div class="reading-note-editor-head" data-note-drag-handle><h3>Note</h3><button class="reading-note-close" type="button" data-note-editor-close>×</button></div><div class="reading-note-editor-body"><p class="reading-note-quote" data-note-quote></p><input class="reading-note-title" data-note-title type="text" placeholder="Title"><textarea class="reading-note-body" data-note-body placeholder="Write your note"></textarea></div>';
+            document.body.appendChild(editor);
+            editor.addEventListener('click', (event) => { if (event.target.closest?.('[data-note-editor-close]')) closeNoteEditor(); });
+            editor.querySelector('[data-note-title]')?.addEventListener('input', saveActiveNoteFromEditor);
+            editor.querySelector('[data-note-body]')?.addEventListener('input', saveActiveNoteFromEditor);
+            editor.querySelector('[data-note-title]')?.addEventListener('change', flushActiveNoteFromEditor);
+            editor.querySelector('[data-note-body]')?.addEventListener('change', flushActiveNoteFromEditor);
+            attachNoteEditorDrag(editor);
+        }
+        if (!state.noteUiInitialized) {
+            state.noteUiInitialized = true;
+            document.addEventListener('click', handleNoteHighlightClick, true);
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') { closeNoteEditor(); closeNotesDrawer(); }
+            });
+        }
+        syncNotesToLegacyText();
+        renderNotesDrawer();
+        refreshNoteHighlightAttributes();
+        return drawer;
+    }
+
+    function toggleNotesDrawer() {
+        const drawer = ensureReadingNotesUi();
+        if (drawer?.classList.contains('open')) closeNotesDrawer();
+        else openNotesDrawer();
+    }
+
+    function openNotesDrawer() {
+        const drawer = ensureReadingNotesUi();
+        if (!drawer) return;
+        state.noteDrawerDirty = true;
+        drawer.classList.add('open');
+        drawer.setAttribute('aria-hidden', 'false');
+        renderNotesDrawer();
+    }
+
+    function closeNotesDrawer() {
+        const drawer = document.getElementById('reading-note-drawer');
+        drawer?.classList.remove('open');
+        drawer?.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderNoteRow(note) {
+        const title = String(note.title || '').trim() || 'Untitled note';
+        const editable = canEditReadingNotes();
+        const disabled = editable ? '' : ' disabled';
+        return `<div class="reading-note-row" draggable="${editable}" data-note-row="${escapeHtml(note.id)}"><button class="reading-note-open" type="button" data-note-open="${escapeHtml(note.id)}" title="${escapeHtml(title)}">${escapeHtml(title)}</button><button class="reading-note-drag-handle" type="button" data-note-drag-handle="${escapeHtml(note.id)}" aria-label="Move note"${disabled}>⋮⋮</button><button class="reading-note-delete" type="button" data-note-delete="${escapeHtml(note.id)}" aria-label="Delete note"${disabled}>×</button></div>`;
+    }
+
+    function renderNotesDrawer() {
+        const count = state.notes.length;
+        const badge = document.querySelector('#notes-drawer-btn .reading-note-count');
+        if (badge) { badge.textContent = String(count); badge.style.display = count ? 'block' : 'none'; }
+        const list = document.querySelector('#reading-note-drawer [data-note-list]');
+        if (!list || !state.noteDrawerDirty) return;
+        const disabled = canEditReadingNotes() ? '' : ' disabled';
+        const notesByOutline = new Map();
+        sortNotesForDrawer().forEach((note) => {
+            const outlineId = getValidNoteOutlineId(note.outlineId);
+            const group = notesByOutline.get(outlineId) || [];
+            group.push(note);
+            notesByOutline.set(outlineId, group);
+        });
+        const outlinesHtml = collectNoteOutlines().map((outline) => {
+            const notes = notesByOutline.get(outline.id) || [];
+            return `<section class="reading-note-outline${outline.collapsed ? ' collapsed' : ''}" data-note-outline="${escapeHtml(outline.id)}"><div class="reading-note-outline-head"><button class="reading-note-outline-toggle" type="button" data-note-outline-toggle="${escapeHtml(outline.id)}"${disabled}>${outline.collapsed ? '›' : '⌄'}</button><button class="reading-note-outline-title" type="button" data-note-outline-title="${escapeHtml(outline.id)}"${disabled}>${escapeHtml(outline.title)}</button><button class="reading-note-outline-delete" type="button" data-note-outline-delete="${escapeHtml(outline.id)}"${disabled}>×</button></div><div class="reading-note-outline-body" data-note-drop-list="${escapeHtml(outline.id)}">${notes.map(renderNoteRow).join('')}</div></section>`;
+        }).join('');
+        const loose = (notesByOutline.get('') || []).map(renderNoteRow).join('');
+        list.innerHTML = count || state.noteOutlines.length
+            ? `${outlinesHtml}<div class="reading-note-loose-list" data-note-drop-list="">${loose}</div>`
+            : '<div class="reading-note-empty">No notes yet.</div>';
+        const add = document.querySelector('#reading-note-drawer [data-note-outline-add]');
+        if (add) add.disabled = !canEditReadingNotes();
+        state.noteDrawerDirty = false;
+    }
+
+    function handleNoteDrawerClick(event) {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) return;
+        if (target.closest('[data-note-drawer-close]')) return closeNotesDrawer();
+        if (target.closest('[data-note-outline-add]')) return createNoteOutline();
+        const toggle = target.closest('[data-note-outline-toggle]');
+        if (toggle) return toggleNoteOutline(toggle.getAttribute('data-note-outline-toggle'));
+        const outlineDelete = target.closest('[data-note-outline-delete]');
+        if (outlineDelete) return deleteNoteOutline(outlineDelete.getAttribute('data-note-outline-delete'));
+        const outlineTitle = target.closest('[data-note-outline-title]');
+        if (outlineTitle) return startRenameNoteOutline(outlineTitle.getAttribute('data-note-outline-title'));
+        const noteDelete = target.closest('[data-note-delete]');
+        if (noteDelete) return deleteNote(noteDelete.getAttribute('data-note-delete'));
+        const noteOpen = target.closest('[data-note-open]');
+        if (noteOpen) {
+            const noteId = noteOpen.getAttribute('data-note-open');
+            const anchor = findOrRestoreNoteHighlight(noteId);
+            if (anchor) scrollNoteHighlightIntoView(anchor);
+            openNoteEditor(noteId, { anchorNode: anchor });
+        }
+    }
+
+    function upsertNote(rawNote, options = {}) {
+        if (!canEditReadingNotes()) return null;
+        const normalized = normalizeNotes([rawNote])[0];
+        if (!normalized) return null;
+        normalized.outlineId = getValidNoteOutlineId(normalized.outlineId);
+        const index = state.notes.findIndex((note) => note.id === normalized.id);
+        if (index >= 0) state.notes.splice(index, 1, { ...state.notes[index], ...normalized });
+        else {
+            if (!Number.isFinite(Number(rawNote?.order))) normalized.order = getNextNoteOrder(normalized.outlineId);
+            state.notes.push(normalized);
+        }
+        state.noteDrawerDirty = true;
+        state.noteHighlightMetaDirty = true;
+        syncNotesToLegacyText();
+        if (options.forceUi !== false) { renderNotesDrawer(); refreshNoteHighlightAttributes(normalized.id); }
+        if (options.sync !== false) syncReadingAnnotation(options.reason || 'note');
+        return getNoteById(normalized.id);
+    }
+
+    function setNotes(rawNotes, rawOutlines = [], options = {}) {
+        const sanitized = sanitizeNotesWithOutlines(rawNotes, rawOutlines);
+        state.notes = sanitized.notes;
+        state.noteOutlines = sanitized.noteOutlines;
+        if (!state.notes.length && options.legacyText) {
+            const legacyText = String(options.legacyText || '');
+            if (legacyText.trim()) {
+                state.notes = normalizeNotes([{ id: generateNoteId(), title: 'Notes', body: legacyText, quote: '' }]);
+            }
+        }
+        state.noteDrawerDirty = true;
+        state.noteHighlightMetaDirty = true;
+        ensureReadingNotesUi();
+        syncNotesToLegacyText();
+        renderNotesDrawer();
+        refreshNoteHighlightAttributes();
+        restoreMissingNoteAnchors();
+    }
+
+    function createNoteOutline() {
+        if (!canEditReadingNotes()) return;
+        const now = Date.now();
+        state.noteOutlines.push({ id: generateNoteOutlineId(), title: 'New outline', order: state.noteOutlines.length, collapsed: false, createdAt: now, updatedAt: now });
+        state.noteDrawerDirty = true;
+        renderNotesDrawer();
+        startRenameNoteOutline(state.noteOutlines[state.noteOutlines.length - 1].id);
+        syncReadingAnnotation('note-outline-add');
+    }
+
+    function getNoteOutlineById(id) { return state.noteOutlines.find((outline) => outline.id === String(id || '')) || null; }
+
+    function toggleNoteOutline(id) {
+        if (!canEditReadingNotes()) return;
+        const outline = getNoteOutlineById(id);
+        if (!outline) return;
+        outline.collapsed = !outline.collapsed;
+        outline.updatedAt = Date.now();
+        state.noteDrawerDirty = true;
+        renderNotesDrawer();
+        syncReadingAnnotation('note-outline-toggle');
+    }
+
+    function deleteNoteOutline(id) {
+        if (!canEditReadingNotes()) return;
+        const outlineId = String(id || '');
+        state.noteOutlines = state.noteOutlines.filter((outline) => outline.id !== outlineId);
+        state.notes.forEach((note) => { if (note.outlineId === outlineId) note.outlineId = ''; });
+        state.noteDrawerDirty = true;
+        renderNotesDrawer();
+        syncReadingAnnotation('note-outline-delete');
+    }
+
+    function startRenameNoteOutline(id) {
+        if (!canEditReadingNotes()) return;
+        const outline = getNoteOutlineById(id);
+        const button = document.querySelector(`[data-note-outline-title="${escapeSelector(id)}"]`);
+        if (!outline || !button) return;
+        const input = document.createElement('input');
+        input.className = 'reading-note-outline-title-input';
+        input.value = outline.title;
+        input.setAttribute('data-note-outline-title-input', outline.id);
+        button.replaceWith(input);
+        input.focus(); input.select();
+    }
+
+    function commitRenameNoteOutline(input, cancel = false) {
+        if (!(input instanceof HTMLInputElement) || input.dataset.committed === 'true') return;
+        if (!canEditReadingNotes() && !cancel) cancel = true;
+        input.dataset.committed = 'true';
+        const outline = getNoteOutlineById(input.getAttribute('data-note-outline-title-input'));
+        if (outline && !cancel) { outline.title = String(input.value || '').trim() || 'New outline'; outline.updatedAt = Date.now(); }
+        state.noteDrawerDirty = true;
+        renderNotesDrawer();
+        if (!cancel) syncReadingAnnotation('note-outline-rename');
+    }
+
+    function handleNoteDrawerKeydown(event) {
+        const input = event.target instanceof HTMLElement ? event.target.closest('[data-note-outline-title-input]') : null;
+        if (input) {
+            if (!canEditReadingNotes() && event.key !== 'Escape') return;
+            if (event.key === 'Enter') { event.preventDefault(); commitRenameNoteOutline(input); }
+            else if (event.key === 'Escape') { event.preventDefault(); commitRenameNoteOutline(input, true); }
+            return;
+        }
+        const handle = event.target instanceof HTMLElement ? event.target.closest('[data-note-drag-handle]') : null;
+        if (!handle || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        if (!canEditReadingNotes()) return;
+        event.preventDefault();
+        const note = getNoteById(handle.getAttribute('data-note-drag-handle'));
+        if (!note) return;
+        if (event.key === 'ArrowLeft') note.outlineId = '';
+        else if (event.key === 'ArrowRight' && state.noteOutlines[0]) note.outlineId = state.noteOutlines[0].id;
+        else {
+            const siblings = sortNotesForDrawer().filter((item) => item.outlineId === note.outlineId);
+            const index = siblings.findIndex((item) => item.id === note.id);
+            const targetIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;
+            if (targetIndex >= 0 && targetIndex < siblings.length) {
+                const targetOrder = siblings[targetIndex].order;
+                siblings[targetIndex].order = note.order;
+                note.order = targetOrder;
+            }
+        }
+        note.updatedAt = Date.now();
+        state.noteDrawerDirty = true;
+        renderNotesDrawer();
+        syncReadingAnnotation('note-reorder');
+    }
+
+    function handleNoteDrawerFocusOut(event) {
+        const input = event.target instanceof HTMLInputElement ? event.target.closest('[data-note-outline-title-input]') : null;
+        if (input) commitRenameNoteOutline(input);
+    }
+
+    let draggedNoteId = '';
+    function handleNoteDragStart(event) {
+        if (!canEditReadingNotes()) return;
+        const row = event.target instanceof HTMLElement ? event.target.closest('[data-note-row]') : null;
+        if (!row) return;
+        draggedNoteId = row.getAttribute('data-note-row') || '';
+        row.classList.add('dragging');
+        event.dataTransfer?.setData('text/plain', draggedNoteId);
+    }
+
+    function handleNoteDragOver(event) {
+        if (!canEditReadingNotes()) return;
+        const target = event.target instanceof HTMLElement ? event.target.closest('[data-note-row], [data-note-drop-list]') : null;
+        if (!target) return;
+        event.preventDefault();
+        clearNoteDragIndicators();
+        document.querySelector(`[data-note-row="${escapeSelector(draggedNoteId)}"]`)?.classList.add('dragging');
+        target.classList.add('drag-over');
+    }
+
+    function handleNoteDrop(event) {
+        if (!canEditReadingNotes()) return clearNoteDragIndicators();
+        event.preventDefault();
+        const note = getNoteById(draggedNoteId || event.dataTransfer?.getData('text/plain'));
+        const row = event.target instanceof HTMLElement ? event.target.closest('[data-note-row]') : null;
+        const list = event.target instanceof HTMLElement ? event.target.closest('[data-note-drop-list]') : null;
+        if (!note || (!row && !list)) return clearNoteDragIndicators();
+        const outlineId = getValidNoteOutlineId((list || row.closest('[data-note-drop-list]'))?.getAttribute('data-note-drop-list'));
+        const siblings = sortNotesForDrawer().filter((item) => item.id !== note.id && (item.outlineId || '') === outlineId);
+        const index = row ? Math.max(0, siblings.findIndex((item) => item.id === row.getAttribute('data-note-row'))) : siblings.length;
+        siblings.splice(index < 0 ? siblings.length : index, 0, note);
+        siblings.forEach((item, order) => { item.outlineId = outlineId; item.order = order; item.updatedAt = Date.now(); });
+        state.noteDrawerDirty = true;
+        clearNoteDragIndicators();
+        renderNotesDrawer();
+        syncReadingAnnotation('note-reorder');
+    }
+
+    function clearNoteDragIndicators() {
+        document.querySelectorAll('.reading-note-row.dragging,.reading-note-row.drag-over,[data-note-drop-list].drag-over').forEach((node) => node.classList.remove('dragging', 'drag-over'));
+        draggedNoteId = '';
+    }
+
+    function clampNoteEditorPosition(left, top) {
+        const editor = document.getElementById('reading-note-editor');
+        const margin = 12;
+        const width = editor?.offsetWidth || 430;
+        const height = editor?.offsetHeight || 330;
+        return {
+            left: Math.min(Math.max(margin, left), Math.max(margin, global.innerWidth - width - margin)),
+            top: Math.min(Math.max(margin, top), Math.max(margin, global.innerHeight - height - margin))
+        };
+    }
+
+    function positionNoteEditor(anchorNode = null) {
+        const editor = document.getElementById('reading-note-editor');
+        if (!editor) return;
+        let left = Number(state.noteEditorPosition?.left);
+        let top = Number(state.noteEditorPosition?.top);
+        if (!Number.isFinite(left) || !Number.isFinite(top)) {
+            const rect = anchorNode?.getBoundingClientRect?.();
+            left = rect ? rect.left + Math.min(24, rect.width / 2) : (global.innerWidth - (editor.offsetWidth || 430)) / 2;
+            top = rect ? rect.bottom + 10 : (global.innerHeight - (editor.offsetHeight || 330)) / 2;
+        }
+        const position = clampNoteEditorPosition(left, top);
+        editor.style.left = `${Math.round(position.left)}px`;
+        editor.style.top = `${Math.round(position.top)}px`;
+        state.noteEditorPosition = position;
+    }
+
+    function canEditReadingNotes() {
+        if (state.timerLocked) return false;
+        const activePracticeCanEdit = Boolean(
+            !state.readOnly
+            && !state.memorizeMode
+            && !state.submitted
+        );
+        const submittedRecordCanEdit = Boolean(
+            state.submitted
+            && state.submittedRecordId
+            && !state.memorizeMode
+        );
+        return Boolean(state.reviewMode || activePracticeCanEdit || submittedRecordCanEdit);
+    }
+
+    function openNoteEditor(noteId, options = {}) {
+        ensureReadingNotesUi();
+        if (state.activeNoteId && state.activeNoteId !== noteId) flushActiveNoteFromEditor();
+        const note = getNoteById(noteId);
+        if (!note) return;
+        state.activeNoteId = note.id;
+        const editor = document.getElementById('reading-note-editor');
+        const title = editor?.querySelector('[data-note-title]');
+        const body = editor?.querySelector('[data-note-body]');
+        const quote = editor?.querySelector('[data-note-quote]');
+        if (!editor) return;
+        const canEditNotes = canEditReadingNotes();
+        if (title) { title.value = note.title || ''; title.disabled = !canEditNotes; }
+        if (body) { body.value = note.body || ''; body.disabled = !canEditNotes; }
+        if (quote) { quote.textContent = note.quote || ''; quote.style.display = note.quote ? '' : 'none'; }
+        editor.style.display = 'flex';
+        editor.setAttribute('aria-hidden', 'false');
+        global.requestAnimationFrame(() => {
+            positionNoteEditor(options.anchorNode || findNoteHighlight(note.id));
+            (options.focusBody ? body : title)?.focus();
+        });
+    }
+
+    function closeNoteEditor() {
+        flushActiveNoteFromEditor();
+        const editor = document.getElementById('reading-note-editor');
+        if (editor) { editor.style.display = 'none'; editor.setAttribute('aria-hidden', 'true'); }
+        state.activeNoteId = '';
+    }
+
+    function attachNoteEditorDrag(editor) {
+        const handle = editor.querySelector('[data-note-drag-handle]');
+        if (!handle) return;
+        let drag = null;
+        const move = (event) => {
+            if (!drag) return;
+            const next = clampNoteEditorPosition(drag.left + event.clientX - drag.x, drag.top + event.clientY - drag.y);
+            editor.style.left = `${Math.round(next.left)}px`;
+            editor.style.top = `${Math.round(next.top)}px`;
+            state.noteEditorPosition = next;
+        };
+        const stop = () => {
+            drag = null;
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', stop);
+            document.removeEventListener('pointercancel', stop);
+        };
+        handle.addEventListener('pointerdown', (event) => {
+            if (event.target.closest?.('button')) return;
+            const rect = editor.getBoundingClientRect();
+            drag = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', stop);
+            document.addEventListener('pointercancel', stop);
+            event.preventDefault();
+        });
+    }
+
+    function clearNoteEditorSaveTimer() {
+        if (state.noteEditorSaveTimer) global.clearTimeout(state.noteEditorSaveTimer);
+        state.noteEditorSaveTimer = null;
+    }
+
+    function saveActiveNoteFromEditor() {
+        if (!canEditReadingNotes()) return;
+        const note = getNoteById(state.activeNoteId);
+        if (!note) return;
+        const editor = document.getElementById('reading-note-editor');
+        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
+        const body = String(editor?.querySelector('[data-note-body]')?.value || '');
+        if (title === note.title && body === note.body) return;
+        Object.assign(note, { title, body, updatedAt: Date.now() });
+        state.noteDrawerDirty = true;
+        state.noteHighlightMetaDirty = true;
+        state.noteEditorPendingSync = true;
+        syncNotesToLegacyText();
+        clearNoteEditorSaveTimer();
+        state.noteEditorSaveTimer = global.setTimeout(flushActiveNoteFromEditor, NOTE_EDITOR_SAVE_DEBOUNCE_MS);
+    }
+
+    function flushActiveNoteFromEditor() {
+        if (!canEditReadingNotes()) return;
+        const note = getNoteById(state.activeNoteId);
+        if (!note) return;
+        const editor = document.getElementById('reading-note-editor');
+        const title = String(editor?.querySelector('[data-note-title]')?.value || '').trim();
+        const body = String(editor?.querySelector('[data-note-body]')?.value || '');
+        if (title === note.title && body === note.body && !state.noteEditorPendingSync) return;
+        clearNoteEditorSaveTimer();
+        state.noteEditorPendingSync = false;
+        upsertNote({ ...note, title, body, updatedAt: Date.now() }, { forceUi: true, reason: 'note-edit' });
+    }
+
+    function createNoteAnchorSpan(note) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.dataset.hlType = 'note';
+        span.dataset.noteId = note.id;
+        return span;
+    }
+
+    function shouldSkipNoteAnchorTextNode(node) {
+        if (!node?.nodeValue?.trim()) return true;
+        const element = node.parentElement;
+        return Boolean(element?.closest?.('.hl') || getHighlightShared()?.isInsideExplanation?.(node));
+    }
+
+    function wrapNoteTextInRoot(root, note, quote) {
+        const nodes = getHighlightShared()?.getTextNodes?.(root) || [];
+        // 先统计整段里命中次数；saved highlight 缺失才会走到这条兜底路径，若同一引文
+        // 多次出现，按“首次命中”绑定会静默定位到错误位置。这里要求全局唯一匹配才绑定，
+        // 否则放弃恢复该笔记的锚点，而不是盲目绑到第一个重复位置。
+        let matchNode = null;
+        let matchIndex = -1;
+        let totalMatches = 0;
+        for (const node of nodes) {
+            if (shouldSkipNoteAnchorTextNode(node)) continue;
+            const value = String(node.nodeValue || '');
+            let from = 0;
+            let idx = value.indexOf(quote, from);
+            while (idx >= 0) {
+                totalMatches += 1;
+                if (!matchNode) {
+                    matchNode = node;
+                    matchIndex = idx;
+                }
+                from = idx + quote.length;
+                idx = value.indexOf(quote, from);
+            }
+        }
+        if (totalMatches === 0 || totalMatches > 1 || !matchNode) {
+            return null;
+        }
+        const range = document.createRange();
+        range.setStart(matchNode, matchIndex); range.setEnd(matchNode, matchIndex + quote.length);
+        const span = createNoteAnchorSpan(note);
+        try { range.surroundContents(span); return span; } catch (_) { return null; }
+    }
+
+    function findRestorableNoteAnchor(note) {
+        const quote = normalizeNoteText(note?.quote);
+        if (!quote || quote.length < 2) return null;
+        // 唯一性的判定需要在整篇 passage 范围内完成；逐 root 绑定会让跨 root
+        // 的重复引文被误判为“当前 root 内唯一”。先聚合所有命中，再决定绑定。
+        const roots = [dom.left, dom.groups].filter(Boolean);
+        let totalMatches = 0;
+        let matchRoot = null;
+        for (const root of roots) {
+            const nodes = getHighlightShared()?.getTextNodes?.(root) || [];
+            for (const node of nodes) {
+                if (shouldSkipNoteAnchorTextNode(node)) continue;
+                const value = String(node.nodeValue || '');
+                let from = 0;
+                let idx = value.indexOf(quote, from);
+                while (idx >= 0) {
+                    totalMatches += 1;
+                    if (!matchRoot) matchRoot = root;
+                    from = idx + quote.length;
+                    idx = value.indexOf(quote, from);
+                }
+            }
+        }
+        if (totalMatches !== 1 || !matchRoot) return null;
+        return wrapNoteTextInRoot(matchRoot, note, quote);
+    }
+
+    function restoreMissingNoteAnchors() {
+        let count = 0;
+        state.notes.forEach((note) => {
+            if (!findNoteHighlight(note.id) && findRestorableNoteAnchor(note)) count += 1;
+        });
+        if (count) { state.noteHighlightMetaDirty = true; refreshNoteHighlightAttributes(); }
+        return count;
+    }
+
+    function ensureNoteForHighlight(highlightNode, quote = '', options = {}) {
+        if (!(highlightNode instanceof HTMLElement)) return null;
+        let note = getNoteById(highlightNode.dataset.noteId);
+        if (!note && !canEditReadingNotes()) return null;
+        if (!note) {
+            const now = Date.now();
+            note = upsertNote({
+                id: highlightNode.dataset.noteId || generateNoteId(),
+                title: '', body: '', quote: quote || normalizeNoteText(highlightNode.textContent),
+                createdAt: now, updatedAt: now
+            }, { sync: false });
+        }
+        if (note) {
+            highlightNode.dataset.noteId = note.id;
+            highlightNode.dataset.hlType = 'note';
+            state.noteHighlightMetaDirty = true;
+            refreshNoteHighlightAttributes(note.id);
+            if (options.sync !== false) syncReadingAnnotation('note-anchor');
+        }
+        return note;
+    }
+
+    function ensureNoteAnchorsBeforeSnapshot() {
+        document.querySelectorAll('.hl[data-hl-type="note"]').forEach((node) => {
+            if (node instanceof HTMLElement && !node.dataset.noteId) {
+                ensureNoteForHighlight(node, normalizeNoteText(node.textContent), { sync: false });
+            }
+        });
+    }
+
+    function findNoteHighlight(noteId) {
+        const id = String(noteId || '').trim();
+        return id ? document.querySelector(`.hl[data-note-id="${escapeSelector(id)}"]`) : null;
+    }
+
+    function findOrRestoreNoteHighlight(noteId) {
+        const existing = findNoteHighlight(noteId);
+        if (existing) return existing;
+        const note = getNoteById(noteId);
+        return note ? findRestorableNoteAnchor(note) : null;
+    }
+
+    function scrollNoteHighlightIntoView(node) {
+        node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        node?.classList.add('reading-note-flash');
+        global.setTimeout(() => node?.classList.remove('reading-note-flash'), 900);
+    }
+
+    function deleteNote(noteId, options = {}) {
+        if (!canEditReadingNotes()) return;
+        const id = String(noteId || '').trim();
+        if (!id) return;
+        state.notes = state.notes.filter((note) => note.id !== id);
+        document.querySelectorAll(`.hl[data-note-id="${escapeSelector(id)}"]`).forEach((node) => {
+            const parent = node.parentNode;
+            if (!parent) return;
+            while (node.firstChild) parent.insertBefore(node.firstChild, node);
+            node.remove(); parent.normalize();
+        });
+        if (state.activeNoteId === id) { state.activeNoteId = ''; closeNoteEditor(); }
+        state.noteDrawerDirty = true;
+        state.noteHighlightMetaDirty = true;
+        syncNotesToLegacyText();
+        renderNotesDrawer();
+        if (options.sync !== false) syncReadingAnnotation('note-delete');
+    }
+
+    function clearStructuredNotesForReset() {
+        if (!canEditReadingNotes()) return;
+        clearNoteEditorSaveTimer();
+        state.noteEditorPendingSync = false;
+        state.activeNoteId = '';
+        state.notes = [];
+        state.noteOutlines = [];
+        state.noteDrawerDirty = true;
+        state.noteHighlightMetaDirty = true;
+        document.querySelectorAll('.hl[data-note-id], .hl[data-hl-type="note"]').forEach((node) => {
+            const parent = node.parentNode;
+            if (!parent) return;
+            while (node.firstChild) parent.insertBefore(node.firstChild, node);
+            node.remove();
+            parent.normalize();
+        });
+        setNotesText('');
+        const editor = document.getElementById('reading-note-editor');
+        if (editor) {
+            editor.querySelectorAll('input, textarea').forEach((field) => { field.value = ''; });
+            editor.style.display = 'none';
+            editor.setAttribute('aria-hidden', 'true');
+        }
+        closeNotesDrawer();
+        renderNotesDrawer();
+    }
+
+    function refreshNoteHighlightAttributes(noteId = '') {
+        if (!state.noteHighlightMetaDirty && !noteId) return;
+        const selector = noteId ? `.hl[data-note-id="${escapeSelector(noteId)}"]` : '.hl[data-note-id]';
+        document.querySelectorAll(selector).forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            const note = getNoteById(node.dataset.noteId);
+            const title = String(note?.title || '').trim() || buildDefaultNoteTitle(node.textContent);
+            node.dataset.hlType = 'note';
+            node.title = `Note: ${title}`;
+            node.setAttribute('role', 'button');
+            node.tabIndex = 0;
+            node.setAttribute('aria-label', `Open note: ${title}`);
+        });
+        state.noteHighlightMetaDirty = false;
+    }
+
+    function handleNoteHighlightClick(event) {
+        const highlight = event.target instanceof HTMLElement ? event.target.closest('.hl[data-note-id]') : null;
+        if (!highlight) return;
+        event.preventDefault(); event.stopPropagation();
+        openNoteEditor(highlight.dataset.noteId, { anchorNode: highlight });
+    }
+
+    function syncReadingAnnotation(reason = 'note') {
+        if (!canEditReadingNotes()) return;
+        const isSuiteReviewAnnotation = Boolean(
+            state.simulationMode
+            && state.suiteReviewMode
+            && state.reviewMode
+            && state.suiteSessionId
+        );
+        if (state.simulationMode && (!state.readOnly || isSuiteReviewAnnotation)) {
+            syncSimulationDraftSnapshot(reason);
+            return;
+        }
+        if (state.reviewMode) {
+            postMessage('READING_ANNOTATION_SYNC', {
+                examId: state.examId,
+                recordId: state.reviewRecordId || null,
+                reviewSessionId: state.reviewSessionId || null,
+                sessionId: state.sessionId || null,
+                windowSessionToken: state.windowSessionToken || null,
+                annotations: {
+                    highlights: collectHighlights(),
+                    noteText: getNotesText(),
+                    notes: collectNotes(),
+                    noteOutlines: collectNoteOutlines(),
+                    markedQuestions: getCurrentMarkedQuestions(),
+                    scrollY: global.scrollY || 0
+                },
+                reason
+            });
+            return;
+        }
+        // 单篇 final-submit 后（submitted=true，reviewMode=false），宿主在保存练习
+        // 记录后通过 PRACTICE_RECORD_SAVED 回传 recordId。持有该 id 时，结果页笔记
+        // 改动需要以 READING_ANNOTATION_SYNC 直接写回已存档的练习记录，而非走草稿
+        // 同步（草稿在提交时已被清除，且 draft 分支在此状态下会被跳过）。
+        if (state.submitted && state.submittedRecordId && !state.memorizeMode) {
+            postMessage('READING_ANNOTATION_SYNC', {
+                examId: state.examId,
+                recordId: state.submittedRecordId,
+                reviewSessionId: null,
+                sessionId: state.sessionId || null,
+                windowSessionToken: state.windowSessionToken || null,
+                annotations: {
+                    highlights: collectHighlights(),
+                    noteText: getNotesText(),
+                    notes: collectNotes(),
+                    noteOutlines: collectNoteOutlines(),
+                    markedQuestions: getCurrentMarkedQuestions(),
+                    scrollY: global.scrollY || 0
+                },
+                reason
+            });
+            return;
+        }
+        if (!state.readOnly && !state.submitted && !state.memorizeMode) {
+            syncReadingDraftSnapshot(reason);
+        }
+    }
+
+    async function ensureExplanationDataset(options = {}) {
+        const targetDataKey = String(options.dataKey || state.dataKey || '').trim();
+        const targetExamId = String(options.examId || state.examId || '').trim();
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
         const registry = global.__READING_EXPLANATION_DATA__;
         if (!registry || typeof registry.get !== 'function') {
             return null;
@@ -1363,7 +2675,10 @@
         } catch (_) {
             return null;
         }
-        const entry = manifest[state.dataKey] || manifest[state.examId];
+        if (isCurrent && !isCurrent()) {
+            return null;
+        }
+        const entry = manifest[targetDataKey] || manifest[targetExamId];
         if (!entry || !entry.dataKey || !entry.script) {
             return null;
         }
@@ -1373,6 +2688,9 @@
             } catch (_) {
                 return null;
             }
+        }
+        if (isCurrent && !isCurrent()) {
+            return null;
         }
         const payload = registry.get(entry.dataKey);
         state.explanation = payload || null;
@@ -1469,6 +2787,11 @@
             .reading-locator-highlight:hover {
                 background: rgba(250, 204, 21, 0.62);
             }
+            .reading-locator-overlap { cursor:pointer; text-decoration:underline #dc2626 2px; text-underline-offset:3px; }
+            .reading-locator-highlight.is-review-jump-target,.reading-locator-overlap.is-review-jump-target { outline:2px solid rgba(37,99,235,.45); outline-offset:2px; }
+            .reading-locator-block { display:inline-block;width:1px;height:1em;overflow:hidden;opacity:0;pointer-events:none;vertical-align:baseline; }
+            .reading-passage-locator-target.is-review-jump-target { border-radius:4px;outline:2px solid rgba(37,99,235,.38);background:rgba(96,165,250,.12); }
+            .results-table .question-jump-btn { border:0;padding:0;background:transparent;color:#2563eb;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px; }
         `;
         document.head.appendChild(style);
     }
@@ -1487,6 +2810,11 @@
             return;
         }
         shared.unwrapMatchingHighlights(dom.left, LOCATOR_HIGHLIGHT_SELECTOR);
+        dom.left?.querySelectorAll('.reading-passage-locator-target').forEach((node) => node.classList.remove('reading-passage-locator-target', 'is-review-jump-target'));
+        dom.left?.querySelectorAll(LOCATOR_OVERLAP_SELECTOR).forEach((node) => {
+            node.classList.remove('reading-locator-overlap', 'is-review-jump-target');
+            delete node.dataset.locatorOverlap;
+        });
     }
 
     function getHighlightShared() {
@@ -1734,6 +3062,19 @@
         return index >= 0 ? (state.suite.sequence[index] || null) : null;
     }
 
+    function resolveComparisonNavStatus(comparison, answered = false) {
+        if (!comparison || typeof comparison !== 'object') {
+            return answered ? 'answered' : '';
+        }
+        if (comparison.isCorrect === true) {
+            return 'correct';
+        }
+        if (comparison.isCorrect === false) {
+            return 'incorrect';
+        }
+        return answered ? 'answered' : '';
+    }
+
     function getPassageQuestionStates() {
         if (state.suite?.inline && state.suite.sequence.length) {
             const info = {
@@ -1758,8 +3099,7 @@
                     const labelMap = dataset?.questionDisplayMap || {};
                     const label = labelMap[qId] || String(qId).replace(/^q/i, '');
                     let status = statusMap.get(qId) || '';
-                    const answered = Object.prototype.hasOwnProperty.call(answers, qId)
-                        && splitAnswerTokens(answers[qId]).length > 0;
+                    const answered = hasAnswerInDataset(qId, answers, dataset);
                     if (answered && !status) {
                         status = 'answered';
                     }
@@ -1768,7 +3108,7 @@
                     }
                     const comparison = slot?.lastResults?.answerComparison?.[qId];
                     if (comparison) {
-                        status = comparison.isCorrect ? 'correct' : 'incorrect';
+                        status = resolveComparisonNavStatus(comparison, answered);
                     }
                     return { qId, label, status, examId: entry.examId };
                 });
@@ -1789,17 +3129,14 @@
         let draftsByExam = {};
         let resultsByExam = {};
         try {
-            const raw = global.sessionStorage?.getItem('ielts_sim_session');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed) {
-                    if (Array.isArray(parsed.sequence)) sequenceExams = parsed.sequence;
-                    if (parsed.draftsByExam) draftsByExam = parsed.draftsByExam;
-                    if (Array.isArray(parsed.results)) {
-                        parsed.results.forEach(res => {
-                            if (res && res.examId) resultsByExam[res.examId] = res;
-                        });
-                    }
+            const parsed = global.AppData?.recovery?.windowSession?.get('simulation');
+            if (parsed) {
+                if (Array.isArray(parsed.sequence)) sequenceExams = parsed.sequence;
+                if (parsed.draftsByExam) draftsByExam = parsed.draftsByExam;
+                if (Array.isArray(parsed.results)) {
+                    parsed.results.forEach(res => {
+                        if (res && res.examId) resultsByExam[res.examId] = res;
+                    });
                 }
             }
         } catch (_) {}
@@ -1833,7 +3170,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -1865,7 +3202,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -1897,7 +3234,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -2365,7 +3702,7 @@
                 navStatus.set(questionId, hasAnswer(questionId) ? 'answered' : '');
                 return;
             }
-            navStatus.set(questionId, entry.isCorrect ? 'correct' : 'incorrect');
+            navStatus.set(questionId, resolveComparisonNavStatus(entry, hasAnswer(questionId)));
         });
         buildQuestionNav();
         syncPrimaryActionButtons();
@@ -2494,7 +3831,7 @@
     function attachMemorizeLocatorListeners() {
         document.addEventListener('click', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.reading-locator-highlight[data-question-id]')
+                ? event.target.closest('.reading-locator-highlight[data-question-id],.reading-locator-overlap[data-question-id],.reading-locator-block[data-question-id]')
                 : null;
             if (!target) {
                 return;
@@ -2667,18 +4004,32 @@
         });
     }
 
-    async function renderExplanations() {
+    async function renderExplanations(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (typeof testOverrides.renderExplanations === 'function') {
-            await testOverrides.renderExplanations();
-            return;
+            const commitOverride = await testOverrides.renderExplanations(options);
+            if (isCurrent && !isCurrent()) {
+                return false;
+            }
+            if (typeof commitOverride === 'function') {
+                commitOverride();
+            }
+            return true;
         }
         clearExplanations();
-        const explanation = await ensureExplanationDataset();
+        const explanation = await ensureExplanationDataset(options);
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (!explanation) {
-            return;
+            return false;
         }
         renderPassageExplanations();
         renderQuestionExplanations();
+        return true;
     }
 
     function createAnswerKeyCard(questionId, answerValue) {
@@ -2788,6 +4139,61 @@
         return snippets;
     }
 
+    function buildLocatorSnippetVariants(text) {
+        const source = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!source) return [];
+        return Array.from(new Set([
+            source,
+            source.replace(/[‘’]/g, "'").replace(/[“”]/g, '"'),
+            source.replace(/[‐‑‒–—―]/g, '-'),
+            source.replace(/\s+-\s+/g, ' — '),
+            source.replace(/\s+-\s+/g, ' – ')
+        ])).filter(Boolean);
+    }
+
+    function normalizeLocatorComparableText(text) {
+        return String(text || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[‐‑‒–—―]/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function findPassageBlockForLocatorSnippet(snippet) {
+        if (!dom.left || !snippet) return null;
+        const variants = buildLocatorSnippetVariants(snippet).map(normalizeLocatorComparableText);
+        return Array.from(dom.left.querySelectorAll('p, li, td, th, div')).filter((node) => {
+            if (node.closest(EXPLANATION_NODE_SELECTOR) || node.classList.contains('reading-locator-highlight')) return false;
+            if (node.tagName === 'DIV' && node.querySelector('p, li, td, th')) return false;
+            const text = normalizeLocatorComparableText(node.textContent);
+            return text.length >= 10 && variants.some((variant) => text.includes(variant));
+        }).sort((a, b) => String(a.textContent || '').length - String(b.textContent || '').length)[0] || null;
+    }
+
+    function markOverlappingLocatorHighlight(questionId, snippet) {
+        const variants = buildLocatorSnippetVariants(snippet).map(normalizeLocatorComparableText);
+        const target = Array.from(dom.left?.querySelectorAll('.hl') || []).find((node) => {
+            const text = normalizeLocatorComparableText(node.textContent);
+            return text.length >= 12 && variants.some((variant) => text.includes(variant) || variant.includes(text));
+        });
+        if (!target) return null;
+        target.classList.add('reading-locator-overlap');
+        target.dataset.questionId = questionId;
+        target.dataset.locatorOverlap = 'true';
+        target.title = `Q${displayLabel(questionId)} 定位`;
+        return target;
+    }
+
+    function createLocatorBlock(questionId, snippet) {
+        const target = findPassageBlockForLocatorSnippet(snippet);
+        if (!target) return null;
+        const existing = target.querySelector(`.reading-locator-block[data-question-id="${escapeSelector(questionId)}"]`);
+        if (existing) return existing;
+        target.classList.add('reading-passage-locator-target');
+        const marker = document.createElement('span');
+        marker.className = 'reading-locator-block';
+        marker.dataset.questionId = questionId;
+        marker.setAttribute('aria-hidden', 'true');
+        target.insertBefore(marker, target.firstChild);
+        return marker;
+    }
+
     function buildMemorizeLocatorSnippets() {
         const snippetsByQuestionId = new Map();
         const sections = Array.isArray(state.explanation?.questionExplanations)
@@ -2831,7 +4237,7 @@
 
     function applyMemorizeLocatorHighlights() {
         clearMemorizeLocatorHighlights();
-        if (!state.memorizeMode || !dom.left) {
+        if ((!state.memorizeMode && !state.reviewMode && !state.submitted) || !dom.left) {
             return 0;
         }
         const shared = getHighlightShared();
@@ -2843,19 +4249,66 @@
         let applied = 0;
         snippetsByQuestionId.forEach((snippets, questionId) => {
             snippets.slice(0, 4).forEach((snippet) => {
-                const matches = shared.wrapTextMatches(dom.left, snippet, {
-                    className: 'reading-locator-highlight',
-                    attrs: {
-                        'data-question-id': questionId,
-                        title: `Q${displayLabel(questionId)} 定位`
-                    },
-                    limit: 2,
-                    skipSelector: '.hl, .reading-locator-highlight, .reading-locator-block'
-                });
+                let matches = [];
+                for (const variant of buildLocatorSnippetVariants(snippet)) {
+                    if (matches.length) break;
+                    matches = shared.wrapTextMatches(dom.left, variant, {
+                        className: 'reading-locator-highlight',
+                        attrs: { 'data-question-id': questionId, title: `Q${displayLabel(questionId)} 定位` },
+                        limit: 2,
+                        skipSelector: '.hl, .reading-locator-highlight, .reading-locator-block'
+                    });
+                }
+                if (!matches.length) {
+                    const overlap = markOverlappingLocatorHighlight(questionId, snippet);
+                    if (overlap) matches = [overlap];
+                }
+                if (!matches.length) {
+                    const marker = createLocatorBlock(questionId, snippet);
+                    if (marker) matches = [marker];
+                }
                 applied += matches.length;
             });
         });
         return applied;
+    }
+
+    function findLocatorAnchor(questionId) {
+        const normalized = normalizeQuestionId(questionId);
+        return Array.from(document.querySelectorAll('.reading-locator-highlight[data-question-id],.reading-locator-block[data-question-id],.reading-locator-overlap[data-question-id]'))
+            .find((node) => normalizeQuestionId(node.dataset.questionId) === normalized) || null;
+    }
+
+    function applyLocatorHighlightsForQuestion(questionId) {
+        const normalized = normalizeQuestionId(questionId);
+        const snippets = buildMemorizeLocatorSnippets().get(normalized) || [];
+        if (!normalized || !dom.left) return 0;
+        const shared = getHighlightShared();
+        for (const snippet of snippets) {
+            for (const variant of buildLocatorSnippetVariants(snippet)) {
+                const matches = shared?.wrapTextMatches?.(dom.left, variant, {
+                    className: 'reading-locator-highlight',
+                    attrs: { 'data-question-id': normalized, title: `Q${displayLabel(normalized)} 定位` },
+                    limit: 1,
+                    skipSelector: '.hl, .reading-locator-highlight, .reading-locator-block'
+                }) || [];
+                if (matches.length) return matches.length;
+            }
+            if (markOverlappingLocatorHighlight(normalized, snippet) || createLocatorBlock(normalized, snippet)) return 1;
+        }
+        return 0;
+    }
+
+    function jumpToQuestionEvidence(questionId) {
+        if (!findLocatorAnchor(questionId)) applyLocatorHighlightsForQuestion(questionId);
+        const locator = findLocatorAnchor(questionId);
+        const target = locator || findQuestionAnchor(questionId);
+        if (!target) return false;
+        target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        const highlightTarget = locator?.classList.contains('reading-locator-block') ? locator.closest('.reading-passage-locator-target') : locator;
+        highlightTarget?.classList.add('is-review-jump-target');
+        global.setTimeout(() => highlightTarget?.classList.remove('is-review-jump-target'), 1800);
+        return true;
     }
 
     async function renderMemorizeStudyLayer() {
@@ -2898,8 +4351,11 @@
 
     function clearDropzone(dropzone) {
         if (!dropzone) return;
+        const previousPayload = getDropzonePayload(dropzone);
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
+        // 清除判卷残留的标记，避免重置后旧颜色残留
+        dropzone.classList.remove('correct', 'wrong');
         if (dropzone.classList.contains('drop-target-summary')) {
             dropzone.innerHTML = '';
         } else {
@@ -2907,6 +4363,10 @@
             if (holder) {
                 holder.innerHTML = '';
             }
+        }
+        // 清空后恢复 pool 中对应选项的显示（不允许复用的题组）
+        if (previousPayload) {
+            restorePoolOption(dropzone, previousPayload);
         }
         updateDropzoneState(dropzone);
     }
@@ -2925,10 +4385,12 @@
     function buildDragPayload(item) {
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
+        const sourcePool = item.closest(POOL_CONTAINER_SELECTOR);
         return {
-            value: item.dataset.heading || item.dataset.option || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
+            value: item.dataset.heading || item.dataset.option || item.dataset.key || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
             label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
-            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || ''
+            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || '',
+            sourcePoolId: sourcePool?.id || item.dataset.originPool || ''
         };
     }
 
@@ -2942,7 +4404,8 @@
             return {
                 value: String(payload.value || payload.label || '').trim(),
                 label: String(payload.label || payload.value || '').trim(),
-                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim()
+                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim(),
+                sourcePoolId: String(payload.sourcePoolId || '').trim()
             };
         } catch (_) {
             const fallback = String(rawValue).trim();
@@ -2963,6 +4426,11 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
+            // 已被使用的选项不可拖拽
+            if (item.classList.contains('option-consumed') || item.dataset.consumed === '1') {
+                event.preventDefault();
+                return;
+            }
             const payload = buildDragPayload(item);
             if (!payload || !payload.value) {
                 event.preventDefault();
@@ -2983,6 +4451,8 @@
         const normalizedLabel = String(label || value || '').trim();
         dropzone.dataset.answerValue = normalizedValue;
         dropzone.dataset.answerLabel = normalizedLabel;
+        // 作答阶段移除判卷残留的标记，避免旧颜色泄露
+        dropzone.classList.remove('correct', 'wrong');
         const holder = ensureDropzoneHolder(dropzone);
         if (!holder) {
             return;
@@ -3011,6 +4481,140 @@
         updateDropzoneState(dropzone);
     }
 
+    function resolvePoolContainer(group) {
+        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool /
+        // .option-pool / .cardpool 均可能是（.option-pool 与 .options-pool 是不同 class，
+        // .cardpool 用于卡片匹配题，二者都必须覆盖）
+        if (!group) return null;
+        return group.querySelector(POOL_CONTAINER_SELECTOR);
+    }
+
+    function resolveOptionGroupAndPool(dropzone, payload) {
+        // 辅助函数：在左右分栏布局下也能找到正确的题组容器和选项池。
+        // 优先用 dropzone 定位所属组（consume/restore 针对放置/清空的答案区所属组，
+        // 跨组交换时不能用 payload 来源定位，否则会误伤源组），sourcePoolId 作兜底。
+        let group = null;
+        let pool = null;
+
+        // 1. 优先从 dropzone 向上查找 group（目标/源答案区所属组）
+        if (dropzone) {
+            group = dropzone.closest('.unified-group');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 2. 尝试通过 payload.sourcePoolId 查找 pool（兼容分栏下 closest 失效）
+        if (!group && payload && payload.sourcePoolId) {
+            pool = document.getElementById(payload.sourcePoolId);
+            if (pool) {
+                group = pool.closest('.unified-group');
+            }
+        }
+
+        // 3. 如果还没找到，找到页面上 allowOptionReuse=false 的 group
+        if (!group) {
+            group = document.querySelector('.unified-group[data-allow-option-reuse="false"]');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 4. 最后兜底：直接找第一个 pool
+        if (!pool) {
+            pool = document.querySelector(POOL_CONTAINER_SELECTOR);
+            if (pool) {
+                group = group || pool.closest('.unified-group');
+            }
+        }
+
+        return { group, pool };
+    }
+
+    function findPoolItemByValue(pool, consumedValue) {
+        // 统一候选 item 类型：.drag-item（段落/匹配）、.draggable-word（选词填空）
+        if (!pool) return null;
+        const items = pool.querySelectorAll(POOL_ITEM_SELECTOR);
+        for (const item of items) {
+            const itemValue = canonicalizeAnswerToken(
+                item.dataset.heading || item.dataset.option || item.dataset.key
+                || item.dataset.word || item.dataset.value || item.textContent
+            );
+            if (itemValue && itemValue === consumedValue) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function consumePoolOption(dropzone, payload) {
+        // 段落匹配等不允许复用的题组：选项拖走后在候选池标记为已使用（禁用+标灰），
+        // 便于用户直观看到哪些选项已被使用，且不可再次选择。
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        const consumedValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, consumedValue);
+        if (item && !item.dataset.consumed) {
+            item.dataset.consumed = '1';
+            item.classList.add('option-consumed');
+            item.setAttribute('draggable', 'false');
+        }
+    }
+
+    function restorePoolOption(dropzone, payload) {
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        // 限定到当前组的 questionIds：同一页面可能有多个不允许复用的题组
+        // 使用相同选项字母（如 p2-high-233 组2/组3 都用 A-E），
+        // 跨组扫描会误伤其他组的独立选项。
+        const groupQuestionIds = new Set(
+            String(group.dataset.questionIds || '')
+                .split(',')
+                .map((entry) => normalizeQuestionId(entry.trim()))
+                .filter(Boolean)
+        );
+        const restoredValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, restoredValue);
+        if (item && item.dataset.consumed) {
+            // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
+            // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
+            // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
+            const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
+                .filter((zone) => {
+                    const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
+                    const zoneIds = expandQuestionSequence(zoneQuestion);
+                    const normalizedZoneIds = zoneIds.length
+                        ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
+                        : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
+                    return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
+                });
+            const stillUsed = groupDropzones.some((zone) => {
+                const zonePayload = getDropzonePayload(zone);
+                return zonePayload
+                    && canonicalizeAnswerToken(zonePayload.value) === restoredValue;
+            });
+            if (!stillUsed) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
+                // 不允许重新启用选项，否则可绕过锁定继续作答
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+                item.classList.toggle('drag-item-locked', interactionLocked);
+            }
+        }
+    }
+
     function handleDropOnDropzone(dropzone, payload) {
         if (!dropzone || !payload || !payload.value) {
             return;
@@ -3023,12 +4627,28 @@
             return;
         }
         const previousPayload = getDropzonePayload(dropzone);
+        const sourcePreviousPayload = getDropzonePayload(sourceDropzone);
         setDropzoneAnswer(dropzone, payload.value, payload.label);
+
+        // 目标 dropzone：消耗新值；若原来有值且被替换，恢复原值（仅当不再被使用）
+        consumePoolOption(dropzone, payload);
+        if (previousPayload && previousPayload.value
+            && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
+            restorePoolOption(dropzone, previousPayload);
+        }
+
         if (sourceDropzone && sourceDropzone !== dropzone) {
+            // 跨答案区拖动：先把目标旧值移入源 dropzone（消耗源组对应选项），
+            // 再恢复源旧值——此时源已更新，才能正确判断源旧值是否仍被使用
             if (previousPayload && previousPayload.value) {
                 setDropzoneAnswer(sourceDropzone, previousPayload.value, previousPayload.label);
+                consumePoolOption(sourceDropzone, previousPayload);
             } else {
                 clearDropzone(sourceDropzone);
+            }
+            // 源 dropzone 的旧值已被移走，恢复其在 pool 中的状态（仅当不再被使用）
+            if (sourcePreviousPayload && sourcePreviousPayload.value) {
+                restorePoolOption(sourceDropzone, sourcePreviousPayload);
             }
         }
         updateNavStatuses();
@@ -3042,11 +4662,17 @@
         if (!sourceDropzone) {
             return;
         }
+        // 先记录原答案，清空后恢复 pool 中的选项显示
+        const previousPayload = getDropzonePayload(sourceDropzone);
         clearDropzone(sourceDropzone);
+        if (previousPayload) {
+            restorePoolOption(sourceDropzone, previousPayload);
+        }
         updateNavStatuses();
     }
 
     function attachDragDrop() {
+        ensureOptionConsumedStyles();
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
@@ -3061,7 +4687,7 @@
         });
         document.addEventListener('dragover', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -3071,13 +4697,13 @@
         });
         document.addEventListener('dragleave', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -3089,7 +4715,7 @@
             if (!payload) {
                 return;
             }
-            if (target.classList.contains('pool-items')) {
+            if (target.matches(POOL_CONTAINER_SELECTOR) || target.closest(POOL_CONTAINER_SELECTOR)) {
                 handleDropBackToPool(payload);
                 return;
             }
@@ -3349,6 +4975,8 @@
         }
         const label = normalizeAnswerForReplay(rawValue, 'label') || value;
         setDropzoneAnswer(dropzone, value, label);
+        // 回放答案时也需要标记选项为已使用（不允许复用的题组）
+        consumePoolOption(dropzone, { value, label });
         return true;
     }
 
@@ -3384,7 +5012,7 @@
         const checkboxGroups = getCheckboxAnswers();
 
         checkboxGroups.forEach((values, name) => {
-            const questionIds = expandQuestionSequence(name);
+            const questionIds = resolveCheckboxQuestionIds(name);
             if (!questionIds.length) {
                 return;
             }
@@ -3393,8 +5021,8 @@
                 answers[questionIds[0]] = sorted.length > 1 ? sorted : (sorted[0] || '');
                 return;
             }
-            questionIds.forEach((questionId, index) => {
-                answers[questionId] = sorted[index] || '';
+            questionIds.forEach((questionId) => {
+                answers[questionId] = sorted;
             });
         });
 
@@ -3417,6 +5045,26 @@
         });
 
         return answers;
+    }
+
+    function resolveCheckboxQuestionIds(name) {
+        const questionIds = expandQuestionSequence(name);
+        if (questionIds.length <= 1) {
+            return questionIds;
+        }
+        const firstQuestionId = questionIds[0];
+        const answerKey = state.dataset?.answerKey || {};
+        const questionGroup = buildQuestionGroupLookup(state.dataset).get(firstQuestionId) || null;
+        if (
+            questionGroup
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            && Array.isArray(questionGroup.questionIds)
+            && questionGroup.questionIds.length === 1
+            && Array.isArray(answerKey[firstQuestionId])
+        ) {
+            return [firstQuestionId];
+        }
+        return questionIds;
     }
 
     function normalizeAnswerValue(value) {
@@ -3554,7 +5202,10 @@
             : splitAnswerTokens(value);
         const normalized = [];
         rawTokens.forEach((entry) => {
-            const token = canonicalizeAnswerToken(entry);
+            const rawChoiceToken = String(entry ?? '').trim().toUpperCase();
+            const token = /^[A-Z]$/.test(rawChoiceToken)
+                ? rawChoiceToken
+                : canonicalizeAnswerToken(entry);
             if (!token) {
                 return;
             }
@@ -3577,12 +5228,64 @@
         return tokens.sort((left, right) => left.localeCompare(right, 'en'));
     }
 
+    function resolveSplitMultiChoiceSelection(answers, answerKey, questionGroup, targetQuestionId) {
+        const questionIds = Array.isArray(questionGroup?.questionIds)
+            ? questionGroup.questionIds.map((entry) => normalizeQuestionId(entry)).filter(Boolean)
+            : [];
+        const selectedTokens = collectGroupChoiceTokens(answers, questionIds);
+        // 数量校验：用户选择数不能超过正确答案总数（如 5选2 最多选 2 个）。
+        // 超选（如全选 A-E）视为整组错误，防止通过多选选项刷满分。
+        const expectedCount = questionIds
+            .map((questionId) => canonicalizeAnswerToken(answerKey[questionId]))
+            .filter(Boolean)
+            .length;
+        const overSelected = expectedCount > 0 && selectedTokens.length > expectedCount;
+        const remainingTokens = selectedTokens.slice();
+        const assignments = new Map();
+
+        questionIds.forEach((questionId) => {
+            const expectedToken = canonicalizeAnswerToken(answerKey[questionId]);
+            if (!expectedToken) {
+                return;
+            }
+            const matchedIndex = remainingTokens.findIndex((token) => areAnswerTokensEquivalent(token, expectedToken));
+            if (matchedIndex >= 0) {
+                assignments.set(questionId, remainingTokens[matchedIndex]);
+                remainingTokens.splice(matchedIndex, 1);
+            }
+        });
+
+        questionIds.forEach((questionId) => {
+            if (assignments.has(questionId)) {
+                return;
+            }
+            const fallbackToken = remainingTokens.shift();
+            if (fallbackToken) {
+                assignments.set(questionId, fallbackToken);
+            }
+        });
+
+        const normalizedTargetId = normalizeQuestionId(targetQuestionId) || targetQuestionId;
+        const expectedToken = canonicalizeAnswerToken(answerKey[normalizedTargetId]);
+        const assignedToken = assignments.get(normalizedTargetId) || '';
+        return {
+            // Review rows for split-key multi-choice still show the full selected set
+            // so partial credit remains inspectable even though scoring is per expected token.
+            displayUserAnswer: selectedTokens.length
+                ? selectedTokens.slice()
+                : (assignedToken || answers[normalizedTargetId] || ''),
+            expectedToken,
+            isCorrect: !overSelected
+                && Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
+        };
+    }
+
     function questionWeight(correctAnswer, questionGroup = null) {
         if (Array.isArray(correctAnswer)) {
             const normalized = normalizeAnswerValue(correctAnswer);
             const isMultiChoiceGroup = Boolean(
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
                 && Array.isArray(questionGroup.questionIds)
             );
             if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
@@ -3593,10 +5296,37 @@
         return 1;
     }
 
-    function hasAnswer(questionId) {
-        const answers = collectAnswers();
+    function hasAnswerInDataset(questionId, answers, dataset) {
         const value = answers[questionId];
-        return splitAnswerTokens(value).length > 0;
+        const tokens = splitAnswerTokens(value);
+        if (tokens.length === 0) {
+            return false;
+        }
+        // 拆分多选题组：一个 questionId 持有了整组的选中集合，
+        // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
+        const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+        const questionGroup = buildQuestionGroupLookup(dataset).get(normalizedQuestionId) || null;
+        const isSplitMultiChoiceGroup = Boolean(
+            questionGroup
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            && Array.isArray(questionGroup.questionIds)
+            && questionGroup.questionIds.length > 1
+        );
+        if (isSplitMultiChoiceGroup) {
+            const answerKey = dataset?.answerKey || {};
+            const expectedCount = questionGroup.questionIds
+                .map((id) => canonicalizeAnswerToken(answerKey[id]))
+                .filter(Boolean)
+                .length;
+            if (expectedCount > 0) {
+                return tokens.length >= expectedCount;
+            }
+        }
+        return true;
+    }
+
+    function hasAnswer(questionId) {
+        return hasAnswerInDataset(questionId, collectAnswers(), state.dataset);
     }
 
     function buildResultsFromAnswers(dataset, answers = {}) {
@@ -3618,15 +5348,17 @@
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
             const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
-            const isSplitMultiChoiceGroup = Boolean(
+            const isMultiChoiceKind = (
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            );
+            const isSplitMultiChoiceGroup = Boolean(
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length > 1
             );
             const isSingleKeyMultiChoiceGroup = Boolean(
-                questionGroup
-                && questionGroup.kind === 'multi_choice'
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length === 1
                 && Array.isArray(correctAnswer)
@@ -3637,14 +5369,13 @@
             let partialCorrectCount = isCorrect ? weight : 0;
 
             if (isSplitMultiChoiceGroup) {
-                const selectedTokens = collectGroupChoiceTokens(answers, questionGroup.questionIds);
-                const expectedToken = canonicalizeAnswerToken(correctAnswer);
-                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
-                if (!expectedToken) {
+                const splitSelection = resolveSplitMultiChoiceSelection(answers, answerKey, questionGroup, normalizedQuestionId);
+                displayUserAnswer = splitSelection.displayUserAnswer || userAnswer;
+                if (!splitSelection.expectedToken) {
                     isCorrect = null;
                     partialCorrectCount = 0;
                 } else {
-                    isCorrect = selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken));
+                    isCorrect = splitSelection.isCorrect;
                     partialCorrectCount = isCorrect ? 1 : 0;
                 }
                 weight = 1;
@@ -3729,13 +5460,22 @@
             const label = escapeHtml(displayLabel(entry.questionId));
             const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
-            const status = entry.isCorrect ? '✓' : '✗';
+            const partial = Number(entry.partialCorrectCount) || 0;
+            const weight = Number(entry.weight) || 1;
+            const correctnessKnown = entry.isCorrect === true || entry.isCorrect === false;
+            const isPartial = entry.isCorrect === false && partial > 0 && weight > 1;
+            const status = entry.isCorrect === true
+                ? '✓'
+                : (isPartial ? `${partial}/${weight}` : (correctnessKnown ? '✗' : '—'));
+            const statusClass = entry.isCorrect === true
+                ? 'result-correct'
+                : (isPartial ? 'result-partial' : (correctnessKnown ? 'result-incorrect' : 'result-unknown'));
             return `
                 <tr>
-                    <td>${label}</td>
+                    <td><button type="button" class="question-jump-btn" data-result-question-id="${escapeHtml(entry.questionId)}" aria-label="跳转到题号 ${label} 的原文证据">${label}</button></td>
                     <td>${userAnswer}</td>
                     <td>${correctAnswer || ''}</td>
-                    <td class="${entry.isCorrect ? 'result-correct' : 'result-incorrect'}">${status}</td>
+                    <td class="${statusClass}">${status}</td>
                 </tr>
             `;
         }).join('');
@@ -3755,6 +5495,10 @@
             </table>
         `;
         dom.results.style.display = 'block';
+        dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
+            button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
+        });
+        applyResultsToQuestionArea(results);
     }
 
     function escapeSelector(value) {
@@ -3766,6 +5510,151 @@
             }
         }
         return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function applyResultsToQuestionArea(results) {
+        if (!results || !results.answerComparison) {
+            return;
+        }
+        const comparison = results.answerComparison;
+        // 先清除所有旧标记，再按判卷结果重新标记。
+        // 按 class 全局清除（不依赖容器选择器），确保 legacy 容器（.mcq/.location-options 等）
+        // 的旧绿/红标记也被清理，避免 replay 不同记录时残留。
+        document.querySelectorAll('.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong, [data-result-filled="true"]').forEach((node) => {
+            node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
+        });
+        // 把 comparison 条目按 checkbox/radio 组聚合：组内任一拆分子题的正确答案
+        // 都属于该组，避免拆分多选题时"正确选项在另一子题被当成用户错选"而标红。
+        // 正确答案未知（legacy 记录无 correctAnswerMap，isCorrect 为 null）时跳过该组，
+        // 避免把历史记录的所有选择都标红。
+        const groupEntries = new Map();
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            const inputNodes = collectChoiceInputsForQuestion(questionId);
+            if (!inputNodes.length) {
+                return; // 无 input 时走 dropzone 分支
+            }
+            const correctValues = (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
+                .map((value) => canonicalizeAnswerToken(value))
+                .filter(Boolean);
+            if (correctValues.length === 0) {
+                return; // 正确答案未知，不标记对错
+            }
+            const groupKey = inputNodes[0].name || questionId;
+            if (!groupEntries.has(groupKey)) {
+                groupEntries.set(groupKey, {
+                    inputs: inputNodes,
+                    correctValues: new Set(),
+                    userValues: new Set()
+                });
+            }
+            const group = groupEntries.get(groupKey);
+            correctValues.forEach((value) => group.correctValues.add(value));
+            normalizeChoiceTokenList(entry.userAnswer)
+                .forEach((value) => group.userValues.add(value));
+        });
+        groupEntries.forEach((group) => {
+            group.inputs.forEach((input) => {
+                const highlightTarget = resolveChoiceHighlightTarget(input);
+                if (!highlightTarget) {
+                    return;
+                }
+                const inputValue = canonicalizeAnswerToken(input.value);
+                if (!inputValue) {
+                    return;
+                }
+                if (group.correctValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-correct');
+                } else if (input.checked || group.userValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-wrong');
+                }
+            });
+        });
+        // 剩余条目：dropzone（拖拽/表格非 input 类）单独处理
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            if (collectChoiceInputsForQuestion(questionId).length) {
+                return; // 已按组处理
+            }
+            // 正确答案未知（isCorrect 为 null）时跳过，避免历史记录被误标红
+            if (entry.isCorrect === null || entry.isCorrect === undefined) {
+                return;
+            }
+            const isCorrect = Boolean(entry.isCorrect);
+            const aliases = resolveAnswerAliases(questionId);
+            const selector = aliases.map((alias) => {
+                const escaped = escapeSelector(alias);
+                return [
+                    `.drop-target-summary[data-question="${escaped}"]`,
+                    `.paragraph-dropzone[data-question="${escaped}"]`,
+                    `.match-dropzone[data-question="${escaped}"]`
+                ].join(', ');
+            }).join(', ');
+            let dropzoneNode = null;
+            if (selector) {
+                try {
+                    dropzoneNode = document.querySelector(selector);
+                } catch (_) {
+                    // ignore invalid selector
+                }
+            }
+            if (dropzoneNode) {
+                dropzoneNode.classList.add(isCorrect ? 'correct' : 'wrong');
+                // 未作答的拖拽区：补上 filled 状态，让 wrong/correct 样式能生效
+                if (!dropzoneNode.classList.contains('dropzone-filled')) {
+                    dropzoneNode.classList.add('dropzone-filled');
+                    dropzoneNode.dataset.resultFilled = 'true';
+                }
+            }
+        });
+    }
+
+    function resolveChoiceHighlightTarget(input) {
+        const explicitTarget = input.closest([
+            'label',
+            'td',
+            '.heading-option',
+            '.choice-option',
+            '.answer-option',
+            '.radio-option',
+            '.checkbox-option',
+            '.option-item'
+        ].join(', '));
+        if (explicitTarget) {
+            return explicitTarget;
+        }
+        const parent = input.parentElement;
+        if (!parent) {
+            return null;
+        }
+        const siblingChoices = parent.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+        return siblingChoices.length === 1 ? parent : null;
+    }
+
+    function collectChoiceInputsForQuestion(questionId) {
+        const normalizedTarget = normalizeQuestionId(questionId);
+        // 直接匹配
+        let inputs = document.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
+        if (inputs.length) {
+            return Array.from(inputs);
+        }
+        // 扫描所有 checkbox/radio 组，匹配 name 展开后的题目序列
+        const matched = [];
+        document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+            const name = input.name || '';
+            const ids = expandQuestionSequence(name);
+            if (ids.some((id) => normalizeQuestionId(id) === normalizedTarget)) {
+                matched.push(input);
+            }
+        });
+        if (matched.length) {
+            return matched;
+        }
+        return [];
     }
 
     function normalizeReplayQuestionId(rawValue) {
@@ -3796,7 +5685,6 @@
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
         const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
-        const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
             ...Object.keys(normalizedAnswers),
@@ -3807,45 +5695,83 @@
                 : [])
         ]);
 
-        let correctCount = 0;
+        const replayAnswers = {};
         questionIds.forEach((questionId) => {
             const rawEntry = rawComparison[questionId];
             const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
                 ? rawEntry
                 : {};
-            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+            replayAnswers[questionId] = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
-            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
-            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
-            if (isCorrect) {
-                correctCount += 1;
+        });
+
+        const hasUsableCorrectAnswer = (questionId) => (
+            Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId)
+            && splitAnswerTokens(normalizedCorrectAnswers[questionId]).length > 0
+        );
+        const replayGroupLookup = buildQuestionGroupLookup(state.dataset);
+        const knownQuestionIds = Array.from(questionIds).filter((questionId) => {
+            if (!hasUsableCorrectAnswer(questionId)) {
+                return false;
             }
+            const questionGroup = replayGroupLookup.get(questionId);
+            const isSplitMultiChoiceGroup = Boolean(
+                questionGroup
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length > 1
+            );
+            return !isSplitMultiChoiceGroup
+                || questionGroup.questionIds.every((groupQuestionId) => hasUsableCorrectAnswer(groupQuestionId));
+        });
+        if (knownQuestionIds.length > 0) {
+            const replayResults = buildResultsFromAnswers(
+                Object.assign({}, state.dataset || {}, {
+                    answerKey: normalizedCorrectAnswers,
+                    questionOrder: knownQuestionIds
+                }),
+                replayAnswers
+            );
+            const answerComparison = {};
+            questionIds.forEach((questionId) => {
+                answerComparison[questionId] = replayResults.answerComparison[questionId] || {
+                    questionId,
+                    userAnswer: replayAnswers[questionId],
+                    correctAnswer: '',
+                    isCorrect: null
+                };
+            });
+            return {
+                answers: replayAnswers,
+                correctAnswers: normalizedCorrectAnswers,
+                answerComparison,
+                scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
+            };
+        }
+
+        const normalizedComparison = {};
+        questionIds.forEach((questionId) => {
             normalizedComparison[questionId] = {
                 questionId,
-                userAnswer,
-                correctAnswer,
-                isCorrect
+                userAnswer: replayAnswers[questionId],
+                correctAnswer: '',
+                isCorrect: null
             };
         });
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
-        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
-        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
-        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
+        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : 0;
+        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
+        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
-        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
-            ? Math.round(scoreInfo.accuracy * 100)
-            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);
 
         return {
-            answers: normalizedAnswers,
+            answers: replayAnswers,
             correctAnswers: normalizedCorrectAnswers,
             answerComparison: normalizedComparison,
             scoreInfo
@@ -3857,6 +5783,8 @@
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 buildResultsFromAnswers,
                 renderTimer,
                 handleSubmit
@@ -3864,55 +5792,121 @@
         );
     }
 
-    function applyReplayAnswersToDom(answers = {}) {
+    function applyAnswersToDom(answers = {}) {
+        if (!answers || typeof answers !== 'object') {
+            return;
+        }
+
+        const groupedHandledQuestionIds = new Set();
+        const groupedChoiceInputs = new Map();
+        document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
+            const groupName = String(input.getAttribute('name') || '').trim();
+            if (!groupName) return;
+            const expandedQuestionIds = expandQuestionSequence(groupName);
+            if (expandedQuestionIds.length <= 1) return;
+            const questionIds = resolveCheckboxQuestionIds(groupName);
+            if (!questionIds.length) return;
+            const existing = groupedChoiceInputs.get(groupName) || {
+                groupName,
+                questionIds,
+                inputs: []
+            };
+            existing.inputs.push(input);
+            groupedChoiceInputs.set(groupName, existing);
+        });
+
+        groupedChoiceInputs.forEach((group) => {
+            const mergedValues = [];
+            const appendValues = (rawValue) => {
+                splitAnswerTokens(rawValue).forEach((entry) => {
+                    const normalized = canonicalizeAnswerToken(entry);
+                    if (normalized) {
+                        mergedValues.push(normalized);
+                    }
+                });
+            };
+            group.questionIds.forEach((questionId) => {
+                groupedHandledQuestionIds.add(questionId);
+                if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
+                    appendValues(answers[questionId]);
+                }
+            });
+            if (Object.prototype.hasOwnProperty.call(answers, group.groupName)) {
+                appendValues(answers[group.groupName]);
+            }
+            const normalizedValues = Array.from(new Set(mergedValues));
+            group.inputs.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+        });
+
         Object.entries(answers).forEach(([questionId, rawValue]) => {
             const normalizedId = normalizeReplayQuestionId(questionId);
-            if (!normalizedId) return;
+            if (!normalizedId || groupedHandledQuestionIds.has(normalizedId)) return;
             if (applyDropzoneAnswer(normalizedId, rawValue)) {
                 return;
             }
-            const aliases = Array.from(new Set([
-                normalizedId,
-                normalizedId.replace(/^q/i, ''),
-                `question${normalizedId.replace(/^q/i, '')}`
-            ])).filter(Boolean);
-
-            const valueList = splitAnswerTokens(rawValue);
-            const firstValue = valueList[0] || '';
-
+            const aliases = resolveAnswerAliases(normalizedId);
+            const choiceFields = new Set();
+            const textFields = new Set();
+            const selectFields = new Set();
             aliases.forEach((alias) => {
                 const escapedAlias = escapeSelector(alias);
-                const selector = [
+                document.querySelectorAll(
+                    `input[type="radio"][name="${escapedAlias}"], input[type="checkbox"][name="${escapedAlias}"]`
+                ).forEach((field) => choiceFields.add(field));
+                document.querySelectorAll([
                     `input[name="${escapedAlias}"]`,
                     `textarea[name="${escapedAlias}"]`,
-                    `select[name="${escapedAlias}"]`,
                     `input[id="${escapedAlias}"]`,
                     `textarea[id="${escapedAlias}"]`,
-                    `select[id="${escapedAlias}"]`
-                ].join(', ');
-                const fields = Array.from(document.querySelectorAll(selector));
-                fields.forEach((field) => {
-                    if (!(field instanceof HTMLElement)) return;
-                    if (field instanceof HTMLInputElement) {
-                        if (field.type === 'radio') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        if (field.type === 'checkbox') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        field.value = firstValue;
-                        return;
-                    }
-                    if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
-                        field.value = firstValue;
+                    `input[data-question-id="${escapedAlias}"]`,
+                    `textarea[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => {
+                    if (field.type !== 'radio' && field.type !== 'checkbox') {
+                        textFields.add(field);
                     }
                 });
+                document.querySelectorAll([
+                    `select[name="${escapedAlias}"]`,
+                    `select[id="${escapedAlias}"]`,
+                    `select[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => selectFields.add(field));
+            });
+
+            const normalizedValues = splitAnswerTokens(rawValue)
+                .map((entry) => canonicalizeAnswerToken(entry))
+                .filter(Boolean);
+            choiceFields.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+
+            const textValue = displayAnswerValue(rawValue, '');
+            textFields.forEach((field) => {
+                field.value = textValue;
+            });
+            selectFields.forEach((select) => {
+                for (let index = 0; index < select.options.length; index += 1) {
+                    if (compareAnswers(select.options[index].value, rawValue)) {
+                        select.selectedIndex = index;
+                        break;
+                    }
+                }
             });
         });
+    }
+
+    function applyReplayAnswersToDom(answers = {}) {
+        // 连续 replay 不同记录时，先重置所有候选池的已使用状态，
+        // 再按新记录的完整答案集重新消耗，避免新旧答案的选项都保持禁用
+        resetAllConsumedOptions();
+        applyAnswersToDom(answers);
     }
 
     function setReadOnlyMode(enabled, reason = '') {
@@ -3939,9 +5933,21 @@
         const controls = document.querySelectorAll('input, textarea, select');
         controls.forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                // review、普通进行中练习、以及已回传 recordId 的结果页允许编辑笔记；
+                // 只读/计时锁定/背诵模式仍保持禁用，避免改动无法保存或破坏答题流程。
+                const canEditNotes = canEditReadingNotes();
+                if (
+                    canEditNotes
+                    && typeof control.closest === 'function'
+                    && control.closest('#reading-note-editor, #reading-note-drawer')
+                ) {
+                    control.disabled = false;
+                    return;
+                }
                 control.disabled = state.readOnly || state.timerLocked;
             }
         });
+        renderNotesDrawer();
         syncPrimaryActionButtons();
         refreshSimulationDraftSyncLifecycle();
         enhanceReviewHighlights();
@@ -3951,7 +5957,9 @@
         const locked = Boolean(state.readOnly || state.timerLocked);
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
-            item.setAttribute('draggable', locked ? 'false' : 'true');
+            // 如果选项已被使用（option-consumed），始终保持不可拖拽
+            const isConsumed = item.classList.contains('option-consumed') || item.dataset.consumed === '1';
+            item.setAttribute('draggable', locked || isConsumed ? 'false' : 'true');
             item.classList.toggle('drag-item-locked', locked);
         });
     }
@@ -3962,6 +5970,8 @@
     }
 
     function enterSubmittedReadOnlyState(reason = 'submit') {
+        clearSubmissionAckTimer();
+        state.submissionStatus = 'submitted';
         state.submitted = true;
         setReadOnlyMode(true, reason);
         disableDragInteractions();
@@ -3974,22 +5984,201 @@
         syncPrimaryActionButtons();
     }
 
+    function clearSubmissionAckTimer() {
+        if (state.submissionAckTimer) {
+            clearTimeout(state.submissionAckTimer);
+            state.submissionAckTimer = null;
+        }
+    }
+
+    function createSubmissionId() {
+        try {
+            if (global.crypto && typeof global.crypto.randomUUID === 'function') {
+                return global.crypto.randomUUID();
+            }
+        } catch (_) {
+            // Fall through to a session-bound identifier.
+        }
+        return [state.sessionId || 'session', state.examId || 'exam', Date.now(), Math.random().toString(36).slice(2)].join(':');
+    }
+
+    function restoreDraftSubmissionState(submissionId = '') {
+        if (state.submissionStatus === 'submitted') {
+            return false;
+        }
+        if (submissionId && state.submissionId && submissionId !== state.submissionId) {
+            return false;
+        }
+        clearSubmissionAckTimer();
+        state.submissionStatus = 'draft';
+        state.submitted = false;
+        syncPrimaryActionButtons();
+        return true;
+    }
+
+    function expirePendingSubmission(submissionId = '') {
+        if (state.submissionStatus !== 'submitting') {
+            return false;
+        }
+        return restoreDraftSubmissionState(submissionId || state.submissionId);
+    }
+
+    function beginSubmission(messageType, payload, presentation = null) {
+        if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
+            return false;
+        }
+        if (!state.submissionId) {
+            state.submissionId = createSubmissionId();
+        }
+        state.submissionStatus = 'submitting';
+        state.pendingSubmissionPresentation = presentation;
+        syncPrimaryActionButtons();
+        const delivered = postMessage(messageType, Object.assign({}, payload || {}, {
+            submissionId: state.submissionId
+        }));
+        if (!delivered) {
+            restoreDraftSubmissionState(state.submissionId);
+            return false;
+        }
+        clearSubmissionAckTimer();
+        state.submissionAckTimer = setTimeout(() => {
+            expirePendingSubmission(state.submissionId);
+        }, SUBMIT_ACK_TIMEOUT_MS);
+        return true;
+    }
+
+    function matchesPendingSubmission(data = {}) {
+        if (state.submissionStatus !== 'submitting') return false;
+        const submissionId = data && data.submissionId != null ? String(data.submissionId).trim() : '';
+        const sessionId = data && data.sessionId != null ? String(data.sessionId).trim() : '';
+        const examId = data && data.examId != null ? String(data.examId).trim() : '';
+        const suiteSessionId = data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
+        if (!submissionId || submissionId !== state.submissionId) return false;
+        if (!sessionId || !state.sessionId || sessionId !== String(state.sessionId)) return false;
+        if (!examId || !state.examId || examId !== String(state.examId)) return false;
+        if (state.suiteSessionId && suiteSessionId !== String(state.suiteSessionId)) return false;
+        if (!state.suiteSessionId && suiteSessionId) return false;
+        return true;
+    }
+
+    function capturePendingSubmissionOwnership(data = {}) {
+        if (!matchesPendingSubmission(data)) return null;
+        const generation = Number(state.windowSessionGeneration);
+        return {
+            parentWindow: state.parentWindow || null,
+            examId: String(state.examId || ''),
+            sessionId: String(state.sessionId || ''),
+            suiteSessionId: String(state.suiteSessionId || ''),
+            windowSessionToken: normalizeWindowSessionToken(state.windowSessionToken),
+            windowSessionGeneration: Number.isInteger(generation) && generation > 0 ? generation : 0,
+            submissionId: String(state.submissionId || ''),
+            finalSuiteSubmission: Boolean(
+                state.simulationMode
+                && state.simulationCtx
+                && state.simulationCtx.isLast
+                && state.suiteSessionId
+            )
+        };
+    }
+
+    function retainsSubmissionOwnership(ownership) {
+        if (!ownership || state.submissionStatus !== 'submitted') return false;
+        const generation = Number(state.windowSessionGeneration);
+        const currentGeneration = Number.isInteger(generation) && generation > 0 ? generation : 0;
+        return Boolean(
+            state.parentWindow === ownership.parentWindow
+            && String(state.examId || '') === ownership.examId
+            && String(state.sessionId || '') === ownership.sessionId
+            && String(state.suiteSessionId || '') === ownership.suiteSessionId
+            && normalizeWindowSessionToken(state.windowSessionToken) === ownership.windowSessionToken
+            && currentGeneration === ownership.windowSessionGeneration
+            && String(state.submissionId || '') === ownership.submissionId
+        );
+    }
+
+    async function acceptSubmissionAcknowledgement(data = {}) {
+        const ownership = capturePendingSubmissionOwnership(data);
+        if (!ownership) {
+            return false;
+        }
+        const presentation = state.pendingSubmissionPresentation;
+        clearSubmissionAckTimer();
+        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
+        if (presentation && presentation.results) {
+            state.lastResults = presentation.results;
+            renderResults(presentation.results);
+            await renderExplanations();
+            if (!retainsSubmissionOwnership(ownership)) {
+                return false;
+            }
+            applyHighlights(Array.isArray(presentation.highlights) ? presentation.highlights : []);
+            refreshNoteHighlightAttributes();
+            restoreMissingNoteAnchors();
+            applyMemorizeLocatorHighlights();
+            enhanceReviewHighlights();
+            updateNavStatuses(presentation.results);
+        }
+        if (!retainsSubmissionOwnership(ownership)) {
+            return false;
+        }
+        state.pendingSubmissionPresentation = null;
+        if (ownership.finalSuiteSubmission) {
+            stopSimulationDraftSync();
+            clearSimulationDraftMirror();
+            state.simulationDraftFingerprint = '';
+            if (state.suiteSessionId && typeof global.close === 'function') {
+                try {
+                    global.close();
+                } catch (_) {
+                    // The host teardown remains the fallback when the browser refuses self-close.
+                }
+            }
+        }
+        return true;
+    }
+
     if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
         global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 mergeDraft,
+                normalizeNotes,
+                normalizeNoteOutlines,
+                syncReadingAnnotation,
                 mergeSuiteDraftPayload,
                 captureInlineSuiteDraftBeforeReinit,
                 shouldIgnoreInlineSuiteEnvelope,
                 shouldAcceptWindowSessionMessage,
                 adoptWindowSessionMessage,
+                buildInitSignature,
                 handleIncoming,
                 initializeInlineSimulationSuite,
+                activateSuiteSlot,
                 buildResultsFromAnswers,
+                applyAnswersToDom,
+                applyReplayAnswersToDom,
+                captureDom,
+                updateSelectionToolbar,
+                applySelectionHighlight,
+                getSelectionHighlightTestState() {
+                    return {
+                        hasLastRange: Boolean(interaction.lastRange),
+                        hasCurrentHighlightNode: interaction.currentHighlightNode instanceof HTMLElement
+                    };
+                },
+                renderResults,
+                updateNavStatuses,
                 renderTimer,
                 handleSubmit,
+                beginSubmission,
+                acceptSubmissionAcknowledgement,
+                expirePendingSubmission,
+                restoreDraftSubmissionState,
+                stopReadingDraftSync,
+                stopSimulationDraftSync,
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -4008,7 +6197,25 @@
                         activeExamId: state.suite?.activeExamId || null,
                         currentIndex: state.suite?.currentIndex || 0,
                         suiteInline: Boolean(state.suite?.inline),
+                        suiteActivating: Boolean(state.suite?.activating),
+                        activationGeneration: Number(state.suite?.activationGeneration) || 0,
                         suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
+                        reviewRecordId: state.reviewRecordId,
+                        submittedRecordId: state.submittedRecordId,
+                        submitted: state.submitted,
+                        readOnly: state.readOnly,
+                        reviewMode: state.reviewMode,
+                        timerLocked: state.timerLocked,
+                        submissionStatus: state.submissionStatus,
+                        submissionId: state.submissionId,
+                        parentOrigin: state.parentOrigin,
+                        parentOriginIsOpaque: state.parentOriginIsOpaque,
+                        expectedParentOrigin: state.expectedParentOrigin,
+                        windowSessionToken: state.windowSessionToken,
+                        notes: collectNotes(),
+                        noteOutlines: collectNoteOutlines(),
+                        markedQuestions: normalizeMarkedQuestions(state.markedQuestions),
+                        navStatus: Array.from(navStatus.entries()),
                         suiteSequence: Array.isArray(state.suite?.sequence)
                             ? state.suite.sequence.map((entry) => ({ ...entry }))
                             : [],
@@ -4135,7 +6342,7 @@
                 if (!state.readOnly || canResetSubmittedSingle) {
                     setSubmitLabel(dom.submitBtn.dataset.defaultLabel || 'Submit');
                 }
-                dom.submitBtn.disabled = state.readOnly;
+                dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) {
                 dom.resetBtn.style.display = '';
@@ -4156,7 +6363,7 @@
             dom.submitBtn.style.display = ctx.isLast ? '' : 'none';
             dom.submitBtn.setAttribute('type', 'button');
             setSubmitLabel('Submit');
-            dom.submitBtn.disabled = state.readOnly;
+            dom.submitBtn.disabled = state.readOnly || state.submissionStatus === 'submitting';
         }
     }
 
@@ -4229,8 +6436,13 @@
     }
 
     function resetToAnsweringPresentation() {
+        clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
+        state.submissionStatus = 'draft';
+        state.submissionId = '';
+        state.pendingSubmissionPresentation = null;
+        state.submittedRecordId = '';
         state.readOnly = false;
         state.timerLocked = false;
         state.timerExpired = false;
@@ -4243,6 +6455,14 @@
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
         document.body.classList.remove('timer-locked-mode');
+        // 清除判卷残留的绿/红标记，避免切回作答态后用户看到旧的对错反馈
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong, [data-result-filled="true"]').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
+        });
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
@@ -4292,6 +6512,8 @@
             syncPrimaryActionButtons();
         } else {
             state.reviewMode = true;
+            // 进入 review 视图后，单篇 submitted 回传的 recordId 已不再适用，清空避免误用。
+            state.submittedRecordId = '';
             if (data.readOnly !== false) {
                 enterSubmittedReadOnlyState('stationary-review');
             } else {
@@ -4302,6 +6524,7 @@
 
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
+        const replayData = entry.realData && typeof entry.realData === 'object' ? entry.realData : {};
         const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
         const currentExamId = state.examId != null ? String(state.examId).trim() : '';
         if (entryExamId && currentExamId && entryExamId !== currentExamId) {
@@ -4314,7 +6537,10 @@
                 ? entry.markedQuestions
                 : (Array.isArray(entry.metadata && entry.metadata.markedQuestions)
                     ? entry.metadata.markedQuestions
-                    : []));
+                    : (Array.isArray(replayData.markedQuestions) ? replayData.markedQuestions : [])));
+        state.reviewRecordId = String(data.recordId || entry.id || '').trim();
+            // 进入 review 回放后，单篇 submitted 回传的 recordId 已不再适用，清空避免误用。
+            state.submittedRecordId = '';
         if (data.reviewSessionId) {
             state.reviewSessionId = data.reviewSessionId;
         }
@@ -4324,8 +6550,16 @@
         state.reviewMode = true;
         state.reviewViewMode = 'review';
         applyReplayAnswersToDom(replayResults.answers || {});
-        const replayHighlights = Array.isArray(entry.highlights) ? entry.highlights : [];
+        const replayHighlights = Array.isArray(entry.highlights)
+            ? entry.highlights
+            : (Array.isArray(replayData.highlights) ? replayData.highlights : []);
         applyHighlights(replayHighlights);
+        setNotes(
+            Array.isArray(entry.notes) ? entry.notes : replayData.notes,
+            Array.isArray(entry.noteOutlines) ? entry.noteOutlines : replayData.noteOutlines,
+            { legacyText: typeof entry.noteText === 'string' ? entry.noteText : replayData.noteText }
+        );
+        state.markedQuestions = normalizeMarkedQuestions(replayMarks);
         enhanceReviewHighlights();
         if (Number.isFinite(Number(entry.scrollY))) {
             global.scrollTo(0, Number(entry.scrollY));
@@ -4334,6 +6568,9 @@
         renderResults(replayResults);
         await renderExplanations();
         applyHighlights(replayHighlights);
+        refreshNoteHighlightAttributes();
+        restoreMissingNoteAnchors();
+        applyMemorizeLocatorHighlights();
         enhanceReviewHighlights();
         updateNavStatuses(replayResults);
         if (data.readOnly !== false) {
@@ -4364,6 +6601,7 @@
                 suiteTimerMode: state.suiteTimerMode,
                 suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                 windowSessionToken: state.windowSessionToken || null,
+                windowSessionGeneration: Number.isInteger(state.windowSessionGeneration) ? state.windowSessionGeneration : 0,
                 messageIssuedAtMs,
                 source: MESSAGE_SOURCE
             }, payload || {}),
@@ -4410,6 +6648,8 @@
         const currentIssuedAtMs = Number.isFinite(Number(state.windowSessionIssuedAtMs))
             ? Number(state.windowSessionIssuedAtMs)
             : 0;
+        const incomingGeneration = Number(data && data.windowSessionGeneration);
+        const currentGeneration = Number(state.windowSessionGeneration);
 
         if (sourceWindow && state.parentWindow && sourceWindow !== state.parentWindow && currentToken) {
             return false;
@@ -4423,7 +6663,19 @@
         if (incomingToken === currentToken) {
             return true;
         }
-        if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs >= currentIssuedAtMs) {
+        if (Number.isInteger(incomingGeneration) && incomingGeneration > 0) {
+            if (Number.isInteger(currentGeneration) && currentGeneration > 0) {
+                return incomingGeneration > currentGeneration;
+            }
+            return true;
+        }
+        if (Number.isInteger(currentGeneration) && currentGeneration > 0) {
+            return false;
+        }
+        // A timestamp alone cannot establish ordering when two registrations
+        // occur in the same millisecond.  Without a generation, keep the
+        // current token rather than allowing an ambiguous message to replace it.
+        if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs > currentIssuedAtMs) {
             return true;
         }
         return false;
@@ -4432,9 +6684,7 @@
     function adoptWindowSessionMessage(data = {}, sourceWindow = null) {
         const incomingToken = normalizeWindowSessionToken(data && data.windowSessionToken);
         const incomingIssuedAtMs = readMessageIssuedAtMs(data);
-        if (sourceWindow) {
-            state.parentWindow = sourceWindow;
-        }
+        const incomingGeneration = Number(data && data.windowSessionGeneration);
         if (incomingToken) {
             state.windowSessionToken = incomingToken;
         }
@@ -4443,27 +6693,82 @@
         } else if (incomingToken && !state.windowSessionIssuedAtMs) {
             state.windowSessionIssuedAtMs = Date.now();
         }
+        if (Number.isInteger(incomingGeneration) && incomingGeneration > 0) {
+            state.windowSessionGeneration = incomingGeneration;
+        }
+    }
+
+    function acceptHostInitMessage(event, envelope, data = {}) {
+        if (!state.parentWindow || !event || event.source !== state.parentWindow) return false;
+        if (!envelope || envelope.source !== HOST_MESSAGE_SOURCE) return false;
+        const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+        const declaredOrigin = typeof data.parentOrigin === 'string' ? data.parentOrigin : '';
+        const incomingToken = normalizeWindowSessionToken(data.windowSessionToken);
+        if (!incomingToken) return false;
+        // "file://" is not a usable postMessage target/origin pin.  Treat it the same
+        // as an unbound referrer so file:// hosts can bind via opaque "null".
+        const expectedParentOrigin = state.expectedParentOrigin
+            && state.expectedParentOrigin !== 'file://'
+            && !String(state.expectedParentOrigin).startsWith('file:')
+            ? state.expectedParentOrigin
+            : '';
+        if (expectedParentOrigin) {
+            if (incomingOrigin !== expectedParentOrigin || declaredOrigin !== expectedParentOrigin) {
+                return false;
+            }
+            state.parentOrigin = expectedParentOrigin;
+            state.parentOriginIsOpaque = false;
+        } else if (global.location.protocol === 'file:') {
+            // File pages can report either opaque "null" or "file://" for iframe
+            // messages across Chromium platforms; never accept a web origin here.
+            const trustedFileOrigin = (incomingOrigin === 'null' || incomingOrigin === 'file://')
+                && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
+            if (!trustedFileOrigin) {
+                return false;
+            }
+            state.parentOrigin = 'null';
+            state.parentOriginIsOpaque = true;
+        } else {
+            const trustedWebOrigin = Boolean(incomingOrigin)
+                && incomingOrigin !== 'null'
+                && incomingOrigin !== 'file://'
+                && declaredOrigin === incomingOrigin;
+            if (!trustedWebOrigin) {
+                return false;
+            }
+            state.parentOrigin = incomingOrigin;
+            state.parentOriginIsOpaque = false;
+        }
+        return true;
+    }
+
+    function isTrustedHostMessage(event, envelope, data = {}) {
+        if (!state.parentWindow || !event || event.source !== state.parentWindow) return false;
+        if (!envelope || envelope.source !== HOST_MESSAGE_SOURCE) return false;
+        const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+        if (state.parentOriginIsOpaque) {
+            if (incomingOrigin !== 'null' && incomingOrigin !== 'file://') return false;
+        } else if (!state.parentOrigin || incomingOrigin !== state.parentOrigin) {
+            return false;
+        }
+        const expectedToken = normalizeWindowSessionToken(state.windowSessionToken);
+        const incomingToken = normalizeWindowSessionToken(data.windowSessionToken);
+        return Boolean(expectedToken && incomingToken && expectedToken === incomingToken);
     }
 
     function postMessage(type, payload) {
         const envelope = buildEnvelope(type, payload);
-        const candidates = [global.opener, state.parentWindow, global.parent];
-        const visited = new Set();
-        for (let index = 0; index < candidates.length; index += 1) {
-            const target = candidates[index];
-            if (!target || target === global || visited.has(target)) {
-                continue;
-            }
-            visited.add(target);
-            try {
-                target.postMessage(envelope, '*');
-                state.parentWindow = target;
-                return true;
-            } catch (_) {
-                // try next candidate
-            }
+        const target = state.parentWindow;
+        if (!target || target === global || typeof target.postMessage !== 'function') return false;
+        const targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
+            ? state.parentOrigin
+            : (state.expectedParentOrigin || (global.location.protocol === 'file:' ? '*' : ''));
+        if (!targetOrigin) return false;
+        try {
+            return target.postMessage(envelope, targetOrigin) !== false;
+        } catch (_) {
+            return false;
         }
-        return false;
     }
 
     function stopInitLoop() {
@@ -4505,7 +6810,8 @@
             suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
             suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
             suiteTimerLimitSeconds: parseOptionalNonNegativeInteger(data && data.suiteTimerLimitSeconds),
-            globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null
+            globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null,
+            draftFingerprint: buildDraftFingerprint(data && data.draft)
         });
     }
 
@@ -4531,6 +6837,10 @@
     }
 
     function restartInitHandshake() {
+        clearSubmissionAckTimer();
+        state.submissionStatus = 'draft';
+        state.submissionId = '';
+        state.pendingSubmissionPresentation = null;
         state.sessionId = null;
         state.sessionReadySent = false;
         state.lastInitSignature = '';
@@ -4582,13 +6892,13 @@
         }, 500);
     }
 
-    function getSimulationDraftStorageKey() {
+    function getSimulationDraftSessionName() {
         const suiteSessionId = state.suiteSessionId ? String(state.suiteSessionId).trim() : '';
         const examId = state.examId ? String(state.examId).trim() : '';
         if (!suiteSessionId || !examId) {
             return '';
         }
-        return `ielts_sim_draft::${suiteSessionId}::${examId}`;
+        return `simulation-draft:${suiteSessionId}:${examId}`;
     }
 
     function cloneDraftSafely(draft) {
@@ -4602,6 +6912,9 @@
                 answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
                 highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
                 noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
+                notes: normalizeNotes(draft.notes),
+                noteOutlines: normalizeNoteOutlines(draft.noteOutlines),
+                markedQuestions: normalizeMarkedQuestions(draft.markedQuestions),
                 scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
             };
         }
@@ -4612,6 +6925,11 @@
             return '';
         }
         try {
+            // updatedAt 每次调用都会刷新（Date.now()），若纳入指纹会让周期性比对永远不相等，
+            // 导致空闲时每 1.5s 都会重复 POST/持久化草稿。只用稳定内容计算指纹。
+            if ('updatedAt' in draft) {
+                return JSON.stringify(Object.assign({}, draft, { updatedAt: null }));
+            }
             return JSON.stringify(draft);
         } catch (_) {
             return '';
@@ -4619,29 +6937,27 @@
     }
 
     function persistSimulationDraftMirror(draft) {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage || !draft) {
+        const name = getSimulationDraftSessionName();
+        if (!name || !global.AppData?.recovery?.windowSession || !draft) {
             return;
         }
         try {
-            global.sessionStorage.setItem(key, JSON.stringify({
+            global.AppData.recovery.windowSession.save(name, {
                 draft,
                 updatedAt: Date.now()
-            }));
+            });
         } catch (_) {
-            // ignore sessionStorage failures in restricted environments
+            // AppData v2 recovery is best-effort during page teardown.
         }
     }
 
     function restoreSimulationDraftMirror() {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage) {
+        const name = getSimulationDraftSessionName();
+        if (!name || !global.AppData?.recovery?.windowSession) {
             return null;
         }
         try {
-            const raw = global.sessionStorage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
+            const parsed = global.AppData.recovery.windowSession.get(name);
             if (!parsed || typeof parsed !== 'object') {
                 return null;
             }
@@ -4654,14 +6970,14 @@
     }
 
     function clearSimulationDraftMirror() {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage) {
+        const name = getSimulationDraftSessionName();
+        if (!name || !global.AppData?.recovery?.windowSession) {
             return;
         }
         try {
-            global.sessionStorage.removeItem(key);
+            global.AppData.recovery.windowSession.discard(name);
         } catch (_) {
-            // ignore sessionStorage failures in restricted environments
+            // AppData v2 recovery is best-effort during page teardown.
         }
     }
 
@@ -4679,13 +6995,99 @@
             answers,
             highlights: collectHighlights(),
             noteText: getNotesText(),
+            notes: collectNotes(),
+            noteOutlines: collectNoteOutlines(),
+            markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
             updatedAt
         };
     }
 
+    function canSyncReadingDraft() {
+        return Boolean(
+            !state.simulationMode
+            && !state.reviewMode
+            && !state.readOnly
+            && !state.timerLocked
+            && !state.submitted
+            && !state.memorizeMode
+            && state.examId
+            && state.sessionId
+            && state.windowSessionToken
+        );
+    }
+
+    function syncReadingDraftSnapshot(reason = 'periodic') {
+        if (!canSyncReadingDraft()) {
+            return;
+        }
+        const draft = collectCurrentDraft();
+        const fingerprint = buildDraftFingerprint(draft);
+        if (reason === 'periodic' && fingerprint && fingerprint === state.readingDraftFingerprint) {
+            return;
+        }
+        state.readingDraftFingerprint = fingerprint;
+        const mirroredDraft = cloneDraftSafely(draft);
+        if (!mirroredDraft) {
+            return;
+        }
+        postMessage('READING_DRAFT_SYNC', {
+            examId: state.examId,
+            sessionId: state.sessionId || null,
+            windowSessionToken: state.windowSessionToken || null,
+            draft: mirroredDraft,
+            draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
+            elapsed: getPageElapsedSeconds(),
+            timerSnapshot: getPracticeTimerSnapshot(),
+            reason
+        });
+    }
+
+    function stopReadingDraftSync() {
+        if (state.readingDraftSyncTimer) {
+            clearInterval(state.readingDraftSyncTimer);
+            state.readingDraftSyncTimer = null;
+        }
+    }
+
+    function refreshReadingDraftSyncLifecycle() {
+        if (!canSyncReadingDraft()) {
+            stopReadingDraftSync();
+            return;
+        }
+        if (!state.readingDraftSyncTimer) {
+            state.readingDraftSyncTimer = setInterval(() => {
+                syncReadingDraftSnapshot('periodic');
+            }, READING_DRAFT_SYNC_MS);
+        }
+        syncReadingDraftSnapshot('activate');
+    }
+
+    function flushReadingDraftOnLifecycle(reason = 'pagehide') {
+        if (state.simulationMode && state.suiteSessionId) {
+            syncSimulationDraftSnapshot(reason);
+            return;
+        }
+        if (canSyncReadingDraft()) {
+            syncReadingDraftSnapshot(reason);
+            return;
+        }
+        // 草稿同步在 submitted/只读态被跳过；但单篇 final-submit 后若宿主已回传
+        // submittedRecordId，结果页笔记改动仍需要落库——这里同步触发一次标注同步，
+        // 防止页面在 450ms 防抖触发前关闭/隐藏而丢失 READING_ANNOTATION_SYNC。
+        if (state.submitted && state.submittedRecordId && !state.memorizeMode && !state.reviewMode) {
+            syncReadingAnnotation(reason);
+        }
+    }
+
     function syncSimulationDraftSnapshot(reason = 'periodic') {
-        if (!state.simulationMode || state.readOnly || !state.suiteSessionId) {
+        if (state.timerLocked) return;
+        const isSuiteReviewAnnotation = Boolean(
+            state.suiteReviewMode
+            && state.reviewMode
+            && state.suiteSessionId
+        );
+        if (!state.simulationMode || (state.readOnly && !isSuiteReviewAnnotation) || !state.suiteSessionId) {
             return;
         }
         const draft = state.suite?.inline
@@ -4707,7 +7109,9 @@
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
-            elapsed: getPageElapsedSeconds()
+            elapsed: getPageElapsedSeconds(),
+            timerSnapshot: getPracticeTimerSnapshot(),
+            reason
         });
     }
 
@@ -4736,115 +7140,15 @@
             return;
         }
         if (draft.answers && typeof draft.answers === 'object') {
-            const answers = draft.answers;
-            const groupedHandledQuestionIds = new Set();
-            const groupedChoiceInputs = new Map();
-
-            document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
-                const groupName = String(input.getAttribute('name') || '').trim();
-                if (!groupName) return;
-                const questionIds = expandQuestionSequence(groupName);
-                if (questionIds.length <= 1) return;
-                const existing = groupedChoiceInputs.get(groupName) || {
-                    questionIds,
-                    inputs: []
-                };
-                existing.inputs.push(input);
-                groupedChoiceInputs.set(groupName, existing);
-            });
-
-            groupedChoiceInputs.forEach((group) => {
-                const mergedValues = [];
-                group.questionIds.forEach((questionId) => {
-                    groupedHandledQuestionIds.add(questionId);
-                    if (!Object.prototype.hasOwnProperty.call(answers, questionId)) {
-                        return;
-                    }
-                    splitAnswerTokens(answers[questionId]).forEach((entry) => {
-                        const normalized = canonicalizeAnswerToken(entry);
-                        if (normalized) {
-                            mergedValues.push(normalized);
-                        }
-                    });
-                });
-                const normalizedValues = Array.from(new Set(mergedValues));
-                group.inputs.forEach((input) => {
-                    const candidate = canonicalizeAnswerToken(
-                        input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                    );
-                    input.checked = normalizedValues.includes(candidate)
-                        || normalizedValues.some((value) => compareAnswers(input.value, value));
-                });
-            });
-
-            Object.entries(answers).forEach(([qid, value]) => {
-                const normalized = normalizeQuestionId(qid);
-                if (!normalized) return;
-                if (groupedHandledQuestionIds.has(normalized)) {
-                    return;
-                }
-                if (applyDropzoneAnswer(normalized, value)) {
-                    return;
-                }
-                const escapedId = escapeSelector(normalized);
-                // Radio / checkbox
-                const choices = document.querySelectorAll(
-                    `input[type="radio"][name="${escapedId}"], input[type="checkbox"][name="${escapedId}"]`
-                );
-                if (choices.length) {
-                    const normalizedValues = splitAnswerTokens(value)
-                        .map((entry) => canonicalizeAnswerToken(entry))
-                        .filter(Boolean);
-                    choices.forEach((input) => {
-                        const candidate = canonicalizeAnswerToken(
-                            input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                        );
-                        input.checked = normalizedValues.includes(candidate) || compareAnswers(input.value, value);
-                    });
-                    return;
-                }
-                // Text input
-                const textInput = document.querySelector(`input[data-question-id="${escapedId}"], input#${escapedId}`);
-                if (textInput && textInput.type !== 'radio' && textInput.type !== 'checkbox') {
-                    textInput.value = displayAnswerValue(value, '');
-                    return;
-                }
-                const namedTextFields = Array.from(
-                    document.querySelectorAll(`input[name="${escapedId}"], textarea[name="${escapedId}"]`)
-                ).filter((field) => field.type !== 'radio' && field.type !== 'checkbox');
-                if (namedTextFields.length) {
-                    const normalizedTextValue = displayAnswerValue(value, '');
-                    namedTextFields.forEach((field) => {
-                        field.value = normalizedTextValue;
-                    });
-                    return;
-                }
-                // Select
-                const select = document.querySelector(`select[data-question-id="${escapedId}"], select#${escapedId}`);
-                if (select) {
-                    for (let i = 0; i < select.options.length; i++) {
-                        if (compareAnswers(select.options[i].value, value)) {
-                            select.selectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-                const namedSelects = document.querySelectorAll(`select[name="${escapedId}"]`);
-                namedSelects.forEach((namedSelect) => {
-                    for (let i = 0; i < namedSelect.options.length; i++) {
-                        if (compareAnswers(namedSelect.options[i].value, value)) {
-                            namedSelect.selectedIndex = i;
-                            break;
-                        }
-                    }
-                });
-            });
+            applyAnswersToDom(draft.answers);
         }
         if (Array.isArray(draft.highlights)) {
             applyHighlights(draft.highlights);
         }
-        if (typeof draft.noteText === 'string') {
-            setNotesText(draft.noteText);
+        setNotes(draft.notes, draft.noteOutlines, { legacyText: draft.noteText });
+        state.markedQuestions = normalizeMarkedQuestions(draft.markedQuestions);
+        if (typeof global.setPracticeMarkedQuestions === 'function') {
+            try { global.setPracticeMarkedQuestions(state.markedQuestions); } catch (_) { /* ignore */ }
         }
         if (typeof draft.scrollY === 'number') {
             global.scrollTo(0, draft.scrollY);
@@ -4861,6 +7165,7 @@
         if (!shared) {
             return [];
         }
+        ensureNoteAnchorsBeforeSnapshot();
         return shared.snapshotHighlights({
             left: dom.left,
             groups: dom.groups
@@ -4899,6 +7204,9 @@
             answers: results.answers || {},
             highlights: collectHighlights(),
             noteText: getNotesText(),
+            notes: collectNotes(),
+            noteOutlines: collectNoteOutlines(),
+            markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
             elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
             timerSnapshot,
@@ -4951,7 +7259,13 @@
             slot.lastResults = results;
             slot.navStatus = new Map();
             Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
-                slot.navStatus.set(questionId, comparison && comparison.isCorrect ? 'correct' : 'incorrect');
+                slot.navStatus.set(
+                    questionId,
+                    resolveComparisonNavStatus(
+                        comparison,
+                        hasAnswerInDataset(questionId, draft.answers || {}, slot.dataset)
+                    )
+                );
             });
             const scoreInfo = results.scoreInfo || {};
             totalCorrect += Number(scoreInfo.correct) || 0;
@@ -4976,6 +7290,9 @@
                 questionTypePerformance: results.questionTypePerformance || {},
                 highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
                 noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
+                notes: normalizeNotes(draft.notes),
+                noteOutlines: normalizeNoteOutlines(draft.noteOutlines),
+                markedQuestions: normalizeMarkedQuestions(draft.markedQuestions),
                 scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0,
                 updatedAt: Number.isFinite(Number(draft.updatedAt)) ? Number(draft.updatedAt) : Date.now()
             });
@@ -5009,6 +7326,9 @@
             scoreInfo,
             highlights: [],
             noteText: '',
+            notes: [],
+            noteOutlines: [],
+            markedQuestions: [],
             scrollY: global.scrollY || 0,
             elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
             timerSnapshot,
@@ -5016,11 +7336,25 @@
         };
     }
 
+    function resetAllConsumedOptions() {
+        // 重置所有候选池选项的已使用状态（覆盖 .drag-item 和 .draggable-word）。
+        // 供重置和 replay 前调用，避免连续 replay 时新旧答案的选项都保持禁用。
+        document.querySelectorAll(`${POOL_ITEM_SELECTOR}`).forEach((item) => {
+            if (item.dataset.consumed || item.classList.contains('option-consumed')) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+            }
+        });
+    }
+
     function clearCurrentAnswers() {
         document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
             input.checked = false;
         });
         document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
+            if (input.closest('#notes-panel, #reading-note-editor, #reading-note-drawer')) return;
             input.value = '';
         });
         document.querySelectorAll('select').forEach((select) => {
@@ -5028,6 +7362,12 @@
         });
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
+        });
+        // 兜底：确保所有选项池中的选项都恢复为可用状态
+        resetAllConsumedOptions();
+        // 清除选择题/表格判卷残留的绿/红标记
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
         });
     }
 
@@ -5060,6 +7400,9 @@
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
                 noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
+                notes: normalizeNotes(snapshot.notes),
+                noteOutlines: normalizeNoteOutlines(snapshot.noteOutlines),
+                markedQuestions: normalizeMarkedQuestions(snapshot.markedQuestions),
                 scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
@@ -5068,6 +7411,9 @@
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
             noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
+            notes: normalizeNotes(snapshot.notes),
+            noteOutlines: normalizeNoteOutlines(snapshot.noteOutlines),
+            markedQuestions: normalizeMarkedQuestions(snapshot.markedQuestions),
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
             elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
             timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
@@ -5085,7 +7431,7 @@
             handleExitClick();
             return;
         }
-        if (state.readOnly) {
+        if (state.readOnly || state.submissionStatus !== 'draft') {
             return;
         }
         const submissionSnapshot = state.suite?.inline
@@ -5100,15 +7446,12 @@
             ? (Array.isArray(activeSlot?.draft?.highlights) ? activeSlot.draft.highlights : [])
             : (Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : []);
         const postedResults = submissionSnapshot.results || results;
-        state.lastResults = results;
         if (activeSlot) {
             activeSlot.lastResults = results;
         }
-        renderResults(results);
-        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
-        postMessage(messageType, Object.assign({
+        beginSubmission(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
@@ -5128,25 +7471,22 @@
                 dataKey: state.dataKey,
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
-                    : []
+                    : normalizeMarkedQuestions(submissionSnapshot.markedQuestions)
             },
             answers: submissionSnapshot.answers || {},
             highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
             noteText: typeof submissionSnapshot.noteText === 'string' ? submissionSnapshot.noteText : '',
+            notes: normalizeNotes(submissionSnapshot.notes),
+            noteOutlines: normalizeNoteOutlines(submissionSnapshot.noteOutlines),
+            markedQuestions: normalizeMarkedQuestions(submissionSnapshot.markedQuestions),
             scrollY: Number.isFinite(Number(submissionSnapshot.scrollY)) ? Number(submissionSnapshot.scrollY) : 0
         }, state.suite?.inline ? {
             suiteSubmission: true,
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
-        } : {}, postedResults));
-        await renderExplanations();
-        applyHighlights(highlightSnapshot);
-        enhanceReviewHighlights();
-        updateNavStatuses(results);
-        if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
-            stopSimulationDraftSync();
-            clearSimulationDraftMirror();
-            state.simulationDraftFingerprint = '';
-        }
+        } : {}, postedResults), {
+            results,
+            highlights: highlightSnapshot
+        });
     }
 
     function handleReset() {
@@ -5157,6 +7497,7 @@
         if (state.submitted && state.readOnlyReason === 'final-submit' && !state.suiteSessionId && !state.reviewMode) {
             resetToAnsweringPresentation();
             clearCurrentAnswers();
+            clearStructuredNotesForReset();
             requestNormalPracticeRestart('retake-after-submit');
             return;
         }
@@ -5165,6 +7506,7 @@
         }
         closeReviewHighlightDictionary();
         clearCurrentAnswers();
+        clearStructuredNotesForReset();
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
@@ -5182,7 +7524,7 @@
         const opener = global.opener && !global.opener.closed ? global.opener : null;
         if (hasEndlessMarker && opener) {
             try {
-                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                postMessage('ENDLESS_USER_EXIT', {});
                 if (typeof opener.stopEndlessPractice === 'function') {
                     opener.stopEndlessPractice();
                 } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
@@ -5283,6 +7625,9 @@
         const data = payload.data || {};
         const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            if (!acceptHostInitMessage(event, payload, data)) {
+                return;
+            }
             if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
                 return;
             }
@@ -5308,6 +7653,12 @@
             adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
+            }
+            if (data.sessionId && state.sessionId && String(data.sessionId) !== String(state.sessionId)) {
+                clearSubmissionAckTimer();
+                state.submissionStatus = 'draft';
+                state.submissionId = '';
+                state.pendingSubmissionPresentation = null;
             }
             if (data.sessionId) {
                 state.sessionId = data.sessionId;
@@ -5386,14 +7737,28 @@
             }
             if (data.reviewMode) {
                 state.reviewMode = true;
+                // init 中的 review 模式同样不应沿用单篇 submitted 回传的 recordId。
+                state.submittedRecordId = '';
                 if (data.readOnly !== false) {
                     enterSubmittedReadOnlyState('stationary-review');
                 } else {
                     setReadOnlyMode(false);
                 }
             }
+            const singleDraft = !state.simulationMode
+                && !state.reviewMode
+                && data
+                && data.draft
+                && typeof data.draft === 'object'
+                ? data.draft
+                : null;
+            if (singleDraft) {
+                applyDraftToDom(singleDraft);
+                state.readingDraftFingerprint = buildDraftFingerprint(singleDraft);
+            }
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
+            refreshReadingDraftSyncLifecycle();
             syncSuiteModeState();
             stopInitLoop();
             state.lastInitSignature = initSignature;
@@ -5401,6 +7766,9 @@
                 renderMemorizeStudyLayer().catch(() => {});
             }
             sendSessionReady();
+            return;
+        }
+        if (!isTrustedHostMessage(event, payload, data)) {
             return;
         }
         if (type === 'REPLAY_PRACTICE_RECORD') {
@@ -5414,6 +7782,40 @@
         }
         if (type === 'REVIEW_CONTEXT') {
             applyReviewContext(data || {});
+            return;
+        }
+        if (type === 'PRACTICE_SUBMIT_ACK') {
+            await acceptSubmissionAcknowledgement(data || {});
+            return;
+        }
+        if (type === 'PRACTICE_SUBMIT_FAILED') {
+            if (matchesPendingSubmission(data || {})) {
+                restoreDraftSubmissionState(String(data.submissionId || ''));
+            }
+            return;
+        }
+        if (type === 'VOCAB_HIGHLIGHT_SAVE_ACK' || type === 'VOCAB_HIGHLIGHT_SAVE_FAILED') {
+            const dictionary = getReviewHighlightDictionary();
+            if (dictionary && typeof dictionary.handleSaveOutcome === 'function') {
+                dictionary.handleSaveOutcome(data || {}, type === 'VOCAB_HIGHLIGHT_SAVE_ACK');
+            }
+            return;
+        }
+        if (type === 'PRACTICE_RECORD_SAVED') {
+            // 宿主在单篇阅读 final-submit 落库成功后回传已存档 recordId，
+            // 用于支持结果页笔记改动的持久化（syncReadingAnnotation 的 submitted 分支）。
+            const payloadExamId = data && data.examId != null ? String(data.examId).trim() : '';
+            const currentExamId = state.examId != null ? String(state.examId).trim() : '';
+            if (payloadExamId && currentExamId && payloadExamId !== currentExamId && !state.suite?.inline) {
+                return;
+            }
+            const payloadSessionId = data && data.sessionId != null ? String(data.sessionId).trim() : '';
+            const currentSessionId = state.sessionId != null ? String(state.sessionId).trim() : '';
+            if (!payloadSessionId || !currentSessionId || payloadSessionId !== currentSessionId) {
+                return;
+            }
+            const recordId = data && data.recordId != null ? String(data.recordId).trim() : '';
+            state.submittedRecordId = recordId;
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
@@ -5572,6 +7974,30 @@
         global.addEventListener('message', handleIncoming);
     }
 
+    function attachReadingDraftLifecycleHooks() {
+        const flush = (reason) => {
+            try {
+                // 先把编辑器里未提交的笔记立刻刷出：review 页面 flushReadingDraftOnLifecycle
+                // 会因 canSyncReadingDraft 直接 no-op，笔记只能靠 450ms 防抖提交，页面在
+                // 防抖触发前关闭/隐藏就会丢失 READING_ANNOTATION_SYNC。这里同步触发一次，
+                // review 路径在同步里发出最新的 note，正常阅读路径则继续走 draft 快照。
+                if (typeof flushActiveNoteFromEditor === 'function') {
+                    flushActiveNoteFromEditor();
+                }
+                flushReadingDraftOnLifecycle(reason);
+            } catch (_) {
+                // ignore draft flush failures during teardown
+            }
+        };
+        global.addEventListener('pagehide', () => flush('pagehide'));
+        global.addEventListener('beforeunload', () => flush('beforeunload'));
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                flush('visibilitychange');
+            }
+        });
+    }
+
     function attachPracticeTimerBridge() {
         global.addEventListener(PRACTICE_TIMER_EVENT, (event) => {
             const detail = event && event.detail && typeof event.detail === 'object'
@@ -5585,6 +8011,8 @@
     }
 
     async function bootstrap() {
+        await loadReadingCandidateCodePreferences();
+        if (global.PracticeTimerPreferences?.ready) await global.PracticeTimerPreferences.ready;
         parseQuery();
         captureDom();
         const dataset = await ensureDataset();
@@ -5597,31 +8025,19 @@
         attachDragDrop();
         attachPaneResizer();
 
-        // Ensure drag items can return home when replaced or discarded
-        function initDragPools() {
-            document.querySelectorAll('.pool-items').forEach((pool, index) => {
-                if (!pool.id) {
-                    pool.id = `practice-pool-${index}`;
-                }
-            });
-            document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
-                if (!item.dataset.originPool) {
-                    const pool = item.closest('.pool-items');
-                    if (pool?.id) {
-                        item.dataset.originPool = pool.id;
-                    }
-                }
-            });
-        }
         initDragPools();
 
         attachUnifiedTimer();
         attachUnifiedPanels();
+        ensureReadingNotesUi();
+        ensureReadingDisplayControls();
+        await loadReadingDisplayPreferences();
         attachSelectionHighlightToolbar();
         attachReviewHighlightDictionary();
         attachActionListeners();
         attachMessageBridge();
         attachPracticeTimerBridge();
+        attachReadingDraftLifecycleHooks();
         syncSuiteModeState();
         setExitButtonVisible(false);
         if (state.memorizeMode) {
@@ -5629,6 +8045,7 @@
         }
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
+        refreshReadingDraftSyncLifecycle();
         startInitLoop();
     }
 

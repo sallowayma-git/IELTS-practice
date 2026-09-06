@@ -6,6 +6,7 @@ const DEFAULT_INTERACTION_TARGETS = Object.freeze({
         'practice-settings-entry-btn',
         'library-manager-btn',
         'show-onboarding-btn',
+        'external-backup-entry-btn',
         'create-backup-btn',
         'backup-list-btn',
         'export-data-btn',
@@ -60,6 +61,27 @@ const SETTINGS_BUTTON_TESTS = {
         stubbed: ['createManualBackup'],
         stubImplementation: () => Promise.resolve({ id: 'stub-backup' })
     },
+    'external-backup-entry-btn': {
+        name: '设置 - 本地磁盘备份按钮',
+        expectInvocation: false,
+        waitForSelector: '#external-backup-modal.show',
+        waitDescription: '本地磁盘备份弹窗显示',
+        waitForCondition: ({ doc, win }) => {
+            const modal = doc.getElementById('external-backup-modal');
+            const serviceReady = !!(win.ExternalBackupService
+                && win.ExternalBackupService.__v2 === true
+                && typeof win.ExternalBackupService.openModal === 'function');
+            const actionsReady = [
+                'external-backup-bind-btn',
+                'external-backup-write-btn',
+                'external-backup-restore-btn',
+                'external-backup-unbind-btn'
+            ].every((id) => !!doc.getElementById(id));
+            if (modal && serviceReady && actionsReady) modal.classList.remove('show');
+            return serviceReady && actionsReady;
+        },
+        waitTimeout: 500
+    },
     'backup-list-btn': {
         name: '设置 - 查看备份列表按钮',
         expectInvocation: false,
@@ -93,7 +115,7 @@ class AppE2ETestSuite {
         this.results = [];
         this.win = null;
         this.doc = null;
-        this.originalPracticeRecords = null;
+        this.isolationBackupId = null;
     }
 
     setStatus(message) {
@@ -123,6 +145,18 @@ class AppE2ETestSuite {
             };
             check();
         });
+    }
+
+    async waitForAsync(condition, { timeout = 8000, interval = 50, description = '等待条件成立' } = {}) {
+        const start = performance.now();
+        while (performance.now() - start < timeout) {
+            const result = await condition();
+            if (result) {
+                return result;
+            }
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        throw new Error(`${description} 超时 (${timeout}ms)`);
     }
 
     recordResult(name, passed, details) {
@@ -178,26 +212,32 @@ class AppE2ETestSuite {
             timeout: 15000,
             description: '主应用完成初始化'
         });
-
-        if (this.win.simpleStorageWrapper && typeof this.win.simpleStorageWrapper.getPracticeRecords === 'function') {
-            try {
-                this.originalPracticeRecords = await this.win.simpleStorageWrapper.getPracticeRecords();
-            } catch (error) {
-                console.warn('[E2E] 备份练习记录失败:', error);
-                this.originalPracticeRecords = null;
-            }
-        }
+        await this.waitFor(() => this.win.AppData && this.win.AppData.backups, {
+            timeout: 15000,
+            description: 'AppData v2 就绪'
+        });
+        await this.win.AppData.ready;
+        const backup = await this.win.AppData.backups.create({
+            type: 'e2e-isolation',
+            operationId: `app-e2e-isolation-${Date.now()}`
+        });
+        this.isolationBackupId = backup.id;
     }
 
     async teardown() {
-        if (this.originalPracticeRecords && this.win?.simpleStorageWrapper) {
+        if (this.isolationBackupId && this.win?.AppData?.backups) {
             try {
-                await this.win.simpleStorageWrapper.savePracticeRecords(this.originalPracticeRecords);
+                await this.win.AppData.backups.restore(this.isolationBackupId, {
+                    operationId: `app-e2e-restore-${this.isolationBackupId}`
+                });
                 if (typeof this.win.syncPracticeRecords === 'function') {
                     await this.win.syncPracticeRecords();
                 }
+                await this.win.AppData.backups.delete(this.isolationBackupId, {
+                    operationId: `app-e2e-cleanup-${this.isolationBackupId}`
+                });
             } catch (error) {
-                console.warn('[E2E] 恢复原始练习记录失败:', error);
+                console.warn('[E2E] 恢复 v2 隔离备份失败，备份已保留:', error);
             }
         }
         if (this.win && typeof this.win.showView === 'function') {
@@ -219,12 +259,10 @@ class AppE2ETestSuite {
             await this.testSearchFunction();
             await this.testExamActionButtons();
             await this.testExamEmptyStateAction();
-            await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
             await this.testPracticeHistoryBulkDelete();
             await this.testPracticeSubmissionMessageFlow();
             await this.testSettingsControlButtons();
-            await this.testDataIntegrityImportFlow();
             await this.testThemePortals();
 
             this.setStatus('全部测试执行完毕');
@@ -567,83 +605,6 @@ class AppE2ETestSuite {
         }
     }
 
-    async testDataIntegrityImportFlow() {
-        const name = '数据导入执行';
-        let backupId = null;
-        try {
-            const manager = this.win.dataIntegrityManager;
-            if (!manager || typeof manager.importData !== 'function') {
-                this.recordResult(name, false, '缺少 dataIntegrityManager.importData');
-                return;
-            }
-
-            const fixtureUrl = './fixtures/data-integrity-import-sample.json';
-            const response = await fetch(fixtureUrl, { cache: 'no-store' });
-            if (!response.ok) {
-                this.recordResult(name, false, `获取样例失败: ${response.status}`);
-                return;
-            }
-
-            const text = await response.text();
-            const blobSource = typeof File === 'function'
-                ? new File([text], 'data-integrity-import-sample.json', { type: 'application/json' })
-                : new Blob([text], { type: 'application/json' });
-
-            const before = await manager.getCriticalData();
-            const result = await manager.importData(blobSource);
-            backupId = result?.backupId || null;
-            const after = await manager.getCriticalData();
-
-            const records = Array.isArray(after.practice_records) ? after.practice_records : [];
-            const imported = records.find((entry) => entry && entry.id === 'fixture_record_1');
-            const settings = after.system_settings || {};
-
-            const passed = !!imported
-                && imported.examId === 'listening-fixture-01'
-                && settings.language === 'zh-CN'
-                && typeof result?.importedCount === 'number'
-                && result.importedCount >= 1;
-
-            this.recordResult(name, passed, {
-                importedCount: result?.importedCount ?? null,
-                backupId,
-                language: settings.language || null,
-                recordExamId: imported?.examId || null
-            });
-
-            if (backupId) {
-                try {
-                    await manager.restoreBackup(backupId);
-                } catch (error) {
-                    console.warn('[E2E] 恢复导入前备份失败:', error);
-                }
-                return;
-            }
-
-            if (manager.repositories && typeof manager.repositories.transaction === 'function') {
-                try {
-                    await manager.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
-                        if (Array.isArray(before.practice_records)) {
-                            await repos.practice.overwrite(before.practice_records, { transaction: tx });
-                        }
-                        if (before.system_settings && typeof repos.settings?.saveAll === 'function') {
-                            await repos.settings.saveAll(before.system_settings, { transaction: tx });
-                        }
-                    });
-                } catch (error) {
-                    console.warn('[E2E] 回滚导入数据失败:', error);
-                }
-            }
-        } catch (error) {
-            this.recordResult(name, false, error?.message || String(error));
-            if (backupId) {
-                try {
-                    await this.win.dataIntegrityManager.restoreBackup(backupId);
-                } catch (_) {}
-            }
-        }
-    }
-
     async testThemePortals() {
         const name = '主题偏好持久化';
         try {
@@ -711,10 +672,14 @@ class AppE2ETestSuite {
     }
 
     async waitForExamIndex() {
-        await this.waitFor(() => Array.isArray(this.win.examIndex) && this.win.examIndex.length > 0, {
+        await this.waitFor(() => typeof this.win.resolveActiveLibraryIndex === 'function', {
             timeout: 15000,
-            description: '题库索引加载完成'
+            description: '题库索引解析器加载完成'
         });
+        return this.waitForAsync(async () => {
+            const index = await this.win.resolveActiveLibraryIndex();
+            return Array.isArray(index) && index.length > 0 ? index : null;
+        }, { timeout: 15000, description: '题库索引加载完成' });
     }
 
     async testExamFiltering() {
@@ -963,7 +928,7 @@ class AppE2ETestSuite {
                 try {
                     const exams = Array.isArray(this.win.filteredExams) && this.win.filteredExams.length
                         ? this.win.filteredExams
-                        : (Array.isArray(this.win.examIndex) ? this.win.examIndex : []);
+                        : await this.win.resolveActiveLibraryIndex();
                     this.win.displayExams(exams);
                 } catch (restoreError) {
                     console.warn('[E2E] 无法恢复题库列表', restoreError);
@@ -972,90 +937,11 @@ class AppE2ETestSuite {
         }
     }
 
-    async testLegacyBridgeSynchronization() {
-        const name = 'AppStateService 状态同步';
-        try {
-            const stateService = this.win.appStateService;
-            if (!stateService) {
-                this.recordResult(name, false, 'appStateService 未加载');
-                return;
-            }
-
-            const originalExamIndex = Array.isArray(this.win.examIndex) ? this.win.examIndex.slice() : [];
-            const originalPractice = Array.isArray(this.win.practiceRecords) ? this.win.practiceRecords.slice() : [];
-
-            const examSampleSize = originalExamIndex.length > 1 ? 1 : originalExamIndex.length;
-            const examSample = examSampleSize > 0 ? originalExamIndex.slice(0, examSampleSize) : [];
-
-            stateService.setExamIndex(examSample);
-            await this.waitFor(() => {
-                const state = this.win.app?.getState?.('exam.index');
-                return Array.isArray(state) && state.length === examSample.length;
-            }, { description: 'App exam state 接收状态服务更新' });
-            const examState = this.win.app.getState('exam.index') || [];
-            const examSynced = Array.isArray(examState) && examState.length === examSample.length;
-
-            let practiceSynced = true;
-            let practiceSampleSize = 0;
-            if (originalPractice.length > 0) {
-                practiceSampleSize = 1;
-                const practiceSample = originalPractice.slice(0, practiceSampleSize);
-                stateService.setPracticeRecords(practiceSample);
-                await this.waitFor(() => {
-                    const state = this.win.app?.getState?.('practice.records');
-                    return Array.isArray(state) && state.length === practiceSample.length;
-                }, { description: 'App practice state 接收状态服务更新' });
-                const practiceState = this.win.app.getState('practice.records') || [];
-                practiceSynced = Array.isArray(practiceState) && practiceState.length === practiceSample.length;
-            }
-
-            if (typeof this.win.filterByType === 'function') {
-                this.win.filterByType('reading');
-            } else {
-                throw new Error('filterByType 不可用');
-            }
-            await this.waitFor(() => {
-                const filter = this.win.app?.getState?.('ui.browseFilter');
-                return filter && filter.type === 'reading';
-            }, { description: '浏览筛选通过桥接层同步' });
-            const filter = this.win.app.getState('ui.browseFilter') || {};
-            const filterSynced = filter.type === 'reading' && (!filter.category || filter.category === 'all');
-
-            stateService.setExamIndex(originalExamIndex);
-            await this.waitFor(() => {
-                const state = this.win.app?.getState?.('exam.index');
-                return Array.isArray(state) && state.length === originalExamIndex.length;
-            }, { description: 'App exam state 恢复原始数据' });
-
-            stateService.setPracticeRecords(originalPractice);
-            await this.waitFor(() => {
-                const state = this.win.app?.getState?.('practice.records');
-                return Array.isArray(state) && state.length === originalPractice.length;
-            }, { description: 'App practice state 恢复原始数据' });
-
-            if (typeof this.win.filterByType === 'function') {
-                this.win.filterByType('all');
-            }
-            await this.waitFor(() => {
-                const restored = this.win.app?.getState?.('ui.browseFilter');
-                return restored && restored.type === 'all';
-            }, { description: '浏览筛选恢复默认' });
-
-            this.recordResult(name, examSynced && practiceSynced && filterSynced, {
-                examSampleSize,
-                practiceSampleSize,
-                filterSnapshot: filter
-            });
-        } catch (error) {
-            this.recordResult(name, false, error.message || String(error));
-        }
-    }
-
     async testPracticeRecordsFlow() {
         const name = '练习记录同步流程';
         try {
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.AppData?.practice) {
+                this.recordResult(name, false, 'AppData.practice 不可用');
                 return;
             }
 
@@ -1067,7 +953,7 @@ class AppE2ETestSuite {
                 description: '切换到练习记录视图'
             });
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([]);
+            await this.win.AppData.practice.clear({ operationId: `e2e-practice-clear-${Date.now()}` });
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1078,8 +964,10 @@ class AppE2ETestSuite {
 
             const sampleRecord = {
                 id: 'e2e-record',
+                examId: 'e2e-reading',
                 title: 'E2E 阅读测试题',
                 type: 'reading',
+                status: 'completed',
                 score: 85,
                 percentage: 85,
                 totalQuestions: 40,
@@ -1089,7 +977,10 @@ class AppE2ETestSuite {
                 dataSource: 'real'
             };
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([sampleRecord]);
+            await this.win.AppData.practice.completeAttempt({
+                record: sampleRecord,
+                operationId: `e2e-practice-seed-${Date.now()}`
+            });
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1165,8 +1056,8 @@ class AppE2ETestSuite {
         let originalConfirm = null;
 
         try {
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.AppData?.practice) {
+                this.recordResult(name, false, 'AppData.practice 不可用');
                 return;
             }
 
@@ -1179,7 +1070,13 @@ class AppE2ETestSuite {
                 description: '切换到练习视图'
             });
 
-            await this.win.simpleStorageWrapper.savePracticeRecords(sampleRecords);
+            await this.win.AppData.practice.clear({ operationId: `e2e-bulk-delete-clear-${Date.now()}` });
+            for (const [index, record] of sampleRecords.entries()) {
+                await this.win.AppData.practice.completeAttempt({
+                    record,
+                    operationId: `e2e-bulk-delete-seed-${index}-${Date.now()}`
+                });
+            }
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1217,7 +1114,7 @@ class AppE2ETestSuite {
                 description: '等待列表刷新到剩余记录'
             });
 
-            const remaining = await this.win.simpleStorageWrapper.getPracticeRecords();
+            const remaining = await this.win.AppData.practice.list({ projection: 'full' });
             const remainingIds = Array.isArray(remaining) ? remaining.map(record => record.id) : [];
             const passed = remainingIds.length === 1 && remainingIds[0] === 'bulk-c';
 
@@ -1255,24 +1152,19 @@ class AppE2ETestSuite {
                 this.recordResult(name, false, 'app.openExam 不可用');
                 return;
             }
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.AppData?.practice) {
+                this.recordResult(name, false, 'AppData.practice 不可用');
                 return;
             }
 
-            await this.waitFor(() => {
-                const index = this.win.app?.getState?.('exam.index');
-                return Array.isArray(index) && index.length > 0;
-            }, { timeout: 8000, description: '加载题库索引' });
-
-            const examIndex = this.win.app?.getState?.('exam.index') || this.win.examIndex || [];
+            const examIndex = await this.waitForExamIndex();
             const targetExam = examIndex.find((exam) => exam && typeof exam.title === 'string' && exam.title.includes('Analysis of Fear'));
             if (!targetExam) {
                 this.recordResult(name, false, '未找到目标练习题');
                 return;
             }
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([]);
+            await this.win.AppData.practice.clear({ operationId: `e2e-submission-clear-${Date.now()}` });
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1381,6 +1273,22 @@ class AppE2ETestSuite {
                 timeout: 12000,
                 description: '练习页面会话握手'
             });
+            const hostSession = this.win.app.examWindows && this.win.app.examWindows.get(targetExam.id);
+            if (!hostSession || !hostSession.windowSessionToken) {
+                throw new Error('练习页面握手未生成 windowSessionToken');
+            }
+            const originalNotifyParent = fixtureWin.practicePageEnhancer.notifyParent.bind(fixtureWin.practicePageEnhancer);
+            let submissionId = '';
+            fixtureWin.practicePageEnhancer.notifyParent = (type, payload) => {
+                const correlated = Object.assign({}, payload || {}, {
+                    windowSessionToken: hostSession.windowSessionToken
+                });
+                if (type === 'PRACTICE_COMPLETE') {
+                    submissionId = submissionId || `e2e-inline-submit-${Date.now()}`;
+                    correlated.submissionId = correlated.submissionId || submissionId;
+                }
+                return originalNotifyParent(type, correlated);
+            };
 
             await this.waitFor(() => fixtureDoc.getElementById('submit-btn'), {
                 timeout: 12000,
@@ -1395,83 +1303,16 @@ class AppE2ETestSuite {
 
             submitBtn.click();
 
-            const waitForRecordReady = async (timeout, description) => {
-                await this.waitFor(() => {
-                    const records = this.win.app?.getState?.('practice.records');
-                    if (!Array.isArray(records) || records.length === 0) {
-                        return false;
-                    }
-                    const record = records[0];
-                    return record && record.dataSource === 'real' && typeof record.title === 'string' && record.title.includes('Fear');
-                }, { timeout, description });
-            };
-
-            try {
-                await waitForRecordReady(15000, '等待练习记录写入');
-            } catch (waitError) {
-                const enhancer = fixtureWin.practicePageEnhancer || {};
-                try {
-                    const score = typeof enhancer.extractScore === 'function' ? enhancer.extractScore() : (enhancer.scoreInfo || null);
-                    const answers = enhancer.answers || {};
-                    const correctAnswers = enhancer.correctAnswers || {};
-                    const interactions = enhancer.interactions || [];
-                    const resolvedAccuracy = typeof score?.accuracy === 'number' ? score.accuracy : (typeof score?.percentage === 'number' ? score.percentage / 100 : 0.85);
-                    const resolvedPercentage = typeof score?.percentage === 'number' ? score.percentage : Math.round(resolvedAccuracy * 100);
-                    const resolvedTotal = typeof score?.total === 'number' ? score.total : (Object.keys(answers).length || 40);
-                    const resolvedCorrect = typeof score?.correct === 'number' ? score.correct : Math.round(resolvedTotal * resolvedAccuracy);
-                    const resolvedDuration = typeof score?.duration === 'number' ? score.duration : 1800;
-                    const fallbackSessionId = enhancer.sessionId || `e2e-fallback-${Date.now()}`;
-                    const fallbackRecord = {
-                        id: fallbackSessionId,
-                        examId: targetExam.id,
-                        title: targetExam.title || 'E2E Practice Fallback',
-                        category: targetExam.category || 'P1',
-                        frequency: targetExam.frequency || 'high',
-                        status: 'completed',
-                        accuracy: resolvedAccuracy,
-                        percentage: resolvedPercentage,
-                        score: resolvedCorrect,
-                        type: targetExam.type || 'reading',
-                        duration: resolvedDuration,
-                        correctAnswers: resolvedCorrect,
-                        totalQuestions: resolvedTotal,
-                        date: new Date().toISOString(),
-                        dataSource: 'real',
-                        sessionId: fallbackSessionId,
-                        timestamp: Date.now(),
-                        realData: {
-                            score: resolvedCorrect,
-                            totalQuestions: resolvedTotal,
-                            accuracy: resolvedAccuracy,
-                            percentage: resolvedPercentage,
-                            duration: resolvedDuration,
-                            answers,
-                            correctAnswers,
-                            interactions,
-                            isRealData: true,
-                            source: 'e2e-fallback'
-                        },
-                        scoreInfo: {
-                            correct: resolvedCorrect,
-                            total: resolvedTotal,
-                            accuracy: resolvedAccuracy,
-                            percentage: resolvedPercentage,
-                            source: 'e2e-fallback'
-                        }
-                    };
-
-                    await this.win.simpleStorageWrapper.savePracticeRecords([fallbackRecord]);
-                    if (typeof this.win.syncPracticeRecords === 'function') {
-                        await this.win.syncPracticeRecords();
-                    }
-                    await waitForRecordReady(8000, '等待练习记录写入(回退)');
-                } catch (fallbackError) {
-                    throw fallbackError instanceof Error ? fallbackError : waitError;
-                }
-            }
-
-            const records = this.win.app.getState('practice.records') || [];
-            const latest = records[0] || null;
+            const records = await this.waitForAsync(async () => {
+                const current = await this.win.AppData.practice.list({ projection: 'full' });
+                const committed = current.find((record) => record
+                    && record.dataSource === 'real'
+                    && record.realData?.isRealData === true);
+                return committed ? current : null;
+            }, { timeout: 15000, description: '等待练习记录写入' });
+            const latest = records.find((record) => record
+                && record.dataSource === 'real'
+                && record.realData?.isRealData === true) || null;
 
             await this.waitFor(() => {
                 const item = this.doc.querySelector('#history-list .history-item');

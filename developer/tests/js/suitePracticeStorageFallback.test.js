@@ -20,36 +20,23 @@ function deepClone(value) {
 }
 
 async function main() {
-    const state = new Map();
-    state.set('practice_records', [{ id: 'legacy_1', examId: 'legacy-a' }]);
-    const storage = {
-        async get(key, fallback = undefined) {
-            if (state.has(key)) {
-                return deepClone(state.get(key));
-            }
-            return deepClone(fallback);
-        },
-        async set(key, value) {
-            state.set(key, deepClone(value));
-        }
-    };
-
+    const practiceListCalls = [];
     const sandboxWindow = {
         location: { href: 'http://localhost/' },
         showMessage() {},
         addEventListener() {},
         removeEventListener() {},
         document: { addEventListener() {}, removeEventListener() {} },
-        // 统一入口：PracticeRecordAPI 是套题练习记录的唯一读取通道
-        PracticeRecordAPI: {
-            async list() {
+        AppData: {
+            ready: Promise.resolve(),
+            practice: {
+            async list(options) {
+                practiceListCalls.push(deepClone(options));
                 return [{ id: 'api_1', examId: 'api-a' }];
             },
-            async saveRecord() {
-                throw new Error('saveRecord should not be called in this read test');
-            },
-            async recalculateStats() {
+            async getStats() {
                 return { totalPractices: 1 };
+            }
             }
         }
     };
@@ -57,7 +44,6 @@ async function main() {
     const sandbox = {
         window: sandboxWindow,
         document: sandboxWindow.document,
-        storage,
         console,
         setTimeout,
         clearTimeout,
@@ -86,22 +72,26 @@ async function main() {
 
     Object.assign(app, mixins.examSession, mixins.suitePractice);
 
-    // 统一入口验证：_loadSuitePracticeRecordsForFiltering 应通过 PracticeRecordAPI.list 读取
+    // 统一入口验证：过滤和聚合只读 AppData.practice
     const fromFiltering = await app._loadSuitePracticeRecordsForFiltering();
     assert.ok(Array.isArray(fromFiltering) && fromFiltering.length > 0, '过滤读取应返回记录');
-    assert.strictEqual(fromFiltering[0].id, 'api_1', '过滤读取应通过 PracticeRecordAPI.list 获取');
+    assert.strictEqual(fromFiltering[0].id, 'api_1', '过滤读取应通过 AppData.practice.list 获取');
 
-    // _listPracticeRecordsViaAPI 也应直接走 PracticeRecordAPI.list
+    // 兼容命名的方法内部也必须直达领域 API
     const viaAPI = await app._listPracticeRecordsViaAPI();
     assert.ok(Array.isArray(viaAPI) && viaAPI.length > 0, 'API 读取应返回记录');
-    assert.strictEqual(viaAPI[0].id, 'api_1', 'API 读取应通过 PracticeRecordAPI.list 获取');
+    assert.strictEqual(viaAPI[0].id, 'api_1', 'API 读取应通过 AppData.practice.list 获取');
+    assert.deepStrictEqual(practiceListCalls, [
+        { projection: 'detail' },
+        { projection: 'detail' }
+    ], '套题去重只应读取详情层，不得加载高亮和笔记层');
+    assert.strictEqual(await app._recalculatePracticeStatsFromRecords(), true);
 
-    // 无 PracticeRecordAPI 时应返回空数组，不崩溃
-    delete sandboxWindow.PracticeRecordAPI;
-    const emptyResult = await app._listPracticeRecordsViaAPI();
-    assert.ok(Array.isArray(emptyResult) && emptyResult.length === 0, '无 API 时应安全返回空数组');
+    // 缺少事实层必须明确失败，不能伪装成空记录
+    delete sandboxWindow.AppData;
+    await assert.rejects(() => app._listPracticeRecordsViaAPI(), /AppData|practice/);
 
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice 统一通过 PracticeRecordAPI 读取记录' }));
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice only reads AppData.practice and does not fake empty data when unavailable' }));
 }
 
 main().catch((error) => {

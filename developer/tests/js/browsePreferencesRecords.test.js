@@ -14,39 +14,59 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createHarness({ examIndex = [], records = [] } = {}) {
-    const localStorageState = new Map();
+function deferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+function createHarness({
+    examIndex = [],
+    records = [],
+    initialBrowse = null,
+    browseReadGate = null,
+    browseWriteHook = null
+} = {}) {
+    let persistedBrowse = initialBrowse ? structuredClone(initialBrowse) : null;
+    let failNextWrite = false;
     const documentStub = {
         addEventListener() {},
         getElementById() { return null; },
         querySelector() { return null; }
     };
     const windowStub = {
-        localStorage: {
-            getItem(key) {
-                return localStorageState.has(key) ? localStorageState.get(key) : null;
-            },
-            setItem(key, value) {
-                localStorageState.set(key, String(value));
-            },
-            removeItem(key) {
-                localStorageState.delete(key);
+        AppData: {
+            ready: Promise.resolve(),
+            preferences: {
+                async getBrowse() {
+                    if (browseReadGate) await browseReadGate;
+                    return persistedBrowse ? structuredClone(persistedBrowse) : null;
+                },
+                async patchBrowse(value) {
+                    if (failNextWrite) {
+                        failNextWrite = false;
+                        throw new Error('injected preference commit failure');
+                    }
+                    if (typeof browseWriteHook === 'function') {
+                        await browseWriteHook(structuredClone(value));
+                    }
+                    persistedBrowse = structuredClone(value);
+                    return { committed: true };
+                }
             }
         },
         addEventListener() {},
-        getExamIndexState() {
-            return examIndex.slice();
-        },
-        getPracticeRecordsState() {
-            return records.slice();
-        }
+        failNextBrowsePreferenceWrite() { failNextWrite = true; }
     };
 
     const sandbox = {
         window: windowStub,
         globalThis: windowStub,
         document: documentStub,
-        localStorage: windowStub.localStorage,
         console: { log() {}, warn() {}, error() {}, info() {} },
         Date,
         Math,
@@ -64,7 +84,14 @@ function createHarness({ examIndex = [], records = [] } = {}) {
     };
     const context = vm.createContext(sandbox);
     loadScript('js/utils/BrowsePreferencesUtils.js', context);
-    return { window: windowStub, localStorageState };
+    return {
+        window: windowStub,
+        examIndex,
+        records,
+        readPersistedBrowse() {
+            return persistedBrowse ? structuredClone(persistedBrowse) : null;
+        }
+    };
 }
 
 const results = [];
@@ -73,11 +100,11 @@ function recordResult(name, detail) {
 }
 
 function readPreferences(windowStub) {
-    return JSON.parse(windowStub.localStorage.getItem('browse_view_preferences_v2') || '{}');
+    return windowStub.getBrowseViewPreferences();
 }
 
-function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
-    const { window } = createHarness({
+async function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
+    const { window, examIndex } = createHarness({
         examIndex: [{
             id: 'unrelated-current-config-exam',
             title: 'Unrelated Current Config',
@@ -96,7 +123,8 @@ function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
         endTime: '2026-05-22T08:00:00.000Z'
     };
 
-    window.updateBrowseAnchorsFromRecords([record]);
+    window.updateBrowseAnchorsFromRecords([record], examIndex);
+    await window.flushBrowsePreferenceWrites();
     const prefs = readPreferences(window);
     assert(prefs.listAnchors, '应写入浏览锚点');
     assert(prefs.listAnchors['P1|reading'], '历史阅读记录应在当前题库不含该题时仍产生 P1|reading 锚点');
@@ -106,8 +134,8 @@ function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
     recordResult('历史记录不依赖当前题库也能生成浏览锚点', prefs.listAnchors['P1|reading']);
 }
 
-function testExplicitMetadataOutranksCurrentExamIndex() {
-    const { window } = createHarness({
+async function testExplicitMetadataOutranksCurrentExamIndex() {
+    const { window, examIndex } = createHarness({
         examIndex: [{
             id: 'recorded-exam',
             title: 'Wrong Current Index Match',
@@ -127,11 +155,12 @@ function testExplicitMetadataOutranksCurrentExamIndex() {
         timestamp: 1770000000000
     };
 
-    const info = window.resolveRecordExamInfo(record, window.getExamIndexState());
+    const info = window.resolveRecordExamInfo(record, examIndex);
     assert.strictEqual(info.category, 'P2', '记录自身 metadata.category 必须优先于当前题库索引');
     assert.strictEqual(info.type, 'reading', '记录自身 metadata.examType 必须优先于当前题库索引');
 
-    window.updateBrowseAnchorsFromRecords([record]);
+    window.updateBrowseAnchorsFromRecords([record], examIndex);
+    await window.flushBrowsePreferenceWrites();
     const prefs = readPreferences(window);
     assert(prefs.listAnchors['P2|reading'], '锚点 key 应来自历史记录自身 metadata');
     assert(!prefs.listAnchors['P4|listening'], '当前活动题库的同 id 元数据不能污染历史记录锚点');
@@ -139,8 +168,8 @@ function testExplicitMetadataOutranksCurrentExamIndex() {
     recordResult('历史记录 metadata 优先于当前题库索引', info);
 }
 
-function testLatestTimestampWinsPerFilter() {
-    const { window } = createHarness();
+async function testLatestTimestampWinsPerFilter() {
+    const { window, examIndex } = createHarness();
     window.updateBrowseAnchorsFromRecords([
         {
             id: 'old',
@@ -156,7 +185,8 @@ function testLatestTimestampWinsPerFilter() {
             metadata: { category: 'P3', examType: 'reading' },
             timestamp: 1800000000000
         }
-    ]);
+    ], examIndex);
+    await window.flushBrowsePreferenceWrites();
 
     const prefs = readPreferences(window);
     assert.strictEqual(prefs.listAnchors['P3|reading'].examId, 'new-p3', '同一筛选下应保留最新练习记录锚点');
@@ -164,11 +194,230 @@ function testLatestTimestampWinsPerFilter() {
     recordResult('浏览锚点按时间保留最新记录', prefs.listAnchors['P3|reading']);
 }
 
-function main() {
+async function testDelayedAnchorProjectionPublishesBeforePersistence() {
+    const writeGate = deferred();
+    const { window, readPersistedBrowse } = createHarness({
+        browseWriteHook: async () => writeGate.promise
+    });
+    await window.whenBrowseViewPreferencesReady();
+    const updates = window.prepareBrowseAnchorUpdates([{
+        id: 'staged-anchor-record',
+        examId: 'staged-anchor-exam',
+        title: 'P2 Reading Staged',
+        metadata: { category: 'P2', examType: 'reading' },
+        timestamp: 1800000000000
+    }], []);
+
+    assert.strictEqual(
+        window.getBrowseViewPreferences().listAnchors['P2|reading'],
+        undefined,
+        'anchor preparation must not mutate the accepted preference cache'
+    );
+    assert.strictEqual(window.commitBrowseAnchorUpdates(updates, {
+        practiceProjectionGeneration: 7
+    }), true);
+    assert.strictEqual(
+        window.getBrowseViewPreferences().listAnchors['P2|reading'].examId,
+        'staged-anchor-exam',
+        'the accepted anchor projection must be visible before persistence settles'
+    );
+    assert.strictEqual(readPersistedBrowse(), null, 'the delayed write must still be pending');
+    assert.deepStrictEqual(
+        structuredClone(window.getBrowseAnchorProjectionState()),
+        { revision: 1, generation: 7, persistence: 'pending' }
+    );
+    writeGate.resolve();
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(
+        readPersistedBrowse().listAnchors['P2|reading'].examId,
+        'staged-anchor-exam'
+    );
+    assert.strictEqual(window.getBrowseAnchorProjectionState().persistence, 'persisted');
+    recordResult('浏览锚点投影先于延迟持久化同步发布', updates['P2|reading']);
+}
+
+async function testRejectedAnchorPersistenceRetainsCurrentProjection() {
+    const { window, readPersistedBrowse } = createHarness();
+    await window.whenBrowseViewPreferencesReady();
+    const baseline = window.prepareBrowseAnchorUpdates([{
+        id: 'baseline-anchor-record',
+        examId: 'baseline-anchor-exam',
+        title: 'P2 Reading Baseline',
+        metadata: { category: 'P2', examType: 'reading' },
+        timestamp: 1799999999999
+    }], []);
+    assert.strictEqual(window.commitBrowseAnchorUpdates(baseline, {
+        practiceProjectionGeneration: 8
+    }), true);
+    await window.flushBrowsePreferenceWrites();
+    assert.deepStrictEqual(Object.keys(readPersistedBrowse().listAnchors), ['P2|reading']);
+
+    window.failNextBrowsePreferenceWrite();
+    const rejected = window.prepareBrowseAnchorUpdates([{
+        id: 'rejected-anchor-record',
+        examId: 'rejected-anchor-exam',
+        title: 'P3 Reading Rejected Persistence',
+        metadata: { category: 'P3', examType: 'reading' },
+        timestamp: 1800000000000
+    }], []);
+
+    assert.strictEqual(window.commitBrowseAnchorUpdates(rejected, {
+        practiceProjectionGeneration: 9
+    }), true);
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(
+        window.getBrowseViewPreferences().listAnchors['P3|reading'].examId,
+        'rejected-anchor-exam',
+        'a durable rejection must not tear down the accepted live projection'
+    );
+    assert.deepStrictEqual(
+        Object.keys(window.getBrowseViewPreferences().listAnchors),
+        ['P3|reading']
+    );
+    assert.deepStrictEqual(
+        Object.keys(readPersistedBrowse().listAnchors),
+        ['P2|reading'],
+        'the injected rejection must leave the older durable snapshot unchanged'
+    );
+    assert.strictEqual(window.getBrowseAnchorProjectionState().persistence, 'failed');
+
+    const stale = window.prepareBrowseAnchorUpdates([{
+        id: 'stale-anchor-record',
+        examId: 'stale-anchor-exam',
+        title: 'P4 Reading Stale',
+        metadata: { category: 'P4', examType: 'reading' },
+        timestamp: 1800000000001
+    }], []);
+    assert.strictEqual(window.commitBrowseAnchorUpdates(stale, {
+        practiceProjectionGeneration: 8
+    }), false, 'an older generation must not replace the accepted projection');
+    assert.deepStrictEqual(
+        Object.keys(window.getBrowseViewPreferences().listAnchors),
+        ['P3|reading']
+    );
+
+    assert.strictEqual(window.commitBrowseAnchorUpdates(rejected, {
+        practiceProjectionGeneration: 10
+    }), true);
+    await window.flushBrowsePreferenceWrites();
+    assert.deepStrictEqual(Object.keys(readPersistedBrowse().listAnchors), ['P3|reading']);
+    assert.strictEqual(window.getBrowseAnchorProjectionState().persistence, 'persisted');
+    recordResult('锚点持久化失败保留当前代投影并由更新代收敛', rejected['P3|reading']);
+}
+
+async function testConsecutiveAnchorSnapshotsReplacePendingPredecessor() {
+    const firstWriteGate = deferred();
+    const firstWriteStarted = deferred();
+    let writeCount = 0;
+    const { window, readPersistedBrowse } = createHarness({
+        browseWriteHook: async () => {
+            writeCount += 1;
+            if (writeCount === 1) {
+                firstWriteStarted.resolve();
+                await firstWriteGate.promise;
+            }
+        }
+    });
+    await window.whenBrowseViewPreferencesReady();
+
+    const first = window.prepareBrowseAnchorUpdates([{
+        id: 'first-anchor-record',
+        examId: 'first-anchor-exam',
+        title: 'P2 Reading First',
+        metadata: { category: 'P2', examType: 'reading' },
+        timestamp: 1800000000000
+    }], []);
+    assert.strictEqual(window.commitBrowseAnchorUpdates(first, {
+        practiceProjectionGeneration: 10
+    }), true);
+    await firstWriteStarted.promise;
+    const second = window.prepareBrowseAnchorUpdates([{
+        id: 'second-anchor-record',
+        examId: 'second-anchor-exam',
+        title: 'P3 Reading Second',
+        metadata: { category: 'P3', examType: 'reading' },
+        timestamp: 1800000000001
+    }], []);
+    assert.strictEqual(window.commitBrowseAnchorUpdates(second, {
+        practiceProjectionGeneration: 11
+    }), true);
+    assert.deepStrictEqual(
+        Object.keys(window.getBrowseViewPreferences().listAnchors),
+        ['P3|reading'],
+        'the newer full projection must synchronously replace pending A'
+    );
+    firstWriteGate.resolve();
+    await window.flushBrowsePreferenceWrites();
+    assert.deepStrictEqual(
+        Object.keys(readPersistedBrowse().listAnchors),
+        ['P3|reading'],
+        'the later durable snapshot must remove every A-only anchor'
+    );
+    assert.strictEqual(readPersistedBrowse().listAnchors['P3|reading'].examId, 'second-anchor-exam');
+    recordResult('连续 A/B 锚点写入仅保留最新完整快照', readPersistedBrowse().listAnchors);
+}
+
+async function testFailedPreferenceWriteDoesNotReplaceCommittedCache() {
+    const { window } = createHarness();
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(window.getBrowseViewPreferences().autoScrollEnabled, true);
+
+    window.failNextBrowsePreferenceWrite();
+    const preview = window.saveBrowseViewPreferences({ autoScrollEnabled: false });
+    assert.strictEqual(preview.autoScrollEnabled, false, 'UI preview may reflect the requested value');
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(window.getBrowseViewPreferences().autoScrollEnabled, true, 'failed commit must not become the cached fact');
+    recordResult('偏好提交失败不会污染已提交缓存', { autoScrollEnabled: true });
+}
+
+async function testFirstReadCanAwaitPersistedPreferences() {
+    let releaseRead;
+    const browseReadGate = new Promise((resolve) => { releaseRead = resolve; });
+    const { window } = createHarness({
+        initialBrowse: {
+            autoScrollEnabled: false,
+            lastFilter: { category: 'P2', type: 'reading' },
+            listAnchors: {
+                'P2|reading': { examId: 'saved-reading', title: 'Saved Reading', timestamp: 1 }
+            }
+        },
+        browseReadGate
+    });
+
+    assert.strictEqual(
+        window.getBrowseViewPreferences().autoScrollEnabled,
+        true,
+        '同步兼容读取在 hydration 前仍可返回默认值'
+    );
+    let settled = false;
+    const ready = window.whenBrowseViewPreferencesReady().then((preferences) => {
+        settled = true;
+        return preferences;
+    });
+    await Promise.resolve();
+    assert.strictEqual(settled, false, '首次 UI 读取必须等待 AppData hydration');
+    releaseRead();
+    const hydrated = await ready;
+    assert.strictEqual(hydrated.autoScrollEnabled, false, 'hydration 后必须返回持久化开关');
+    assert.deepStrictEqual(
+        structuredClone(hydrated.lastFilter),
+        { category: 'P2', type: 'reading' },
+        '首次筛选恢复必须使用持久化值'
+    );
+    assert.strictEqual(hydrated.listAnchors['P2|reading'].examId, 'saved-reading');
+    recordResult('首次浏览状态等待 AppData hydration', hydrated);
+}
+
+async function main() {
     try {
-        testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
-        testExplicitMetadataOutranksCurrentExamIndex();
-        testLatestTimestampWinsPerFilter();
+        await testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
+        await testExplicitMetadataOutranksCurrentExamIndex();
+        await testLatestTimestampWinsPerFilter();
+        await testDelayedAnchorProjectionPublishesBeforePersistence();
+        await testRejectedAnchorPersistenceRetainsCurrentProjection();
+        await testConsecutiveAnchorSnapshotsReplacePendingPredecessor();
+        await testFailedPreferenceWriteDoesNotReplaceCommittedCache();
+        await testFirstReadCanAwaitPersistedPreferences();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,
@@ -187,4 +436,4 @@ function main() {
     }
 }
 
-main();
+await main();

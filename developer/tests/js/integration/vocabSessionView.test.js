@@ -12,6 +12,8 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 const originalConsoleLog = (console && typeof console.log === 'function')
     ? console.log.bind(console)
     : null;
+let activeDocumentStub = null;
+const modalFocusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function emitResult(payload) {
     const text = JSON.stringify(payload, null, 2);
@@ -65,6 +67,14 @@ function patchVocabSessionView(source) {
         closeMenu,
         bindEvents,
         toggleMenu,
+        getWordStatus,
+        analyzeListWords,
+        openListModal,
+        closeListModal,
+        exportCurrentList,
+        renderListBrowser,
+        renderCard,
+        syncListSwitcherFromStore,
         setElements: (elements) => { state.elements = elements || {}; },
         setStore: (store) => { state.store = store; },
         setScheduler: (scheduler) => { state.scheduler = scheduler; },
@@ -134,6 +144,7 @@ function createElementStub(tag = 'div', overrides = {}) {
         textContent: '',
         value: '',
         hidden: false,
+        disabled: false,
         appendChild(child) {
             if (!child) {
                 return child;
@@ -214,6 +225,9 @@ function createElementStub(tag = 'div', overrides = {}) {
         },
         focus() {
             this._focused = true;
+            if (activeDocumentStub) {
+                activeDocumentStub.activeElement = this;
+            }
         },
         click() {
             this._clicked = true;
@@ -231,7 +245,7 @@ function createDocumentStub() {
     const listeners = new Map();
     const body = createElementStub('body');
 
-    return {
+    const documentStub = {
         body,
         activeElement: null,
         addEventListener(type, handler) {
@@ -271,6 +285,8 @@ function createDocumentStub() {
             return element;
         }
     };
+    activeDocumentStub = documentStub;
+    return documentStub;
 }
 
 function createWindowStub(documentStub) {
@@ -333,8 +349,8 @@ function createMockStore(words = [], config = {}) {
             ...word
         })),
         config: { ...baseConfig, ...config },
-        reviewQueue: [],
         setConfigCalls: 0,
+        replaceProgressCalls: [],
         init: async () => true,
         getWords() {
             return this.words;
@@ -346,12 +362,39 @@ function createMockStore(words = [], config = {}) {
             this.config = { ...this.config, ...next };
             this.setConfigCalls += 1;
         },
-        async setWords(next) {
+        async mergeWords(incoming) {
+            const indexByWord = new Map(this.words.map((word, index) => [String(word.word || '').trim().toLowerCase(), index]));
+            let addedCount = 0;
+            let updatedCount = 0;
+            for (const entry of incoming) {
+                const key = String(entry.word || '').trim().toLowerCase();
+                if (!key) continue;
+                if (indexByWord.has(key)) {
+                    const index = indexByWord.get(key);
+                    this.words[index] = { ...this.words[index], ...entry };
+                    updatedCount += 1;
+                } else {
+                    const word = { id: entry.id || `word-${this.words.length + 1}`, ...entry };
+                    indexByWord.set(key, this.words.length);
+                    this.words.push(word);
+                    addedCount += 1;
+                }
+            }
+            return { words: this.words, addedCount, updatedCount };
+        },
+        async replaceProgress(next, nextConfig = {}, listId = null) {
             this.words = next.map((word, index) => ({
                 id: word.id || `word-${index + 1}`,
                 ...word
             }));
-            return true;
+            const activeListId = listId || nextConfig.activeListId || this.config.activeListId || 'default';
+            this.config = { ...this.config, ...nextConfig, activeListId };
+            this.replaceProgressCalls.push({
+                listId: activeListId,
+                words: this.words.map((word) => ({ ...word })),
+                config: { ...this.config }
+            });
+            return { words: this.words, config: this.config };
         },
         async updateWord(id, patch) {
             const idx = this.words.findIndex((word) => word.id === id);
@@ -361,9 +404,6 @@ function createMockStore(words = [], config = {}) {
             const updated = { ...this.words[idx], ...patch };
             this.words[idx] = updated;
             return updated;
-        },
-        setReviewQueue(queue) {
-            this.reviewQueue = Array.isArray(queue) ? queue.slice() : [];
         },
         getDueWords(now) {
             const nowTime = now instanceof Date ? now.getTime() : Date.now();
@@ -380,7 +420,7 @@ function createMockStore(words = [], config = {}) {
             return items.slice(0, limit);
         },
         getActiveListId() {
-            return 'default';
+            return this.config.activeListId || 'default';
         },
         getAvailableLists() {
             return [];
@@ -447,6 +487,7 @@ function createSessionElements() {
 
     const settingsModal = createElementStub('div');
     const settingsDialog = createElementStub('div');
+    const settingsClose = createElementStub('button');
     const settingsError = createElementStub('div');
     const settingsForm = createElementStub('form');
 
@@ -458,6 +499,28 @@ function createSessionElements() {
     const listSwitcher = createElementStub('div');
     const menuButton = createElementStub('button');
     const menu = createElementStub('div');
+    const listModal = createElementStub('div');
+    const listDialog = createElementStub('div');
+    const listSubtitle = createElementStub('p');
+    const listSearch = createElementStub('input');
+    const listLearnedOnly = createElementStub('input');
+    const listStats = createElementStub('div');
+    const listBody = createElementStub('div');
+    const listClose = createElementStub('button');
+
+    settingsDialog.appendChild(dailyField);
+    settingsDialog.appendChild(settingsClose);
+    settingsDialog.__queryMap = {
+        'input, button, select, textarea': dailyField
+    };
+    settingsDialog.__queryListMap = {
+        [modalFocusableSelector]: [dailyField, settingsClose]
+    };
+    listDialog.appendChild(listSearch);
+    listDialog.appendChild(listClose);
+    listDialog.__queryListMap = {
+        [modalFocusableSelector]: [listSearch, listClose]
+    };
 
     return {
         root: createElementStub('div'),
@@ -485,7 +548,16 @@ function createSessionElements() {
         },
         listSwitcher,
         menuButton,
-        menu
+        menu,
+        listModal,
+        listDialog,
+        listSubtitle,
+        listSearch,
+        listLearnedOnly,
+        listStats,
+        listBody,
+        settingsClose,
+        listClose
     };
 }
 
@@ -581,11 +653,31 @@ async function run() {
             'data-action="toggle-side-panel"',
             'data-action="save-note"',
             'data-vocab-role="import-input"',
+            'data-action="menu-view-list"',
+            'data-vocab-role="list-modal"',
+            'data-vocab-role="list-dialog"',
+            'data-action="export-current-list"',
             'data-vocab-role="settings-modal"'
         ];
         markers.forEach((marker) => {
             assert.ok(source.includes(marker), `Missing marker: ${marker}`);
         });
+    });
+
+    await record('list modal body owns the table scroll', () => {
+        const css = readSource('css/main.css');
+        const bodyRule = css.match(/\.vocab-list-modal__body\s*\{([^}]*)\}/);
+        const tableWrapRule = css.match(/\.vocab-list-table-wrap\s*\{([^}]*)\}/);
+        assert.ok(bodyRule, 'Missing list modal body rule');
+        assert.ok(tableWrapRule, 'Missing table wrapper rule');
+        assert.match(bodyRule[1], /flex:\s*1 1 220px/);
+        assert.match(bodyRule[1], /min-height:\s*0/);
+        assert.match(bodyRule[1], /overflow:\s*hidden/);
+        assert.match(tableWrapRule[1], /flex:\s*1/);
+        assert.match(tableWrapRule[1], /min-height:\s*0/);
+        assert.match(tableWrapRule[1], /overflow:\s*auto/);
+        assert.doesNotMatch(css, /@media\s*\(max-height:\s*480px\)/);
+        assert.doesNotMatch(css, /@media\s*\(max-height:\s*300px\)/);
     });
 
     const vocabContext = createVocabContext();
@@ -822,6 +914,11 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'feedback');
         assert.strictEqual(hooks.state.session.lastAnswer.spellingAttempts, 3);
+        assert.strictEqual(hooks.state.session.lastAnswer.finalQuality, 'wrong');
+        assert.strictEqual(store.words[0].correctCount, 0);
+        assert.strictEqual(store.words[0].repetitions, 0);
+        assert.strictEqual(store.words[0].interval, 1);
+        assert.strictEqual(hooks.state.session.progress.wrong, 1);
     });
 
     await record('skip spelling triggers feedback', async () => {
@@ -854,6 +951,199 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'feedback');
         assert.strictEqual(hooks.state.session.lastAnswer.skipped, true);
+        assert.strictEqual(hooks.state.session.lastAnswer.finalQuality, 'wrong');
+        assert.strictEqual(store.words[0].correctCount, 0);
+        assert.strictEqual(store.words[0].repetitions, 0);
+        assert.strictEqual(hooks.state.session.progress.wrong, 1);
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('vocab-card--wrong'));
+        assert.ok(elements.sessionCard.innerHTML.includes('已跳过，需要加强'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('vocab-card--correct'));
+    });
+
+    await record('session card escapes imported word fields', () => {
+        hooks.resetSessionState();
+        hooks.state.session.stage = 'recognition';
+        hooks.state.session.meaningVisible = true;
+        hooks.state.session.currentWord = {
+            id: 'unsafe-1',
+            word: '<img src=x onerror="window.__wordXss=1">',
+            meaning: '<svg onload="window.__meaningXss=1"></svg>'
+        };
+
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
+
+        hooks.state.session.stage = 'spelling';
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
+
+        hooks.state.session.currentWord = {
+            ...hooks.state.session.currentWord,
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 0,
+            nextReview: '2026-08-11T00:00:00.000Z'
+        };
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
+    });
+
+    await record('recognition renders a labeled phonetic below the word and spelling omits it', () => {
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-1',
+            word: 'alpha',
+            meaning: '阿尔法',
+            phonetic: ' /ˈæl.fə '
+        };
+        hooks.state.session.stage = 'recognition';
+
+        hooks.renderCard();
+
+        const recognitionMarkup = elements.sessionCard.innerHTML;
+        assert.match(
+            recognitionMarkup,
+            /<div class="vocab-card__word">alpha<\/div>\s*<div class="vocab-card__phonetic">/,
+            'Expected the phonetic block immediately below the word'
+        );
+        assert.ok(recognitionMarkup.includes('<span class="visually-hidden">音标：</span>'));
+        assert.ok(recognitionMarkup.includes('<span>ˈæl.fə</span>'));
+        assert.ok(!recognitionMarkup.includes('//'));
+        assert.strictEqual((recognitionMarkup.match(/aria-hidden="true">\/<\/span>/g) || []).length, 2);
+        const wordlineRule = readSource('css/main.css').match(/\.vocab-card__wordline\s*\{([^}]*)\}/);
+        assert.ok(wordlineRule, 'Missing word-and-phonetic layout rule');
+        assert.match(wordlineRule[1], /flex-direction:\s*column/);
+
+        hooks.state.session.stage = 'spelling';
+        hooks.renderCard();
+
+        const spellingMarkup = elements.sessionCard.innerHTML;
+        assert.ok(!spellingMarkup.includes('vocab-card__phonetic'));
+        assert.ok(!spellingMarkup.includes('vocab-feedback__phonetic'));
+        assert.ok(!spellingMarkup.includes('音标'));
+        assert.ok(!spellingMarkup.includes('ˈæl.fə'));
+    });
+
+    await record('feedback renders phonetic as a labeled detail', () => {
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-2',
+            word: 'beta',
+            meaning: '贝塔',
+            phonetic: 'ˈbiː.tə/',
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 1,
+            lastReviewed: '2026-08-19T00:00:00.000Z'
+        };
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            finalQuality: 'good',
+            finalEF: 2.5,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+
+        hooks.renderCard();
+
+        const markup = elements.sessionCard.innerHTML;
+        assert.match(
+            markup,
+            /<div><dt>音标<\/dt><dd class="vocab-feedback__phonetic">[\s\S]*?<span>ˈbiː\.tə<\/span>[\s\S]*?<\/dd><\/div>/
+        );
+    });
+
+    await record('missing blank and slash-only phonetics omit recognition blocks and feedback rows', () => {
+        const omittedPhonetics = [undefined, '   ', ' /   / ', '/', '///'];
+
+        omittedPhonetics.forEach((phonetic, index) => {
+            hooks.resetSessionState();
+            hooks.state.session.currentWord = {
+                id: `phonetic-empty-${index}`,
+                word: 'gamma',
+                meaning: '伽马',
+                phonetic,
+                easeFactor: 2.5,
+                interval: 1,
+                repetitions: 1,
+                lastReviewed: '2026-08-19T00:00:00.000Z'
+            };
+            hooks.state.session.stage = 'recognition';
+            hooks.renderCard();
+
+            assert.ok(!elements.sessionCard.innerHTML.includes('vocab-card__phonetic'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('//'));
+
+            hooks.state.session.lastAnswer = {
+                recognitionQuality: 'good',
+                spellingAttempts: 0,
+                spellingCorrect: true,
+                finalQuality: 'good',
+                finalEF: 2.5,
+                saved: true
+            };
+            hooks.state.session.stage = 'feedback';
+            hooks.renderCard();
+
+            assert.ok(!elements.sessionCard.innerHTML.includes('vocab-feedback__phonetic'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('<dt>音标</dt>'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('//'));
+        });
+    });
+
+    await record('recognition and feedback escape malicious phonetics', () => {
+        const maliciousPhonetic = '/<img src=x onerror="window.__phoneticXss=1">/';
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-unsafe',
+            word: 'delta',
+            meaning: '德尔塔',
+            phonetic: maliciousPhonetic,
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 1,
+            lastReviewed: '2026-08-19T00:00:00.000Z'
+        };
+        hooks.state.session.stage = 'recognition';
+
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&quot;window.__phoneticXss=1&quot;'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            finalQuality: 'good',
+            finalEF: 2.5,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&quot;window.__phoneticXss=1&quot;'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
     });
 
     await record('move to next word handles completion', () => {
@@ -901,7 +1191,7 @@ async function run() {
         assert.strictEqual(elements.noteInput.value, 'Note text');
     });
 
-    await record('save note writes to store', () => {
+    await record('save note writes to store', async () => {
         const store = createMockStore([
             {
                 id: 'w-5',
@@ -915,7 +1205,7 @@ async function run() {
         hooks.state.session.currentWord = store.words[0];
         elements.noteInput.value = 'remember this';
 
-        hooks.saveCurrentNote();
+        await hooks.saveCurrentNote();
         assert.strictEqual(store.words[0].note, 'remember this');
         assert.ok(elements.noteStatus.textContent.length > 0);
     });
@@ -962,6 +1252,7 @@ async function run() {
         };
 
         hooks.state.session.batchSize = 1;
+        hooks.openSettingsModal(elements.menuButton);
         await hooks.handleSettingsSubmit({
             preventDefault() {},
             currentTarget: elements.settingsForm
@@ -982,6 +1273,314 @@ async function run() {
         hooks.toggleMenu({ stopPropagation() {} });
         assert.strictEqual(hooks.state.menuOpen, false);
         assert.ok(elements.menu.hidden);
+    });
+
+    await record('settings modal restores focus to visible menu trigger', () => {
+        const hiddenMenuItem = createElementStub('button');
+        const trigger = createElementStub('button');
+        trigger.dataset.action = 'menu-settings';
+        documentStub.activeElement = hiddenMenuItem;
+        elements.menuButton._focused = false;
+
+        elements.menu.dispatchEvent({
+            type: 'click',
+            target: {
+                closest(selector) {
+                    return selector === 'button[data-action]' ? trigger : null;
+                }
+            }
+        });
+        hooks.closeSettingsModal();
+
+        assert.strictEqual(elements.menuButton._focused, true);
+        assert.ok(!hiddenMenuItem._focused);
+    });
+
+    await record('list status keeps due mastered words in the review queue', () => {
+        const config = { masteryCount: 4 };
+        const dueMastered = hooks.getWordStatus({
+            correctCount: 4,
+            nextReview: new Date(Date.now() - 60_000).toISOString()
+        }, config);
+        const futureMastered = hooks.getWordStatus({
+            correctCount: 4,
+            nextReview: new Date(Date.now() + 60_000).toISOString()
+        }, config);
+
+        assert.strictEqual(dueMastered.tone, 'due');
+        assert.strictEqual(futureMastered.tone, 'mastered');
+
+        hooks.setStore(createMockStore([
+            { word: 'alpha', meaning: 'A', correctCount: 4, nextReview: new Date(Date.now() - 60_000).toISOString() }
+        ], config));
+        const analysis = hooks.analyzeListWords();
+        assert.strictEqual(analysis.masteredCount, 1);
+        assert.strictEqual(analysis.dueCount, 1);
+    });
+
+    await record('list modal restores focus to visible menu trigger', async () => {
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        const hiddenMenuItem = createElementStub('button');
+        const trigger = createElementStub('button');
+        trigger.dataset.action = 'menu-view-list';
+        hooks.setStore(store);
+        documentStub.activeElement = hiddenMenuItem;
+        elements.menuButton._focused = false;
+
+        elements.menu.dispatchEvent({
+            type: 'click',
+            target: {
+                closest(selector) {
+                    return selector === 'button[data-action]' ? trigger : null;
+                }
+            }
+        });
+        await flushPromises();
+        hooks.closeListModal();
+
+        assert.strictEqual(elements.menuButton._focused, true);
+        assert.ok(!hiddenMenuItem._focused);
+    });
+
+    await record('Escape cancels a pending list modal open', async () => {
+        let resolveInit;
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        store.init = () => new Promise((resolve) => {
+            resolveInit = resolve;
+        });
+        hooks.setStore(store);
+        const opening = hooks.openListModal(elements.menuButton);
+        let prevented = false;
+
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Escape',
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        resolveInit(true);
+        await opening;
+
+        assert.strictEqual(prevented, true);
+        assert.notStrictEqual(elements.listModal.dataset.open, 'true');
+        assert.ok(elements.listModal.hidden);
+    });
+
+    await record('list and settings modals remain mutually exclusive', async () => {
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        hooks.setStore(store);
+
+        await hooks.openListModal(elements.menuButton);
+        hooks.openSettingsModal(elements.menuButton);
+        assert.strictEqual(elements.settingsModal.dataset.open, 'true');
+        assert.strictEqual(elements.listModal.dataset.open, 'false');
+
+        await hooks.openListModal(elements.menuButton);
+        assert.strictEqual(elements.listModal.dataset.open, 'true');
+        assert.strictEqual(elements.settingsModal.dataset.open, 'false');
+        hooks.closeListModal();
+    });
+
+    await record('settings writes keep the latest submitted values', async () => {
+        const pendingSaves = [];
+        const store = createMockStore();
+        store.setConfig = (config) => new Promise((resolve) => {
+            pendingSaves.push(() => {
+                store.config = { ...store.config, ...config };
+                resolve(true);
+            });
+        });
+        hooks.setStore(store);
+        elements.settingsForm.__fields = {
+            dailyNew: '10',
+            reviewLimit: '50',
+            masteryCount: '3'
+        };
+        hooks.openSettingsModal(elements.menuButton);
+        const pendingSave = hooks.handleSettingsSubmit({
+            preventDefault() {},
+            currentTarget: elements.settingsForm
+        });
+        await flushPromises();
+
+        hooks.closeSettingsModal();
+        hooks.openSettingsModal(elements.menuButton);
+        elements.settingsForm.__fields = {
+            dailyNew: '30',
+            reviewLimit: '80',
+            masteryCount: '5',
+            notify: '1'
+        };
+        const latestSave = hooks.handleSettingsSubmit({
+            preventDefault() {},
+            currentTarget: elements.settingsForm
+        });
+        assert.strictEqual(pendingSaves.length, 1);
+
+        pendingSaves.shift()();
+        await pendingSave;
+        await flushPromises();
+        assert.strictEqual(pendingSaves.length, 1);
+        pendingSaves.shift()();
+        await latestSave;
+
+        assert.strictEqual(store.config.dailyNew, 30);
+        assert.strictEqual(store.config.reviewLimit, 80);
+        assert.strictEqual(store.config.masteryCount, 5);
+        assert.strictEqual(store.config.notify, true);
+        assert.strictEqual(elements.settingsModal.dataset.open, 'false');
+    });
+
+    await record('Tab stays inside the active modal', async () => {
+        let prevented = false;
+        hooks.openSettingsModal(elements.menuButton);
+        elements.settingsClose.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: false,
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(prevented, true);
+        assert.strictEqual(documentStub.activeElement, elements.settingsFields.dailyNew);
+
+        prevented = false;
+        elements.settingsFields.dailyNew.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: true,
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(prevented, true);
+        assert.strictEqual(documentStub.activeElement, elements.settingsClose);
+        hooks.closeSettingsModal();
+
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        hooks.setStore(store);
+        await hooks.openListModal(elements.menuButton);
+        elements.listClose.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: false,
+            preventDefault() {}
+        });
+        assert.strictEqual(documentStub.activeElement, elements.listSearch);
+        hooks.closeListModal();
+    });
+
+    await record('list rendering is paged and resets after search', async () => {
+        const words = Array.from({ length: 401 }, (_, index) => ({
+            word: `word-${String(index + 1).padStart(3, '0')}`,
+            meaning: `Meaning ${index + 1}`
+        }));
+        const store = createMockStore(words);
+        let getWordsCalls = 0;
+        const originalGetWords = store.getWords.bind(store);
+        store.getWords = () => {
+            getWordsCalls += 1;
+            return originalGetWords();
+        };
+        hooks.setStore(store);
+        hooks.state.ui.listBrowserQuery = '';
+        hooks.state.ui.listBrowserLearnedOnly = false;
+        hooks.state.ui.listBrowserPage = 1;
+
+        hooks.renderListBrowser();
+        const firstBody = elements.listBody.innerHTML.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
+        assert.strictEqual((firstBody.match(/<tr>/g) || []).length, 200);
+        assert.strictEqual(getWordsCalls, 1);
+
+        hooks.state.ui.listBrowserPage = 2;
+        hooks.renderListBrowser();
+        assert.match(elements.listBody.innerHTML, /<td>201<\/td>/);
+        elements.listSearch.dispatchEvent({ type: 'input', target: { value: 'word-401' } });
+        assert.strictEqual(hooks.state.ui.listBrowserPage, 1);
+        await new Promise((resolve) => setTimeout(resolve, 220));
+        assert.match(elements.listBody.innerHTML, /word-401/);
+    });
+
+    await record('filtered list export remains a complete mergeable word list', async () => {
+        const store = createMockStore([
+            {
+                word: 'alpha',
+                meaning: 'A',
+                example: 'First',
+                phonetic: ' /ˈæl.fə ',
+                freq: 0.8,
+                correctCount: 2
+            },
+            {
+                word: 'beta',
+                meaning: 'B',
+                phonetic: ' /   / ',
+                note: 'private note',
+                questionId: 'internal-id'
+            },
+            {
+                word: 'gamma',
+                meaning: 'C',
+                phonetic: '/'
+            },
+            {
+                word: 'delta',
+                meaning: 'D',
+                phonetic: '///'
+            }
+        ]);
+        hooks.setStore(store);
+        hooks.state.ui.listBrowserQuery = 'alpha';
+        hooks.state.ui.listBrowserLearnedOnly = true;
+        windowStub.URL.created.length = 0;
+        const anchor = createElementStub('a');
+        vocabContext.document.createElement = () => anchor;
+
+        hooks.exportCurrentList();
+
+        const download = windowStub.URL.created.at(-1);
+        assert.ok(download, 'Expected an exported blob');
+        const payload = JSON.parse(await download.blob.text());
+        assert.strictEqual(payload.type, 'wordlist');
+        assert.strictEqual(payload.category, 'external');
+        assert.strictEqual(payload.entries.length, 4);
+        assert.deepStrictEqual(Array.from(payload.entries, (entry) => entry.word), ['alpha', 'beta', 'gamma', 'delta']);
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'version'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'words'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[0], 'correctCount'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[1], 'questionId'));
+        assert.strictEqual(payload.entries[0].phonetic, 'ˈæl.fə');
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[1], 'phonetic'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[2], 'phonetic'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[3], 'phonetic'));
+        assert.match(windowStub.messages.at(-1).text, /可分享词表/);
+    });
+
+    await record('card actions are ignored while list modal is open', () => {
+        hooks.state.session.stage = 'recognition';
+        elements.listModal.dataset.open = 'true';
+        let prevented = false;
+        hooks.handleCardAction({
+            target: {
+                closest() {
+                    return { dataset: { action: 'reveal-meaning' } };
+                }
+            },
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(hooks.state.session.stage, 'recognition');
+        assert.strictEqual(prevented, false);
+        elements.listModal.dataset.open = 'false';
     });
 
     await record('import request triggers input', () => {
@@ -1015,14 +1614,21 @@ async function run() {
         const store = createMockStore();
         hooks.setStore(store);
         hooks.state.ui.importing = false;
+        let switcherSyncCalls = 0;
+        hooks.state.ui.listSwitcher = {
+            syncFromStore() {
+                switcherSyncCalls += 1;
+                return true;
+            }
+        };
         windowStub.VocabDataIO = {
             importWordList: async () => ({
                 type: 'progress',
-                entries: [{ word: 'theta', meaning: 'T' }],
+                entries: [{ word: 'theta', meaning: 'T', nextReview: '2026-07-25T00:00:00.000Z' }],
                 meta: {
                     category: 'user',
-                    config: { dailyNew: 5, reviewLimit: 10, masteryCount: 2, notify: false },
-                    reviewQueue: ['x']
+                    listId: 'spelling-errors-p1',
+                    config: { dailyNew: 5, reviewLimit: 10, masteryCount: 2, notify: false }
                 }
             })
         };
@@ -1030,7 +1636,11 @@ async function run() {
         await hooks.performImport({ name: 'progress.json' });
         assert.strictEqual(store.words.length, 1);
         assert.strictEqual(store.config.dailyNew, 5);
-        assert.strictEqual(store.reviewQueue.length, 1);
+        assert.strictEqual(store.config.activeListId, 'spelling-errors-p1');
+        assert.strictEqual(store.replaceProgressCalls[0].listId, 'spelling-errors-p1');
+        assert.strictEqual(store.replaceProgressCalls[0].words[0].nextReview, '2026-07-25T00:00:00.000Z');
+        assert.strictEqual(switcherSyncCalls, 1);
+        hooks.state.ui.listSwitcher = null;
     });
 
     await record('export progress triggers download', async () => {
