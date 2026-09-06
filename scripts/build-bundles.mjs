@@ -64,6 +64,7 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/utils/answerComparisonUtils.js',
         'js/utils/BrowsePreferencesUtils.js',
+        'js/components/interruptedPracticeHistory.js',
         'js/main.js'
     ],
     'js/bundles/diagnostics.bundle.js': [

@@ -310,6 +310,91 @@ let lastPracticeRecordsSignature = null;
 // the Practice-history single-flight contract below.
 let browsePracticeProjectionInvocationSequence = 0;
 let browsePracticeProjectionGeneration = 0;
+let interruptedPracticeHistoryRenderGeneration = 0;
+let interruptedPracticeHistoryReadError = null;
+
+function resolveInterruptedPracticeType(record) {
+    const metadata = record && record.metadata || {};
+    const candidates = record ? [record.type, record.examType, record.practiceType,
+        metadata.type, metadata.examType, metadata.practiceType, record.pageType, metadata.pageType] : [];
+    for (const candidate of candidates) {
+        const type = normalizeRecordType(candidate);
+        if (type === 'reading' || type === 'listening') return type;
+    }
+    return null;
+}
+
+async function loadInterruptedPracticeHistory() {
+    try {
+        const records = await window.AppData.recovery.listInterrupted();
+        const libraryReads = new Map();
+        const manager = getLibraryManager();
+        const resolvedRecords = await Promise.all((Array.isArray(records) ? records : []).map(async (record) => {
+            if (!record || resolveInterruptedPracticeType(record)) return record;
+            if (!manager || typeof manager.resolveIndexForRecord !== 'function') return record;
+            // Older snapshots may have provenance but no type. Resolve only the
+            // saved source library, using the shared default/unknown-source policy.
+            // A different active library can reuse the same exam IDs.
+            const provenance = manager.getRecordLibraryProvenance(record);
+            const key = JSON.stringify(provenance);
+            if (!libraryReads.has(key)) {
+                libraryReads.set(key, Promise.resolve().then(() => manager.resolveIndexForRecord(record))
+                    .catch((error) => {
+                        console.warn('[PracticeHistory] 读取中断记录来源题库失败:', error);
+                        return [];
+                    }));
+            }
+            const sourceIndex = await libraryReads.get(key);
+            const exam = (Array.isArray(sourceIndex) ? sourceIndex : [])
+                .find((entry) => entry && String(entry.id) === String(record.examId));
+            const type = resolveInterruptedPracticeType(exam);
+            return type ? Object.assign({}, record, { type }) : record;
+        }));
+        return { records: resolvedRecords, error: null };
+    } catch (error) {
+        console.warn('[PracticeHistory] 读取中断记录失败:', error);
+        return { records: [], error };
+    }
+}
+
+function interruptedRecordMatchesExamType(record, targetType) {
+    const target = normalizeRecordType(targetType);
+    if (!target || target === 'all') return true;
+    // Unidentifiable legacy attempts remain in All, rather than being presented
+    // as both reading and listening. Canonical history keeps its existing policy.
+    return resolveInterruptedPracticeType(record) === target;
+}
+
+function updateInterruptedPracticeHistory(snapshot, examIndex) {
+    const container = document.getElementById('interrupted-practice-history');
+    const renderer = window.InterruptedPracticeHistory;
+    if (!container || !renderer) return;
+
+    const examType = getCurrentExamType();
+    const query = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
+    const records = snapshot.records.filter((record) => {
+        if (!record) return false;
+        if (examType !== 'all' && !interruptedRecordMatchesExamType(record, examType)) return false;
+        if (!query) return true;
+        return [record.title, record.examId, record.category, record.frequency,
+            record.metadata && record.metadata.examTitle, record.startTime,
+            record.endTime, record.date].some((field) => String(field || '').toLowerCase().includes(query));
+    }).sort((left, right) =>
+        (Date.parse(right.endTime || right.createdAt || right.startTime) || 0)
+        - (Date.parse(left.endTime || left.createdAt || left.startTime) || 0));
+    renderer.render({
+        container,
+        records,
+        error: snapshot.error,
+        onLoadDetails: (recordId) => window.AppData.recovery.getInterrupted(recordId),
+        onDelete: deleteInterruptedRecord,
+        onRetry: () => ensurePracticeRecordsSync('interrupted-retry', {
+            forceRender: true,
+            requirePostCommitRead: true
+        })
+    });
+}
+
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
@@ -319,10 +404,11 @@ async function syncPracticeRecords(options = {}) {
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
-    let [records, insightRecords, examIndex] = await Promise.all([
+    let [records, insightRecords, examIndex, interruptedSnapshot] = await Promise.all([
         listCanonicalPracticeRecordSummaries(),
         window.AppData.practice.listInsights({ limit: 10 }),
-        resolveActiveExamIndex()
+        resolveActiveExamIndex(),
+        loadInterruptedPracticeHistory()
     ]);
     const insightsById = new Map((Array.isArray(insightRecords) ? insightRecords : [])
         .filter((record) => record && record.id)
@@ -412,6 +498,13 @@ async function syncPracticeRecords(options = {}) {
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
         updatePracticeView(records, examIndex);
+    }
+    // Recovery is a separate view, never a formal score or completion projection.
+    // Always render its fresh read, even when canonical history has not changed.
+    if (practiceProjectionInvocation >= interruptedPracticeHistoryRenderGeneration) {
+        interruptedPracticeHistoryRenderGeneration = practiceProjectionInvocation;
+        interruptedPracticeHistoryReadError = interruptedSnapshot.error;
+        updateInterruptedPracticeHistory(interruptedSnapshot, examIndex);
     }
     return records;
 }
@@ -2194,6 +2287,19 @@ function ensurePracticeSessionSyncListener() {
             forceRender: true
         });
     });
+    const refreshInterruptedHistory = (event) => {
+        const detail = event && event.detail;
+        if (!detail || detail.reason === 'completed' || detail.interruptedRecordSaved !== true) return;
+        startPracticeRecordsSyncInBackground('session-interrupted', {
+            mode: 'summary',
+            forceRender: true,
+            requirePostCommitRead: true
+        });
+    };
+    document.addEventListener('practiceSessionEnded', refreshInterruptedHistory);
+    // A saved old attempt must refresh history even if a replacement session
+    // owns the exam and therefore must not receive a session-ended event.
+    document.addEventListener('practiceInterruptedRecordSaved', refreshInterruptedHistory);
 }
 
 // Phase 3: 练习统计计算 - 保留在 main.js（数据处理逻辑，暂不迁移）
@@ -4219,19 +4325,68 @@ async function deleteRecord(recordId) {
     }
 }
 
+async function refreshPracticeHistoryAfterMutation(trigger) {
+    try {
+        await ensurePracticeRecordsSync(trigger, { forceRender: true, requirePostCommitRead: true });
+        return !interruptedPracticeHistoryReadError;
+    } catch (error) {
+        console.warn('[PracticeHistory] 操作后刷新失败:', error);
+        return false;
+    }
+}
+
+async function deleteInterruptedRecord(recordId) {
+    if (!recordId) return false;
+    if (!confirm('确定要删除这条未完成 / 中断记录及其中保存的作答吗？阅读草稿将保留。此操作不可恢复。')) return false;
+    let mutationError = null;
+    try {
+        const result = await window.AppData.recovery.discardInterrupted(recordId);
+        if (result && result.committed === false) throw new Error('Interrupted deletion was not committed');
+    } catch (error) {
+        mutationError = error;
+        console.warn('[PracticeHistory] 删除中断记录失败:', error);
+    }
+    const refreshed = await refreshPracticeHistoryAfterMutation('interrupted-delete');
+    if (mutationError) {
+        showMessage(refreshed
+            ? '未能确认中断记录已删除，请查看刷新后的记录并重试。'
+            : '未能确认中断记录已删除，且记录刷新失败，请重试。', 'error');
+    } else {
+        showMessage(refreshed ? '中断记录已删除' : '中断记录已删除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return !mutationError && refreshed;
+}
+
 async function clearPracticeData() {
-    if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        await window.AppData.practice.clear();
-        await syncPracticeRecords({ forceRender: true, trigger: 'clear-all' });
-        if (window.AppData && window.AppData.recovery && typeof window.AppData.recovery.clear === 'function') {
-            await window.AppData.recovery.clear();
+    if (!confirm('确定要清除所有正式练习记录和未完成 / 中断记录吗？阅读草稿、活动会话及其他恢复数据将保留。此操作不可恢复。')) return false;
+
+    // Both scopes are explicitly selected by this history action. A failure in
+    // one must not hide a committed change in the other, or clear unrelated recovery.
+    const scopes = ['正式练习记录', '未完成 / 中断记录'];
+    const results = await Promise.allSettled([
+        Promise.resolve().then(() => window.AppData.practice.clear()),
+        Promise.resolve().then(() => window.AppData.recovery.clearInterrupted())
+    ]);
+    const failedScopes = [];
+    results.forEach((result, index) => {
+        if (result.status === 'rejected' || (result.value && result.value.committed === false)) {
+            failedScopes.push(scopes[index]);
+            console.warn(`[PracticeHistory] 清除${scopes[index]}失败:`, result.reason || result.value);
         }
+    });
+    if (!failedScopes.includes(scopes[0])) {
         processedSessions.clear();
         clearSelectedRecordsState();
         setBulkDeleteModeState(false);
         refreshBulkDeleteButton();
-        showMessage('练习记录已清除', 'success');
     }
+    const refreshed = await refreshPracticeHistoryAfterMutation('clear-all');
+    if (failedScopes.length) {
+        showMessage(`未能确认清除：${failedScopes.join('、')}。${refreshed ? '已刷新当前记录，请重试。' : '记录刷新也失败，请重试。'}`, 'error');
+    } else {
+        showMessage(refreshed ? '正式练习记录和中断记录已清除' : '练习记录已清除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return failedScopes.length === 0 && refreshed;
 }
 
 async function clearCache() {

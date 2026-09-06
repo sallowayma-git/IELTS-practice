@@ -35,6 +35,18 @@ class PracticeRecorder {
         return null;
     }
 
+    resolveSessionPracticeType(...sources) {
+        for (const source of sources) {
+            if (!source || typeof source !== 'object') continue;
+            const metadata = source.metadata || {};
+            for (const candidate of [source.type, source.examType, metadata.type, metadata.examType, source.pageType, metadata.pageType]) {
+                const type = this.normalizePracticeType(candidate);
+                if (type) return type;
+            }
+        }
+        return null;
+    }
+
     getCoreContracts() {
         return window.PracticeCore && window.PracticeCore.contracts
             ? window.PracticeCore.contracts
@@ -729,11 +741,13 @@ class PracticeRecorder {
         const previousEntityId = existing
             ? this.activeSessionEntityId(existing)
             : null;
+        const type = this.resolveSessionPracticeType(examData, existing);
 
         const sessionData = {
             id: this.activeSessionEntityId(sessionId),
             sessionId,
             examId,
+            type,
             startTime,
             lastActivity: new Date().toISOString(),
             status: existing ? (existing.status || 'started') : 'started',
@@ -748,6 +762,7 @@ class PracticeRecorder {
                 examTitle: examData.title || '',
                 category: examData.category || '',
                 frequency: examData.frequency || '',
+                pageType: examData.pageType || examData.metadata?.pageType || null,
                 userAgent: navigator.userAgent,
                 screenResolution: `${screen.width}x${screen.height}`,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -764,6 +779,7 @@ class PracticeRecorder {
         if (examData && examData.title) {
             sessionData.metadata.examTitle = examData.title;
         }
+        if (type) sessionData.metadata.type = type;
 
         // 存储会话
         this.activeSessions.set(examId, sessionData);
@@ -802,6 +818,8 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) {
             this.startPracticeSession(examId, Object.assign({}, metadata || {}, {
                 sessionId,
+                type: this.resolveSessionPracticeType(data),
+                pageType: data.pageType || metadata?.pageType || null,
                 title: metadata && (metadata.title || metadata.examTitle) || '',
                 category: metadata && metadata.category || '',
                 frequency: metadata && metadata.frequency || '',
@@ -820,6 +838,7 @@ class PracticeRecorder {
 
         let session = this.activeSessions.get(examId);
         const previousEntityId = this.activeSessionEntityId(session);
+        const type = this.resolveSessionPracticeType(data, session);
         // A host start supersedes pending cleanup even if its ID, status, and
         // timestamp are unchanged. Keep this generation out of stored sessions.
         this.sessionStartGenerations.set(session, (this.sessionStartGenerations.get(session) || 0) + 1);
@@ -830,6 +849,10 @@ class PracticeRecorder {
 
         if (metadata) {
             session.metadata = { ...session.metadata, ...metadata };
+        }
+        if (type) {
+            session.type = type;
+            session.metadata = { ...session.metadata, type };
         }
 
         this.activeSessions.set(examId, session);
@@ -1223,7 +1246,9 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) return false;
 
         const session = this.activeSessions.get(examId);
+        const sessionId = session.sessionId;
         const sessionStartGeneration = this.sessionStartGenerations.get(session) || 0;
+        let interruptedRecordSaved = false;
         let sessionEntityId;
         try {
             sessionEntityId = this.activeSessionEntityId(session);
@@ -1237,11 +1262,13 @@ class PracticeRecorder {
         if (reason !== 'completed' && session.status !== 'completed') {
             const endTime = new Date().toISOString();
             const duration = new Date(endTime) - new Date(session.startTime);
+            const type = this.resolveSessionPracticeType(session);
 
             const interruptedRecord = {
-                id: `interrupted_${session.sessionId}`,
+                id: `interrupted_${sessionId}`,
                 examId,
-                sessionId: session.sessionId,
+                sessionId,
+                type,
                 startTime: session.startTime,
                 endTime,
                 duration: Math.floor(duration / 1000),
@@ -1249,7 +1276,7 @@ class PracticeRecorder {
                 reason,
                 progress: session.progress,
                 answers: session.answers,
-                metadata: session.metadata,
+                metadata: Object.assign({}, session.metadata, type ? { type } : {}),
                 createdAt: endTime
             };
 
@@ -1258,6 +1285,7 @@ class PracticeRecorder {
                 // interrupted record commits. Never discard it on a failed
                 // conversion (quota, backend loss, validation, etc.).
                 await this.saveInterruptedRecord(interruptedRecord);
+                interruptedRecordSaved = true;
             } catch (error) {
                 console.error('[PracticeRecorder] 保存中断记录失败:', error);
                 this.dispatchSessionEvent('sessionError', { examId, error });
@@ -1270,6 +1298,9 @@ class PracticeRecorder {
         if (this.activeSessions.get(examId) !== session
             || this.activeSessionEntityId(session) !== sessionEntityId
             || (this.sessionStartGenerations.get(session) || 0) !== sessionStartGeneration) {
+            if (interruptedRecordSaved) {
+                this.dispatchSessionEvent('InterruptedRecordSaved', { examId, reason, sessionId, interruptedRecordSaved: true });
+            }
             return true;
         }
 
@@ -1284,12 +1315,17 @@ class PracticeRecorder {
 
         // A new session can also start while the old checkpoint is discarded.
         if (this.activeSessions.has(examId)) {
+            if (interruptedRecordSaved) {
+                this.dispatchSessionEvent('InterruptedRecordSaved', { examId, reason, sessionId, interruptedRecordSaved: true });
+            }
             return true;
         }
 
         console.log(`Practice session ended: ${examId} (${reason})`);
 
-        // 触发结束事件
+        // Publish the consumer-facing contract after durable interruption storage.
+        this.dispatchSessionEvent('SessionEnded', { examId, reason, interruptedRecordSaved });
+        // Keep the historical spelling and payload for existing integrations.
         this.dispatchSessionEvent('sessionEnded', { examId, reason });
         return true;
     }
@@ -1775,15 +1811,22 @@ class PracticeRecorder {
      * 保存中断记录
      */
     async saveInterruptedRecord(record) {
-        await window.AppData.recovery.saveInterrupted(record);
-        const existing = await window.AppData.recovery.listInterrupted();
-        const records = (Array.isArray(existing) ? existing : [])
-            .slice()
-            .sort((left, right) => Date.parse(right.updatedAt || right.createdAt || 0) - Date.parse(left.updatedAt || left.createdAt || 0));
-        for (const stale of records.slice(100)) {
-            await window.AppData.recovery.discardInterrupted(stale.id || stale.sessionId || stale.recordId);
+        const receipt = await window.AppData.recovery.saveInterrupted(record);
+        try {
+            const existing = await window.AppData.recovery.listInterrupted();
+            const records = (Array.isArray(existing) ? existing : [])
+                .slice()
+                .sort((left, right) => Date.parse(right.updatedAt || right.createdAt || 0) - Date.parse(left.updatedAt || left.createdAt || 0));
+            for (const stale of records.slice(100)) {
+                await window.AppData.recovery.discardInterrupted(stale.id || stale.sessionId || stale.recordId);
+            }
+        } catch (error) {
+            // Retention is best-effort after the record has committed. A cleanup
+            // failure must not hide saved answers or report the write as failed.
+            console.warn('[PracticeRecorder] 中断记录保留清理失败，不影响已保存记录:', error);
         }
         console.log(`Interrupted record saved: ${record.id}`);
+        return receipt;
     }
 
     /**

@@ -38,9 +38,11 @@ function createHarness({ now = null } = {}) {
         backupCalls: [],
         activeCheckpoints: new Map(),
         interruptedRecords: [],
+        discardedInterruptedIds: [],
         discardedSessionIds: [],
         intervals: new Set(),
         events: [],
+        eventListeners: new Map(),
         failCompleteAttempts: 0
     };
     const quietConsole = { log() {}, warn() {}, error() {}, info() {}, debug() {} };
@@ -87,6 +89,11 @@ function createHarness({ now = null } = {}) {
             },
             async listInterrupted() {
                 return clone(state.interruptedRecords);
+            },
+            async discardInterrupted(id) {
+                state.discardedInterruptedIds.push(id);
+                state.interruptedRecords = state.interruptedRecords.filter((record) => record.id !== id);
+                return { committed: true };
             },
             async listDrafts() {
                 return clone(state.drafts);
@@ -190,8 +197,14 @@ function createHarness({ now = null } = {}) {
             }
         },
         document: {
+            addEventListener(type, listener) {
+                const listeners = state.eventListeners.get(type) || [];
+                listeners.push(listener);
+                state.eventListeners.set(type, listeners);
+            },
             dispatchEvent(event) {
                 state.events.push({ type: event.type, detail: clone(event.detail) });
+                for (const listener of state.eventListeners.get(event.type) || []) listener(event);
             }
         },
         Date: now === null ? Date : class extends Date {
@@ -212,7 +225,7 @@ function createHarness({ now = null } = {}) {
     recorder.sessionListeners = new Map();
     recorder.sessionStartGenerations = new WeakMap();
     recorder.wait = async () => {};
-    return { recorder, state, windowStub };
+    return { recorder, state, windowStub, document: sandbox.document };
 }
 
 function makeRecord(id = 'record-v2') {
@@ -350,6 +363,83 @@ async function main() {
             assert.deepStrictEqual(state.drafts.map((draft) => draft.id), ['reading-draft:reading-p2']);
         });
 
+        for (const scenario of [
+            { name: 'launch type with an unknown ready page', launch: { type: 'LISTENING' }, ready: { metadata: { type: 'practice', pageType: 'suite-placeholder' } }, expected: 'listening' },
+            { name: 'unified listening ready page', launch: {}, ready: { metadata: { type: 'unknown', pageType: 'unified-listening' } }, expected: 'listening' },
+            { name: 'unified reading ready page', launch: {}, ready: { metadata: { pageType: 'unified-reading' } }, expected: 'reading' },
+            { name: 'known launch examType behind an unknown type', launch: { type: 'unknown', examType: 'reading' }, ready: { metadata: { pageType: 'practice' } }, expected: 'reading' }
+        ]) {
+            await record(`timeout retains ${scenario.name} without the source library`, async () => {
+                const now = Date.parse('2026-09-07T12:00:00.000Z');
+                const { recorder, state, windowStub } = createHarness({ now });
+                const examId = 'opaque-shared-exam';
+                let libraryReads = 0;
+                windowStub.resolveActiveLibraryIndex = async () => {
+                    libraryReads += 1;
+                    return [{ id: examId, type: scenario.expected === 'reading' ? 'listening' : 'reading' }];
+                };
+                const session = recorder.startPracticeSession(examId, {
+                    ...scenario.launch,
+                    sessionId: 'typed-attempt',
+                    title: 'Original library title',
+                    libraryConfigurationId: 'removed-library'
+                });
+                recorder.handleSessionStarted({ ...scenario.ready, examId, sessionId: session.sessionId });
+                recorder.handleSessionProgress({ examId, progress: { currentQuestion: 2 }, answers: { q1: 'B' } });
+                await recorder.saveActiveSessions();
+                assert.strictEqual(session.type, scenario.expected);
+                assert.strictEqual(session.metadata.type, scenario.expected);
+                assert.strictEqual(state.activeCheckpoints.get(session.id).type, scenario.expected);
+                windowStub.resolveActiveLibraryIndex = async () => {
+                    libraryReads += 1;
+                    return [];
+                };
+
+                let ending;
+                const endPracticeSession = recorder.endPracticeSession.bind(recorder);
+                recorder.endPracticeSession = (...args) => {
+                    ending = endPracticeSession(...args);
+                    return ending;
+                };
+                session.lastActivity = new Date(now - 31 * 60 * 1000).toISOString();
+                recorder.checkSessionActivity(examId);
+                assert(ending, 'the original timeout path must run');
+                assert.strictEqual(await ending, true);
+
+                const saved = state.interruptedRecords[0];
+                assert.strictEqual(saved.type, scenario.expected);
+                assert.strictEqual(saved.metadata.type, scenario.expected);
+                assert.strictEqual(saved.metadata.libraryConfigurationId, 'removed-library');
+                assert.strictEqual(saved.metadata.examTitle, 'Original library title');
+                assert.deepStrictEqual(saved.answers, { q1: 'B' });
+                assert.strictEqual(libraryReads, 0, 'attempt type must come from the session, independent of the active library');
+            });
+        }
+
+        for (const pageType of ['unified-reading', 'listening']) {
+            await record(`host-only ${pageType} handshake preserves type in interruption`, async () => {
+                const { recorder, state, windowStub } = createHarness();
+                windowStub.resolveActiveLibraryIndex = async () => [];
+                const examId = 'host-only-opaque-id';
+                recorder.handleSessionStarted({
+                    examId,
+                    sessionId: 'host-created-attempt',
+                    metadata: { pageType, libraryConfigurationId: 'inactive-library', examTitle: 'Host title' }
+                });
+                const session = recorder.activeSessions.get(examId);
+                await recorder.saveActiveSessions();
+                const expected = pageType === 'unified-reading' ? 'reading' : 'listening';
+                assert.strictEqual(session.type, expected);
+                assert.strictEqual(session.metadata.type, expected);
+                assert.strictEqual(session.metadata.pageType, pageType);
+                assert.strictEqual(state.activeCheckpoints.get(session.id).metadata.type, expected);
+                assert.strictEqual(await recorder.endPracticeSession(examId, 'timeout'), true);
+                assert.strictEqual(state.interruptedRecords[0].type, expected);
+                assert.strictEqual(state.interruptedRecords[0].metadata.type, expected);
+                assert.strictEqual(state.interruptedRecords[0].metadata.libraryConfigurationId, 'inactive-library');
+            });
+        }
+
         await record('JSON export is a catalog-governed v2 practice snapshot', async () => {
             const { recorder, state } = createHarness();
             state.records.push(makeRecord('record-export'));
@@ -401,8 +491,10 @@ async function main() {
             await record(`delayed interrupted save preserves the session after ${mode}`, async () => {
                 const { recorder, state, windowStub } = createHarness({ now: Date.parse('2026-09-05T00:00:00.000Z') });
                 const examId = 'reading-p1';
-                const original = recorder.startPracticeSession(examId, { sessionId: 'session-A' });
-                recorder.handleSessionStarted({ examId, sessionId: 'session-A' });
+                const original = recorder.startPracticeSession(examId, {
+                    sessionId: 'session-A', type: 'listening', title: 'Original listening title', libraryConfigurationId: 'original-library'
+                });
+                recorder.handleSessionStarted({ examId, sessionId: 'session-A', metadata: { pageType: 'unified-listening' } });
                 recorder.handleSessionProgress({
                     examId,
                     progress: { currentQuestion: 4 },
@@ -423,10 +515,14 @@ async function main() {
 
                 const sessionId = mode.startsWith('same-id') ? 'session-A' : 'session-B';
                 if (mode.endsWith('identity rebind')) {
-                    recorder.handleSessionStarted({ examId, sessionId });
+                    recorder.handleSessionStarted({ examId, sessionId, metadata: {
+                        pageType: 'unified-reading', examTitle: 'Replacement reading title', libraryConfigurationId: 'replacement-library'
+                    } });
                     assert.strictEqual(recorder.activeSessions.get(examId), original);
                 } else {
-                    recorder.startPracticeSession(examId, { sessionId });
+                    recorder.startPracticeSession(examId, {
+                        sessionId, type: 'reading', title: 'Replacement reading title', libraryConfigurationId: 'replacement-library'
+                    });
                     assert.notStrictEqual(recorder.activeSessions.get(examId), original);
                 }
                 const replacement = recorder.activeSessions.get(examId);
@@ -453,6 +549,13 @@ async function main() {
                 assert.strictEqual(state.interruptedRecords.length, 1);
                 assert.strictEqual(state.interruptedRecords[0].sessionId, 'session-A');
                 assert.strictEqual(state.interruptedRecords[0].reason, 'timeout');
+                assert.strictEqual(state.interruptedRecords[0].type, 'listening');
+                assert.strictEqual(state.interruptedRecords[0].metadata.type, 'listening');
+                assert.strictEqual(state.interruptedRecords[0].metadata.examTitle, 'Original listening title');
+                assert.strictEqual(state.interruptedRecords[0].metadata.libraryConfigurationId, 'original-library');
+                assert.strictEqual(replacement.type, 'reading');
+                assert.strictEqual(replacement.metadata.type, 'reading');
+                assert.strictEqual(replacement.metadata.libraryConfigurationId, 'replacement-library');
                 assert.strictEqual(state.interruptedRecords[0].progress.currentQuestion, 4);
                 assert.deepStrictEqual(state.interruptedRecords[0].answers, { q1: 'A' });
                 assert.strictEqual(recorder.activeSessions.get(examId), replacement,
@@ -460,6 +563,12 @@ async function main() {
                 assert.strictEqual(recorder.sessionListeners.get(examId), listener);
                 assert(state.intervals.has(listener), 'the current listener must remain scheduled');
                 assert.deepStrictEqual(state.activeCheckpoints.get(replacement.id), checkpoint);
+                assert.deepStrictEqual(
+                    state.events.filter((event) => event.type === 'practiceInterruptedRecordSaved'),
+                    [{ type: 'practiceInterruptedRecordSaved', detail: { examId, reason: 'timeout', sessionId: 'session-A', interruptedRecordSaved: true } }],
+                    'a saved earlier attempt must refresh history without announcing the replacement as ended'
+                );
+                assert.strictEqual(state.events.filter((event) => event.type === 'practiceSessionEnded').length, 0);
                 assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
 
                 recorder.handleSessionProgress({
@@ -527,6 +636,12 @@ async function main() {
                 assert.strictEqual(state.activeCheckpoints.has(session.id), false);
                 assert.deepStrictEqual(state.discardedSessionIds, [session.id]);
                 assert.strictEqual(state.interruptedRecords.length, reason === 'timeout' ? 1 : 0);
+                assert.strictEqual(state.events.filter((event) => event.type === 'practiceInterruptedRecordSaved').length, 0,
+                    'ordinary session cleanup must not publish a second history refresh');
+                assert.deepStrictEqual(
+                    state.events.filter((event) => event.type === 'practiceSessionEnded'),
+                    [{ type: 'practiceSessionEnded', detail: { examId, reason, interruptedRecordSaved: reason === 'timeout' } }]
+                );
                 assert.deepStrictEqual(
                     state.events.filter((event) => event.type === 'practicesessionEnded'),
                     [{ type: 'practicesessionEnded', detail: { examId, reason } }]
@@ -562,6 +677,13 @@ async function main() {
                 assert(state.intervals.has(listener));
                 assert.strictEqual(state.activeCheckpoints.has(original.id), false);
                 assert.strictEqual(state.activeCheckpoints.get(replacement.id).sessionId, 'session-B');
+                assert.deepStrictEqual(
+                    state.events.filter((event) => event.type === 'practiceInterruptedRecordSaved'),
+                    reason === 'timeout'
+                        ? [{ type: 'practiceInterruptedRecordSaved', detail: { examId, reason, sessionId: 'session-A', interruptedRecordSaved: true } }]
+                        : []
+                );
+                assert.strictEqual(state.events.filter((event) => event.type === 'practiceSessionEnded').length, 0);
                 assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
             });
         }
@@ -588,7 +710,100 @@ async function main() {
             assert.strictEqual(state.discardedSessionIds.length, 0,
                 'the only durable checkpoint must not be discarded after save failure');
             assert.strictEqual(state.interruptedRecords.length, 0);
+            assert.strictEqual(state.events.filter((event) => event.type === 'practiceInterruptedRecordSaved').length, 0);
+            assert.strictEqual(state.events.filter((event) => event.type === 'practiceSessionEnded').length, 0);
             assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionEnded').length, 0);
+        });
+
+        await record('real timeout publishes saved answers only after interruption commits', async () => {
+            const now = Date.parse('2026-09-05T12:00:00.000Z');
+            const { recorder, state, windowStub, document } = createHarness({ now });
+            const examId = 'reading-p1';
+            const session = recorder.startPracticeSession(examId, { sessionId: 'timed-out-session' });
+            recorder.handleSessionStarted({ examId, sessionId: session.sessionId });
+            recorder.handleSessionProgress({ examId, progress: { currentQuestion: 2 }, answers: { q1: 'B' } });
+            await recorder.saveActiveSessions();
+            const draftsBefore = clone(state.drafts);
+            const gate = deferred();
+            const saveInterrupted = windowStub.AppData.recovery.saveInterrupted;
+            windowStub.AppData.recovery.saveInterrupted = async (value) => {
+                await gate.promise;
+                return saveInterrupted(value);
+            };
+            let ending;
+            const endPracticeSession = recorder.endPracticeSession.bind(recorder);
+            recorder.endPracticeSession = (...args) => {
+                ending = endPracticeSession(...args);
+                return ending;
+            };
+            let refreshedRecords = null;
+            let refresh;
+            document.addEventListener('practiceSessionEnded', (event) => {
+                assert.strictEqual(event.detail.interruptedRecordSaved, true);
+                refresh = windowStub.AppData.recovery.listInterrupted().then((records) => { refreshedRecords = records; });
+            });
+
+            session.lastActivity = new Date(now - 31 * 60 * 1000).toISOString();
+            recorder.checkSessionActivity(examId);
+            assert(ending, 'the original inactivity check must invoke the end lifecycle');
+            assert.strictEqual(refreshedRecords, null);
+            assert.strictEqual(state.events.filter((event) => event.type === 'practiceSessionEnded').length, 0);
+            gate.resolve();
+            assert.strictEqual(await ending, true);
+            await refresh;
+
+            assert.strictEqual(refreshedRecords.length, 1);
+            assert.strictEqual(refreshedRecords[0].reason, 'timeout');
+            assert.deepStrictEqual(refreshedRecords[0].answers, { q1: 'B' });
+            assert.strictEqual(state.records.length, 0, 'interruption must not create a formal score');
+            assert.strictEqual(state.commands.length, 0);
+            assert.deepStrictEqual(state.drafts, draftsBefore, 'reading drafts remain a separate answer source');
+            assert.strictEqual(state.events.filter((event) => event.type === 'practiceSessionEnded').length, 1);
+        });
+
+        for (const failedCleanup of ['retention read', 'retention discard', 'active checkpoint discard']) {
+            await record(`committed interruption still publishes history after ${failedCleanup} failure`, async () => {
+                const { recorder, state, windowStub } = createHarness();
+                const examId = 'reading-p1';
+                const session = recorder.startPracticeSession(examId, { sessionId: 'saved-before-cleanup-error' });
+                recorder.handleSessionProgress({ examId, progress: { currentQuestion: 1 }, answers: { q1: 'A' } });
+                await recorder.saveActiveSessions();
+                const fail = async () => { throw new Error(`forced ${failedCleanup} failure`); };
+                if (failedCleanup === 'retention read') windowStub.AppData.recovery.listInterrupted = fail;
+                if (failedCleanup === 'retention discard') {
+                    state.interruptedRecords = Array.from({ length: 100 }, (_, index) => ({
+                        id: `stale-${index}`, createdAt: new Date(index * 1000).toISOString()
+                    }));
+                    windowStub.AppData.recovery.discardInterrupted = fail;
+                }
+                if (failedCleanup === 'active checkpoint discard') windowStub.AppData.recovery.discardActiveSession = fail;
+
+                assert.strictEqual(await recorder.endPracticeSession(examId, 'timeout'), true);
+                const saved = state.interruptedRecords.find((record) => record.sessionId === session.sessionId);
+                assert.deepStrictEqual(saved.answers, { q1: 'A' });
+                assert.strictEqual(recorder.activeSessions.has(examId), false);
+                assert.strictEqual(state.activeCheckpoints.has(session.id), failedCleanup === 'active checkpoint discard');
+                assert.deepStrictEqual(
+                    state.events.filter((event) => event.type === 'practiceSessionEnded'),
+                    [{ type: 'practiceSessionEnded', detail: { examId, reason: 'timeout', interruptedRecordSaved: true } }]
+                );
+                assert.strictEqual(state.events.filter((event) => event.type === 'practicesessionError').length, 0,
+                    'cleanup warnings must not misreport a committed interrupted write as failed');
+                assert.strictEqual(state.records.length, 0);
+            });
+        }
+
+        await record('interruption retention keeps the newest 100 records', async () => {
+            const { recorder, state } = createHarness();
+            state.interruptedRecords = Array.from({ length: 105 }, (_, index) => ({
+                id: `older-${index}`,
+                createdAt: new Date(index * 1000).toISOString()
+            }));
+            const receipt = await recorder.saveInterruptedRecord({ id: 'newest', createdAt: new Date().toISOString() });
+            assert.strictEqual(receipt.committed, true);
+            assert.strictEqual(state.interruptedRecords.length, 100);
+            assert(state.interruptedRecords.some((record) => record.id === 'newest'));
+            assert.deepStrictEqual(state.discardedInterruptedIds, ['older-5', 'older-4', 'older-3', 'older-2', 'older-1', 'older-0']);
         });
 
         await record('backup create and restore delegate to the backups domain', async () => {
