@@ -6,6 +6,7 @@ class PracticeRecorder {
     constructor() {
         this.activeSessions = new Map();
         this.sessionListeners = new Map();
+        this.sessionStartGenerations = new WeakMap();
         this.autoSaveInterval = 30000; // 30秒自动保存
         this.autoSaveTimer = null;
 
@@ -819,6 +820,9 @@ class PracticeRecorder {
 
         let session = this.activeSessions.get(examId);
         const previousEntityId = this.activeSessionEntityId(session);
+        // A host start supersedes pending cleanup even if its ID, status, and
+        // timestamp are unchanged. Keep this generation out of stored sessions.
+        this.sessionStartGenerations.set(session, (this.sessionStartGenerations.get(session) || 0) + 1);
         session.sessionId = sessionId;
         session.id = this.activeSessionEntityId(sessionId);
         session.status = 'active';
@@ -1218,7 +1222,8 @@ class PracticeRecorder {
     async endPracticeSession(examId, reason = 'completed') {
         if (!this.activeSessions.has(examId)) return false;
 
-        let session = this.activeSessions.get(examId);
+        const session = this.activeSessions.get(examId);
+        const sessionStartGeneration = this.sessionStartGenerations.get(session) || 0;
         let sessionEntityId;
         try {
             sessionEntityId = this.activeSessionEntityId(session);
@@ -1260,6 +1265,14 @@ class PracticeRecorder {
             }
         }
 
+        // The interrupted save may outlive a replacement or an in-place host
+        // rebind. Only the original object, identity, and start generation own cleanup.
+        if (this.activeSessions.get(examId) !== session
+            || this.activeSessionEntityId(session) !== sessionEntityId
+            || (this.sessionStartGenerations.get(session) || 0) !== sessionStartGeneration) {
+            return true;
+        }
+
         // 清理会话
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
@@ -1267,6 +1280,11 @@ class PracticeRecorder {
             await window.AppData.recovery.discardActiveSession(sessionEntityId);
         } catch (error) {
             console.error('[PracticeRecorder] 清理活动会话失败:', error);
+        }
+
+        // A new session can also start while the old checkpoint is discarded.
+        if (this.activeSessions.has(examId)) {
+            return true;
         }
 
         console.log(`Practice session ended: ${examId} (${reason})`);

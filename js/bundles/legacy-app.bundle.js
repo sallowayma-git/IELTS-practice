@@ -3007,11 +3007,9 @@ class ExamSystemApp {
         },
         async loadInitialData() {
             try {
-                const browsePreference = await window.AppData.preferences.getBrowse();
-                const browseFilter = browsePreference && browsePreference.filter
-                    ? browsePreference.filter
-                    : { category: 'all', type: 'all' };
-                this.setState('ui.browseFilter', browseFilter);
+                // Browse intent is hydrated once by initializeBrowseView from
+                // the canonical lastFilter preference. Data refreshes must not
+                // replay an older durable scope into the live state service.
                 await this.loadUserStats();
                 await this.updateOverviewStats();
             } catch (error) {
@@ -3198,6 +3196,17 @@ class ExamSystemApp {
         async refreshData() {
             try {
                 await this.loadInitialData();
+                if (this.currentView === 'browse') {
+                    // A visibility resume only needs fresh derived progress.
+                    // Re-running Browse activation would rehydrate and
+                    // normalize the user's live category/mode/path scope.
+                    if (typeof window.ensurePracticeRecordsSync === 'function') {
+                        await window.ensurePracticeRecordsSync('visibility-resume');
+                    } else if (typeof window.syncPracticeRecords === 'function') {
+                        await window.syncPracticeRecords();
+                    }
+                    return;
+                }
                 this.onViewActivated(this.currentView);
             } catch (error) {
                 console.error('Failed to refresh data:', error);
