@@ -44,7 +44,6 @@ Thumbs.db
 developer/tests/e2e/reports/static-ci-report.json
 # 忽略 E2E 运行产物
 developer/tests/e2e/.pw-browsers/
-developer/tests/e2e/__pycache__/
 developer/tests/e2e/reports/
 developer/tests/e2e/reports/suite-practice-flow-report.json
 developer/tests/e2e/reports/*.png
@@ -56,4 +55,7 @@ developer/tests/reports/listeningpractice-scan.md
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**
 node_modules
+# Local dependency and Python caches
+.pnpm-store/
+__pycache__/
 .playwright-mcp/
