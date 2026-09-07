@@ -13,6 +13,7 @@
         <link rel="stylesheet" href="css/heroui-bridge.css" />
         <link rel="stylesheet" href="css/theme-switcher-scroll.css" />
         <link rel="stylesheet" href="css/onboarding.css" />
+        <link rel="stylesheet" href="css/vocab-reader.css" />
     </head>
 
     <body class="hero-body boot-active" data-theme="heroui">
@@ -1000,6 +1001,19 @@
                     <button
                         class="tool-card"
                         type="button"
+                        data-action="open-bookshelf"
+                        id="bookshelf-tool-card"
+                    >
+                        <div class="tool-card-icon">📚</div>
+                        <div class="tool-card-content">
+                            <h3>书架</h3>
+                            <p>收录使用过生词本的题目，支持分类检索、快速复习与导出。</p>
+                        </div>
+                        <div class="tool-card-arrow">进入</div>
+                    </button>
+                    <button
+                        class="tool-card"
+                        type="button"
                         data-index-action="show-achievements"
                     >
                         <div class="tool-card-icon">🏆</div>
@@ -1013,6 +1027,9 @@
             </div>
             <section id="vocab-view" class="view" data-view="vocab" hidden>
                 <div class="vocab-view-shell" data-vocab-role="root"></div>
+            </section>
+            <section id="bookshelf-view" class="view" data-view="bookshelf" hidden>
+                <div class="bookshelf-view-shell" id="bookshelf-root"></div>
             </section>
         </div>
 

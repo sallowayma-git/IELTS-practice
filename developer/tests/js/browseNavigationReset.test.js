@@ -44,6 +44,17 @@ function createClassList(initial = []) {
     };
 }
 
+function createView(id, active = false) {
+    return {
+        id,
+        hidden: !active,
+        classList: createClassList(active ? ['active'] : []),
+        removeAttribute(name) {
+            if (name === 'hidden') this.hidden = false;
+        }
+    };
+}
+
 function createButton(dataset, active = false) {
     return {
         dataset: Object.assign({}, dataset),
@@ -928,8 +939,8 @@ test('a newer navigation cancels a delayed hot pending Browse filter', async () 
     const app = vm.runInContext('new ExamSystemApp()', harness.context);
     const initialization = deferred();
     const appliedFilters = [];
-    const browseView = { id: 'browse-view', classList: createClassList() };
-    const overviewView = { id: 'overview-view', classList: createClassList(['active']) };
+    const browseView = createView('browse-view');
+    const overviewView = createView('overview-view', true);
     const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
     const originalQuerySelector = harness.window.document.querySelector.bind(harness.window.document);
     const originalQuerySelectorAll = harness.window.document.querySelectorAll.bind(harness.window.document);
@@ -960,6 +971,7 @@ test('a newer navigation cancels a delayed hot pending Browse filter', async () 
     app.refreshOverviewData = () => {};
 
     app.browseCategory('P3', 'reading');
+    assert.equal(browseView.hidden, false, 'navigation must reveal the target view');
     app.navigateToView('overview');
     initialization.resolve();
     await flushMicrotasks();
@@ -979,8 +991,8 @@ test('a fallback navigation round trip invalidates a delayed hot Browse filter',
     const initialization = deferred();
     const appliedFilters = [];
     let sharedNavigationGeneration = 0;
-    const browseView = { id: 'browse-view', classList: createClassList() };
-    const overviewView = { id: 'overview-view', classList: createClassList(['active']) };
+    const browseView = createView('browse-view');
+    const overviewView = createView('overview-view', true);
     const views = [browseView, overviewView];
     const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
     const originalQuerySelector = harness.window.document.querySelector.bind(harness.window.document);
@@ -1021,6 +1033,7 @@ test('a fallback navigation round trip invalidates a delayed hot Browse filter',
     };
 
     app.browseCategory('P3', 'reading');
+    assert.equal(browseView.hidden, false, 'navigation must reveal the target view');
     const capturedPendingFilter = harness.window.__pendingBrowseFilter;
     harness.window.showView('overview', false);
     harness.window.showView('browse', false);

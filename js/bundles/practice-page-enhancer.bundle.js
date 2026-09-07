@@ -343,6 +343,16 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'vocab.readingBookshelfExams', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'preferences.values', classification: 'preference',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'
@@ -474,7 +484,9 @@
     const LEGACY_UNPREFIXED_WEB_KEYS = Object.freeze([
         'practice_records',
         'vocab_user_config',
-        'user_achievements'
+        'user_achievements',
+        'ielts_reading_vocab_words_v1',
+        'ielts_reading_bookshelf_exams_v1'
     ]);
 
     function clone(value) { return catalog.clone(value); }
@@ -3834,11 +3846,21 @@
         if (logicalKey.startsWith('recovery.')) return ['id', 'sessionId', 'recordId'];
         if (logicalKey === 'backups.entries') return ['id'];
         if (logicalKey === 'vocab.words') return ['id', 'word', 'key'];
+        if (logicalKey === 'vocab.readingVocabWords') return ['id', 'word'];
+        if (logicalKey === 'vocab.readingBookshelfExams') return ['examId', 'id'];
         if (logicalKey === 'goals.items') return ['id', 'goalId'];
         return ['id', 'sessionId', 'recordId'];
     }
 
     function collectionIdentity(logicalKey, value) {
+        if (logicalKey === 'vocab.readingVocabWords') {
+            const word = value && (value.word || value.id);
+            return word ? String(word).trim().toLowerCase() : idOf(value, ['id', 'word']);
+        }
+        if (logicalKey === 'vocab.readingBookshelfExams') {
+            const examId = value && (value.examId || value.id);
+            return examId ? String(examId).trim() : idOf(value, ['examId', 'id']);
+        }
         const identity = idOf(value, collectionIdentityFields(logicalKey));
         return logicalKey === 'vocab.words' ? identity.trim().toLowerCase() : identity;
     }
@@ -3855,9 +3877,22 @@
             const identity = collectionIdentity(logicalKey, item);
             if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
             const position = positions.get(identity);
-            const mergedItem = logicalKey === 'vocab.words'
+            let mergedItem = logicalKey === 'vocab.words'
                 ? preserveProgressPhonetics([item], position === undefined ? [] : [result[position]])[0]
                 : item;
+            if (logicalKey === 'vocab.readingBookshelfExams' && position !== undefined) {
+                const existingRec = result[position] || {};
+                mergedItem = Object.assign({}, existingRec, item, {
+                    firstUsedAt: Math.min(Number(existingRec.firstUsedAt) || Date.now(), Number(item.firstUsedAt) || Date.now()),
+                    lastOpenedAt: Math.max(Number(existingRec.lastOpenedAt) || 0, Number(item.lastOpenedAt) || 0)
+                });
+            } else if (logicalKey === 'vocab.readingVocabWords' && position !== undefined) {
+                const existingWord = result[position] || {};
+                mergedItem = Object.assign({}, existingWord, item, {
+                    createdAt: Math.min(Number(existingWord.createdAt) || Date.now(), Number(item.createdAt) || Date.now()),
+                    updatedAt: Math.max(Number(existingWord.updatedAt) || 0, Number(item.updatedAt) || 0)
+                });
+            }
             if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
@@ -4059,6 +4094,42 @@
         return createImportPlan(parsed, { replace: true });
     }
 
+    async function flushReadingDataToKernel() {
+        try {
+            if (typeof global.localStorage === 'undefined') return;
+            const rawVocab = global.localStorage.getItem('ielts_reading_vocab_words_v1');
+            if (rawVocab) {
+                const parsed = JSON.parse(rawVocab);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const current = await kernel.read('vocab.readingVocabWords');
+                    const currentArr = Array.isArray(current) ? current : [];
+                    if (currentArr.length === 0) {
+                        await kernel.mutate([{ logicalKey: 'vocab.readingVocabWords', data: parsed }], { operationId: 'flush-reading-vocab' });
+                    } else if (parsed.length > currentArr.length) {
+                        const merged = mergeCollection(currentArr, parsed, 'vocab.readingVocabWords');
+                        await kernel.mutate([{ logicalKey: 'vocab.readingVocabWords', data: merged }], { operationId: 'flush-reading-vocab-merge' });
+                    }
+                }
+            }
+            const rawBookshelf = global.localStorage.getItem('ielts_reading_bookshelf_exams_v1');
+            if (rawBookshelf) {
+                const parsed = JSON.parse(rawBookshelf);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const current = await kernel.read('vocab.readingBookshelfExams');
+                    const currentArr = Array.isArray(current) ? current : [];
+                    if (currentArr.length === 0) {
+                        await kernel.mutate([{ logicalKey: 'vocab.readingBookshelfExams', data: parsed }], { operationId: 'flush-reading-bookshelf' });
+                    } else if (parsed.length > currentArr.length) {
+                        const merged = mergeCollection(currentArr, parsed, 'vocab.readingBookshelfExams');
+                        await kernel.mutate([{ logicalKey: 'vocab.readingBookshelfExams', data: merged }], { operationId: 'flush-reading-bookshelf-merge' });
+                    }
+                }
+            }
+        } catch (e) {
+            if (global.console && console.warn) console.warn('[AppData v2] flushReadingDataToKernel skipped:', e);
+        }
+    }
+
     const backups = Object.freeze({
         onDataCommitted(listener) { return kernel.onCommitted(listener); },
         async getSettings() { await ready; return kernel.read('backups.settings'); },
@@ -4068,7 +4139,9 @@
         async recordExport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.exportHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup export history entry'))); return kernel.mutate([{ logicalKey: 'backups.exportHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-export-history', entry)); },
         async recordImport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.importHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup import history entry'))); return kernel.mutate([{ logicalKey: 'backups.importHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-import-history', entry)); },
         async create(options = {}) {
-            await ready; const current = await readCollectionMeta('backups.entries');
+            await ready;
+            await flushReadingDataToKernel();
+            const current = await readCollectionMeta('backups.entries');
             const mutation = optionsMutationOptions(options, 'backup-create', { id: options.id || null, type: options.type || 'manual' });
             const backupId = options.id || (options.operationId ? `backup_${checksum({ operationId: String(options.operationId) }).replace(/[^a-z0-9]/gi, '')}` : randomId('backup'));
             const existing = current.items.find((item) => String(item.id) === String(backupId));
@@ -4093,6 +4166,7 @@
         async delete(id, options = {}) { await ready; const current = await readCollectionMeta('backups.entries'); return kernel.mutate([{ logicalKey: 'backups.entries', data: current.items.filter((item) => String(item.id) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-delete', { id: String(id) })); },
         async export(options = {}) {
             await ready;
+            await flushReadingDataToKernel();
             if (options.backupId !== undefined && options.backupId !== null) {
                 const backupId = String(options.backupId);
                 const stored = asArray(await kernel.read('backups.entries'))
@@ -4531,6 +4605,32 @@
                 const receipt = await kernel.mutate(changes, mutation);
                 return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
+        },
+        async listReadingWords() { await ready; return kernel.read('vocab.readingVocabWords'); },
+        async saveReadingWords(words, options = {}) {
+            await ready; assertArray(words, 'vocab.saveReadingWords requires an array');
+            const mutation = optionsMutationOptions(options, 'vocab-reading-words', words);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.readingVocabWords', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.readingVocabWords',
+                    data: words,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async listReadingBookshelfExams() { await ready; return kernel.read('vocab.readingBookshelfExams'); },
+        async saveReadingBookshelfExams(records, options = {}) {
+            await ready; assertArray(records, 'vocab.saveReadingBookshelfExams requires an array');
+            const mutation = optionsMutationOptions(options, 'vocab-reading-bookshelf', records);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.readingBookshelfExams', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.readingBookshelfExams',
+                    data: records,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
         }
     });
 
@@ -4661,6 +4761,8 @@
         'backups.entries': ['manual_backups'], 'backups.settings': ['backup_settings'],
         'backups.exportHistory': ['export_history'], 'backups.importHistory': ['import_history'],
         'vocab.words': ['vocab_words'], 'vocab.userConfig': ['vocab_user_config'], 'vocab.lists': ['vocab_lists'],
+        'vocab.readingVocabWords': ['ielts_reading_vocab_words_v1'],
+        'vocab.readingBookshelfExams': ['ielts_reading_bookshelf_exams_v1'],
         'preferences.values': ['ui_preferences'], 'goals.items': ['learning_goals'],
         'achievements.manual': ['achievement_manual_state', 'user_achievements']
     });
@@ -4992,6 +5094,11 @@
                 await cleanupExpiredRecovery();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
+            }
+            try {
+                await flushReadingDataToKernel();
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
             }
             return true;
         })

@@ -2539,6 +2539,7 @@ class ExamSystemApp {
             const targetView = document.getElementById(`${viewName}-view`);
             if (targetView) {
                 targetView.classList.add('active');
+                targetView.removeAttribute('hidden');
                 this.currentView = viewName;
                 document.querySelectorAll('.nav-btn').forEach((btn) => {
                     btn.classList.remove('active');
@@ -2546,6 +2547,11 @@ class ExamSystemApp {
                 const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
                 if (activeNavBtn) {
                     activeNavBtn.classList.add('active');
+                } else if (viewName === 'bookshelf' || viewName === 'vocab') {
+                    const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+                    if (moreNavBtn) {
+                        moreNavBtn.classList.add('active');
+                    }
                 }
                 const url = new URL(window.location);
                 url.searchParams.set('view', viewName);
@@ -2726,6 +2732,30 @@ class ExamSystemApp {
                         })
                         .catch((error) => {
                             console.warn('[App] 激活更多视图时加载工具模块失败:', error);
+                        });
+                    break;
+                case 'bookshelf':
+                    Promise.resolve()
+                        .then(() => {
+                            if (window.AppEntry && typeof window.AppEntry.ensureMoreToolsGroup === 'function') {
+                                return window.AppEntry.ensureMoreToolsGroup();
+                            }
+                            if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                                return window.AppLazyLoader.ensureGroup('more-tools');
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            const bookshelfView = document.getElementById('bookshelf-view');
+                            if (bookshelfView) {
+                                bookshelfView.removeAttribute('hidden');
+                            }
+                            if (window.BookshelfView && typeof window.BookshelfView.mount === 'function') {
+                                window.BookshelfView.mount('#bookshelf-view');
+                            }
+                        })
+                        .catch((error) => {
+                            console.warn('[App] 激活书架视图时加载工具模块失败:', error);
                         });
                     break;
                 default:

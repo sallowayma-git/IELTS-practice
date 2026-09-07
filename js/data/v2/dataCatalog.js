@@ -138,6 +138,16 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'vocab.readingBookshelfExams', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'preferences.values', classification: 'preference',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'

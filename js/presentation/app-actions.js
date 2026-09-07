@@ -1040,10 +1040,58 @@
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
-        stopEndlessPractice: stopEndlessPractice
+        stopEndlessPractice: stopEndlessPractice,
+        openBookshelf: openBookshelf
     });
 
+    function openBookshelf(options) {
+        var fromView = (options && options.fromView) || 'overview';
+        return Promise.resolve().then(function () {
+            if (global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function') {
+                return global.AppEntry.ensureMoreToolsGroup();
+            }
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return global.AppLazyLoader.ensureGroup('more-tools');
+            }
+            return null;
+        }).then(function () {
+            var bookshelfView = document.getElementById('bookshelf-view');
+            if (bookshelfView) {
+                bookshelfView.removeAttribute('hidden');
+            }
+            if (global.BookshelfView && typeof global.BookshelfView.mount === 'function') {
+                global.BookshelfView.mount('#bookshelf-view', { fromView: fromView });
+            }
+            if (global.app && typeof global.app.navigateToView === 'function') {
+                global.app.navigateToView('bookshelf');
+            } else if (typeof global.switchView === 'function') {
+                global.switchView('bookshelf');
+            }
+            var allViews = document.querySelectorAll('.view');
+            for (var i = 0; i < allViews.length; i++) {
+                allViews[i].classList.remove('active');
+            }
+            if (bookshelfView) {
+                bookshelfView.classList.add('active');
+            }
+            var allNavBtns = document.querySelectorAll('.nav-btn');
+            for (var j = 0; j < allNavBtns.length; j++) {
+                allNavBtns[j].classList.remove('active');
+            }
+            var moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+            if (moreNavBtn) {
+                moreNavBtn.classList.add('active');
+            }
+        }).catch(function (error) {
+            console.warn('[AppActions] 打开书架失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('未能打开阅读书架，请稍后重试。', 'warning');
+            }
+        });
+    }
+
     // 挂载到全局（向后兼容）
+    global.openBookshelfView = openBookshelf;
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;

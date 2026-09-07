@@ -1,0 +1,1655 @@
+/* ==========================================================================
+   雅思阅读生词本与全文精读样式 (Vocab Reader & Notebook)
+   ========================================================================== */
+
+/* 题库浏览卡片中的“生词本”按钮布局适配 */
+.exam-actions.has-vocab-btn {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.exam-item-vocab-btn {
+    border-color: rgba(37, 99, 235, 0.3) !important;
+    background: rgba(239, 246, 255, 0.85) !important;
+    color: #1d4ed8 !important;
+    font-weight: 600 !important;
+}
+
+.exam-item-vocab-btn:hover:not(:disabled) {
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+    border-color: #1d4ed8 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(29, 78, 216, 0.2);
+}
+
+@media (max-width: 640px) {
+    .exam-actions.has-vocab-btn {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* 全屏沉浸式阅读器浮层 */
+body.vocab-reader-open {
+    overflow: hidden !important;
+}
+
+.vocab-reader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background-color: #f8fafc;
+    color: #0f172a;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.vocab-reader-overlay.is-hidden {
+    display: none !important;
+}
+
+.vocab-reader-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: #f8fafc;
+    position: relative;
+}
+
+/* 顶部吸顶导航栏：紧凑标题、全平铺陈列段落与题目 Tabs，永远置顶不动 */
+.vocab-reader-header {
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.vocab-reader-header__left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.vocab-reader-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.vocab-reader-back-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+/* 缩小文章标题这一块，为全文与各段落按钮腾出充裕空间 */
+.vocab-reader-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+}
+
+.vocab-reader-title {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #0f172a;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.vocab-reader-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.vocab-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.vocab-badge--cat {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.vocab-badge--freq {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.vocab-badge--info {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+/* 导航段落 Tabs：完全陈列平铺展开，杜绝横向滚动/滑动 */
+.vocab-reader-header__center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: visible;
+}
+
+.vocab-reader-tabs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 0;
+    overflow: visible;
+}
+
+.vocab-tab-btn {
+    padding: 4px 10px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #475569;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    line-height: 1.3;
+}
+
+.vocab-tab-btn:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+    border-color: #94a3b8;
+}
+
+.vocab-tab-btn.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+    font-weight: 600;
+}
+
+.vocab-tab-btn--questions {
+    border-color: #fbbf24;
+    color: #b45309;
+    background: #fffbeb;
+}
+
+.vocab-tab-btn--questions:hover {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #f59e0b;
+}
+
+.vocab-tab-btn--questions.active {
+    background: #d97706;
+    color: #ffffff;
+    border-color: #d97706;
+    box-shadow: 0 1px 4px rgba(217, 119, 6, 0.25);
+    font-weight: 600;
+}
+
+/* 导航右侧工具 */
+.vocab-reader-header__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.vocab-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.vocab-tool-btn:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.vocab-tool-btn.active {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.vocab-notebook-btn {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+.vocab-notebook-btn:hover {
+    background: #dbeafe;
+}
+
+.vocab-badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 10px;
+    background: #ef4444;
+    color: #ffffff;
+}
+
+/* 顶部划词收录提示 Banner */
+.vocab-reader-banner {
+    flex-shrink: 0;
+    background: linear-gradient(90deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid #bbf7d0;
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #166534;
+}
+
+.vocab-banner-icon {
+    font-size: 1rem;
+}
+
+/* 独立滚动主体区域（确保顶部 header 永远固定在视口顶部不动） */
+.vocab-reader-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    width: 100%;
+    min-height: 0;
+}
+
+/* 阅读核心主内容区 */
+.vocab-reader-body {
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 20px 80px 20px;
+    box-sizing: border-box;
+}
+
+/* 划词高亮样式 */
+.vocab-reader-body ::selection {
+    background: #fed7aa;
+    color: #7c2d12;
+}
+
+/* 文章区域 */
+.vocab-passage-section {
+    margin-bottom: 40px;
+}
+
+.vocab-passage-header {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.vocab-passage-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 8px 0;
+}
+
+.vocab-passage-intro {
+    font-size: 0.95rem;
+    color: #64748b;
+    margin: 0;
+}
+
+/* 前置考试题目说明指导语：独立说明卡片，绝不带段落A标签 */
+.vocab-passage-instruction {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #3b82f6;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 10px;
+    color: #334155;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.vocab-instruction-icon {
+    font-size: 1.15rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.vocab-instruction-text {
+    flex: 1;
+    font-weight: 500;
+    color: #334155;
+}
+
+.vocab-instruction-text p {
+    margin: 0;
+}
+
+.vocab-passage-subtitle {
+    font-size: 0.95rem;
+    color: #64748b;
+    font-style: italic;
+    margin-top: 6px;
+}
+
+/* 段落卡片 */
+.vocab-paragraph-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    scroll-margin-top: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+    transition: box-shadow 0.2s;
+}
+
+.vocab-paragraph-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.vocab-paragraph-tag {
+    margin-bottom: 12px;
+}
+
+.vocab-para-letter {
+    display: inline-block;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.vocab-paragraph-text {
+    font-size: 1.1rem;
+    line-height: 1.85;
+    color: #334155;
+    user-select: text;
+}
+
+.vocab-paragraph-text p {
+    margin: 0 0 12px 0;
+}
+
+.vocab-paragraph-text p:last-child {
+    margin-bottom: 0;
+}
+
+/* 生词黄色高亮标记 (Yellow Highlight for Vocabulary) */
+mark.vocab-highlight,
+.vocab-highlight {
+    background-color: #fef08a !important; /* 明亮舒适的经典纯正柔黄 */
+    color: #0f172a !important;
+    padding: 2px 4px !important;
+    margin: 0 1px !important;
+    border-radius: 4px !important;
+    border-bottom: 2px solid #eab308 !important; /* 黄色强化底边 */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    display: inline;
+}
+
+mark.vocab-highlight:hover,
+.vocab-highlight:hover {
+    background-color: #fde047 !important; /* 悬停交互更鲜明的明黄 */
+    border-bottom-color: #ca8a04 !important;
+    box-shadow: 0 2px 5px rgba(234, 179, 8, 0.35);
+}
+
+mark.vocab-highlight:active,
+.vocab-highlight:active {
+    transform: scale(0.97);
+}
+
+@keyframes vocabHighlightPop {
+    0% {
+        background-color: #fef9c3;
+        transform: scale(1.05);
+    }
+    100% {
+        background-color: #fef08a;
+        transform: scale(1);
+    }
+}
+
+.vocab-highlight--pulse {
+    animation: vocabHighlightPop 0.4s ease-out;
+}
+
+/* 段落译文卡片 */
+.vocab-translation-card {
+    margin-top: 16px;
+    background: #fefce8;
+    border-left: 4px solid #eab308;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    color: #713f12;
+    line-height: 1.7;
+}
+
+.vocab-trans-label {
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: #854d0e;
+}
+
+/* 题目区域 */
+.vocab-questions-section {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 30px;
+    margin-top: 36px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.vocab-questions-header {
+    border-bottom: 2px dashed #cbd5e1;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+.vocab-questions-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+}
+
+.vocab-questions-subtitle {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.vocab-question-group {
+    margin-bottom: 30px;
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: #334155;
+    user-select: text;
+}
+
+.vocab-question-group h4 {
+    font-size: 1.15rem;
+    color: #0f172a;
+    margin: 0 0 12px 0;
+}
+
+.vocab-question-group .drag-item,
+.vocab-question-group .pool-items {
+    user-select: text !important;
+}
+
+/* 划词轻提示 Toast (仿 untitled.html) */
+.vocab-toast-msg {
+    position: fixed;
+    bottom: 90px;
+    right: 28px;
+    background: rgba(16, 185, 129, 0.95);
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 10000;
+    pointer-events: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.vocab-toast-msg.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 悬浮生词本 FAB 按钮 (仿 untitled.html) */
+.vocab-fab {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: linear-gradient(135deg, #e11d48, #be123c);
+    color: #ffffff;
+    padding: 12px 22px;
+    border-radius: 30px;
+    box-shadow: 0 6px 20px rgba(225, 29, 72, 0.4);
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.95rem;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+}
+
+.vocab-fab:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(225, 29, 72, 0.5);
+}
+
+.vocab-fab-count {
+    background: rgba(255, 255, 255, 0.25);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+/* 生词本 Modal 弹窗 (仿 untitled.html) */
+.vocab-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10001;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.vocab-modal.active {
+    display: flex;
+    animation: vocabFadeIn 0.2s ease-out;
+}
+
+.vocab-modal-content {
+    background: #ffffff;
+    width: 440px;
+    max-width: 95vw;
+    max-height: 82vh;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.vocab-modal-header {
+    background: #1e293b;
+    color: #ffffff;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.vocab-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.vocab-modal-title-wrap h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.vocab-modal-tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    padding: 2px;
+    border-radius: 8px;
+}
+
+.v-tab-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.v-tab-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+}
+
+.vocab-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.vocab-modal-close:hover {
+    color: #ffffff;
+}
+
+/* 手动添加生词 */
+.vocab-modal-add-row {
+    display: flex;
+    padding: 10px 16px;
+    gap: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.vocab-modal-add-row input {
+    flex: 1;
+    padding: 7px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.vocab-modal-add-row input:focus {
+    border-color: #2563eb;
+}
+
+.vocab-modal-add-row button {
+    padding: 7px 14px;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.vocab-modal-add-row button:hover {
+    background: #1d4ed8;
+}
+
+/* 单词列表 */
+.vocab-list {
+    padding: 12px 18px;
+    overflow-y: auto;
+    flex: 1;
+    max-height: 400px;
+}
+
+.vocab-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 12px;
+}
+
+.vocab-item:last-child {
+    border-bottom: none;
+}
+
+.vocab-item__main {
+    flex: 1;
+}
+
+.vocab-item__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vocab-item__word {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1e293b;
+}
+
+.vocab-speak-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 2px 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.vocab-speak-btn:hover {
+    opacity: 1;
+}
+
+.vocab-item__context {
+    margin: 4px 0 0 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.vocab-item__source {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    background: #f8fafc;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.vocab-delete-btn {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.vocab-delete-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+/* 空状态 */
+.vocab-empty-box {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+}
+
+.vocab-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.vocab-empty-title {
+    font-weight: 700;
+    color: #64748b;
+    margin: 0 0 6px 0;
+}
+
+.vocab-empty-desc {
+    font-size: 0.85rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 底部操作 */
+.vocab-modal-footer {
+    padding: 14px 18px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    gap: 10px;
+}
+
+.v-action-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.v-export-btn {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.v-export-btn:hover {
+    background: #059669;
+}
+
+.v-clear-btn {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.v-clear-btn:hover {
+    background: #dc2626;
+}
+
+@keyframes vocabFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 模态框顶部操作组与书架快捷入口 */
+.vocab-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vocab-modal-bookshelf-btn {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vocab-modal-bookshelf-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+/* ==========================================================================
+   阅读书架样式 (Bookshelf View)
+   ========================================================================== */
+
+#bookshelf-view {
+    width: 100%;
+    min-height: calc(100vh - 80px);
+    background: #f8fafc;
+    padding: 24px 20px 60px;
+    box-sizing: border-box;
+}
+
+.bookshelf-view-shell {
+    max-width: 1160px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.bookshelf-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 顶部栏 */
+.bookshelf-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.bookshelf-topbar__left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.bookshelf-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bookshelf-back-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+.bookshelf-back-arrow {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.bookshelf-heading-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bookshelf-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bookshelf-subtitle {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.bookshelf-topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bookshelf-export-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bookshelf-export-all-btn:hover:not(:disabled) {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+.bookshelf-export-all-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+}
+
+.bookshelf-notebook-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bookshelf-notebook-btn:hover {
+    background: #1d4ed8;
+}
+
+/* 统计横幅 */
+.bookshelf-stats-banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.bookshelf-stat-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bookshelf-stat-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+
+.bookshelf-stat-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.bookshelf-stat-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.bookshelf-stat-label {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* 工具条 (搜索与筛选) */
+.bookshelf-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+.bookshelf-search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 6px 10px;
+    flex: 1;
+    min-width: 240px;
+    max-width: 440px;
+}
+
+.bookshelf-search-icon {
+    font-size: 0.9rem;
+    color: #94a3b8;
+}
+
+.bookshelf-search-input {
+    border: none;
+    background: transparent;
+    font-size: 0.88rem;
+    color: #0f172a;
+    outline: none;
+    width: 100%;
+}
+
+.bookshelf-search-clear {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.bookshelf-search-clear:hover {
+    color: #475569;
+}
+
+.bookshelf-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.bookshelf-segmented {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.bookshelf-segment-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.bookshelf-segment-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.bookshelf-sort-select {
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+    outline: none;
+    cursor: pointer;
+}
+
+/* 卡片网格 */
+.bookshelf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.bookshelf-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.bookshelf-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.bookshelf-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.bookshelf-card__tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.bookshelf-card__badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.bookshelf-card__badge--category {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.bookshelf-card__badge--vocab {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.bookshelf-card__badge--read {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.bookshelf-card__remove-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.bookshelf-card__remove-btn:hover {
+    opacity: 1;
+    background: #fee2e2;
+}
+
+.bookshelf-card__body {
+    flex: 1;
+    margin-bottom: 14px;
+}
+
+.bookshelf-card__title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.4;
+    margin: 0 0 6px 0;
+    cursor: pointer;
+    transition: color 0.15s;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.bookshelf-card__title:hover {
+    color: #2563eb;
+}
+
+.bookshelf-card__meta {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+/* 生词预览药丸标签 */
+.bookshelf-card__vocab-preview {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.bookshelf-vocab-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.bookshelf-vocab-chip {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bookshelf-vocab-chip:hover {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+
+.bookshelf-chip-audio {
+    font-size: 0.7rem;
+    opacity: 0.6;
+}
+
+.bookshelf-vocab-chip-more {
+    font-size: 0.72rem;
+    color: #64748b;
+    font-weight: 600;
+    padding: 3px 6px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    align-self: center;
+}
+
+.bookshelf-vocab-empty-hint {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin: 0;
+    font-style: italic;
+}
+
+/* 卡片操作按钮 */
+.bookshelf-card__footer {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.bookshelf-action-btn {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.bookshelf-action-btn--main {
+    flex: 1;
+    min-width: 100px;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+}
+
+.bookshelf-action-btn--main:hover {
+    background: #1d4ed8;
+}
+
+.bookshelf-card__footer .btn-secondary {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+.bookshelf-card__footer .btn-secondary:hover:not(:disabled) {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.bookshelf-card__footer .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 空状态 */
+.bookshelf-empty-state {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 60px 24px;
+    text-align: center;
+    max-width: 540px;
+    margin: 20px auto;
+}
+
+.bookshelf-empty-icon {
+    font-size: 3.5rem;
+    margin-bottom: 12px;
+}
+
+.bookshelf-empty-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 8px 0;
+}
+
+.bookshelf-empty-desc {
+    font-size: 0.88rem;
+    color: #64748b;
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+}
+
+.bookshelf-empty-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Toast 轻量反馈 */
+.bookshelf-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(15, 23, 42, 0.92);
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+
+.bookshelf-toast.is-hidden {
+    opacity: 0;
+    transform: translateY(10px);
+    display: none;
+}
+
+.bookshelf-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    display: block;
+}
+
+/* 响应式断点 */
+@media (max-width: 768px) {
+    #bookshelf-view {
+        padding: 16px 12px 40px;
+    }
+
+    .bookshelf-topbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bookshelf-topbar__right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .bookshelf-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .bookshelf-search-box {
+        max-width: 100%;
+    }
+
+    .bookshelf-filter-group {
+        justify-content: space-between;
+    }
+
+    .bookshelf-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 书架移除安全确认模态框（纯 DOM 模态，免疫 iframe 拦截） */
+.bookshelf-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: bookshelfFadeIn 0.2s ease-out;
+}
+
+.bookshelf-confirm-overlay.is-hidden {
+    display: none !important;
+}
+
+.bookshelf-confirm-box {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+    max-width: 440px;
+    width: 100%;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border: 1px solid #e2e8f0;
+    box-sizing: border-box;
+    animation: bookshelfSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bookshelf-confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bookshelf-confirm-icon {
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.bookshelf-confirm-title {
+    margin: 0;
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.bookshelf-confirm-msg {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #334155;
+    line-height: 1.55;
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.bookshelf-confirm-notice {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.bookshelf-notice-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #0284c7;
+    background: #e0f2fe;
+    padding: 2px 7px;
+    border-radius: 4px;
+    align-self: flex-start;
+}
+
+.bookshelf-notice-text {
+    margin: 0;
+    font-size: 0.83rem;
+    color: #475569;
+    line-height: 1.48;
+}
+
+.bookshelf-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.bookshelf-confirm-btn {
+    padding: 7px 16px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-danger {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    border: 1px solid #dc2626 !important;
+}
+
+.btn-danger:hover {
+    background: #b91c1c !important;
+    border-color: #b91c1c !important;
+}
+
+@keyframes bookshelfFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes bookshelfSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
