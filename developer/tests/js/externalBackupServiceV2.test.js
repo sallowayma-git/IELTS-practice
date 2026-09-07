@@ -1296,6 +1296,114 @@ async function testRestoreMetadataFailureRemainsDurablyGuarded() {
         'reload must observe the same guarded state after metadata persistence failure');
 }
 
+// ---------------------------------------------------------------------------
+// 权限恢复（reauthorize）与状态广播（onStatusChange）
+//
+// 契约：启动/后台 flush 只允许 queryPermission；requestPermission 只能由
+// 用户点击直达的 reauthorize() 触发，且必须是该路径上的第一个 await。
+// ---------------------------------------------------------------------------
+async function testStartupOnlyQueriesPermissionAndReauthorizeResumesFlush() {
+    const first = createHarness();
+    await first.ready();
+    await first.service.bindDirectory({ writeNow: true });
+    const directory = first.directory;
+    const requestsAfterBind = directory.state.permissionRequests;
+
+    // 重新加载一次：浏览器已把权限降回 prompt。
+    directory.state.permission = 'prompt';
+    const reloaded = createHarness({
+        indexedDB: first.indexedDB,
+        directory,
+        snapshot: makeSnapshot('fnv1a-after-revoke', 'after-revoke')
+    });
+    await reloaded.ready();
+    assert.equal(reloaded.service.getStatus().bound, true);
+    assert.equal(reloaded.service.getStatus().permissionGranted, false);
+    assert.equal(directory.state.permissionRequests, requestsAfterBind,
+        '启动恢复绑定只能 queryPermission，绝不能自动弹权限请求');
+
+    const blocked = await reloaded.service.flushSilentlyIfPermitted();
+    assert.equal(blocked.success, false);
+    assert.equal(blocked.reason, 'permission_denied');
+    assert.equal(directory.state.permissionRequests, requestsAfterBind,
+        '后台静默 flush 也不能弹权限请求');
+    assert.equal(reloaded.service.getStatus().dirty, true);
+
+    // 用户点击但仍未授权：只算一次请求，状态保持未授权。
+    const denied = await reloaded.service.reauthorize();
+    assert.equal(denied.success, false);
+    assert.equal(denied.reason, 'denied');
+    assert.equal(directory.state.permissionRequests, requestsAfterBind + 1);
+    assert.equal(reloaded.service.getStatus().permissionGranted, false);
+
+    // 用户点击并授权：恢复后应当自动补一次安全 checkpoint。
+    directory.state.permission = 'granted';
+    const granted = await reloaded.service.reauthorize();
+    assert.equal(granted.success, true);
+    assert.equal(granted.reason, 'granted');
+    assert.equal(directory.state.permissionRequests, requestsAfterBind + 2);
+    assert.equal(reloaded.service.getStatus().permissionGranted, true);
+    assert.ok(reloaded.pendingTimerCount() > 0, '授权恢复后应安排一次静默写入');
+    await reloaded.flushTimers();
+    assert.equal(reloaded.service.getStatus().dirty, false);
+    assert.equal(reloaded.service.getStatus().lastChecksum, 'fnv1a-after-revoke');
+    assert.equal(reloaded.pendingTimerCount(), 0, '恢复授权后只应触发一次 flush');
+}
+
+async function testReauthorizeUnderAwaitingRestoreNeverOverwrites() {
+    const directory = createDirectory();
+    const originalText = JSON.stringify(makeSnapshot('fnv1a-existing', 'existing'));
+    directory.files.set('ielts-atlas-backup-latest.json', originalText);
+    const harness = createHarness({ directory });
+    await harness.ready();
+    await harness.service.bindDirectory({ writeNow: true });
+    assert.equal(harness.service.getStatus().awaitingRestore, true);
+
+    harness.setSnapshot(makeSnapshot('fnv1a-local-newer', 'local-newer'));
+    harness.service.markDirty();
+    directory.state.permission = 'prompt';
+
+    directory.state.permission = 'granted';
+    const result = await harness.service.reauthorize();
+    assert.equal(result.success, true);
+    assert.equal(result.reason, 'restore_required',
+        'awaitingRestore 时恢复授权不得转为"可以写盘"');
+    assert.equal(harness.pendingTimerCount(), 0,
+        'awaitingRestore 时不得安排任何自动写入');
+    assert.equal(directory.files.get('ielts-atlas-backup-latest.json'), originalText,
+        '恢复授权不得覆盖磁盘上尚未恢复的备份');
+
+    const blocked = await harness.service.writeNow();
+    assert.equal(blocked.success, false);
+    assert.equal(blocked.reason, 'restore_required');
+    assert.equal(directory.files.get('ielts-atlas-backup-latest.json'), originalText);
+}
+
+async function testStatusListenersObservePermissionAndDirtyTransitions() {
+    const harness = createHarness();
+    await harness.ready();
+    const seen = [];
+    const unsubscribe = harness.service.onStatusChange((status) => {
+        seen.push({ bound: status.bound, dirty: status.dirty, permissionGranted: status.permissionGranted });
+    });
+    assert.equal(seen.length, 1, '订阅时应立即回调一次当前状态');
+    assert.equal(seen[0].bound, false);
+
+    await harness.service.bindDirectory({ writeNow: true });
+    assert.ok(seen.some((status) => status.bound === true), '绑定后应广播已绑定状态');
+
+    harness.setSnapshot(makeSnapshot('fnv1a-listener', 'listener'));
+    harness.service.markDirty();
+    assert.equal(seen[seen.length - 1].dirty, true, 'dirty 变化必须广播');
+    await harness.flushTimers();
+    assert.equal(seen[seen.length - 1].dirty, false, '写入完成必须广播');
+
+    const before = seen.length;
+    unsubscribe();
+    harness.service.markDirty();
+    assert.equal(seen.length, before, '退订后不得再收到广播');
+}
+
 async function main() {
     await testBindingWritesVerifiedV2Snapshots();
     await testMissingCrossTabLockFailsClosed();
@@ -1333,6 +1441,9 @@ async function main() {
     await testBindingDatedGenerationBlocksInitialOverwrite();
     await testRestoreMetadataFailureRemainsDurablyGuarded();
     await testRestoreConcurrentCommitSchedulesFlushAfterAwaitingRestoreClears();
+    await testStartupOnlyQueriesPermissionAndReauthorizeResumesFlush();
+    await testReauthorizeUnderAwaitingRestoreNeverOverwrites();
+    await testStatusListenersObservePermissionAndDirtyTransitions();
     console.log('ExternalBackupService v2 tests passed');
 }
 

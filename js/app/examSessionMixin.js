@@ -2324,6 +2324,7 @@
                     'SIMULATION_DRAFT_SYNC',
                     'READING_DRAFT_SYNC',
                     'READING_ANNOTATION_SYNC',
+                    'REPLAY_APPLIED',
                     'PRACTICE_RECORD_SAVED',
                     'SIMULATION_NAVIGATE',
                     'SIMULATION_ACTIVE_EXAM_CHANGE',
@@ -2929,6 +2930,20 @@
                             );
                         }
                         break;
+                    case 'REPLAY_APPLIED': {
+                        // 复盘 ACK 必须来自正是那个考试窗口，并且携带匹配的会话/记录/attempt。
+                        const hasStrictSessionBinding = Boolean(
+                            expectedSessionId
+                            && payloadSessionId
+                            && payloadSessionId === expectedSessionId
+                        );
+                        if (!sourceMatched || !hasStrictSessionBinding) {
+                            this._reportExamMessageRejected(examId, type, 'replay-ack-binding-mismatch', event);
+                            break;
+                        }
+                        await this.handleReplayApplied(examId, data, sourceWindow || expectedWindow);
+                        break;
+                    }
                     case 'REVIEW_NAVIGATE':
                         if (data && typeof this.handleSuiteReviewNavigate === 'function') {
                             const activeSuiteId = this.currentSuiteSession && this.currentSuiteSession.id
@@ -4180,20 +4195,115 @@
             throw new Error('该记录对应的题目在当前题库中不存在，可能题库已被删除或切换');
         },
 
-        _buildReviewSession(record) {
+        _buildReviewSession(record, options = {}) {
             const entries = this._buildReviewReplayEntriesFromRecord(record);
             const validEntries = entries.filter((entry) => entry && entry.examId);
             if (validEntries.length === 0) {
                 return null;
             }
+            const reviewAttemptId = options && options.reviewAttemptId
+                ? String(options.reviewAttemptId).trim()
+                : '';
             return {
                 sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
                 recordId: record && record.id != null ? String(record.id) : '',
                 entries: validEntries,
                 currentIndex: 0,
                 windowRef: null,
-                readOnly: true
+                readOnly: true,
+                // 复盘调度专用：只有带 reviewAttemptId 的会话才收集 REPLAY_APPLIED 并可评分。
+                // 普通"查看回放"必须保持 null，否则历史回顾会误记一次复盘。
+                reviewAttemptId: reviewAttemptId || null,
+                // 套题必须每一子篇都成功回放才算读完一轮；单篇就是唯一那一条。
+                expectedEntryKeys: validEntries.map((entry, index) => this._reviewEntryKey(index, entry.examId)),
+                appliedEntryKeys: [],
+                pendingGrade: false
             };
+        },
+
+        _reviewEntryKey(entryIndex, examId) {
+            const index = Number.isInteger(entryIndex) ? entryIndex : 0;
+            return `${index}:${String(examId || '').trim()}`;
+        },
+
+        _generateReviewAttemptId() {
+            return `rev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+        },
+
+        // 回放已成功应用的确认（内容 + 答案 + 解析都落地后子页才会发）。
+        // 任何一处校验不过就静默忽略：伪造、迟到、跨记录、跨 attempt 的 ACK
+        // 都不允许把一条记录推进到"可评分"。
+        async handleReplayApplied(examId, data = {}, sourceWindow = null) {
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (!windowInfo || !windowInfo.reviewMode || !windowInfo.reviewSessionId) {
+                return false;
+            }
+            const store = this._ensureReviewReplayStore();
+            const sessionId = String(windowInfo.reviewSessionId);
+            const session = store.get(sessionId);
+            if (!session || !session.reviewAttemptId) {
+                return false;
+            }
+            const payloadSessionId = data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '';
+            if (payloadSessionId && payloadSessionId !== sessionId) {
+                return false;
+            }
+            const payloadAttemptId = data && data.reviewAttemptId != null ? String(data.reviewAttemptId).trim() : '';
+            if (!payloadAttemptId || payloadAttemptId !== String(session.reviewAttemptId)) {
+                return false;
+            }
+            const payloadRecordId = data && data.recordId != null ? String(data.recordId).trim() : '';
+            if (!payloadRecordId || payloadRecordId !== String(session.recordId || '')) {
+                return false;
+            }
+            const entryIndex = Number(data && data.reviewEntryIndex);
+            if (!Number.isInteger(entryIndex) || entryIndex < 0 || entryIndex >= session.entries.length) {
+                return false;
+            }
+            const entry = session.entries[entryIndex];
+            const payloadExamId = data && data.examId != null ? String(data.examId).trim() : '';
+            if (!payloadExamId
+                || payloadExamId !== String(entry && entry.examId || '')
+                || payloadExamId !== String(examId)) {
+                return false;
+            }
+            const entryKey = this._reviewEntryKey(entryIndex, payloadExamId);
+            const applied = Array.isArray(session.appliedEntryKeys) ? session.appliedEntryKeys.slice() : [];
+            if (!applied.includes(entryKey)) {
+                applied.push(entryKey);
+            }
+            session.appliedEntryKeys = applied;
+            const expected = Array.isArray(session.expectedEntryKeys) ? session.expectedEntryKeys : [];
+            const complete = expected.length > 0 && expected.every((key) => applied.includes(key));
+            const becamePending = complete && session.pendingGrade !== true;
+            if (complete) {
+                session.pendingGrade = true;
+            }
+            store.set(sessionId, session);
+            if (becamePending) {
+                this._announceReviewAttemptPending(session);
+            }
+            return true;
+        },
+
+        _announceReviewAttemptPending(session) {
+            const flow = window.PracticeReviewFlow;
+            if (!flow || typeof flow.notifyAttemptApplied !== 'function') {
+                return false;
+            }
+            try {
+                flow.notifyAttemptApplied({
+                    reviewSessionId: String(session.sessionId),
+                    reviewAttemptId: String(session.reviewAttemptId || ''),
+                    recordId: String(session.recordId || ''),
+                    entryCount: Array.isArray(session.entries) ? session.entries.length : 0,
+                    title: (session.entries && session.entries[0] && (session.entries[0].title || session.entries[0].examId)) || ''
+                });
+                return true;
+            } catch (error) {
+                console.warn('[ReviewReplay] 通知待评分状态失败:', error);
+                return false;
+            }
         },
 
         _cloneReadingDraftValue(value) {
@@ -4772,8 +4882,10 @@
             }
             const replayPayload = {
                 reviewSessionId: session.sessionId,
+                reviewAttemptId: session.reviewAttemptId || null,
                 recordId: session.recordId || null,
                 reviewEntryIndex: safeIndex,
+                reviewEntryTotal: session.entries.length,
                 readOnly: session.readOnly !== false,
                 entry: this._cloneReviewData(entry)
             };
@@ -4887,8 +4999,8 @@
             });
         },
 
-        async openPracticeRecordReplay(record) {
-            const session = this._buildReviewSession(record);
+        async openPracticeRecordReplay(record, options = {}) {
+            const session = this._buildReviewSession(record, options);
             if (!session) {
                 throw new Error('该练习记录缺少可回放的题目映射');
             }

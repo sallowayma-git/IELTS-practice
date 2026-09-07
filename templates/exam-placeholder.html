@@ -1115,6 +1115,25 @@
         state.submitted = true;
         setReadOnlyMode(payload.readOnly !== false);
         markState('当前为回看态', appendReplaySummary('已回灌本篇结果，可切题继续回看。'));
+        acknowledgeReplayApplied(payload, scope);
+    }
+
+    // 复盘调度的回放确认：只有宿主带了 reviewAttemptId 才回执，
+    // 普通历史回放不得触发复盘记账。
+    function acknowledgeReplayApplied(payload = {}, scope = {}) {
+        const reviewAttemptId = payload && payload.reviewAttemptId != null ? String(payload.reviewAttemptId).trim() : '';
+        const recordId = payload && payload.recordId != null ? String(payload.recordId).trim() : '';
+        if (!reviewAttemptId || !recordId) {
+            return;
+        }
+        postMessage('REPLAY_APPLIED', {
+            examId: (scope && scope.examId) || state.examId,
+            reviewSessionId: payload.reviewSessionId != null ? String(payload.reviewSessionId) : (state.reviewSessionId || null),
+            reviewAttemptId,
+            recordId,
+            reviewEntryIndex: Number.isInteger(payload.reviewEntryIndex) ? payload.reviewEntryIndex : state.reviewEntryIndex,
+            appliedAt: new Date().toISOString()
+        });
     }
 
     function sendSessionReady() {

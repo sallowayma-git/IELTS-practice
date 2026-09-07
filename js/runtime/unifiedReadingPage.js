@@ -6423,6 +6423,7 @@
                 openNoteEditor,
                 closeNoteEditor,
                 applyReplayRecord,
+                acknowledgeReplayApplied,
                 setTimerRunning,
                 checkpointActiveSuiteDuration,
                 getSelectionHighlightTestState() {
@@ -6882,6 +6883,27 @@
                 // ignore mark replay failures
             }
         }
+        // 只有到这里才算"内容 + 答案 + 解析"全部落地：renderExplanations 抛错会直接
+        // 跳过下面这条 ACK，宿主因此不会把这一篇算作已回放。
+        acknowledgeReplayApplied(data, entryExamId);
+    }
+
+    // 复盘调度的回放确认：只有宿主带了 reviewAttemptId（即这是一次真正的复盘）才回执，
+    // 普通"查看回放"不得触发任何复盘记账。
+    function acknowledgeReplayApplied(data = {}, entryExamId = '') {
+        const reviewAttemptId = data && data.reviewAttemptId != null ? String(data.reviewAttemptId).trim() : '';
+        const recordId = data && data.recordId != null ? String(data.recordId).trim() : '';
+        if (!reviewAttemptId || !recordId) {
+            return false;
+        }
+        return postMessage('REPLAY_APPLIED', {
+            examId: entryExamId || state.examId,
+            reviewSessionId: data.reviewSessionId != null ? String(data.reviewSessionId) : state.reviewSessionId,
+            reviewAttemptId,
+            recordId,
+            reviewEntryIndex: Number.isInteger(data.reviewEntryIndex) ? data.reviewEntryIndex : state.reviewEntryIndex,
+            appliedAt: new Date().toISOString()
+        });
     }
 
     function buildEnvelope(type, payload) {

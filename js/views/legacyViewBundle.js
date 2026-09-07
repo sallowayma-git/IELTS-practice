@@ -1148,16 +1148,31 @@
             highFill: options.highFillId || 'practice-priority-high-fill',
             mediumFill: options.mediumFillId || 'practice-priority-medium-fill',
             highAccuracy: options.highAccuracyId || 'practice-priority-high-accuracy',
-            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy'
+            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy',
+            reviewDueToday: options.reviewDueTodayId || 'practice-review-due-today',
+            reviewOverdue: options.reviewOverdueId || 'practice-review-overdue',
+            reviewCompleted: options.reviewCompletedId || 'practice-review-completed',
+            reviewLoad: options.reviewLoadId || 'practice-review-load',
+            reviewSummary: options.reviewSummaryId || 'practice-review-summary'
         };
         this.records = [];
         this.exams = [];
         this.examType = 'all';
+        this.reviewStats = null;
         // 优先沿用用户上次选中的组件；显式传入 defaultWidget 时只作为兜底。
         this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap';
+        this.widgetChosenByUser = false;
         this.heatmapMonth = normalizePracticeHeatmapMonth(options.defaultHeatmapMonth || new Date());
         this.bound = false;
         this.resizeHandler = null;
+        // 偏好是异步读出来的：如果它在本渲染器构造之后才到，必须补一次重绘，
+        // 否则用户上次选的组件要等下一次数据刷新才生效（看起来就是"偏好没保存"）。
+        var self = this;
+        onPracticeWidgetHydrated(function applyHydratedWidget(value) {
+            if (self.widgetChosenByUser || !value || value === self.activeWidget) return;
+            self.activeWidget = value;
+            self.render();
+        });
     }
 
     PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
@@ -1165,6 +1180,9 @@
         this.records = Array.isArray(records) ? records.slice() : [];
         this.exams = Array.isArray(exams) ? exams.slice() : [];
         this.examType = options.examType || 'all';
+        if (Object.prototype.hasOwnProperty.call(options, 'reviewStats')) {
+            this.reviewStats = options.reviewStats || null;
+        }
         this._ensureInteractions();
         this.render();
     };
@@ -1179,9 +1197,7 @@
         }
         var titleElem = document.getElementById('practice-custom-card-title');
         if (titleElem) {
-            titleElem.textContent = this.activeWidget === 'radar'
-                ? '阅读错题雷达'
-                : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
+            titleElem.textContent = PRACTICE_WIDGET_TITLES[this.activeWidget] || PRACTICE_WIDGET_TITLES.heatmap;
         }
         
         var contents = card.querySelectorAll('.practice-custom-widget-content');
@@ -1201,6 +1217,8 @@
             this._renderGroup('medium', stats.medium);
         } else if (this.activeWidget === 'radar') {
             this._renderRadarChart();
+        } else if (this.activeWidget === 'review') {
+            this._renderReviewRhythm();
         }
         
         this._syncOptionState();
@@ -1211,6 +1229,7 @@
     PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
         if (!widget) return;
         this.activeWidget = widget;
+        this.widgetChosenByUser = true;
         persistPracticeWidget(widget);
         this.render();
     };
@@ -1330,6 +1349,75 @@
         this._setText(key + 'Accuracy', Math.round(accuracy) + '%');
         this._setProgress(key + 'Fill', pct);
         this._setAccuracyLevel(key + 'Accuracy', accuracy);
+    };
+
+    /**
+     * 复盘节奏：只画能由当前 reviewState 精确还原的量。
+     *   - 今日待复盘 / 已逾期 / 今日已完成：三个可核对的计数；
+     *   - 主体是未来 7 天的复盘负荷（今日格子含逾期）；
+     *   - footer 是这 7 天的计划总量。
+     * 刻意不画"今日完成 / 原计划"这类分母——历史上没有记录每天原定多少，
+     * 编一个分母出来只会给用户错误的完成率。
+     */
+    PracticePriorityRenderer.prototype._renderReviewRhythm = function _renderReviewRhythm() {
+        var stats = this.reviewStats || null;
+        var dueToday = stats ? Number(stats.dueToday) || 0 : 0;
+        var overdue = stats ? Number(stats.overdue) || 0 : 0;
+        var completedToday = stats ? Number(stats.completedToday) || 0 : 0;
+        this._setText('reviewDueToday', String(dueToday));
+        this._setText('reviewOverdue', String(overdue));
+        this._setText('reviewCompleted', String(completedToday));
+
+        var container = this._getElement('reviewLoad');
+        var buckets = stats && Array.isArray(stats.buckets) ? stats.buckets : [];
+        if (container && typeof document !== 'undefined') {
+            container.textContent = '';
+            if (buckets.length === 0) {
+                var empty = document.createElement('p');
+                empty.className = 'practice-trend-empty';
+                empty.textContent = '暂无复盘计划';
+                container.appendChild(empty);
+            } else {
+                var peak = buckets.reduce(function maxCount(max, bucket) {
+                    return Math.max(max, Number(bucket && bucket.count) || 0);
+                }, 0);
+                var weekdayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+                buckets.forEach(function renderBucket(bucket, index) {
+                    var count = Number(bucket && bucket.count) || 0;
+                    var date = new Date(bucket && bucket.date);
+                    var column = document.createElement('div');
+                    column.className = 'practice-review-load__column';
+                    if (index === 0) column.classList.add('practice-review-load__column--today');
+                    column.title = (isNaN(date.getTime())
+                        ? '第 ' + (index + 1) + ' 天'
+                        : (date.getMonth() + 1) + '月' + date.getDate() + '日')
+                        + '：' + count + ' 条'
+                        + (bucket && bucket.includesOverdue && overdue > 0 ? '（含逾期 ' + overdue + ' 条）' : '');
+                    var bar = document.createElement('span');
+                    bar.className = 'practice-review-load__bar';
+                    var ratio = peak > 0 ? Math.max(count > 0 ? 8 : 2, Math.round((count / peak) * 100)) : 2;
+                    bar.style.setProperty('--practice-review-load-height', ratio + '%');
+                    if (count === 0) bar.classList.add('practice-review-load__bar--empty');
+                    var value = document.createElement('small');
+                    value.className = 'practice-review-load__value';
+                    value.textContent = count > 0 ? String(count) : '';
+                    var label = document.createElement('small');
+                    label.className = 'practice-review-load__label';
+                    label.textContent = index === 0
+                        ? '今天'
+                        : (isNaN(date.getTime()) ? String(index) : weekdayLabels[date.getDay()]);
+                    column.appendChild(value);
+                    column.appendChild(bar);
+                    column.appendChild(label);
+                    container.appendChild(column);
+                });
+            }
+        }
+
+        var total = stats ? Number(stats.futureSevenDayTotal) || 0 : 0;
+        this._setText('reviewSummary', total > 0
+            ? '未来 7 天共 ' + total + ' 条复盘计划'
+            : '未来 7 天暂无复盘计划');
     };
 
     PracticePriorityRenderer.prototype._ensureInteractions = function _ensureInteractions() {
@@ -1590,12 +1678,48 @@
 
     // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
     // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
-    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'review'];
+    var PRACTICE_WIDGET_TITLES = {
+        heatmap: '练习热力图',
+        priority: '中高频余量',
+        radar: '阅读错题雷达',
+        review: '复盘节奏'
+    };
     var persistedPracticeWidget = null;
+    var practiceWidgetHydrated = false;
+    var practiceWidgetHydrationListeners = [];
+
+    function markPracticeWidgetHydrated(value) {
+        persistedPracticeWidget = SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
+        practiceWidgetHydrated = true;
+        var listeners = practiceWidgetHydrationListeners.slice();
+        practiceWidgetHydrationListeners.length = 0;
+        listeners.forEach(function invoke(listener) {
+            try {
+                listener(persistedPracticeWidget);
+            } catch (error) {
+                console.warn('[PracticeWidget] 偏好回填失败:', error);
+            }
+        });
+    }
+
+    /** 偏好已就绪时立刻回调；否则登记等待，只回调一次。 */
+    function onPracticeWidgetHydrated(listener) {
+        if (typeof listener !== 'function') return;
+        if (practiceWidgetHydrated) {
+            listener(persistedPracticeWidget);
+            return;
+        }
+        practiceWidgetHydrationListeners.push(listener);
+    }
+
     if (window.AppData && window.AppData.preferences) {
-        window.AppData.ready.then(function () { return window.AppData.preferences.getPracticeWidget(); }).then(function (value) {
-            persistedPracticeWidget = SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
-        }).catch(function () {});
+        window.AppData.ready
+            .then(function () { return window.AppData.preferences.getPracticeWidget(); })
+            .then(markPracticeWidgetHydrated)
+            .catch(function () { markPracticeWidgetHydrated(null); });
+    } else {
+        practiceWidgetHydrated = true;
     }
 
     function loadPersistedPracticeWidget() {
@@ -2283,6 +2407,35 @@
         });
     }
 
+    /**
+     * 复盘徽标只读 listReviewQueue 投影出来的 reviewState，不在 UI 侧推演调度。
+     * 返回 null 表示这条记录没有复盘计划（满分 / 听力 / 旧历史），此时既不显示徽标，
+     * 也不显示复盘入口。
+     */
+    historyRenderer.resolveReviewBadge = function (entry, now) {
+        if (!entry || !entry.reviewState || !entry.reviewState.nextReview) {
+            return null;
+        }
+        var reference = now instanceof Date ? now : new Date();
+        var todayStart = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+        var next = new Date(entry.reviewState.nextReview);
+        if (isNaN(next.getTime())) {
+            return null;
+        }
+        var nextStart = new Date(next.getFullYear(), next.getMonth(), next.getDate());
+        if (nextStart.getTime() < todayStart.getTime()) {
+            return { state: 'overdue', label: '已逾期', title: '原定 ' + next.toLocaleDateString() + ' 复盘' };
+        }
+        if (next.getTime() <= reference.getTime()) {
+            return { state: 'due', label: '待复盘', title: '今天需要复盘' };
+        }
+        return {
+            state: 'scheduled',
+            label: '下次复盘 ' + (next.getMonth() + 1) + '/' + next.getDate(),
+            title: '下次复盘时间 ' + next.toLocaleString()
+        };
+    };
+
     historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
@@ -2369,6 +2522,26 @@
             ])
         ]);
 
+        var reviewQueue = options.reviewQueue;
+        var reviewEntry = null;
+        if (recordId && reviewQueue && reviewQueue.byRecordId && typeof reviewQueue.byRecordId.get === 'function') {
+            reviewEntry = reviewQueue.byRecordId.get(String(recordId)) || null;
+        }
+        var reviewBadge = historyRenderer.resolveReviewBadge(reviewEntry);
+        if (reviewBadge) {
+            item.classList.add('history-record-item--review-' + reviewBadge.state);
+            var metaLine = info.querySelector ? info.querySelector('.record-meta-line') : null;
+            var badgeNode = createNode('small', {
+                className: 'record-review-badge record-review-badge--' + reviewBadge.state,
+                title: reviewBadge.title
+            }, reviewBadge.label);
+            if (metaLine) {
+                metaLine.appendChild(badgeNode);
+            } else {
+                info.appendChild(badgeNode);
+            }
+        }
+
         var percentageNode = createNode('div', { className: 'record-percentage-container' }, [
             createNode('div', {
                 className: 'record-percentage',
@@ -2378,14 +2551,23 @@
 
         var actions = null;
         if (!bulkDeleteMode) {
-            actions = createNode('div', { className: 'record-actions-container' }, [
-                createNode('button', {
+            var actionChildren = [];
+            // 复盘入口只对确实有复盘计划的记录出现（首版仅阅读），听力历史保持原样。
+            if (reviewBadge) {
+                actionChildren.push(createNode('button', {
                     type: 'button',
-                    className: 'delete-record-btn',
-                    title: '删除此记录',
-                    dataset: { recordAction: 'delete', recordId: recordId }
-                }, '🗑️')
-            ]);
+                    className: 'review-record-btn',
+                    title: reviewBadge.state === 'scheduled' ? '提前复盘这条记录' : '开始复盘',
+                    dataset: { recordAction: 'review', recordId: recordId }
+                }, '🔁'));
+            }
+            actionChildren.push(createNode('button', {
+                type: 'button',
+                className: 'delete-record-btn',
+                title: '删除此记录',
+                dataset: { recordAction: 'delete', recordId: recordId }
+            }, '🗑️'));
+            actions = createNode('div', { className: 'record-actions-container' }, actionChildren);
         }
 
         item.appendChild(info);
@@ -2396,11 +2578,17 @@
         return item;
     };
 
-    historyRenderer.renderEmptyState = function (container) {
+    historyRenderer.renderEmptyState = function (container, options) {
         if (!container) return;
+        var reviewMode = Boolean(options && options.reviewMode);
         replaceContent(container, createNode('div', { className: 'practice-history-empty' }, [
-            createNode('div', { className: 'practice-history-empty-icon' }, '📂'),
-            createNode('p', { className: 'practice-history-empty-text' }, '暂无任何练习记录')
+            createNode('div', { className: 'practice-history-empty-icon' }, reviewMode ? '✅' : '📂'),
+            createNode('p', { className: 'practice-history-empty-text' }, reviewMode
+                ? '暂无待复盘的阅读记录'
+                : '暂无任何练习记录'),
+            reviewMode
+                ? createNode('p', { className: 'practice-history-empty-note' }, '完成新的阅读练习并出现错题后，会自动加入复盘计划')
+                : null
         ]));
     };
 
@@ -2580,7 +2768,7 @@
 
         if (list.length === 0) {
             historyRenderer.destroyScroller(options.scroller);
-            historyRenderer.renderEmptyState(container);
+            historyRenderer.renderEmptyState(container, { reviewMode: options.reviewMode });
             return null;
         }
 
@@ -2592,6 +2780,8 @@
         return historyRenderer.renderList(container, list, {
             bulkDeleteMode: options.bulkDeleteMode,
             selectedRecords: options.selectedRecords,
+            reviewMode: options.reviewMode,
+            reviewQueue: options.reviewQueue,
             scrollerOptions: scrollerOptions,
             itemFactory: options.itemFactory,
             scroller: options.scroller
@@ -2613,12 +2803,16 @@
             : function (record) {
                 return historyRenderer.createRecordNode(record, {
                     bulkDeleteMode: params.bulkDeleteMode,
-                    selectedRecords: params.selectedRecords
+                    selectedRecords: params.selectedRecords,
+                    reviewMode: params.reviewMode,
+                    reviewQueue: params.reviewQueue
                 });
             };
         var scroller = historyRenderer.renderWithState(container, list, {
             bulkDeleteMode: params.bulkDeleteMode,
             selectedRecords: params.selectedRecords,
+            reviewMode: params.reviewMode,
+            reviewQueue: params.reviewQueue,
             scrollerOptions: params.scrollerOptions,
             itemFactory: itemFactory,
             scroller: params.scroller

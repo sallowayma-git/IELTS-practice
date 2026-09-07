@@ -12,6 +12,8 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const catalogSource = fs.readFileSync(path.join(repoRoot, 'js/data/v2/dataCatalog.js'), 'utf8');
 const kernelSource = fs.readFileSync(path.join(repoRoot, 'js/data/v2/dataKernel.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(repoRoot, 'js/data/practiceRecordSource.js'), 'utf8');
+const vocabSchedulerSource = fs.readFileSync(path.join(repoRoot, 'js/core/vocabScheduler.js'), 'utf8');
+const practiceReviewSchedulerSource = fs.readFileSync(path.join(repoRoot, 'js/core/practiceReviewScheduler.js'), 'utf8');
 const appDataSource = fs.readFileSync(path.join(repoRoot, 'js/data/v2/appData.js'), 'utf8');
 
 function withTimeout(promise, label, timeoutMs = 15000) {
@@ -40,6 +42,8 @@ async function loadAppData(page) {
     await page.addScriptTag({ content: catalogSource });
     await page.addScriptTag({ content: kernelSource });
     await page.addScriptTag({ content: recordSource });
+    await page.addScriptTag({ content: vocabSchedulerSource });
+    await page.addScriptTag({ content: practiceReviewSchedulerSource });
     await page.addScriptTag({ content: appDataSource });
     await page.evaluate(async () => window.AppData.ready);
 }
@@ -738,6 +742,8 @@ async function main() {
             request.onblocked = () => reject(new Error('migration target reset blocked'));
         }));
         await page.addScriptTag({ content: recordSource });
+        await page.addScriptTag({ content: vocabSchedulerSource });
+        await page.addScriptTag({ content: practiceReviewSchedulerSource });
         await page.addScriptTag({ content: appDataSource });
         const migrated = await page.evaluate(async () => {
             await window.AppData.ready;

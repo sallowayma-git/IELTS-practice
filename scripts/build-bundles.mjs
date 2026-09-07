@@ -57,6 +57,7 @@ const bundles = {
         'js/app/examActions.js',
         'js/app/spellingErrorCollector.js',
         'js/app/examSessionMixin.js',
+        'js/app/practiceReviewFlow.js',
         'js/app/browseController.js',
         'js/components/PDFHandler.js',
         'js/components/BrowseStateManager.js',

@@ -15,6 +15,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const appDataSource = fs.readFileSync(path.join(root, 'js/data/v2/appData.js'), 'utf8');
 const catalogSource = fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(root, 'js/data/practiceRecordSource.js'), 'utf8');
+const vocabSchedulerSource = fs.readFileSync(path.join(root, 'js/core/vocabScheduler.js'), 'utf8');
+const practiceReviewSchedulerSource = fs.readFileSync(path.join(root, 'js/core/practiceReviewScheduler.js'), 'utf8');
 const clone = (value) => value === undefined ? undefined : structuredClone(value);
 function stable(value) { if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`; if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`; return JSON.stringify(value); }
 function checksum(value) { let hash = 0x811c9dc5; for (const char of stable(value)) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 0x01000193); } return `fnv1a-${(hash >>> 0).toString(16)}`; }
@@ -74,7 +76,7 @@ function harness(legacyValues, options = {}) {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)), readLegacyValues: async () => { shared.legacyReads += 1; return clone(legacyValues); }, readLegacyExternalBackup: async () => { shared.externalReads += 1; return clone(options.externalBackup || null); } };
     const sandbox = { console: { log() {}, warn() {}, error() {} }, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(vocabSchedulerSource, context, { filename: 'vocabScheduler.js' }); vm.runInContext(practiceReviewSchedulerSource, context, { filename: 'practiceReviewScheduler.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared };
 }
 
 async function run() {

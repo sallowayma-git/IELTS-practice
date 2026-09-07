@@ -10,6 +10,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const appDataSource = fs.readFileSync(path.join(root, 'js/data/v2/appData.js'), 'utf8');
 const catalogSource = fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(root, 'js/data/practiceRecordSource.js'), 'utf8');
+// appData.js 硬依赖 PracticeReviewScheduler（复盘状态的唯一算法实现），
+// 而它又硬依赖 VocabScheduler 的 SM-2 计算；顺序必须与 build-bundles.mjs 一致。
+const vocabSchedulerSource = fs.readFileSync(path.join(root, 'js/core/vocabScheduler.js'), 'utf8');
+const practiceReviewSchedulerSource = fs.readFileSync(path.join(root, 'js/core/practiceReviewScheduler.js'), 'utf8');
 const examSessionSource = fs.readFileSync(path.join(root, 'js/app/examSessionMixin.js'), 'utf8');
 const clone = (value) => value === undefined ? undefined : structuredClone(value);
 function stable(value) { if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`; if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`; return JSON.stringify(value); }
@@ -121,7 +125,7 @@ function harness() {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, parseLegacyValue, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)) };
     const sandbox = { console, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(vocabSchedulerSource, context, { filename: 'vocabScheduler.js' }); vm.runInContext(practiceReviewSchedulerSource, context, { filename: 'practiceReviewScheduler.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
 }
 
 async function testVocabPhoneticMutationProtection() {

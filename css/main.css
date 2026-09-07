@@ -8330,3 +8330,306 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
     }
 }
 
+
+/* ==========================================================================
+   复盘调度（阅读）：全局提示条、历史卡片徽标、复盘节奏组件
+   ========================================================================== */
+
+.app-global-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    gap: var(--space-md, 1rem);
+    flex-wrap: wrap;
+    max-width: min(720px, calc(100vw - 32px));
+    padding: 12px 16px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(10px);
+    color: var(--color-gray-900, #0f172a);
+}
+
+.app-global-banner--review {
+    border-left: 4px solid var(--color-brand-primary, #667eea);
+}
+
+.app-global-banner--backup {
+    border-left: 4px solid var(--color-warning, #f59e0b);
+}
+
+.app-global-banner__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.app-global-banner__title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.app-global-banner__detail {
+    font-size: 0.8rem;
+    opacity: 0.72;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 320px;
+}
+
+.app-global-banner__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.app-global-banner__btn {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    border-radius: 10px;
+}
+
+.app-global-banner__btn--hard {
+    background: var(--color-error-bg, #fef2f2);
+    color: var(--color-error, #ef4444);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.app-global-banner__btn--good {
+    background: var(--color-info-bg, #eff6ff);
+    color: var(--color-info, #3b82f6);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+}
+
+.app-global-banner__btn--easy {
+    background: var(--color-success-bg, #f0fdf4);
+    color: var(--color-success, #10b981);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.app-global-banner__btn:disabled,
+.app-global-banner__close:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.app-global-banner__close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: var(--color-gray-500, #64748b);
+}
+
+.app-global-banner__close:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+.record-review-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.record-review-badge--due {
+    background: var(--color-info-bg, #eff6ff);
+    color: var(--color-info, #3b82f6);
+}
+
+.record-review-badge--overdue {
+    background: var(--color-error-bg, #fef2f2);
+    color: var(--color-error, #ef4444);
+}
+
+.record-review-badge--scheduled {
+    background: var(--color-gray-100, #f1f5f9);
+    color: var(--color-gray-600, #475569);
+}
+
+.review-record-btn {
+    background: none;
+    border: none;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition-normal);
+    padding: var(--space-sm);
+    border-radius: var(--border-radius-full);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-gray-500);
+}
+
+.history-item:hover .review-record-btn {
+    opacity: 0.8;
+}
+
+.review-record-btn:hover {
+    opacity: 1;
+    background: var(--color-info-bg, #eff6ff);
+    color: var(--color-info, #3b82f6);
+    transform: scale(1.1);
+}
+
+.practice-history-empty-note {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.practice-review-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.practice-review-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
+    border-radius: 12px;
+    background: rgba(102, 126, 234, 0.08);
+}
+
+.practice-review-stat strong {
+    font-size: 1.25rem;
+    line-height: 1.1;
+    color: var(--color-brand-primary, #667eea);
+}
+
+.practice-review-stat small {
+    font-size: 0.72rem;
+    opacity: 0.75;
+}
+
+.practice-review-stat--overdue {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.practice-review-stat--overdue strong {
+    color: var(--color-error, #ef4444);
+}
+
+.practice-review-stat--done {
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.practice-review-stat--done strong {
+    color: var(--color-success, #10b981);
+}
+
+.practice-review-load {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 108px;
+    padding: 4px 2px 0;
+}
+
+.practice-review-load__column {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: 0;
+    height: 100px;
+}
+
+.practice-review-load__value {
+    font-size: 0.7rem;
+    font-weight: 600;
+    opacity: 0.8;
+    min-height: 0.9rem;
+}
+
+.practice-review-load__bar {
+    width: 100%;
+    max-width: 22px;
+    height: var(--practice-review-load-height, 2%);
+    min-height: 3px;
+    border-radius: 6px 6px 3px 3px;
+    background: linear-gradient(180deg, var(--color-brand-primary, #667eea), var(--color-brand-secondary, #764ba2));
+}
+
+.practice-review-load__bar--empty {
+    background: rgba(15, 23, 42, 0.1);
+}
+
+.practice-review-load__label {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    white-space: nowrap;
+}
+
+.practice-review-load__column--today .practice-review-load__label {
+    font-weight: 700;
+    opacity: 0.9;
+}
+
+body.bloom-dark-mode .app-global-banner,
+body.blue-dark-mode .app-global-banner {
+    background: rgba(24, 24, 30, 0.94);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f1f5f9;
+}
+
+body.bloom-dark-mode .app-global-banner__close:hover:not(:disabled),
+body.blue-dark-mode .app-global-banner__close:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.bloom-dark-mode .record-review-badge--scheduled,
+body.blue-dark-mode .record-review-badge--scheduled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(226, 232, 240, 0.85);
+}
+
+body.bloom-dark-mode .practice-review-load__bar--empty,
+body.blue-dark-mode .practice-review-load__bar--empty {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 640px) {
+    .app-global-banner {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        transform: none;
+        max-width: none;
+    }
+
+    .app-global-banner__actions {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .app-global-banner__detail {
+        max-width: none;
+    }
+}

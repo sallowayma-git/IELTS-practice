@@ -16,6 +16,8 @@ const repoRoot = path.resolve(__dirname, '../../..');
 const catalogSource = fs.readFileSync(path.join(repoRoot, 'js/data/v2/dataCatalog.js'), 'utf8');
 const appDataSource = fs.readFileSync(path.join(repoRoot, 'js/data/v2/appData.js'), 'utf8');
 const practiceRecordSourceSource = fs.readFileSync(path.join(repoRoot, 'js/data/practiceRecordSource.js'), 'utf8');
+const vocabSchedulerSource = fs.readFileSync(path.join(repoRoot, 'js/core/vocabScheduler.js'), 'utf8');
+const practiceReviewSchedulerSource = fs.readFileSync(path.join(repoRoot, 'js/core/practiceReviewScheduler.js'), 'utf8');
 
 function clone(value) {
     return value === undefined ? undefined : structuredClone(value);
@@ -305,6 +307,8 @@ function createHarness() {
     sandbox.globalThis = sandbox;
     const context = vm.createContext(sandbox);
     vm.runInContext(practiceRecordSourceSource, context, { filename: 'practiceRecordSource.js' });
+    vm.runInContext(vocabSchedulerSource, context, { filename: 'vocabScheduler.js' });
+    vm.runInContext(practiceReviewSchedulerSource, context, { filename: 'practiceReviewScheduler.js' });
     vm.runInContext(appDataSource, context, { filename: 'appData.js' });
 
     return { app: sandbox.AppData, shared };

@@ -1698,7 +1698,33 @@
                 if (!this.hasRenderableResults()) {
                     this.renderReplayFallbackTable(finalPayload);
                 }
+                // 结果表真的渲染出来了才回执：渲染失败时宿主不会把这一篇算作已回放，
+                // 因此用户也拿不到评分入口。
+                if (this.hasRenderableResults()) {
+                    this.acknowledgeReplayApplied(payload, entry);
+                }
             }, 120);
+        },
+
+        // 复盘调度的回放确认。只有宿主下发了 reviewAttemptId（真正的复盘）才回执；
+        // 普通历史回放没有 attempt，不得产生任何复盘记账。
+        acknowledgeReplayApplied: function (payload = {}, entry = {}) {
+            const reviewAttemptId = payload && payload.reviewAttemptId != null
+                ? String(payload.reviewAttemptId).trim()
+                : '';
+            const recordId = payload && payload.recordId != null ? String(payload.recordId).trim() : '';
+            if (!reviewAttemptId || !recordId) {
+                return false;
+            }
+            return this.sendMessage('REPLAY_APPLIED', {
+                examId: (entry && entry.examId) || this.examId,
+                sessionId: this.sessionId,
+                reviewSessionId: payload.reviewSessionId != null ? String(payload.reviewSessionId) : (this.reviewSessionId || null),
+                reviewAttemptId,
+                recordId,
+                reviewEntryIndex: Number.isInteger(payload.reviewEntryIndex) ? payload.reviewEntryIndex : this.reviewEntryIndex,
+                appliedAt: new Date().toISOString()
+            });
         },
 
         captureQuestionSet: function () {

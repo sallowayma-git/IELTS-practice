@@ -334,6 +334,8 @@ function ensureSettings() {
                     : undefined;
             case 'toggle-bulk-delete':
                 return typeof global.toggleBulkDelete === 'function' ? global.toggleBulkDelete() : undefined;
+            case 'toggle-practice-review-mode':
+                return typeof global.togglePracticeReviewMode === 'function' ? global.togglePracticeReviewMode() : undefined;
             case 'clear-practice-data':
                 return typeof global.clearPracticeData === 'function' ? global.clearPracticeData() : undefined;
             case 'toggle-practice-summary':

@@ -23,6 +23,7 @@
     var WRITE_DELAY_MS = 8000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
+    var BANNER_ID = 'external-backup-permission-banner';
 
     var state = {
         ready: false,
@@ -44,6 +45,7 @@
         silentFlushTimer: null,
         unsubscribeCommitted: null,
         visibilityHandler: null,
+        statusListeners: [],
         meta: {
             directoryName: null,
             lastWriteAt: null,
@@ -1465,7 +1467,180 @@
         return modal;
     }
 
+    // ------------------------------------------------------------------
+    // 权限恢复与状态广播
+    //
+    // 启动阶段永远只 queryPermission（见 ensureReady）：自动 requestPermission
+    // 既拿不到 transient activation，也会在用户什么都没点的时候弹系统对话框。
+    // 恢复授权只能由下面的 reauthorize() 承担，且必须由真实点击直接调用。
+    // ------------------------------------------------------------------
+    function onStatusChange(listener) {
+        if (typeof listener !== 'function') return function noop() {};
+        state.statusListeners.push(listener);
+        try {
+            listener(getStatus());
+        } catch (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+        }
+        return function unsubscribe() {
+            var index = state.statusListeners.indexOf(listener);
+            if (index >= 0) state.statusListeners.splice(index, 1);
+        };
+    }
+
+    function notifyStatusChange() {
+        if (!state.statusListeners.length) return;
+        var status = getStatus();
+        state.statusListeners.slice().forEach(function invoke(listener) {
+            try {
+                listener(status);
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+            }
+        });
+    }
+
+    /**
+     * 只能由用户点击直接调用：requestPermission 必须是这条路径上的第一个 await，
+     * 否则 transient activation 会在前面的 await 里过期，浏览器会直接拒绝弹窗。
+     */
+    async function reauthorize() {
+        if (!supportsFileSystemAccess()) return { success: false, reason: 'unsupported' };
+        var handle = state.directoryHandle;
+        if (!handle) {
+            // 句柄还没恢复完：此时已经不可能保住本次点击的激活状态，
+            // 只查询一次并请用户再点一次，而不是偷偷弹一个注定失败的窗。
+            await ensureReady();
+            handle = state.directoryHandle;
+            if (!handle) {
+                refreshPanel();
+                return { success: false, reason: 'unbound' };
+            }
+            state.permission = await queryPermission(handle, 'readwrite');
+            refreshPanel();
+            return state.permission === 'granted'
+                ? { success: true, reason: 'granted' }
+                : { success: false, reason: 'activation_lost' };
+        }
+        var permission = 'denied';
+        try {
+            if (typeof handle.requestPermission === 'function') {
+                permission = await handle.requestPermission({ mode: 'readwrite' });
+            }
+        } catch (_) {
+            permission = 'denied';
+        }
+        state.permission = permission;
+        refreshPanel();
+        if (permission !== 'granted') return { success: false, reason: 'denied' };
+        // 待恢复状态下绝不能顺手写盘：那会用本机数据覆盖用户还没读回来的备份。
+        if (state.meta.awaitingRestore) return { success: true, reason: 'restore_required' };
+        if (state.dirty && !state.suspended && !state.resetPreparing) scheduleSilentFlush();
+        return { success: true, reason: 'granted' };
+    }
+
+    function resolveBannerMode(status) {
+        if (!status.supported || !status.bound || status.suspended || status.resetPreparing) return null;
+        if (status.awaitingRestore) return status.permissionGranted ? 'restore' : 'reauthorize-restore';
+        return status.permissionGranted ? null : 'reauthorize';
+    }
+
+    var BANNER_COPY = {
+        'reauthorize': {
+            title: '本地备份权限已失效',
+            detail: '浏览器已收回文件夹访问权限，练习数据暂时无法写入磁盘备份。',
+            action: '恢复备份权限'
+        },
+        'reauthorize-restore': {
+            title: '本地备份权限已失效',
+            detail: '该文件夹里已有备份，恢复权限后请先「从备份恢复」，不会自动覆盖。',
+            action: '恢复备份权限'
+        },
+        'restore': {
+            title: '检测到已有备份',
+            detail: '为避免覆盖磁盘上的备份，自动写入已暂停，请先完成一次恢复。',
+            action: '打开备份面板'
+        }
+    };
+
+    // 非阻塞的全局横幅：只提示，不拦截任何操作；恢复授权成功后自行消失。
+    function renderGlobalBanner() {
+        if (!global.document || !global.document.body) return;
+        var status = getStatus();
+        var mode = resolveBannerMode(status);
+        var existing = global.document.getElementById(BANNER_ID);
+        if (!mode) {
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+            return;
+        }
+        var copy = BANNER_COPY[mode];
+        var banner = existing;
+        if (!banner) {
+            banner = global.document.createElement('div');
+            banner.id = BANNER_ID;
+            banner.className = 'app-global-banner app-global-banner--backup';
+            banner.setAttribute('role', 'region');
+            banner.setAttribute('aria-live', 'polite');
+            banner.setAttribute('aria-label', '本地备份状态');
+            global.document.body.appendChild(banner);
+            banner.addEventListener('click', handleBannerClick);
+        }
+        banner.dataset.mode = mode;
+        while (banner.firstChild) banner.removeChild(banner.firstChild);
+        var body = global.document.createElement('div');
+        body.className = 'app-global-banner__body';
+        var title = global.document.createElement('strong');
+        title.className = 'app-global-banner__title';
+        title.textContent = copy.title;
+        var detail = global.document.createElement('span');
+        detail.className = 'app-global-banner__detail';
+        detail.textContent = copy.detail;
+        body.appendChild(title);
+        body.appendChild(detail);
+        banner.appendChild(body);
+        var actions = global.document.createElement('div');
+        actions.className = 'app-global-banner__actions';
+        var button = global.document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn app-global-banner__btn';
+        button.dataset.backupBannerAction = mode === 'restore' ? 'open' : 'reauthorize';
+        button.textContent = copy.action;
+        actions.appendChild(button);
+        banner.appendChild(actions);
+    }
+
+    function handleBannerClick(event) {
+        var target = event.target && event.target.closest ? event.target.closest('[data-backup-banner-action]') : null;
+        if (!target) return;
+        event.preventDefault();
+        if (target.dataset.backupBannerAction === 'open') {
+            openModal();
+            return;
+        }
+        // 用户点击 → 直接进 reauthorize()，中间不插入任何 await。
+        target.disabled = true;
+        reauthorize().then(function (result) {
+            if (result && result.success) {
+                notify(result.reason === 'restore_required'
+                    ? '备份权限已恢复，请先从备份恢复数据'
+                    : '备份权限已恢复', 'success');
+            } else if (result && result.reason === 'activation_lost') {
+                notify('请再点一次「恢复备份权限」', 'warning');
+            } else {
+                notify('未获得文件夹访问权限', 'warning');
+            }
+        }).catch(function (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] reauthorize failed:', error);
+            notify('恢复备份权限失败', 'error');
+        }).finally(function () {
+            target.disabled = false;
+            refreshPanel();
+        });
+    }
+
     function refreshPanel() {
+        notifyStatusChange();
+        renderGlobalBanner();
         if (!global.document) return;
         var status = getStatus();
         var statusElement = global.document.getElementById('external-backup-status');
@@ -1488,7 +1663,12 @@
         var restoreButton = global.document.getElementById('external-backup-restore-btn');
         var unbindButton = global.document.getElementById('external-backup-unbind-btn');
         if (bindButton) bindButton.disabled = !status.supported || status.writing;
-        if (writeButton) writeButton.disabled = !status.bound || status.writing;
+        // awaitingRestore 时禁止"立即写入"：磁盘上已有备份还没恢复回来，
+        // 一次写入就会把它覆盖掉。这里改成明确的恢复引导。
+        if (writeButton) {
+            writeButton.disabled = !status.bound || status.writing || status.awaitingRestore;
+            writeButton.title = status.awaitingRestore ? '检测到已有备份，请先完成恢复' : '';
+        }
         if (restoreButton) restoreButton.disabled = !status.bound || status.writing;
         if (unbindButton) unbindButton.disabled = !status.bound || status.writing;
     }
@@ -1609,6 +1789,8 @@
         restoreFromLatest: restoreFromLatest,
         restorePayload: restorePayload,
         getStatus: getStatus,
+        onStatusChange: onStatusChange,
+        reauthorize: reauthorize,
         markDirty: markDirty,
         flushSilentlyIfPermitted: flushSilentlyIfPermitted,
         refreshPanel: refreshPanel,
