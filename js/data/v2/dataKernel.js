@@ -28,7 +28,9 @@
     const LEGACY_UNPREFIXED_WEB_KEYS = Object.freeze([
         'practice_records',
         'vocab_user_config',
-        'user_achievements'
+        'user_achievements',
+        'ielts_reading_vocab_words_v1',
+        'ielts_reading_bookshelf_exams_v1'
     ]);
 
     function clone(value) { return catalog.clone(value); }

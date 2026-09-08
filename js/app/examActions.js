@@ -1743,6 +1743,24 @@
         }
         actions.appendChild(pdfBtn);
 
+        if (isReadingMemorizeExam(exam)) {
+            const vocabBtn = document.createElement('button');
+            vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
+            vocabBtn.type = 'button';
+            vocabBtn.dataset.action = 'vocab-book';
+            if (exam.id) {
+                vocabBtn.dataset.examId = exam.id;
+            }
+            vocabBtn.textContent = '精读';
+            vocabBtn.title = '打开该题全文精读与生词本';
+            if (isSelecting) {
+                vocabBtn.disabled = true;
+                vocabBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(vocabBtn);
+            actions.classList.add('has-vocab-btn');
+        }
+
         item.appendChild(info);
         item.appendChild(actions);
         return item;
@@ -1815,6 +1833,21 @@
                 return;
             }
 
+            if (action === 'vocab-book') {
+                if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
+                    global.ReadingVocabReader.open(examId);
+                    return;
+                }
+                if (typeof global.openReadingVocabReader === 'function') {
+                    global.openReadingVocabReader(examId);
+                    return;
+                }
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('生词本阅读模块未就绪', 'warning');
+                }
+                return;
+            }
+
             if (action === 'generate' && typeof global.generateHTML === 'function') {
                 global.generateHTML(examId);
             }
@@ -1836,6 +1869,9 @@
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="pdf"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="vocab-book"]', function (event) {
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="generate"]', function (event) {

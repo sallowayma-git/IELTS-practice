@@ -1831,7 +1831,103 @@
                 transition-duration: 0.01ms !important;
             }
         }
+
+        /* 划词生词本顶栏按钮与结果页入口 */
+        .reading-vocab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 7px 11px;
+            font-size: 0.88rem;
+            line-height: 1;
+            color: var(--text);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .reading-vocab-btn:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        body.dark-mode .reading-vocab-btn {
+            background: #1e293b;
+            border-color: #475569;
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .reading-vocab-btn:hover {
+            background: #334155;
+            border-color: #64748b;
+            color: #f8fafc;
+        }
+
+        .reading-vocab-btn .vocab-btn-icon {
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .reading-vocab-btn .vocab-btn-label {
+            font-size: 0.88rem;
+        }
+
+        .results-header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .results-header-bar h4 {
+            margin: 0;
+        }
+
+        .results-score-text {
+            margin: 4px 0 0 0;
+            color: var(--muted, #64748b);
+            font-size: 0.95rem;
+        }
+
+        .results-vocab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #1d4ed8;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .results-vocab-btn:hover {
+            background: #dbeafe;
+            border-color: #93c5fd;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+        }
+
+        body.dark-mode .results-vocab-btn {
+            color: #93c5fd;
+            background: rgba(30, 58, 138, 0.35);
+            border-color: rgba(96, 165, 250, 0.4);
+        }
+
+        body.dark-mode .results-vocab-btn:hover {
+            background: rgba(30, 58, 138, 0.6);
+            border-color: #60a5fa;
+        }
     </style>
+    <link rel="stylesheet" href="../../../css/vocab-reader.css">
 </head>
 
 <body data-page-node-id="AS04mOy4HONAkSIVdf9fOD">

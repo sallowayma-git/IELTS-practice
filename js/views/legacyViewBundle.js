@@ -2847,6 +2847,22 @@
             actions.appendChild(pdfBtn);
         }
 
+        var isReadingExam = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        if (isReadingExam && exam.id) {
+            var vocabBtn = this._createElement('button', {
+                className: 'btn btn-outline exam-item-action-btn exam-item-vocab-btn',
+                dataset: { action: 'vocab-book', examId: exam.id },
+                type: 'button',
+                title: '打开该题全文精读与生词本'
+            }, '精读');
+            if (isSelecting) {
+                vocabBtn.disabled = true;
+                vocabBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(vocabBtn);
+            actions.classList.add('has-vocab-btn');
+        }
+
         if (this._shouldShowGenerate(exam, options)) {
             var generateBtn = this._createElement('button', {
                 className: 'btn btn-info exam-item-action-btn',

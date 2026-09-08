@@ -29,6 +29,8 @@ const bundles = {
         'js/core/practiceCore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
+        'js/runtime/readingExamRegistry.js',
+        'js/runtime/readingExplanationRegistry.js',
         'js/app/state-service.js',
         'js/services/libraryDiscovery.js',
         'js/services/libraryManager.js'
@@ -59,6 +61,7 @@ const bundles = {
         'js/app/examSessionMixin.js',
         'js/app/browseController.js',
         'js/components/PDFHandler.js',
+        'js/components/readingVocabReader.js',
         'js/components/BrowseStateManager.js',
         'js/utils/suiteBackGuard.js',
         'js/utils/answerMatchCore.js',
@@ -101,6 +104,7 @@ const bundles = {
         'js/core/dictionaryService.js',
         'js/runtime/reviewHighlightDictionary.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/components/readingVocabReader.js',
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [
@@ -145,6 +149,7 @@ const bundles = {
         'js/app/vocabListSwitcher.js',
         'js/components/vocabDashboardCards.js',
         'js/components/vocabSessionView.js',
+        'js/components/bookshelfView.js',
         'js/presentation/moreView.js',
         'js/presentation/miniGames.js',
         'js/services/achievementManager.js'

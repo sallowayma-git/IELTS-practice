@@ -3584,6 +3584,27 @@ function createFallbackExamCard(exam, options = {}) {
             viewPDF(exam.id);
         });
         actions.appendChild(pdfBtn);
+
+        const isReading = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        if (isReading && exam && exam.id) {
+            const vocabBtn = document.createElement('button');
+            vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
+            vocabBtn.type = 'button';
+            vocabBtn.dataset.action = 'vocab-book';
+            vocabBtn.dataset.examId = exam.id;
+            vocabBtn.textContent = '精读';
+            vocabBtn.title = '打开该题全文精读与生词本';
+            vocabBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (window.ReadingVocabReader && typeof window.ReadingVocabReader.open === 'function') {
+                    window.ReadingVocabReader.open(exam.id);
+                } else if (typeof window.openReadingVocabReader === 'function') {
+                    window.openReadingVocabReader(exam.id);
+                }
+            });
+            actions.appendChild(vocabBtn);
+            actions.classList.add('has-vocab-btn');
+        }
     }
 
     item.appendChild(info);

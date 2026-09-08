@@ -343,6 +343,16 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'vocab.readingBookshelfExams', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'preferences.values', classification: 'preference',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'
@@ -474,7 +484,9 @@
     const LEGACY_UNPREFIXED_WEB_KEYS = Object.freeze([
         'practice_records',
         'vocab_user_config',
-        'user_achievements'
+        'user_achievements',
+        'ielts_reading_vocab_words_v1',
+        'ielts_reading_bookshelf_exams_v1'
     ]);
 
     function clone(value) { return catalog.clone(value); }
@@ -2280,6 +2292,10 @@
         consent: 'consent', logConfig: 'logConfig'
     });
     const PRACTICE_ENTITY_STORES = Object.freeze(['practiceSummaries', 'practiceDetails', 'practiceAnnotations']);
+    const READING_LEGACY_KEYS = Object.freeze({
+        'vocab.readingVocabWords': 'ielts_reading_vocab_words_v1',
+        'vocab.readingBookshelfExams': 'ielts_reading_bookshelf_exams_v1'
+    });
 
     function asObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
     function asArray(value) { return Array.isArray(value) ? value : []; }
@@ -3834,11 +3850,21 @@
         if (logicalKey.startsWith('recovery.')) return ['id', 'sessionId', 'recordId'];
         if (logicalKey === 'backups.entries') return ['id'];
         if (logicalKey === 'vocab.words') return ['id', 'word', 'key'];
+        if (logicalKey === 'vocab.readingVocabWords') return ['id', 'word'];
+        if (logicalKey === 'vocab.readingBookshelfExams') return ['examId', 'id'];
         if (logicalKey === 'goals.items') return ['id', 'goalId'];
         return ['id', 'sessionId', 'recordId'];
     }
 
     function collectionIdentity(logicalKey, value) {
+        if (logicalKey === 'vocab.readingVocabWords') {
+            const word = value && (value.word || value.id);
+            return word ? String(word).trim().toLowerCase() : idOf(value, ['id', 'word']);
+        }
+        if (logicalKey === 'vocab.readingBookshelfExams') {
+            const examId = value && (value.examId || value.id);
+            return examId ? String(examId).trim() : idOf(value, ['examId', 'id']);
+        }
         const identity = idOf(value, collectionIdentityFields(logicalKey));
         return logicalKey === 'vocab.words' ? identity.trim().toLowerCase() : identity;
     }
@@ -3855,9 +3881,22 @@
             const identity = collectionIdentity(logicalKey, item);
             if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
             const position = positions.get(identity);
-            const mergedItem = logicalKey === 'vocab.words'
+            let mergedItem = logicalKey === 'vocab.words'
                 ? preserveProgressPhonetics([item], position === undefined ? [] : [result[position]])[0]
                 : item;
+            if (logicalKey === 'vocab.readingBookshelfExams' && position !== undefined) {
+                const existingRec = result[position] || {};
+                mergedItem = Object.assign({}, existingRec, item, {
+                    firstUsedAt: Math.min(Number(existingRec.firstUsedAt) || Date.now(), Number(item.firstUsedAt) || Date.now()),
+                    lastOpenedAt: Math.max(Number(existingRec.lastOpenedAt) || 0, Number(item.lastOpenedAt) || 0)
+                });
+            } else if (logicalKey === 'vocab.readingVocabWords' && position !== undefined) {
+                const existingWord = result[position] || {};
+                mergedItem = Object.assign({}, existingWord, item, {
+                    createdAt: Math.min(Number(existingWord.createdAt) || Date.now(), Number(item.createdAt) || Date.now()),
+                    updatedAt: Math.max(Number(existingWord.updatedAt) || 0, Number(item.updatedAt) || 0)
+                });
+            }
             if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
@@ -3933,6 +3972,14 @@
     }
     async function createImportPlan(parsed, options = {}) {
         const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
+        // Preserve local-only reading data before capturing revisions for any
+        // reading collection this plan will install, including present arrays.
+        const readingKeys = Object.keys(READING_LEGACY_KEYS).filter((key) => {
+            const envelope = asObject(parsed.envelopes)[key];
+            return (replaceDocuments && parsed.scope === 'full')
+                || (envelope && (envelope.state === 'present' || replaceDocuments || options.applyClears === true));
+        });
+        await migrateLegacyReadingData({ required: true, logicalKeys: readingKeys });
         const snapshot = { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: parsed.scope, envelopes: {}, entities: {} };
         const revisionToken = { documents: {}, entities: {}, entityEpochs: {} };
         const keys = []; const clearedKeys = [];
@@ -4056,7 +4103,74 @@
         const parsed = parseImportPayload(asObject(backup && backup.data));
         if (parsed.format !== 'v2') throw new AppDataError('VALIDATION', 'Only v2 snapshots can be restored from local backups');
         if (backup.checksum && backup.checksum !== parsed.checksum) throw new AppDataError('VALIDATION', 'Backup checksum mismatch');
+        // Validate the target first, then finish intentional migration before
+        // capturing the revision token used by the atomic snapshot install.
+        await migrateLegacyReadingData({ required: true });
         return createImportPlan(parsed, { replace: true });
+    }
+
+    async function migrateLegacyReadingData({ required = false, logicalKeys = Object.keys(READING_LEGACY_KEYS) } = {}) {
+        for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
+            if (!logicalKeys.includes(logicalKey)) continue;
+            try {
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                // A present empty array or a cleared envelope is authoritative too.
+                // Legacy mirrors only seed documents that have never been written.
+                if (current.envelope) continue;
+                if (!global.localStorage) return;
+                const raw = global.localStorage.getItem(storageKey);
+                const parsed = raw ? JSON.parse(raw) : null;
+                if (!Array.isArray(parsed)) continue;
+                await kernel.mutate([{ logicalKey, data: parsed, expectedRevision: 0 }], {
+                    operationId: randomId('migrate-reading')
+                });
+            } catch (error) {
+                // Startup can retry later; a backup or destructive installation
+                // must not discard a legacy copy that has never reached the kernel.
+                if (required) throw error;
+                if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
+            }
+        }
+    }
+
+    async function refreshReadingMirrors(logicalKeys = Object.keys(READING_LEGACY_KEYS)) {
+        for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
+            if (!logicalKeys.includes(logicalKey)) continue;
+            try {
+                if (!global.localStorage) return;
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                if (current.envelope && Array.isArray(current.data)) {
+                    global.localStorage.setItem(storageKey, JSON.stringify(current.data));
+                }
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[AppData v2] reading mirror refresh skipped:', error);
+            }
+        }
+    }
+
+    async function createBackup(options = {}, migrateReading = true) {
+        await ready;
+        if (migrateReading) await migrateLegacyReadingData({ required: true });
+        const current = await readCollectionMeta('backups.entries');
+        const mutation = optionsMutationOptions(options, 'backup-create', { id: options.id || null, type: options.type || 'manual' });
+        const backupId = options.id || (options.operationId ? `backup_${checksum({ operationId: String(options.operationId) }).replace(/[^a-z0-9]/gi, '')}` : randomId('backup'));
+        const existing = current.items.find((item) => String(item.id) === String(backupId));
+        if (existing) {
+            if (String(existing.operationId || '') === String(mutation.operationId)
+                && String(existing.type || 'manual') === String(options.type || 'manual')) {
+                return clone(existing);
+            }
+            throw new AppDataError('CONFLICT', `Backup id already exists: ${backupId}`, {
+                backupId: String(backupId)
+            });
+        }
+        const snapshot = await kernel.exportSnapshot();
+        const backup = { id: backupId, operationId: mutation.operationId, timestamp: nowIso(), type: options.type || 'manual', version: 2, data: snapshot, size: JSON.stringify(snapshot).length, checksum: snapshot.checksum };
+        current.items.unshift(backup);
+        current.items = retainBackupEntries(current.items, 20, options.preserveIds);
+        await kernel.mutate([{ logicalKey: 'backups.entries', data: current.items, expectedRevision: current.revision }], mutation);
+        const committed = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(backupId));
+        return clone(committed || backup);
     }
 
     const backups = Object.freeze({
@@ -4068,31 +4182,13 @@
         async recordExport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.exportHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup export history entry'))); return kernel.mutate([{ logicalKey: 'backups.exportHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-export-history', entry)); },
         async recordImport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.importHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup import history entry'))); return kernel.mutate([{ logicalKey: 'backups.importHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-import-history', entry)); },
         async create(options = {}) {
-            await ready; const current = await readCollectionMeta('backups.entries');
-            const mutation = optionsMutationOptions(options, 'backup-create', { id: options.id || null, type: options.type || 'manual' });
-            const backupId = options.id || (options.operationId ? `backup_${checksum({ operationId: String(options.operationId) }).replace(/[^a-z0-9]/gi, '')}` : randomId('backup'));
-            const existing = current.items.find((item) => String(item.id) === String(backupId));
-            if (existing) {
-                if (String(existing.operationId || '') === String(mutation.operationId)
-                    && String(existing.type || 'manual') === String(options.type || 'manual')) {
-                    return clone(existing);
-                }
-                throw new AppDataError('CONFLICT', `Backup id already exists: ${backupId}`, {
-                    backupId: String(backupId)
-                });
-            }
-            const snapshot = await kernel.exportSnapshot();
-            const backup = { id: backupId, operationId: mutation.operationId, timestamp: nowIso(), type: options.type || 'manual', version: 2, data: snapshot, size: JSON.stringify(snapshot).length, checksum: snapshot.checksum };
-            current.items.unshift(backup);
-            current.items = retainBackupEntries(current.items, 20, options.preserveIds);
-            await kernel.mutate([{ logicalKey: 'backups.entries', data: current.items, expectedRevision: current.revision }], mutation);
-            const committed = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(backupId));
-            return clone(committed || backup);
+            return createBackup(options);
         },
         async list() { await ready; return kernel.read('backups.entries'); },
         async delete(id, options = {}) { await ready; const current = await readCollectionMeta('backups.entries'); return kernel.mutate([{ logicalKey: 'backups.entries', data: current.items.filter((item) => String(item.id) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-delete', { id: String(id) })); },
         async export(options = {}) {
             await ready;
+            await migrateLegacyReadingData();
             if (options.backupId !== undefined && options.backupId !== null) {
                 const backupId = String(options.backupId);
                 const stored = asArray(await kernel.read('backups.entries'))
@@ -4141,7 +4237,10 @@
             }
         },
         async previewImport(payload, options = {}) {
-            await ready; const parsed = parseImportPayload(payload); const prepared = await createImportPlan(parsed, options); const planId = randomId('import-plan');
+            await ready;
+            const parsed = parseImportPayload(payload);
+            const prepared = await createImportPlan(parsed, options);
+            const planId = randomId('import-plan');
             const cutoff = Date.now() - (30 * 60 * 1000);
             for (const [id, existing] of importPlans) {
                 if (Date.parse(existing.createdAt) < cutoff || importPlans.size >= 20) importPlans.delete(id);
@@ -4154,6 +4253,10 @@
             if (plan.destructive && options.confirmDestructive !== true) {
                 throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
             }
+            // Mirrors may arrive after preview, including callers without a
+            // safety backup. Keep the reviewed token: a late successful migration
+            // changes its revision and requires a new preview instead of data loss.
+            await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
             const mutation = optionsMutationOptions(options, 'import-commit', {
                 planId: plan.id,
                 signature: plan.signature
@@ -4163,6 +4266,7 @@
                 expectedRevisionToken: plan.revisionToken
             }));
             importPlans.delete(String(planId));
+            await refreshReadingMirrors(Object.keys(plan.snapshot.envelopes));
             return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
         },
         async restore(id, options = {}) {
@@ -4179,16 +4283,18 @@
                 backupId: String(id),
                 checksum: backup.checksum || checksum(backup.data)
             }).replace(/[^a-z0-9]/gi, '')}`;
-            const preRestoreBackup = await backups.create({
+            // The safety backup must not mutate targets covered by the plan token.
+            const preRestoreBackup = await createBackup({
                 id: preRestoreBackupId,
                 operationId: preRestoreOperationId,
                 type: 'pre-restore',
                 preserveIds: [String(id)]
-            });
+            }, false);
             const receipt = await kernel.installSnapshot(prepared.snapshot, Object.assign({}, restoreMutation, {
                 resetJournal: prepared.resetJournal === true,
                 expectedRevisionToken: prepared.revisionToken
             }));
+            await refreshReadingMirrors(Object.keys(prepared.snapshot.envelopes));
             return Object.assign({}, receipt, { preRestoreBackupId: preRestoreBackup.id });
         }
     });
@@ -4531,6 +4637,32 @@
                 const receipt = await kernel.mutate(changes, mutation);
                 return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
+        },
+        async listReadingWords(options = {}) { await ready; return kernel.read('vocab.readingVocabWords', { withMeta: asObject(options).withMeta === true }); },
+        async saveReadingWords(words, options = {}) {
+            await ready; assertArray(words, 'vocab.saveReadingWords requires an array');
+            const mutation = optionsMutationOptions(options, 'vocab-reading-words', words);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.readingVocabWords', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.readingVocabWords',
+                    data: words,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async listReadingBookshelfExams(options = {}) { await ready; return kernel.read('vocab.readingBookshelfExams', { withMeta: asObject(options).withMeta === true }); },
+        async saveReadingBookshelfExams(records, options = {}) {
+            await ready; assertArray(records, 'vocab.saveReadingBookshelfExams requires an array');
+            const mutation = optionsMutationOptions(options, 'vocab-reading-bookshelf', records);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.readingBookshelfExams', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.readingBookshelfExams',
+                    data: records,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
         }
     });
 
@@ -4661,6 +4793,8 @@
         'backups.entries': ['manual_backups'], 'backups.settings': ['backup_settings'],
         'backups.exportHistory': ['export_history'], 'backups.importHistory': ['import_history'],
         'vocab.words': ['vocab_words'], 'vocab.userConfig': ['vocab_user_config'], 'vocab.lists': ['vocab_lists'],
+        'vocab.readingVocabWords': ['ielts_reading_vocab_words_v1'],
+        'vocab.readingBookshelfExams': ['ielts_reading_bookshelf_exams_v1'],
         'preferences.values': ['ui_preferences'], 'goals.items': ['learning_goals'],
         'achievements.manual': ['achievement_manual_state', 'user_achievements']
     });
@@ -4792,6 +4926,7 @@
         if (!currentEnvelope) {
             return { logicalKey, data: clone(legacyValue), expectedRevision: 0 };
         }
+        if (Object.prototype.hasOwnProperty.call(READING_LEGACY_KEYS, logicalKey)) return null;
         if (entry.import === 'replace' || entry.import === 'ignore') return null;
         const currentValue = await kernel.read(logicalKey);
         const next = reconcileLegacyValue(entry, legacyValue, currentValue);
@@ -4992,6 +5127,12 @@
                 await cleanupExpiredRecovery();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
+            }
+            try {
+                await migrateLegacyReadingData();
+                await refreshReadingMirrors();
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
             }
             return true;
         })
