@@ -3056,7 +3056,7 @@
         }
         // An explicitly selected existing owner is stronger than list order.
         for (const term of next.reading.terms) owners.set(term.normalizedTerm, copy(term.wordRef));
-        const preferredIncoming = new Map(incoming.reading.terms.map((term) => [term.normalizedTerm, term.wordRef]));
+        const importedRefs = new Map();
 
         for (const listId of allLists(incoming)) {
             const incomingWords = listWords(incoming, listId);
@@ -3075,34 +3075,58 @@
                 fail(`Cannot merge vocabulary into malformed lists.${listId}`);
             }
             const destination = listWords(next, listId);
-            const ids = new Set(destination.filter((word) => word && typeof word.id === 'string').map((word) => word.id));
+            const ids = new Map();
+            for (const word of destination) {
+                if (word && typeof word.id === 'string') {
+                    if (!ids.has(word.id)) ids.set(word.id, []);
+                    ids.get(word.id).push(word);
+                }
+            }
             let serialized;
             for (const rawWord of incomingWords) {
                 const word = copy(rawWord);
                 const normalized = word && typeof word.word === 'string' && word.word.trim()
                     ? normalizeTerm(word.word) : null;
-                if (normalized && owners.has(normalized)) continue;
-                const preferred = normalized && preferredIncoming.get(normalized);
-                if (preferred && (preferred.listId !== listId || preferred.wordId !== word.id)) continue;
-                if (!normalized || !(word && typeof word.id === 'string' && word.id && word.id.trim() === word.id)) {
+                const referenceable = normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id;
+                if (!referenceable) {
                     if (!serialized) serialized = new Set(destination.map(stableJson));
                     const encoded = stableJson(word);
                     if (serialized.has(encoded)) continue;
                     serialized.add(encoded);
                 }
+                let existingWord = false;
                 if (word && typeof word.id === 'string' && ids.has(word.id)) {
                     if (!normalized) continue;
                     const originalId = word.id;
                     let suffix = 0;
-                    do {
+                    while (ids.has(word.id)) {
+                        const matches = ids.get(word.id);
+                        if (matches.length === 1 && typeof matches[0].word === 'string'
+                            && matches[0].word.trim().toLowerCase() === normalized) {
+                            existingWord = true;
+                            break;
+                        }
                         word.id = key('reading-merge-word', listId, originalId, normalized, suffix++);
-                    } while (ids.has(word.id));
+                    }
                 }
-                destination.push(word);
-                if (word && typeof word.id === 'string') ids.add(word.id);
-                if (normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id) {
-                    owners.set(normalized, { listId, wordId: word.id });
+                // Vocabulary identity is scoped to its list. Same-term records
+                // in other lists have independent membership and review history.
+                // A matching local record keeps all of its existing progress.
+                if (!existingWord) {
+                    destination.push(word);
+                    if (word && typeof word.id === 'string') ids.set(word.id, [word]);
                 }
+                if (referenceable) {
+                    importedRefs.set(key(listId, rawWord.id), { listId, wordId: word.id });
+                }
+            }
+        }
+        // Reader canonical ownership is separate from vocabulary membership.
+        // Reuse local owners, otherwise retain the incoming explicit owner,
+        // including any deterministic ID remapping within its own list.
+        for (const term of incoming.reading.terms) {
+            if (!owners.has(term.normalizedTerm)) {
+                owners.set(term.normalizedTerm, importedRefs.get(key(term.wordRef.listId, term.wordRef.wordId)));
             }
         }
         return owners;
@@ -5105,6 +5129,13 @@
         if (!global.ReadingVocabularyModel) return; // Old non-reader test/embed bootstraps remain supported.
         return retryMergeConflict({}, async () => {
             const migration = await kernel.read('system.migrations', { withMeta: true });
+            // The canonical V1 vocabulary must land before reading initialization
+            // creates words/lists envelopes that become authoritative on reload.
+            // Keep public reading and backup calls behind the same recovery fence.
+            if (typeof internals.readLegacyValues === 'function'
+                && asObject(asObject(migration.data).v1ToV2).status !== 'complete') {
+                throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy vocabulary recovery is pending; reload before reading or saving vocabulary');
+            }
             if (asObject(migration.data).readingVocabularyV1?.completed === true) return;
             const current = await readReadingDocuments();
             const recoverable = { localStorage: {}, documents: {}, rejected: [] };
@@ -5529,10 +5560,10 @@
     }
     function tombstoneRevision(value) { return Number(value && value.revision) || 0; }
     function assertFreshReadingIntent(current, type, command, observed) {
-        if (type !== 'collect' && type !== 'recordVisit') return;
         if (observed.generation !== current.generation) {
             throw new AppDataError('CONFLICT', 'Reading data was replaced; reload before saving');
         }
+        if (type !== 'collect' && type !== 'recordVisit') return;
         const model = readingModel(); const tombstones = current.state.tombstones;
         const articleId = model.articleId(command.source, command.article.examId);
         const fences = type === 'collect' ? [tombstones.all, tombstones.articles[articleId], tombstones.visits[articleId]]
@@ -5637,6 +5668,7 @@
     async function mutateVocabDocuments(changes, options) {
         const ownsWords = changes.some((change) => change.logicalKey === 'vocab.words' || change.logicalKey === 'vocab.lists');
         if (!ownsWords || !global.ReadingVocabularyModel) return kernel.mutate(changes, options);
+        await ensureReadingMigration();
         const current = await readReadingDocuments();
         const next = clone(current.snapshot);
         for (const change of changes) {
@@ -5711,6 +5743,53 @@
                 const receipt = await kernel.mutate(readingChanges(current, next, current.state),
                     optionsMutationOptions(options, 'vocab-default-initialize', command));
                 return Object.assign({}, receipt, { words: clone(next.words) });
+            });
+        },
+        async repairDefaultWords(command, options = {}) {
+            await ready; await ensureReadingMigration();
+            assertObject(command, 'Default vocabulary repair requires a command');
+            assertArray(command.words, 'Default vocabulary repair requires words');
+            return retryVocabMutation(options, async () => {
+                const current = await readReadingDocuments();
+                const words = current.snapshot.words.filter((word) => word && typeof word.word === 'string'
+                    && word.word.trim() && typeof word.meaning === 'string' && word.meaning.trim());
+                const pollutedCount = words.filter((word) => word.meaning.trim().startsWith('你曾拼写为:')).length;
+                // Repair existing corruption independently of first-run seeding.
+                // Recheck after every conflict so a newer empty restore wins.
+                if (!words.length || pollutedCount / words.length < 0.6) {
+                    return { committed: false, words: clone(current.snapshot.words) };
+                }
+                const next = clone(current.snapshot); next.words = clone(command.words);
+                const ownedTerms = next.reading.terms.filter((term) => term.wordRef.listId === 'default');
+                if (ownedTerms.length) {
+                    // Reader progress belongs to the acknowledged canonical row,
+                    // whose ID may differ from (or be absent in) the bundled list.
+                    const listId = readingModel().READING_LIST_ID;
+                    const collection = next.lists[listId];
+                    const retainedWords = Array.isArray(collection) ? collection : asArray(asObject(collection).words);
+                    const retainedIds = new Set(retainedWords.map((word) => word && word.id));
+                    const replacements = new Map();
+                    for (const term of ownedTerms) {
+                        const oldId = term.wordRef.wordId;
+                        if (!replacements.has(oldId)) {
+                            const owner = current.snapshot.words.find((word) => word && word.id === oldId);
+                            const baseId = JSON.stringify(['default-repair', oldId]);
+                            let id = baseId; let suffix = 1;
+                            while (retainedIds.has(id)) id = `${baseId}-${suffix++}`;
+                            retainedIds.add(id);
+                            retainedWords.push(Object.assign({}, clone(owner), { id }));
+                            replacements.set(oldId, { listId, wordId: id });
+                        }
+                        term.wordRef = clone(replacements.get(oldId));
+                    }
+                    next.lists[listId] = Array.isArray(collection) ? retainedWords
+                        : Object.assign({}, asObject(collection), { id: listId, words: retainedWords });
+                }
+                current.state.allowDefaultWordSeed = false; readingModel().validate(next);
+                const receipt = await kernel.mutate(readingChanges(current, next, current.state),
+                    optionsMutationOptions(options, 'vocab-default-repair', command));
+                if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Default vocabulary repair was not acknowledged');
+                return Object.assign({}, receipt, { words: clone((await readReadingDocuments()).snapshot.words) });
             });
         },
         mutateReading,

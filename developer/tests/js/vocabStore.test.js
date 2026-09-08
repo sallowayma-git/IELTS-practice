@@ -26,6 +26,7 @@ function createVocabFacade(seed = {}) {
         replaceListWordsCalls: [],
         backfillListWordPhoneticsCalls: [],
         backfillListWordPhoneticsWrites: 0,
+        repairDefaultWordsCalls: [],
         replaceProgressCalls: []
     };
     const state = {
@@ -45,6 +46,20 @@ function createVocabFacade(seed = {}) {
                 state.allowDefaultWordSeed = false;
             }
             if (!await this.shouldInitializeDefaultWords()) return { committed: false, words: clone(state.words) };
+            await this.replaceListWords({ listId: 'default', words });
+            state.allowDefaultWordSeed = false;
+            return { committed: true, words: clone(state.words) };
+        },
+        async repairDefaultWords({ words }) {
+            metrics.repairDefaultWordsCalls.push({ words: clone(words) });
+            if (seed.replaceBeforeRepair) {
+                state.words = [];
+                state.allowDefaultWordSeed = false;
+            }
+            const pollutedCount = state.words.filter((word) => String(word.meaning || '').trim().startsWith('你曾拼写为:')).length;
+            if (!state.words.length || pollutedCount / state.words.length < 0.6) {
+                return { committed: false, words: clone(state.words) };
+            }
             await this.replaceListWords({ listId: 'default', words });
             state.allowDefaultWordSeed = false;
             return { committed: true, words: clone(state.words) };
@@ -951,12 +966,51 @@ async function testDefaultBootstrapPreservesAuthoritativeEmptyReplace() {
     assert.deepStrictEqual(restored.__appDataState.words, []);
     assert.strictEqual(restored.getWords().length, 0);
     assert.strictEqual(restored.__appDataMetrics.replaceListWordsCalls.length, 0);
+    assert.strictEqual(restored.__appDataMetrics.repairDefaultWordsCalls.length, 0);
 
     const racing = loadVocabStore({ embeddedWords, dataSeed: { replaceBeforeSeed: true } });
     await racing.init();
     assert.deepStrictEqual(racing.__appDataState.words, []);
     assert.strictEqual(racing.getWords().length, 0, 'the committed empty receipt must supersede the bundled snapshot');
     assert.strictEqual(racing.__appDataMetrics.replaceListWordsCalls.length, 0);
+}
+
+async function testDefaultBootstrapRepairsPollutedSnapshotAndRetriesFailedWrite() {
+    const embeddedWords = [{ id: 'default-apple', word: 'apple', meaning: 'Apple' }];
+    const dataSeed = {
+        words: [{ id: 'polluted-garden', word: 'garden', meaning: '你曾拼写为: gardon' }],
+        failReplace: true
+    };
+    const vocabStore = loadVocabStore({ embeddedWords, dataSeed });
+    await assert.rejects(vocabStore.init(), /backend write failed/);
+    assert.strictEqual(vocabStore.state.ready, false);
+    assert.deepStrictEqual(vocabStore.__appDataState.words, dataSeed.words, 'failed repair must leave the acknowledged words untouched');
+    assert.strictEqual(vocabStore.getWords()[0].word, 'garden', 'uncommitted bundled words must not reach runtime state');
+
+    dataSeed.failReplace = false;
+    await vocabStore.init();
+    assert.strictEqual(vocabStore.state.ready, true);
+    assert.strictEqual(vocabStore.__appDataState.words[0].word, 'apple');
+    assert.strictEqual(vocabStore.getWords()[0].word, 'apple');
+    assert.strictEqual((await vocabStore.loadList('default')).words[0].word, 'apple');
+    assert.strictEqual(vocabStore.__appDataMetrics.repairDefaultWordsCalls.length, 2);
+    assert.strictEqual(vocabStore.__appDataMetrics.replaceListWordsCalls.length, 1);
+}
+
+async function testDefaultRepairUsesConcurrentAuthoritativeEmptyReceipt() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [{ id: 'default-apple', word: 'apple', meaning: 'Apple' }],
+        dataSeed: {
+            words: [{ id: 'polluted-garden', word: 'garden', meaning: '你曾拼写为: gardon' }],
+            replaceBeforeRepair: true
+        }
+    });
+    await vocabStore.init();
+    assert.deepStrictEqual(vocabStore.__appDataState.words, []);
+    assert.strictEqual(vocabStore.getWords().length, 0);
+    assert.strictEqual((await vocabStore.loadList('default')).words.length, 0);
+    assert.strictEqual(vocabStore.__appDataMetrics.repairDefaultWordsCalls.length, 1);
+    assert.strictEqual(vocabStore.__appDataMetrics.replaceListWordsCalls.length, 0);
 }
 
 async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
@@ -1153,6 +1207,10 @@ async function main() {
         results.push({ name: '阅读高亮复用默认规范词条并拒绝未持久化的成功', status: 'pass' });
         await testDefaultBootstrapPreservesAuthoritativeEmptyReplace();
         results.push({ name: '默认词库初始化保留权威空替换及并发替换结果', status: 'pass' });
+        await testDefaultBootstrapRepairsPollutedSnapshotAndRetriesFailedWrite();
+        results.push({ name: '默认词库污染修复须持久化成功且失败可重试', status: 'pass' });
+        await testDefaultRepairUsesConcurrentAuthoritativeEmptyReceipt();
+        results.push({ name: '污染修复采用并发权威空替换的回执', status: 'pass' });
         await testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation();
         results.push({ name: '阅读高亮旧 note 音标只投影且显式字段优先', status: 'pass' });
         await testExternalListCommitInvalidatesCacheAndRefreshesActiveList();

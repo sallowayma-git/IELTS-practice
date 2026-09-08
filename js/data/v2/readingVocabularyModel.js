@@ -459,7 +459,7 @@
         }
         // An explicitly selected existing owner is stronger than list order.
         for (const term of next.reading.terms) owners.set(term.normalizedTerm, copy(term.wordRef));
-        const preferredIncoming = new Map(incoming.reading.terms.map((term) => [term.normalizedTerm, term.wordRef]));
+        const importedRefs = new Map();
 
         for (const listId of allLists(incoming)) {
             const incomingWords = listWords(incoming, listId);
@@ -478,34 +478,58 @@
                 fail(`Cannot merge vocabulary into malformed lists.${listId}`);
             }
             const destination = listWords(next, listId);
-            const ids = new Set(destination.filter((word) => word && typeof word.id === 'string').map((word) => word.id));
+            const ids = new Map();
+            for (const word of destination) {
+                if (word && typeof word.id === 'string') {
+                    if (!ids.has(word.id)) ids.set(word.id, []);
+                    ids.get(word.id).push(word);
+                }
+            }
             let serialized;
             for (const rawWord of incomingWords) {
                 const word = copy(rawWord);
                 const normalized = word && typeof word.word === 'string' && word.word.trim()
                     ? normalizeTerm(word.word) : null;
-                if (normalized && owners.has(normalized)) continue;
-                const preferred = normalized && preferredIncoming.get(normalized);
-                if (preferred && (preferred.listId !== listId || preferred.wordId !== word.id)) continue;
-                if (!normalized || !(word && typeof word.id === 'string' && word.id && word.id.trim() === word.id)) {
+                const referenceable = normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id;
+                if (!referenceable) {
                     if (!serialized) serialized = new Set(destination.map(stableJson));
                     const encoded = stableJson(word);
                     if (serialized.has(encoded)) continue;
                     serialized.add(encoded);
                 }
+                let existingWord = false;
                 if (word && typeof word.id === 'string' && ids.has(word.id)) {
                     if (!normalized) continue;
                     const originalId = word.id;
                     let suffix = 0;
-                    do {
+                    while (ids.has(word.id)) {
+                        const matches = ids.get(word.id);
+                        if (matches.length === 1 && typeof matches[0].word === 'string'
+                            && matches[0].word.trim().toLowerCase() === normalized) {
+                            existingWord = true;
+                            break;
+                        }
                         word.id = key('reading-merge-word', listId, originalId, normalized, suffix++);
-                    } while (ids.has(word.id));
+                    }
                 }
-                destination.push(word);
-                if (word && typeof word.id === 'string') ids.add(word.id);
-                if (normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id) {
-                    owners.set(normalized, { listId, wordId: word.id });
+                // Vocabulary identity is scoped to its list. Same-term records
+                // in other lists have independent membership and review history.
+                // A matching local record keeps all of its existing progress.
+                if (!existingWord) {
+                    destination.push(word);
+                    if (word && typeof word.id === 'string') ids.set(word.id, [word]);
                 }
+                if (referenceable) {
+                    importedRefs.set(key(listId, rawWord.id), { listId, wordId: word.id });
+                }
+            }
+        }
+        // Reader canonical ownership is separate from vocabulary membership.
+        // Reuse local owners, otherwise retain the incoming explicit owner,
+        // including any deterministic ID remapping within its own list.
+        for (const term of incoming.reading.terms) {
+            if (!owners.has(term.normalizedTerm)) {
+                owners.set(term.normalizedTerm, importedRefs.get(key(term.wordRef.listId, term.wordRef.wordId)));
             }
         }
         return owners;

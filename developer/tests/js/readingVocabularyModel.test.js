@@ -399,6 +399,74 @@ test('legacy array-shaped lists remain valid canonical owners through serializat
     assert.equal(query(snapshot).distinctTermCount, 0);
 });
 
+test('backup merge preserves independent same-term vocabulary memberships and the incoming explicit reader owner', () => {
+    const customApple = { ...APPLE, meaning: 'Personal definition', repetitions: 2,
+        reviewHistory: [{ at: AT, grade: 2 }] };
+    const spellingApple = { ...APPLE, id: 'spelling-apple', word: 'APPLE', repetitions: 4,
+        reviewHistory: [{ at: AT, grade: 3 }] };
+    const anotherCustomApple = { ...APPLE, id: 'another-custom-apple', note: 'Independent record in the same list' };
+    const incoming = mutate('collect', model.createSnapshot({
+        words: [APPLE],
+        lists: {
+            custom: [customApple, anotherCustomApple],
+            'spelling-errors': { id: 'spelling-errors', name: 'Spelling errors', words: [spellingApple] }
+        }
+    }), command({ wordRef: { listId: 'spelling-errors', wordId: spellingApple.id } }));
+    const merged = mutate('merge', model.createSnapshot(), incoming);
+    assert.deepEqual(plain(merged.words), [APPLE]);
+    assert.deepEqual(plain(merged.lists), plain(incoming.lists));
+    assert.deepEqual(plain(query(merged).terms[0].wordRef), { listId: 'spelling-errors', wordId: spellingApple.id });
+    assert.deepEqual(plain(query(merged).terms[0].word.reviewHistory), spellingApple.reviewHistory);
+    assert.deepEqual(plain(mutate('merge', merged, incoming)), plain(merged), 'repeated merge retains every record exactly once');
+});
+
+test('backup merge keeps local per-list progress and reader ownership while importing other same-term records', () => {
+    const localCustom = { ...APPLE, id: 'custom-apple', meaning: 'Local custom definition', repetitions: 12,
+        reviewHistory: [{ at: LATER, grade: 5 }] };
+    const existing = mutate('collect', model.createSnapshot({
+        words: [APPLE], lists: { custom: { id: 'custom', name: 'Local list', words: [localCustom] } }
+    }), command({ wordRef: { listId: 'custom', wordId: localCustom.id } }));
+    const importedDefault = { ...APPLE, repetitions: 0, reviewHistory: [] };
+    const importedCustom = { ...localCustom, repetitions: 0, reviewHistory: [] };
+    const importedSpelling = { ...APPLE, id: 'spelling-apple', repetitions: 3,
+        reviewHistory: [{ at: AT, grade: 1 }] };
+    const incoming = mutate('collect', model.createSnapshot({
+        words: [importedDefault], lists: {
+            custom: { id: 'custom', words: [importedCustom] },
+            'spelling-errors': { id: 'spelling-errors', words: [importedSpelling] }
+        }
+    }), command({ source: SOURCE_B }));
+    const merged = mutate('merge', existing, incoming);
+    assert.deepEqual(plain(merged.words), [APPLE]);
+    assert.deepEqual(plain(merged.lists.custom), plain(existing.lists.custom));
+    assert.deepEqual(plain(merged.lists['spelling-errors'].words), [importedSpelling]);
+    assert.deepEqual(plain(query(merged).terms[0].wordRef), { listId: 'custom', wordId: localCustom.id });
+    assert.equal(merged.reading.terms.length, 1);
+    assert.equal(merged.reading.associations.length, 2);
+    assert.deepEqual(plain(mutate('merge', merged, incoming)), plain(merged));
+});
+
+test('backup merge remaps list-scoped ID collisions and reuses the same imported owner after review and retry', () => {
+    const collisionId = 'shared-record-id';
+    const existing = model.createSnapshot({ lists: { custom: [{ ...APPLE, id: collisionId }] } });
+    const incomingPear = { ...APPLE, id: collisionId, word: 'pear', meaning: 'Another fruit' };
+    const incoming = mutate('collect', model.createSnapshot({ lists: { custom: [incomingPear] } }), command({
+        word: { word: 'pear' }, occurrence: undefined, wordRef: { listId: 'custom', wordId: collisionId }
+    }));
+    const merged = mutate('merge', existing, incoming);
+    assert.equal(merged.lists.custom.length, 2);
+    assert.deepEqual(plain(merged.lists.custom[0]), plain(existing.lists.custom[0]));
+    const importedRef = query(merged).terms[0].wordRef;
+    assert.equal(importedRef.listId, 'custom');
+    assert.notEqual(importedRef.wordId, collisionId);
+    assert.equal(query(merged).terms[0].word.word, 'pear');
+    const reviewed = plain(merged);
+    reviewed.lists.custom[1].repetitions = 10;
+    reviewed.lists.custom[1].reviewHistory.push({ at: LATER, grade: 5 });
+    assert.deepEqual(plain(mutate('merge', reviewed, incoming)), reviewed,
+        'retry must resolve the original collision to the existing renamed record without replacing progress');
+});
+
 test('explicit global deletion cascades all reader relationships and same-term vocabulary rows, preserving other terms and visits', () => {
     const pear = { id: 'pear', word: 'pear', meaning: 'Another fruit', interval: 12 };
     let snapshot = twoArticles({

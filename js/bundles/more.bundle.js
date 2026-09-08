@@ -1480,7 +1480,7 @@
                 return backfilled;
             }
             const vocab = await requireVocabData();
-            if (!await vocab.shouldInitializeDefaultWords()) {
+            if (!pollutedBySpellingList && !await vocab.shouldInitializeDefaultWords()) {
                 if (state.activeListId === DEFAULT_LIST_ID) setWordsInternal(normalizedStored);
                 return normalizedStored;
             }
@@ -1490,7 +1490,9 @@
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            const receipt = await vocab.initializeDefaultWords({ words: normalized });
+            const receipt = pollutedBySpellingList
+                ? await vocab.repairDefaultWords({ words: normalized })
+                : await vocab.initializeDefaultWords({ words: normalized });
             normalized = normalizeStoredListWords(receipt.words, DEFAULT_LIST_ID);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);

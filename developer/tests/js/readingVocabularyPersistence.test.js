@@ -222,6 +222,48 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
         });
     }
 
+    for (const removal of ['removeOccurrence', 'removeArticleTerm', 'clearArticle', 'deleteCanonicalTerm',
+        'removeTermAssociations', 'clearReading', 'removeArticle']) {
+        await t.test(`${removal} rejects an old generation and a pending deletion across replacement`, async (t) => {
+            const [stale, writer] = await pages(t, 2);
+            const [donor] = await pages(t);
+            await collect(writer, command('apple'));
+            await collect(donor, command('apple'));
+            await collect(donor, command('banana'));
+            const restored = await snapshot(donor);
+            const backup = await donor.evaluate(() => AppData.backups.export());
+            const observed = await stale.evaluate(() => AppData.vocab.getReadingSnapshot());
+            const input = {
+                articleId: observed.snapshot.reading.articles[0].id,
+                termId: observed.snapshot.reading.terms[0].id,
+                occurrenceId: observed.snapshot.reading.occurrences[0].id,
+                clearWords: true, at: AT
+            };
+            await startPausedOperation(stale, removal, { ...input, operationId: `pending-delete-${removal}` });
+            assert.equal((await importSnapshot(writer, backup, true)).committed, true);
+            const pending = await releaseCollect(stale);
+            assert.equal(pending.error?.code, 'CONFLICT', 'a pending deletion must not replay against restored data');
+            assert.equal(pending.error?.committed, false);
+            assert.deepEqual(await snapshot(writer), restored);
+
+            const oldGeneration = await stale.evaluate(async ({ removal, input, observed }) => {
+                try {
+                    return { receipt: await AppData.vocab.mutateReading(removal, input, {
+                        observedRevision: observed.revision, observedGeneration: observed.generation
+                    }) };
+                } catch (error) { return { code: error.code, committed: error.committed }; }
+            }, { removal, input, observed });
+            assert.deepEqual(oldGeneration, { code: 'CONFLICT', committed: false });
+            assert.deepEqual(await snapshot(writer), restored, 'explicit stale observation cannot remove any restored records');
+            await stale.reload();
+            await loadAppData(stale);
+            assert.deepEqual(await snapshot(stale), restored, 'rejected commands leave durable data intact');
+            const fresh = await stale.evaluate(({ removal, input }) => AppData.vocab.mutateReading(removal, input), { removal, input });
+            assert.equal(fresh.committed, true, 'a refreshed deletion can still be acknowledged');
+            assert.notDeepEqual(await snapshot(writer), restored);
+        });
+    }
+
     await t.test('removing an article and its vocabulary commits together and fences an already pending bookshelf visit', async (t) => {
         const [stale, writer] = await pages(t, 2);
         await collect(writer, command('apple', SOURCE_A));

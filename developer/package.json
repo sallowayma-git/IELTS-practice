@@ -10,6 +10,6 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\"",
     "test:unit": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\"",
-    "test:reading-persistence": "node --test tests/js/readingVocabularyPersistence.test.js tests/js/readingDataBackupAuthority.test.js"
+    "test:reading-persistence": "node --test tests/js/readingVocabularyPersistence.test.js tests/js/readingDataBackupAuthority.test.js tests/js/readingVocabularyBackupMembership.test.js tests/js/readingLegacyRecovery.test.js tests/js/vocabDefaultRepairPersistence.test.js"
   }
 }
