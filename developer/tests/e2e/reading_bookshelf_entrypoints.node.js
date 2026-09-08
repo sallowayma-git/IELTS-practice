@@ -59,6 +59,7 @@ const report = { generatedAt: new Date().toISOString(), browser: browser.version
 const persistReport = () => {
     report.updatedAt = new Date().toISOString();
     report.elapsedSeconds = Number(((Date.now() - startedAt) / 1000).toFixed(3));
+    report.activeCheckpoints = report.checkpoints.filter(entry => entry.status === 'running').map(entry => entry.name);
     fs.writeFileSync(path.join(reports, 'reading-bookshelf-entrypoints-report.json'), `${JSON.stringify(report, null, 2)}\n`);
 };
 const log = message => console.error(`[issue159 +${((Date.now() - startedAt) / 1000).toFixed(3)}s] ${message}`);
@@ -198,8 +199,8 @@ async function search(page, query, ids) {
         await page.locator('.bookshelf-search-input').fill('');
     } catch (error) {
         recordFailure(error);
-        report.searchFailure = await page.evaluate(query => ({
-            query, inputValue: document.querySelector('.bookshelf-search-input')?.value,
+        const diagnostic = await page.evaluate(query => ({
+            query, url: location.href, inputValue: document.querySelector('.bookshelf-search-input')?.value,
             stateQuery: BookshelfView.state.searchQuery,
             activeElement: document.activeElement?.className,
             loading: ReadingBookshelfStore._loading, revision: ReadingBookshelfStore._revision,
@@ -209,6 +210,7 @@ async function search(page, query, ids) {
                 title: node.querySelector('.bookshelf-card__title')?.textContent.trim()
             }))
         }), query).catch(diagnosticError => ({ query, error: diagnosticError.message }));
+        (report.searchFailures ||= []).push(diagnostic);
         persistReport();
         throw error;
     }
@@ -230,11 +232,12 @@ async function browseAndColdShelf(page, protocol) {
         && (await window.resolveActiveLibraryIndex()).some(exam => exam.id === 'p2-low-08'), null, { timeout: 60_000 });
     const entry = page.locator('#exam-list-container [data-action="vocab-book"]').first();
     await entry.waitFor().catch(async error => {
-        report.browseFailure = await page.evaluate(() => ({
+        const diagnostic = await page.evaluate(() => ({
             view: document.querySelector('.view.active')?.id,
             text: document.querySelector('#browse-view')?.textContent.slice(-4000),
             list: document.querySelector('#exam-list-container')?.innerHTML.slice(0, 3000)
         }));
+        (report.browseFailures ||= []).push({ protocol, ...diagnostic });
         throw error;
     });
     const examId = await entry.getAttribute('data-exam-id');
@@ -504,23 +507,36 @@ async function browseReplacedArticle(protocol) {
     } finally { await context.close(); }
 }
 
-try {
-    for (const protocol of ['http', 'https', 'file']) {
-        const context = await newContext();
+async function runProtocol(protocol) {
+    const context = await newContext();
+    try {
         const page = await context.newPage();
         page.on('dialog', dialog => dialog.accept());
-        try {
-            const examA = await checkpoint(`${protocol}-browse-and-cold-shelf`, () => browseAndColdShelf(page, protocol));
-            const examB = await checkpoint(`${protocol}-counts-and-controls`, () => countsAndControls(page, examA, protocol));
-            await checkpoint(`${protocol}-import-and-cross-window`, () => importAndCrossWindow(page, context, examA, examB, protocol));
-            await checkpoint(`${protocol}-source-identity`, () => sourceIdentity(page, protocol));
-            assert.deepEqual(await page.evaluate(() => AppData.practice.list()), [], 'reader and bookshelf use must not create practice records');
-        } catch (error) {
-            recordFailure(error);
-            throw error;
-        } finally { await context.close(); }
-        await checkpoint(`${protocol}-practice-first-invocation`, () => practiceFirstInvocation(protocol));
-        await checkpoint(`${protocol}-browse-replaced-article`, () => browseReplacedArticle(protocol));
+        const examA = await checkpoint(`${protocol}-browse-and-cold-shelf`, () => browseAndColdShelf(page, protocol));
+        const examB = await checkpoint(`${protocol}-counts-and-controls`, () => countsAndControls(page, examA, protocol));
+        await checkpoint(`${protocol}-import-and-cross-window`, () => importAndCrossWindow(page, context, examA, examB, protocol));
+        await checkpoint(`${protocol}-source-identity`, () => sourceIdentity(page, protocol));
+        assert.deepEqual(await page.evaluate(() => AppData.practice.list()), [], 'reader and bookshelf use must not create practice records');
+    } catch (error) {
+        recordFailure(error);
+        throw error;
+    } finally { await context.close(); }
+    await checkpoint(`${protocol}-practice-first-invocation`, () => practiceFirstInvocation(protocol));
+    await checkpoint(`${protocol}-browse-replaced-article`, () => browseReplacedArticle(protocol));
+}
+
+try {
+    // Protocols have independent storage and download contexts. Wait for every
+    // flow, including after a failure, before closing their shared browser.
+    const protocols = ['http', 'https', 'file'];
+    const results = await Promise.allSettled(protocols.map(protocol => runProtocol(protocol)));
+    report.protocols = results.map((result, index) => ({
+        protocol: protocols[index], status: result.status === 'fulfilled' ? 'pass' : 'fail',
+        ...(result.status === 'rejected' ? { error: result.reason?.stack || String(result.reason) } : {})
+    }));
+    const failures = results.filter(result => result.status === 'rejected');
+    if (failures.length) {
+        throw new AggregateError(failures.map(result => result.reason), 'Bookshelf protocol regressions failed');
     }
     report.status = 'pass';
 } catch (error) {
