@@ -132,11 +132,11 @@ retry. Quota/conflict failures support retry in the same page. A latched
 `BACKEND_UNAVAILABLE` failure requires refreshing the page before retry, as in
 the existing DataKernel contract.
 
-The current full-text reader loads the built-in generated registry. It rejects
-other source namespaces before recording visits or collections, avoiding an
-association between imported identities and built-in passage content. Existing
-imported-source data remains queryable and exportable in the bookshelf; source
-navigation and content rendering continue under the later reader work items.
+The reader resolves built-in generated content and source-scoped imported
+content through the [entrypoint contract](Intensive-Reading-Entrypoints.md).
+Original content references are persisted through the same acknowledged reading
+operations. Missing, changed, or ambiguous source references leave vocabulary
+reviewable/exportable and cannot silently resolve through the active library.
 
 ## Validation
 

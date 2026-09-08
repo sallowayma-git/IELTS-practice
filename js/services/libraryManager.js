@@ -294,7 +294,7 @@
             }
             return this.normalizeIndexForCustomConfig(
                 this.getDefaultReadingIndex().concat(this.resolveDefaultTypeIndex('listening'))
-            );
+            ).map((exam) => ({ ...exam, libraryConfigurationId: null }));
         }
 
         async resolveIndexForConfiguration(configurationId) {
@@ -303,7 +303,8 @@
                 ? configurationId.trim()
                 : null;
             if (id === null) return this.resolveDefaultIndex();
-            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id));
+            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id))
+                .map((exam) => ({ ...exam, libraryConfigurationId: id }));
         }
 
         getRecordLibraryProvenance(record) {
@@ -387,7 +388,8 @@
             }
 
             if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData);
+                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData)
+                    .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
                 if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
                 this.finishLibraryLoading(startTime, updatedIndex);
@@ -425,7 +427,8 @@
                     return [];
                 }
 
-                const combined = cloneArray(readingExams).concat(listeningExams);
+                const combined = cloneArray(readingExams).concat(listeningExams)
+                    .map((exam) => ({ ...exam, libraryConfigurationId: null }));
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
@@ -714,7 +717,10 @@
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
-            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
+            const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
+            const exams = Array.isArray(rawExams)
+                ? rawExams.map((exam) => ({ ...exam, libraryConfigurationId: configurationId })) : [];
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');

@@ -44,7 +44,7 @@ and list metadata are preserved. `reading` has these tables:
 | Table | Record fields | Responsibility |
 | --- | --- | --- |
 | `sources` | `id`, `kind`, `libraryId` | Stable built-in or imported library namespace. |
-| `articles` | `id`, `sourceId`, `examId`, `title`, `titleUpdatedAt`, `createdAt`, `updatedAt` | Source-scoped article identity and display metadata, with a separate title update clock. |
+| `articles` | `id`, `sourceId`, `examId`, `title`, `titleUpdatedAt`, `createdAt`, `updatedAt`, optional `contentRefs` | Source-scoped article identity, display metadata, and original content references. |
 | `terms` | `id`, `normalizedTerm`, `wordRef: {listId, wordId}`, `createdAt` | One normalized reading term linked to a live existing vocabulary record. |
 | `associations` | `id`, `articleId`, `termId`, `manual`, `createdAt`, `updatedAt` | One article-term relationship, with independent manual membership. |
 | `occurrences` | `id`, `associationId`, `scopeId`, `contentVersion`, `startOffset`, `endOffset`, `quote`, `before`, `after`, `createdAt`, `updatedAt` | A specifically selected occurrence belonging to one association. |
@@ -63,6 +63,23 @@ timestamp within the inclusive `createdAt` to `updatedAt` range. An explicitly
 supplied empty title has a timestamp and is distinct from an omitted title.
 Serialization preserves this field and validation rejects a missing or invalid
 title clock.
+
+Issue #159 adds optional `articles.contentRefs` without invalidating earlier
+version-1 snapshots. It is a sorted array of unique, nonempty strings. A visit or
+collection may supply `article.contentRef` to bind the original content locator.
+The first binding is retained; a different reference or an existing ambiguous
+binding rejects the mutation without changing its input. Commands that omit the
+reference preserve an existing binding. Backup merge unions references, so
+conflicting backups remain recoverable and the reader displays an unavailable
+state rather than choosing a different article. Legacy unbound articles acquire
+a reference on their next acknowledged visit.
+
+`contentRef(exam)` serializes `[sourceKind, dataKey, path, filename, importKey]`;
+missing fields become empty strings, values are trimmed, and path/filename
+backslashes become forward slashes. It identifies the content locator, not a
+hash of the passage text. Generated built-in articles use their generated key;
+source-text changes at the same locator still use the occurrence restoration
+rules in [the anchor contract](Intensive-Reading-Anchors.md).
 
 ## Identity and normalization
 

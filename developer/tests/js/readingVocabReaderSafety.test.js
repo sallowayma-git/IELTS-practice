@@ -215,8 +215,12 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     await ReadingVocabReader.open('article', { source: { kind: 'imported', id: 'missing-library' } });
                     ReadingVocabReader.openModal();
                 });
-                await page.locator('#vocab-manual-input').fill('not-collected');
-                await page.locator('#vocab-manual-add-btn').click();
+                assert.equal(await page.locator('#vocab-manual-input').isEnabled(), false);
+                assert.equal(await page.locator('#vocab-manual-add-btn').isEnabled(), false);
+                await page.evaluate(() => {
+                    document.querySelector('#vocab-manual-input').value = 'not-collected';
+                    document.querySelector('#vocab-manual-add-btn').click();
+                });
                 const state = await page.evaluate(() => ({
                     words: ReadingVocabStore.getAll().map(item => item.word),
                     payload: ReadingVocabReader.currentPayload,
@@ -307,7 +311,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     await __openA;
                     ReadingVocabReader.currentExplanation = { passageNotes: [{ label: 'Paragraph A', text: 'old cached translation' }] };
                     await __queueOpen('b', '__openB');
-                    const cleared = ReadingVocabReader.currentPayload === null && ReadingVocabReader.currentExam === null && ReadingVocabReader.currentExplanation === null;
+                    const cleared = ReadingVocabReader.currentPayload === null && ReadingVocabReader.currentExam?.title !== 'a' && ReadingVocabReader.currentExplanation === null;
                     __finishScript('b.js', 'b');
                     await __openB;
                     const before = document.getElementById('vocab-trans-text-p-1').textContent;

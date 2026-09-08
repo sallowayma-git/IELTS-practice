@@ -2392,8 +2392,17 @@
         openBookshelf: openBookshelf
     });
 
+    var bookshelfOpenSequence = 0;
+
     function openBookshelf(options) {
-        var fromView = (options && options.fromView) || 'overview';
+        var sequence = ++bookshelfOpenSequence;
+        var fromView = (options && options.fromView) || global.app?.currentView || 'overview';
+        var navigation = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration() : null;
+        var isCurrent = function () {
+            return sequence === bookshelfOpenSequence && (navigation == null
+                || navigation === global.__getAppNavigationIntentGeneration());
+        };
         return Promise.resolve().then(function () {
             if (global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function') {
                 return global.AppEntry.ensureMoreToolsGroup();
@@ -2403,6 +2412,15 @@
             }
             return null;
         }).then(function () {
+            if (!isCurrent()) return;
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return global.AppLazyLoader.ensureGroup('exam-data');
+            }
+        }).then(function () {
+            if (!isCurrent()) return;
+            if (!global.BookshelfView || typeof global.BookshelfView.mount !== 'function') {
+                throw new Error('Bookshelf component is unavailable');
+            }
             var bookshelfView = document.getElementById('bookshelf-view');
             if (bookshelfView) {
                 bookshelfView.removeAttribute('hidden');
@@ -2431,6 +2449,7 @@
                 moreNavBtn.classList.add('active');
             }
         }).catch(function (error) {
+            if (!isCurrent()) return;
             console.warn('[AppActions] 打开书架失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('未能打开阅读书架，请稍后重试。', 'warning');
@@ -2440,6 +2459,18 @@
 
     // 挂载到全局（向后兼容）
     global.openBookshelfView = openBookshelf;
+    // The More card is visible before more-tools has finished loading. Accept
+    // that first click in the resident runtime; the mounted handler prevents
+    // default itself, so warm clicks still have exactly one owner.
+    if (typeof document !== 'undefined') {
+        document.addEventListener('click', function (event) {
+            if (event.defaultPrevented) return;
+            var target = event.target?.closest?.('[data-action="open-bookshelf"]');
+            if (!target || !target.closest('#more-view')) return;
+            event.preventDefault();
+            openBookshelf({ fromView: 'more' });
+        });
+    }
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;

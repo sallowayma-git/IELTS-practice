@@ -155,9 +155,12 @@
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        if (typeof global.AppActions?.openBookshelf === 'function') {
+            return global.AppActions.openBookshelf({ fromView: 'more' });
+        }
         var mountView = function () {
             if (global.BookshelfView && typeof global.BookshelfView.mount === 'function') {
-                global.BookshelfView.mount('#bookshelf-view');
+                global.BookshelfView.mount('#bookshelf-view', { fromView: 'more' });
             }
         };
 

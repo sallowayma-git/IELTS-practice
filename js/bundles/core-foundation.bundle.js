@@ -2662,6 +2662,13 @@
     }
 
     function articleId(source, examId) { return key('article', sourceId(source), nonempty(examId, 'examId')); }
+    function contentRef(exam) {
+        object(exam, 'exam');
+        return key(...['sourceKind', 'dataKey', 'path', 'filename', 'importKey'].map((field) => {
+            const value = typeof exam[field] === 'string' ? exam[field].trim() : '';
+            return field === 'path' || field === 'filename' ? value.replace(/\\/g, '/') : value;
+        }));
+    }
     function termId(word) { return key('term', normalizeTerm(word)); }
     function associationId(article, term) { return key('association', article, term); }
 
@@ -2750,6 +2757,18 @@
             const source = idx.sources.get(article.sourceId);
             if (!source || article.id !== articleId({ kind: source.kind, id: source.libraryId }, article.examId)) fail('Invalid article source or identity');
             if (typeof article.title !== 'string') fail('Article title must be a string');
+            if (own(article, 'contentRefs')) {
+                if (!Array.isArray(article.contentRefs)) fail('Article contentRefs must be an array');
+                const refs = new Set();
+                for (const ref of article.contentRefs) {
+                    exactString(ref, 'article.contentRefs entry');
+                    if (refs.has(ref)) fail('Article contentRefs must be unique');
+                    refs.add(ref);
+                }
+                if (article.contentRefs.some((ref, index) => index > 0 && article.contentRefs[index - 1] > ref)) {
+                    fail('Article contentRefs must be sorted');
+                }
+            }
             timestamp(article.createdAt, 'article.createdAt');
             timestamp(article.updatedAt, 'article.updatedAt');
             if (article.createdAt > article.updatedAt) fail('Article timestamps are out of order');
@@ -2825,10 +2844,15 @@
         const articleKey = articleId(source, article.examId);
         const hasTitle = own(article, 'title');
         if (hasTitle && typeof article.title !== 'string') fail('article.title must be a string');
+        const ref = own(article, 'contentRef') ? exactString(article.contentRef, 'article.contentRef') : null;
         if (!snapshot.reading.sources.some((row) => row.id === sourceKey)) {
             snapshot.reading.sources.push({ id: sourceKey, kind: source.kind, libraryId: source.id.trim() });
         }
         let row = snapshot.reading.articles.find((item) => item.id === articleKey);
+        if (row && ref !== null && row.contentRefs && (row.contentRefs.length > 1
+            || (row.contentRefs.length === 1 && row.contentRefs[0] !== ref))) {
+            fail('Article content reference has changed or is ambiguous');
+        }
         if (!row) {
             row = {
                 id: articleKey, sourceId: sourceKey, examId: article.examId.trim(),
@@ -2845,6 +2869,7 @@
             row.createdAt = at < row.createdAt ? at : row.createdAt;
             row.updatedAt = at > row.updatedAt ? at : row.updatedAt;
         }
+        if (ref !== null) row.contentRefs = [ref];
         return row;
     }
 
@@ -3156,6 +3181,13 @@
                         { title: incomingRow.title, titleUpdatedAt: incomingRow.titleUpdatedAt }, 'titleUpdatedAt');
                     merged.title = title.title;
                     merged.titleUpdatedAt = title.titleUpdatedAt;
+                    if (own(existing, 'contentRefs') || own(incomingRow, 'contentRefs')) {
+                        // Conflicting backups retain every binding so a reader
+                        // cannot silently select a different content source.
+                        merged.contentRefs = [...new Set([
+                            ...(existing.contentRefs || []), ...(incomingRow.contentRefs || [])
+                        ])].sort();
+                    }
                 } else if (existing && table === 'associations') {
                     merged.manual = existing.manual || incomingRow.manual;
                 } else if (existing && table === 'visits') {
@@ -3200,7 +3232,7 @@
     }
 
     const model = Object.freeze({
-        SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, termId, occurrenceId,
+        SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, contentRef, termId, occurrenceId,
         createSnapshot, validate, collect, recordVisit, removeOccurrence, removeArticleTerm,
         clearArticle, deleteCanonicalTerm, merge, query, listVisits, serialize, deserialize
     });
@@ -16147,7 +16179,7 @@
             }
             return this.normalizeIndexForCustomConfig(
                 this.getDefaultReadingIndex().concat(this.resolveDefaultTypeIndex('listening'))
-            );
+            ).map((exam) => ({ ...exam, libraryConfigurationId: null }));
         }
 
         async resolveIndexForConfiguration(configurationId) {
@@ -16156,7 +16188,8 @@
                 ? configurationId.trim()
                 : null;
             if (id === null) return this.resolveDefaultIndex();
-            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id));
+            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id))
+                .map((exam) => ({ ...exam, libraryConfigurationId: id }));
         }
 
         getRecordLibraryProvenance(record) {
@@ -16240,7 +16273,8 @@
             }
 
             if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData);
+                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData)
+                    .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
                 if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
                 this.finishLibraryLoading(startTime, updatedIndex);
@@ -16278,7 +16312,8 @@
                     return [];
                 }
 
-                const combined = cloneArray(readingExams).concat(listeningExams);
+                const combined = cloneArray(readingExams).concat(listeningExams)
+                    .map((exam) => ({ ...exam, libraryConfigurationId: null }));
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
@@ -16567,7 +16602,10 @@
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
-            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
+            const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
+            const exams = Array.isArray(rawExams)
+                ? rawExams.map((exam) => ({ ...exam, libraryConfigurationId: configurationId })) : [];
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');

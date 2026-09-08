@@ -17,6 +17,7 @@ const deferred = () => {
 
 function fixture() {
     const events = [];
+    const eventListeners = new Map();
     const commitListeners = [];
     const sandbox = {
         console: { warn() {} }, setTimeout, clearTimeout,
@@ -25,7 +26,14 @@ function fixture() {
             setItem() { throw new Error('A display consumer must not write legacy storage'); }
         },
         CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
-        addEventListener() {}, dispatchEvent(event) { events.push(event); },
+        addEventListener(type, listener) {
+            if (!eventListeners.has(type)) eventListeners.set(type, []);
+            eventListeners.get(type).push(listener);
+        },
+        dispatchEvent(event) {
+            events.push(event);
+            (eventListeners.get(event.type) || []).forEach((listener) => listener(event));
+        },
         document: { querySelector() { return null; }, getElementById() { return null; } }
     };
     sandbox.window = sandbox;
@@ -77,8 +85,8 @@ function fixture() {
         setCanonical(value) { canonical = value; },
         setFailure(value) { failure = value; },
         setGate(value) { gate = value; },
-        async commit() {
-            commitListeners.forEach((listener) => listener({ targets: [{ logicalKey: 'vocab.readingState' }] }));
+        async commit(target = 'vocab.readingState') {
+            commitListeners.forEach((listener) => listener({ targets: [{ logicalKey: target }] }));
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
     };
@@ -244,4 +252,237 @@ test('Bookshelf backend failure offers page reload instead of retrying a latched
     view.render();
     assert.match(root.innerHTML, /data-action="reload-page"/);
     assert.doesNotMatch(root.innerHTML, /data-action="retry-load"/);
+});
+
+test('Bookshelf counts distinct associated terms, searches beyond previews, and retains a cleared visit', async () => {
+    const f = fixture();
+    await f.store.init();
+    let snapshot = clone(f.canonical.snapshot);
+    for (let index = 2; index <= 8; index += 1) {
+        snapshot = f.model.collect(snapshot, {
+            source: sourceA, article: { examId: 'same-exam' }, word: { word: `word-${index}`, meaning: `Meaning ${index}` }, at
+        });
+    }
+    snapshot = f.model.collect(snapshot, {
+        source: sourceB, article: { examId: 'same-exam' }, word: { word: 'APPLE', meaning: 'apple' }, at
+    });
+    f.setCanonical({ snapshot, revision: 2, generation: 'original' });
+    await f.commit();
+    const rows = f.store.getBookshelfExams();
+    assert.equal(rows[0].wordCount, 8);
+    assert.equal(rows[1].wordCount, 2);
+    assert.equal(f.store.getDistinctWordCount(), 9, 'shared terms count only once globally');
+    assert.equal(rows[0].sampleWords.length, 6);
+    assert.equal(rows[0].allWords.includes('word-8'), true);
+
+    const root = { innerHTML: '' };
+    f.sandbox.document.querySelector = () => root;
+    const view = f.sandbox.BookshelfView;
+    view.bindCardEvents = () => {};
+    view.state.searchQuery = 'word-8';
+    view.render();
+    assert.match(root.innerHTML, /data-article-id=/);
+    assert.doesNotMatch(root.innerHTML, /未找到匹配的篇目/);
+
+    snapshot = f.model.clearArticle(snapshot, { articleId: f.model.articleId(sourceA, 'same-exam'), at });
+    f.setCanonical({ snapshot, revision: 3, generation: 'original' });
+    await f.commit();
+    assert.equal(f.store.getBookshelfExams()[0].wordCount, 0);
+    assert.equal(f.store.getBookshelfExams()[1].wordCount, 2);
+    assert.equal(f.store.getDistinctWordCount(), 2);
+    assert.equal(f.store.getBookshelfExams().length, 2, 'clearing terms preserves independent visits');
+    assert.match(root.innerHTML, /未找到匹配的篇目/);
+});
+
+test('Bookshelf preserves stored titles and displays and searches source identity and imported category', async () => {
+    const f = fixture();
+    f.sandbox.AppData.library.listConfigurations = async () => [{ id: 'library-b', name: 'Research Collection' }];
+    f.sandbox.AppData.library.getIndex = async () => [{ id: 'same-exam', title: 'Changed title', category: 'Science' }];
+    await f.store.init();
+    const article = f.store.getBookshelfExams().find((row) => row.source.id === 'library-b');
+    assert.equal(article.title, 'library-b', 'the original stored article title remains visible');
+    assert.equal(article.sourceLabel, '导入题库 · Research Collection (library-b)');
+    assert.equal(article.category, 'Science');
+    assert.equal(article.sourceUnavailable, false);
+    const root = { innerHTML: '' };
+    f.sandbox.document.querySelector = () => root;
+    const view = f.sandbox.BookshelfView;
+    view.bindCardEvents = () => {};
+    for (const query of ['research collection', 'library-b', 'science']) {
+        view.state.searchQuery = query;
+        view.render();
+        assert.match(root.innerHTML, /Research Collection \(library-b\)/);
+        assert.doesNotMatch(root.innerHTML, /未找到匹配的篇目/);
+    }
+    f.sandbox.AppData.library.getIndex = async () => [];
+    await f.commit('library.importedIndexes');
+    const unavailable = f.store.getBookshelfExams().find((row) => row.source.id === 'library-b');
+    assert.equal(unavailable.sourceUnavailable, true);
+    assert.equal(unavailable.wordCount, 1, 'missing content never discards vocabulary');
+    view.state.searchQuery = '';
+    view.render();
+    assert.match(root.innerHTML, /原题库内容不可用/);
+});
+
+test('Bookshelf adopts acknowledged reader changes immediately and refreshes merge and replacement counts', async () => {
+    const f = fixture();
+    await f.store.init();
+    const added = f.model.collect(f.canonical.snapshot, {
+        source: sourceA, article: { examId: 'same-exam' }, word: { word: 'cedar', meaning: 'A tree' }, at
+    });
+    f.sandbox.ReadingVocabStore = { _state: { snapshot: added, revision: 2, generation: 'original' } };
+    f.sandbox.dispatchEvent({ type: 'reading-vocab-store-updated' });
+    assert.equal(f.store.getDistinctWordCount(), 3);
+    const incoming = f.model.recordVisit(f.model.createSnapshot(), {
+        source: sourceA, article: { examId: 'zero-visit', title: 'No words yet' }, at
+    });
+    f.setCanonical({ snapshot: f.model.merge(added, incoming), revision: 3, generation: 'original' });
+    await f.commit();
+    assert.equal(f.store.getBookshelfExams().length, 3);
+    assert.equal(f.store.getDistinctWordCount(), 3);
+    f.setCanonical({ snapshot: incoming, revision: 4, generation: 'restored' });
+    await f.commit();
+    assert.equal(f.store.getBookshelfExams().length, 1);
+    assert.equal(f.store.getBookshelfExams()[0].wordCount, 0);
+    assert.equal(f.store.getDistinctWordCount(), 0);
+});
+
+test('Cold Bookshelf loads real runtime groups and only opens the latest source-scoped request', async () => {
+    const f = fixture();
+    await f.store.init();
+    const loadedGroups = [];
+    const opens = [];
+    const gate = deferred();
+    f.sandbox.AppLazyLoader = { async ensureGroup(group) {
+        loadedGroups.push(group);
+        await gate.promise;
+        f.sandbox.ReadingVocabReader = { async open(examId, options) { opens.push({ examId, options: clone(options) }); } };
+    } };
+    const view = f.sandbox.BookshelfView;
+    const first = view.launchExamVocabReader('same-exam', sourceA, f.model.articleId(sourceA, 'same-exam'));
+    const second = view.launchExamVocabReader('same-exam', sourceB, f.model.articleId(sourceB, 'same-exam'));
+    assert.equal(view.state.readerLoading, true);
+    assert.deepEqual(loadedGroups, ['exam-data', 'browse-runtime']);
+    gate.resolve();
+    await Promise.all([first, second]);
+    assert.equal(opens.length, 1);
+    assert.equal(opens[0].examId, 'same-exam');
+    assert.deepEqual(opens[0].options.source, sourceB);
+    assert.equal(opens[0].options.articleId, f.model.articleId(sourceB, 'same-exam'));
+    assert.equal(opens[0].options.fromView, 'bookshelf');
+    assert.equal(opens[0].options.title, 'library-b');
+    assert.equal(view.state.readerLoading, false);
+});
+
+test('Bookshelf exposes retry after lazy-load failure and cold global notebook uses the shared reader', async () => {
+    const f = fixture();
+    await f.store.init();
+    const view = f.sandbox.BookshelfView;
+    f.sandbox.AppLazyLoader = { async ensureGroup() { throw new Error('offline'); } };
+    await view.launchGlobalNotebook();
+    assert.match(view.state.readerError.message, /offline/);
+    assert.equal(view.state.readerLoading, false);
+    let options;
+    f.sandbox.AppLazyLoader = { async ensureGroup() {
+        f.sandbox.ReadingVocabReader = { async open() {}, async openNotebook(value) { options = value; } };
+    } };
+    await view.launchGlobalNotebook();
+    assert.equal(options.fromView, 'bookshelf');
+    assert.equal(view.state.readerError, null);
+});
+
+test('Bookshelf practice source guard refuses another active library and removed source content', async () => {
+    const f = fixture();
+    await f.store.init();
+    const view = f.sandbox.BookshelfView;
+    const toasts = [];
+    view.showToast = (message) => toasts.push(message);
+    const article = f.store.getBookshelfExams().find((row) => row.source.id === 'library-b');
+    assert.equal(await view.canOpenOriginalSource(article), false);
+    assert.match(toasts.pop(), /切换至原题库/);
+    f.sandbox.AppData.library.getActive = async () => 'library-b';
+    f.sandbox.AppData.library.getIndex = async () => [];
+    assert.equal(await view.canOpenOriginalSource(article), false);
+    assert.match(toasts.pop(), /原题库内容已不可用/);
+    f.sandbox.AppData.library.getIndex = async () => [{ id: 'same-exam' }];
+    f.sandbox.ReadingVocabReader = { async open() {} };
+    assert.equal(await view.canOpenOriginalSource(article), true);
+});
+
+test('Leaving Bookshelf cancels a pending cold open and returns to the initiating view', async () => {
+    const f = fixture();
+    await f.store.init();
+    const gate = deferred();
+    let opens = 0;
+    const navigations = [];
+    f.sandbox.app = { async navigateToView(view) { navigations.push(view); } };
+    f.sandbox.AppLazyLoader = { async ensureGroup() {
+        await gate.promise;
+        f.sandbox.ReadingVocabReader = { async open() { opens += 1; } };
+    } };
+    const view = f.sandbox.BookshelfView;
+    view.state.fromView = 'overview';
+    const pending = view.launchExamVocabReader('same-exam', sourceA);
+    await view.navigateToMoreView();
+    gate.resolve();
+    await pending;
+    assert.equal(opens, 0);
+    assert.deepEqual(navigations, ['overview']);
+    assert.equal(view.state.fromView, null);
+    await view.navigateToMoreView();
+    assert.deepEqual(navigations, ['overview', 'more']);
+});
+
+test('External navigation away and back cancels a pending Bookshelf reader launch', async () => {
+    const f = fixture();
+    await f.store.init();
+    const gate = deferred();
+    let navigation = 1;
+    let opens = 0;
+    f.sandbox.__getAppNavigationIntentGeneration = () => navigation;
+    f.sandbox.AppLazyLoader = { async ensureGroup() {
+        await gate.promise;
+        f.sandbox.ReadingVocabReader = { async open() { opens += 1; } };
+    } };
+    const view = f.sandbox.BookshelfView;
+    const pending = view.launchExamVocabReader('same-exam', sourceA);
+    navigation += 1; // A navbar action leaves Bookshelf without its back button.
+    navigation += 1; // Returning before the old load completes does not revive it.
+    gate.resolve();
+    await pending;
+    assert.equal(opens, 0);
+    assert.equal(view.state.readerLoading, false);
+    assert.equal(view.state.readerError, null);
+    await view.launchExamVocabReader('same-exam', sourceA);
+    assert.equal(opens, 1, 'a fresh invocation from the returned view still opens normally');
+});
+
+test('Bookshelf practice source guard rechecks source and displayed index provenance after lazy loading', async () => {
+    const f = fixture();
+    await f.store.init();
+    const gate = deferred();
+    let activeId = 'library-b';
+    f.sandbox.AppData.library.getActive = async () => activeId;
+    f.sandbox.AppData.library.getIndex = async () => [{ id: 'same-exam' }];
+    f.sandbox.AppLazyLoader = { async ensureGroup() {
+        await gate.promise;
+        f.sandbox.ReadingVocabReader = { async open() {} };
+    } };
+    const view = f.sandbox.BookshelfView;
+    const toasts = [];
+    view.showToast = (message) => toasts.push(message);
+    const article = f.store.getBookshelfExams().find((row) => row.source.id === 'library-b');
+    const pending = view.canOpenOriginalSource(article);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    activeId = null;
+    gate.resolve();
+    assert.equal(await pending, false, 'a library activation during lazy loading cancels the action');
+    assert.match(toasts.pop(), /题库已切换或正在更新/);
+    activeId = 'library-b';
+    f.sandbox.examIndex = [{ id: 'same-exam', libraryConfigurationId: null }];
+    assert.equal(await view.canOpenOriginalSource(article), false, 'a stale builtin index cannot supply an imported article');
+    f.sandbox.examIndex = [{ id: 'same-exam', libraryConfigurationId: 'library-c' }];
+    assert.equal(await view.canOpenOriginalSource(article), false, 'another imported index with the same exam ID is rejected');
+    f.sandbox.examIndex = [{ id: 'same-exam', libraryConfigurationId: 'library-b' }];
+    assert.equal(await view.canOpenOriginalSource(article), true);
 });

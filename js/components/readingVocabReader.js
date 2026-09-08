@@ -12,10 +12,10 @@
             .replace(/'/g, '&#39;');
     }
 
-    async function recordBookshelfExamDirect(examId, examTitle = '', category = '', source = DEFAULT_SOURCE) {
+    async function recordBookshelfExamDirect(examId, examTitle = '', category = '', source = DEFAULT_SOURCE, contentRef = null) {
         if (!examId) return;
         return ReadingVocabStore.mutate('recordVisit', {
-            source, article: { examId: String(examId), title: examTitle },
+            source, article: { examId: String(examId), title: examTitle, category, ...(contentRef ? { contentRef } : {}) },
             at: new Date().toISOString()
         });
     }
@@ -69,8 +69,10 @@
             const source = reading?.sources.find(row => row.id === article?.sourceId);
             if (!article || !source) return null;
             return { articleId: article.id,
+                contentAmbiguous: (article.contentRefs || []).length > 1,
                 source: { kind: source.kind, id: source.libraryId },
-                article: { examId: article.examId, title: article.title } };
+                article: { examId: article.examId, title: article.title,
+                    ...(article.contentRefs?.length === 1 ? { contentRef: article.contentRefs[0] } : {}) } };
         },
 
         adopt(state) {
@@ -112,7 +114,7 @@
         async syncToAppData() { return this.reload(); },
         async flushToAppData() { return this.reload(); },
 
-        async add(rawWord, examId, examTitle, context = '', highlight = null, source = DEFAULT_SOURCE) {
+        async add(rawWord, examId, examTitle, context = '', highlight = null, source = DEFAULT_SOURCE, contentRef = null) {
             const word = this.cleanWord(rawWord);
             if (!word || word.length > 50) return { added: false, reason: 'invalid_word' };
             if (!this._state) await this.init();
@@ -124,7 +126,7 @@
                 quote: highlight.quote || highlight.text || word, before: highlight.before || '', after: highlight.after || ''
             } : undefined;
             const result = await this.mutate('collect', {
-                source, article: { examId: String(examId), title: examTitle || '' },
+                source, article: { examId: String(examId), title: examTitle || '', ...(contentRef ? { contentRef } : {}) },
                 word: { word, meaning: '待补充释义', example: String(context || '').trim().slice(0, 150) },
                 ...(occurrence ? { occurrence } : { manual: true }),
                 at: new Date().toISOString()
@@ -353,6 +355,125 @@
         return registryAfterLoad.get(examId) || (entry && (registryAfterLoad.get(entry.dataKey) || registryAfterLoad.get(entry.examId))) || null;
     }
 
+    function manifestEntryFor(examId) {
+        const manifest = global.__READING_EXAM_MANIFEST__ || {};
+        return manifest[examId] || Object.values(manifest).find(entry => entry &&
+            [entry.examId, entry.id, entry.dataKey].some(id => String(id) === String(examId))) || null;
+    }
+
+    async function resolveReadingArticle(examId, source) {
+        if (source.kind === 'builtin' && source.id === 'default') {
+            return { exam: manifestEntryFor(examId) || {}, sourceLabel: '内置题库', generatedKey: examId };
+        }
+        if (source.kind !== 'imported') throw new Error('原题库来源不可用，已保存的生词仍可查看或导出');
+        const [index, configurations] = await Promise.all([
+            global.AppData.library.getIndex(source.id),
+            global.AppData.library.listConfigurations()
+        ]);
+        const configuration = configurations.find(item => (item.id || item.key) === source.id);
+        const matches = index.filter(item => item && String(item.id || item.examId) === String(examId));
+        const sourceLabel = `${configuration?.name || configuration?.title || '导入题库'} · ${source.id}`;
+        if (!configuration || matches.length !== 1) {
+            return { exam: null, sourceLabel };
+        }
+        const exam = matches[0];
+        if (exam.sourceKind === 'file-picker' && exam.importKey) {
+            // Session blobs predate library-scoped identities. When the same
+            // import key exists in another library the blob cannot prove which
+            // source it belongs to, so keep the saved vocabulary available only.
+            const otherIndexes = await Promise.all(configurations
+                .filter(item => (item.id || item.key) !== source.id)
+                .map(item => global.AppData.library.getIndex(item.id || item.key)));
+            if (otherIndexes.some(rows => rows.some(row => row?.sourceKind === 'file-picker' && row.importKey === exam.importKey))) {
+                return { exam: null, sourceLabel, unavailableReason: '多个题库使用同名会话文件，无法确认原文来源；已保存的生词仍可查看或导出' };
+            }
+        }
+        // Only an explicit generated-reading reference may use the built-in
+        // registry. A coincidentally identical examId is never a content link.
+        const generatedKey = exam.sourceKind === 'generated-reading' && exam.dataKey && manifestEntryFor(exam.dataKey)
+            ? exam.dataKey : null;
+        return { exam, sourceLabel, generatedKey };
+    }
+
+    async function loadImportedReadingPayload(exam) {
+        let url = '';
+        if (exam.sourceKind === 'file-picker') {
+            // File-picker resources disappear when their session ends. Do not
+            // fall back to another imported entry with the same examId.
+            url = exam.importKey && global.LibraryDiscovery?.resolveRuntimeResource({ importKey: exam.importKey }, 'html');
+        } else if (exam.filename) {
+            const base = global.location.pathname.includes('/reading-exams/')
+                ? new URL('../../../', global.location.href) : new URL('./', global.location.href);
+            const filename = String(exam.filename).replace(/\\/g, '/');
+            const path = String(exam.path || '').replace(/\\/g, '/');
+            url = new URL(/^[a-z][a-z\d+.-]*:/i.test(filename) || filename.startsWith('/')
+                ? filename : `${path.replace(/\/?$/, '/')}${filename}`.replace(/^\//, ''), base).href;
+        }
+        if (!url || !/^(?:https?:|file:|blob:)/i.test(url)) {
+            throw new Error('原题库文件不可用，请重新载入原题库；已保存的生词仍可查看或导出');
+        }
+        const response = await global.fetch(url);
+        if (!response.ok) throw new Error('原题库文件无法读取，已保存的生词仍可查看或导出');
+        // Parse and sanitize before the content normalizer creates any regular
+        // DOM nodes: even detached images can dispatch load/error handlers.
+        const template = document.createElement('template');
+        template.innerHTML = await response.text();
+        const passage = template.content.querySelector('#passage, #reading-passage, .reading-passage, #left, .passage');
+        const questions = template.content.querySelector('#questions, #question-panel, .questions-container, #right');
+        if (!passage || !passage.textContent.trim()) {
+            throw new Error('原题库文章结构已更改或不支持，已保存的生词仍可查看或导出');
+        }
+        const assetBase = response.url || url;
+        return { meta: { title: exam.title || template.content.querySelector('title')?.textContent || '', category: exam.category },
+            passage: { blocks: [{ html: sanitizeImportedReadingHtml(passage.innerHTML, assetBase, 'imported-passage') }] },
+            questionGroups: questions ? [{ bodyHtml: sanitizeImportedReadingHtml(questions.innerHTML, assetBase, 'imported-questions') }] : [] };
+    }
+
+    function sanitizeImportedReadingHtml(html, baseUrl, namespace) {
+        const template = document.createElement('template');
+        template.content.appendChild(createReadOnlyQuestionContent(html, namespace));
+        template.content.querySelectorAll('base, meta').forEach(node => node.remove());
+        const resolveAsset = value => {
+            try {
+                const url = new URL(value, baseUrl);
+                if (/^(?:https?:|file:|blob:)$/.test(url.protocol)
+                    || (url.protocol === 'data:' && /^data:image\/(?:png|gif|jpe?g|webp|avif|svg\+xml)[;,]/i.test(url.href))) return url.href;
+            } catch (_) {}
+            return '';
+        };
+        const resolveSrcset = value => {
+            const candidates = [];
+            let remaining = value.trim();
+            while (remaining) {
+                remaining = remaining.replace(/^[\s,]+/, '');
+                const match = remaining.match(/^\S+/);
+                if (!match) break;
+                const token = match[0];
+                remaining = remaining.slice(token.length);
+                let descriptor = '';
+                if (!token.endsWith(',')) {
+                    const end = remaining.indexOf(',');
+                    descriptor = (end < 0 ? remaining : remaining.slice(0, end)).trim();
+                    remaining = end < 0 ? '' : remaining.slice(end + 1);
+                }
+                const url = resolveAsset(token.replace(/,+$/, ''));
+                if (url && (!descriptor || /^(?:\d+w|(?:\d+(?:\.\d+)?|\.\d+)x)$/.test(descriptor))) {
+                    candidates.push(url + (descriptor ? ` ${descriptor}` : ''));
+                }
+            }
+            return candidates.join(', ');
+        };
+        template.content.querySelectorAll('[src], [srcset], [poster]').forEach(node => {
+            for (const name of ['src', 'srcset', 'poster']) {
+                if (!node.hasAttribute(name)) continue;
+                const value = name === 'srcset' ? resolveSrcset(node.getAttribute(name)) : resolveAsset(node.getAttribute(name));
+                if (value) node.setAttribute(name, value);
+                else node.removeAttribute(name);
+            }
+        });
+        return template.innerHTML;
+    }
+
     async function loadReadingExplanationPayload(examId) {
         if (!examId) return null;
 
@@ -504,6 +625,10 @@
     const ReadingVocabReader = {
         currentExamId: null,
         currentSource: DEFAULT_SOURCE,
+        currentSourceLabel: '内置题库',
+        currentContentRef: null,
+        _sourceReady: false,
+        _openOptions: null,
         currentExam: null,
         currentPayload: null,
         currentExplanation: null,
@@ -737,13 +862,15 @@
             // 前往阅读书架
             const bookshelfBtn = overlay.querySelector('#vocab-modal-bookshelf-btn');
             if (bookshelfBtn) {
-                on(bookshelfBtn, 'click', () => {
+                on(bookshelfBtn, 'click', async () => {
                     this.closeModal();
                     this.close();
                     if (global.opener && !global.opener.closed) {
                         try {
-                            if (global.opener.BookshelfView && typeof global.opener.BookshelfView.mount === 'function') {
-                                global.opener.BookshelfView.mount('#bookshelf-view');
+                            if (typeof global.opener.AppActions?.openBookshelf === 'function') {
+                                await global.opener.AppActions.openBookshelf({ fromView: global.opener.app?.currentView || 'browse' });
+                                global.opener.focus();
+                                return;
                             }
                             if (global.opener.app && typeof global.opener.app.navigateToView === 'function') {
                                 global.opener.app.navigateToView('bookshelf');
@@ -756,10 +883,9 @@
                             }
                         } catch (_) {}
                     }
-                    if (global.BookshelfView && typeof global.BookshelfView.mount === 'function') {
-                        global.BookshelfView.mount('#bookshelf-view');
-                    }
-                    if (global.app && typeof global.app.navigateToView === 'function') {
+                    if (typeof global.AppActions?.openBookshelf === 'function') {
+                        await global.AppActions.openBookshelf({ fromView: global.app?.currentView || 'browse' });
+                    } else if (global.app && typeof global.app.navigateToView === 'function') {
                         global.app.navigateToView('bookshelf');
                     } else if (typeof global.switchView === 'function') {
                         global.switchView('bookshelf');
@@ -843,7 +969,7 @@
                         val,
                         this.currentExamId,
                         this.currentExam?.title || '',
-                        '', null, this.currentSource
+                        '', null, this.currentSource, this.currentContentRef
                     );
                     if (requestId !== this._openRequestId) return;
                     if (result.added) {
@@ -969,7 +1095,7 @@
                 } else if (button.dataset.action === 'undo-occurrence') {
                     this.undoOccurrence();
                 } else if (button.dataset.action === 'retry-anchors') {
-                    this.open(this.currentExamId, { source: this.currentSource });
+                    this.open(this.currentExamId, { ...this._openOptions, source: this.currentSource });
                 }
             });
 
@@ -988,23 +1114,32 @@
         },
 
         async open(examId, options = {}) {
-            if (!examId) return;
+            if (!examId && !options.notebook) return;
 
             const overlay = this.ensureOverlay();
             const requestId = ++this._openRequestId;
+            this._openOptions = { ...options };
             const initiatingElement = options.returnFocus || document.activeElement;
             if (initiatingElement && !overlay.contains(initiatingElement)) this._returnFocus = initiatingElement;
             this.unbindEvents();
             this.bindEvents(overlay);
             this.clearPendingWork(overlay);
             this.currentExamId = examId;
+            this.currentSource = options.source ? { ...options.source } : { ...DEFAULT_SOURCE };
+            this.currentSourceLabel = options.source?.kind === 'imported' ? `导入题库 · ${options.source.id}` : '内置题库';
+            this._sourceReady = false;
             this.currentExam = null;
+            this.currentContentRef = null;
             this.currentPayload = null;
             this.currentExplanation = null;
             this.closeModal(false);
             this.modalTab = 'current';
             overlay.querySelector('#v-tab-current')?.classList.add('active');
             overlay.querySelector('#v-tab-all')?.classList.remove('active');
+            overlay.querySelector('#v-tab-current').disabled = !examId;
+            ['#vocab-manual-input', '#vocab-manual-add-btn', '#vocab-export-btn', '#vocab-clear-btn'].forEach(selector => {
+                overlay.querySelector(selector).disabled = true;
+            });
             const manualInput = overlay.querySelector('#vocab-manual-input');
             if (manualInput) manualInput.value = '';
 
@@ -1014,6 +1149,9 @@
             if (options && options.fromPractice) {
                 if (backBtnText) backBtnText.textContent = '返回练习';
                 if (backBtn) backBtn.title = '返回练习试卷';
+            } else if (options.fromView === 'bookshelf') {
+                if (backBtnText) backBtnText.textContent = '返回书架';
+                if (backBtn) backBtn.title = '返回阅读书架';
             } else {
                 if (backBtnText) backBtnText.textContent = '返回题库';
                 if (backBtn) backBtn.title = '返回题库浏览';
@@ -1039,53 +1177,98 @@
                 if (element) element.textContent = '';
             });
             this.switchViewTab('all');
+            this.updateCounts();
 
             try {
+                if (options.notebook) {
+                    await ReadingVocabStore.init();
+                    if (requestId !== this._openRequestId) return;
+                    this._sourceReady = true;
+                    this.currentExam = { title: '全部精读生词' };
+                    titleEl.textContent = '全部精读生词';
+                    passageContent.textContent = '查看、删除或导出全部文章的精读生词。';
+                    this.modalTab = 'all';
+                    overlay.querySelector('#v-tab-current').classList.remove('active');
+                    overlay.querySelector('#v-tab-all').classList.add('active');
+                    overlay.querySelector('#vocab-export-btn').disabled = false;
+                    overlay.querySelector('#vocab-clear-btn').disabled = false;
+                    this.openModal();
+                    return;
+                }
                 // 加载试卷数据
                 const source = await ReadingVocabStore.resolveSource(options);
                 if (requestId !== this._openRequestId) return;
                 this.currentSource = source;
-                const payload = await loadReadingExamPayload(examId);
+                this.currentSourceLabel = source.kind === 'imported' ? `导入题库 · ${source.id}` : '内置题库';
+                const articleId = global.AppData.vocab.readingModel.articleId(source, String(examId));
+                if (options.articleId && options.articleId !== articleId) {
+                    throw new Error('文章与题库来源不匹配，请从原书架条目重新打开');
+                }
+                this._sourceReady = true;
+                this.currentExam = { title: options.title || examId };
+                await ReadingVocabStore.init();
+                if (requestId !== this._openRequestId) return;
+                const storedArticle = ReadingVocabStore._state.snapshot.reading.articles.find(article => article.id === articleId);
+                const resolved = await resolveReadingArticle(examId, source);
+                if (requestId !== this._openRequestId) return;
+                this.currentSourceLabel = resolved.sourceLabel;
+                this.currentExam = { ...this.currentExam, ...(resolved.exam || {}) };
+                this.renderIdentity();
+                if (!resolved.exam) throw new Error(resolved.unavailableReason || '原题库或文章已移除，已保存的生词仍可查看或导出');
+                const contentRef = global.AppData.vocab.readingModel.contentRef(source.kind === 'builtin'
+                    ? { sourceKind: 'generated-reading', dataKey: resolved.generatedKey } : resolved.exam);
+                const storedRefs = storedArticle?.contentRefs || [];
+                if (storedRefs.length > 1 || (storedRefs.length === 1 && storedRefs[0] !== contentRef)
+                    || (options.contentRef && options.contentRef !== contentRef)) {
+                    throw new Error('原题库的文章文件已更改或来源记录冲突，已保存的生词仍可查看或导出');
+                }
+                this.currentContentRef = contentRef;
+                const expectedTitle = options.title || storedArticle?.title;
+                const normalizeTitle = title => String(title || '').trim().replace(/\s+/g, ' ');
+                if (expectedTitle && resolved.exam.title && normalizeTitle(expectedTitle) !== normalizeTitle(resolved.exam.title)) {
+                    throw new Error('原题库中的文章已更改，已保存的生词仍可查看或导出');
+                }
+                const payload = resolved.generatedKey
+                    ? await loadReadingExamPayload(resolved.generatedKey)
+                    : await loadImportedReadingPayload(resolved.exam);
                 if (requestId !== this._openRequestId) return;
                 if (!payload) {
                     throw new Error('未找到该试卷的数据文件');
-                }
-                // The current payload registry contains only built-in generated
-                // content. Never attach that content to a different library.
-                if (source.kind !== 'builtin' || source.id !== 'default') {
-                    throw new Error('此来源的全文暂不可用，可在书架中查看或导出生词');
                 }
                 this.currentPayload = payload;
                 this.currentSource = source;
 
                 // 异步加载解析（不阻塞主内容）
-                loadReadingExplanationPayload(examId).then(exp => {
+                if (resolved.generatedKey) loadReadingExplanationPayload(resolved.generatedKey).then(exp => {
                     if (requestId !== this._openRequestId) return;
                     this.currentExplanation = exp;
                     this.enhanceWithExplanation(exp);
                 }).catch(() => {});
 
                 // 获取 Exam Meta
-                const manifest = global.__READING_EXAM_MANIFEST__ || {};
-                const manifestEntry = manifest[examId] || {};
-                this.currentExam = Object.assign({}, manifestEntry, payload.meta || {});
+                this.currentExam = Object.assign({}, payload.meta || {}, resolved.exam);
 
                 // 记录至阅读书架
                 const examTitle = this.currentExam.title || this.currentExam.name || examId;
                 const examCategory = this.currentExam.category || this.currentExam.type || '雅思阅读';
                 let saveError = null;
                 try {
-                    await ReadingVocabStore.init();
-                    if (requestId !== this._openRequestId) return;
-                    await recordBookshelfExamDirect(examId, examTitle, examCategory, source);
+                    await recordBookshelfExamDirect(examId, examTitle, examCategory, source, contentRef);
                 } catch (error) {
                     saveError = error;
                 }
                 if (requestId !== this._openRequestId) return;
+                const committedRefs = ReadingVocabStore._state?.snapshot.reading.articles.find(article => article.id === articleId)?.contentRefs || [];
+                if (committedRefs.length > 1 || (committedRefs.length === 1 && committedRefs[0] !== contentRef)) {
+                    throw new Error('原题库的来源记录已更改，已保存的生词仍可查看或导出');
+                }
 
                 // 渲染界面
                 this.renderContent();
                 this.updateCounts();
+                ['#vocab-manual-input', '#vocab-manual-add-btn', '#vocab-export-btn', '#vocab-clear-btn'].forEach(selector => {
+                    overlay.querySelector(selector).disabled = false;
+                });
                 if (saveError) this.showSaveError(saveError, '书架记录保存失败，请重新打开文章重试');
             } catch (err) {
                 if (requestId !== this._openRequestId) return;
@@ -1093,12 +1276,22 @@
                 this.currentPayload = null;
                 await ReadingVocabStore.init().catch(() => {});
                 if (requestId !== this._openRequestId) return;
+                if (this._sourceReady) {
+                    const articleId = global.AppData.vocab.readingModel.articleId(this.currentSource, String(examId));
+                    const stored = ReadingVocabStore._state?.snapshot.reading.articles.find(article => article.id === articleId);
+                    this.currentExam = { ...(this.currentExam || {}), title: options.title || stored?.title || this.currentExam?.title || examId };
+                    overlay.querySelector('#vocab-export-btn').disabled = false;
+                    overlay.querySelector('#vocab-clear-btn').disabled = false;
+                }
+                this.renderIdentity();
                 this.applyVocabHighlights();
                 this.updateCounts();
                 if (passageContent) {
                     const errorState = document.createElement('div');
                     errorState.className = 'vocab-error-state';
                     const message = document.createElement('p');
+                    errorState.setAttribute('role', 'status');
+                    errorState.dataset.sourceUnavailable = 'true';
                     message.textContent = `⚠️ 载入文章数据失败：${err.message || '请检查网络或试卷配置'}`;
                     const retry = document.createElement('button');
                     retry.type = 'button';
@@ -1112,16 +1305,25 @@
                     retry.addEventListener('click', handleRetry);
                     this._eventCleanups.push(() => retry.removeEventListener('click', handleRetry));
                     errorState.append(message, retry);
+                    const review = document.createElement('button');
+                    review.type = 'button';
+                    review.textContent = '查看已保存生词';
+                    const handleReview = () => this.openModal();
+                    review.addEventListener('click', handleReview);
+                    this._eventCleanups.push(() => review.removeEventListener('click', handleReview));
+                    errorState.append(review);
                     passageContent.replaceChildren(errorState);
                 }
             }
         },
 
-        renderContent() {
-            const overlay = this.ensureOverlay();
-            const exam = this.currentExam;
-            const payload = this.currentPayload;
+        openNotebook(options = {}) {
+            return this.open(null, { ...options, notebook: true });
+        },
 
+        renderIdentity() {
+            const overlay = this.ensureOverlay();
+            const exam = this.currentExam || {};
             // 标题与标签（紧凑精致）
             const titleEl = overlay.querySelector('#vocab-reader-title');
             const badgesEl = overlay.querySelector('#vocab-reader-badges');
@@ -1133,9 +1335,17 @@
             if (badgesEl) {
                 badgesEl.innerHTML = `
                     <span class="vocab-badge vocab-badge--cat">${escapeHtml(exam.category || '阅读')}</span>
+                    <span class="vocab-badge vocab-badge--source">${escapeHtml(this.currentSourceLabel)}</span>
                     ${exam.frequency ? `<span class="vocab-badge vocab-badge--freq">${escapeHtml(exam.frequency)}</span>` : ''}
                 `;
             }
+        },
+
+        renderContent() {
+            const overlay = this.ensureOverlay();
+            const exam = this.currentExam;
+            const payload = this.currentPayload;
+            this.renderIdentity();
 
             // 解析文章大标题、考试指导语与真实段落
             const passageData = global.ReadingVocabContent.normalizePassage(payload?.passage, exam.title || '');
@@ -1332,7 +1542,7 @@
             this.showToast('正在保存…');
             try {
                 const result = await ReadingVocabStore.add(captured.word, this.currentExamId,
-                    this.currentExam?.title || '', captured.context, captured, this.currentSource);
+                    this.currentExam?.title || '', captured.context, captured, this.currentSource, this.currentContentRef);
                 if (requestId !== this._openRequestId) return;
                 if (!result.added) throw new Error('Selection was not saved');
                 selection.removeAllRanges();
@@ -1442,7 +1652,7 @@
                 // Keep the acknowledged deletion fence: a later clear/replace must
                 // reject this undo instead of resurrecting deleted relationships.
                 const committedRevision = result.revisions?.['vocab.readingState'];
-                this._undoOccurrence = result.changed !== false && Number.isInteger(committedRevision)
+                this._undoOccurrence = !owner.contentAmbiguous && result.changed !== false && Number.isInteger(committedRevision)
                     ? { command: undo, observed: { revision: committedRevision, generation: observed.generation } } : null;
                 this.ensureOverlay().querySelector('#vocab-occurrence-actions').replaceChildren();
                 this.ensureOverlay().querySelector('#vocab-occurrence-undo').innerHTML =
@@ -1577,7 +1787,7 @@
         updateCounts() {
             const overlay = this.ensureOverlay();
             const examId = this.currentExamId;
-            const currentList = ReadingVocabStore.getByExam(examId, this.currentSource);
+            const currentList = this._sourceReady ? ReadingVocabStore.getByExam(examId, this.currentSource) : [];
             const allList = ReadingVocabStore.getAll();
 
             const headerCount = overlay.querySelector('#vocab-header-count');
@@ -1599,7 +1809,7 @@
 
             const isCurrent = this.modalTab === 'current';
             const list = isCurrent
-                ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
+                ? (this._sourceReady ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource) : [])
                 : ReadingVocabStore.getAll();
 
             if (!list || list.length === 0) {
@@ -1662,7 +1872,8 @@
                 this.renderVocabList();
                 modal.classList.add('active');
                 modal.setAttribute('aria-hidden', 'false');
-                modal.querySelector('#vocab-manual-input')?.focus({ preventScroll: true });
+                const input = modal.querySelector('#vocab-manual-input');
+                (input && !input.disabled ? input : modal.querySelector('#vocab-modal-close'))?.focus({ preventScroll: true });
             }
         },
 
@@ -1713,6 +1924,12 @@
             }
             document.body.classList.remove('vocab-reader-open');
             if (this._returnFocus?.isConnected) this._returnFocus.focus({ preventScroll: true });
+            else if (this._openOptions?.fromView === 'bookshelf') {
+                const card = [...document.querySelectorAll('[data-article-id]')]
+                    .find(element => element.dataset.articleId === this._openOptions.articleId);
+                (card?.querySelector('button[data-action="open-reading-vocab"]')
+                    || document.querySelector('[data-action="open-global-notebook"]'))?.focus({ preventScroll: true });
+            }
             this._returnFocus = null;
         }
     };
@@ -1720,7 +1937,7 @@
     // 监听生词更新事件以即时刷新打开的视图
     if (typeof window !== 'undefined') {
         window.addEventListener('reading-vocab-store-updated', () => {
-            if (ReadingVocabReader.currentExamId) {
+            if (ReadingVocabReader._sourceReady && !document.getElementById('reading-vocab-reader-overlay')?.classList.contains('is-hidden')) {
                 ReadingVocabReader.updateCounts();
                 ReadingVocabReader.applyVocabHighlights();
                 if (ReadingVocabReader.modalOpen) ReadingVocabReader.renderVocabList();

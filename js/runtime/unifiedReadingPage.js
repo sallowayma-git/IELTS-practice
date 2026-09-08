@@ -2263,20 +2263,39 @@
         }
     }
 
-    function openVocabReaderForCurrentExam() {
+    let vocabReaderOpenRequest = 0;
+    async function openVocabReaderForCurrentExam() {
         const examId = state.suite?.activeExamId || state.examId;
         if (!examId) {
             console.warn('[UnifiedReadingPage] 无法获取当前试卷 ID');
             return;
         }
+        const requestId = ++vocabReaderOpenRequest;
+        const returnFocus = document.activeElement;
+        const options = { fromPractice: true, returnFocus,
+            title: state.dataset?.meta?.title || examId,
+            libraryConfigurationId: state.libraryConfigurationId };
         ensureVocabReaderStyles();
-
-        if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
-            global.ReadingVocabReader.open(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
-        } else if (typeof global.openReadingVocabReader === 'function') {
-            global.openReadingVocabReader(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
-        } else {
-            console.warn('[UnifiedReadingPage] ReadingVocabReader 模块未加载');
+        try {
+            if (!global.ReadingVocabReader && global.AppLazyLoader?.ensureGroup) {
+                await global.AppLazyLoader.ensureGroup('exam-data');
+                await global.AppLazyLoader.ensureGroup('browse-runtime');
+            }
+            if (requestId !== vocabReaderOpenRequest) return;
+            if (!global.ReadingVocabReader?.open) throw new Error('Reading vocabulary reader is unavailable');
+            document.getElementById('reading-vocab-load-status')?.remove();
+            await global.ReadingVocabReader.open(examId, options);
+        } catch (error) {
+            if (requestId !== vocabReaderOpenRequest) return;
+            console.warn('[UnifiedReadingPage] 生词本加载失败:', error);
+            let status = document.getElementById('reading-vocab-load-status');
+            if (!status) {
+                status = document.createElement('p');
+                status.id = 'reading-vocab-load-status';
+                status.setAttribute('role', 'status');
+                document.querySelector('.header-right')?.appendChild(status);
+            }
+            status.textContent = '生词本加载失败，请再次点击生词本重试。';
         }
     }
 
