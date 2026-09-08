@@ -75,6 +75,9 @@ function createDocumentStub() {
             return [];
         },
         getElementById(id) {
+            if (id === 'question-groups') {
+                return this;
+            }
             return id === 'timer' ? timer : null;
         },
         addEventListener() {},

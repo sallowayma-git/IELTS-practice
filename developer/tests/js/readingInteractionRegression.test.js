@@ -64,14 +64,15 @@ async function testBrowserInteractions() {
                 <header><div class="header-right"></div></header>
                 <div id="highlight-root">alpha <span class="hl" data-note-id="note-1">repeat</span><span class="hl" data-note-id="note-2" data-hl-level="secondary">repeat</span> omega</div>
                 <div id="inline-highlight-root"><span class="hl" data-hl-level="secondary"><em>AB</em>C<strong>DE</strong></span></div>
-                <input type="checkbox" name="q8-9" value="A">
-                <input type="checkbox" name="q8-9" value="B">
-                <input type="checkbox" name="q8-9" value="C">
-                <input type="checkbox" name="q12_40" value="A">
-                <input type="checkbox" name="q12_40" value="B">
-                <input type="checkbox" name="q12_40" value="C">
-                <input type="radio" name="q1" value="A" checked>
-                <div class="shell"><div id="left"></div><div id="divider"></div><div id="right"><div id="question-groups"></div></div></div>
+                <div class="shell"><div id="left"></div><div id="divider"></div><div id="right"><div id="question-groups">
+                    <input type="checkbox" name="q8-9" value="A">
+                    <input type="checkbox" name="q8-9" value="B">
+                    <input type="checkbox" name="q8-9" value="C">
+                    <input type="checkbox" name="q12_40" value="A">
+                    <input type="checkbox" name="q12_40" value="B">
+                    <input type="checkbox" name="q12_40" value="C">
+                    <input type="radio" name="q1" value="A" checked>
+                </div></div></div>
                 <div id="results"></div>
                 <div id="question-nav"></div>
                 <button id="submit-btn" type="button">Submit</button>
@@ -285,6 +286,40 @@ async function testBrowserInteractions() {
         assert.deepEqual(replayChecks.split, [true, false, true]);
         assert.deepEqual(replayChecks.single, [true, false, true]);
 
+        await page.evaluate(() => {
+            window.__READING_EXAM_DATA__ = {
+                register(_examId, dataset) { window.__PASSAGE_DROPZONE_FIXTURE__ = dataset; }
+            };
+        });
+        await page.addScriptTag({ content: read('assets/generated/reading-exams/p1-high-01.js') });
+        const passageAnswerChecks = await page.evaluate(() => {
+            const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+            const dataset = window.__PASSAGE_DROPZONE_FIXTURE__;
+            document.getElementById('left').innerHTML = dataset.passage.blocks.map((block) => block.html).join('');
+            document.getElementById('question-groups').innerHTML = dataset.questionGroups.map((group) => group.bodyHtml).join('');
+            hooks.setTestState({ dataset });
+            const foreign = document.createElement('div');
+            foreign.innerHTML = '<div class="paragraph-dropzone" data-question="q1" data-answer-value="foreign"></div>';
+            document.body.prepend(foreign);
+            hooks.applyReplayAnswersToDom({ q1: 'iv', q9: 'B' });
+            const answers = hooks.collectAnswers();
+            const result = {
+                passageAnswer: answers.q1.toLowerCase(),
+                questionAnswer: answers.q9,
+                renderedPassageAnswer: document.querySelector('#left [data-question="q1"]').dataset.answerValue.toLowerCase(),
+                foreignAnswer: foreign.firstElementChild.dataset.answerValue
+            };
+            foreign.remove();
+            document.getElementById('left').innerHTML = '';
+            return result;
+        });
+        assert.deepEqual(passageAnswerChecks, {
+            passageAnswer: 'iv',
+            questionAnswer: 'B',
+            renderedPassageAnswer: 'iv',
+            foreignAnswer: 'foreign'
+        }, 'production matching-headings answers in the passage pane must collect and replay without using foreign dropzones');
+
         const cardPoolChecks = await page.evaluate(() => {
             const groups = document.getElementById('question-groups');
             groups.innerHTML = `
@@ -360,6 +395,7 @@ async function testBrowserInteractions() {
 
         const unknownPresentation = await page.evaluate(() => {
             const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+            document.getElementById('question-groups').innerHTML = '<input type="radio" name="q1" value="A" checked>';
             hooks.captureDom();
             hooks.setTestState({
                 dataset: {
