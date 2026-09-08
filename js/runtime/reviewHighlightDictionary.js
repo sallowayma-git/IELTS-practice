@@ -466,16 +466,21 @@
         if (payload.phonetic) {
             word.phonetic = payload.phonetic;
         }
-        if (typeof global.AppData.vocab.mergeListWords === 'function') {
-            // mergeListWords 对已有词条只更新词典字段，保留用户笔记与学习进度。
-            await global.AppData.vocab.mergeListWords({
-                listId: 'reading-highlights',
-                words: [word]
-            });
-        } else {
-            await global.AppData.vocab.upsertCollectionWord('reading-highlights', word);
-        }
-        return true;
+        const context = payload.context || {};
+        if (!context.examId || context.libraryConfigurationId === undefined) return false;
+        const configurationId = context.libraryConfigurationId;
+        const source = configurationId == null || configurationId === ''
+            ? { kind: 'builtin', id: 'default' }
+            : { kind: 'imported', id: String(configurationId).trim() };
+        const observed = await global.AppData.vocab.getReadingSnapshot();
+        const receipt = await global.AppData.vocab.mutateReading('collect', {
+            source,
+            article: { examId: String(context.examId), title: String(context.title || '') },
+            word,
+            manual: true,
+            at: now
+        }, { observedRevision: observed.revision, observedGeneration: observed.generation });
+        return Boolean(receipt && receipt.saved === true);
     }
 
     function createRequestId() {
@@ -489,19 +494,19 @@
         return `vocab-highlight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
 
-    function settleSaveRequest(requestId, succeeded) {
+    function settleSaveRequest(requestId, succeeded, errorCode = '') {
         const id = String(requestId || '').trim();
         const pending = pendingSaveRequests.get(id);
         if (!id || !pending) return false;
         pendingSaveRequests.delete(id);
         clearTimeout(pending.timer);
-        pending.resolve(Boolean(succeeded));
+        pending.resolve({ saved: Boolean(succeeded), errorCode: String(errorCode || '') });
         return true;
     }
 
     function handleSaveOutcome(payload, succeeded) {
         const requestId = payload && payload.requestId != null ? String(payload.requestId).trim() : '';
-        return settleSaveRequest(requestId, succeeded);
+        return settleSaveRequest(requestId, succeeded, payload && payload.errorCode);
     }
 
     function postVocabPayload(payload) {
@@ -511,7 +516,7 @@
         const outcome = new Promise((resolve) => {
             const timer = setTimeout(() => {
                 pendingSaveRequests.delete(requestId);
-                resolve(false);
+                resolve({ saved: false, errorCode: 'timeout' });
             }, 5000);
             pendingSaveRequests.set(requestId, { resolve, timer });
         });
@@ -533,13 +538,26 @@
         if (!payload.word) {
             return;
         }
+        if (button instanceof HTMLButtonElement) {
+            button.textContent = '保存中…';
+            button.disabled = true;
+        }
         const hostOutcome = postVocabPayload(payload);
-        let persisted = hostOutcome ? await hostOutcome : false;
-        if (!persisted) {
-            try { persisted = await writeAppDataVocab(payload); } catch (_) { persisted = false; }
+        const hostResult = hostOutcome ? await hostOutcome : null;
+        let persisted = Boolean(hostResult && hostResult.saved);
+        let errorCode = hostResult && hostResult.errorCode || '';
+        if (!hostOutcome) {
+            try { persisted = await writeAppDataVocab(payload); } catch (error) {
+                persisted = false;
+                errorCode = error && error.code || '';
+            }
         }
         if (button instanceof HTMLButtonElement) {
-            button.textContent = persisted ? '已加入' : '保存失败';
+            const unavailable = errorCode === 'BACKEND_UNAVAILABLE';
+            button.textContent = persisted ? '已加入' : unavailable
+                ? (hostOutcome ? '请刷新主页并重开阅读页后重试' : '请刷新页面后重试')
+                : '保存失败';
+            button.title = !persisted && unavailable ? button.textContent : '';
             button.disabled = persisted;
         }
     }

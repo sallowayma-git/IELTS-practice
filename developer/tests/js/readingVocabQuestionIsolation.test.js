@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installReadingAuthority } from './helpers/readingVocabReaderHarness.js';
 
 const readerSource = fs.readFileSync(new URL('../../../js/components/readingVocabReader.js', import.meta.url), 'utf8');
 const registryPath = fileURLToPath(new URL('../../../js/runtime/readingExamRegistry.js', import.meta.url));
@@ -20,10 +21,10 @@ test('reader questions are selectable text with isolated identities and no answe
               <p id="description">Practice description</p>
             </div>` }));
         await page.goto('https://reader.test/');
+        await installReadingAuthority(page);
         await page.addScriptTag({ path: registryPath });
         await page.evaluate(() => {
             window.__READING_EXPLANATION_MANIFEST__ = {};
-            window.ReadingBookshelfStore = { recordExamUsed() {} };
             __READING_EXAM_DATA__.register('isolation', {
                 meta: { title: 'Isolation fixture' },
                 passage: { blocks: [{ html: '<p>A sufficiently long article for selectable reading content.</p>' }] },

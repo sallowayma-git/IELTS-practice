@@ -343,6 +343,11 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingState', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'replace'
+        },
+        {
             logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'
@@ -2676,6 +2681,165 @@
         return finish(next);
     }
 
+    // Backups merge relationships, never review progress. The authoritative
+    // persistence layer applies deletion tombstones before/after this union.
+    function stableJson(value) {
+        if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+        if (value && typeof value === 'object') {
+            return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson(value[name])}`).join(',')}}`;
+        }
+        return JSON.stringify(value);
+    }
+
+    function mergeMetadata(existing, incoming, clock) {
+        const next = { ...existing };
+        const leftAt = clock ? existing[clock] || '' : '';
+        const rightAt = clock ? incoming[clock] || '' : '';
+        for (const name of Object.keys(incoming)) {
+            if (!own(existing, name) || rightAt > leftAt
+                || (rightAt === leftAt && stableJson(incoming[name]) > stableJson(existing[name]))) {
+                Object.defineProperty(next, name, {
+                    value: incoming[name], enumerable: true, writable: true, configurable: true
+                });
+            }
+        }
+        return next;
+    }
+
+    function mergeVocabulary(next, incoming) {
+        const owners = new Map();
+        for (const listId of allLists(next)) {
+            const words = listWords(next, listId);
+            const ids = new Map();
+            for (const word of words) {
+                if (word && typeof word.id === 'string') ids.set(word.id, (ids.get(word.id) || 0) + 1);
+            }
+            for (const word of words) {
+                if (word && typeof word.word === 'string' && word.word.trim()
+                    && typeof word.id === 'string' && word.id.trim() === word.id && word.id
+                    && ids.get(word.id) === 1) {
+                    const normalized = normalizeTerm(word.word);
+                    if (!owners.has(normalized)) owners.set(normalized, { listId, wordId: word.id });
+                }
+            }
+        }
+        // An explicitly selected existing owner is stronger than list order.
+        for (const term of next.reading.terms) owners.set(term.normalizedTerm, copy(term.wordRef));
+        const importedRefs = new Map();
+
+        for (const listId of allLists(incoming)) {
+            const incomingWords = listWords(incoming, listId);
+            if (listId !== 'default' && !own(next.lists, listId)) {
+                const incomingList = incoming.lists[listId];
+                const list = Array.isArray(incomingList) ? []
+                    : incomingList && Array.isArray(incomingList.words) ? { ...copy(incomingList), words: [] }
+                        : copy(incomingList);
+                Object.defineProperty(next.lists, listId, {
+                    value: list, enumerable: true, writable: true, configurable: true
+                });
+            }
+            if (!incomingWords.length) continue;
+            if (listId !== 'default' && !Array.isArray(next.lists[listId])
+                && !(next.lists[listId] && Array.isArray(next.lists[listId].words))) {
+                fail(`Cannot merge vocabulary into malformed lists.${listId}`);
+            }
+            const destination = listWords(next, listId);
+            const ids = new Map();
+            for (const word of destination) {
+                if (word && typeof word.id === 'string') {
+                    if (!ids.has(word.id)) ids.set(word.id, []);
+                    ids.get(word.id).push(word);
+                }
+            }
+            let serialized;
+            for (const rawWord of incomingWords) {
+                const word = copy(rawWord);
+                const normalized = word && typeof word.word === 'string' && word.word.trim()
+                    ? normalizeTerm(word.word) : null;
+                const referenceable = normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id;
+                if (!referenceable) {
+                    if (!serialized) serialized = new Set(destination.map(stableJson));
+                    const encoded = stableJson(word);
+                    if (serialized.has(encoded)) continue;
+                    serialized.add(encoded);
+                }
+                let existingWord = false;
+                if (word && typeof word.id === 'string' && ids.has(word.id)) {
+                    if (!normalized) continue;
+                    const originalId = word.id;
+                    let suffix = 0;
+                    while (ids.has(word.id)) {
+                        const matches = ids.get(word.id);
+                        if (matches.length === 1 && typeof matches[0].word === 'string'
+                            && matches[0].word.trim().toLowerCase() === normalized) {
+                            existingWord = true;
+                            break;
+                        }
+                        word.id = key('reading-merge-word', listId, originalId, normalized, suffix++);
+                    }
+                }
+                // Vocabulary identity is scoped to its list. Same-term records
+                // in other lists have independent membership and review history.
+                // A matching local record keeps all of its existing progress.
+                if (!existingWord) {
+                    destination.push(word);
+                    if (word && typeof word.id === 'string') ids.set(word.id, [word]);
+                }
+                if (referenceable) {
+                    importedRefs.set(key(listId, rawWord.id), { listId, wordId: word.id });
+                }
+            }
+        }
+        // Reader canonical ownership is separate from vocabulary membership.
+        // Reuse local owners, otherwise retain the incoming explicit owner,
+        // including any deterministic ID remapping within its own list.
+        for (const term of incoming.reading.terms) {
+            if (!owners.has(term.normalizedTerm)) {
+                owners.set(term.normalizedTerm, importedRefs.get(key(term.wordRef.listId, term.wordRef.wordId)));
+            }
+        }
+        return owners;
+    }
+
+    function merge(existingSnapshot, incomingSnapshot) {
+        const next = writable(existingSnapshot);
+        const incoming = writable(incomingSnapshot);
+        const owners = mergeVocabulary(next, incoming);
+        for (const table of TABLES) {
+            const rows = new Map(next.reading[table].map((row) => [row.id, row]));
+            for (const incomingRow of incoming.reading[table]) {
+                const existing = rows.get(incomingRow.id);
+                let merged = existing ? mergeMetadata(existing, incomingRow,
+                    table === 'visits' ? 'lastVisitedAt' : 'updatedAt') : copy(incomingRow);
+                if (existing && own(existing, 'createdAt')) {
+                    merged.createdAt = existing.createdAt < incomingRow.createdAt ? existing.createdAt : incomingRow.createdAt;
+                }
+                if (existing && own(existing, 'updatedAt')) {
+                    merged.updatedAt = existing.updatedAt > incomingRow.updatedAt ? existing.updatedAt : incomingRow.updatedAt;
+                }
+                if (table === 'terms') {
+                    merged.wordRef = existing ? copy(existing.wordRef) : copy(owners.get(incomingRow.normalizedTerm));
+                } else if (existing && table === 'articles') {
+                    const title = mergeMetadata(
+                        { title: existing.title, titleUpdatedAt: existing.titleUpdatedAt },
+                        { title: incomingRow.title, titleUpdatedAt: incomingRow.titleUpdatedAt }, 'titleUpdatedAt');
+                    merged.title = title.title;
+                    merged.titleUpdatedAt = title.titleUpdatedAt;
+                } else if (existing && table === 'associations') {
+                    merged.manual = existing.manual || incomingRow.manual;
+                } else if (existing && table === 'visits') {
+                    merged.firstVisitedAt = existing.firstVisitedAt < incomingRow.firstVisitedAt
+                        ? existing.firstVisitedAt : incomingRow.firstVisitedAt;
+                    merged.lastVisitedAt = existing.lastVisitedAt > incomingRow.lastVisitedAt
+                        ? existing.lastVisitedAt : incomingRow.lastVisitedAt;
+                }
+                rows.set(merged.id, merged);
+            }
+            next.reading[table] = [...rows.values()].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+        }
+        return finish(next);
+    }
+
     function query(snapshot, options = {}) {
         validate(snapshot);
         object(options, 'query options');
@@ -2707,7 +2871,7 @@
     const model = Object.freeze({
         SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, termId, occurrenceId,
         createSnapshot, validate, collect, recordVisit, removeOccurrence, removeArticleTerm,
-        clearArticle, deleteCanonicalTerm, query, listVisits, serialize, deserialize
+        clearArticle, deleteCanonicalTerm, merge, query, listVisits, serialize, deserialize
     });
     global.ReadingVocabularyModel = model;
     if (typeof module !== 'undefined' && module.exports) module.exports = model;
@@ -4431,7 +4595,7 @@
         const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
         // Preserve local-only reading data before capturing revisions for any
         // reading collection this plan will install, including present arrays.
-        const readingKeys = Object.keys(READING_LEGACY_KEYS).filter((key) => {
+        const readingKeys = READING_DOCUMENT_KEYS.filter((key) => {
             const envelope = asObject(parsed.envelopes)[key];
             return (replaceDocuments && parsed.scope === 'full')
                 || (envelope && (envelope.state === 'present' || replaceDocuments || options.applyClears === true));
@@ -4473,6 +4637,8 @@
                 clearedKeys.push(entry.logicalKey);
             }
         }
+
+        await prepareReadingImport(parsed, snapshot, revisionToken, keys, clearedKeys, replaceDocuments);
 
         // Any successful practice import installs all three stores together. Merge
         // may update a subset only when the final recordId sets remain identical.
@@ -4566,28 +4732,109 @@
         return createImportPlan(parsed, { replace: true });
     }
 
-    async function migrateLegacyReadingData({ required = false, logicalKeys = Object.keys(READING_LEGACY_KEYS) } = {}) {
-        for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
-            if (!logicalKeys.includes(logicalKey)) continue;
-            try {
-                const current = await kernel.read(logicalKey, { withMeta: true });
-                // A present empty array or a cleared envelope is authoritative too.
-                // Legacy mirrors only seed documents that have never been written.
-                if (current.envelope) continue;
-                if (!global.localStorage) return;
-                const raw = global.localStorage.getItem(storageKey);
-                const parsed = raw ? JSON.parse(raw) : null;
-                if (!Array.isArray(parsed)) continue;
-                await kernel.mutate([{ logicalKey, data: parsed, expectedRevision: 0 }], {
-                    operationId: randomId('migrate-reading')
-                });
-            } catch (error) {
-                // Startup can retry later; a backup or destructive installation
-                // must not discard a legacy copy that has never reached the kernel.
-                if (required) throw error;
-                if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
-            }
+    async function migrateLegacyReadingData({ required = false, logicalKeys } = {}) {
+        // The versioned marker and recovered source bytes are committed in the
+        // same transaction as the model. No later startup/export re-reads mirrors.
+        if (Array.isArray(logicalKeys) && !logicalKeys.some((key) => READING_DOCUMENT_KEYS.includes(key))) return;
+        try { await ensureReadingMigration(); }
+        catch (error) {
+            if (required) throw error;
+            if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
         }
+    }
+
+    function legacyReadingAt(value, fallback = '1970-01-01T00:00:00.000Z') {
+        const parsed = typeof value === 'number' ? value : Date.parse(value);
+        return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+    }
+    function legacyReadingSource(row) {
+        const source = asObject(row && row.source);
+        if ((source.kind === 'builtin' || source.kind === 'imported') && source.id) return source;
+        return { kind: row && row.sourceKind === 'imported' ? 'imported' : 'builtin',
+            id: String(row && (row.libraryId || row.sourceId) || 'default') };
+    }
+    function convertLegacyReading(snapshot, words, bookshelf, rejected = [], activityAt = null) {
+        const model = readingModel(); let next = snapshot;
+        for (const row of asArray(words)) {
+            try {
+                if (!row || typeof row.word !== 'string' || !row.word.trim()) throw new Error('Missing word');
+                const at = activityAt || legacyReadingAt(row.createdAt);
+                const highlights = asArray(row.highlights);
+                const examIds = new Set([row.examId, ...highlights.map((item) => item && item.examId)].filter(Boolean).map(String));
+                if (!examIds.size) throw new Error('Missing article identity');
+                for (const examId of examIds) {
+                    const command = { source: legacyReadingSource(row), article: { examId, title: String(row.examTitle || '') },
+                        word: Object.assign({}, row, { word: row.word.trim(), meaning: String(row.meaning || '待补充释义') }), at, manual: true };
+                    next = model.recordVisit(model.collect(next, command), command);
+                    for (const highlight of highlights.filter((item) => String(item && item.examId || row.examId) === examId)) {
+                        const quote = String(highlight.quote || highlight.text || row.word);
+                        if (Number.isSafeInteger(highlight.startOffset) && Number.isSafeInteger(highlight.endOffset)
+                            && highlight.endOffset - highlight.startOffset === quote.length) {
+                            try {
+                                next = model.collect(next, Object.assign({}, command, { manual: false, occurrence: {
+                                    scopeId: String(highlight.scopeId || highlight.scope || 'passage'),
+                                    contentVersion: String(highlight.contentVersion || 'legacy-v1'),
+                                    startOffset: highlight.startOffset, endOffset: highlight.endOffset, quote,
+                                    before: String(highlight.before || ''), after: String(highlight.after || '')
+                                } }));
+                            } catch (error) { rejected.push({ kind: 'occurrence', value: clone(highlight), reason: error.message }); }
+                        } else rejected.push({ kind: 'occurrence', value: clone(highlight), reason: 'Missing exact selection anchor' });
+                    }
+                }
+            } catch (error) { rejected.push({ kind: 'word', value: clone(row), reason: error.message }); }
+        }
+        for (const row of asArray(bookshelf)) {
+            try {
+                if (!row || !row.examId) throw new Error('Missing article identity');
+                const command = { source: legacyReadingSource(row), article: { examId: String(row.examId),
+                    title: String(row.examTitle || row.title || '') }, at: legacyReadingAt(row.firstUsedAt) };
+                next = model.recordVisit(next, command);
+                next = model.recordVisit(next, Object.assign({}, command, { at: legacyReadingAt(row.lastOpenedAt, command.at) }));
+            } catch (error) { rejected.push({ kind: 'visit', value: clone(row), reason: error.message }); }
+        }
+        return next;
+    }
+    async function ensureReadingMigration() {
+        if (!global.ReadingVocabularyModel) return; // Old non-reader test/embed bootstraps remain supported.
+        return retryMergeConflict({}, async () => {
+            const migration = await kernel.read('system.migrations', { withMeta: true });
+            // The canonical V1 vocabulary must land before reading initialization
+            // creates words/lists envelopes that become authoritative on reload.
+            // Keep public reading and backup calls behind the same recovery fence.
+            if (typeof internals.readLegacyValues === 'function'
+                && asObject(asObject(migration.data).v1ToV2).status !== 'complete') {
+                throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy vocabulary recovery is pending; reload before reading or saving vocabulary');
+            }
+            if (asObject(migration.data).readingVocabularyV1?.completed === true) return;
+            const current = await readReadingDocuments();
+            const recoverable = { localStorage: {}, documents: {}, rejected: [] };
+            const values = {};
+            for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
+                const meta = current.metas[logicalKey];
+                recoverable.documents[logicalKey] = clone(meta.data);
+                let raw = null;
+                if (global.localStorage) raw = global.localStorage.getItem(storageKey);
+                if (raw !== null) recoverable.localStorage[storageKey] = raw;
+                let parsed = null;
+                try { parsed = raw === null ? null : JSON.parse(raw); }
+                catch (_) { recoverable.rejected.push({ kind: 'storage', key: storageKey, reason: 'Invalid JSON' }); }
+                if (raw !== null && !Array.isArray(parsed)) recoverable.rejected.push({ kind: 'storage', key: storageKey, reason: 'Unrecognized legacy payload' });
+                values[logicalKey] = meta.envelope ? meta.data : (Array.isArray(parsed) ? parsed : []);
+            }
+            let next = current.snapshot;
+            current.state.allowDefaultWordSeed = !current.metas['vocab.words'].envelope;
+            if (!current.metas[READING_STATE_KEY].envelope) {
+                next = convertLegacyReading(next, values['vocab.readingVocabWords'], values['vocab.readingBookshelfExams'], recoverable.rejected);
+            }
+            const changes = readingChanges(current, next, current.state);
+            // Preserve recognizable prototype arrays for compatibility/export as
+            // well as storing lossless originals in the recovery marker.
+            for (const change of changes) if (hasOwn(values, change.logicalKey)) change.data = values[change.logicalKey];
+            changes.push({ logicalKey: 'system.migrations', data: Object.assign({}, asObject(migration.data), {
+                readingVocabularyV1: { version: 1, completed: true, completedAt: nowIso(), recoverable }
+            }), expectedRevision: metaRevision(migration) });
+            await kernel.mutate(changes, { operationId: randomId('migrate-reading') });
+        }, 12);
     }
 
     async function refreshReadingMirrors(logicalKeys = Object.keys(READING_LEGACY_KEYS)) {
@@ -4596,7 +4843,11 @@
             try {
                 if (!global.localStorage) return;
                 const current = await kernel.read(logicalKey, { withMeta: true });
-                if (current.envelope && Array.isArray(current.data)) {
+                // Unknown prototype payloads remain recoverable in-place too.
+                let recognized = true;
+                const raw = global.localStorage.getItem(storageKey);
+                if (raw !== null) { try { recognized = Array.isArray(JSON.parse(raw)); } catch (_) { recognized = false; } }
+                if (recognized && current.envelope && Array.isArray(current.data)) {
                     global.localStorage.setItem(storageKey, JSON.stringify(current.data));
                 }
             } catch (error) {
@@ -4645,7 +4896,10 @@
         async delete(id, options = {}) { await ready; const current = await readCollectionMeta('backups.entries'); return kernel.mutate([{ logicalKey: 'backups.entries', data: current.items.filter((item) => String(item.id) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-delete', { id: String(id) })); },
         async export(options = {}) {
             await ready;
-            await migrateLegacyReadingData();
+            if ((options.backupId === undefined || options.backupId === null)
+                && (!Array.isArray(options.domains) || options.domains.includes('vocab'))) {
+                await migrateLegacyReadingData({ required: true });
+            }
             if (options.backupId !== undefined && options.backupId !== null) {
                 const backupId = String(options.backupId);
                 const stored = asArray(await kernel.read('backups.entries'))
@@ -4766,17 +5020,455 @@
         return enqueueVocabMutation(() => retryMergeConflict(options, task));
     }
 
+    const READING_STATE_KEY = 'vocab.readingState';
+    const READING_DOCUMENT_KEYS = ['vocab.words', 'vocab.lists', READING_STATE_KEY,
+        'vocab.readingVocabWords', 'vocab.readingBookshelfExams'];
+    function readingModel() {
+        const model = global.ReadingVocabularyModel;
+        if (!model) throw new AppDataError('INITIALIZATION_BLOCKED', 'ReadingVocabularyModel is required');
+        return model;
+    }
+    function emptyReadingState(generation = 'initial') {
+        return { schemaVersion: 1, generation, reading: readingModel().createSnapshot().reading,
+            tombstones: { articles: {}, visits: {}, terms: {}, canonicalTerms: {}, associations: {}, occurrences: {}, all: null } };
+    }
+    function normalizeReadingState(value) {
+        if (!value || !Object.keys(value).length) return emptyReadingState();
+        if (value.schemaVersion !== 1 || !value.reading || typeof value.generation !== 'string') {
+            throw new AppDataError('VALIDATION', 'Unsupported reading persistence state');
+        }
+        const result = Object.assign(emptyReadingState(value.generation), clone(value), {
+            tombstones: Object.assign(emptyReadingState().tombstones, clone(asObject(value.tombstones)))
+        });
+        const validStamp = (stamp) => stamp && typeof stamp.at === 'string' && Number.isFinite(Date.parse(stamp.at))
+            && new Date(stamp.at).toISOString() === stamp.at && Number.isSafeInteger(stamp.revision) && stamp.revision >= 0;
+        for (const [table, rows] of Object.entries(result.tombstones)) {
+            if (table === 'all') {
+                if (rows !== null && !validStamp(rows)) throw new AppDataError('VALIDATION', 'Invalid reading deletion fence');
+            } else if (!rows || typeof rows !== 'object' || Array.isArray(rows) || Object.values(rows).some((stamp) => !validStamp(stamp))) {
+                throw new AppDataError('VALIDATION', `Invalid reading ${table} deletion fences`);
+            }
+        }
+        return result;
+    }
+    const metaRevision = (meta) => Number(meta && meta.envelope && meta.envelope.revision) || 0;
+    async function readReadingDocuments() {
+        // Every canonical vocabulary mutation also checks/increments readingState.
+        // Read that fence twice so a split readonly read never exposes mixed owners.
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            const before = await kernel.read(READING_STATE_KEY, { withMeta: true });
+            const values = await Promise.all(READING_DOCUMENT_KEYS.filter((key) => key !== READING_STATE_KEY)
+                .map(async (key) => [key, await kernel.read(key, { withMeta: true })]));
+            const after = await kernel.read(READING_STATE_KEY, { withMeta: true });
+            if (metaRevision(before) !== metaRevision(after)) continue;
+            const metas = Object.fromEntries(values.concat([[READING_STATE_KEY, after]]));
+            const state = normalizeReadingState(after.data);
+            const snapshot = readingModel().createSnapshot({ words: metas['vocab.words'].data,
+                lists: metas['vocab.lists'].data, reading: state.reading });
+            return { metas, state, snapshot, revision: metaRevision(after), generation: state.generation };
+        }
+        throw new AppDataError('CONFLICT', 'Vocabulary changed repeatedly while reading; retry');
+    }
+    function readingResult(current) {
+        return { snapshot: clone(current.snapshot), revision: current.revision, generation: current.generation };
+    }
+    function readingActivityClock(snapshot, state) {
+        const timestamps = [state.clockAt];
+        for (const table of ['articles', 'terms', 'associations', 'occurrences', 'visits']) {
+            for (const row of snapshot.reading[table]) timestamps.push(row.updatedAt, row.createdAt, row.lastVisitedAt);
+        }
+        for (const [table, rows] of Object.entries(state.tombstones)) {
+            if (table === 'all') timestamps.push(rows && rows.at);
+            else for (const stamp of Object.values(rows)) timestamps.push(stamp.at);
+        }
+        return timestamps.reduce((latest, at) => Math.max(latest, Date.parse(at || '') || 0), 0);
+    }
+    function mergeReadingTombstones(existing, incoming) {
+        const result = clone(existing);
+        const latest = (left, right) => !left ? right : !right ? left
+            : String(left.at) >= String(right.at) ? left : right;
+        for (const table of ['articles', 'visits', 'terms', 'canonicalTerms', 'associations', 'occurrences']) {
+            for (const [id, stamp] of Object.entries(asObject(incoming[table]))) {
+                result[table][id] = clone(latest(result[table][id], stamp));
+            }
+        }
+        result.all = clone(latest(result.all, incoming.all));
+        return result;
+    }
+    function applyReadingTombstones(snapshot, tombstones) {
+        let next = clone(snapshot);
+        const deleted = (stamp, at) => stamp && String(stamp.at) >= String(at);
+        for (const [termId, stamp] of Object.entries(tombstones.canonicalTerms)) {
+            const term = next.reading.terms.find((row) => row.id === termId);
+            if (!term || deleted(stamp, term.createdAt)) next = readingModel().deleteCanonicalTerm(next, { termId });
+        }
+        next.reading.associations = next.reading.associations.filter((row) => ![
+            tombstones.all, tombstones.articles[row.articleId], tombstones.terms[row.termId], tombstones.associations[row.id]
+        ].some((stamp) => deleted(stamp, row.updatedAt)));
+        const associations = new Set(next.reading.associations.map((row) => row.id));
+        next.reading.occurrences = next.reading.occurrences.filter((row) => associations.has(row.associationId)
+            && !deleted(tombstones.occurrences[row.id], row.updatedAt));
+        next.reading.associations = next.reading.associations.filter((row) => row.manual
+            || next.reading.occurrences.some((occurrence) => occurrence.associationId === row.id));
+        next.reading.visits = next.reading.visits.filter((row) => !deleted(tombstones.visits[row.articleId], row.lastVisitedAt));
+        readingModel().validate(next);
+        return next;
+    }
+    async function prepareReadingImport(parsed, target, revisionToken, keys, clearedKeys, replace) {
+        if (!global.ReadingVocabularyModel) return;
+        const incomingEnvelopes = asObject(parsed.envelopes);
+        const hasReading = [READING_STATE_KEY, ...Object.keys(READING_LEGACY_KEYS)]
+            .some((key) => hasOwn(target.envelopes, key));
+        const hasOwners = ['vocab.words', 'vocab.lists'].some((key) => hasOwn(target.envelopes, key));
+        if (!hasReading && !hasOwners) return;
+        const current = await readReadingDocuments(); const model = readingModel();
+        const value = (envelopes, key, fallback) => {
+            const envelope = envelopes[key];
+            return !envelope ? fallback : envelope.state === 'cleared' ? catalog.get(key).defaultValue() : envelope.data;
+        };
+        const native = incomingEnvelopes[READING_STATE_KEY];
+        let state; let next;
+        if (hasReading) {
+            let incomingState = normalizeReadingState(value(incomingEnvelopes, READING_STATE_KEY, {}));
+            let incoming = model.createSnapshot({
+                words: value(incomingEnvelopes, 'vocab.words', replace && parsed.scope !== 'full' ? current.snapshot.words : []),
+                lists: value(incomingEnvelopes, 'vocab.lists', replace && parsed.scope !== 'full' ? current.snapshot.lists : {}),
+                reading: incomingState.reading
+            });
+            if (!native) {
+                incoming = convertLegacyReading(incoming,
+                    value(incomingEnvelopes, 'vocab.readingVocabWords', replace && parsed.scope !== 'full' ? current.metas['vocab.readingVocabWords'].data : []),
+                    value(incomingEnvelopes, 'vocab.readingBookshelfExams', replace && parsed.scope !== 'full' ? current.metas['vocab.readingBookshelfExams'].data : []));
+            }
+            if (replace) {
+                next = incoming; state = incomingState;
+                state.generation = randomId('reading-replace');
+            } else {
+                state = clone(current.state);
+                state.tombstones = mergeReadingTombstones(state.tombstones, incomingState.tombstones);
+                // Filter each history before union: an old backup must not lower
+                // a deliberately recollected term's creation clock below deletion.
+                next = model.merge(applyReadingTombstones(current.snapshot, state.tombstones),
+                    applyReadingTombstones(incoming, state.tombstones));
+                next = applyReadingTombstones(next, state.tombstones);
+            }
+        } else {
+            state = clone(current.state);
+            const ownerValue = (key, stored) => {
+                if (!hasOwn(target.envelopes, key)) return stored;
+                const envelope = incomingEnvelopes[key];
+                if (!replace && envelope && envelope.state === 'present') {
+                    return mergeImportValue(catalog.get(key), stored, envelope.data);
+                }
+                return value(target.envelopes, key, stored);
+            };
+            next = model.createSnapshot({ words: ownerValue('vocab.words', current.snapshot.words),
+                lists: ownerValue('vocab.lists', current.snapshot.lists), reading: state.reading });
+        }
+        // Imported revisions belong to another snapshot/installation. Install a
+        // new local epoch and rebase every fence to this transaction's revision.
+        state.generation = randomId('reading-import');
+        const stamps = Object.entries(state.tombstones).flatMap(([table, rows]) => table === 'all' ? (rows ? [rows] : []) : Object.values(rows));
+        for (const stamp of stamps) stamp.revision = current.revision + 1;
+        state.clockAt = [state.clockAt, ...stamps.map((stamp) => stamp.at)].filter(Boolean).sort().pop() || nowIso();
+        state.allowDefaultWordSeed = false;
+        const changes = readingChanges(current, next, state);
+        for (const change of changes) {
+            revisionToken.documents[change.logicalKey] = metaRevision(current.metas[change.logicalKey]);
+            // Legacy-only backups retain their original portable arrays. New
+            // model backups derive compatibility arrays from the merged graph.
+            if (!native && hasOwn(READING_LEGACY_KEYS, change.logicalKey) && target.envelopes[change.logicalKey]) {
+                const incoming = incomingEnvelopes[change.logicalKey];
+                if (!replace && incoming && incoming.state === 'present') {
+                    target.envelopes[change.logicalKey] = internals.makeEnvelope(catalog.get(change.logicalKey),
+                        mergeImportValue(catalog.get(change.logicalKey), current.metas[change.logicalKey].data, incoming.data),
+                        { operationId: randomId('import-reading-compatibility') });
+                }
+                continue;
+            }
+            target.envelopes[change.logicalKey] = internals.makeEnvelope(catalog.get(change.logicalKey), change.data,
+                { operationId: randomId('import-reading') });
+            if (!keys.includes(change.logicalKey)) keys.push(change.logicalKey);
+            const clearIndex = clearedKeys.indexOf(change.logicalKey);
+            if (clearIndex >= 0) clearedKeys.splice(clearIndex, 1);
+        }
+    }
+    function readingProjection(snapshot) {
+        const model = readingModel();
+        const query = model.query(snapshot);
+        const articles = new Map(snapshot.reading.articles.map((row) => [row.id, row]));
+        const sources = new Map(snapshot.reading.sources.map((row) => [row.id, row]));
+        const words = query.terms.map((row) => {
+            const first = articles.get(row.associations[0].articleId);
+            return Object.assign({}, clone(row.word), { id: row.term.id, termId: row.term.id,
+                wordRef: row.wordRef, examId: first.examId, examTitle: first.title,
+                associations: row.associations, occurrences: row.occurrences,
+                highlights: row.occurrences.map((occurrence) => {
+                    const association = row.associations.find((item) => item.id === occurrence.associationId);
+                    const article = articles.get(association.articleId);
+                    return Object.assign({}, occurrence, { examId: article.examId,
+                        articleId: article.id, scope: occurrence.scopeId, text: occurrence.quote });
+                }) });
+        });
+        const bookshelf = snapshot.reading.visits.map((visit) => {
+            const article = articles.get(visit.articleId); const source = sources.get(article.sourceId);
+            return { id: article.id, articleId: article.id, examId: article.examId, examTitle: article.title,
+                source: { kind: source.kind, id: source.libraryId },
+                firstUsedAt: Date.parse(visit.firstVisitedAt), lastOpenedAt: Date.parse(visit.lastVisitedAt) };
+        });
+        return { words, bookshelf };
+    }
+    function readingChanges(current, snapshot, state) {
+        state.reading = snapshot.reading;
+        const projection = readingProjection(snapshot);
+        const values = { 'vocab.words': snapshot.words, 'vocab.lists': snapshot.lists,
+            [READING_STATE_KEY]: state, 'vocab.readingVocabWords': projection.words,
+            'vocab.readingBookshelfExams': projection.bookshelf };
+        return READING_DOCUMENT_KEYS.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
+            expectedRevision: metaRevision(current.metas[logicalKey]) }));
+    }
+    function tombstoneRevision(value) { return Number(value && value.revision) || 0; }
+    function assertFreshReadingIntent(current, type, command, observed) {
+        if (observed.generation !== current.generation) {
+            throw new AppDataError('CONFLICT', 'Reading data was replaced; reload before saving');
+        }
+        if (type !== 'collect' && type !== 'recordVisit') return;
+        const model = readingModel(); const tombstones = current.state.tombstones;
+        const articleId = model.articleId(command.source, command.article.examId);
+        const fences = type === 'collect' ? [tombstones.all, tombstones.articles[articleId], tombstones.visits[articleId]]
+            : [tombstones.visits[articleId]];
+        if (type === 'collect') {
+            const termId = model.termId(command.word.word);
+            const associationId = JSON.stringify(['association', articleId, termId]);
+            fences.push(tombstones.terms[termId], tombstones.associations[associationId]);
+            if (command.occurrence) fences.push(tombstones.occurrences[model.occurrenceId(articleId, termId, command.occurrence)]);
+        }
+        if (fences.some((fence) => tombstoneRevision(fence) > observed.revision)) {
+            throw new AppDataError('CONFLICT', 'This reading association was removed; reload before collecting again');
+        }
+    }
+    async function mutateReading(type, input = {}, options = {}) {
+        await ready; await ensureReadingMigration();
+        assertObject(input, 'Reading command must be an object');
+        const command = Object.assign({ at: nowIso() }, clone(input));
+        const initial = await readReadingDocuments();
+        const observed = { revision: options.observedRevision ?? initial.revision,
+            generation: options.observedGeneration ?? initial.generation };
+        const mutation = optionsMutationOptions(options, `reading-${type}`, { type, command: input });
+        return retryVocabMutation(options, async () => {
+            const current = await readReadingDocuments();
+            assertFreshReadingIntent(current, type, command, observed);
+            const model = readingModel(); let next = current.snapshot;
+            const state = clone(current.state); const tombstones = state.tombstones;
+            if (typeof command.at !== 'string' || !Number.isFinite(Date.parse(command.at))
+                || new Date(command.at).toISOString() !== command.at) throw new AppDataError('VALIDATION', 'Reading at must be a UTC ISO timestamp');
+            // Timestamp order is advanced at the acknowledged write boundary, not
+            // trusted to the stale page's wall clock. A fresh deliberate re-add
+            // therefore sorts after deletion when backups are merged later.
+            const previousClock = readingActivityClock(current.snapshot, state);
+            command.at = new Date(Math.max(Date.now(), Date.parse(command.at), previousClock + 1)).toISOString();
+            state.clockAt = command.at;
+            const stamp = { at: command.at, revision: current.revision + 1 };
+            const mark = (table, id) => { tombstones[table][id] = stamp; };
+            if (type === 'collect') next = model.recordVisit(model.collect(next, command), command);
+            else if (type === 'recordVisit') next = model.recordVisit(next, command);
+            else if (type === 'removeOccurrence') { next = model.removeOccurrence(next, command); mark('occurrences', command.occurrenceId); }
+            else if (type === 'removeArticleTerm') {
+                next = model.removeArticleTerm(next, command);
+                mark('associations', JSON.stringify(['association', command.articleId, command.termId]));
+            } else if (type === 'clearArticle') { next = model.clearArticle(next, command); mark('articles', command.articleId); }
+            else if (type === 'deleteCanonicalTerm') { next = model.deleteCanonicalTerm(next, command); mark('terms', command.termId); mark('canonicalTerms', command.termId); }
+            else if (type === 'removeTermAssociations') {
+                for (const row of next.reading.associations.filter((row) => row.termId === command.termId)) {
+                    next = model.removeArticleTerm(next, row); mark('associations', row.id);
+                }
+                mark('terms', command.termId);
+            } else if (type === 'clearReading') {
+                for (const row of next.reading.articles) next = model.clearArticle(next, { articleId: row.id });
+                tombstones.all = stamp;
+            } else if (type === 'removeArticle') {
+                if (!command.articleId) throw new AppDataError('VALIDATION', 'articleId is required');
+                if (command.clearWords === true) { next = model.clearArticle(next, command); mark('articles', command.articleId); }
+                next.reading.visits = next.reading.visits.filter((row) => row.articleId !== command.articleId);
+                mark('visits', command.articleId);
+            } else throw new AppDataError('VALIDATION', `Unknown reading operation: ${type}`);
+            // Remember concrete removals as well as broad fences for portable merges.
+            for (const row of current.snapshot.reading.associations) {
+                if (!next.reading.associations.some((item) => item.id === row.id)) mark('associations', row.id);
+            }
+            for (const row of current.snapshot.reading.occurrences) {
+                if (!next.reading.occurrences.some((item) => item.id === row.id)) mark('occurrences', row.id);
+            }
+            model.validate(next);
+            const receipt = await kernel.mutate(readingChanges(current, next, state), mutation);
+            if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Reading save was not acknowledged');
+            // A replay may acknowledge an earlier operation; return current durable data.
+            const committed = await readReadingDocuments();
+            if (type === 'collect') {
+                const articleId = model.articleId(command.source, command.article.examId);
+                const termId = model.termId(command.word.word);
+                const association = committed.snapshot.reading.associations.find((row) => row.articleId === articleId && row.termId === termId);
+                const occurrenceId = command.occurrence && model.occurrenceId(articleId, termId, command.occurrence);
+                const requiresManual = command.manual === true || (!command.occurrence && command.manual !== false);
+                if (!association || (requiresManual && !association.manual)
+                    || (occurrenceId && !committed.snapshot.reading.occurrences.some((row) => row.id === occurrenceId))) {
+                    throw new AppDataError('CONFLICT', 'The acknowledged reading selection has since been removed; reload before retrying');
+                }
+            } else if (type === 'recordVisit') {
+                const articleId = model.articleId(command.source, command.article.examId);
+                if (!committed.snapshot.reading.visits.some((row) => row.articleId === articleId)) {
+                    throw new AppDataError('CONFLICT', 'The acknowledged bookshelf visit has since been removed; reload before retrying');
+                }
+            } else {
+                const snapshot = committed.snapshot;
+                let stillRemoved;
+                if (type === 'removeTermAssociations') stillRemoved = !snapshot.reading.associations.some((row) => row.termId === command.termId);
+                else if (type === 'clearReading') stillRemoved = snapshot.reading.associations.length === 0;
+                else if (type === 'removeArticle') stillRemoved = !snapshot.reading.visits.some((row) => row.articleId === command.articleId)
+                    && (command.clearWords !== true || !snapshot.reading.associations.some((row) => row.articleId === command.articleId));
+                else stillRemoved = checksum(model[type](snapshot, command)) === checksum(snapshot);
+                if (!stillRemoved) throw new AppDataError('CONFLICT', 'Newer reading activity superseded the acknowledged removal; reload before retrying');
+            }
+            return Object.assign({}, receipt, readingResult(committed), { saved: true,
+                added: type === 'collect', changed: checksum(next) !== checksum(current.snapshot) });
+        });
+    }
+
+    async function mutateVocabDocuments(changes, options) {
+        const ownsWords = changes.some((change) => change.logicalKey === 'vocab.words' || change.logicalKey === 'vocab.lists');
+        if (!ownsWords || !global.ReadingVocabularyModel) return kernel.mutate(changes, options);
+        await ensureReadingMigration();
+        const current = await readReadingDocuments();
+        const next = clone(current.snapshot);
+        for (const change of changes) {
+            if (change.logicalKey === 'vocab.words') { next.words = change.state === 'cleared' ? [] : change.data; current.state.allowDefaultWordSeed = false; }
+            if (change.logicalKey === 'vocab.lists') next.lists = change.state === 'cleared' ? {} : change.data;
+        }
+        // Bulk canonical writes cannot silently orphan reading relationships. Call
+        // deleteCanonicalTerm for an intentional cascade instead.
+        readingModel().validate(next);
+        const guarded = changes.concat([{ logicalKey: READING_STATE_KEY, data: current.state,
+            expectedRevision: current.revision }]);
+        return kernel.mutate(guarded, options);
+    }
+
+    async function replaceLegacyReadingCollection(logicalKey, rows, options) {
+        await ready; await ensureReadingMigration();
+        assertArray(rows, 'Reading compatibility snapshots require an array');
+        if (!hasOwn(options, 'expectedRevision')) {
+            throw new AppDataError('VALIDATION', 'Reading snapshot writes require the revision from a withMeta read; use mutateReading for interactive changes');
+        }
+        return enqueueVocabMutation(async () => {
+            const current = await readReadingDocuments();
+            if (Number(options.expectedRevision) !== metaRevision(current.metas[logicalKey])) {
+                throw new AppDataError('CONFLICT', 'Reading snapshot changed; reload before replacing it');
+            }
+            let next = clone(current.snapshot); const state = clone(current.state);
+            const stamp = { at: new Date(Math.max(Date.now(), readingActivityClock(current.snapshot, state) + 1)).toISOString(), revision: current.revision + 1 };
+            const rejected = [];
+            if (logicalKey === 'vocab.readingVocabWords') {
+                next.reading.associations = []; next.reading.occurrences = [];
+                next = convertLegacyReading(next, rows, [], rejected, stamp.at);
+                for (const row of current.snapshot.reading.associations) if (!next.reading.associations.some((item) => item.id === row.id)) state.tombstones.associations[row.id] = stamp;
+                for (const row of current.snapshot.reading.occurrences) if (!next.reading.occurrences.some((item) => item.id === row.id)) state.tombstones.occurrences[row.id] = stamp;
+            } else {
+                next.reading.visits = [];
+                next = convertLegacyReading(next, [], rows, rejected);
+                for (const row of current.snapshot.reading.visits) if (!next.reading.visits.some((item) => item.id === row.id)) state.tombstones.visits[row.id] = stamp;
+            }
+            state.clockAt = stamp.at; state.generation = randomId('reading-snapshot');
+            const changes = readingChanges(current, next, state);
+            for (const change of changes) {
+                if (change.logicalKey === logicalKey) change.data = rows;
+                else if (hasOwn(READING_LEGACY_KEYS, change.logicalKey)) change.data = current.metas[change.logicalKey].data;
+            }
+            return kernel.mutate(changes, optionsMutationOptions(options, 'reading-compatibility-replace', { logicalKey, rows },
+                { warnings: rejected.map((entry) => `Retained unrecognized legacy ${entry.kind}: ${entry.reason}`) }));
+        });
+    }
+
     const vocab = Object.freeze({
         // Pure schema/relationship operations. Persistence commands consume this
         // contract; a returned snapshot is not a durable commit acknowledgement.
         get readingModel() { return global.ReadingVocabularyModel; },
+        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments()); },
+        async shouldInitializeDefaultWords() {
+            await ready; await ensureReadingMigration();
+            if (!global.ReadingVocabularyModel) return !(await kernel.read('vocab.words', { withMeta: true })).envelope;
+            const current = await readReadingDocuments();
+            return current.state.allowDefaultWordSeed === true && current.snapshot.words.length === 0;
+        },
+        async initializeDefaultWords(command, options = {}) {
+            await ready; await ensureReadingMigration();
+            assertObject(command, 'Default vocabulary initialization requires a command');
+            assertArray(command.words, 'Default vocabulary initialization requires words');
+            return retryVocabMutation(options, async () => {
+                const current = await readReadingDocuments();
+                if (current.state.allowDefaultWordSeed !== true || current.snapshot.words.length) {
+                    return { committed: false, words: clone(current.snapshot.words) };
+                }
+                const next = clone(current.snapshot); next.words = clone(command.words);
+                current.state.allowDefaultWordSeed = false; readingModel().validate(next);
+                const receipt = await kernel.mutate(readingChanges(current, next, current.state),
+                    optionsMutationOptions(options, 'vocab-default-initialize', command));
+                return Object.assign({}, receipt, { words: clone(next.words) });
+            });
+        },
+        async repairDefaultWords(command, options = {}) {
+            await ready; await ensureReadingMigration();
+            assertObject(command, 'Default vocabulary repair requires a command');
+            assertArray(command.words, 'Default vocabulary repair requires words');
+            return retryVocabMutation(options, async () => {
+                const current = await readReadingDocuments();
+                const words = current.snapshot.words.filter((word) => word && typeof word.word === 'string'
+                    && word.word.trim() && typeof word.meaning === 'string' && word.meaning.trim());
+                const pollutedCount = words.filter((word) => word.meaning.trim().startsWith('你曾拼写为:')).length;
+                // Repair existing corruption independently of first-run seeding.
+                // Recheck after every conflict so a newer empty restore wins.
+                if (!words.length || pollutedCount / words.length < 0.6) {
+                    return { committed: false, words: clone(current.snapshot.words) };
+                }
+                const next = clone(current.snapshot); next.words = clone(command.words);
+                const ownedTerms = next.reading.terms.filter((term) => term.wordRef.listId === 'default');
+                if (ownedTerms.length) {
+                    // Reader progress belongs to the acknowledged canonical row,
+                    // whose ID may differ from (or be absent in) the bundled list.
+                    const listId = readingModel().READING_LIST_ID;
+                    const collection = next.lists[listId];
+                    const retainedWords = Array.isArray(collection) ? collection : asArray(asObject(collection).words);
+                    const retainedIds = new Set(retainedWords.map((word) => word && word.id));
+                    const replacements = new Map();
+                    for (const term of ownedTerms) {
+                        const oldId = term.wordRef.wordId;
+                        if (!replacements.has(oldId)) {
+                            const owner = current.snapshot.words.find((word) => word && word.id === oldId);
+                            const baseId = JSON.stringify(['default-repair', oldId]);
+                            let id = baseId; let suffix = 1;
+                            while (retainedIds.has(id)) id = `${baseId}-${suffix++}`;
+                            retainedIds.add(id);
+                            retainedWords.push(Object.assign({}, clone(owner), { id }));
+                            replacements.set(oldId, { listId, wordId: id });
+                        }
+                        term.wordRef = clone(replacements.get(oldId));
+                    }
+                    next.lists[listId] = Array.isArray(collection) ? retainedWords
+                        : Object.assign({}, asObject(collection), { id: listId, words: retainedWords });
+                }
+                current.state.allowDefaultWordSeed = false; readingModel().validate(next);
+                const receipt = await kernel.mutate(readingChanges(current, next, current.state),
+                    optionsMutationOptions(options, 'vocab-default-repair', command));
+                if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Default vocabulary repair was not acknowledged');
+                return Object.assign({}, receipt, { words: clone((await readReadingDocuments()).snapshot.words) });
+            });
+        },
+        mutateReading,
         async listWords() { await ready; return kernel.read('vocab.words'); },
         async saveWords(words, options = {}) {
             await ready; assertArray(words, 'vocab.saveWords requires an array');
             const mutation = optionsMutationOptions(options, 'vocab-words', words);
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.words', { withMeta: true });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.words',
                     data: words,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4789,7 +5481,7 @@
             const mutation = optionsMutationOptions(options, 'vocab-config', config);
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.userConfig', { withMeta: true });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.userConfig',
                     data: asObject(config),
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4802,7 +5494,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.userConfig', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), clone(patch));
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.userConfig',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4818,7 +5510,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), { [collectionId]: clone(value) });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4833,7 +5525,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), upserts);
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4865,7 +5557,7 @@
                 if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
                 list.updatedAt = nowIso();
                 collections[id] = list;
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4883,7 +5575,7 @@
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const collections = Object.assign({}, asObject(current.data));
                 collections[id] = Object.assign({}, asObject(collections[id]), { id, words, updatedAt: nowIso() });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4956,7 +5648,7 @@
                             { id: listId, words: merged, updatedAt: nowIso() }
                         )
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -5015,7 +5707,7 @@
                     : Object.assign({}, collections, {
                         [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words })
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -5057,7 +5749,7 @@
                     : Object.assign({}, collections, {
                         [listId]: Object.assign({}, collection, { id: listId, words: next, updatedAt: nowIso() })
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? Number(current.envelope.revision) : 0)
@@ -5094,35 +5786,17 @@
                     lists[listId] = Object.assign({}, existingList, { id: listId, words: committedWords });
                     changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
                 }
-                const receipt = await kernel.mutate(changes, mutation);
+                const receipt = await mutateVocabDocuments(changes, mutation);
                 return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
         },
         async listReadingWords(options = {}) { await ready; return kernel.read('vocab.readingVocabWords', { withMeta: asObject(options).withMeta === true }); },
         async saveReadingWords(words, options = {}) {
-            await ready; assertArray(words, 'vocab.saveReadingWords requires an array');
-            const mutation = optionsMutationOptions(options, 'vocab-reading-words', words);
-            return retryVocabMutation(options, async () => {
-                const current = await kernel.read('vocab.readingVocabWords', { withMeta: true });
-                return kernel.mutate([{
-                    logicalKey: 'vocab.readingVocabWords',
-                    data: words,
-                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
-                }], mutation);
-            });
+            return replaceLegacyReadingCollection('vocab.readingVocabWords', words, options);
         },
         async listReadingBookshelfExams(options = {}) { await ready; return kernel.read('vocab.readingBookshelfExams', { withMeta: asObject(options).withMeta === true }); },
         async saveReadingBookshelfExams(records, options = {}) {
-            await ready; assertArray(records, 'vocab.saveReadingBookshelfExams requires an array');
-            const mutation = optionsMutationOptions(options, 'vocab-reading-bookshelf', records);
-            return retryVocabMutation(options, async () => {
-                const current = await kernel.read('vocab.readingBookshelfExams', { withMeta: true });
-                return kernel.mutate([{
-                    logicalKey: 'vocab.readingBookshelfExams',
-                    data: records,
-                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
-                }], mutation);
-            });
+            return replaceLegacyReadingCollection('vocab.readingBookshelfExams', records, options);
         }
     });
 
@@ -5382,6 +6056,11 @@
     }
     async function prepareLegacyDocumentChange(logicalKey, legacyValue) {
         const entry = catalog.get(logicalKey);
+        // A completed reading installation owns its canonical records as well
+        // as projections. An interrupted older, broader migration must not merge
+        // stale default/list records back after an authoritative empty restore.
+        if ((logicalKey === 'vocab.words' || logicalKey === 'vocab.lists')
+            && await kernel.getEnvelope(READING_STATE_KEY)) return null;
         const currentEnvelope = await kernel.getEnvelope(logicalKey);
         if (!currentEnvelope) {
             return { logicalKey, data: clone(legacyValue), expectedRevision: 0 };
@@ -5590,7 +6269,6 @@
             }
             try {
                 await migrateLegacyReadingData();
-                await refreshReadingMirrors();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
             }
@@ -7394,16 +8072,21 @@
         if (payload.phonetic) {
             word.phonetic = payload.phonetic;
         }
-        if (typeof global.AppData.vocab.mergeListWords === 'function') {
-            // mergeListWords 对已有词条只更新词典字段，保留用户笔记与学习进度。
-            await global.AppData.vocab.mergeListWords({
-                listId: 'reading-highlights',
-                words: [word]
-            });
-        } else {
-            await global.AppData.vocab.upsertCollectionWord('reading-highlights', word);
-        }
-        return true;
+        const context = payload.context || {};
+        if (!context.examId || context.libraryConfigurationId === undefined) return false;
+        const configurationId = context.libraryConfigurationId;
+        const source = configurationId == null || configurationId === ''
+            ? { kind: 'builtin', id: 'default' }
+            : { kind: 'imported', id: String(configurationId).trim() };
+        const observed = await global.AppData.vocab.getReadingSnapshot();
+        const receipt = await global.AppData.vocab.mutateReading('collect', {
+            source,
+            article: { examId: String(context.examId), title: String(context.title || '') },
+            word,
+            manual: true,
+            at: now
+        }, { observedRevision: observed.revision, observedGeneration: observed.generation });
+        return Boolean(receipt && receipt.saved === true);
     }
 
     function createRequestId() {
@@ -7417,19 +8100,19 @@
         return `vocab-highlight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
 
-    function settleSaveRequest(requestId, succeeded) {
+    function settleSaveRequest(requestId, succeeded, errorCode = '') {
         const id = String(requestId || '').trim();
         const pending = pendingSaveRequests.get(id);
         if (!id || !pending) return false;
         pendingSaveRequests.delete(id);
         clearTimeout(pending.timer);
-        pending.resolve(Boolean(succeeded));
+        pending.resolve({ saved: Boolean(succeeded), errorCode: String(errorCode || '') });
         return true;
     }
 
     function handleSaveOutcome(payload, succeeded) {
         const requestId = payload && payload.requestId != null ? String(payload.requestId).trim() : '';
-        return settleSaveRequest(requestId, succeeded);
+        return settleSaveRequest(requestId, succeeded, payload && payload.errorCode);
     }
 
     function postVocabPayload(payload) {
@@ -7439,7 +8122,7 @@
         const outcome = new Promise((resolve) => {
             const timer = setTimeout(() => {
                 pendingSaveRequests.delete(requestId);
-                resolve(false);
+                resolve({ saved: false, errorCode: 'timeout' });
             }, 5000);
             pendingSaveRequests.set(requestId, { resolve, timer });
         });
@@ -7461,13 +8144,26 @@
         if (!payload.word) {
             return;
         }
+        if (button instanceof HTMLButtonElement) {
+            button.textContent = '保存中…';
+            button.disabled = true;
+        }
         const hostOutcome = postVocabPayload(payload);
-        let persisted = hostOutcome ? await hostOutcome : false;
-        if (!persisted) {
-            try { persisted = await writeAppDataVocab(payload); } catch (_) { persisted = false; }
+        const hostResult = hostOutcome ? await hostOutcome : null;
+        let persisted = Boolean(hostResult && hostResult.saved);
+        let errorCode = hostResult && hostResult.errorCode || '';
+        if (!hostOutcome) {
+            try { persisted = await writeAppDataVocab(payload); } catch (error) {
+                persisted = false;
+                errorCode = error && error.code || '';
+            }
         }
         if (button instanceof HTMLButtonElement) {
-            button.textContent = persisted ? '已加入' : '保存失败';
+            const unavailable = errorCode === 'BACKEND_UNAVAILABLE';
+            button.textContent = persisted ? '已加入' : unavailable
+                ? (hostOutcome ? '请刷新主页并重开阅读页后重试' : '请刷新页面后重试')
+                : '保存失败';
+            button.title = !persisted && unavailable ? button.textContent : '';
             button.disabled = persisted;
         }
     }
@@ -7628,8 +8324,7 @@
 (function initReadingVocabReader(global) {
     'use strict';
 
-    const STORAGE_KEY = 'ielts_reading_vocab_words_v1';
-    const BOOKSHELF_STORAGE_KEY = 'ielts_reading_bookshelf_exams_v1';
+    const DEFAULT_SOURCE = { kind: 'builtin', id: 'default' };
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -7640,174 +8335,134 @@
             .replace(/'/g, '&#39;');
     }
 
-    function recordBookshelfExamDirect(examId, examTitle = '', category = '') {
+    async function recordBookshelfExamDirect(examId, examTitle = '', category = '', source = DEFAULT_SOURCE) {
         if (!examId) return;
-        try {
-            if (global.ReadingBookshelfStore && typeof global.ReadingBookshelfStore.recordExamUsed === 'function') {
-                global.ReadingBookshelfStore.recordExamUsed(examId, examTitle, category);
-                return;
-            }
-            const raw = localStorage.getItem(BOOKSHELF_STORAGE_KEY);
-            const records = raw ? JSON.parse(raw) : [];
-            const idx = records.findIndex(r => String(r.examId) === String(examId));
-            const now = Date.now();
-            if (idx !== -1) {
-                records[idx].lastOpenedAt = now;
-                if (examTitle && !records[idx].examTitle) records[idx].examTitle = examTitle;
-                if (category && !records[idx].category) records[idx].category = category;
-            } else {
-                records.unshift({
-                    examId: String(examId),
-                    examTitle: examTitle || '',
-                    category: category || '',
-                    firstUsedAt: now,
-                    lastOpenedAt: now
-                });
-            }
-            localStorage.setItem(BOOKSHELF_STORAGE_KEY, JSON.stringify(records));
-            if (global.ReadingBookshelfStore && typeof global.ReadingBookshelfStore.syncToAppData === 'function') {
-                global.ReadingBookshelfStore.syncToAppData(records);
-            } else if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.saveReadingBookshelfExams === 'function') {
-                global.AppData.vocab.saveReadingBookshelfExams(records).catch(() => {});
-            }
-        } catch (e) {
-            console.warn('[ReadingVocabReader] recordBookshelfExamDirect error:', e);
-        }
+        return ReadingVocabStore.mutate('recordVisit', {
+            source, article: { examId: String(examId), title: examTitle },
+            at: new Date().toISOString()
+        });
     }
 
-    // ============================================================================
-    // 生词本数据管理 (Store)
-    // ============================================================================
+    // This cache is a view of acknowledged AppData state, never a storage authority.
     const ReadingVocabStore = {
-        _cache: null,
+        _state: null,
         _commitBound: false,
+        _loadSequence: 0,
 
-        getAll() {
-            if (this._cache) {
-                return this._cache;
+        async resolveSource(options = {}) {
+            if (options.source) return { ...options.source };
+            const id = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? options.libraryConfigurationId
+                : await global.AppData.library.getActive();
+            return id == null || id === '' ? { ...DEFAULT_SOURCE } : { kind: 'imported', id: String(id) };
+        },
+
+        getAll() { return this.project(); },
+
+        project(articleId = null) {
+            if (!this._state) return [];
+            const snapshot = this._state.snapshot;
+            const model = global.AppData.vocab.readingModel;
+            return model.query(snapshot, articleId ? { articleId } : {}).terms.map(entry => {
+                const associations = entry.associations;
+                const article = snapshot.reading.articles.find(row => row.id === associations[0]?.articleId);
+                return {
+                    ...entry.word, id: entry.term.id, word: entry.word.word,
+                    examId: article?.examId || '', examTitle: article?.title || '',
+                    context: entry.word.example || entry.word.context || '',
+                    associations, occurrences: entry.occurrences,
+                    highlights: entry.occurrences.map(occurrence => {
+                        const relation = associations.find(row => row.id === occurrence.associationId);
+                        const owner = snapshot.reading.articles.find(row => row.id === relation?.articleId);
+                        return { ...occurrence, examId: owner?.examId, scope: occurrence.scopeId, text: occurrence.quote };
+                    })
+                };
+            });
+        },
+
+        getByExam(examId, source = DEFAULT_SOURCE) {
+            if (!examId || !this._state) return [];
+            return this.project(global.AppData.vocab.readingModel.articleId(source, String(examId)));
+        },
+
+        adopt(state) {
+            if (this._state?.generation === state.generation && this._state.revision > state.revision) return;
+            this._state = state;
+            if (typeof global.dispatchEvent === 'function') {
+                global.dispatchEvent(new CustomEvent('reading-vocab-store-updated'));
             }
+        },
+
+        async reload() {
+            const sequence = ++this._loadSequence;
+            await global.AppData.ready;
+            const state = await global.AppData.vocab.getReadingSnapshot();
+            if (sequence === this._loadSequence) this.adopt(state);
+            return state;
+        },
+
+        async mutate(type, command) {
+            if (!this._state) await this.init();
+            const observed = this._state;
+            let result;
             try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed)) {
-                        this._cache = parsed;
-                        return this._cache;
-                    }
-                }
-            } catch (err) {
-                console.warn('[ReadingVocabStore] 读取失败:', err);
+                result = await global.AppData.vocab.mutateReading(type, command, {
+                    observedRevision: observed.revision, observedGeneration: observed.generation
+                });
+            } catch (error) {
+                // The next explicit retry must use the new deletion/replace fence.
+                await this.reload().catch(() => {});
+                throw error;
             }
-            this._cache = [];
-            return this._cache;
+            if (!result || result.saved !== true) throw new Error('Reading save was not acknowledged');
+            ++this._loadSequence;
+            this.adopt(result);
+            return result;
         },
 
-        _save() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(this._cache || []));
-            } catch (err) {
-                console.warn('[ReadingVocabStore] 保存失败:', err);
-            }
-            this.syncToAppData();
-        },
+        // Compatibility flush methods only read authoritative state.
+        async syncToAppData() { return this.reload(); },
+        async flushToAppData() { return this.reload(); },
 
-        async syncToAppData() {
-            try {
-                if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.saveReadingWords === 'function') {
-                    await global.AppData.vocab.saveReadingWords(this._cache || []);
-                }
-            } catch (err) {
-                console.warn('[ReadingVocabStore] syncToAppData failed:', err);
-            }
-        },
-
-        async flushToAppData() {
-            return this.syncToAppData();
-        },
-
-        getByExam(examId) {
-            if (!examId) return [];
-            const all = this.getAll();
-            return all.filter(item => String(item.examId) === String(examId));
-        },
-
-        add(rawWord, examId, examTitle, context = '', highlight = null) {
+        async add(rawWord, examId, examTitle, context = '', highlight = null, source = DEFAULT_SOURCE) {
             const word = this.cleanWord(rawWord);
-            if (!word || word.length > 50) {
-                return { added: false, reason: 'invalid_word' };
-            }
-
-            const all = this.getAll();
-            const lowerWord = word.toLowerCase();
-
-            // 检查当前文章或全局是否存在
-            const existingIndex = all.findIndex(item => item.word.toLowerCase() === lowerWord);
-            if (existingIndex !== -1) {
-                const item = all[existingIndex];
-                item.updatedAt = Date.now();
-                if (examId && !item.examId) {
-                    item.examId = examId;
-                    item.examTitle = examTitle || '';
-                }
-                if (highlight) {
-                    if (!Array.isArray(item.highlights)) {
-                        item.highlights = [];
-                    }
-                    const isDup = item.highlights.some(h =>
-                        String(h.examId) === String(highlight.examId) &&
-                        String(h.scope) === String(highlight.scope) &&
-                        h.startOffset === highlight.startOffset
-                    );
-                    if (!isDup) {
-                        item.highlights.push(highlight);
-                    }
-                }
-                this._save();
-                return { added: true, item: item, isDuplicate: true };
-            }
-
-            const newItem = {
-                id: 'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-                word: word,
-                examId: examId || '',
-                examTitle: examTitle || '',
-                context: context ? String(context).trim().slice(0, 150) : '',
-                createdAt: Date.now(),
-                highlights: highlight ? [highlight] : []
-            };
-
-            all.unshift(newItem);
-            this._save();
-
-            if (examId) {
-                recordBookshelfExamDirect(examId, examTitle);
-            }
-
-            return { added: true, item: newItem, isDuplicate: false };
+            if (!word || word.length > 50) return { added: false, reason: 'invalid_word' };
+            if (!this._state) await this.init();
+            const duplicate = this.getByExam(examId, source).some(item => item.word.toLowerCase() === word.toLowerCase());
+            const occurrence = highlight ? {
+                scopeId: highlight.scopeId || highlight.scope,
+                contentVersion: highlight.contentVersion || 'legacy-reader-v1',
+                startOffset: highlight.startOffset, endOffset: highlight.endOffset,
+                quote: highlight.text || word, before: highlight.before || '', after: highlight.after || ''
+            } : undefined;
+            const result = await this.mutate('collect', {
+                source, article: { examId: String(examId), title: examTitle || '' },
+                word: { word, meaning: '待补充释义', example: String(context || '').trim().slice(0, 150) },
+                ...(occurrence ? { occurrence } : { manual: true }),
+                at: new Date().toISOString()
+            });
+            return { ...result, added: result.added !== false, isDuplicate: duplicate,
+                item: this.getByExam(examId, source).find(item => item.word.toLowerCase() === word.toLowerCase()) };
         },
 
-        remove(wordOrId) {
-            const all = this.getAll();
+        async remove(wordOrId, examId = null, source = DEFAULT_SOURCE) {
+            if (!this._state) await this.init();
             const target = String(wordOrId).trim().toLowerCase();
-            const index = all.findIndex(item => item.id === wordOrId || item.word.toLowerCase() === target);
-            if (index !== -1) {
-                all.splice(index, 1);
-                this._save();
-                return true;
-            }
-            return false;
-        },
-
-        clear(examId = null) {
-            if (!examId) {
-                this._cache = [];
-                this._save();
-                return true;
-            }
-            this._cache = this.getAll().filter(item => String(item.examId) !== String(examId));
-            this._save();
+            const item = this.getAll().find(row => row.id === wordOrId || row.word.toLowerCase() === target);
+            if (!item) return false;
+            await this.mutate(examId ? 'removeArticleTerm' : 'removeTermAssociations', {
+                termId: item.id,
+                ...(examId ? { articleId: global.AppData.vocab.readingModel.articleId(source, String(examId)) } : {})
+            });
             return true;
         },
+
+        async clear(examId = null, source = DEFAULT_SOURCE) {
+            await this.mutate(examId ? 'clearArticle' : 'clearReading', examId
+                ? { articleId: global.AppData.vocab.readingModel.articleId(source, String(examId)) } : {});
+            return true;
+        },
+
 
         cleanWord(str) {
             if (!str) return '';
@@ -7816,8 +8471,8 @@
                 .trim();
         },
 
-        exportTxt(examId = null, customFilename = null, fallbackTitle = '') {
-            const list = examId ? this.getByExam(examId) : this.getAll();
+        exportTxt(examId = null, customFilename = null, fallbackTitle = '', source = DEFAULT_SOURCE) {
+            const list = examId ? this.getByExam(examId, source) : this.getAll();
             if (!list || list.length === 0) {
                 return false;
             }
@@ -7866,49 +8521,21 @@
 
         async init() {
             this.bindCommitListener();
-            try {
-                if (global.AppData && global.AppData.ready) {
-                    await global.AppData.ready;
-                }
-                if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.listReadingWords === 'function') {
-                    const result = await global.AppData.vocab.listReadingWords({ withMeta: true });
-                    const appDataWords = Array.isArray(result)
-                        ? result
-                        : (result && result.envelope ? result.data : null);
-                    if (Array.isArray(appDataWords)) {
-                        // An existing AppData document owns restores, including empty lists.
-                        // An absent document may mean migration failed; preserve the local copy.
-                        this._cache = appDataWords;
-                        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appDataWords)); } catch (_) {}
-                    }
-                }
-            } catch (e) {
-                console.warn('[ReadingVocabStore] init failed:', e);
-            }
+            return this.reload();
         },
 
         bindCommitListener() {
-            if (this._commitBound) return;
-            if (global.AppData && global.AppData.backups && typeof global.AppData.backups.onDataCommitted === 'function') {
-                this._commitBound = true;
-                global.AppData.backups.onDataCommitted(async (event) => {
-                    const targets = event && event.targets;
-                    if (!Array.isArray(targets)) return;
-                    const hasVocab = targets.some(t => t.logicalKey === 'vocab.readingVocabWords');
-                    if (hasVocab) {
-                        try {
-                            const updated = await global.AppData.vocab.listReadingWords();
-                            if (Array.isArray(updated)) {
-                                this._cache = updated;
-                                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                                window.dispatchEvent(new CustomEvent('reading-vocab-store-updated', { detail: { words: updated } }));
-                            }
-                        } catch (err) {
-                            console.warn('[ReadingVocabStore] reload on committed failed:', err);
-                        }
+            if (this._commitBound || !global.AppData?.backups?.onDataCommitted) return;
+            this._commitBound = true;
+            global.AppData.backups.onDataCommitted(event => {
+                if (!event?.targets?.some(target => target.logicalKey?.startsWith('vocab.'))) return;
+                this.reload().catch(error => {
+                    console.warn('[ReadingVocabStore] Unable to refresh committed data:', error);
+                    if (global.ReadingVocabReader?.currentExamId) {
+                        global.ReadingVocabReader.showToast('数据刷新失败，请重新打开生词本重试');
                     }
                 });
-            }
+            });
         }
     };
 
@@ -8411,6 +9038,7 @@
     // ============================================================================
     const ReadingVocabReader = {
         currentExamId: null,
+        currentSource: DEFAULT_SOURCE,
         currentExam: null,
         currentPayload: null,
         currentExplanation: null,
@@ -8690,7 +9318,7 @@
 
             const vocabList = overlay.querySelector('#vocab-list');
             if (vocabList) {
-                on(vocabList, 'click', event => {
+                on(vocabList, 'click', async event => {
                     const speakButton = event.target.closest('.vocab-speak-btn');
                     const deleteButton = event.target.closest('.vocab-delete-btn');
                     if (speakButton && vocabList.contains(speakButton)) {
@@ -8698,14 +9326,25 @@
                         speakWord(speakButton.dataset.speakWord);
                     } else if (deleteButton && vocabList.contains(deleteButton)) {
                         event.stopPropagation();
+                        if (deleteButton.disabled) return;
+                        const requestId = this._openRequestId;
                         const id = deleteButton.dataset.delId;
                         const item = ReadingVocabStore.getAll().find(word => word.id === id);
                         const word = item?.word;
-                        ReadingVocabStore.remove(id);
-                        this.updateCounts();
-                        this.renderVocabList();
-                        if (word) this.removeVocabHighlightForWord(word);
-                        this.showToast('已从生词本删除');
+                        deleteButton.disabled = true;
+                        this.showToast('正在保存…');
+                        try {
+                            await ReadingVocabStore.remove(id, this.modalTab === 'current' ? this.currentExamId : null, this.currentSource);
+                            if (requestId !== this._openRequestId) return;
+                            this.updateCounts();
+                            this.renderVocabList();
+                            if (word) this.removeVocabHighlightForWord(word);
+                            this.showToast('已从生词本删除');
+                        } catch (error) {
+                            if (requestId === this._openRequestId) this.showSaveError(error, '删除失败，请再次点击删除重试');
+                        } finally {
+                            deleteButton.disabled = false;
+                        }
                     }
                 });
             }
@@ -8713,22 +9352,33 @@
             // 手动收录
             const manualInput = overlay.querySelector('#vocab-manual-input');
             const manualAddBtn = overlay.querySelector('#vocab-manual-add-btn');
-            const handleManualAdd = () => {
-                if (!manualInput) return;
+            const handleManualAdd = async () => {
+                if (!manualInput || manualAddBtn?.disabled || !this.currentPayload) return;
                 const val = manualInput.value.trim();
                 if (!val) return;
-                const result = ReadingVocabStore.add(
-                    val,
-                    this.currentExamId,
-                    this.currentExam?.title || '',
-                    ''
-                );
-                if (result.added) {
-                    manualInput.value = '';
-                    this.updateCounts();
-                    this.renderVocabList();
-                    this.applyVocabHighlights(val);
-                    this.showToast(result.isDuplicate ? `"${val}" 已在生词本中` : `✅ "${val}" 已收录并黄色高亮`);
+                const requestId = this._openRequestId;
+                if (manualAddBtn) manualAddBtn.disabled = true;
+                this.showToast('正在保存…');
+                try {
+                    const result = await ReadingVocabStore.add(
+                        val,
+                        this.currentExamId,
+                        this.currentExam?.title || '',
+                        '', null, this.currentSource
+                    );
+                    if (requestId !== this._openRequestId) return;
+                    if (result.added) {
+                        manualInput.value = '';
+                        this.updateCounts();
+                        this.renderVocabList();
+                        this.showToast(result.isDuplicate ? `"${val}" 已在生词本中` : `✅ "${val}" 已收录`);
+                    } else {
+                        this.showToast('未保存，请检查输入后重试');
+                    }
+                } catch (error) {
+                    if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请再次点击收录重试');
+                } finally {
+                    if (manualAddBtn) manualAddBtn.disabled = false;
                 }
             };
             if (manualAddBtn) {
@@ -8761,7 +9411,7 @@
                     const safeArticleName = String(rawArticleName).replace(/[\\/:*?"<>|]/g, '_').trim();
                     const filename = `${dateStr}_${safeArticleName}.txt`;
 
-                    const success = ReadingVocabStore.exportTxt(examId, filename, safeArticleName);
+                    const success = ReadingVocabStore.exportTxt(examId, filename, safeArticleName, this.currentSource);
                     if (success) {
                         this.showToast(`✅ 已导出：${filename}`);
                     } else {
@@ -8772,11 +9422,13 @@
 
             const clearBtn = overlay.querySelector('#vocab-clear-btn');
             if (clearBtn) {
-                on(clearBtn, 'click', () => {
+                on(clearBtn, 'click', async () => {
+                    if (clearBtn.disabled) return;
+                    const requestId = this._openRequestId;
                     const isCurrent = this.modalTab === 'current';
                     const examId = isCurrent ? this.currentExamId : null;
                     const count = isCurrent
-                        ? ReadingVocabStore.getByExam(this.currentExamId).length
+                        ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource).length
                         : ReadingVocabStore.getAll().length;
 
                     if (count === 0) {
@@ -8784,14 +9436,23 @@
                         return;
                     }
 
-                    ReadingVocabStore.clear(examId);
-                    this.updateCounts();
-                    this.renderVocabList();
-                    const passageContent = overlay.querySelector('#vocab-passage-content');
-                    const questionsContent = overlay.querySelector('#vocab-questions-content');
-                    this.removeVocabHighlights(passageContent);
-                    this.removeVocabHighlights(questionsContent);
-                    this.showToast(isCurrent ? '✅ 本篇生词已清空' : '✅ 全部生词已清空');
+                    clearBtn.disabled = true;
+                    this.showToast('正在保存…');
+                    try {
+                        await ReadingVocabStore.clear(examId, this.currentSource);
+                        if (requestId !== this._openRequestId) return;
+                        this.updateCounts();
+                        this.renderVocabList();
+                        const passageContent = overlay.querySelector('#vocab-passage-content');
+                        const questionsContent = overlay.querySelector('#vocab-questions-content');
+                        this.removeVocabHighlights(passageContent);
+                        this.removeVocabHighlights(questionsContent);
+                        this.showToast(isCurrent ? '✅ 本篇生词已清空' : '✅ 全部生词已清空');
+                    } catch (error) {
+                        if (requestId === this._openRequestId) this.showSaveError(error, '清空失败，请再次点击清空重试');
+                    } finally {
+                        clearBtn.disabled = false;
+                    }
                 });
             }
 
@@ -8800,8 +9461,8 @@
             if (readerBody) {
                 const handleSelectionCapture = () => {
                     const requestId = this._openRequestId;
-                    this.defer(() => {
-                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden')) return;
+                    this.defer(async () => {
+                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden') || !this.currentPayload) return;
                         const selection = window.getSelection();
                         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
                         const rawText = selection.toString();
@@ -8893,21 +9554,35 @@
                             text: cleanWord
                         };
 
-                        const result = ReadingVocabStore.add(
-                            cleanWord,
-                            this.currentExamId,
-                            this.currentExam?.title || '',
-                            contextSentence,
-                            highlightRecord
-                        );
+                        this.showToast('正在保存…');
+                        try {
+                            const result = await ReadingVocabStore.add(
+                                cleanWord,
+                                this.currentExamId,
+                                this.currentExam?.title || '',
+                                contextSentence,
+                                highlightRecord, this.currentSource
+                            );
 
-                        if (result.added) {
-                            selection.removeAllRanges(); // 取消选中状态，避免残留蓝色选区
-                            this.updateCounts();
-                            if (this.modalOpen) {
-                                this.renderVocabList();
+                            if (requestId !== this._openRequestId) return;
+                            if (result.added) {
+                                selection.removeAllRanges(); // 取消选中状态，避免残留蓝色选区
+                                this.updateCounts();
+                                if (this.modalOpen) {
+                                    this.renderVocabList();
+                                }
+                                this.showToast(`✅ "${cleanWord}" 已收录并黄色高亮`);
+                            } else {
+                                throw new Error('Selection was not saved');
                             }
-                            this.showToast(`✅ "${cleanWord}" 已收录并黄色高亮`);
+                        } catch (error) {
+                            if (wrappedMark.parentNode) {
+                                const parent = wrappedMark.parentNode;
+                                while (wrappedMark.firstChild) parent.insertBefore(wrappedMark.firstChild, wrappedMark);
+                                wrappedMark.remove();
+                                parent.normalize();
+                            }
+                            if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请重新划选重试');
                         }
                     }, 20);
                 };
@@ -9001,12 +9676,20 @@
 
             try {
                 // 加载试卷数据
-                const payload = await loadReadingExamPayload(examId);
+                const [payload, source] = await Promise.all([
+                    loadReadingExamPayload(examId), ReadingVocabStore.resolveSource(options)
+                ]);
                 if (requestId !== this._openRequestId) return;
                 if (!payload) {
                     throw new Error('未找到该试卷的数据文件');
                 }
+                // The current payload registry contains only built-in generated
+                // content. Never attach that content to a different library.
+                if (source.kind !== 'builtin' || source.id !== 'default') {
+                    throw new Error('此来源的全文暂不可用，可在书架中查看或导出生词');
+                }
                 this.currentPayload = payload;
+                this.currentSource = source;
 
                 // 异步加载解析（不阻塞主内容）
                 loadReadingExplanationPayload(examId).then(exp => {
@@ -9023,11 +9706,20 @@
                 // 记录至阅读书架
                 const examTitle = this.currentExam.title || this.currentExam.name || examId;
                 const examCategory = this.currentExam.category || this.currentExam.type || '雅思阅读';
-                recordBookshelfExamDirect(examId, examTitle, examCategory);
+                let saveError = null;
+                try {
+                    await ReadingVocabStore.init();
+                    if (requestId !== this._openRequestId) return;
+                    await recordBookshelfExamDirect(examId, examTitle, examCategory, source);
+                } catch (error) {
+                    saveError = error;
+                }
+                if (requestId !== this._openRequestId) return;
 
                 // 渲染界面
                 this.renderContent();
                 this.updateCounts();
+                if (saveError) this.showSaveError(saveError, '书架记录保存失败，请重新打开文章重试');
             } catch (err) {
                 if (requestId !== this._openRequestId) return;
                 console.error('[ReadingVocabReader] 加载失败:', err);
@@ -9290,7 +9982,7 @@
             if (!this.currentExamId) return;
 
             // 2. 仅获取针对当前篇目已收录的生词（绝不跨篇串显，也绝不全篇正则批量盲高亮）
-            const examItems = ReadingVocabStore.getByExam(this.currentExamId);
+            const examItems = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource);
             if (!examItems || examItems.length === 0) return;
 
             examItems.forEach(item => {
@@ -9300,9 +9992,6 @@
                             this.restoreVocabHighlight(overlay, hl, item.word);
                         }
                     });
-                } else if (item.context && item.word) {
-                    // 兼容旧存量数据：基于 context 句子仅高亮单处实例，绝不全篇乱高亮
-                    this.restoreLegacyHighlightByContext(overlay, item.word, item.context);
                 }
             });
         },
@@ -9584,7 +10273,7 @@
         updateCounts() {
             const overlay = this.ensureOverlay();
             const examId = this.currentExamId;
-            const currentList = ReadingVocabStore.getByExam(examId);
+            const currentList = ReadingVocabStore.getByExam(examId, this.currentSource);
             const allList = ReadingVocabStore.getAll();
 
             const headerCount = overlay.querySelector('#vocab-header-count');
@@ -9606,7 +10295,7 @@
 
             const isCurrent = this.modalTab === 'current';
             const list = isCurrent
-                ? ReadingVocabStore.getByExam(this.currentExamId)
+                ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
                 : ReadingVocabStore.getAll();
 
             if (!list || list.length === 0) {
@@ -9638,6 +10327,7 @@
             });
 
             listEl.innerHTML = html;
+
         },
 
         openModal() {
@@ -9668,6 +10358,11 @@
                 this._modalReturnFocus.focus({ preventScroll: true });
             }
             this._modalReturnFocus = null;
+        },
+
+        showSaveError(error, retryMessage) {
+            this.showToast(error?.code === 'BACKEND_UNAVAILABLE'
+                ? '存储暂不可用，请刷新页面后重试' : retryMessage);
         },
 
         showToast(msg) {
@@ -9704,8 +10399,8 @@
     // 监听生词更新事件以即时刷新打开的视图
     if (typeof window !== 'undefined') {
         window.addEventListener('reading-vocab-store-updated', () => {
-            if (ReadingVocabReader.modalOpen) {
-                ReadingVocabReader.renderVocabList();
+            if (ReadingVocabReader.currentExamId) {
+                if (ReadingVocabReader.modalOpen) ReadingVocabReader.renderVocabList();
                 ReadingVocabReader.updateCounts();
                 ReadingVocabReader.applyVocabHighlights();
             }
@@ -9720,7 +10415,7 @@
     };
 
     // 启动数据同步初始化
-    ReadingVocabStore.init();
+    ReadingVocabStore.init().catch(error => console.warn('[ReadingVocabStore] Initialization failed:', error));
 
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -9807,6 +10502,7 @@
 
     const state = {
         examId: null,
+        libraryConfigurationId: undefined,
         dataKey: null,
         sessionId: null,
         suiteSessionId: null,
@@ -10796,6 +11492,7 @@
     function getReviewDictionaryContext() {
         return {
             examId: state.examId,
+            libraryConfigurationId: state.libraryConfigurationId,
             dataKey: state.dataKey,
             title: state.dataset?.meta?.title || '',
             category: state.dataset?.meta?.category || '',
@@ -11998,9 +12695,9 @@
         ensureVocabReaderStyles();
 
         if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
-            global.ReadingVocabReader.open(examId, { fromPractice: true });
+            global.ReadingVocabReader.open(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
         } else if (typeof global.openReadingVocabReader === 'function') {
-            global.openReadingVocabReader(examId, { fromPractice: true });
+            global.openReadingVocabReader(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
         } else {
             console.warn('[UnifiedReadingPage] ReadingVocabReader 模块未加载');
         }
@@ -17882,6 +18579,9 @@
             }
             if (data.sessionId) {
                 state.sessionId = data.sessionId;
+            }
+            if (Object.prototype.hasOwnProperty.call(data, 'libraryConfigurationId')) {
+                state.libraryConfigurationId = data.libraryConfigurationId;
             }
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;

@@ -3,176 +3,245 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-test('Bookshelf delete button and vocab isolation test', async () => {
-    const bookshelfPath = new URL('../../../js/components/bookshelfView.js', import.meta.url);
-    const bookshelfCode = fs.readFileSync(bookshelfPath, 'utf8');
+const bookshelfCode = fs.readFileSync(new URL('../../../js/components/bookshelfView.js', import.meta.url), 'utf8');
+const modelCode = fs.readFileSync(new URL('../../../js/data/v2/readingVocabularyModel.js', import.meta.url), 'utf8');
+const sourceA = { kind: 'builtin', id: 'default' };
+const sourceB = { kind: 'imported', id: 'library-b' };
+const at = '2026-09-08T00:00:00.000Z';
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+};
 
-    // 1. 静态断言：确认已移除脆弱的 window.confirm，使用安全的 openConfirmDialog
-    assert.ok(!bookshelfCode.includes('if (confirm('), '应当不再依赖沙箱 iframe 中易被拦截的 window.confirm');
-    assert.ok(bookshelfCode.includes('openConfirmDialog'), '应当具有 openConfirmDialog 自定义模态确认');
-    assert.ok(bookshelfCode.includes('bookshelf-confirm-dialog'), '应当包含 bookshelf-confirm-dialog 确认对话框');
-
-    // 2. 模拟运行环境测试 ReadingBookshelfStore.removeExam
-    const mockStorage = new Map();
-    const localStorageShim = {
-        getItem: (k) => mockStorage.get(k) || null,
-        setItem: (k, v) => mockStorage.set(k, String(v)),
-        removeItem: (k) => mockStorage.delete(k)
-    };
-
-    let readingVocabStoreClearedExamId = null;
-    const mockReadingVocabStore = {
-        clear: (eid) => {
-            readingVocabStoreClearedExamId = eid;
-        }
-    };
-
-    let appDataSavedWords = null;
-    const mockAppData = {
-        vocab: {
-            saveReadingWords: async (words) => {
-                appDataSavedWords = words;
-            }
-        },
-        // 练习做题记录（严格隔离，绝不允许被删除）
-        practice: {
-            records: [
-                { id: 'rec_1', examId: 'cambridge-18-test-1-p1', score: 11, total: 13, timeSpent: 1200 },
-                { id: 'rec_2', examId: 'cambridge-18-test-1-p2', score: 9, total: 13, timeSpent: 1100 }
-            ]
-        }
-    };
-
+function fixture() {
+    const events = [];
+    const commitListeners = [];
     const sandbox = {
-        console,
-        localStorage: localStorageShim,
-        CustomEvent: class { constructor(type, detail) { this.type = type; this.detail = detail; } },
-        setTimeout,
-        clearTimeout,
-        Date,
-        JSON,
-        Set,
-        Map,
-        Array,
-        String,
-        Math,
-        ReadingVocabStore: mockReadingVocabStore,
-        AppData: mockAppData
+        console: { warn() {} }, setTimeout, clearTimeout,
+        localStorage: {
+            getItem() { throw new Error('A display consumer must not read legacy storage'); },
+            setItem() { throw new Error('A display consumer must not write legacy storage'); }
+        },
+        CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
+        addEventListener() {}, dispatchEvent(event) { events.push(event); },
+        document: { querySelector() { return null; }, getElementById() { return null; } }
     };
     sandbox.window = sandbox;
-    sandbox.global = sandbox;
-    sandbox.document = {
-        getElementById: () => null,
-        createElement: () => ({ setAttribute: () => {}, querySelector: () => null }),
-        querySelector: () => null,
-        body: { appendChild: () => {} }
-    };
-    sandbox.addEventListener = () => {};
-    sandbox.dispatchEvent = () => {};
-
     vm.createContext(sandbox);
+    vm.runInContext(modelCode, sandbox);
+    const model = sandbox.ReadingVocabularyModel;
+    let snapshot = model.createSnapshot();
+    for (const [source, word] of [[sourceA, 'apple'], [sourceB, 'banana']]) {
+        const command = { source, article: { examId: 'same-exam', title: source.id }, word: { word, meaning: word }, at };
+        snapshot = model.recordVisit(model.collect(snapshot, command), command);
+    }
+    let canonical = { snapshot, revision: 1, generation: 'original' };
+    let failure = null;
+    let gate = null;
+    const calls = [];
+    const practice = [{ id: 'practice-1', examId: 'same-exam', score: 11 }];
+    sandbox.AppData = {
+        ready: Promise.resolve(),
+        backups: { onDataCommitted(listener) { commitListeners.push(listener); } },
+        library: { async getActive() { return null; } },
+        practice: { records: practice },
+        vocab: {
+            readingModel: model,
+            async getReadingSnapshot() {
+                if (failure) throw failure;
+                return clone(canonical);
+            },
+            async mutateReading(type, command, options) {
+                calls.push({ type, command: clone(command), options: clone(options) });
+                if (gate) await gate.promise;
+                if (failure) throw failure;
+                let next = clone(canonical.snapshot);
+                if (type === 'removeArticle') {
+                    if (command.clearWords) next = model.clearArticle(next, command);
+                    next.reading.visits = next.reading.visits.filter((row) => row.articleId !== command.articleId);
+                } else if (type === 'recordVisit') {
+                    next = model.recordVisit(next, { ...command, at });
+                } else throw new Error('Unexpected operation');
+                canonical = { ...canonical, snapshot: next, revision: canonical.revision + 1 };
+                return { ...clone(canonical), saved: true };
+            }
+        }
+    };
     vm.runInContext(bookshelfCode, sandbox);
+    return {
+        sandbox, model, events, calls, practice,
+        store: sandbox.ReadingBookshelfStore,
+        get canonical() { return canonical; },
+        setCanonical(value) { canonical = value; },
+        setFailure(value) { failure = value; },
+        setGate(value) { gate = value; },
+        async commit() {
+            commitListeners.forEach((listener) => listener({ targets: [{ logicalKey: 'vocab.readingState' }] }));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+    };
+}
 
-    const store = sandbox.ReadingBookshelfStore;
-    assert.ok(store, 'ReadingBookshelfStore 必须正常导出到全局');
-
-    // 初始化测试数据：
-    // - 篇目 1: cambridge-18-test-1-p1 (有书架记录 + 2个生词)
-    // - 篇目 2: cambridge-18-test-1-p2 (有书架记录 + 1个生词)
-    const initialBookshelf = [
-        { examId: 'cambridge-18-test-1-p1', examTitle: 'Reading Passage 1', firstUsedAt: 1000, lastOpenedAt: 2000 },
-        { examId: 'cambridge-18-test-1-p2', examTitle: 'Reading Passage 2', firstUsedAt: 1000, lastOpenedAt: 3000 }
-    ];
-    const initialVocab = [
-        { id: 'w1', examId: 'cambridge-18-test-1-p1', word: 'urbanisation', createdAt: 2000 },
-        { id: 'w2', examId: 'cambridge-18-test-1-p1', word: 'infrastructure', createdAt: 2100 },
-        { id: 'w3', examId: 'cambridge-18-test-1-p2', word: 'biodiversity', createdAt: 3000 }
-    ];
-
-    mockStorage.set('ielts_reading_bookshelf_exams_v1', JSON.stringify(initialBookshelf));
-    mockStorage.set('ielts_reading_vocab_words_v1', JSON.stringify(initialVocab));
-
-    // 检查删除前书架列表
-    const beforeExams = store.getBookshelfExams();
-    assert.equal(beforeExams.length, 2, '初始书架应当包含2篇');
-    const p1Before = beforeExams.find(e => e.examId === 'cambridge-18-test-1-p1');
-    assert.ok(p1Before);
-    assert.equal(p1Before.wordCount, 2);
-
-    // 记录做题练习数据基线（必须严格保持一致）
-    const initialPracticeSnapshot = JSON.stringify(mockAppData.practice.records);
-
-    // 执行从书架移除 cambridge-18-test-1-p1
-    const res = store.removeExam('cambridge-18-test-1-p1', true);
-    assert.ok(res, 'removeExam 执行应当成功');
-
-    // 检查删除后的书架列表
-    const afterExams = store.getBookshelfExams();
-    assert.equal(afterExams.length, 1, '删除后书架应仅剩 1 篇');
-    assert.equal(afterExams[0].examId, 'cambridge-18-test-1-p2', '剩余篇目应为 p2');
-
-    // 检查生词本数据：p1 的词汇已被清除，p2 的词汇完整保留
-    const currentVocabRaw = mockStorage.get('ielts_reading_vocab_words_v1');
-    const currentVocab = JSON.parse(currentVocabRaw || '[]');
-    assert.equal(currentVocab.length, 1, '生词本中只保留非删除篇目的词');
-    assert.equal(currentVocab[0].word, 'biodiversity');
-
-    // 检查 ReadingVocabStore.clear 调用
-    assert.equal(readingVocabStoreClearedExamId, 'cambridge-18-test-1-p1');
-
-    // 核心断言：做题练习记录严格隔离，分毫未动！
-    const finalPracticeSnapshot = JSON.stringify(mockAppData.practice.records);
-    assert.equal(
-        finalPracticeSnapshot,
-        initialPracticeSnapshot,
-        '做题练习记录与答题历史必须完好无损，严格与生词本/书架删除隔离'
-    );
-
-    console.log('✅ 书架删除生词本记录且严格隔离做题练习记录测试全部通过！');
+test('Bookshelf removal waits for one source-scoped durable operation and preserves practice records', async () => {
+    const f = fixture();
+    await f.store.init();
+    const beforePractice = clone(f.practice);
+    const before = clone(f.store.getBookshelfExams());
+    assert.equal(before.length, 2, 'identical exam IDs from different libraries stay separate');
+    assert.deepEqual(before.map((row) => row.sampleWords), [['apple'], ['banana']]);
+    assert.equal(before[0].wordCount, 1);
+    const gate = deferred();
+    f.setGate(gate);
+    const pending = f.store.removeExam('same-exam', true, sourceA);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(clone(f.store.getBookshelfExams()), before, 'pending removal must retain visible records');
+    assert.equal(f.calls.length, 1, 'removal is one atomic operation');
+    assert.equal(f.calls[0].command.articleId, f.model.articleId(sourceA, 'same-exam'));
+    assert.equal(f.calls[0].options.observedRevision, 1);
+    gate.resolve();
+    assert.equal((await pending).saved, true);
+    const after = clone(f.store.getBookshelfExams());
+    assert.equal(after.length, 1);
+    assert.deepEqual(after[0].source, sourceB);
+    assert.deepEqual(after[0].sampleWords, ['banana']);
+    assert.deepEqual(f.practice, beforePractice, 'practice history is independent from reading removal');
+    assert.equal(f.canonical.snapshot.lists['reading-highlights'].words.length, 2, 'article removal preserves canonical review words');
 });
 
-test('Bookshelf initialization adopts empty and smaller canonical collections without reimporting stale mirrors', async () => {
-    const bookshelfCode = fs.readFileSync(new URL('../../../js/components/bookshelfView.js', import.meta.url), 'utf8');
-    const key = 'ielts_reading_bookshelf_exams_v1';
-    const stale = [{ examId: 'keep', lastOpenedAt: 999 }, { examId: 'removed' }];
-    const storage = new Map([[key, JSON.stringify(stale)]]);
-    let canonical = { data: [], envelope: { state: 'present' } };
-    let saves = 0;
-    const sandbox = {
-        console,
-        localStorage: {
-            getItem: (name) => storage.get(name) || null,
-            setItem: (name, value) => storage.set(name, String(value))
-        },
-        AppData: {
-            ready: Promise.resolve(),
-            vocab: {
-                listReadingBookshelfExams: async (options) => {
-                    assert.equal(options.withMeta, true);
-                    return canonical;
-                },
-                saveReadingBookshelfExams: async () => { saves += 1; }
-            }
-        },
-        addEventListener() {}
-    };
-    sandbox.window = sandbox;
-    vm.runInNewContext(bookshelfCode, sandbox);
-    await sandbox.ReadingBookshelfStore.init();
-    assert.deepEqual(JSON.parse(storage.get(key)), [], 'an empty canonical bookshelf clears the stale mirror');
+test('Failed bookshelf writes retain the committed cache and retry without duplicate visits', async () => {
+    const f = fixture();
+    await f.store.init();
+    const before = clone(f.store.getBookshelfExams());
+    f.setFailure(new Error('quota'));
+    await assert.rejects(f.store.removeExam('same-exam', true, sourceA), /quota/);
+    assert.deepEqual(clone(f.store.getBookshelfExams()), before);
+    await assert.rejects(f.store.recordExamUsed('new-exam', 'New', '', sourceA), /quota/);
+    assert.deepEqual(clone(f.store.getBookshelfExams()), before);
+    f.setFailure(null);
+    assert.equal((await f.store.recordExamUsed('new-exam', 'New', '', sourceA)).saved, true);
+    assert.equal((await f.store.recordExamUsed('new-exam', 'New', '', sourceA)).saved, true);
+    assert.equal(f.store.getBookshelfExams().filter((row) => row.examId === 'new-exam').length, 1);
+    assert.equal(f.store.getBookshelfExams().find((row) => row.examId === 'new-exam').wordCount, 0);
+});
 
-    canonical = { data: [{ examId: 'keep', lastOpenedAt: 100 }], envelope: { state: 'present' } };
-    storage.set(key, JSON.stringify(stale));
-    await sandbox.ReadingBookshelfStore.init();
-    assert.deepEqual(JSON.parse(storage.get(key)), canonical.data,
-        'the restored metadata and membership must replace stale local records');
-    canonical = { data: [], envelope: null };
-    storage.set(key, JSON.stringify(stale));
-    await sandbox.ReadingBookshelfStore.init();
-    assert.deepEqual(JSON.parse(storage.get(key)), stale,
-        'an absent canonical envelope must preserve the only local copy if migration failed');
-    canonical = { data: [], envelope: { state: 'cleared' } };
-    await sandbox.ReadingBookshelfStore.init();
-    assert.deepEqual(JSON.parse(storage.get(key)), [], 'a cleared envelope remains authoritative');
-    assert.equal(saves, 0, 'loading a canonical bookshelf must never save the old mirror back to AppData');
+test('Bookshelf refresh adopts authoritative empty replacement and rejects stale same-generation snapshots', async () => {
+    const f = fixture();
+    await f.store.init();
+    f.setFailure(new Error('read failed'));
+    await assert.rejects(f.store.init(), /read failed/);
+    assert.equal(f.store.getBookshelfExams().length, 2, 'failed loads retain the last committed view');
+    f.setFailure(null);
+    const stale = clone(f.canonical);
+    f.setCanonical({ snapshot: f.model.createSnapshot(), revision: 2, generation: 'original' });
+    await f.commit();
+    assert.equal(f.store.getBookshelfExams().length, 0);
+    f.store._adopt(stale);
+    assert.equal(f.store.getBookshelfExams().length, 0, 'a slower stale response cannot restore removed cards');
+    await f.store.init();
+    assert.equal(f.store.getBookshelfExams().length, 0);
+    assert.equal(f.calls.length, 0, 'reload and lazy initialization perform no writes');
+});
+
+test('Bookshelf retries reload the current generation after a missed replacement notification', async () => {
+    const f = fixture();
+    await f.store.init();
+    const gate = deferred();
+    f.setGate(gate);
+    const pending = f.store.recordExamUsed('new-exam', 'New', '', sourceA);
+    const rejection = assert.rejects(pending, /replaced/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    f.setCanonical({ snapshot: f.model.createSnapshot(), revision: 2, generation: 'replacement' });
+    gate.reject(new Error('Reading data was replaced'));
+    await rejection;
+    assert.equal(f.store.getBookshelfExams().length, 0);
+    f.setGate(null);
+    assert.equal((await f.store.recordExamUsed('new-exam', 'New', '', sourceA)).saved, true);
+    assert.equal(f.calls[1].options.observedGeneration, 'replacement');
+    assert.equal(f.calls[1].options.observedRevision, 2);
+});
+
+test('Bookshelf confirmation shows pending, retains a retry after failure, and reports success only after acknowledgement', async () => {
+    const f = fixture();
+    await f.store.init();
+    const elements = new Map([
+        ['#bookshelf-confirm-text', { textContent: '' }],
+        ['#bookshelf-confirm-ok', { textContent: '', disabled: false }],
+        ['#bookshelf-confirm-cancel', { disabled: false }]
+    ]);
+    const classes = new Set(['is-hidden']);
+    const overlay = {
+        querySelector: (selector) => elements.get(selector),
+        classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) }
+    };
+    f.sandbox.document.getElementById = (id) => id === 'bookshelf-confirm-dialog' ? overlay : null;
+    const view = f.sandbox.BookshelfView;
+    const toasts = [];
+    view.showToast = (message) => toasts.push(message);
+    view.render = () => {};
+    view.openConfirmDialog('same-exam', 'Article A', sourceA);
+    const ok = elements.get('#bookshelf-confirm-ok');
+    const gate = deferred();
+    f.setGate(gate);
+    f.setFailure(new Error('quota'));
+    const pending = ok.onclick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(ok.disabled, true);
+    assert.equal(classes.has('is-hidden'), false);
+    assert.deepEqual(toasts, []);
+    gate.resolve();
+    await pending;
+    assert.equal(ok.disabled, false);
+    assert.match(ok.textContent, /重试/);
+    assert.equal(classes.has('is-hidden'), false);
+    assert.deepEqual(toasts, []);
+    assert.equal(f.store.getBookshelfExams().length, 2);
+    f.setFailure(null);
+    await ok.onclick();
+    assert.equal(classes.has('is-hidden'), true);
+    assert.equal(toasts.length, 1);
+    assert.match(toasts[0], /已从书架移除/);
+    assert.equal(f.store.getBookshelfExams().length, 1);
+});
+
+test('Bookshelf backend failure offers page reload instead of retrying a latched connection', async () => {
+    const f = fixture();
+    await f.store.init();
+    const elements = new Map([
+        ['#bookshelf-confirm-text', { textContent: '' }],
+        ['#bookshelf-confirm-ok', { textContent: '', disabled: false }],
+        ['#bookshelf-confirm-cancel', { disabled: false }]
+    ]);
+    const classes = new Set(['is-hidden']);
+    const overlay = {
+        querySelector: (selector) => elements.get(selector),
+        classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) }
+    };
+    f.sandbox.document.getElementById = (id) => id === 'bookshelf-confirm-dialog' ? overlay : null;
+    let reloads = 0;
+    f.sandbox.location = { reload() { reloads += 1; } };
+    const view = f.sandbox.BookshelfView;
+    const toasts = [];
+    view.showToast = (message) => toasts.push(message);
+    view.openConfirmDialog('same-exam', 'Article A', sourceA);
+    f.setFailure(Object.assign(new Error('Connection aborted'), { code: 'BACKEND_UNAVAILABLE' }));
+    const ok = elements.get('#bookshelf-confirm-ok');
+    await ok.onclick();
+    assert.equal(ok.textContent, '刷新页面');
+    assert.match(elements.get('#bookshelf-confirm-text').textContent, /刷新页面后重试/);
+    assert.equal(classes.has('is-hidden'), false);
+    assert.equal(f.store.getBookshelfExams().length, 2);
+    assert.deepEqual(toasts, []);
+    const attempts = f.calls.length;
+    await ok.onclick();
+    assert.equal(reloads, 1);
+    assert.equal(f.calls.length, attempts, 'the recovery action does not repeat the doomed mutation');
+
+    const root = { innerHTML: '' };
+    f.sandbox.document.querySelector = () => root;
+    view.bindCardEvents = () => {};
+    view.render();
+    assert.match(root.innerHTML, /data-action="reload-page"/);
+    assert.doesNotMatch(root.innerHTML, /data-action="retry-load"/);
 });

@@ -830,9 +830,11 @@ async function saveReadingHighlightVocab(payload) {
     } catch (error) {
         console.warn('[VocabStore] 阅读高亮生词保存失败:', error);
         if (typeof showMessage === 'function') {
-            showMessage('高亮生词已在阅读页本地缓存，主词表稍后同步', 'warning');
+            showMessage(error && error.code === 'BACKEND_UNAVAILABLE'
+                ? '高亮生词保存失败，请刷新主页并重新打开阅读页后重试'
+                : '高亮生词保存失败，请在阅读页重试', 'warning');
         }
-        return null;
+        throw error;
     }
 }
 
@@ -1005,11 +1007,19 @@ function setupMessageListener() {
             const payload = data.data && typeof data.data === 'object' ? data.data : data;
             const requestId = payload && payload.requestId != null ? String(payload.requestId).trim() : '';
             if (!requestId) return;
-            saveReadingHighlightVocab(payload).then((saved) => {
+            const launchContext = matched.rec.initPayload || matched.rec;
+            const savePayload = Object.assign({}, payload, {
+                context: Object.assign({}, payload.context || {}, {
+                    examId: matched.rec.examId,
+                    libraryConfigurationId: launchContext.libraryConfigurationId == null
+                        ? null : launchContext.libraryConfigurationId
+                })
+            });
+            saveReadingHighlightVocab(savePayload).then((saved) => {
                 sendFallbackVocabOutcome(matched.rec, payload, Boolean(saved), saved ? '' : 'save_failed');
             }).catch((error) => {
                 console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
-                sendFallbackVocabOutcome(matched.rec, payload, false, 'save_failed');
+                sendFallbackVocabOutcome(matched.rec, payload, false, error && error.code || 'save_failed');
             });
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};

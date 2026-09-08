@@ -871,7 +871,8 @@ async def run() -> bool:
                 "() => {\n"
                 "  const params = new URLSearchParams(window.location.search || '');\n"
                 "  const examId = params.get('dataKey') || params.get('examId') || '';\n"
-                "  const manifest = window.__READING_EXPLANATION_MANIFEST__ || {};\n"
+                "  const manifest = window.__READING_EXPLANATION_MANIFEST__;\n"
+                "  if (!manifest) return false;\n"
                 "  if (!examId || !manifest[examId]) return true;\n"
                 "  return document.querySelectorAll('.reading-explanation-card, .reading-question-explanation-list').length > 0;\n"
                 "}",

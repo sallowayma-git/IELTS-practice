@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installReadingAuthority } from './helpers/readingVocabReaderHarness.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const source = fs.readFileSync(path.join(root, 'js/components/readingVocabReader.js'), 'utf8');
@@ -18,6 +19,7 @@ async function createPage(browser) {
     }));
     await page.goto('https://reader-lifecycle.test/');
     await page.addStyleTag({ content: css });
+    await installReadingAuthority(page);
     await page.evaluate(() => {
         const payloads = new Map(['a', 'b'].map(id => [id, {
             meta: { title: `Article ${id}` },
@@ -26,8 +28,7 @@ async function createPage(browser) {
         }]));
         window.__READING_EXAM_DATA__ = { get: id => payloads.get(id), register: (id, data) => payloads.set(id, data) };
         window.__READING_EXPLANATION_MANIFEST__ = {};
-        window.__visits = [];
-        window.ReadingBookshelfStore = { recordExamUsed: id => __visits.push(id) };
+        window.__visits = window.__recordedExams;
         window.__listeners = [];
         const add = EventTarget.prototype.addEventListener;
         const remove = EventTarget.prototype.removeEventListener;
@@ -115,7 +116,7 @@ test('reader lifecycle restores its initiating view and releases reader interact
                     const failedCloseCount = __activeReaderListeners();
                     await ReadingVocabReader.open('a');
                     const oldTab = document.querySelector('[data-para="questions"]');
-                    ReadingVocabStore.add('preserved', 'a', 'Article a');
+                    await ReadingVocabStore.add('preserved', 'a', 'Article a');
                     ReadingVocabReader.openModal();
                     const oldDelete = document.querySelector('.vocab-delete-btn');
                     ReadingVocabReader.close();
@@ -169,7 +170,13 @@ test('reader lifecycle restores its initiating view and releases reader interact
                         pending.get(`${id}.js`).onload();
                     };
                     const openA = ReadingVocabReader.open('race-a');
+                    // Storage/source resolution precedes loading each payload. Keep
+                    // both real requests pending before completing them out of order.
+                    for (let step = 0; step < 50 && !pending.has('race-a.js'); step += 1) await Promise.resolve();
+                    if (!pending.has('race-a.js')) throw new Error('Article A did not reach the payload loader');
                     const openB = ReadingVocabReader.open('race-b');
+                    for (let step = 0; step < 50 && !pending.has('race-b.js'); step += 1) await Promise.resolve();
+                    if (!pending.has('race-b.js')) throw new Error('Article B did not reach the payload loader');
                     finish('race-b', 'Latest race article');
                     await openB;
                     finish('race-a', 'Stale race article');
@@ -179,6 +186,7 @@ test('reader lifecycle restores its initiating view and releases reader interact
                 await page.locator('#vocab-fab').click();
                 await page.locator('#vocab-manual-input').fill('chrysoprase');
                 await page.locator('#vocab-manual-add-btn').click();
+                await page.waitForFunction(() => ReadingVocabStore.getAll().some(item => item.word === 'chrysoprase'));
                 const state = await page.evaluate(() => ({
                     current: ReadingVocabReader.currentExamId,
                     title: document.getElementById('vocab-reader-title').textContent,

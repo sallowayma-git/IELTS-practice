@@ -343,6 +343,11 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingState', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'replace'
+        },
+        {
             logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'
@@ -2676,6 +2681,165 @@
         return finish(next);
     }
 
+    // Backups merge relationships, never review progress. The authoritative
+    // persistence layer applies deletion tombstones before/after this union.
+    function stableJson(value) {
+        if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+        if (value && typeof value === 'object') {
+            return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson(value[name])}`).join(',')}}`;
+        }
+        return JSON.stringify(value);
+    }
+
+    function mergeMetadata(existing, incoming, clock) {
+        const next = { ...existing };
+        const leftAt = clock ? existing[clock] || '' : '';
+        const rightAt = clock ? incoming[clock] || '' : '';
+        for (const name of Object.keys(incoming)) {
+            if (!own(existing, name) || rightAt > leftAt
+                || (rightAt === leftAt && stableJson(incoming[name]) > stableJson(existing[name]))) {
+                Object.defineProperty(next, name, {
+                    value: incoming[name], enumerable: true, writable: true, configurable: true
+                });
+            }
+        }
+        return next;
+    }
+
+    function mergeVocabulary(next, incoming) {
+        const owners = new Map();
+        for (const listId of allLists(next)) {
+            const words = listWords(next, listId);
+            const ids = new Map();
+            for (const word of words) {
+                if (word && typeof word.id === 'string') ids.set(word.id, (ids.get(word.id) || 0) + 1);
+            }
+            for (const word of words) {
+                if (word && typeof word.word === 'string' && word.word.trim()
+                    && typeof word.id === 'string' && word.id.trim() === word.id && word.id
+                    && ids.get(word.id) === 1) {
+                    const normalized = normalizeTerm(word.word);
+                    if (!owners.has(normalized)) owners.set(normalized, { listId, wordId: word.id });
+                }
+            }
+        }
+        // An explicitly selected existing owner is stronger than list order.
+        for (const term of next.reading.terms) owners.set(term.normalizedTerm, copy(term.wordRef));
+        const importedRefs = new Map();
+
+        for (const listId of allLists(incoming)) {
+            const incomingWords = listWords(incoming, listId);
+            if (listId !== 'default' && !own(next.lists, listId)) {
+                const incomingList = incoming.lists[listId];
+                const list = Array.isArray(incomingList) ? []
+                    : incomingList && Array.isArray(incomingList.words) ? { ...copy(incomingList), words: [] }
+                        : copy(incomingList);
+                Object.defineProperty(next.lists, listId, {
+                    value: list, enumerable: true, writable: true, configurable: true
+                });
+            }
+            if (!incomingWords.length) continue;
+            if (listId !== 'default' && !Array.isArray(next.lists[listId])
+                && !(next.lists[listId] && Array.isArray(next.lists[listId].words))) {
+                fail(`Cannot merge vocabulary into malformed lists.${listId}`);
+            }
+            const destination = listWords(next, listId);
+            const ids = new Map();
+            for (const word of destination) {
+                if (word && typeof word.id === 'string') {
+                    if (!ids.has(word.id)) ids.set(word.id, []);
+                    ids.get(word.id).push(word);
+                }
+            }
+            let serialized;
+            for (const rawWord of incomingWords) {
+                const word = copy(rawWord);
+                const normalized = word && typeof word.word === 'string' && word.word.trim()
+                    ? normalizeTerm(word.word) : null;
+                const referenceable = normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id;
+                if (!referenceable) {
+                    if (!serialized) serialized = new Set(destination.map(stableJson));
+                    const encoded = stableJson(word);
+                    if (serialized.has(encoded)) continue;
+                    serialized.add(encoded);
+                }
+                let existingWord = false;
+                if (word && typeof word.id === 'string' && ids.has(word.id)) {
+                    if (!normalized) continue;
+                    const originalId = word.id;
+                    let suffix = 0;
+                    while (ids.has(word.id)) {
+                        const matches = ids.get(word.id);
+                        if (matches.length === 1 && typeof matches[0].word === 'string'
+                            && matches[0].word.trim().toLowerCase() === normalized) {
+                            existingWord = true;
+                            break;
+                        }
+                        word.id = key('reading-merge-word', listId, originalId, normalized, suffix++);
+                    }
+                }
+                // Vocabulary identity is scoped to its list. Same-term records
+                // in other lists have independent membership and review history.
+                // A matching local record keeps all of its existing progress.
+                if (!existingWord) {
+                    destination.push(word);
+                    if (word && typeof word.id === 'string') ids.set(word.id, [word]);
+                }
+                if (referenceable) {
+                    importedRefs.set(key(listId, rawWord.id), { listId, wordId: word.id });
+                }
+            }
+        }
+        // Reader canonical ownership is separate from vocabulary membership.
+        // Reuse local owners, otherwise retain the incoming explicit owner,
+        // including any deterministic ID remapping within its own list.
+        for (const term of incoming.reading.terms) {
+            if (!owners.has(term.normalizedTerm)) {
+                owners.set(term.normalizedTerm, importedRefs.get(key(term.wordRef.listId, term.wordRef.wordId)));
+            }
+        }
+        return owners;
+    }
+
+    function merge(existingSnapshot, incomingSnapshot) {
+        const next = writable(existingSnapshot);
+        const incoming = writable(incomingSnapshot);
+        const owners = mergeVocabulary(next, incoming);
+        for (const table of TABLES) {
+            const rows = new Map(next.reading[table].map((row) => [row.id, row]));
+            for (const incomingRow of incoming.reading[table]) {
+                const existing = rows.get(incomingRow.id);
+                let merged = existing ? mergeMetadata(existing, incomingRow,
+                    table === 'visits' ? 'lastVisitedAt' : 'updatedAt') : copy(incomingRow);
+                if (existing && own(existing, 'createdAt')) {
+                    merged.createdAt = existing.createdAt < incomingRow.createdAt ? existing.createdAt : incomingRow.createdAt;
+                }
+                if (existing && own(existing, 'updatedAt')) {
+                    merged.updatedAt = existing.updatedAt > incomingRow.updatedAt ? existing.updatedAt : incomingRow.updatedAt;
+                }
+                if (table === 'terms') {
+                    merged.wordRef = existing ? copy(existing.wordRef) : copy(owners.get(incomingRow.normalizedTerm));
+                } else if (existing && table === 'articles') {
+                    const title = mergeMetadata(
+                        { title: existing.title, titleUpdatedAt: existing.titleUpdatedAt },
+                        { title: incomingRow.title, titleUpdatedAt: incomingRow.titleUpdatedAt }, 'titleUpdatedAt');
+                    merged.title = title.title;
+                    merged.titleUpdatedAt = title.titleUpdatedAt;
+                } else if (existing && table === 'associations') {
+                    merged.manual = existing.manual || incomingRow.manual;
+                } else if (existing && table === 'visits') {
+                    merged.firstVisitedAt = existing.firstVisitedAt < incomingRow.firstVisitedAt
+                        ? existing.firstVisitedAt : incomingRow.firstVisitedAt;
+                    merged.lastVisitedAt = existing.lastVisitedAt > incomingRow.lastVisitedAt
+                        ? existing.lastVisitedAt : incomingRow.lastVisitedAt;
+                }
+                rows.set(merged.id, merged);
+            }
+            next.reading[table] = [...rows.values()].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+        }
+        return finish(next);
+    }
+
     function query(snapshot, options = {}) {
         validate(snapshot);
         object(options, 'query options');
@@ -2707,7 +2871,7 @@
     const model = Object.freeze({
         SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, termId, occurrenceId,
         createSnapshot, validate, collect, recordVisit, removeOccurrence, removeArticleTerm,
-        clearArticle, deleteCanonicalTerm, query, listVisits, serialize, deserialize
+        clearArticle, deleteCanonicalTerm, merge, query, listVisits, serialize, deserialize
     });
     global.ReadingVocabularyModel = model;
     if (typeof module !== 'undefined' && module.exports) module.exports = model;
@@ -4431,7 +4595,7 @@
         const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
         // Preserve local-only reading data before capturing revisions for any
         // reading collection this plan will install, including present arrays.
-        const readingKeys = Object.keys(READING_LEGACY_KEYS).filter((key) => {
+        const readingKeys = READING_DOCUMENT_KEYS.filter((key) => {
             const envelope = asObject(parsed.envelopes)[key];
             return (replaceDocuments && parsed.scope === 'full')
                 || (envelope && (envelope.state === 'present' || replaceDocuments || options.applyClears === true));
@@ -4473,6 +4637,8 @@
                 clearedKeys.push(entry.logicalKey);
             }
         }
+
+        await prepareReadingImport(parsed, snapshot, revisionToken, keys, clearedKeys, replaceDocuments);
 
         // Any successful practice import installs all three stores together. Merge
         // may update a subset only when the final recordId sets remain identical.
@@ -4566,28 +4732,109 @@
         return createImportPlan(parsed, { replace: true });
     }
 
-    async function migrateLegacyReadingData({ required = false, logicalKeys = Object.keys(READING_LEGACY_KEYS) } = {}) {
-        for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
-            if (!logicalKeys.includes(logicalKey)) continue;
-            try {
-                const current = await kernel.read(logicalKey, { withMeta: true });
-                // A present empty array or a cleared envelope is authoritative too.
-                // Legacy mirrors only seed documents that have never been written.
-                if (current.envelope) continue;
-                if (!global.localStorage) return;
-                const raw = global.localStorage.getItem(storageKey);
-                const parsed = raw ? JSON.parse(raw) : null;
-                if (!Array.isArray(parsed)) continue;
-                await kernel.mutate([{ logicalKey, data: parsed, expectedRevision: 0 }], {
-                    operationId: randomId('migrate-reading')
-                });
-            } catch (error) {
-                // Startup can retry later; a backup or destructive installation
-                // must not discard a legacy copy that has never reached the kernel.
-                if (required) throw error;
-                if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
-            }
+    async function migrateLegacyReadingData({ required = false, logicalKeys } = {}) {
+        // The versioned marker and recovered source bytes are committed in the
+        // same transaction as the model. No later startup/export re-reads mirrors.
+        if (Array.isArray(logicalKeys) && !logicalKeys.some((key) => READING_DOCUMENT_KEYS.includes(key))) return;
+        try { await ensureReadingMigration(); }
+        catch (error) {
+            if (required) throw error;
+            if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
         }
+    }
+
+    function legacyReadingAt(value, fallback = '1970-01-01T00:00:00.000Z') {
+        const parsed = typeof value === 'number' ? value : Date.parse(value);
+        return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+    }
+    function legacyReadingSource(row) {
+        const source = asObject(row && row.source);
+        if ((source.kind === 'builtin' || source.kind === 'imported') && source.id) return source;
+        return { kind: row && row.sourceKind === 'imported' ? 'imported' : 'builtin',
+            id: String(row && (row.libraryId || row.sourceId) || 'default') };
+    }
+    function convertLegacyReading(snapshot, words, bookshelf, rejected = [], activityAt = null) {
+        const model = readingModel(); let next = snapshot;
+        for (const row of asArray(words)) {
+            try {
+                if (!row || typeof row.word !== 'string' || !row.word.trim()) throw new Error('Missing word');
+                const at = activityAt || legacyReadingAt(row.createdAt);
+                const highlights = asArray(row.highlights);
+                const examIds = new Set([row.examId, ...highlights.map((item) => item && item.examId)].filter(Boolean).map(String));
+                if (!examIds.size) throw new Error('Missing article identity');
+                for (const examId of examIds) {
+                    const command = { source: legacyReadingSource(row), article: { examId, title: String(row.examTitle || '') },
+                        word: Object.assign({}, row, { word: row.word.trim(), meaning: String(row.meaning || '待补充释义') }), at, manual: true };
+                    next = model.recordVisit(model.collect(next, command), command);
+                    for (const highlight of highlights.filter((item) => String(item && item.examId || row.examId) === examId)) {
+                        const quote = String(highlight.quote || highlight.text || row.word);
+                        if (Number.isSafeInteger(highlight.startOffset) && Number.isSafeInteger(highlight.endOffset)
+                            && highlight.endOffset - highlight.startOffset === quote.length) {
+                            try {
+                                next = model.collect(next, Object.assign({}, command, { manual: false, occurrence: {
+                                    scopeId: String(highlight.scopeId || highlight.scope || 'passage'),
+                                    contentVersion: String(highlight.contentVersion || 'legacy-v1'),
+                                    startOffset: highlight.startOffset, endOffset: highlight.endOffset, quote,
+                                    before: String(highlight.before || ''), after: String(highlight.after || '')
+                                } }));
+                            } catch (error) { rejected.push({ kind: 'occurrence', value: clone(highlight), reason: error.message }); }
+                        } else rejected.push({ kind: 'occurrence', value: clone(highlight), reason: 'Missing exact selection anchor' });
+                    }
+                }
+            } catch (error) { rejected.push({ kind: 'word', value: clone(row), reason: error.message }); }
+        }
+        for (const row of asArray(bookshelf)) {
+            try {
+                if (!row || !row.examId) throw new Error('Missing article identity');
+                const command = { source: legacyReadingSource(row), article: { examId: String(row.examId),
+                    title: String(row.examTitle || row.title || '') }, at: legacyReadingAt(row.firstUsedAt) };
+                next = model.recordVisit(next, command);
+                next = model.recordVisit(next, Object.assign({}, command, { at: legacyReadingAt(row.lastOpenedAt, command.at) }));
+            } catch (error) { rejected.push({ kind: 'visit', value: clone(row), reason: error.message }); }
+        }
+        return next;
+    }
+    async function ensureReadingMigration() {
+        if (!global.ReadingVocabularyModel) return; // Old non-reader test/embed bootstraps remain supported.
+        return retryMergeConflict({}, async () => {
+            const migration = await kernel.read('system.migrations', { withMeta: true });
+            // The canonical V1 vocabulary must land before reading initialization
+            // creates words/lists envelopes that become authoritative on reload.
+            // Keep public reading and backup calls behind the same recovery fence.
+            if (typeof internals.readLegacyValues === 'function'
+                && asObject(asObject(migration.data).v1ToV2).status !== 'complete') {
+                throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy vocabulary recovery is pending; reload before reading or saving vocabulary');
+            }
+            if (asObject(migration.data).readingVocabularyV1?.completed === true) return;
+            const current = await readReadingDocuments();
+            const recoverable = { localStorage: {}, documents: {}, rejected: [] };
+            const values = {};
+            for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
+                const meta = current.metas[logicalKey];
+                recoverable.documents[logicalKey] = clone(meta.data);
+                let raw = null;
+                if (global.localStorage) raw = global.localStorage.getItem(storageKey);
+                if (raw !== null) recoverable.localStorage[storageKey] = raw;
+                let parsed = null;
+                try { parsed = raw === null ? null : JSON.parse(raw); }
+                catch (_) { recoverable.rejected.push({ kind: 'storage', key: storageKey, reason: 'Invalid JSON' }); }
+                if (raw !== null && !Array.isArray(parsed)) recoverable.rejected.push({ kind: 'storage', key: storageKey, reason: 'Unrecognized legacy payload' });
+                values[logicalKey] = meta.envelope ? meta.data : (Array.isArray(parsed) ? parsed : []);
+            }
+            let next = current.snapshot;
+            current.state.allowDefaultWordSeed = !current.metas['vocab.words'].envelope;
+            if (!current.metas[READING_STATE_KEY].envelope) {
+                next = convertLegacyReading(next, values['vocab.readingVocabWords'], values['vocab.readingBookshelfExams'], recoverable.rejected);
+            }
+            const changes = readingChanges(current, next, current.state);
+            // Preserve recognizable prototype arrays for compatibility/export as
+            // well as storing lossless originals in the recovery marker.
+            for (const change of changes) if (hasOwn(values, change.logicalKey)) change.data = values[change.logicalKey];
+            changes.push({ logicalKey: 'system.migrations', data: Object.assign({}, asObject(migration.data), {
+                readingVocabularyV1: { version: 1, completed: true, completedAt: nowIso(), recoverable }
+            }), expectedRevision: metaRevision(migration) });
+            await kernel.mutate(changes, { operationId: randomId('migrate-reading') });
+        }, 12);
     }
 
     async function refreshReadingMirrors(logicalKeys = Object.keys(READING_LEGACY_KEYS)) {
@@ -4596,7 +4843,11 @@
             try {
                 if (!global.localStorage) return;
                 const current = await kernel.read(logicalKey, { withMeta: true });
-                if (current.envelope && Array.isArray(current.data)) {
+                // Unknown prototype payloads remain recoverable in-place too.
+                let recognized = true;
+                const raw = global.localStorage.getItem(storageKey);
+                if (raw !== null) { try { recognized = Array.isArray(JSON.parse(raw)); } catch (_) { recognized = false; } }
+                if (recognized && current.envelope && Array.isArray(current.data)) {
                     global.localStorage.setItem(storageKey, JSON.stringify(current.data));
                 }
             } catch (error) {
@@ -4645,7 +4896,10 @@
         async delete(id, options = {}) { await ready; const current = await readCollectionMeta('backups.entries'); return kernel.mutate([{ logicalKey: 'backups.entries', data: current.items.filter((item) => String(item.id) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-delete', { id: String(id) })); },
         async export(options = {}) {
             await ready;
-            await migrateLegacyReadingData();
+            if ((options.backupId === undefined || options.backupId === null)
+                && (!Array.isArray(options.domains) || options.domains.includes('vocab'))) {
+                await migrateLegacyReadingData({ required: true });
+            }
             if (options.backupId !== undefined && options.backupId !== null) {
                 const backupId = String(options.backupId);
                 const stored = asArray(await kernel.read('backups.entries'))
@@ -4766,17 +5020,455 @@
         return enqueueVocabMutation(() => retryMergeConflict(options, task));
     }
 
+    const READING_STATE_KEY = 'vocab.readingState';
+    const READING_DOCUMENT_KEYS = ['vocab.words', 'vocab.lists', READING_STATE_KEY,
+        'vocab.readingVocabWords', 'vocab.readingBookshelfExams'];
+    function readingModel() {
+        const model = global.ReadingVocabularyModel;
+        if (!model) throw new AppDataError('INITIALIZATION_BLOCKED', 'ReadingVocabularyModel is required');
+        return model;
+    }
+    function emptyReadingState(generation = 'initial') {
+        return { schemaVersion: 1, generation, reading: readingModel().createSnapshot().reading,
+            tombstones: { articles: {}, visits: {}, terms: {}, canonicalTerms: {}, associations: {}, occurrences: {}, all: null } };
+    }
+    function normalizeReadingState(value) {
+        if (!value || !Object.keys(value).length) return emptyReadingState();
+        if (value.schemaVersion !== 1 || !value.reading || typeof value.generation !== 'string') {
+            throw new AppDataError('VALIDATION', 'Unsupported reading persistence state');
+        }
+        const result = Object.assign(emptyReadingState(value.generation), clone(value), {
+            tombstones: Object.assign(emptyReadingState().tombstones, clone(asObject(value.tombstones)))
+        });
+        const validStamp = (stamp) => stamp && typeof stamp.at === 'string' && Number.isFinite(Date.parse(stamp.at))
+            && new Date(stamp.at).toISOString() === stamp.at && Number.isSafeInteger(stamp.revision) && stamp.revision >= 0;
+        for (const [table, rows] of Object.entries(result.tombstones)) {
+            if (table === 'all') {
+                if (rows !== null && !validStamp(rows)) throw new AppDataError('VALIDATION', 'Invalid reading deletion fence');
+            } else if (!rows || typeof rows !== 'object' || Array.isArray(rows) || Object.values(rows).some((stamp) => !validStamp(stamp))) {
+                throw new AppDataError('VALIDATION', `Invalid reading ${table} deletion fences`);
+            }
+        }
+        return result;
+    }
+    const metaRevision = (meta) => Number(meta && meta.envelope && meta.envelope.revision) || 0;
+    async function readReadingDocuments() {
+        // Every canonical vocabulary mutation also checks/increments readingState.
+        // Read that fence twice so a split readonly read never exposes mixed owners.
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            const before = await kernel.read(READING_STATE_KEY, { withMeta: true });
+            const values = await Promise.all(READING_DOCUMENT_KEYS.filter((key) => key !== READING_STATE_KEY)
+                .map(async (key) => [key, await kernel.read(key, { withMeta: true })]));
+            const after = await kernel.read(READING_STATE_KEY, { withMeta: true });
+            if (metaRevision(before) !== metaRevision(after)) continue;
+            const metas = Object.fromEntries(values.concat([[READING_STATE_KEY, after]]));
+            const state = normalizeReadingState(after.data);
+            const snapshot = readingModel().createSnapshot({ words: metas['vocab.words'].data,
+                lists: metas['vocab.lists'].data, reading: state.reading });
+            return { metas, state, snapshot, revision: metaRevision(after), generation: state.generation };
+        }
+        throw new AppDataError('CONFLICT', 'Vocabulary changed repeatedly while reading; retry');
+    }
+    function readingResult(current) {
+        return { snapshot: clone(current.snapshot), revision: current.revision, generation: current.generation };
+    }
+    function readingActivityClock(snapshot, state) {
+        const timestamps = [state.clockAt];
+        for (const table of ['articles', 'terms', 'associations', 'occurrences', 'visits']) {
+            for (const row of snapshot.reading[table]) timestamps.push(row.updatedAt, row.createdAt, row.lastVisitedAt);
+        }
+        for (const [table, rows] of Object.entries(state.tombstones)) {
+            if (table === 'all') timestamps.push(rows && rows.at);
+            else for (const stamp of Object.values(rows)) timestamps.push(stamp.at);
+        }
+        return timestamps.reduce((latest, at) => Math.max(latest, Date.parse(at || '') || 0), 0);
+    }
+    function mergeReadingTombstones(existing, incoming) {
+        const result = clone(existing);
+        const latest = (left, right) => !left ? right : !right ? left
+            : String(left.at) >= String(right.at) ? left : right;
+        for (const table of ['articles', 'visits', 'terms', 'canonicalTerms', 'associations', 'occurrences']) {
+            for (const [id, stamp] of Object.entries(asObject(incoming[table]))) {
+                result[table][id] = clone(latest(result[table][id], stamp));
+            }
+        }
+        result.all = clone(latest(result.all, incoming.all));
+        return result;
+    }
+    function applyReadingTombstones(snapshot, tombstones) {
+        let next = clone(snapshot);
+        const deleted = (stamp, at) => stamp && String(stamp.at) >= String(at);
+        for (const [termId, stamp] of Object.entries(tombstones.canonicalTerms)) {
+            const term = next.reading.terms.find((row) => row.id === termId);
+            if (!term || deleted(stamp, term.createdAt)) next = readingModel().deleteCanonicalTerm(next, { termId });
+        }
+        next.reading.associations = next.reading.associations.filter((row) => ![
+            tombstones.all, tombstones.articles[row.articleId], tombstones.terms[row.termId], tombstones.associations[row.id]
+        ].some((stamp) => deleted(stamp, row.updatedAt)));
+        const associations = new Set(next.reading.associations.map((row) => row.id));
+        next.reading.occurrences = next.reading.occurrences.filter((row) => associations.has(row.associationId)
+            && !deleted(tombstones.occurrences[row.id], row.updatedAt));
+        next.reading.associations = next.reading.associations.filter((row) => row.manual
+            || next.reading.occurrences.some((occurrence) => occurrence.associationId === row.id));
+        next.reading.visits = next.reading.visits.filter((row) => !deleted(tombstones.visits[row.articleId], row.lastVisitedAt));
+        readingModel().validate(next);
+        return next;
+    }
+    async function prepareReadingImport(parsed, target, revisionToken, keys, clearedKeys, replace) {
+        if (!global.ReadingVocabularyModel) return;
+        const incomingEnvelopes = asObject(parsed.envelopes);
+        const hasReading = [READING_STATE_KEY, ...Object.keys(READING_LEGACY_KEYS)]
+            .some((key) => hasOwn(target.envelopes, key));
+        const hasOwners = ['vocab.words', 'vocab.lists'].some((key) => hasOwn(target.envelopes, key));
+        if (!hasReading && !hasOwners) return;
+        const current = await readReadingDocuments(); const model = readingModel();
+        const value = (envelopes, key, fallback) => {
+            const envelope = envelopes[key];
+            return !envelope ? fallback : envelope.state === 'cleared' ? catalog.get(key).defaultValue() : envelope.data;
+        };
+        const native = incomingEnvelopes[READING_STATE_KEY];
+        let state; let next;
+        if (hasReading) {
+            let incomingState = normalizeReadingState(value(incomingEnvelopes, READING_STATE_KEY, {}));
+            let incoming = model.createSnapshot({
+                words: value(incomingEnvelopes, 'vocab.words', replace && parsed.scope !== 'full' ? current.snapshot.words : []),
+                lists: value(incomingEnvelopes, 'vocab.lists', replace && parsed.scope !== 'full' ? current.snapshot.lists : {}),
+                reading: incomingState.reading
+            });
+            if (!native) {
+                incoming = convertLegacyReading(incoming,
+                    value(incomingEnvelopes, 'vocab.readingVocabWords', replace && parsed.scope !== 'full' ? current.metas['vocab.readingVocabWords'].data : []),
+                    value(incomingEnvelopes, 'vocab.readingBookshelfExams', replace && parsed.scope !== 'full' ? current.metas['vocab.readingBookshelfExams'].data : []));
+            }
+            if (replace) {
+                next = incoming; state = incomingState;
+                state.generation = randomId('reading-replace');
+            } else {
+                state = clone(current.state);
+                state.tombstones = mergeReadingTombstones(state.tombstones, incomingState.tombstones);
+                // Filter each history before union: an old backup must not lower
+                // a deliberately recollected term's creation clock below deletion.
+                next = model.merge(applyReadingTombstones(current.snapshot, state.tombstones),
+                    applyReadingTombstones(incoming, state.tombstones));
+                next = applyReadingTombstones(next, state.tombstones);
+            }
+        } else {
+            state = clone(current.state);
+            const ownerValue = (key, stored) => {
+                if (!hasOwn(target.envelopes, key)) return stored;
+                const envelope = incomingEnvelopes[key];
+                if (!replace && envelope && envelope.state === 'present') {
+                    return mergeImportValue(catalog.get(key), stored, envelope.data);
+                }
+                return value(target.envelopes, key, stored);
+            };
+            next = model.createSnapshot({ words: ownerValue('vocab.words', current.snapshot.words),
+                lists: ownerValue('vocab.lists', current.snapshot.lists), reading: state.reading });
+        }
+        // Imported revisions belong to another snapshot/installation. Install a
+        // new local epoch and rebase every fence to this transaction's revision.
+        state.generation = randomId('reading-import');
+        const stamps = Object.entries(state.tombstones).flatMap(([table, rows]) => table === 'all' ? (rows ? [rows] : []) : Object.values(rows));
+        for (const stamp of stamps) stamp.revision = current.revision + 1;
+        state.clockAt = [state.clockAt, ...stamps.map((stamp) => stamp.at)].filter(Boolean).sort().pop() || nowIso();
+        state.allowDefaultWordSeed = false;
+        const changes = readingChanges(current, next, state);
+        for (const change of changes) {
+            revisionToken.documents[change.logicalKey] = metaRevision(current.metas[change.logicalKey]);
+            // Legacy-only backups retain their original portable arrays. New
+            // model backups derive compatibility arrays from the merged graph.
+            if (!native && hasOwn(READING_LEGACY_KEYS, change.logicalKey) && target.envelopes[change.logicalKey]) {
+                const incoming = incomingEnvelopes[change.logicalKey];
+                if (!replace && incoming && incoming.state === 'present') {
+                    target.envelopes[change.logicalKey] = internals.makeEnvelope(catalog.get(change.logicalKey),
+                        mergeImportValue(catalog.get(change.logicalKey), current.metas[change.logicalKey].data, incoming.data),
+                        { operationId: randomId('import-reading-compatibility') });
+                }
+                continue;
+            }
+            target.envelopes[change.logicalKey] = internals.makeEnvelope(catalog.get(change.logicalKey), change.data,
+                { operationId: randomId('import-reading') });
+            if (!keys.includes(change.logicalKey)) keys.push(change.logicalKey);
+            const clearIndex = clearedKeys.indexOf(change.logicalKey);
+            if (clearIndex >= 0) clearedKeys.splice(clearIndex, 1);
+        }
+    }
+    function readingProjection(snapshot) {
+        const model = readingModel();
+        const query = model.query(snapshot);
+        const articles = new Map(snapshot.reading.articles.map((row) => [row.id, row]));
+        const sources = new Map(snapshot.reading.sources.map((row) => [row.id, row]));
+        const words = query.terms.map((row) => {
+            const first = articles.get(row.associations[0].articleId);
+            return Object.assign({}, clone(row.word), { id: row.term.id, termId: row.term.id,
+                wordRef: row.wordRef, examId: first.examId, examTitle: first.title,
+                associations: row.associations, occurrences: row.occurrences,
+                highlights: row.occurrences.map((occurrence) => {
+                    const association = row.associations.find((item) => item.id === occurrence.associationId);
+                    const article = articles.get(association.articleId);
+                    return Object.assign({}, occurrence, { examId: article.examId,
+                        articleId: article.id, scope: occurrence.scopeId, text: occurrence.quote });
+                }) });
+        });
+        const bookshelf = snapshot.reading.visits.map((visit) => {
+            const article = articles.get(visit.articleId); const source = sources.get(article.sourceId);
+            return { id: article.id, articleId: article.id, examId: article.examId, examTitle: article.title,
+                source: { kind: source.kind, id: source.libraryId },
+                firstUsedAt: Date.parse(visit.firstVisitedAt), lastOpenedAt: Date.parse(visit.lastVisitedAt) };
+        });
+        return { words, bookshelf };
+    }
+    function readingChanges(current, snapshot, state) {
+        state.reading = snapshot.reading;
+        const projection = readingProjection(snapshot);
+        const values = { 'vocab.words': snapshot.words, 'vocab.lists': snapshot.lists,
+            [READING_STATE_KEY]: state, 'vocab.readingVocabWords': projection.words,
+            'vocab.readingBookshelfExams': projection.bookshelf };
+        return READING_DOCUMENT_KEYS.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
+            expectedRevision: metaRevision(current.metas[logicalKey]) }));
+    }
+    function tombstoneRevision(value) { return Number(value && value.revision) || 0; }
+    function assertFreshReadingIntent(current, type, command, observed) {
+        if (observed.generation !== current.generation) {
+            throw new AppDataError('CONFLICT', 'Reading data was replaced; reload before saving');
+        }
+        if (type !== 'collect' && type !== 'recordVisit') return;
+        const model = readingModel(); const tombstones = current.state.tombstones;
+        const articleId = model.articleId(command.source, command.article.examId);
+        const fences = type === 'collect' ? [tombstones.all, tombstones.articles[articleId], tombstones.visits[articleId]]
+            : [tombstones.visits[articleId]];
+        if (type === 'collect') {
+            const termId = model.termId(command.word.word);
+            const associationId = JSON.stringify(['association', articleId, termId]);
+            fences.push(tombstones.terms[termId], tombstones.associations[associationId]);
+            if (command.occurrence) fences.push(tombstones.occurrences[model.occurrenceId(articleId, termId, command.occurrence)]);
+        }
+        if (fences.some((fence) => tombstoneRevision(fence) > observed.revision)) {
+            throw new AppDataError('CONFLICT', 'This reading association was removed; reload before collecting again');
+        }
+    }
+    async function mutateReading(type, input = {}, options = {}) {
+        await ready; await ensureReadingMigration();
+        assertObject(input, 'Reading command must be an object');
+        const command = Object.assign({ at: nowIso() }, clone(input));
+        const initial = await readReadingDocuments();
+        const observed = { revision: options.observedRevision ?? initial.revision,
+            generation: options.observedGeneration ?? initial.generation };
+        const mutation = optionsMutationOptions(options, `reading-${type}`, { type, command: input });
+        return retryVocabMutation(options, async () => {
+            const current = await readReadingDocuments();
+            assertFreshReadingIntent(current, type, command, observed);
+            const model = readingModel(); let next = current.snapshot;
+            const state = clone(current.state); const tombstones = state.tombstones;
+            if (typeof command.at !== 'string' || !Number.isFinite(Date.parse(command.at))
+                || new Date(command.at).toISOString() !== command.at) throw new AppDataError('VALIDATION', 'Reading at must be a UTC ISO timestamp');
+            // Timestamp order is advanced at the acknowledged write boundary, not
+            // trusted to the stale page's wall clock. A fresh deliberate re-add
+            // therefore sorts after deletion when backups are merged later.
+            const previousClock = readingActivityClock(current.snapshot, state);
+            command.at = new Date(Math.max(Date.now(), Date.parse(command.at), previousClock + 1)).toISOString();
+            state.clockAt = command.at;
+            const stamp = { at: command.at, revision: current.revision + 1 };
+            const mark = (table, id) => { tombstones[table][id] = stamp; };
+            if (type === 'collect') next = model.recordVisit(model.collect(next, command), command);
+            else if (type === 'recordVisit') next = model.recordVisit(next, command);
+            else if (type === 'removeOccurrence') { next = model.removeOccurrence(next, command); mark('occurrences', command.occurrenceId); }
+            else if (type === 'removeArticleTerm') {
+                next = model.removeArticleTerm(next, command);
+                mark('associations', JSON.stringify(['association', command.articleId, command.termId]));
+            } else if (type === 'clearArticle') { next = model.clearArticle(next, command); mark('articles', command.articleId); }
+            else if (type === 'deleteCanonicalTerm') { next = model.deleteCanonicalTerm(next, command); mark('terms', command.termId); mark('canonicalTerms', command.termId); }
+            else if (type === 'removeTermAssociations') {
+                for (const row of next.reading.associations.filter((row) => row.termId === command.termId)) {
+                    next = model.removeArticleTerm(next, row); mark('associations', row.id);
+                }
+                mark('terms', command.termId);
+            } else if (type === 'clearReading') {
+                for (const row of next.reading.articles) next = model.clearArticle(next, { articleId: row.id });
+                tombstones.all = stamp;
+            } else if (type === 'removeArticle') {
+                if (!command.articleId) throw new AppDataError('VALIDATION', 'articleId is required');
+                if (command.clearWords === true) { next = model.clearArticle(next, command); mark('articles', command.articleId); }
+                next.reading.visits = next.reading.visits.filter((row) => row.articleId !== command.articleId);
+                mark('visits', command.articleId);
+            } else throw new AppDataError('VALIDATION', `Unknown reading operation: ${type}`);
+            // Remember concrete removals as well as broad fences for portable merges.
+            for (const row of current.snapshot.reading.associations) {
+                if (!next.reading.associations.some((item) => item.id === row.id)) mark('associations', row.id);
+            }
+            for (const row of current.snapshot.reading.occurrences) {
+                if (!next.reading.occurrences.some((item) => item.id === row.id)) mark('occurrences', row.id);
+            }
+            model.validate(next);
+            const receipt = await kernel.mutate(readingChanges(current, next, state), mutation);
+            if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Reading save was not acknowledged');
+            // A replay may acknowledge an earlier operation; return current durable data.
+            const committed = await readReadingDocuments();
+            if (type === 'collect') {
+                const articleId = model.articleId(command.source, command.article.examId);
+                const termId = model.termId(command.word.word);
+                const association = committed.snapshot.reading.associations.find((row) => row.articleId === articleId && row.termId === termId);
+                const occurrenceId = command.occurrence && model.occurrenceId(articleId, termId, command.occurrence);
+                const requiresManual = command.manual === true || (!command.occurrence && command.manual !== false);
+                if (!association || (requiresManual && !association.manual)
+                    || (occurrenceId && !committed.snapshot.reading.occurrences.some((row) => row.id === occurrenceId))) {
+                    throw new AppDataError('CONFLICT', 'The acknowledged reading selection has since been removed; reload before retrying');
+                }
+            } else if (type === 'recordVisit') {
+                const articleId = model.articleId(command.source, command.article.examId);
+                if (!committed.snapshot.reading.visits.some((row) => row.articleId === articleId)) {
+                    throw new AppDataError('CONFLICT', 'The acknowledged bookshelf visit has since been removed; reload before retrying');
+                }
+            } else {
+                const snapshot = committed.snapshot;
+                let stillRemoved;
+                if (type === 'removeTermAssociations') stillRemoved = !snapshot.reading.associations.some((row) => row.termId === command.termId);
+                else if (type === 'clearReading') stillRemoved = snapshot.reading.associations.length === 0;
+                else if (type === 'removeArticle') stillRemoved = !snapshot.reading.visits.some((row) => row.articleId === command.articleId)
+                    && (command.clearWords !== true || !snapshot.reading.associations.some((row) => row.articleId === command.articleId));
+                else stillRemoved = checksum(model[type](snapshot, command)) === checksum(snapshot);
+                if (!stillRemoved) throw new AppDataError('CONFLICT', 'Newer reading activity superseded the acknowledged removal; reload before retrying');
+            }
+            return Object.assign({}, receipt, readingResult(committed), { saved: true,
+                added: type === 'collect', changed: checksum(next) !== checksum(current.snapshot) });
+        });
+    }
+
+    async function mutateVocabDocuments(changes, options) {
+        const ownsWords = changes.some((change) => change.logicalKey === 'vocab.words' || change.logicalKey === 'vocab.lists');
+        if (!ownsWords || !global.ReadingVocabularyModel) return kernel.mutate(changes, options);
+        await ensureReadingMigration();
+        const current = await readReadingDocuments();
+        const next = clone(current.snapshot);
+        for (const change of changes) {
+            if (change.logicalKey === 'vocab.words') { next.words = change.state === 'cleared' ? [] : change.data; current.state.allowDefaultWordSeed = false; }
+            if (change.logicalKey === 'vocab.lists') next.lists = change.state === 'cleared' ? {} : change.data;
+        }
+        // Bulk canonical writes cannot silently orphan reading relationships. Call
+        // deleteCanonicalTerm for an intentional cascade instead.
+        readingModel().validate(next);
+        const guarded = changes.concat([{ logicalKey: READING_STATE_KEY, data: current.state,
+            expectedRevision: current.revision }]);
+        return kernel.mutate(guarded, options);
+    }
+
+    async function replaceLegacyReadingCollection(logicalKey, rows, options) {
+        await ready; await ensureReadingMigration();
+        assertArray(rows, 'Reading compatibility snapshots require an array');
+        if (!hasOwn(options, 'expectedRevision')) {
+            throw new AppDataError('VALIDATION', 'Reading snapshot writes require the revision from a withMeta read; use mutateReading for interactive changes');
+        }
+        return enqueueVocabMutation(async () => {
+            const current = await readReadingDocuments();
+            if (Number(options.expectedRevision) !== metaRevision(current.metas[logicalKey])) {
+                throw new AppDataError('CONFLICT', 'Reading snapshot changed; reload before replacing it');
+            }
+            let next = clone(current.snapshot); const state = clone(current.state);
+            const stamp = { at: new Date(Math.max(Date.now(), readingActivityClock(current.snapshot, state) + 1)).toISOString(), revision: current.revision + 1 };
+            const rejected = [];
+            if (logicalKey === 'vocab.readingVocabWords') {
+                next.reading.associations = []; next.reading.occurrences = [];
+                next = convertLegacyReading(next, rows, [], rejected, stamp.at);
+                for (const row of current.snapshot.reading.associations) if (!next.reading.associations.some((item) => item.id === row.id)) state.tombstones.associations[row.id] = stamp;
+                for (const row of current.snapshot.reading.occurrences) if (!next.reading.occurrences.some((item) => item.id === row.id)) state.tombstones.occurrences[row.id] = stamp;
+            } else {
+                next.reading.visits = [];
+                next = convertLegacyReading(next, [], rows, rejected);
+                for (const row of current.snapshot.reading.visits) if (!next.reading.visits.some((item) => item.id === row.id)) state.tombstones.visits[row.id] = stamp;
+            }
+            state.clockAt = stamp.at; state.generation = randomId('reading-snapshot');
+            const changes = readingChanges(current, next, state);
+            for (const change of changes) {
+                if (change.logicalKey === logicalKey) change.data = rows;
+                else if (hasOwn(READING_LEGACY_KEYS, change.logicalKey)) change.data = current.metas[change.logicalKey].data;
+            }
+            return kernel.mutate(changes, optionsMutationOptions(options, 'reading-compatibility-replace', { logicalKey, rows },
+                { warnings: rejected.map((entry) => `Retained unrecognized legacy ${entry.kind}: ${entry.reason}`) }));
+        });
+    }
+
     const vocab = Object.freeze({
         // Pure schema/relationship operations. Persistence commands consume this
         // contract; a returned snapshot is not a durable commit acknowledgement.
         get readingModel() { return global.ReadingVocabularyModel; },
+        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments()); },
+        async shouldInitializeDefaultWords() {
+            await ready; await ensureReadingMigration();
+            if (!global.ReadingVocabularyModel) return !(await kernel.read('vocab.words', { withMeta: true })).envelope;
+            const current = await readReadingDocuments();
+            return current.state.allowDefaultWordSeed === true && current.snapshot.words.length === 0;
+        },
+        async initializeDefaultWords(command, options = {}) {
+            await ready; await ensureReadingMigration();
+            assertObject(command, 'Default vocabulary initialization requires a command');
+            assertArray(command.words, 'Default vocabulary initialization requires words');
+            return retryVocabMutation(options, async () => {
+                const current = await readReadingDocuments();
+                if (current.state.allowDefaultWordSeed !== true || current.snapshot.words.length) {
+                    return { committed: false, words: clone(current.snapshot.words) };
+                }
+                const next = clone(current.snapshot); next.words = clone(command.words);
+                current.state.allowDefaultWordSeed = false; readingModel().validate(next);
+                const receipt = await kernel.mutate(readingChanges(current, next, current.state),
+                    optionsMutationOptions(options, 'vocab-default-initialize', command));
+                return Object.assign({}, receipt, { words: clone(next.words) });
+            });
+        },
+        async repairDefaultWords(command, options = {}) {
+            await ready; await ensureReadingMigration();
+            assertObject(command, 'Default vocabulary repair requires a command');
+            assertArray(command.words, 'Default vocabulary repair requires words');
+            return retryVocabMutation(options, async () => {
+                const current = await readReadingDocuments();
+                const words = current.snapshot.words.filter((word) => word && typeof word.word === 'string'
+                    && word.word.trim() && typeof word.meaning === 'string' && word.meaning.trim());
+                const pollutedCount = words.filter((word) => word.meaning.trim().startsWith('你曾拼写为:')).length;
+                // Repair existing corruption independently of first-run seeding.
+                // Recheck after every conflict so a newer empty restore wins.
+                if (!words.length || pollutedCount / words.length < 0.6) {
+                    return { committed: false, words: clone(current.snapshot.words) };
+                }
+                const next = clone(current.snapshot); next.words = clone(command.words);
+                const ownedTerms = next.reading.terms.filter((term) => term.wordRef.listId === 'default');
+                if (ownedTerms.length) {
+                    // Reader progress belongs to the acknowledged canonical row,
+                    // whose ID may differ from (or be absent in) the bundled list.
+                    const listId = readingModel().READING_LIST_ID;
+                    const collection = next.lists[listId];
+                    const retainedWords = Array.isArray(collection) ? collection : asArray(asObject(collection).words);
+                    const retainedIds = new Set(retainedWords.map((word) => word && word.id));
+                    const replacements = new Map();
+                    for (const term of ownedTerms) {
+                        const oldId = term.wordRef.wordId;
+                        if (!replacements.has(oldId)) {
+                            const owner = current.snapshot.words.find((word) => word && word.id === oldId);
+                            const baseId = JSON.stringify(['default-repair', oldId]);
+                            let id = baseId; let suffix = 1;
+                            while (retainedIds.has(id)) id = `${baseId}-${suffix++}`;
+                            retainedIds.add(id);
+                            retainedWords.push(Object.assign({}, clone(owner), { id }));
+                            replacements.set(oldId, { listId, wordId: id });
+                        }
+                        term.wordRef = clone(replacements.get(oldId));
+                    }
+                    next.lists[listId] = Array.isArray(collection) ? retainedWords
+                        : Object.assign({}, asObject(collection), { id: listId, words: retainedWords });
+                }
+                current.state.allowDefaultWordSeed = false; readingModel().validate(next);
+                const receipt = await kernel.mutate(readingChanges(current, next, current.state),
+                    optionsMutationOptions(options, 'vocab-default-repair', command));
+                if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Default vocabulary repair was not acknowledged');
+                return Object.assign({}, receipt, { words: clone((await readReadingDocuments()).snapshot.words) });
+            });
+        },
+        mutateReading,
         async listWords() { await ready; return kernel.read('vocab.words'); },
         async saveWords(words, options = {}) {
             await ready; assertArray(words, 'vocab.saveWords requires an array');
             const mutation = optionsMutationOptions(options, 'vocab-words', words);
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.words', { withMeta: true });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.words',
                     data: words,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4789,7 +5481,7 @@
             const mutation = optionsMutationOptions(options, 'vocab-config', config);
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.userConfig', { withMeta: true });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.userConfig',
                     data: asObject(config),
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4802,7 +5494,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.userConfig', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), clone(patch));
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.userConfig',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4818,7 +5510,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), { [collectionId]: clone(value) });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4833,7 +5525,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), upserts);
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4865,7 +5557,7 @@
                 if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
                 list.updatedAt = nowIso();
                 collections[id] = list;
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4883,7 +5575,7 @@
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const collections = Object.assign({}, asObject(current.data));
                 collections[id] = Object.assign({}, asObject(collections[id]), { id, words, updatedAt: nowIso() });
-                return kernel.mutate([{
+                return mutateVocabDocuments([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -4956,7 +5648,7 @@
                             { id: listId, words: merged, updatedAt: nowIso() }
                         )
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -5015,7 +5707,7 @@
                     : Object.assign({}, collections, {
                         [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words })
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -5057,7 +5749,7 @@
                     : Object.assign({}, collections, {
                         [listId]: Object.assign({}, collection, { id: listId, words: next, updatedAt: nowIso() })
                     });
-                const receipt = await kernel.mutate([{
+                const receipt = await mutateVocabDocuments([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? Number(current.envelope.revision) : 0)
@@ -5094,35 +5786,17 @@
                     lists[listId] = Object.assign({}, existingList, { id: listId, words: committedWords });
                     changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
                 }
-                const receipt = await kernel.mutate(changes, mutation);
+                const receipt = await mutateVocabDocuments(changes, mutation);
                 return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
         },
         async listReadingWords(options = {}) { await ready; return kernel.read('vocab.readingVocabWords', { withMeta: asObject(options).withMeta === true }); },
         async saveReadingWords(words, options = {}) {
-            await ready; assertArray(words, 'vocab.saveReadingWords requires an array');
-            const mutation = optionsMutationOptions(options, 'vocab-reading-words', words);
-            return retryVocabMutation(options, async () => {
-                const current = await kernel.read('vocab.readingVocabWords', { withMeta: true });
-                return kernel.mutate([{
-                    logicalKey: 'vocab.readingVocabWords',
-                    data: words,
-                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
-                }], mutation);
-            });
+            return replaceLegacyReadingCollection('vocab.readingVocabWords', words, options);
         },
         async listReadingBookshelfExams(options = {}) { await ready; return kernel.read('vocab.readingBookshelfExams', { withMeta: asObject(options).withMeta === true }); },
         async saveReadingBookshelfExams(records, options = {}) {
-            await ready; assertArray(records, 'vocab.saveReadingBookshelfExams requires an array');
-            const mutation = optionsMutationOptions(options, 'vocab-reading-bookshelf', records);
-            return retryVocabMutation(options, async () => {
-                const current = await kernel.read('vocab.readingBookshelfExams', { withMeta: true });
-                return kernel.mutate([{
-                    logicalKey: 'vocab.readingBookshelfExams',
-                    data: records,
-                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
-                }], mutation);
-            });
+            return replaceLegacyReadingCollection('vocab.readingBookshelfExams', records, options);
         }
     });
 
@@ -5382,6 +6056,11 @@
     }
     async function prepareLegacyDocumentChange(logicalKey, legacyValue) {
         const entry = catalog.get(logicalKey);
+        // A completed reading installation owns its canonical records as well
+        // as projections. An interrupted older, broader migration must not merge
+        // stale default/list records back after an authoritative empty restore.
+        if ((logicalKey === 'vocab.words' || logicalKey === 'vocab.lists')
+            && await kernel.getEnvelope(READING_STATE_KEY)) return null;
         const currentEnvelope = await kernel.getEnvelope(logicalKey);
         if (!currentEnvelope) {
             return { logicalKey, data: clone(legacyValue), expectedRevision: 0 };
@@ -5590,7 +6269,6 @@
             }
             try {
                 await migrateLegacyReadingData();
-                await refreshReadingMirrors();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
             }

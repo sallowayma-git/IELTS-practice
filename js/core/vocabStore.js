@@ -340,13 +340,6 @@
         return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
     }
 
-    async function saveListData(listId, value) {
-        const vocab = await requireVocabData();
-        const words = value && typeof value === 'object' && Array.isArray(value.words) ? value.words : value;
-        await vocab.replaceListWords({ listId, words: Array.isArray(words) ? words : [] });
-        return true;
-    }
-
     async function saveConfigData(configPatch = state.config) {
         const vocab = await requireVocabData();
         await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
@@ -674,16 +667,21 @@
                 }
                 return backfilled;
             }
-            if (pollutedBySpellingList) {
-                console.warn('[VocabStore] 检测到默认词表被错词快照污染，正在恢复 IELTS 核心词表');
+            const vocab = await requireVocabData();
+            if (!pollutedBySpellingList && !await vocab.shouldInitializeDefaultWords()) {
+                if (state.activeListId === DEFAULT_LIST_ID) setWordsInternal(normalizedStored);
+                return normalizedStored;
             }
 
-            const normalized = await loadBundledDefaultLexicon();
+            let normalized = await loadBundledDefaultLexicon();
             if (!normalized.length) {
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            await saveListData(DEFAULT_LIST_ID, normalized);
+            const receipt = pollutedBySpellingList
+                ? await vocab.repairDefaultWords({ words: normalized })
+                : await vocab.initializeDefaultWords({ words: normalized });
+            normalized = normalizeStoredListWords(receipt.words, DEFAULT_LIST_ID);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);
                 state.lastLoadSource = 'default';
@@ -1102,38 +1100,47 @@
         if (!normalized) {
             return null;
         }
-        await init();
-        const listId = 'reading-highlights';
-        const storedData = await readListData(listId);
-        const words = normalizeStoredListWords(storedData, listId);
-        const key = normalized.word.toLowerCase();
-        const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
-        let committedWord = normalized;
-        if (existingIndex >= 0) {
-            const existing = words[existingIndex];
-            committedWord = normalizeWordRecord({
-                ...existing,
-                ...normalized,
-                id: existing.id || normalized.id,
-                createdAt: existing.createdAt || normalized.createdAt,
-                note: existing.note || normalized.note,
-                easeFactor: existing.easeFactor,
-                interval: existing.interval,
-                repetitions: existing.repetitions,
-                intraCycles: existing.intraCycles,
-                correctCount: existing.correctCount,
-                lastReviewed: existing.lastReviewed,
-                nextReview: existing.nextReview,
-                updatedAt: getNow()
-            });
-            words.splice(existingIndex, 1, committedWord);
-        } else {
-            words.push(normalized);
+        const vocab = await requireVocabData();
+        const context = payload.context && typeof payload.context === 'object' ? payload.context : {};
+        const examId = String(context.examId || payload.examId || '').trim();
+        if (!examId) throw new Error('Reading vocabulary requires an article identity');
+        let source = context.source || (payload.source && typeof payload.source === 'object' ? payload.source : null);
+        const configurationId = Object.prototype.hasOwnProperty.call(context, 'libraryConfigurationId')
+            ? context.libraryConfigurationId
+            : payload.libraryConfigurationId;
+        if (configurationId !== undefined || !source) {
+            if (configurationId === undefined) throw new Error('Reading vocabulary requires a library identity');
+            source = configurationId == null || configurationId === ''
+                ? { kind: 'builtin', id: 'default' }
+                : { kind: 'imported', id: String(configurationId).trim() };
         }
-        await saveListData(listId, words.filter(Boolean));
+        const observed = await vocab.getReadingSnapshot();
+        const command = {
+            source,
+            article: { examId, title: String(context.title || '') },
+            word: normalized,
+            manual: !payload.occurrence,
+            at: getNow()
+        };
+        if (payload.occurrence) command.occurrence = cloneValue(payload.occurrence);
+        const receipt = await vocab.mutateReading('collect', command, {
+            observedRevision: observed.revision,
+            observedGeneration: observed.generation
+        });
+        if (!receipt || receipt.saved !== true || !receipt.snapshot) {
+            throw new Error('Reading vocabulary was not durably acknowledged');
+        }
+        const snapshot = receipt.snapshot;
+        const term = snapshot.reading.terms.find((entry) => entry.normalizedTerm === normalized.word.toLowerCase());
+        if (!term) throw new Error('Saved reading vocabulary has no canonical owner');
+        const listId = term.wordRef.listId;
+        const storedList = listId === DEFAULT_LIST_ID ? snapshot.words : snapshot.lists[listId];
+        const words = Array.isArray(storedList) ? storedList : storedList && storedList.words || [];
+        const committedWord = words.find((entry) => entry.id === term.wordRef.wordId);
+        if (!committedWord) throw new Error('Saved reading vocabulary has no canonical word');
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
-            setWordsInternal(words.map((word) => resolveWordPhonetic(word)).filter(Boolean));
+            setWordsInternal(normalizeStoredListWords(storedList, listId));
         }
         return cloneValue(resolveWordPhonetic(committedWord));
     }
