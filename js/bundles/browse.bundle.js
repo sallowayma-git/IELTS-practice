@@ -16078,6 +16078,17 @@ if (typeof module !== 'undefined' && module.exports) {
             return this.project(global.AppData.vocab.readingModel.articleId(source, String(examId)));
         },
 
+        getOccurrenceOwner(occurrence) {
+            const reading = this._state?.snapshot.reading;
+            const association = reading?.associations.find(row => row.id === occurrence.associationId);
+            const article = reading?.articles.find(row => row.id === association?.articleId);
+            const source = reading?.sources.find(row => row.id === article?.sourceId);
+            if (!article || !source) return null;
+            return { articleId: article.id,
+                source: { kind: source.kind, id: source.libraryId },
+                article: { examId: article.examId, title: article.title } };
+        },
+
         adopt(state) {
             if (this._state?.generation === state.generation && this._state.revision > state.revision) return;
             this._state = state;
@@ -16523,6 +16534,7 @@ if (typeof module !== 'undefined' && module.exports) {
         _pendingTimers: new Set(),
         _returnFocus: null,
         _modalReturnFocus: null,
+        // Durable writes survive closing/reopening; release only when they settle.
         _selectionPending: new Set(),
         _undoOccurrence: null,
         _occurrenceBusy: false,
@@ -16534,7 +16546,6 @@ if (typeof module !== 'undefined' && module.exports) {
             this.toastTimer = null;
             this._undoOccurrence = null;
             this.unresolvedOccurrences = [];
-            this._selectionPending.clear();
             this._occurrenceBusy = false;
             overlay?.querySelector('#vocab-occurrence-actions')?.replaceChildren();
             overlay?.querySelector('#vocab-occurrence-undo')?.replaceChildren();
@@ -17325,9 +17336,15 @@ if (typeof module !== 'undefined' && module.exports) {
             const captured = global.ReadingVocabAnchors.capture(scope, range);
             if (!captured) return;
             const requestId = this._openRequestId;
-            const pendingId = JSON.stringify([requestId, captured.scopeId, captured.startOffset, captured.endOffset]);
-            if (this._selectionPending.has(pendingId)) return;
-            this._selectionPending.add(pendingId);
+            // Pending saves have no paint yet, so reserve their text intervals
+            // until acknowledgement to prevent invisible overlapping captures.
+            const articleId = global.AppData.vocab.readingModel.articleId(this.currentSource, String(this.currentExamId));
+            const pendingSelection = { articleId, scopeId: captured.scopeId,
+                startOffset: captured.startOffset, endOffset: captured.endOffset };
+            if ([...this._selectionPending].some(pending => pending.articleId === articleId &&
+                pending.scopeId === captured.scopeId && captured.startOffset < pending.endOffset &&
+                captured.endOffset > pending.startOffset)) return;
+            this._selectionPending.add(pendingSelection);
             this.showToast('正在保存…');
             try {
                 const result = await ReadingVocabStore.add(captured.word, this.currentExamId,
@@ -17342,7 +17359,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } catch (error) {
                 if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请重新划选重试');
             } finally {
-                this._selectionPending.delete(pendingId);
+                this._selectionPending.delete(pendingSelection);
             }
         },
 
@@ -17422,13 +17439,14 @@ if (typeof module !== 'undefined' && module.exports) {
 
         async removeOccurrence(occurrenceId) {
             if (this._occurrenceBusy) return;
-            const item = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
+            const item = ReadingVocabStore.getAll()
                 .find(row => row.occurrences.some(occurrence => occurrence.id === occurrenceId));
             const occurrence = item?.occurrences.find(row => row.id === occurrenceId);
             if (!occurrence) return;
+            const owner = ReadingVocabStore.getOccurrenceOwner(occurrence);
+            if (!owner) return;
             const requestId = this._openRequestId;
-            const undo = { source: { ...this.currentSource },
-                article: { examId: String(this.currentExamId), title: this.currentExam?.title || item.examTitle || '' },
+            const undo = { source: owner.source, article: owner.article,
                 word: { word: item.word, meaning: item.meaning || '待补充释义', example: item.context || '' },
                 occurrence: { ...occurrence }, manual: false };
             const observed = { revision: ReadingVocabStore._state.revision, generation: ReadingVocabStore._state.generation };
@@ -17613,15 +17631,22 @@ if (typeof module !== 'undefined' && module.exports) {
 
             let html = '';
             const unresolved = new Set(this.unresolvedOccurrences.map(row => row.id));
+            const currentArticleId = this.currentExamId
+                ? global.AppData.vocab.readingModel.articleId(this.currentSource, String(this.currentExamId)) : null;
             list.forEach(item => {
-                const currentOccurrences = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
-                    .find(row => row.id === item.id)?.occurrences || [];
-                const occurrenceRows = currentOccurrences.map(occurrence => '<div class="vocab-occurrence-row" data-occurrence-id="'
-                    + escapeHtml(occurrence.id) + '" data-anchor-status="' + (unresolved.has(occurrence.id) ? 'unresolved' : 'resolved') + '">'
-                    + '<span>' + escapeHtml(occurrence.before + occurrence.quote + occurrence.after) + '</span>'
-                    + (unresolved.has(occurrence.id) ? '<strong>原文位置无法定位，生词已保留</strong>' : '')
-                    + '<button type="button" data-action="remove-occurrence" data-occurrence-id="' + escapeHtml(occurrence.id)
-                    + '">移除这一处</button></div>').join('');
+                const occurrenceRows = item.occurrences.map(occurrence => {
+                    const owner = ReadingVocabStore.getOccurrenceOwner(occurrence);
+                    const status = owner?.articleId === currentArticleId
+                        ? (unresolved.has(occurrence.id) ? 'unresolved' : 'resolved') : 'unverified';
+                    return '<div class="vocab-occurrence-row" data-occurrence-id="'
+                        + escapeHtml(occurrence.id) + '" data-anchor-status="' + status + '">'
+                        + (!isCurrent && owner ? '<span class="vocab-item__source">'
+                            + escapeHtml(owner.article.title || owner.article.examId) + '</span>' : '')
+                        + '<span>' + escapeHtml(occurrence.before + occurrence.quote + occurrence.after) + '</span>'
+                        + (status === 'unresolved' ? '<strong>原文位置无法定位，生词已保留</strong>' : '')
+                        + '<button type="button" data-action="remove-occurrence" data-occurrence-id="' + escapeHtml(occurrence.id)
+                        + '">移除这一处</button></div>';
+                }).join('');
                 html += `
                     <div class="vocab-item" data-word-id="${escapeHtml(item.id)}">
                         <div class="vocab-item__main">

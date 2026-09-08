@@ -70,8 +70,12 @@ anchor and select the intended current location.
 ## Acknowledgement, removal and undo
 
 Collection waits for `ReadingVocabStore.mutate` / `AppData.vocab.mutateReading`
-acknowledgement before painting success. A pending occurrence is deduplicated;
-failed saves retain a retryable selection and do not create a saved-looking mark.
+acknowledgement before painting success. Pending intervals in the same source,
+article and text scope reject overlapping selections until acknowledgement;
+adjacent or disjoint intervals remain eligible. Completed or failed saves release
+their reservations. Reservations survive closing and reopening because their
+durable writes can still succeed; other articles remain independently selectable.
+Failed saves retain a retryable selection and do not create a saved-looking mark.
 Store updates remove only `mark.vocab-highlight` wrappers and restore the current
 article's acknowledged occurrences. Manual associations never invent highlights.
 
@@ -79,6 +83,14 @@ Click or keyboard-activate a mark to expose “remove this occurrence”; the li
 also exposes removal for each resolved or unresolved occurrence. `removeOccurrence`
 uses the shared final-occurrence/manual-membership semantics. Another article,
 visited shelf records, and canonical definitions/review history remain intact.
+
+The current-article tab lists that article's occurrences; the All tab lists every
+occurrence of its global terms, including terms found only in another article.
+Each All-tab occurrence identifies its owning article. Only current-article
+anchors have been evaluated for restoration; other articles' anchors remain
+unverified until opened. Removal and undo derive the owning article and library
+from the saved occurrence association, including identical exam IDs in different
+libraries, instead of using the currently open reader's identity.
 
 The immediate undo action replays the original collection intent through the
 same mutation API. It retains the removal transaction's committed reading-state
