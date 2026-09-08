@@ -2261,7 +2261,12 @@
         }
     }
 
+    // Keep the practice entry unavailable until #157 isolates the reader's
+    // question controls from practice radio groups and answer collection.
+    const PRACTICE_VOCAB_READER_ENABLED = false;
+
     function openVocabReaderForCurrentExam() {
+        if (!PRACTICE_VOCAB_READER_ENABLED) return;
         const examId = state.suite?.activeExamId || state.examId;
         if (!examId) {
             console.warn('[UnifiedReadingPage] 无法获取当前试卷 ID');
@@ -2279,6 +2284,7 @@
     }
 
     function ensureReadingVocabButton() {
+        if (!PRACTICE_VOCAB_READER_ENABLED) return null;
         let button = document.getElementById('reading-vocab-header-btn');
         if (button) return button;
         const headerRight = document.querySelector('.header-right');

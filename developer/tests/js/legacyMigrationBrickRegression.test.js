@@ -152,12 +152,16 @@ async function run() {
         { word: 'new-only', source: 'v2' }
     ]));
     partialDocuments.docs.set('preferences.values', seedEnvelope({ theme: 'v2-theme', v2Only: true }));
+    partialDocuments.docs.set('vocab.readingVocabWords', seedEnvelope([]));
+    partialDocuments.docs.set('vocab.readingBookshelfExams', seedEnvelope([{ examId: 'canonical-only' }]));
     const retriedMigration = harness({
         vocab_words: [
             { word: 'shared', source: 'legacy' },
             { word: 'legacy-only', source: 'legacy' }
         ],
-        ui_preferences: { theme: 'legacy-theme', legacyOnly: true }
+        ui_preferences: { theme: 'legacy-theme', legacyOnly: true },
+        ielts_reading_vocab_words_v1: [{ id: 'removed-word', word: 'removed' }],
+        ielts_reading_bookshelf_exams_v1: [{ examId: 'removed-exam' }, { examId: 'canonical-only' }]
     }, { shared: partialDocuments });
     await retriedMigration.app.ready;
     const reconciledWords = await retriedMigration.app.vocab.listWords();
@@ -169,6 +173,10 @@ async function run() {
         v2Only: true
     });
     assert.strictEqual(partialDocuments.docs.get('system.migrations').data.v1ToV2.status, 'complete');
+    assert.deepStrictEqual(await retriedMigration.app.vocab.listReadingWords(), [],
+        'retrying legacy migration must preserve an explicitly empty canonical reading collection');
+    assert.deepStrictEqual(await retriedMigration.app.vocab.listReadingBookshelfExams(), [{ examId: 'canonical-only' }],
+        'retrying legacy migration must not merge removed bookshelf records back into a smaller canonical collection');
 
     const tombstonedExternal = {
         docs: new Map(),
@@ -189,13 +197,18 @@ async function run() {
     tombstonedExternal.docs.set('system.migrations', seedEnvelope({
         v1ToV2: { version: 1, status: 'complete' }
     }));
+    tombstonedExternal.docs.set('vocab.readingVocabWords', Object.assign(seedEnvelope(null), { state: 'cleared' }));
+    tombstonedExternal.docs.set('vocab.readingBookshelfExams', Object.assign(seedEnvelope(null), { state: 'cleared' }));
     const lateExternalPayload = { practiceRecords: [{
         id: 'late-external',
         type: 'reading',
         title: 'Recovered after tombstone',
         totalQuestions: 1,
         correctAnswers: 1
-    }] };
+    }],
+        ielts_reading_vocab_words_v1: [{ id: 'removed-word', word: 'removed' }],
+        ielts_reading_bookshelf_exams_v1: [{ examId: 'removed-exam' }]
+    };
     const restoredTombstone = harness({}, {
         shared: tombstonedExternal,
         externalBackup: lateExternalPayload
@@ -210,6 +223,10 @@ async function run() {
     }
     assert.strictEqual(tombstonedExternal.docs.get('system.migrations').data.externalBackupV1.status, 'consumed');
     assert.strictEqual(tombstonedExternal.legacyReads, 0, 'a late external backup must not rescan completed v1 data');
+    assert.deepStrictEqual(await restoredTombstone.app.vocab.listReadingWords(), [],
+        'late external migration must preserve the cleared canonical reading vocabulary');
+    assert.deepStrictEqual(await restoredTombstone.app.vocab.listReadingBookshelfExams(), [],
+        'late external migration must preserve the cleared canonical bookshelf');
 
     const tombstoneSecondBoot = harness({}, {
         shared: tombstonedExternal,

@@ -4,6 +4,15 @@
     const STORAGE_KEY = 'ielts_reading_vocab_words_v1';
     const BOOKSHELF_STORAGE_KEY = 'ielts_reading_bookshelf_exams_v1';
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function recordBookshelfExamDirect(examId, examTitle = '', category = '') {
         if (!examId) return;
         try {
@@ -235,36 +244,15 @@
                     await global.AppData.ready;
                 }
                 if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.listReadingWords === 'function') {
-                    const appDataWords = await global.AppData.vocab.listReadingWords();
-                    const localWords = this.getAll();
-                    if (Array.isArray(appDataWords) && appDataWords.length > 0) {
-                        const map = new Map();
-                        localWords.forEach(w => {
-                            const key = String(w && (w.word || w.id) || '').trim().toLowerCase();
-                            if (key) map.set(key, w);
-                        });
-                        appDataWords.forEach(w => {
-                            const key = String(w && (w.word || w.id) || '').trim().toLowerCase();
-                            if (key) {
-                                if (map.has(key)) {
-                                    const existing = map.get(key);
-                                    map.set(key, Object.assign({}, existing, w, {
-                                        createdAt: Math.min(Number(existing.createdAt) || Date.now(), Number(w.createdAt) || Date.now()),
-                                        updatedAt: Math.max(Number(existing.updatedAt) || 0, Number(w.updatedAt) || 0)
-                                    }));
-                                } else {
-                                    map.set(key, w);
-                                }
-                            }
-                        });
-                        const merged = Array.from(map.values());
-                        this._cache = merged;
-                        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch (_) {}
-                        if (merged.length !== appDataWords.length) {
-                            await global.AppData.vocab.saveReadingWords(merged);
-                        }
-                    } else if (localWords.length > 0) {
-                        await global.AppData.vocab.saveReadingWords(localWords);
+                    const result = await global.AppData.vocab.listReadingWords({ withMeta: true });
+                    const appDataWords = Array.isArray(result)
+                        ? result
+                        : (result && result.envelope ? result.data : null);
+                    if (Array.isArray(appDataWords)) {
+                        // An existing AppData document owns restores, including empty lists.
+                        // An absent document may mean migration failed; preserve the local copy.
+                        this._cache = appDataWords;
+                        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appDataWords)); } catch (_) {}
                     }
                 }
             } catch (e) {
@@ -716,6 +704,7 @@
         modalTab: 'current', // 'current' or 'all'
         modalOpen: false,
         toastTimer: null,
+        _openRequestId: 0,
 
         ensureOverlay() {
             let overlay = document.getElementById('reading-vocab-reader-overlay');
@@ -1017,7 +1006,9 @@
             const readerBody = overlay.querySelector('#vocab-reader-body');
             if (readerBody) {
                 const handleSelectionCapture = () => {
+                    const requestId = this._openRequestId;
                     setTimeout(() => {
+                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden')) return;
                         const selection = window.getSelection();
                         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
                         const rawText = selection.toString();
@@ -1164,7 +1155,12 @@
             if (!examId) return;
 
             const overlay = this.ensureOverlay();
+            const requestId = ++this._openRequestId;
             this.currentExamId = examId;
+            this.currentExam = null;
+            this.currentPayload = null;
+            this.currentExplanation = null;
+            this.closeModal();
 
             // 根据来源动态调整返回按钮提示
             const backBtn = overlay.querySelector('#vocab-reader-back-btn');
@@ -1190,10 +1186,16 @@
             if (badgesEl) badgesEl.innerHTML = '';
             if (passageContent) passageContent.innerHTML = '<div class="vocab-loading-spinner">正在解析文章结构与题目...</div>';
             if (questionsContent) questionsContent.innerHTML = '';
+            ['#vocab-passage-title', '#vocab-passage-intro', '#vocab-reader-tabs'].forEach(selector => {
+                const element = overlay.querySelector(selector);
+                if (element) element.textContent = '';
+            });
+            this.switchViewTab('all');
 
             try {
                 // 加载试卷数据
                 const payload = await loadReadingExamPayload(examId);
+                if (requestId !== this._openRequestId) return;
                 if (!payload) {
                     throw new Error('未找到该试卷的数据文件');
                 }
@@ -1201,6 +1203,7 @@
 
                 // 异步加载解析（不阻塞主内容）
                 loadReadingExplanationPayload(examId).then(exp => {
+                    if (requestId !== this._openRequestId) return;
                     this.currentExplanation = exp;
                     this.enhanceWithExplanation(exp);
                 }).catch(() => {});
@@ -1219,14 +1222,20 @@
                 this.renderContent();
                 this.updateCounts();
             } catch (err) {
+                if (requestId !== this._openRequestId) return;
                 console.error('[ReadingVocabReader] 加载失败:', err);
                 if (passageContent) {
-                    passageContent.innerHTML = `
-                        <div class="vocab-error-state">
-                            <p>⚠️ 载入文章数据失败：${err.message || '请检查网络或试卷配置'}</p>
-                            <button type="button" class="btn btn-primary" onclick="ReadingVocabReader.open('${examId}')">重试</button>
-                        </div>
-                    `;
+                    const errorState = document.createElement('div');
+                    errorState.className = 'vocab-error-state';
+                    const message = document.createElement('p');
+                    message.textContent = `⚠️ 载入文章数据失败：${err.message || '请检查网络或试卷配置'}`;
+                    const retry = document.createElement('button');
+                    retry.type = 'button';
+                    retry.className = 'btn btn-primary';
+                    retry.textContent = '重试';
+                    retry.addEventListener('click', () => this.open(examId, options));
+                    errorState.append(message, retry);
+                    passageContent.replaceChildren(errorState);
                 }
             }
         },
@@ -1246,8 +1255,8 @@
             }
             if (badgesEl) {
                 badgesEl.innerHTML = `
-                    <span class="vocab-badge vocab-badge--cat">${exam.category || '阅读'}</span>
-                    ${exam.frequency ? `<span class="vocab-badge vocab-badge--freq">${exam.frequency}</span>` : ''}
+                    <span class="vocab-badge vocab-badge--cat">${escapeHtml(exam.category || '阅读')}</span>
+                    ${exam.frequency ? `<span class="vocab-badge vocab-badge--freq">${escapeHtml(exam.frequency)}</span>` : ''}
                 `;
             }
 
@@ -1805,16 +1814,16 @@
             let html = '';
             list.forEach(item => {
                 html += `
-                    <div class="vocab-item" data-word-id="${item.id}">
+                    <div class="vocab-item" data-word-id="${escapeHtml(item.id)}">
                         <div class="vocab-item__main">
                             <div class="vocab-item__header">
-                                <span class="vocab-item__word">${item.word}</span>
-                                <button type="button" class="vocab-speak-btn" data-speak-word="${item.word}" title="发音">🔊</button>
+                                <span class="vocab-item__word">${escapeHtml(item.word)}</span>
+                                <button type="button" class="vocab-speak-btn" data-speak-word="${escapeHtml(item.word)}" title="发音">🔊</button>
                             </div>
-                            ${item.context ? `<p class="vocab-item__context">"${item.context}"</p>` : ''}
-                            ${!isCurrent && item.examTitle ? `<span class="vocab-item__source">${item.examTitle}</span>` : ''}
+                            ${item.context ? `<p class="vocab-item__context">"${escapeHtml(item.context)}"</p>` : ''}
+                            ${!isCurrent && item.examTitle ? `<span class="vocab-item__source">${escapeHtml(item.examTitle)}</span>` : ''}
                         </div>
-                        <button type="button" class="vocab-delete-btn" data-del-id="${item.id}" title="移出生词本">删除</button>
+                        <button type="button" class="vocab-delete-btn" data-del-id="${escapeHtml(item.id)}" title="移出生词本">删除</button>
                     </div>
                 `;
             });
@@ -1884,12 +1893,13 @@
         },
 
         close() {
+            ++this._openRequestId;
             const overlay = this.ensureOverlay();
             if (overlay) {
                 overlay.classList.add('is-hidden');
             }
             document.body.classList.remove('vocab-reader-open');
-            this.modalOpen = false;
+            this.closeModal();
         }
     };
 

@@ -93,13 +93,13 @@ def require(condition: bool, detail: str) -> None:
         raise RuntimeError(detail)
 
 
-async def open_practice(page: Page, session_id: str, token: str):
-    url = f"{UNIFIED_HTML.as_uri()}?examId={TARGET_EXAM}&dataKey={TARGET_EXAM}&test_env=1"
+async def open_practice(page: Page, session_id: str, token: str, exam_id: str = TARGET_EXAM):
+    url = f"{UNIFIED_HTML.as_uri()}?examId={exam_id}&dataKey={exam_id}&test_env=1"
     await page.goto(HOST_FIXTURE.as_uri(), wait_until="load")
     await page.set_content(HOST_HTML, wait_until="load")
     await page.evaluate(
         "config => window.__hostConfigure(config)",
-        {"url": url, "examId": TARGET_EXAM, "sessionId": session_id, "token": token},
+        {"url": url, "examId": exam_id, "sessionId": session_id, "token": token},
     )
     await page.wait_for_selector("#practice-frame")
     frame = page.frame(name="practice")
@@ -373,12 +373,35 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     return {"afterTimeout": after_timeout, "lateAfterTimeout": late_after_timeout, "afterRetryAck": after_retry_ack}
 
 
+async def run_vocab_entry_gate_scenario(context) -> Dict[str, Any]:
+    page = await context.new_page()
+    frame = await open_practice(page, "session-vocab-gate", "token-vocab-gate", "p2-low-08")
+    await frame.check('#question-groups input[name="q1"][value="A"]')
+    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "unsafe_vocab_entry_available")
+    require(await frame.locator("#reading-vocab-reader-overlay").count() == 0, "reader_controls_in_practice")
+    require(await frame.locator('input[name="q1"][value="A"]').is_checked(), "practice_answer_changed")
+
+    await frame.click("#submit-btn")
+    await wait_for_submission_count(page, 1)
+    submission = (await submissions(page))[0]
+    require(submission.get("data", {}).get("answers", {}).get("q1") == "A", f"practice_payload_changed:{submission}")
+    await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(submission))
+    await frame.wait_for_function(
+        "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitted'"
+    )
+    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "unsafe_vocab_entry_after_submit")
+    require(await frame.locator("#reading-vocab-reader-overlay").count() == 0, "reader_controls_after_submit")
+    await page.close()
+    return {"examId": "p2-low-08", "entryAvailable": False, "submittedAnswer": "A"}
+
+
 async def run() -> Dict[str, Any]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--allow-file-access-from-files"])
         context = await browser.new_context(viewport={"width": 1440, "height": 1000})
         await context.add_init_script(script="window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;")
         try:
+            vocab_entry_gate = await run_vocab_entry_gate_scenario(context)
             ack_and_nack = await run_ack_and_nack_scenario(context)
             timeout = await run_timeout_scenario(context)
         finally:
@@ -387,7 +410,7 @@ async def run() -> Dict[str, Any]:
     return {
         "status": "pass",
         "detail": "unified reliable submit acknowledgement regression passed",
-        "data": {"ackAndNack": ack_and_nack, "timeout": timeout},
+        "data": {"vocabEntryGate": vocab_entry_gate, "ackAndNack": ack_and_nack, "timeout": timeout},
     }
 
 

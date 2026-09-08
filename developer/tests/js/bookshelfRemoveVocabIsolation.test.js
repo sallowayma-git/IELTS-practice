@@ -130,3 +130,49 @@ test('Bookshelf delete button and vocab isolation test', async () => {
 
     console.log('✅ 书架删除生词本记录且严格隔离做题练习记录测试全部通过！');
 });
+
+test('Bookshelf initialization adopts empty and smaller canonical collections without reimporting stale mirrors', async () => {
+    const bookshelfCode = fs.readFileSync(new URL('../../../js/components/bookshelfView.js', import.meta.url), 'utf8');
+    const key = 'ielts_reading_bookshelf_exams_v1';
+    const stale = [{ examId: 'keep', lastOpenedAt: 999 }, { examId: 'removed' }];
+    const storage = new Map([[key, JSON.stringify(stale)]]);
+    let canonical = { data: [], envelope: { state: 'present' } };
+    let saves = 0;
+    const sandbox = {
+        console,
+        localStorage: {
+            getItem: (name) => storage.get(name) || null,
+            setItem: (name, value) => storage.set(name, String(value))
+        },
+        AppData: {
+            ready: Promise.resolve(),
+            vocab: {
+                listReadingBookshelfExams: async (options) => {
+                    assert.equal(options.withMeta, true);
+                    return canonical;
+                },
+                saveReadingBookshelfExams: async () => { saves += 1; }
+            }
+        },
+        addEventListener() {}
+    };
+    sandbox.window = sandbox;
+    vm.runInNewContext(bookshelfCode, sandbox);
+    await sandbox.ReadingBookshelfStore.init();
+    assert.deepEqual(JSON.parse(storage.get(key)), [], 'an empty canonical bookshelf clears the stale mirror');
+
+    canonical = { data: [{ examId: 'keep', lastOpenedAt: 100 }], envelope: { state: 'present' } };
+    storage.set(key, JSON.stringify(stale));
+    await sandbox.ReadingBookshelfStore.init();
+    assert.deepEqual(JSON.parse(storage.get(key)), canonical.data,
+        'the restored metadata and membership must replace stale local records');
+    canonical = { data: [], envelope: null };
+    storage.set(key, JSON.stringify(stale));
+    await sandbox.ReadingBookshelfStore.init();
+    assert.deepEqual(JSON.parse(storage.get(key)), stale,
+        'an absent canonical envelope must preserve the only local copy if migration failed');
+    canonical = { data: [], envelope: { state: 'cleared' } };
+    await sandbox.ReadingBookshelfStore.init();
+    assert.deepEqual(JSON.parse(storage.get(key)), [], 'a cleared envelope remains authoritative');
+    assert.equal(saves, 0, 'loading a canonical bookshelf must never save the old mirror back to AppData');
+});

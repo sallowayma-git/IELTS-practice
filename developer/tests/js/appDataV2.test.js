@@ -124,6 +124,30 @@ function harness() {
     const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
 }
 
+async function testReadingCollectionPresenceMetadata() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const readingCollections = [
+        ['vocab.readingVocabWords', fixture.app.vocab.listReadingWords, fixture.app.vocab.saveReadingWords],
+        ['vocab.readingBookshelfExams', fixture.app.vocab.listReadingBookshelfExams, fixture.app.vocab.saveReadingBookshelfExams]
+    ];
+    for (const [logicalKey, list, save] of readingCollections) {
+        assert.deepStrictEqual(await list(), [], 'default reading list callers retain the array API');
+        const absent = await list({ withMeta: true });
+        assert.deepStrictEqual(absent.data, []);
+        assert.strictEqual(absent.envelope, null, 'metadata distinguishes an unmigrated default from an authoritative empty array');
+        await save([]);
+        const empty = await list({ withMeta: true });
+        assert.deepStrictEqual(empty.data, []);
+        assert.strictEqual(empty.envelope.state, 'present');
+        fixture.shared.docs.set(logicalKey, fixture.envelope(logicalKey, null, 'cleared'));
+        const cleared = await list({ withMeta: true });
+        assert.deepStrictEqual(await list(), []);
+        assert.deepStrictEqual(cleared.data, []);
+        assert.strictEqual(cleared.envelope.state, 'cleared', 'cleared collections retain their canonical presence');
+    }
+}
+
 async function testVocabPhoneticMutationProtection() {
     const fixture = harness();
     await fixture.app.ready;
@@ -1484,6 +1508,7 @@ async function testRecoveryThirtyDayTtlBoundary() {
 }
 
 async function run() {
+    await testReadingCollectionPresenceMetadata();
     await testClearInterruptedRecoveryIsolation();
     await testRecoveryThirtyDayTtlBoundary();
     await testVocabPhoneticMutationProtection();
@@ -2034,6 +2059,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 54 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 55 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

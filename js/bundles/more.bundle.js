@@ -5234,35 +5234,14 @@
                     await global.AppData.ready;
                 }
                 if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.listReadingBookshelfExams === 'function') {
-                    const appDataRecords = await global.AppData.vocab.listReadingBookshelfExams();
-                    const localRecords = this.getRawRecords();
-                    if (Array.isArray(appDataRecords) && appDataRecords.length > 0) {
-                        const map = new Map();
-                        localRecords.forEach(r => {
-                            const eid = String(r && (r.examId || r.id) || '').trim();
-                            if (eid) map.set(eid, r);
-                        });
-                        appDataRecords.forEach(r => {
-                            const eid = String(r && (r.examId || r.id) || '').trim();
-                            if (eid) {
-                                if (map.has(eid)) {
-                                    const existing = map.get(eid);
-                                    map.set(eid, Object.assign({}, existing, r, {
-                                        firstUsedAt: Math.min(Number(existing.firstUsedAt) || Date.now(), Number(r.firstUsedAt) || Date.now()),
-                                        lastOpenedAt: Math.max(Number(existing.lastOpenedAt) || 0, Number(r.lastOpenedAt) || 0)
-                                    }));
-                                } else {
-                                    map.set(eid, r);
-                                }
-                            }
-                        });
-                        const merged = Array.from(map.values());
-                        try { localStorage.setItem(BOOKSHELF_KEY, JSON.stringify(merged)); } catch (_) {}
-                        if (merged.length !== appDataRecords.length) {
-                            await global.AppData.vocab.saveReadingBookshelfExams(merged);
-                        }
-                    } else if (localRecords.length > 0) {
-                        await global.AppData.vocab.saveReadingBookshelfExams(localRecords);
+                    const result = await global.AppData.vocab.listReadingBookshelfExams({ withMeta: true });
+                    const appDataRecords = Array.isArray(result) ? result : result && result.envelope && result.data;
+                    // AppData owns legacy migration. Its restored collection,
+                    // including an empty array, replaces the local display mirror.
+                    // An absent envelope can mean migration failed; retain its
+                    // only legacy copy instead of treating the default [] as a clear.
+                    if (Array.isArray(appDataRecords)) {
+                        localStorage.setItem(BOOKSHELF_KEY, JSON.stringify(appDataRecords));
                     }
                 }
             } catch (e) {
