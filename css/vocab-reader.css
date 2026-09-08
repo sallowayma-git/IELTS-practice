@@ -545,8 +545,20 @@ mark.vocab-highlight:active,
     margin: 0 0 12px 0;
 }
 
-.vocab-question-group .drag-item,
-.vocab-question-group .pool-items {
+.vocab-question-group .vocab-answer-blank {
+    display: inline-block;
+    margin-inline: 0.2em;
+    color: #64748b;
+    user-select: text;
+}
+
+.vocab-question-group .vocab-question-options {
+    white-space: normal;
+    user-select: text;
+}
+
+.vocab-question-group .vocab-question-option,
+.vocab-question-group .vocab-question-pool {
     user-select: text !important;
 }
 

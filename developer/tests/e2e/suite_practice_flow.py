@@ -1002,7 +1002,7 @@ async def run() -> bool:
                 raise AssertionError("manual mode P1 submit should show enabled next nav button")
             await manual_suite_page.click(nav_after_p1_submit["nextSelector"])
             await manual_suite_page.wait_for_function(
-                "(oldId) => (document.body.dataset.examId || '') !== oldId",
+                "(oldId) => { const examId = document.body.dataset.examId || ''; return !!examId && examId !== oldId; }",
                 arg=manual_exam1,
                 timeout=30000,
             )
@@ -1051,7 +1051,7 @@ async def run() -> bool:
                 raise AssertionError("manual mode P2 submit should keep next nav enabled")
             await manual_suite_page.click(nav_after_p2_submit["nextSelector"])
             await manual_suite_page.wait_for_function(
-                "(oldId) => (document.body.dataset.examId || '') !== oldId",
+                "(oldId) => { const examId = document.body.dataset.examId || ''; return !!examId && examId !== oldId; }",
                 arg=manual_exam2,
                 timeout=30000,
             )

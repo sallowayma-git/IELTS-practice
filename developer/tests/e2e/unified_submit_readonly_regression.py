@@ -373,26 +373,42 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     return {"afterTimeout": after_timeout, "lateAfterTimeout": late_after_timeout, "afterRetryAck": after_retry_ack}
 
 
-async def run_vocab_entry_gate_scenario(context) -> Dict[str, Any]:
+async def run_vocab_entry_isolation_scenario(context) -> Dict[str, Any]:
     page = await context.new_page()
-    frame = await open_practice(page, "session-vocab-gate", "token-vocab-gate", "p2-low-08")
+    frame = await open_practice(page, "session-vocab-isolation", "token-vocab-isolation", "p2-low-08")
     await frame.check('#question-groups input[name="q1"][value="A"]')
-    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "unsafe_vocab_entry_available")
-    require(await frame.locator("#reading-vocab-reader-overlay").count() == 0, "reader_controls_in_practice")
-    require(await frame.locator('input[name="q1"][value="A"]').is_checked(), "practice_answer_changed")
+    before_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    await frame.click("#reading-vocab-header-btn")
+    await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
+    require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_available")
+    require(await frame.locator('#question-groups input[name="q1"][value="A"]').is_checked(), "practice_answer_changed")
+    during_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    require(during_answers == before_answers, "reader_changed_answer_payload")
+
+    await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerLockMode(true)")
+    require(await frame.locator('#question-groups input[name="q1"][value="A"]').is_disabled(), "timer_lock_did_not_lock_practice_answer")
+    require(await frame.locator("#reading-note-editor [data-note-body]").is_disabled(), "timer_lock_did_not_lock_practice_notes")
+    require(await frame.locator("#vocab-manual-input").is_enabled(), "timer_lock_disabled_reader_input")
+    await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerLockMode(false)")
+    await frame.click("#vocab-reader-back-btn")
 
     await frame.click("#submit-btn")
     await wait_for_submission_count(page, 1)
     submission = (await submissions(page))[0]
-    require(submission.get("data", {}).get("answers", {}).get("q1") == "A", f"practice_payload_changed:{submission}")
+    require(submission.get("data", {}).get("answers") == before_answers, f"practice_payload_changed:{submission}")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(submission))
     await frame.wait_for_function(
         "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitted'"
     )
-    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "unsafe_vocab_entry_after_submit")
-    require(await frame.locator("#reading-vocab-reader-overlay").count() == 0, "reader_controls_after_submit")
+    await frame.click("#reading-vocab-header-btn")
+    await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
+    require(await frame.locator("#vocab-manual-input").is_enabled(), "submitted_readonly_disabled_reader_input")
+    require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_after_submit")
+    after_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    require(after_answers == before_answers, "reader_after_submit_changed_answers")
+    await frame.click("#vocab-reader-back-btn")
     await page.close()
-    return {"examId": "p2-low-08", "entryAvailable": False, "submittedAnswer": "A"}
+    return {"examId": "p2-low-08", "entryAvailable": True, "submittedAnswer": "A", "readerInputSurvivesPracticeLocks": True}
 
 
 async def run() -> Dict[str, Any]:
@@ -401,7 +417,7 @@ async def run() -> Dict[str, Any]:
         context = await browser.new_context(viewport={"width": 1440, "height": 1000})
         await context.add_init_script(script="window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;")
         try:
-            vocab_entry_gate = await run_vocab_entry_gate_scenario(context)
+            vocab_entry_isolation = await run_vocab_entry_isolation_scenario(context)
             ack_and_nack = await run_ack_and_nack_scenario(context)
             timeout = await run_timeout_scenario(context)
         finally:
@@ -410,7 +426,7 @@ async def run() -> Dict[str, Any]:
     return {
         "status": "pass",
         "detail": "unified reliable submit acknowledgement regression passed",
-        "data": {"vocabEntryGate": vocab_entry_gate, "ackAndNack": ack_and_nack, "timeout": timeout},
+        "data": {"vocabEntryIsolation": vocab_entry_isolation, "ackAndNack": ack_and_nack, "timeout": timeout},
     }
 
 
