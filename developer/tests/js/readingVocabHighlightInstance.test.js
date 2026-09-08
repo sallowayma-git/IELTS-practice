@@ -14,6 +14,7 @@ test('production range calculation and restoration preserve one selected instanc
         const results = await page.evaluate(() => {
             const fullText = 'Clean water is essential for life, but contaminated water causes severe diseases. Stored water must be protected.';
             const root = document.createElement('p');
+            root.dataset.vocabScope = 'passage/p-1';
             root.textContent = fullText;
             document.body.append(root);
             return [6, 52, 89].map((offset, occurrence) => {
@@ -21,19 +22,22 @@ test('production range calculation and restoration preserve one selected instanc
                 range.setStart(root.firstChild, offset);
                 range.setEnd(root.firstChild, offset + 5);
                 const location = ReadingVocabReader.calculateRangeLocation(root, range, 'water');
-                const restored = ReadingVocabReader.resolveRangeForHighlight(root, { ...location, text: 'water' });
-                const fallback = ReadingVocabReader.resolveRangeForHighlight(root, { startOffset: -1, endOffset: -1, occurrence, text: 'water' });
+                const restored = ReadingVocabReader.resolveRangeForHighlight(root, { ...location, scopeId: 'passage/p-1', text: 'water' });
+                const fallback = ReadingVocabReader.resolveRangeForHighlight(root, { scopeId: 'passage/p-1', startOffset: -1, endOffset: -1, occurrence, text: 'water' });
                 return {
-                    startOffset: location.startOffset, endOffset: location.endOffset, occurrence: location.occurrence,
+                    startOffset: location.startOffset, endOffset: location.endOffset,
+                    quoted: location.quote,
+                    contextContainsQuote: location.context.includes(location.quote),
                     restored: { text: restored.toString(), start: restored.startOffset, end: restored.endOffset },
-                    fallback: { text: fallback.toString(), start: fallback.startOffset, end: fallback.endOffset }
+                    fallback
                 };
             });
         });
-        assert.deepEqual(results, [6, 52, 89].map((offset, occurrence) => ({
-            startOffset: offset, endOffset: offset + 5, occurrence,
+        assert.deepEqual(results, [6, 52, 89].map(offset => ({
+            startOffset: offset, endOffset: offset + 5,
+            quoted: 'water', contextContainsQuote: true,
             restored: { text: 'water', start: offset, end: offset + 5 },
-            fallback: { text: 'water', start: offset, end: offset + 5 }
+            fallback: null
         })));
     } finally { await page.close(); await browser.close(); }
 });

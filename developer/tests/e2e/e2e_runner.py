@@ -26,6 +26,7 @@ E2E_CASES = [
     "browse_preference_toggle_flow.py",
     "reading_single_flow.py",
     "reading_reader_isolation.py",
+    "reading_reader_occurrences.py",
     "interrupted_history_flow.py",
     "listening_practice_flow.py",
     "suite_practice_flow.py",

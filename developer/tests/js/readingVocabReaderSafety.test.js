@@ -228,6 +228,30 @@ test('reading vocab reader preserves text boundaries and the active reading sess
             } finally { await page.close(); }
         });
 
+        await t.test('a failed source load retains the requested library and its recoverable occurrences', async () => {
+            const page = await createPage(browser);
+            try {
+                await openArticle(page);
+                const state = await page.evaluate(async () => {
+                    const source = { kind: 'builtin', id: 'default' };
+                    await ReadingVocabStore.add('retained', 'missing-builtin', 'Missing article', 'retained context', {
+                        scopeId: 'passage/p-1', contentVersion: 'legacy-reader-v1',
+                        quote: 'retained', text: 'retained', startOffset: 0, endOffset: 8, before: '', after: ' context'
+                    }, source);
+                    await ReadingVocabReader.open('article', { source: { kind: 'imported', id: 'unavailable-library' } });
+                    await __queueOpen('missing-builtin', '__missing', 'missing-builtin.js', { source });
+                    __finishScript('missing-builtin.js', 'missing-builtin', { error: true });
+                    await __missing;
+                    ReadingVocabReader.openModal();
+                    return { source: ReadingVocabReader.currentSource,
+                        unresolved: document.querySelectorAll('[data-anchor-status="unresolved"]').length,
+                        words: ReadingVocabStore.getByExam('missing-builtin', source).map(row => row.word),
+                        marks: document.querySelectorAll('mark.vocab-highlight').length };
+                });
+                assert.deepEqual(state, { source: { kind: 'builtin', id: 'default' }, unresolved: 1, words: ['retained'], marks: 0 });
+            } finally { await page.close(); }
+        });
+
         await t.test('exam badges render literal text while generated passage formatting remains intact', async () => {
             const page = await createPage(browser);
             try {
@@ -286,14 +310,14 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     const cleared = ReadingVocabReader.currentPayload === null && ReadingVocabReader.currentExam === null && ReadingVocabReader.currentExplanation === null;
                     __finishScript('b.js', 'b');
                     await __openB;
-                    const before = document.getElementById('vocab-trans-text-A').textContent;
+                    const before = document.getElementById('vocab-trans-text-p-1').textContent;
                     __finishScript('b-explanation.js', 'b', { explanation: true, title: 'B translation' });
                     await Promise.resolve();
                     await Promise.resolve();
                     __finishScript('a-explanation.js', 'a', { explanation: true, title: 'A translation' });
                     await Promise.resolve();
                     await Promise.resolve();
-                    return { cleared, before, translation: document.getElementById('vocab-trans-text-A').textContent, current: ReadingVocabReader.currentExplanation.passageNotes[0].text };
+                    return { cleared, before, translation: document.getElementById('vocab-trans-text-p-1').textContent, current: ReadingVocabReader.currentExplanation.passageNotes[0].text };
                 });
                 assert.deepEqual(state, { cleared: true, before: '加载中...', translation: 'B translation', current: 'B translation' });
             } finally { await page.close(); }
@@ -372,11 +396,11 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     __finishScript('a.js', 'a');
                     await __openA;
                     ReadingVocabReader.close();
-                    const before = document.getElementById('vocab-trans-text-A').textContent;
+                    const before = document.getElementById('vocab-trans-text-p-1').textContent;
                     __finishScript('a-explanation.js', 'a', { explanation: true, title: 'closed translation' });
                     await Promise.resolve();
                     await Promise.resolve();
-                    const closedUnchanged = before === document.getElementById('vocab-trans-text-A').textContent;
+                    const closedUnchanged = before === document.getElementById('vocab-trans-text-p-1').textContent;
                     __READING_EXAM_DATA__.clear();
                     await __queueOpen('a', '__oldOpen', 'old-a.js');
                     ReadingVocabReader.close();
@@ -405,6 +429,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     const errorText = document.querySelector('.vocab-error-state p').textContent;
                     const unsafeNodes = document.querySelectorAll('.vocab-error-state img, .vocab-error-state [onclick]').length;
                     document.querySelector('.vocab-error-state button').click();
+                    for (let step = 0; step < 50 && !__pendingScripts.length; step++) await Promise.resolve();
                     return { errorText, unsafeNodes, current: ReadingVocabReader.currentExamId, retryCount: __pendingScripts.length, injected: !!window.__injected, back: document.querySelector('#vocab-reader-back-btn span').textContent };
                 });
                 assert.ok(state.errorText.includes('<img src=x onerror=alert(1)>'));

@@ -8320,6 +8320,467 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/components/readingVocabContent.js ===== */
+(function (global) {
+    'use strict';
+
+    const CONTAINERS = new Set(['DIV', 'SECTION', 'ARTICLE', 'MAIN']);
+    const HEADING = /^H[1-6]$/;
+
+    function labelFromText(value) {
+        const match = String(value || '').trim().match(/^(?:Paragraph\s+)?([A-Z])(?:[.:)])?$/);
+        return match ? match[1] : '';
+    }
+
+    function standaloneLabel(node) {
+        if (HEADING.test(node.tagName) || node.matches('.paragraph-label, strong, b, p')) {
+            return labelFromText(node.textContent);
+        }
+        return '';
+    }
+
+    function leadingLabel(node) {
+        // A capital article at the start of an ordinary sentence is not a label.
+        // Inline labels must have their own leading element or say "Paragraph X".
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        let firstText;
+        while ((firstText = walker.nextNode()) && !firstText.textContent.trim()) {}
+        if (!firstText) return '';
+        const marker = firstText.parentElement.closest('strong, b, .paragraph-label');
+        if (marker && node.contains(marker)) {
+            const label = labelFromText(marker.textContent);
+            if (label) return label;
+        }
+        const explicit = node.textContent.trim().match(/^Paragraph\s+([A-Z])(?:\s*[:.)]\s*|\s+)/);
+        return explicit ? explicit[1] : '';
+    }
+
+    function isInstruction(text) {
+        return /^(?:You should spend\b[^.]*\bminutes\b|Questions\s+\d+\s*(?:[-–—]|to)\s*\d+\s+(?:are based|refer to)\b)/i.test(text.trim());
+    }
+
+    function isItalicSubtitle(node) {
+        if (node.tagName !== 'P') return false;
+        const text = node.textContent.trim();
+        const italicText = Array.from(node.querySelectorAll('em, i'))
+            .filter(element => !element.parentElement.closest('em, i'))
+            .map(element => element.textContent.trim()).join(' ').trim();
+        return !!text && text === italicText;
+    }
+
+    function hasContent(node) {
+        return !!node.textContent.trim() || node.matches('img, svg, video, audio, canvas, hr, math') ||
+            !!node.querySelector('img, svg, video, audio, canvas, hr, math');
+    }
+
+    function collectUnits(root) {
+        const units = [];
+        function visit(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                if (node.textContent.trim()) {
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = node.textContent;
+                    units.push(paragraph);
+                }
+                return;
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+            if (CONTAINERS.has(node.tagName) && !node.classList.contains('paragraph-wrapper')) {
+                Array.from(node.childNodes).forEach(visit);
+            } else if (hasContent(node)) {
+                units.push(node);
+            }
+        }
+        Array.from(root.childNodes).forEach(visit);
+        return units;
+    }
+
+    function ordinalLetter(index) {
+        let label = '';
+        for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
+            label = String.fromCharCode(65 + (value - 1) % 26) + label;
+        }
+        return label;
+    }
+
+    function normalizePassage(passage, fallbackTitle = '') {
+        // This is the same bodyHtml/html precedence and ordered-block contract
+        // used by the practice page's renderDataset implementation.
+        const rawHtml = (Array.isArray(passage?.blocks) ? passage.blocks : [])
+            .map(block => block?.bodyHtml || block?.html || '').join('\n');
+        const root = document.createElement('div');
+        root.innerHTML = rawHtml;
+        root.querySelectorAll('.paragraph-dropzone, .match-dropzone, .dropzone, .empty-space, #divider')
+            .forEach(node => node.remove());
+
+        let passageTitle = fallbackTitle;
+        let titleFound = false;
+        let beforeBody = true;
+        const instructions = [];
+        const subtitles = [];
+        const body = [];
+        for (const node of collectUnits(root)) {
+            const text = node.textContent.trim();
+            if (HEADING.test(node.tagName) && /^READING PASSAGE\s*\d*$/i.test(text)) continue;
+            if (beforeBody && isInstruction(text)) {
+                instructions.push(node.outerHTML);
+                continue;
+            }
+            if (beforeBody && !titleFound && /^H[1-3]$/.test(node.tagName) && !standaloneLabel(node)) {
+                passageTitle = text;
+                titleFound = true;
+                continue;
+            }
+            if (beforeBody && !standaloneLabel(node) &&
+                (/^H[4-6]$/.test(node.tagName) || (titleFound && isItalicSubtitle(node)))) {
+                subtitles.push(node.outerHTML);
+                continue;
+            }
+            beforeBody = false;
+            body.push(node);
+        }
+
+        const blocks = [];
+        let current = null;
+        let pendingHeadingHtml = '';
+        function finish() {
+            if (!current) return;
+            const textRoot = document.createElement('div');
+            textRoot.innerHTML = current.html;
+            if (hasContent(textRoot)) {
+                const index = blocks.length;
+                blocks.push({
+                    id: `p-${index + 1}`,
+                    letter: current.label || ordinalLetter(index),
+                    explicitLabel: !!current.label,
+                    html: current.html,
+                    text: textRoot.textContent.trim()
+                });
+            }
+            current = null;
+        }
+        function start(html, label = '') {
+            current = { html: pendingHeadingHtml + html, label };
+            pendingHeadingHtml = '';
+        }
+
+        for (const node of body) {
+            const marker = standaloneLabel(node);
+            if (marker) {
+                finish();
+                start('', marker);
+                continue;
+            }
+            if (node.classList.contains('paragraph-wrapper')) {
+                finish();
+                start(node.innerHTML, leadingLabel(node));
+                finish();
+                continue;
+            }
+            const inlineLabel = leadingLabel(node);
+            if (inlineLabel) {
+                finish();
+                start(node.outerHTML, inlineLabel);
+                continue;
+            }
+            if (HEADING.test(node.tagName) && !current?.label) {
+                finish();
+                pendingHeadingHtml += node.outerHTML;
+                continue;
+            }
+            if (current?.label) {
+                // Some sources split one lettered paragraph across multiple p
+                // elements. Keep every element under the explicit section label.
+                current.html += node.outerHTML;
+            } else {
+                finish();
+                start(node.outerHTML);
+            }
+        }
+        finish();
+        if (pendingHeadingHtml) {
+            start('');
+            finish();
+        }
+
+        return {
+            passageTitle,
+            instructionHtml: instructions.join('\n'),
+            subtitleHtml: subtitles.join('\n'),
+            rawHtml,
+            blocks
+        };
+    }
+
+    global.ReadingVocabContent = Object.freeze({ normalizePassage });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/components/readingVocabAnchors.js ===== */
+(function (global) {
+    'use strict';
+
+    const SCOPE = '[data-vocab-scope]';
+    const EXCLUDED = 'script,style,noscript,template,button,input,textarea,select,option,' +
+        '[role="button"]:not(.vocab-highlight):not(.hl),[contenteditable]:not([contenteditable="false"]),' +
+        '.vocab-translation-card,.vocab-paragraph-tag,.vocab-answer-blank';
+    const HIGHLIGHT = '.vocab-highlight,.hl';
+    const BLOCK = 'p,div,li,td,th,blockquote,pre,h1,h2,h3,h4,h5,h6,section,article';
+    const CONTEXT_LENGTH = 48;
+
+    function hidden(element) {
+        if (element.hidden || element.getAttribute('aria-hidden') === 'true') return true;
+        const style = element.ownerDocument.defaultView.getComputedStyle(element);
+        return style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse';
+    }
+
+    function excluded(element, root) {
+        for (let current = element; current; current = current.parentElement) {
+            if (current.matches(EXCLUDED) || hidden(current)) return true;
+            if (current === root) break;
+        }
+        return false;
+    }
+
+    // Highlight wrappers contribute their original text. This keeps offsets and
+    // content versions stable while other occurrences are painted or removed.
+    function textNodes(root) {
+        if (!root || !root.ownerDocument) return [];
+        const nodes = [];
+        const walker = root.ownerDocument.createTreeWalker(root, 4);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (node.parentElement && !excluded(node.parentElement, root)) nodes.push(node);
+        }
+        return nodes;
+    }
+
+    function text(root) {
+        return textNodes(root).map(node => node.nodeValue || '').join('');
+    }
+
+    function textVersion(value) {
+        let first = 0x811c9dc5;
+        let second = 0x9e3779b9;
+        for (let index = 0; index < value.length; index += 1) {
+            const code = value.charCodeAt(index);
+            first = Math.imul(first ^ code, 0x01000193);
+            second = Math.imul(second ^ code, 0x85ebca6b);
+        }
+        return `reader-text-v1:${value.length}:${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
+    }
+
+    function versionForText(root, value) {
+        const sourceVersion = root.getAttribute('data-vocab-source-version');
+        const scopeVersion = textVersion(value);
+        return sourceVersion ? `reader-scope-v2:${sourceVersion}:${scopeVersion}` : scopeVersion;
+    }
+
+    function version(root) { return versionForText(root, text(root)); }
+
+    function comparePoints(doc, leftNode, leftOffset, rightNode, rightOffset) {
+        const left = doc.createRange();
+        const right = doc.createRange();
+        left.setStart(leftNode, leftOffset);
+        left.collapse(true);
+        right.setStart(rightNode, rightOffset);
+        right.collapse(true);
+        return left.compareBoundaryPoints(0, right);
+    }
+
+    function offsetAtPoint(root, nodes, container, offset) {
+        if (container !== root && !root.contains(container)) return null;
+        let position = 0;
+        for (const node of nodes) {
+            const length = (node.nodeValue || '').length;
+            if (container === node) return position + offset;
+            if (comparePoints(root.ownerDocument, container, offset, node, 0) <= 0) return position;
+            if (comparePoints(root.ownerDocument, container, offset, node, length) < 0) return null;
+            position += length;
+        }
+        return position;
+    }
+
+    function resolveOffsets(root, start, end) {
+        if (!root || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return null;
+        const nodes = textNodes(root);
+        let position = 0;
+        let startNode;
+        let startInNode;
+        for (const node of nodes) {
+            const next = position + (node.nodeValue || '').length;
+            if (!startNode && start >= position && start < next) {
+                startNode = node;
+                startInNode = start - position;
+            }
+            if (startNode && end > position && end <= next) {
+                const range = root.ownerDocument.createRange();
+                range.setStart(startNode, startInNode);
+                range.setEnd(node, end - position);
+                return range;
+            }
+            position = next;
+        }
+        return null;
+    }
+
+    function calculateLocation(root, range) {
+        if (!root || !range || range.collapsed) return null;
+        try {
+            const nodes = textNodes(root);
+            const fullText = nodes.map(node => node.nodeValue || '').join('');
+            const startOffset = offsetAtPoint(root, nodes, range.startContainer, range.startOffset);
+            const endOffset = offsetAtPoint(root, nodes, range.endContainer, range.endOffset);
+            if (startOffset === null || endOffset === null || endOffset <= startOffset) return null;
+            const quote = fullText.slice(startOffset, endOffset);
+            return {
+                startOffset, endOffset, quote, text: quote,
+                before: fullText.slice(Math.max(0, startOffset - CONTEXT_LENGTH), startOffset),
+                after: fullText.slice(endOffset, endOffset + CONTEXT_LENGTH),
+                contentVersion: versionForText(root, fullText),
+                context: fullText.slice(Math.max(0, startOffset - CONTEXT_LENGTH), endOffset + CONTEXT_LENGTH)
+            };
+        } catch (_) { return null; }
+    }
+
+    function overlaps(range, node) {
+        const other = node.ownerDocument.createRange();
+        other.selectNode(node);
+        const doc = node.ownerDocument;
+        return comparePoints(doc, range.startContainer, range.startOffset, other.endContainer, other.endOffset) < 0 &&
+            comparePoints(doc, range.endContainer, range.endOffset, other.startContainer, other.startOffset) > 0;
+    }
+
+    function validRange(scope, range, allowHighlights = false) {
+        if (!range || range.collapsed || excluded(scope, scope)) return false;
+        if ((range.startContainer !== scope && !scope.contains(range.startContainer)) ||
+            (range.endContainer !== scope && !scope.contains(range.endContainer))) return false;
+        for (const element of scope.querySelectorAll('*')) {
+            if ((element.matches(EXCLUDED + ',br,hr') || (!allowHighlights && element.matches(HIGHLIGHT)) || hidden(element)) && overlaps(range, element)) return false;
+        }
+        let selectedBlock = null;
+        for (const node of textNodes(scope)) {
+            const doc = node.ownerDocument;
+            const selected = comparePoints(doc, range.startContainer, range.startOffset, node, node.length) < 0 &&
+                comparePoints(doc, range.endContainer, range.endOffset, node, 0) > 0;
+            if (!selected) continue;
+            if (node.parentElement.closest(SCOPE) !== scope || (!allowHighlights && node.parentElement.closest(HIGHLIGHT))) return false;
+            const block = node.parentElement.closest(BLOCK);
+            const boundary = block && scope.contains(block) ? block : scope;
+            if (selectedBlock && selectedBlock !== boundary) return false;
+            selectedBlock = boundary;
+        }
+        return selectedBlock !== null;
+    }
+
+    function cleanWord(value) {
+        return value.replace(/^[\s"'“”‘’(（[<{《/\\#]+|[\s"'“”‘’）)\]>}》,.:;!?！？，。；：/\\#]+$/g, '').trim();
+    }
+
+    function capture(scope, range) {
+        if (!scope || !scope.matches(SCOPE)) return null;
+        try {
+            if (!validRange(scope, range)) return null;
+            const rawText = range.toString();
+            if (/[\r\n]/.test(rawText)) return null;
+            const word = cleanWord(rawText);
+            if (!word || word.length > 45 || !/[A-Za-z]/.test(word)) return null;
+            const rawLocation = calculateLocation(scope, range);
+            if (!rawLocation || rawLocation.quote !== rawText) return null;
+            const startOffset = rawLocation.startOffset + rawText.indexOf(word);
+            const trimmed = resolveOffsets(scope, startOffset, startOffset + word.length);
+            if (!trimmed || !validRange(scope, trimmed)) return null;
+            const scopeId = scope.getAttribute('data-vocab-scope');
+            if (!scopeId) return null;
+            const location = calculateLocation(scope, trimmed);
+            if (scope.getAttribute('data-vocab-source-version')) {
+                const sourceRoot = scope.closest('[data-vocab-source-root]');
+                const unique = sourceRoot && contextCandidates(sourceRoot, scope, location).length === 1;
+                location.contentVersion += unique ? '|context-unique' : '|context-scoped';
+            }
+            return { ...location, range: trimmed, word, scopeId, scope: scopeId };
+        } catch (_) { return null; }
+    }
+
+    function findScope(root, scopeId) {
+        if (!root || !scopeId) return null;
+        const matches = [];
+        if (root.matches && root.matches(SCOPE) && root.getAttribute('data-vocab-scope') === scopeId) matches.push(root);
+        for (const scope of root.querySelectorAll(SCOPE)) {
+            if (scope.getAttribute('data-vocab-scope') === scopeId) matches.push(scope);
+        }
+        return matches.length === 1 ? matches[0] : null;
+    }
+
+    function areaScopes(root, originalScope) {
+        const scopeId = originalScope.getAttribute('data-vocab-scope');
+        const area = /^(passage|questions)\//.exec(scopeId);
+        if (!area) return [originalScope];
+        const candidates = root.matches && root.matches(SCOPE) ? [root] : [];
+        candidates.push(...root.querySelectorAll(SCOPE));
+        return candidates.filter(scope => scope.getAttribute('data-vocab-scope').startsWith(area[0]));
+    }
+
+    function contextCandidates(root, originalScope, highlight) {
+        if (typeof highlight.before !== 'string' || typeof highlight.after !== 'string') return [];
+        const quote = typeof highlight.quote === 'string' ? highlight.quote : highlight.text;
+        const candidates = [];
+        for (const scope of areaScopes(root, originalScope)) {
+            const fullText = text(scope);
+            let position = fullText.indexOf(quote);
+            while (position !== -1) {
+                const end = position + quote.length;
+                const beforeMatches = highlight.before ?
+                    position >= highlight.before.length && fullText.slice(position - highlight.before.length, position) === highlight.before : position === 0;
+                const afterMatches = highlight.after ?
+                    fullText.slice(end, end + highlight.after.length) === highlight.after : end === fullText.length;
+                if (beforeMatches && afterMatches) {
+                    const range = resolveOffsets(scope, position, end);
+                    // Existing paint cannot turn an ambiguous textual anchor into
+                    // a unique one. Ignore paint only while counting candidates.
+                    if (range && range.toString() === quote && validRange(scope, range, true)) candidates.push({ scope, range });
+                }
+                if (candidates.length > 1) return candidates;
+                position = fullText.indexOf(quote, position + 1);
+            }
+        }
+        return candidates;
+    }
+
+    function resolve(root, highlight) {
+        if (!highlight) return null;
+        try {
+            const scope = findScope(root, highlight.scopeId || highlight.scope);
+            const quote = typeof highlight.quote === 'string' ? highlight.quote : highlight.text;
+            if (!scope || typeof quote !== 'string' || !quote || quote.length > 45 || /[\r\n]/.test(quote) || !/[A-Za-z]/.test(quote)) return null;
+            const fullText = text(scope);
+            const storedVersion = String(highlight.contentVersion || '');
+            const contextFlag = /\|context-(unique|scoped)$/.exec(storedVersion);
+            const baseVersion = contextFlag ? storedVersion.slice(0, contextFlag.index) : storedVersion;
+            if (baseVersion === versionForText(scope, fullText)) {
+                const start = highlight.startOffset;
+                const end = highlight.endOffset;
+                if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || fullText.slice(start, end) !== quote) return null;
+                const range = resolveOffsets(scope, start, end);
+                return range && range.toString() === quote && validRange(scope, range) ? range : null;
+            }
+            // A source edit can shift an ordinal onto an identical paragraph.
+            // Current uniqueness alone is insufficient if the original source
+            // contained duplicates: removing the selected copy leaves a false
+            // unique survivor. Source-aware capture records that distinction.
+            const sourceAware = scope.getAttribute('data-vocab-source-version') || baseVersion.startsWith('reader-scope-v2:');
+            if (sourceAware && (!contextFlag || contextFlag[1] !== 'unique')) return null;
+            const candidates = contextCandidates(root, scope, highlight);
+            if (candidates.length !== 1) return null;
+            const candidate = candidates[0];
+            return validRange(candidate.scope, candidate.range) ? candidate.range : null;
+        } catch (_) { return null; }
+    }
+
+    global.ReadingVocabAnchors = Object.freeze({ textNodes, text, version, hashText: textVersion, resolveOffsets, calculateLocation, capture, resolve });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/components/readingVocabReader.js ===== */
 (function initReadingVocabReader(global) {
     'use strict';
@@ -8401,9 +8862,9 @@
             return state;
         },
 
-        async mutate(type, command) {
+        async mutate(type, command, observedState = null) {
             if (!this._state) await this.init();
-            const observed = this._state;
+            const observed = observedState || this._state;
             let result;
             try {
                 result = await global.AppData.vocab.mutateReading(type, command, {
@@ -8433,7 +8894,7 @@
                 scopeId: highlight.scopeId || highlight.scope,
                 contentVersion: highlight.contentVersion || 'legacy-reader-v1',
                 startOffset: highlight.startOffset, endOffset: highlight.endOffset,
-                quote: highlight.text || word, before: highlight.before || '', after: highlight.after || ''
+                quote: highlight.quote || highlight.text || word, before: highlight.before || '', after: highlight.after || ''
             } : undefined;
             const result = await this.mutate('collect', {
                 source, article: { examId: String(examId), title: examTitle || '' },
@@ -8719,231 +9180,8 @@
     // ============================================================================
     // 阅读文本与段落清洗器
     // ============================================================================
-    function cleanPassageHtml(rawHtml) {
-        if (!rawHtml) return '';
-        const temp = document.createElement('div');
-        temp.innerHTML = rawHtml;
-
-        // 移除练习交互用的 dropzone 提示与容器
-        const dropzones = temp.querySelectorAll('.paragraph-dropzone, .match-dropzone, .dropzone');
-        dropzones.forEach(dz => dz.remove());
-
-        // 移除多余的空占位与 divider
-        const empties = temp.querySelectorAll('.empty-space, #divider');
-        empties.forEach(el => el.remove());
-
-        return temp.innerHTML;
-    }
-
-    /**
-     * 判断文本是否属于考试指导语/前置题目说明
-     * 例如："You should spend about 20 minutes on Questions 1-13, which are based on Reading Passage 1 below."
-     */
-    function isPassageInstruction(text) {
-        if (!text) return false;
-        const s = text.trim();
-        if (/spend about \d+ minutes/i.test(s)) return true;
-        if (/which are based on reading passage/i.test(s)) return true;
-        if (/based on reading passage \d*/i.test(s)) return true;
-        if (/questions \d+\s*[-–至to]\s*\d+.*based on/i.test(s)) return true;
-        if (/you should spend/i.test(s) && /minutes/i.test(s)) return true;
-        if (/questions \d+\s*[-–至to]\s*\d+\s*(?:are\s+based|refer\s+to)/i.test(s)) return true;
-        return false;
-    }
-
-    /**
-     * 解析阅读文章核心数据：分离前置说明、文章大标题与真实段落
-     */
-    function extractPassageData(rawHtml, fallbackTitle = '') {
-        if (!rawHtml) {
-            return {
-                passageTitle: fallbackTitle,
-                subtitleHtml: '',
-                instructionHtml: '',
-                blocks: []
-            };
-        }
-
-        const cleaned = cleanPassageHtml(rawHtml);
-        const temp = document.createElement('div');
-        temp.innerHTML = cleaned;
-
-        // 1. 提取文章主标题 (h3 或独立非 "READING PASSAGE" 的 h2)
-        let passageTitle = fallbackTitle;
-        const h3 = temp.querySelector('h3');
-        if (h3 && h3.textContent.trim()) {
-            passageTitle = h3.textContent.trim();
-            h3.remove();
-        } else {
-            const h2 = temp.querySelector('h2');
-            if (h2 && !/^reading passage/i.test(h2.textContent.trim())) {
-                passageTitle = h2.textContent.trim();
-                h2.remove();
-            }
-        }
-
-        // 移除诸如 <h2>READING PASSAGE 1</h2> 等结构头标签
-        const readingPassageHeadings = temp.querySelectorAll('h2');
-        readingPassageHeadings.forEach(h => {
-            if (/^reading passage/i.test(h.textContent.trim())) {
-                h.remove();
-            }
-        });
-
-        // 2. 识别并提取前置题目指导语（如 "You should spend about 20 minutes..."），移出正文段落列表
-        let instructionHtml = '';
-        const allPs = Array.from(temp.querySelectorAll('p'));
-        for (const p of allPs) {
-            const text = p.textContent.trim();
-            if (isPassageInstruction(text)) {
-                if (!instructionHtml) {
-                    instructionHtml = p.innerHTML.trim();
-                }
-                p.remove(); // 绝不作为正文段落，不分配任何段落标签
-            }
-        }
-
-        // 3. 提取副标题 (如 h4)
-        let subtitleHtml = '';
-        const h4 = temp.querySelector('h4');
-        if (h4 && h4.textContent.trim()) {
-            subtitleHtml = h4.innerHTML.trim();
-            h4.remove();
-        }
-
-        // 4. 解析段落 blocks
-        const blocks = [];
-        const wrappers = temp.querySelectorAll('.paragraph-wrapper');
-
-        if (wrappers && wrappers.length > 0) {
-            wrappers.forEach((wrap, index) => {
-                // 查找段落标识 letter
-                let letter = '';
-                const strong = wrap.querySelector('strong');
-                if (strong && /^[A-Z]$/.test(strong.textContent.trim())) {
-                    letter = strong.textContent.trim();
-                } else {
-                    const match = wrap.textContent.match(/\b([A-Z])\s+[A-Z]/);
-                    if (match) {
-                        letter = match[1];
-                    } else {
-                        letter = String.fromCharCode(65 + index);
-                    }
-                }
-
-                // 获取段落主体 HTML
-                const p = wrap.querySelector('p');
-                const html = p ? p.innerHTML : wrap.innerHTML;
-
-                blocks.push({
-                    id: `para-${letter}`,
-                    letter: letter,
-                    html: html,
-                    text: wrap.textContent.trim()
-                });
-            });
-        } else {
-            // 没有 .paragraph-wrapper 的情况，按剩下的实际正文 <p> 分段
-            const remainingPs = temp.querySelectorAll('p');
-            let validIdx = 0;
-            remainingPs.forEach((p) => {
-                const text = p.textContent.trim();
-                if (!text || text.length < 20) return;
-                // 防御：若依然属于指导语，跳过
-                if (isPassageInstruction(text)) return;
-
-                const strong = p.querySelector('strong');
-                let letter = '';
-                if (strong && /^[A-Z]$/.test(strong.textContent.trim())) {
-                    letter = strong.textContent.trim();
-                } else {
-                    const leadMatch = text.match(/^(?:Paragraph\s+)?([A-Z])(?:\.|\s+)/);
-                    if (leadMatch) {
-                        letter = leadMatch[1];
-                    } else {
-                        letter = String.fromCharCode(65 + validIdx);
-                    }
-                }
-
-                blocks.push({
-                    id: `para-${letter}`,
-                    letter: letter,
-                    html: p.innerHTML,
-                    text: text
-                });
-                validIdx++;
-            });
-        }
-
-        return {
-            passageTitle,
-            subtitleHtml,
-            instructionHtml,
-            blocks
-        };
-    }
-
-    function extractParagraphBlocks(rawHtml) {
-        return extractPassageData(rawHtml).blocks;
-    }
-
-    function getTextNodes(root) {
-        if (!root) return [];
-        const textNodes = [];
-        const walker = document.createTreeWalker(
-            root,
-            NodeFilter.SHOW_TEXT,
-            {
-                acceptNode(node) {
-                    const parent = node.parentElement;
-                    if (!parent) return NodeFilter.FILTER_REJECT;
-                    const tag = parent.tagName.toUpperCase();
-                    if (['SCRIPT', 'STYLE', 'BUTTON', 'INPUT', 'TEXTAREA'].includes(tag)) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    if (parent.closest('.vocab-translation-card') || parent.closest('.vocab-paragraph-tag')) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    return NodeFilter.FILTER_ACCEPT;
-                }
-            },
-            false
-        );
-        let n;
-        while ((n = walker.nextNode())) {
-            textNodes.push(n);
-        }
-        return textNodes;
-    }
-
-    function resolveRangeFromOffsets(root, start, end) {
-        const nodes = getTextNodes(root);
-        let offset = 0;
-        let startNode = null;
-        let endNode = null;
-        let startOffset = 0;
-        let endOffset = 0;
-        for (let i = 0; i < nodes.length; i++) {
-            const node = nodes[i];
-            const text = node.nodeValue || '';
-            const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && (start < nextOffset || (i === nodes.length - 1 && start === nextOffset))) {
-                startNode = node;
-                startOffset = Math.max(0, start - offset);
-            }
-            if (!endNode && end > offset && end <= nextOffset) {
-                endNode = node;
-                endOffset = Math.max(0, end - offset);
-            }
-            if (startNode && endNode) break;
-            offset = nextOffset;
-        }
-        if (!startNode || !endNode) return null;
-        const range = document.createRange();
-        range.setStart(startNode, startOffset);
-        range.setEnd(endNode, endOffset);
-        return range;
-    }
+    // Content and Range rules are shared with the real-browser regression suite.
+    function getTextNodes(root) { return global.ReadingVocabAnchors.textNodes(root); }
 
     // ============================================================================
     // Parse in an inert template: even a pre-checked radio must never join a
@@ -9053,11 +9291,22 @@
         _pendingTimers: new Set(),
         _returnFocus: null,
         _modalReturnFocus: null,
+        _selectionPending: new Set(),
+        _undoOccurrence: null,
+        _occurrenceBusy: false,
+        unresolvedOccurrences: [],
 
         clearPendingWork(overlay) {
             this._pendingTimers.forEach(timer => clearTimeout(timer));
             this._pendingTimers.clear();
             this.toastTimer = null;
+            this._undoOccurrence = null;
+            this.unresolvedOccurrences = [];
+            this._selectionPending.clear();
+            this._occurrenceBusy = false;
+            overlay?.querySelector('#vocab-occurrence-actions')?.replaceChildren();
+            overlay?.querySelector('#vocab-occurrence-undo')?.replaceChildren();
+            overlay?.querySelector('#vocab-anchor-status')?.replaceChildren();
             const toast = overlay?.querySelector('#vocab-toast');
             if (toast) {
                 toast.classList.remove('show');
@@ -9123,13 +9372,13 @@
                     <!-- 沉浸式提示栏 -->
                     <div class="vocab-reader-banner">
                         <span class="vocab-banner-icon">✨</span>
-                        <span class="vocab-banner-text"><strong>划词即收录</strong>：在文章或题目中鼠标/触屏选中任意生词，系统将自动收入生词本并以<strong>黄色高亮</strong>醒目标注。</span>
+                        <span class="vocab-banner-text"><strong>划词即收录</strong>：在文章或题目中用鼠标、触屏或 Shift＋方向键选择生词或短语（最多 45 字符）。保存后以<strong>黄色高亮</strong>标注；点击高亮可移除这一处。</span>
                     </div>
 
                     <!-- 独立滚动主体区域（确保顶部 header 永远固定在视口顶部） -->
                     <div class="vocab-reader-scroll-area" id="vocab-reader-scroll-area">
                         <!-- 阅读核心主内容区 -->
-                        <main class="vocab-reader-body" id="vocab-reader-body">
+                        <main class="vocab-reader-body" id="vocab-reader-body" data-vocab-source-root>
                             <!-- 文章区域 -->
                             <section class="vocab-passage-section" id="vocab-passage-section">
                                 <div class="vocab-passage-header">
@@ -9163,6 +9412,9 @@
 
                     <!-- 划词收录 Toast 提示 -->
                     <div class="vocab-toast-msg" id="vocab-toast" role="status" aria-live="polite"></div>
+                    <div class="vocab-occurrence-actions" id="vocab-occurrence-actions" aria-live="polite"></div>
+                    <div class="vocab-occurrence-undo" id="vocab-occurrence-undo" role="status" aria-live="polite"></div>
+                    <div class="vocab-anchor-status" id="vocab-anchor-status" role="status" aria-live="polite"></div>
 
                     <!-- 生词本弹窗 Modal -->
                     <div class="vocab-modal" id="vocab-modal" role="dialog" aria-modal="true" aria-hidden="true">
@@ -9456,156 +9708,43 @@
                 });
             }
 
-            // 核心：划选文本自动收录并仅高亮当前选中的具体实例
             const readerBody = overlay.querySelector('#vocab-reader-body');
             if (readerBody) {
-                const handleSelectionCapture = () => {
-                    const requestId = this._openRequestId;
-                    this.defer(async () => {
-                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden') || !this.currentPayload) return;
-                        const selection = window.getSelection();
-                        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-                        const rawText = selection.toString();
-                        const text = rawText.trim();
-
-                        // 限制在1到45个字符之间，避免大段全文误选
-                        if (!text || text.length > 45 || text.includes('\n') || !/[a-zA-Z\u4e00-\u9fa5]/.test(text)) {
-                            return;
-                        }
-
-                        let range;
-                        try {
-                            range = selection.getRangeAt(0);
-                        } catch (_) {
-                            return;
-                        }
-                        if (!range || range.collapsed) return;
-
-                        // 确保选区位于文章正文或题目区域内
-                        const passageContent = overlay.querySelector('#vocab-passage-content');
-                        const questionsContent = overlay.querySelector('#vocab-questions-content');
-                        const commonNode = range.commonAncestorContainer;
-                        const commonEl = commonNode.nodeType === Node.ELEMENT_NODE ? commonNode : commonNode.parentElement;
-                        if (!commonEl) return;
-                        if (!passageContent?.contains(commonEl) && !questionsContent?.contains(commonEl)) {
-                            return;
-                        }
-                        // 忽略译文卡片、段落标签、按钮等非正文区域
-                        if (commonEl.closest('.vocab-translation-card') || commonEl.closest('.vocab-paragraph-tag') || commonEl.closest('button')) {
-                            return;
-                        }
-
-                        // 如果用户选中的区域已经位于高亮生词内，则不重复收录
-                        const existingMark = commonEl.closest('mark.vocab-highlight');
-                        if (existingMark) {
-                            return;
-                        }
-
-                        // 对 range 进行首尾空白去除，确保只高亮纯单词/短语
-                        const trimmedRange = this.trimRangeWhitespace(range);
-                        if (!trimmedRange || trimmedRange.collapsed) return;
-
-                        // 计算高亮所在的 scope（段落 card 或题目 group 或通用容器）
-                        const targetCard = commonEl.closest('.vocab-paragraph-card');
-                        const targetQGroup = commonEl.closest('.vocab-question-group');
-                        let scope = 'passage';
-                        let scopeElement = passageContent;
-
-                        if (targetCard) {
-                            const letter = targetCard.dataset.letter || '';
-                            scope = letter ? `para-${letter}` : 'passage';
-                            scopeElement = targetCard.querySelector('.vocab-paragraph-text') || targetCard;
-                        } else if (targetQGroup) {
-                            scope = targetQGroup.id || 'questions';
-                            scopeElement = targetQGroup;
-                        } else if (questionsContent?.contains(commonEl)) {
-                            scope = 'questions';
-                            scopeElement = questionsContent;
-                        }
-
-                        // 在 scopeElement 内计算精确的 startOffset / endOffset / before / after / occurrence
-                        const locInfo = this.calculateRangeLocation(scopeElement, trimmedRange, text);
-
-                        // 获取上下文句子
-                        let contextSentence = '';
-                        try {
-                            const parentBlock = commonEl;
-                            if (parentBlock) {
-                                contextSentence = parentBlock.textContent.slice(0, 140).trim();
-                            }
-                        } catch (_) {}
-
-                        const cleanWord = ReadingVocabStore.cleanWord(text);
-                        if (!cleanWord) return;
-
-                        // 核心修复：直接在当前选区包裹高亮，只高亮当前选中的这一个单词实例，绝不全篇批量盲高亮！
-                        const wrappedMark = this.wrapRangeWithHighlight(trimmedRange, cleanWord);
-                        if (!wrappedMark) return;
-
-                        const highlightRecord = {
-                            id: 'hl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-                            examId: this.currentExamId || '',
-                            scope: scope,
-                            startOffset: locInfo.startOffset,
-                            endOffset: locInfo.endOffset,
-                            before: locInfo.before,
-                            after: locInfo.after,
-                            occurrence: locInfo.occurrence,
-                            text: cleanWord
-                        };
-
-                        this.showToast('正在保存…');
-                        try {
-                            const result = await ReadingVocabStore.add(
-                                cleanWord,
-                                this.currentExamId,
-                                this.currentExam?.title || '',
-                                contextSentence,
-                                highlightRecord, this.currentSource
-                            );
-
-                            if (requestId !== this._openRequestId) return;
-                            if (result.added) {
-                                selection.removeAllRanges(); // 取消选中状态，避免残留蓝色选区
-                                this.updateCounts();
-                                if (this.modalOpen) {
-                                    this.renderVocabList();
-                                }
-                                this.showToast(`✅ "${cleanWord}" 已收录并黄色高亮`);
-                            } else {
-                                throw new Error('Selection was not saved');
-                            }
-                        } catch (error) {
-                            if (wrappedMark.parentNode) {
-                                const parent = wrappedMark.parentNode;
-                                while (wrappedMark.firstChild) parent.insertBefore(wrappedMark.firstChild, wrappedMark);
-                                wrappedMark.remove();
-                                parent.normalize();
-                            }
-                            if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请重新划选重试');
-                        }
-                    }, 20);
+                const capture = event => {
+                    if (event?.target?.closest('button, input, textarea, select, .vocab-translation-card, .vocab-paragraph-tag')) return;
+                    this.defer(() => this.captureSelection(), 20);
                 };
-
-                on(readerBody, 'mouseup', handleSelectionCapture);
-                on(readerBody, 'touchend', handleSelectionCapture);
-
-                // 点击黄色高亮生词：朗读发音并轻量提示
-                on(readerBody, 'click', (e) => {
-                    const mark = e.target.closest('mark.vocab-highlight');
-                    if (mark) {
-                        const selection = window.getSelection();
-                        if (selection && selection.toString().trim().length > 0) {
-                            return; // 划选操作中不触发点击发音
-                        }
-                        const word = mark.dataset.word || mark.textContent.trim();
-                        if (word) {
-                            speakWord(word);
-                            this.showToast(`🔊 ${word} (已收录生词)`);
-                        }
+                on(readerBody, 'mouseup', capture);
+                on(readerBody, 'touchend', capture);
+                on(overlay, 'keyup', event => {
+                    if (event.key === 'Shift') capture(event);
+                });
+                on(readerBody, 'click', event => {
+                    const mark = event.target.closest('mark.vocab-highlight');
+                    if (mark && !window.getSelection()?.toString().trim()) this.showOccurrenceActions(mark);
+                });
+                on(readerBody, 'keydown', event => {
+                    const mark = event.target.closest('mark.vocab-highlight');
+                    if (mark && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        this.showOccurrenceActions(mark);
+                    } else {
+                        this.moveKeyboardSelection(event);
                     }
                 });
             }
+            on(overlay, 'click', event => {
+                const button = event.target.closest('[data-action]');
+                if (!button || button.disabled) return;
+                if (button.dataset.action === 'remove-occurrence') {
+                    event.stopPropagation();
+                    this.removeOccurrence(button.dataset.occurrenceId);
+                } else if (button.dataset.action === 'undo-occurrence') {
+                    this.undoOccurrence();
+                } else if (button.dataset.action === 'retry-anchors') {
+                    this.open(this.currentExamId, { source: this.currentSource });
+                }
+            });
 
             // ESC 键监听
             on(window, 'keydown', (e) => {
@@ -9676,9 +9815,10 @@
 
             try {
                 // 加载试卷数据
-                const [payload, source] = await Promise.all([
-                    loadReadingExamPayload(examId), ReadingVocabStore.resolveSource(options)
-                ]);
+                const source = await ReadingVocabStore.resolveSource(options);
+                if (requestId !== this._openRequestId) return;
+                this.currentSource = source;
+                const payload = await loadReadingExamPayload(examId);
                 if (requestId !== this._openRequestId) return;
                 if (!payload) {
                     throw new Error('未找到该试卷的数据文件');
@@ -9723,6 +9863,11 @@
             } catch (err) {
                 if (requestId !== this._openRequestId) return;
                 console.error('[ReadingVocabReader] 加载失败:', err);
+                this.currentPayload = null;
+                await ReadingVocabStore.init().catch(() => {});
+                if (requestId !== this._openRequestId) return;
+                this.applyVocabHighlights();
+                this.updateCounts();
                 if (passageContent) {
                     const errorState = document.createElement('div');
                     errorState.className = 'vocab-error-state';
@@ -9766,8 +9911,7 @@
             }
 
             // 解析文章大标题、考试指导语与真实段落
-            const rawPassageHtml = payload?.passage?.blocks?.[0]?.html || '';
-            const passageData = extractPassageData(rawPassageHtml, exam.title || '');
+            const passageData = global.ReadingVocabContent.normalizePassage(payload?.passage, exam.title || '');
             const blocks = passageData.blocks;
             const instructionHtml = passageData.instructionHtml;
             const passageTitle = passageData.passageTitle || exam.title || 'Reading Passage';
@@ -9782,21 +9926,21 @@
             // 关键：作为文章头部的说明提示条展现，不赋予任何段落标签（没有段落A标签）
             const passageIntroEl = overlay.querySelector('#vocab-passage-intro');
             if (passageIntroEl) {
+                passageIntroEl.replaceChildren();
                 if (instructionHtml) {
-                    passageIntroEl.innerHTML = `
-                        <div class="vocab-passage-instruction" role="note">
-                            <span class="vocab-instruction-icon">📋</span>
-                            <div class="vocab-instruction-text">${instructionHtml}</div>
-                        </div>
-                    `;
-                    passageIntroEl.style.display = 'block';
-                } else if (passageData.subtitleHtml) {
-                    passageIntroEl.innerHTML = `<div class="vocab-passage-subtitle">${passageData.subtitleHtml}</div>`;
-                    passageIntroEl.style.display = 'block';
-                } else {
-                    passageIntroEl.innerHTML = '';
-                    passageIntroEl.style.display = 'none';
+                    const instruction = document.createElement('div');
+                    instruction.className = 'vocab-passage-instruction';
+                    instruction.setAttribute('role', 'note');
+                    instruction.appendChild(createReadOnlyQuestionContent(instructionHtml, 'vocab-passage-instruction'));
+                    passageIntroEl.appendChild(instruction);
                 }
+                if (passageData.subtitleHtml) {
+                    const subtitle = document.createElement('div');
+                    subtitle.className = 'vocab-passage-subtitle';
+                    subtitle.appendChild(createReadOnlyQuestionContent(passageData.subtitleHtml, 'vocab-passage-subtitle'));
+                    passageIntroEl.appendChild(subtitle);
+                }
+                passageIntroEl.style.display = passageIntroEl.childNodes.length ? 'block' : 'none';
             }
 
             // 渲染顶部段落切换 Tabs（完全平铺展开：全文、Para A、Para B、Para C...与题目）
@@ -9804,7 +9948,7 @@
             if (tabsContainer) {
                 let tabsHtml = `<button type="button" class="vocab-tab-btn active" data-para="all">全文</button>`;
                 blocks.forEach(b => {
-                    tabsHtml += `<button type="button" class="vocab-tab-btn" data-para="${b.letter}">Para ${b.letter}</button>`;
+                    tabsHtml += `<button type="button" class="vocab-tab-btn" data-para="${b.id}">Para ${b.letter}</button>`;
                 });
                 tabsHtml += `<button type="button" class="vocab-tab-btn vocab-tab-btn--questions" data-para="questions">📝 Questions</button>`;
                 tabsContainer.innerHTML = tabsHtml;
@@ -9817,22 +9961,27 @@
                     let passageHtml = '';
                     blocks.forEach(b => {
                         passageHtml += `
-                            <div class="vocab-paragraph-card" id="vocab-card-${b.letter}" data-letter="${b.letter}">
+                            <div class="vocab-paragraph-card" id="vocab-card-${b.id}" data-paragraph-id="${b.id}" data-letter="${b.letter}">
                                 <div class="vocab-paragraph-tag">
                                     <span class="vocab-para-letter">Para ${b.letter}</span>
                                 </div>
-                                <div class="vocab-paragraph-text">${b.html}</div>
-                                <div class="vocab-translation-card" id="vocab-trans-${b.letter}" style="display: ${this.showTranslation ? 'block' : 'none'};">
+                                <div class="vocab-paragraph-text" data-content-id="${b.id}"></div>
+                                <div class="vocab-translation-card" id="vocab-trans-${b.id}" style="display: ${this.showTranslation ? 'block' : 'none'};">
                                     <div class="vocab-trans-label">中文参考译文：</div>
-                                    <div class="vocab-trans-text" id="vocab-trans-text-${b.letter}">加载中...</div>
+                                    <div class="vocab-trans-text" id="vocab-trans-text-${b.id}">加载中...</div>
                                 </div>
                             </div>
                         `;
                     });
                     passageContent.innerHTML = passageHtml;
+                    blocks.forEach(block => {
+                        const text = passageContent.querySelector('[data-content-id="' + block.id + '"]');
+                        text.appendChild(createReadOnlyQuestionContent(block.html, 'vocab-' + block.id));
+                        this.assignTextScopes(text, 'passage/' + block.id);
+                    });
                 } else {
                     // 原生清洗后渲染
-                    passageContent.innerHTML = cleanPassageHtml(rawPassageHtml);
+                    passageContent.innerHTML = '<p class="vocab-empty-tip">本篇暂无可用正文</p>';
                 }
             }
 
@@ -9846,7 +9995,10 @@
                         const group = document.createElement('div');
                         group.className = 'vocab-question-group';
                         group.id = `vocab-qgroup-${idx + 1}`;
-                        group.appendChild(createReadOnlyQuestionContent(g.bodyHtml, group.id));
+                        group.dataset.sectionId = 'q-' + (idx + 1);
+                        const html = (g.leadHtml || '') + (g.bodyHtml || g.html || '');
+                        group.appendChild(createReadOnlyQuestionContent(html, group.id));
+                        this.assignTextScopes(group, 'questions/q-' + (idx + 1), true);
                         groups.appendChild(group);
                     });
                     questionsContent.replaceChildren(groups);
@@ -9864,317 +10016,234 @@
             this.applyVocabHighlights();
         },
 
-        trimRangeWhitespace(range) {
-            if (!range || range.collapsed) return range;
-            const startNode = range.startContainer;
-            let startOffset = range.startOffset;
-            const endNode = range.endContainer;
-            let endOffset = range.endOffset;
-
-            if (startNode === endNode && startNode.nodeType === Node.TEXT_NODE) {
-                const text = startNode.nodeValue || '';
-                const segment = text.slice(startOffset, endOffset);
-                const leadSpace = segment.search(/\S/);
-                if (leadSpace > 0) {
-                    startOffset += leadSpace;
-                } else if (leadSpace === -1) {
-                    return null;
+        assignTextScopes(root, prefix, alwaysNumber = false) {
+            const boundaries = 'p, li, td, th, dt, dd, h1, h2, h3, h4, h5, h6, blockquote, div, section, table, ul, ol';
+            const scopes = [];
+            const visit = element => {
+                if (!element.querySelector(boundaries)) {
+                    if (global.ReadingVocabAnchors.text(element).trim()) scopes.push(element);
+                    return;
                 }
-                const trailSpace = segment.length - segment.trimEnd().length;
-                if (trailSpace > 0) {
-                    endOffset -= trailSpace;
-                }
-                if (endOffset <= startOffset) return null;
-
-                const trimmed = document.createRange();
-                trimmed.setStart(startNode, startOffset);
-                trimmed.setEnd(endNode, endOffset);
-                return trimmed;
-            }
-
-            if (startNode.nodeType === Node.TEXT_NODE) {
-                const text = (startNode.nodeValue || '').slice(startOffset);
-                const m = text.match(/^\s+/);
-                if (m) {
-                    range.setStart(startNode, startOffset + m[0].length);
-                }
-            }
-            if (endNode.nodeType === Node.TEXT_NODE) {
-                const text = (endNode.nodeValue || '').slice(0, endOffset);
-                const m = text.match(/\s+$/);
-                if (m) {
-                    range.setEnd(endNode, endOffset - m[0].length);
-                }
-            }
-            return range;
+                let run = [];
+                const flush = () => {
+                    if (!run.length) return;
+                    if (run.some(node => node.textContent.trim())) {
+                        const span = document.createElement('span');
+                        element.insertBefore(span, run[0]);
+                        span.append(...run);
+                        scopes.push(span);
+                    }
+                    run = [];
+                };
+                [...element.childNodes].forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE && (node.matches(boundaries) || node.querySelector(boundaries))) {
+                        flush();
+                        visit(node);
+                    } else run.push(node);
+                });
+                flush();
+            };
+            visit(root);
+            scopes.forEach((scope, index) => {
+                scope.dataset.vocabScope = alwaysNumber || scopes.length > 1 ? prefix + '/p-' + (index + 1) : prefix;
+                scope.dataset.vocabSourceVersion = global.ReadingVocabAnchors.hashText(JSON.stringify(this.currentPayload));
+                scope.tabIndex = 0;
+            });
         },
 
-        calculateRangeLocation(scopeElement, range, text) {
-            const textNodes = getTextNodes(scopeElement);
-            let runningOffset = 0;
-            let startOffset = -1;
-
-            for (let i = 0; i < textNodes.length; i++) {
-                const node = textNodes[i];
-                if (node === range.startContainer) {
-                    startOffset = runningOffset + range.startOffset;
-                    break;
-                }
-                runningOffset += (node.nodeValue || '').length;
-            }
-
-            if (startOffset === -1) {
-                startOffset = 0;
-            }
-
-            const endOffset = startOffset + text.length;
-            const fullText = textNodes.map(n => n.nodeValue || '').join('');
-            const before = fullText.slice(Math.max(0, startOffset - 30), startOffset);
-            const after = fullText.slice(endOffset, endOffset + 30);
-
-            let occurrence = 0;
-            const lowerFull = fullText.toLowerCase();
-            const lowerWord = text.toLowerCase();
-            let idx = -1;
-            while ((idx = lowerFull.indexOf(lowerWord, idx + 1)) !== -1 && idx < startOffset) {
-                occurrence += 1;
-            }
-
-            return { startOffset, endOffset, before, after, occurrence };
+        calculateRangeLocation(scopeElement, range) {
+            return global.ReadingVocabAnchors.calculateLocation(scopeElement, range);
         },
 
-        wrapRangeWithHighlight(range, word) {
-            if (!range || range.collapsed) return null;
-            const mark = document.createElement('mark');
-            mark.className = 'vocab-highlight vocab-highlight--pulse';
-            mark.dataset.word = word;
-            mark.title = `生词本: ${word} (点击发音)`;
+        moveKeyboardSelection(event) {
+            if (this.modalOpen || !/^(ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End)$/.test(event.key)) return;
+            const scope = event.target.closest('[data-vocab-scope]');
+            if (!scope || event.target.closest('button, input, textarea, select, [role="button"]')) return;
+            const selection = window.getSelection();
+            if (!selection || typeof selection.modify !== 'function') return;
+            const nodes = getTextNodes(scope);
+            if (!nodes.length) return;
+            if (!scope.contains(selection.anchorNode) || !scope.contains(selection.focusNode)) {
+                selection.collapse(nodes[0], 0);
+            }
+            const previous = { anchor: selection.anchorNode, start: selection.anchorOffset,
+                focus: selection.focusNode, end: selection.focusOffset };
+            const forward = /^(ArrowRight|ArrowDown|End)$/.test(event.key);
+            let unit = /^(ArrowUp|ArrowDown)$/.test(event.key) ? 'line' : 'character';
+            if (event.ctrlKey || event.metaKey) unit = 'word';
+            if (event.key === 'Home' || event.key === 'End') unit = 'lineboundary';
+            event.preventDefault();
+            // Static selectable text has no native caret navigation in some
+            // supported browsers unless their global caret-browsing mode is on.
+            selection.modify(event.shiftKey ? 'extend' : 'move', forward ? 'forward' : 'backward', unit);
+            if (!scope.contains(selection.anchorNode) || !scope.contains(selection.focusNode)) {
+                selection.setBaseAndExtent(previous.anchor, previous.start, previous.focus, previous.end);
+            }
+        },
 
+        async captureSelection() {
+            const overlay = this.ensureOverlay();
+            if (overlay.classList.contains('is-hidden') || this.modalOpen || !this.currentPayload) return;
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return;
+            const range = selection.getRangeAt(0);
+            const start = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
+            const scope = start?.closest('[data-vocab-scope]');
+            if (!scope || !overlay.querySelector('#vocab-reader-body')?.contains(scope)) return;
+            const captured = global.ReadingVocabAnchors.capture(scope, range);
+            if (!captured) return;
+            const requestId = this._openRequestId;
+            const pendingId = JSON.stringify([requestId, captured.scopeId, captured.startOffset, captured.endOffset]);
+            if (this._selectionPending.has(pendingId)) return;
+            this._selectionPending.add(pendingId);
+            this.showToast('正在保存…');
             try {
-                range.surroundContents(mark);
-            } catch (e) {
-                try {
-                    const fragment = range.extractContents();
-                    mark.appendChild(fragment);
-                    range.insertNode(mark);
-                } catch (err) {
-                    console.warn('[ReadingVocabReader] wrapRangeWithHighlight error:', err);
-                    return null;
-                }
+                const result = await ReadingVocabStore.add(captured.word, this.currentExamId,
+                    this.currentExam?.title || '', captured.context, captured, this.currentSource);
+                if (requestId !== this._openRequestId) return;
+                if (!result.added) throw new Error('Selection was not saved');
+                selection.removeAllRanges();
+                this.applyVocabHighlights();
+                this.updateCounts();
+                if (this.modalOpen) this.renderVocabList();
+                this.showToast('✅ "' + captured.word + '" 已收录并黄色高亮');
+            } catch (error) {
+                if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请重新划选重试');
+            } finally {
+                this._selectionPending.delete(pendingId);
             }
+        },
 
-            this.defer(() => {
-                mark.classList.remove('vocab-highlight--pulse');
-            }, 1500);
-
-            return mark;
+        wrapRangeWithHighlight(range, word, occurrenceId) {
+            if (!range || range.collapsed) return false;
+            // Wrap each text fragment separately so repeated restore never splits,
+            // extracts, or rewrites the source's inline formatting or annotations.
+            const fragments = getTextNodes(range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+                ? range.commonAncestorContainer.parentElement : range.commonAncestorContainer)
+                .filter(node => range.intersectsNode(node)).map(node => ({ node,
+                    start: node === range.startContainer ? range.startOffset : 0,
+                    end: node === range.endContainer ? range.endOffset : node.length
+                })).filter(fragment => fragment.end > fragment.start);
+            for (const fragment of fragments.reverse()) {
+                const selected = document.createRange();
+                selected.setStart(fragment.node, fragment.start);
+                selected.setEnd(fragment.node, fragment.end);
+                const mark = document.createElement('mark');
+                mark.className = 'vocab-highlight';
+                mark.dataset.word = word;
+                mark.dataset.occurrenceId = occurrenceId;
+                mark.tabIndex = 0;
+                mark.setAttribute('role', 'button');
+                mark.title = '生词本: ' + word + '（查看或移除这一处）';
+                selected.surroundContents(mark);
+            }
+            return fragments.length > 0;
         },
 
         applyVocabHighlights() {
             const overlay = this.ensureOverlay();
-            const passageContent = overlay.querySelector('#vocab-passage-content');
-            const questionsContent = overlay.querySelector('#vocab-questions-content');
-
-            // 1. 清除已有高亮 mark.vocab-highlight，安全还原为纯文本节点
-            this.removeVocabHighlights(passageContent);
-            this.removeVocabHighlights(questionsContent);
-
-            if (!this.currentExamId) return;
-
-            // 2. 仅获取针对当前篇目已收录的生词（绝不跨篇串显，也绝不全篇正则批量盲高亮）
-            const examItems = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource);
-            if (!examItems || examItems.length === 0) return;
-
-            examItems.forEach(item => {
-                if (Array.isArray(item.highlights) && item.highlights.length > 0) {
-                    item.highlights.forEach(hl => {
-                        if (String(hl.examId) === String(this.currentExamId)) {
-                            this.restoreVocabHighlight(overlay, hl, item.word);
+            this.removeVocabHighlights(overlay.querySelector('#vocab-reader-body'));
+            this.unresolvedOccurrences = [];
+            if (this.currentExamId) {
+                ReadingVocabStore.getByExam(this.currentExamId, this.currentSource).forEach(item => {
+                    item.occurrences.forEach(occurrence => {
+                        if (!this.restoreVocabHighlight(overlay, occurrence, item.word)) {
+                            this.unresolvedOccurrences.push({ ...occurrence, word: item.word });
                         }
                     });
-                }
-            });
+                });
+            }
+            this.renderAnchorStatus();
         },
 
-        restoreVocabHighlight(overlay, hl, word) {
-            if (!overlay || !hl) return false;
-            let scopeElement = null;
+        restoreVocabHighlight(overlay, occurrence, word) {
+            if (!this.currentPayload) return false;
+            const range = this.resolveRangeForHighlight(overlay.querySelector('#vocab-reader-body'), occurrence);
+            return !!range && this.wrapRangeWithHighlight(range, word || occurrence.quote, occurrence.id);
+        },
 
-            if (hl.scope && hl.scope.startsWith('para-')) {
-                const letter = hl.scope.replace('para-', '');
-                const card = overlay.querySelector(`.vocab-paragraph-card[data-letter="${letter}"]`);
-                if (card) {
-                    scopeElement = card.querySelector('.vocab-paragraph-text') || card;
-                }
-            } else if (hl.scope && hl.scope.startsWith('vocab-qgroup-')) {
-                scopeElement = overlay.querySelector(`#${hl.scope}`);
-            } else if (hl.scope === 'questions') {
-                scopeElement = overlay.querySelector('#vocab-questions-content');
-            } else {
-                scopeElement = overlay.querySelector('#vocab-passage-content');
-            }
+        resolveRangeForHighlight(root, occurrence) {
+            return global.ReadingVocabAnchors.resolve(root, occurrence);
+        },
 
-            if (!scopeElement) {
-                scopeElement = overlay.querySelector('#vocab-passage-content') || overlay.querySelector('#vocab-questions-content');
-            }
-            if (!scopeElement) return false;
+        showOccurrenceActions(mark) {
+            const actions = this.ensureOverlay().querySelector('#vocab-occurrence-actions');
+            actions.innerHTML = '<span>' + escapeHtml(mark.dataset.word) + '</span> <button type="button" data-action="remove-occurrence" data-occurrence-id="'
+                + escapeHtml(mark.dataset.occurrenceId) + '">移除这一处高亮</button>';
+            actions.querySelector('button').focus({ preventScroll: true });
+            speakWord(mark.dataset.word);
+        },
 
-            const range = this.resolveRangeForHighlight(scopeElement, hl);
-            if (!range || range.collapsed) return false;
+        renderAnchorStatus() {
+            const status = this.ensureOverlay().querySelector('#vocab-anchor-status');
+            if (!status) return;
+            status.replaceChildren();
+            if (!this.unresolvedOccurrences.length) return;
+            const message = document.createElement('span');
+            message.textContent = this.unresolvedOccurrences.length + ' 处原文暂时无法定位，生词仍保留。可重试加载，或在生词本移除旧位置后重新划选。';
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.dataset.action = 'retry-anchors';
+            retry.textContent = '重试定位';
+            status.append(message, retry);
+        },
 
-            const mark = document.createElement('mark');
-            mark.className = 'vocab-highlight';
-            mark.dataset.word = word || hl.text;
-            mark.title = `生词本: ${word || hl.text} (点击发音)`;
-
+        async removeOccurrence(occurrenceId) {
+            if (this._occurrenceBusy) return;
+            const item = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
+                .find(row => row.occurrences.some(occurrence => occurrence.id === occurrenceId));
+            const occurrence = item?.occurrences.find(row => row.id === occurrenceId);
+            if (!occurrence) return;
+            const requestId = this._openRequestId;
+            const undo = { source: { ...this.currentSource },
+                article: { examId: String(this.currentExamId), title: this.currentExam?.title || item.examTitle || '' },
+                word: { word: item.word, meaning: item.meaning || '待补充释义', example: item.context || '' },
+                occurrence: { ...occurrence }, manual: false };
+            const observed = { revision: ReadingVocabStore._state.revision, generation: ReadingVocabStore._state.generation };
+            this._occurrenceBusy = true;
+            this.showToast('正在保存…');
             try {
-                range.surroundContents(mark);
-                return true;
-            } catch (_) {
-                try {
-                    const fragment = range.extractContents();
-                    mark.appendChild(fragment);
-                    range.insertNode(mark);
-                    return true;
-                } catch (e) {
-                    return false;
-                }
+                const result = await ReadingVocabStore.mutate('removeOccurrence', { occurrenceId }, observed);
+                if (requestId !== this._openRequestId) return;
+                // Keep the acknowledged deletion fence: a later clear/replace must
+                // reject this undo instead of resurrecting deleted relationships.
+                const committedRevision = result.revisions?.['vocab.readingState'];
+                this._undoOccurrence = result.changed !== false && Number.isInteger(committedRevision)
+                    ? { command: undo, observed: { revision: committedRevision, generation: observed.generation } } : null;
+                this.ensureOverlay().querySelector('#vocab-occurrence-actions').replaceChildren();
+                this.ensureOverlay().querySelector('#vocab-occurrence-undo').innerHTML =
+                    this._undoOccurrence ? '<span>已移除这一处高亮</span> <button type="button" data-action="undo-occurrence">撤销</button>' : '';
+                this.applyVocabHighlights();
+                this.updateCounts();
+                if (this.modalOpen) this.renderVocabList();
+                this.showToast('已移除这一处高亮');
+            } catch (error) {
+                if (requestId === this._openRequestId) this.showSaveError(error, '移除失败，请重试');
+            } finally {
+                if (requestId === this._openRequestId) this._occurrenceBusy = false;
             }
         },
 
-        resolveRangeForHighlight(root, hl) {
-            if (!root || !hl) return null;
-            const textNodes = getTextNodes(root);
-            if (!textNodes.length) return null;
-
-            const fullText = textNodes.map(n => n.nodeValue || '').join('');
-            const targetText = String(hl.text || '').trim();
-            if (!targetText) return null;
-
-            const startOffset = Number(hl.startOffset);
-            const endOffset = Number(hl.endOffset);
-
-            // 1. 优先尝试 offset 精确匹配
-            if (
-                Number.isFinite(startOffset) &&
-                Number.isFinite(endOffset) &&
-                endOffset > startOffset &&
-                startOffset >= 0 &&
-                endOffset <= fullText.length
-            ) {
-                const segment = fullText.slice(startOffset, endOffset);
-                if (segment.toLowerCase() === targetText.toLowerCase()) {
-                    return resolveRangeFromOffsets(root, startOffset, endOffset);
-                }
+        async undoOccurrence() {
+            if (this._occurrenceBusy || !this._undoOccurrence) return;
+            const requestId = this._openRequestId;
+            const undo = this._undoOccurrence;
+            this._occurrenceBusy = true;
+            this.showToast('正在保存…');
+            try {
+                await ReadingVocabStore.mutate('collect', { ...undo.command, at: new Date().toISOString() }, undo.observed);
+                if (requestId !== this._openRequestId) return;
+                this._undoOccurrence = null;
+                this.ensureOverlay().querySelector('#vocab-occurrence-undo').replaceChildren();
+                this.applyVocabHighlights();
+                this.updateCounts();
+                if (this.modalOpen) this.renderVocabList();
+                this.showToast('已撤销移除');
+            } catch (error) {
+                if (requestId === this._openRequestId) this.showSaveError(error, '撤销失败，数据可能已更改；可重试或重新划选');
+            } finally {
+                if (requestId === this._openRequestId) this._occurrenceBusy = false;
             }
-
-            // 2. 次优：使用 before / after 上下文精确定位单处实例
-            if (hl.before || hl.after) {
-                let searchPos = 0;
-                let matchIdx = -1;
-                let bestIdx = -1;
-                let bestScore = -1;
-                const lowerFull = fullText.toLowerCase();
-                const lowerTarget = targetText.toLowerCase();
-
-                while ((matchIdx = lowerFull.indexOf(lowerTarget, searchPos)) !== -1) {
-                    let score = 0;
-                    if (hl.before) {
-                        const actualBefore = fullText.slice(Math.max(0, matchIdx - hl.before.length), matchIdx);
-                        if (actualBefore.toLowerCase() === hl.before.toLowerCase()) {
-                            score += 3;
-                        } else if (actualBefore.toLowerCase().endsWith(hl.before.slice(-10).toLowerCase())) {
-                            score += 1;
-                        }
-                    }
-                    if (hl.after) {
-                        const actualAfter = fullText.slice(matchIdx + targetText.length, matchIdx + targetText.length + hl.after.length);
-                        if (actualAfter.toLowerCase() === hl.after.toLowerCase()) {
-                            score += 3;
-                        } else if (actualAfter.toLowerCase().startsWith(hl.after.slice(0, 10).toLowerCase())) {
-                            score += 1;
-                        }
-                    }
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestIdx = matchIdx;
-                    }
-                    searchPos = matchIdx + 1;
-                }
-
-                if (bestIdx !== -1 && bestScore > 0) {
-                    return resolveRangeFromOffsets(root, bestIdx, bestIdx + targetText.length);
-                }
-            }
-
-            // 3. 兜底：使用 occurrence（第 N 次出现）
-            const occurrence = Number.isFinite(Number(hl.occurrence)) ? Number(hl.occurrence) : 0;
-            let currentOccurrence = 0;
-            let pos = 0;
-            let matchPos = -1;
-            const lowerFull = fullText.toLowerCase();
-            const lowerTarget = targetText.toLowerCase();
-
-            while ((matchPos = lowerFull.indexOf(lowerTarget, pos)) !== -1) {
-                if (currentOccurrence === occurrence) {
-                    return resolveRangeFromOffsets(root, matchPos, matchPos + targetText.length);
-                }
-                currentOccurrence += 1;
-                pos = matchPos + 1;
-            }
-
-            return null;
-        },
-
-        restoreLegacyHighlightByContext(overlay, word, context) {
-            if (!overlay || !word) return false;
-            const passageContent = overlay.querySelector('#vocab-passage-content');
-            const questionsContent = overlay.querySelector('#vocab-questions-content');
-            const roots = [passageContent, questionsContent].filter(Boolean);
-
-            const targetWord = String(word).trim();
-            const lowerWord = targetWord.toLowerCase();
-            const lowerContext = String(context || '').trim().toLowerCase();
-
-            for (const root of roots) {
-                const textNodes = getTextNodes(root);
-                const fullText = textNodes.map(n => n.nodeValue || '').join('');
-                const lowerFull = fullText.toLowerCase();
-
-                let targetIdx = -1;
-                if (lowerContext && lowerFull.includes(lowerContext)) {
-                    const ctxIdx = lowerFull.indexOf(lowerContext);
-                    const wordInCtx = lowerContext.indexOf(lowerWord);
-                    if (wordInCtx !== -1) {
-                        targetIdx = ctxIdx + wordInCtx;
-                    }
-                }
-
-                // 无论如何，只恢复单处实例，绝不全篇高亮
-                if (targetIdx !== -1) {
-                    const range = resolveRangeFromOffsets(root, targetIdx, targetIdx + targetWord.length);
-                    if (range && !range.collapsed) {
-                        const mark = document.createElement('mark');
-                        mark.className = 'vocab-highlight';
-                        mark.dataset.word = targetWord;
-                        mark.title = `生词本: ${targetWord} (点击发音)`;
-                        try {
-                            range.surroundContents(mark);
-                            return true;
-                        } catch (_) {
-                            try {
-                                const frag = range.extractContents();
-                                mark.appendChild(frag);
-                                range.insertNode(mark);
-                                return true;
-                            } catch (e) {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-            return false;
         },
 
         removeVocabHighlights(container) {
@@ -10219,7 +10288,8 @@
                 const match = note.label ? note.label.match(/Paragraph\s+([A-Z])/i) : null;
                 if (match) {
                     const letter = match[1].toUpperCase();
-                    const transEl = overlay.querySelector(`#vocab-trans-text-${letter}`);
+                    const cards = [...overlay.querySelectorAll('.vocab-paragraph-card')].filter(card => card.dataset.letter === letter);
+                    const transEl = cards.length === 1 ? cards[0].querySelector('.vocab-trans-text') : null;
                     if (transEl) {
                         transEl.textContent = note.text || '';
                     }
@@ -10260,7 +10330,7 @@
                 if (passageSection) passageSection.style.display = 'block';
                 if (questionsSection) questionsSection.style.display = 'none';
                 cards.forEach(c => {
-                    if (c.dataset.letter === target) {
+                    if (c.dataset.paragraphId === target) {
                         c.style.display = 'block';
                         c.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     } else {
@@ -10310,7 +10380,16 @@
             }
 
             let html = '';
+            const unresolved = new Set(this.unresolvedOccurrences.map(row => row.id));
             list.forEach(item => {
+                const currentOccurrences = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
+                    .find(row => row.id === item.id)?.occurrences || [];
+                const occurrenceRows = currentOccurrences.map(occurrence => '<div class="vocab-occurrence-row" data-occurrence-id="'
+                    + escapeHtml(occurrence.id) + '" data-anchor-status="' + (unresolved.has(occurrence.id) ? 'unresolved' : 'resolved') + '">'
+                    + '<span>' + escapeHtml(occurrence.before + occurrence.quote + occurrence.after) + '</span>'
+                    + (unresolved.has(occurrence.id) ? '<strong>原文位置无法定位，生词已保留</strong>' : '')
+                    + '<button type="button" data-action="remove-occurrence" data-occurrence-id="' + escapeHtml(occurrence.id)
+                    + '">移除这一处</button></div>').join('');
                 html += `
                     <div class="vocab-item" data-word-id="${escapeHtml(item.id)}">
                         <div class="vocab-item__main">
@@ -10319,6 +10398,7 @@
                                 <button type="button" class="vocab-speak-btn" data-speak-word="${escapeHtml(item.word)}" title="发音">🔊</button>
                             </div>
                             ${item.context ? `<p class="vocab-item__context">"${escapeHtml(item.context)}"</p>` : ''}
+                            ${occurrenceRows}
                             ${!isCurrent && item.examTitle ? `<span class="vocab-item__source">${escapeHtml(item.examTitle)}</span>` : ''}
                         </div>
                         <button type="button" class="vocab-delete-btn" data-del-id="${escapeHtml(item.id)}" title="移出生词本">删除</button>
@@ -10400,9 +10480,9 @@
     if (typeof window !== 'undefined') {
         window.addEventListener('reading-vocab-store-updated', () => {
             if (ReadingVocabReader.currentExamId) {
-                if (ReadingVocabReader.modalOpen) ReadingVocabReader.renderVocabList();
                 ReadingVocabReader.updateCounts();
                 ReadingVocabReader.applyVocabHighlights();
+                if (ReadingVocabReader.modalOpen) ReadingVocabReader.renderVocabList();
             }
         });
     }
@@ -19004,6 +19084,8 @@
     "js/core/dictionaryService.js",
     "js/runtime/reviewHighlightDictionary.js",
     "js/utils/practiceTimerPreferences.js",
+    "js/components/readingVocabContent.js",
+    "js/components/readingVocabAnchors.js",
     "js/components/readingVocabReader.js",
     "js/runtime/unifiedReadingPage.js"
 ]);
