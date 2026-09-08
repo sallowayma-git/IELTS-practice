@@ -2748,6 +2748,14 @@
             timestamp(article.createdAt, 'article.createdAt');
             timestamp(article.updatedAt, 'article.updatedAt');
             if (article.createdAt > article.updatedAt) fail('Article timestamps are out of order');
+            if (article.titleUpdatedAt === null) {
+                if (article.title !== '') fail('An article without a title update must have an empty title');
+            } else {
+                timestamp(article.titleUpdatedAt, 'article.titleUpdatedAt');
+                if (article.titleUpdatedAt < article.createdAt || article.titleUpdatedAt > article.updatedAt) {
+                    fail('Article title timestamp must be within article activity timestamps');
+                }
+            }
         }
         for (const term of reading.terms) {
             if (term.normalizedTerm !== normalizeTerm(term.normalizedTerm) || term.id !== termId(term.normalizedTerm)) fail('Invalid normalized term identity');
@@ -2810,17 +2818,25 @@
         const article = object(command.article, 'article');
         const sourceKey = sourceId(source);
         const articleKey = articleId(source, article.examId);
-        if (own(article, 'title') && typeof article.title !== 'string') fail('article.title must be a string');
+        const hasTitle = own(article, 'title');
+        if (hasTitle && typeof article.title !== 'string') fail('article.title must be a string');
         if (!snapshot.reading.sources.some((row) => row.id === sourceKey)) {
             snapshot.reading.sources.push({ id: sourceKey, kind: source.kind, libraryId: source.id.trim() });
         }
         let row = snapshot.reading.articles.find((item) => item.id === articleKey);
         if (!row) {
-            row = { id: articleKey, sourceId: sourceKey, examId: article.examId.trim(), title: article.title || '', createdAt: at, updatedAt: at };
+            row = {
+                id: articleKey, sourceId: sourceKey, examId: article.examId.trim(),
+                title: hasTitle ? article.title : '', titleUpdatedAt: hasTitle ? at : null,
+                createdAt: at, updatedAt: at
+            };
             snapshot.reading.articles.push(row);
         } else {
-            // Older retries must not move clocks backwards or replace newer titles.
-            if (own(article, 'title') && at >= row.updatedAt) row.title = article.title;
+            // Title-less activity must not block delayed title-bearing updates.
+            if (hasTitle && (row.titleUpdatedAt === null || at >= row.titleUpdatedAt)) {
+                row.title = article.title;
+                row.titleUpdatedAt = at;
+            }
             row.createdAt = at < row.createdAt ? at : row.createdAt;
             row.updatedAt = at > row.updatedAt ? at : row.updatedAt;
         }

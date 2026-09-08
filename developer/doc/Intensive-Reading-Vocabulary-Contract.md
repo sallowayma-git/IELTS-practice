@@ -41,7 +41,7 @@ and list metadata are preserved. `reading` has these tables:
 | Table | Record fields | Responsibility |
 | --- | --- | --- |
 | `sources` | `id`, `kind`, `libraryId` | Stable built-in or imported library namespace. |
-| `articles` | `id`, `sourceId`, `examId`, `title`, `createdAt`, `updatedAt` | Source-scoped article identity and display metadata. |
+| `articles` | `id`, `sourceId`, `examId`, `title`, `titleUpdatedAt`, `createdAt`, `updatedAt` | Source-scoped article identity and display metadata, with a separate title update clock. |
 | `terms` | `id`, `normalizedTerm`, `wordRef: {listId, wordId}`, `createdAt` | One normalized reading term linked to a live existing vocabulary record. |
 | `associations` | `id`, `articleId`, `termId`, `manual`, `createdAt`, `updatedAt` | One article-term relationship, with independent manual membership. |
 | `occurrences` | `id`, `associationId`, `scopeId`, `contentVersion`, `startOffset`, `endOffset`, `quote`, `before`, `after`, `createdAt`, `updatedAt` | A specifically selected occurrence belonging to one association. |
@@ -53,6 +53,13 @@ relationships, unresolved canonical word references, invalid timestamps, and
 occurrence-only associations without an occurrence. Snapshots must contain
 JSON-serializable values. Mutations preserve their inputs and return detached
 snapshots; queries also return detached copies. Returned objects are not frozen.
+
+`articles.titleUpdatedAt` is required: `null` means that no command has supplied
+a title, in which case `title` must be `""`. Otherwise it is a canonical UTC ISO
+timestamp within the inclusive `createdAt` to `updatedAt` range. An explicitly
+supplied empty title has a timestamp and is distinct from an omitted title.
+Serialization preserves this field and validation rejects a missing or invalid
+title clock.
 
 ## Identity and normalization
 
@@ -184,8 +191,16 @@ Repeated collection never inflates distinct-term counts or duplicates an
 occurrence identity. A manual request promotes the association's `manual` flag
 to `true`; later occurrence-only collection cannot unset it. An older collection
 request cannot move article, association, or occurrence update times backward or
-overwrite newer article titles/occurrence context. This timestamp behavior is
-local upsert semantics, not a concurrent-write or deletion-conflict policy.
+overwrite newer article titles/occurrence context. Both `collect` and
+`recordVisit` compare title-bearing commands against `titleUpdatedAt`, independently
+of article activity in `updatedAt`. A command without `article.title` leaves the
+title and its clock unchanged, so a delayed collection can supply the first title
+or a rename after a later title-less visit. An explicit `title: ""` updates the
+title clock and prevents an older title from being restored. Equal title update
+timestamps retain the last processed title. Article `createdAt` and `updatedAt`
+still retain the earliest and latest activity respectively. This timestamp
+behavior is local upsert semantics, not a concurrent-write or deletion-conflict
+policy.
 
 `collect` does not implicitly record a visit. Record article opening with
 `recordVisit`, independently of whether a word is collected. The persistence

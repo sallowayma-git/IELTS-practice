@@ -251,6 +251,125 @@ test('visiting an article is independent of collecting vocabulary and repeated v
     assert.equal(model.listVisits(snapshot).length, 2);
 });
 
+test('a delayed first title survives a later title-less visit in either event order', () => {
+    const events = [
+        ['recordVisit', { source: SOURCE_A, article: { examId: ARTICLE.examId }, at: LATER }],
+        ['collect', command()]
+    ];
+    const snapshots = [events, [...events].reverse()].map((ordered) => {
+        let snapshot = model.createSnapshot();
+        for (const [operation, input] of ordered) snapshot = mutate(operation, snapshot, input);
+        const article = snapshot.reading.articles[0];
+        assert.equal(article.title, ARTICLE.title);
+        assert.equal(article.titleUpdatedAt, AT);
+        assert.equal(article.createdAt, AT);
+        assert.equal(article.updatedAt, LATER);
+        assert.equal(model.listVisits(snapshot)[0].lastVisitedAt, LATER);
+        return plain(snapshot);
+    });
+    assert.deepEqual(snapshots[0], snapshots[1], 'reordering title-less activity preserves the same article metadata');
+});
+
+test('title-less activity preserves an unknown title until an explicit title arrives', () => {
+    let snapshot = mutate('recordVisit', model.createSnapshot(), {
+        source: SOURCE_A, article: { examId: ARTICLE.examId }, at: AT
+    });
+    assert.equal(snapshot.reading.articles[0].title, '');
+    assert.equal(snapshot.reading.articles[0].titleUpdatedAt, null);
+    snapshot = mutate('collect', snapshot, command({ article: { examId: ARTICLE.examId }, at: LATER }));
+    assert.equal(snapshot.reading.articles[0].titleUpdatedAt, null, 'collecting without a title must not create a title clock');
+    assert.equal(snapshot.reading.articles[0].updatedAt, LATER);
+    snapshot = mutate('recordVisit', snapshot, { source: SOURCE_A, article: ARTICLE, at: AT });
+    assert.equal(snapshot.reading.articles[0].title, ARTICLE.title);
+    assert.equal(snapshot.reading.articles[0].titleUpdatedAt, AT);
+    assert.equal(snapshot.reading.articles[0].updatedAt, LATER);
+});
+
+test('a delayed rename uses its title clock after unrelated visits and rejects older titles', () => {
+    const renamedAt = '2026-09-08T01:30:00.000Z';
+    const rename = command({ article: { ...ARTICLE, title: 'Renamed article' }, at: renamedAt });
+    const visit = { source: SOURCE_A, article: { examId: ARTICLE.examId }, at: LATER };
+    for (const events of [
+        [['recordVisit', visit], ['collect', rename]],
+        [['collect', rename], ['recordVisit', visit]]
+    ]) {
+        let snapshot = mutate('collect', model.createSnapshot(), command());
+        for (const [operation, input] of events) snapshot = mutate(operation, snapshot, input);
+        assert.equal(snapshot.reading.articles[0].title, 'Renamed article');
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, renamedAt);
+        assert.equal(snapshot.reading.articles[0].updatedAt, LATER);
+        for (const operation of ['recordVisit', 'collect']) {
+            const input = operation === 'collect' ? command() : { source: SOURCE_A, article: ARTICLE, at: AT };
+            snapshot = mutate(operation, snapshot, input);
+            assert.equal(snapshot.reading.articles[0].title, 'Renamed article', `${operation} must not restore an older title`);
+            assert.equal(snapshot.reading.articles[0].titleUpdatedAt, renamedAt);
+            assert.equal(snapshot.reading.articles[0].updatedAt, LATER);
+        }
+    }
+});
+
+test('an explicit empty title is a dated update and equal title timestamps use the last processed value', () => {
+    for (const operation of ['recordVisit', 'collect']) {
+        const input = (title, at) => operation === 'collect'
+            ? command({ article: { ...ARTICLE, title }, at })
+            : { source: SOURCE_A, article: { ...ARTICLE, title }, at };
+        let snapshot = mutate(operation, model.createSnapshot(), input('', LATER));
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, LATER, 'an initially empty explicit title is known');
+        snapshot = mutate(operation, snapshot, input(ARTICLE.title, AT));
+        assert.equal(snapshot.reading.articles[0].title, '', 'older nonempty titles must not overwrite an explicit empty title');
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, LATER);
+        snapshot = mutate(operation, snapshot, input('Same-time title', LATER));
+        assert.equal(snapshot.reading.articles[0].title, 'Same-time title');
+        snapshot = mutate(operation, snapshot, input('', LATER));
+        assert.equal(snapshot.reading.articles[0].title, '', 'an existing title can be explicitly cleared at the same timestamp');
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, LATER);
+    }
+});
+
+test('serialization preserves title provenance for delayed metadata replay', () => {
+    const renamedAt = '2026-09-08T01:30:00.000Z';
+    for (const initiallyKnown of [false, true]) {
+        let snapshot = model.createSnapshot();
+        if (initiallyKnown) snapshot = mutate('collect', snapshot, command());
+        snapshot = mutate('recordVisit', snapshot, {
+            source: SOURCE_A, article: { examId: ARTICLE.examId }, at: LATER
+        });
+        snapshot = model.deserialize(model.serialize(snapshot));
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, initiallyKnown ? AT : null);
+        snapshot = mutate('collect', snapshot, command({
+            article: { ...ARTICLE, title: 'Restored article title' }, at: renamedAt
+        }));
+        assert.equal(snapshot.reading.articles[0].title, 'Restored article title');
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, renamedAt);
+        assert.equal(snapshot.reading.articles[0].updatedAt, LATER);
+        snapshot = model.deserialize(model.serialize(snapshot));
+        snapshot = mutate('collect', snapshot, command());
+        assert.equal(snapshot.reading.articles[0].title, 'Restored article title', 'restoration must retain protection from stale titles');
+        assert.equal(snapshot.reading.articles[0].titleUpdatedAt, renamedAt);
+    }
+});
+
+test('validation and serialization reject missing, malformed or inconsistent title clocks', () => {
+    let valid = mutate('collect', model.createSnapshot(), command());
+    valid = mutate('recordVisit', valid, { source: SOURCE_A, article: { examId: ARTICLE.examId }, at: LATER });
+    const corruptions = [
+        ['missing clock', (article) => { delete article.titleUpdatedAt; }],
+        ['nonempty title with unknown clock', (article) => { article.titleUpdatedAt = null; }],
+        ['invalid timestamp', (article) => { article.titleUpdatedAt = 'invalid-date'; }],
+        ['noncanonical timestamp', (article) => { article.titleUpdatedAt = '2026-09-08T01:00:00Z'; }],
+        ['non-string timestamp', (article) => { article.titleUpdatedAt = Date.parse(AT); }],
+        ['clock before article creation', (article) => { article.titleUpdatedAt = '2026-09-08T00:59:59.999Z'; }],
+        ['clock after article update', (article) => { article.titleUpdatedAt = '2026-09-08T02:00:00.001Z'; }]
+    ];
+    for (const [label, corrupt] of corruptions) {
+        const invalid = plain(valid);
+        corrupt(invalid.reading.articles[0]);
+        assert.throws(() => model.validate(invalid), `validate must reject ${label}`);
+        assert.throws(() => model.deserialize(JSON.stringify(invalid)), `deserialize must reject ${label}`);
+        assert.throws(() => model.serialize(invalid), `serialize must reject ${label}`);
+    }
+});
+
 test('existing named-list owners and explicit owner selection retain their own IDs and review progress', () => {
     const customApple = { ...APPLE, id: 'custom-apple', meaning: 'My custom definition', interval: 45 };
     const lists = { custom: { id: 'custom', name: 'Personal words', words: [customApple] } };
