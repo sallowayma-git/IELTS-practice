@@ -1,0 +1,484 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import test from 'node:test';
+
+// Execute the production contract; fixtures below contain storage data only.
+const modelUrl = new URL('../../../js/data/v2/readingVocabularyModel.js', import.meta.url);
+const storeUrl = new URL('../../../js/core/vocabStore.js', import.meta.url);
+const sandbox = { console, Date, JSON, module: { exports: {} } };
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.runInNewContext(fs.readFileSync(modelUrl, 'utf8'), sandbox, { filename: modelUrl.pathname });
+const model = sandbox.module.exports;
+
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const SOURCE_A = { kind: 'imported', id: 'library-a' };
+const SOURCE_B = { kind: 'imported', id: 'library-b' };
+const ARTICLE = { examId: 'shared-exam', title: 'A shared exam ID' };
+const AT = '2026-09-08T01:00:00.000Z';
+const LATER = '2026-09-08T02:00:00.000Z';
+const APPLE = {
+    id: 'existing-apple', word: 'apple', meaning: 'An existing definition',
+    phonetic: 'æpəl', note: 'Keep my note', example: 'An apple a day.',
+    easeFactor: 2.35, interval: 21, repetitions: 7, intraCycles: 1, correctCount: 9,
+    lastReviewed: '2026-09-01T01:00:00.000Z', nextReview: '2026-09-22T01:00:00.000Z',
+    createdAt: '2026-07-01T01:00:00.000Z', updatedAt: '2026-09-01T01:00:00.000Z',
+    reviewHistory: [{ at: '2026-09-01T01:00:00.000Z', grade: 4 }]
+};
+const occurrence = (overrides = {}) => ({
+    scopeId: 'passage-1', contentVersion: 'sha256:original',
+    startOffset: 10, endOffset: 15, quote: 'apple', before: 'An ', after: ' a day.',
+    ...overrides
+});
+const command = (overrides = {}) => Object.fromEntries(Object.entries({
+    source: SOURCE_A, article: ARTICLE, word: { word: 'apple', meaning: 'A fruit' },
+    occurrence: occurrence(), at: AT, ...overrides
+}).filter(([, value]) => value !== undefined));
+
+function deepFreeze(value) {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.values(value).forEach(deepFreeze);
+        Object.freeze(value);
+    }
+    return value;
+}
+
+function mutate(name, snapshot, input) {
+    const before = JSON.stringify(snapshot);
+    const inputBefore = JSON.stringify(input);
+    const result = model[name](deepFreeze(snapshot), deepFreeze(input));
+    assert.equal(JSON.stringify(snapshot), before, `${name} must preserve its input snapshot`);
+    assert.equal(JSON.stringify(input), inputBefore, `${name} must preserve its command`);
+    assert.notEqual(result, snapshot, `${name} returns an independent snapshot`);
+    assert.equal(model.validate(result), true, `${name} produces a valid snapshot`);
+    return result;
+}
+
+function articleId(source = SOURCE_A) {
+    return model.articleId(source, ARTICLE.examId);
+}
+
+function query(snapshot, source) {
+    return model.query(snapshot, source ? { articleId: articleId(source) } : {});
+}
+
+function twoArticles(seed = { words: [APPLE] }) {
+    let snapshot = model.createSnapshot(seed);
+    for (const source of [SOURCE_A, SOURCE_B]) {
+        snapshot = mutate('recordVisit', snapshot, { source, article: ARTICLE, at: AT });
+    }
+    snapshot = mutate('collect', snapshot, command());
+    return mutate('collect', snapshot, command({
+        source: SOURCE_B, word: { word: '  APPLE  ', meaning: 'Must not replace the definition' },
+        occurrence: occurrence({ quote: 'APPLE', scopeId: 'passage-b' }), at: LATER
+    }));
+}
+
+test('versioned identity includes source kind, stable library ID, article, scope and revision', () => {
+    assert.equal(model.SCHEMA_VERSION, 1);
+    assert.equal(model.READING_LIST_ID, 'reading-highlights');
+    assert.equal(model.normalizeTerm('  APPLE  '), 'apple');
+    assert.equal(model.normalizeTerm('  two  words  '), 'two  words', 'normalization preserves internal whitespace');
+    assert.notEqual(model.termId('apple'), model.termId('apples'), 'normalization does not stem distinct vocabulary words');
+    assert.equal(model.termId('apple'), model.termId('  APPLE  '));
+    assert.notEqual(model.sourceId(SOURCE_A), model.sourceId(SOURCE_B));
+    assert.notEqual(model.sourceId(SOURCE_A), model.sourceId({ kind: 'builtin', id: SOURCE_A.id }));
+    assert.equal(model.articleId(SOURCE_A, ARTICLE.examId), articleId());
+    assert.notEqual(articleId(SOURCE_A), articleId(SOURCE_B));
+    assert.notEqual(model.articleId({ kind: 'imported', id: 'a:b' }, 'c'),
+        model.articleId({ kind: 'imported', id: 'a' }, 'b:c'), 'delimiter-bearing IDs must not collide');
+
+    const id = model.occurrenceId(articleId(), model.termId('apple'), occurrence());
+    assert.equal(id, model.occurrenceId(articleId(), model.termId(' APPLE '), occurrence()));
+    for (const selected of [
+        occurrence({ scopeId: 'passage-2' }), occurrence({ contentVersion: 'sha256:revision-2' }),
+        occurrence({ startOffset: 30, endOffset: 35 })
+    ]) {
+        assert.notEqual(id, model.occurrenceId(articleId(), model.termId('apple'), selected));
+    }
+    assert.notEqual(id, model.occurrenceId(articleId(SOURCE_B), model.termId('apple'), occurrence()));
+});
+
+test('same normalized term in two libraries has one owner and independent article collections', () => {
+    const snapshot = twoArticles();
+    assert.equal(snapshot.reading.terms.length, 1);
+    assert.equal(snapshot.words.length, 1);
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot).occurrenceCount, 2);
+    for (const source of [SOURCE_A, SOURCE_B]) {
+        const result = query(snapshot, source);
+        assert.equal(result.distinctTermCount, 1);
+        assert.equal(result.occurrenceCount, 1);
+        assert.equal(result.terms[0].associations[0].articleId, articleId(source));
+        assert.equal(result.terms[0].occurrences[0].associationId, result.terms[0].associations[0].id);
+        assert.deepEqual(plain(result.terms[0].wordRef), { listId: 'default', wordId: APPLE.id });
+        assert.deepEqual(plain(result.terms[0].word), APPLE, 'collection preserves every existing vocabulary/review field');
+    }
+    assert.equal(snapshot.reading.sources.length, 2);
+    assert.equal(snapshot.reading.articles.length, 2);
+    assert.equal(model.listVisits(snapshot).length, 2);
+    assert.deepEqual(plain(snapshot.words[0]), APPLE);
+    assert.equal(snapshot.lists[model.READING_LIST_ID], undefined, 'linking an existing owner must not create a duplicate review row');
+});
+
+test('repeated selection and repeated requests are idempotent while separate positions, scopes and revisions survive', () => {
+    let snapshot = mutate('collect', model.createSnapshot(), command());
+    const once = plain(snapshot);
+    snapshot = mutate('collect', snapshot, command());
+    assert.deepEqual(plain(snapshot), once, 'retrying the same collection command must be idempotent');
+    snapshot = mutate('collect', snapshot, command({
+        occurrence: occurrence({ before: 'Updated context: ', after: ' remains the same selection.' }), at: LATER
+    }));
+    assert.equal(query(snapshot).occurrenceCount, 1, 'context updates do not manufacture another occurrence');
+    assert.equal(query(snapshot).terms[0].occurrences[0].before, 'Updated context: ');
+    for (const selected of [
+        occurrence({ startOffset: 30, endOffset: 35 }),
+        occurrence({ scopeId: 'question-1' }),
+        occurrence({ contentVersion: 'sha256:revision-2' })
+    ]) {
+        snapshot = mutate('collect', snapshot, command({ occurrence: selected }));
+    }
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot).occurrenceCount, 4);
+    assert.equal(snapshot.reading.associations.length, 1);
+    assert.equal(snapshot.lists[model.READING_LIST_ID].words.length, 1);
+});
+
+test('occurrence deletion is local and final occurrence removes only an occurrence-only association', () => {
+    let snapshot = twoArticles();
+    snapshot = mutate('collect', snapshot, command({ occurrence: occurrence({ startOffset: 30, endOffset: 35 }) }));
+    const first = query(snapshot, SOURCE_A).terms[0].occurrences[0];
+    snapshot = mutate('removeOccurrence', snapshot, { occurrenceId: first.id });
+    assert.equal(query(snapshot, SOURCE_A).distinctTermCount, 1);
+    assert.equal(query(snapshot, SOURCE_A).occurrenceCount, 1);
+    assert.equal(query(snapshot, SOURCE_B).occurrenceCount, 1);
+    const final = query(snapshot, SOURCE_A).terms[0].occurrences[0];
+    snapshot = mutate('removeOccurrence', snapshot, { occurrenceId: final.id });
+    assert.equal(query(snapshot, SOURCE_A).distinctTermCount, 0);
+    assert.equal(query(snapshot, SOURCE_B).distinctTermCount, 1);
+    assert.deepEqual(plain(snapshot.words[0]), APPLE);
+    assert.equal(model.listVisits(snapshot).length, 2);
+});
+
+test('manual additions need no anchor and survive final occurrence deletion until explicitly removed', () => {
+    let snapshot = mutate('recordVisit', model.createSnapshot(), { source: SOURCE_A, article: ARTICLE, at: AT });
+    snapshot = mutate('collect', snapshot, command({ occurrence: undefined }));
+    snapshot = mutate('collect', snapshot, command({ occurrence: undefined, manual: true }));
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot).occurrenceCount, 0);
+    assert.equal(snapshot.reading.occurrences.length, 0, 'manual additions must never invent a passage anchor');
+    assert.equal(snapshot.reading.associations[0].manual, true);
+    snapshot = mutate('collect', snapshot, command());
+    snapshot = mutate('removeOccurrence', snapshot, { occurrenceId: query(snapshot).terms[0].occurrences[0].id });
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot).occurrenceCount, 0);
+    snapshot = mutate('removeArticleTerm', snapshot, { articleId: articleId(), termId: model.termId('apple') });
+    assert.equal(query(snapshot).distinctTermCount, 0);
+    assert.equal(snapshot.lists[model.READING_LIST_ID].words.length, 1, 'article removal preserves the review owner');
+    assert.equal(model.listVisits(snapshot).length, 1);
+});
+
+test('manual promotion of a selected term retains the association after removing its final occurrence', () => {
+    let snapshot = mutate('collect', model.createSnapshot(), command());
+    snapshot = mutate('collect', snapshot, command({ manual: true, occurrence: undefined }));
+    snapshot = mutate('removeOccurrence', snapshot, { occurrenceId: query(snapshot).terms[0].occurrences[0].id });
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot).terms[0].associations[0].manual, true);
+});
+
+test('explicit article-term removal preserves other terms in that article and the same term in another article', () => {
+    let snapshot = twoArticles();
+    snapshot = mutate('collect', snapshot, command({ occurrence: occurrence({ startOffset: 30, endOffset: 35 }) }));
+    snapshot = mutate('collect', snapshot, command({
+        word: { word: 'pear', meaning: 'Another fruit' }, occurrence: undefined
+    }));
+    const removal = { articleId: articleId(), termId: model.termId('apple') };
+    snapshot = mutate('removeArticleTerm', snapshot, removal);
+    assert.equal(query(snapshot, SOURCE_A).distinctTermCount, 1);
+    assert.equal(query(snapshot, SOURCE_A).terms[0].word.word, 'pear');
+    assert.equal(query(snapshot, SOURCE_A).occurrenceCount, 0);
+    assert.equal(query(snapshot, SOURCE_B).distinctTermCount, 1);
+    assert.equal(query(snapshot, SOURCE_B).occurrenceCount, 1);
+    assert.equal(query(snapshot).distinctTermCount, 2);
+    assert.equal(model.listVisits(snapshot).length, 2);
+    const once = plain(snapshot);
+    snapshot = mutate('removeArticleTerm', snapshot, removal);
+    assert.deepEqual(plain(snapshot), once, 'retrying an article-term removal is idempotent');
+});
+
+test('clearing an article preserves both visits, the other library and canonical review history', () => {
+    let snapshot = twoArticles();
+    const visits = plain(model.listVisits(snapshot));
+    const otherArticle = plain(query(snapshot, SOURCE_B));
+    snapshot = mutate('clearArticle', snapshot, { articleId: articleId(SOURCE_A) });
+    assert.equal(query(snapshot, SOURCE_A).distinctTermCount, 0);
+    assert.equal(query(snapshot, SOURCE_A).occurrenceCount, 0);
+    assert.deepEqual(plain(query(snapshot, SOURCE_B)), otherArticle);
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.deepEqual(plain(model.listVisits(snapshot)), visits);
+    assert.deepEqual(plain(snapshot.words), [APPLE]);
+    snapshot = mutate('clearArticle', snapshot, { articleId: articleId(SOURCE_B) });
+    assert.equal(query(snapshot).distinctTermCount, 0, 'global reader count includes active associations only');
+    assert.equal(snapshot.reading.terms.length, 1, 'the canonical link remains available for recollection');
+    assert.deepEqual(plain(snapshot.words), [APPLE]);
+    assert.deepEqual(plain(model.listVisits(snapshot)), visits);
+    snapshot = mutate('collect', snapshot, command({ occurrence: undefined, word: { word: 'APPLE' } }));
+    assert.deepEqual(plain(query(snapshot).terms[0].word), APPLE);
+});
+
+test('visiting an article is independent of collecting vocabulary and repeated visits remain one bookshelf record', () => {
+    let snapshot = model.createSnapshot();
+    const visit = { source: SOURCE_A, article: ARTICLE, at: AT };
+    snapshot = mutate('recordVisit', snapshot, visit);
+    const once = plain(snapshot);
+    snapshot = mutate('recordVisit', snapshot, visit);
+    assert.deepEqual(plain(snapshot), once);
+    snapshot = mutate('recordVisit', snapshot, { ...visit, at: LATER });
+    snapshot = mutate('recordVisit', snapshot, { ...visit, at: '2026-09-07T01:00:00.000Z' });
+    const firstVisit = model.listVisits(snapshot)[0];
+    assert.equal(firstVisit.firstVisitedAt, '2026-09-07T01:00:00.000Z');
+    assert.equal(firstVisit.lastVisitedAt, LATER, 'older visit retries must not move the latest visit backwards');
+    snapshot = mutate('recordVisit', snapshot, { ...visit, source: SOURCE_B });
+    assert.equal(model.listVisits(snapshot).length, 2);
+    assert.equal(query(snapshot).distinctTermCount, 0);
+    assert.equal(snapshot.reading.terms.length, 0);
+    assert.equal(snapshot.words.length, 0);
+    assert.deepEqual(plain(snapshot.lists), {});
+    assert.equal(new Set(model.listVisits(snapshot).map((entry) => entry.articleId)).size, 2);
+    snapshot = mutate('clearArticle', snapshot, { articleId: articleId() });
+    assert.equal(model.listVisits(snapshot).length, 2);
+});
+
+test('existing named-list owners and explicit owner selection retain their own IDs and review progress', () => {
+    const customApple = { ...APPLE, id: 'custom-apple', meaning: 'My custom definition', interval: 45 };
+    const lists = { custom: { id: 'custom', name: 'Personal words', words: [customApple] } };
+    let snapshot = mutate('collect', model.createSnapshot({ lists }), command({ word: { word: 'APPLE' } }));
+    assert.deepEqual(plain(query(snapshot).terms[0].wordRef), { listId: 'custom', wordId: customApple.id });
+    assert.deepEqual(plain(snapshot.lists), lists);
+    assert.equal(snapshot.words.length, 0);
+
+    snapshot = mutate('collect', model.createSnapshot({ words: [APPLE], lists }), command({
+        wordRef: { listId: 'custom', wordId: customApple.id }
+    }));
+    snapshot = mutate('collect', snapshot, command({ source: SOURCE_B }));
+    assert.deepEqual(plain(query(snapshot).terms[0].wordRef), { listId: 'custom', wordId: customApple.id },
+        'subsequent collection must keep the already selected review owner');
+    assert.deepEqual(plain(snapshot.words), [APPLE]);
+    assert.deepEqual(plain(snapshot.lists), lists);
+});
+
+test('legacy array-shaped lists remain valid canonical owners through serialization and explicit deletion', () => {
+    const legacy = [{ ...APPLE, id: 'legacy-owner' }];
+    let snapshot = mutate('collect', model.createSnapshot({ lists: { custom: legacy } }), command());
+    assert.deepEqual(plain(query(snapshot).terms[0].wordRef), { listId: 'custom', wordId: 'legacy-owner' });
+    assert.deepEqual(plain(snapshot.lists.custom), legacy);
+    snapshot = model.deserialize(model.serialize(snapshot));
+    snapshot = mutate('deleteCanonicalTerm', snapshot, { termId: model.termId('apple') });
+    assert.deepEqual(plain(snapshot.lists.custom), []);
+    assert.equal(query(snapshot).distinctTermCount, 0);
+});
+
+test('explicit global deletion cascades all reader relationships and same-term vocabulary rows, preserving other terms and visits', () => {
+    const pear = { id: 'pear', word: 'pear', meaning: 'Another fruit', interval: 12 };
+    let snapshot = twoArticles({
+        words: [APPLE, pear],
+        lists: {
+            custom: { id: 'custom', name: 'Personal', words: [{ ...APPLE, id: 'custom-apple', word: 'APPLE' }, pear] },
+            'reading-highlights': { id: 'reading-highlights', words: [{ ...APPLE, id: 'reader-apple' }] }
+        }
+    });
+    snapshot = mutate('collect', snapshot, command({ word: { word: 'pear' }, occurrence: undefined }));
+    const visits = plain(model.listVisits(snapshot));
+    snapshot = mutate('deleteCanonicalTerm', snapshot, { termId: model.termId('apple') });
+    assert.equal(query(snapshot).distinctTermCount, 1);
+    assert.equal(query(snapshot, SOURCE_A).terms[0].word.word, 'pear');
+    assert.equal(query(snapshot, SOURCE_B).distinctTermCount, 0);
+    assert.equal(snapshot.reading.occurrences.length, 0);
+    assert.deepEqual(plain(snapshot.words), [pear]);
+    assert.deepEqual(plain(snapshot.lists.custom.words), [pear]);
+    assert.equal(snapshot.lists['reading-highlights'].words.length, 0);
+    assert.deepEqual(plain(model.listVisits(snapshot)), visits);
+    assert.equal(snapshot.reading.terms.some((term) => term.id === model.termId('apple')), false);
+});
+
+test('global vocabulary deletion also handles terms never collected by the reader and rejects malformed identities', () => {
+    const pear = { id: 'pear', word: 'pear', meaning: 'Another fruit' };
+    let snapshot = model.createSnapshot({ words: [APPLE, pear], lists: { custom: [{ ...APPLE, id: 'custom-apple' }] } });
+    assert.equal(snapshot.reading.terms.length, 0);
+    snapshot = mutate('deleteCanonicalTerm', snapshot, { termId: model.termId('apple') });
+    assert.deepEqual(plain(snapshot.words), [pear]);
+    assert.deepEqual(plain(snapshot.lists.custom), []);
+    const once = plain(snapshot);
+    snapshot = mutate('deleteCanonicalTerm', snapshot, { termId: model.termId('apple') });
+    assert.deepEqual(plain(snapshot), once, 'repeated canonical deletion is idempotent');
+    for (const invalid of ['apple', '["term","APPLE"]', '["article","apple"]', '["term","apple","extra"]']) {
+        assert.throws(() => model.deleteCanonicalTerm(deepFreeze(snapshot), { termId: invalid }));
+    }
+});
+
+test('serialization preserves source-scoped identities and supports selective deletion after restore', () => {
+    const original = twoArticles();
+    const serialized = model.serialize(deepFreeze(original));
+    assert.equal(typeof serialized, 'string');
+    const restored = model.deserialize(serialized);
+    assert.deepEqual(plain(restored), plain(original));
+    assert.equal(restored.reading.schemaVersion, model.SCHEMA_VERSION);
+    assert.notEqual(restored, original);
+    assert.equal(query(restored, SOURCE_A).distinctTermCount, 1);
+    assert.equal(query(restored, SOURCE_B).distinctTermCount, 1);
+    const cleared = mutate('clearArticle', restored, { articleId: articleId(SOURCE_A) });
+    assert.equal(query(cleared, SOURCE_A).distinctTermCount, 0);
+    assert.equal(query(cleared, SOURCE_B).distinctTermCount, 1);
+    assert.deepEqual(plain(model.deserialize(model.serialize(cleared))), plain(cleared));
+});
+
+test('validation and deserialization reject incompatible versions, duplicate identities and dangling relationships', () => {
+    const valid = twoArticles();
+    const corruptions = [
+        ['schema version', (value) => { value.reading.schemaVersion = 999; }],
+        ['source normalization', (value) => { value.reading.sources[0].libraryId += ' '; }],
+        ['article normalization', (value) => { value.reading.articles[0].examId += ' '; }],
+        ['canonical owner', (value) => { value.reading.terms[0].wordRef.wordId = 'missing-word'; }],
+        ['article source', (value) => { value.reading.articles[0].sourceId = 'missing-source'; }],
+        ['association term', (value) => { value.reading.associations[0].termId = 'missing-term'; }],
+        ['association article', (value) => { value.reading.associations[0].articleId = 'missing-article'; }],
+        ['occurrence association', (value) => { value.reading.occurrences[0].associationId = 'missing-association'; }],
+        ['occurrence scope normalization', (value) => { value.reading.occurrences[0].scopeId += ' '; }],
+        ['occurrence revision normalization', (value) => { value.reading.occurrences[0].contentVersion += ' '; }],
+        ['visit article', (value) => { value.reading.visits[0].articleId = 'missing-article'; }],
+        ['duplicate term', (value) => { value.reading.terms.push(plain(value.reading.terms[0])); }],
+        ['duplicate occurrence', (value) => { value.reading.occurrences.push(plain(value.reading.occurrences[0])); }]
+    ];
+    for (const [label, corrupt] of corruptions) {
+        const invalid = plain(valid);
+        corrupt(invalid);
+        assert.throws(() => model.validate(invalid), `validate must reject ${label}`);
+        assert.throws(() => model.deserialize(JSON.stringify(invalid)), `deserialize must reject ${label}`);
+        assert.throws(() => model.serialize(invalid), `serialize must reject ${label}`);
+    }
+    assert.throws(() => model.deserialize('{invalid-json'));
+});
+
+test('invalid collection inputs fail without altering vocabulary or creating partial relationships', () => {
+    const snapshot = deepFreeze(model.createSnapshot());
+    const before = plain(snapshot);
+    const invalidCommands = [
+        command({ source: { kind: 'imported', id: '' } }),
+        command({ source: { kind: 'unknown', id: 'library' } }),
+        command({ article: { examId: '' } }),
+        command({ word: { word: ' ' } }),
+        command({ word: { word: 'unknown' } }),
+        command({ at: 'invalid-date' }),
+        command({ occurrence: occurrence({ scopeId: '' }) }),
+        command({ occurrence: occurrence({ contentVersion: '' }) }),
+        command({ occurrence: occurrence({ startOffset: -1 }) }),
+        command({ occurrence: occurrence({ startOffset: 1.5 }) }),
+        command({ occurrence: occurrence({ endOffset: 10 }) }),
+        command({ occurrence: occurrence({ endOffset: 20 }) }),
+        command({ occurrence: occurrence({ quote: 'pears' }) }),
+        command({ manual: false, occurrence: undefined }),
+        command({ wordRef: null }),
+        command({ wordRef: { listId: 'default', wordId: 'missing' } })
+    ];
+    for (const input of invalidCommands) {
+        assert.throws(() => model.collect(snapshot, deepFreeze(input)));
+        assert.deepEqual(plain(snapshot), before);
+    }
+});
+
+test('new collection rejects a malformed existing reading list without replacing its data', () => {
+    const snapshot = deepFreeze(model.createSnapshot({
+        lists: { 'reading-highlights': { id: 'reading-highlights', words: { preserved: 'invalid legacy data' } } }
+    }));
+    const before = plain(snapshot);
+    assert.throws(() => model.collect(snapshot, command()));
+    assert.deepEqual(plain(snapshot), before);
+});
+
+test('JSON metadata cannot become inherited canonical word properties during collection', () => {
+    const word = JSON.parse('{"word":"apple","meaning":"A fruit","__proto__":{"phonetic":"injected"}}');
+    const snapshot = mutate('collect', model.createSnapshot(), command({ word, occurrence: undefined }));
+    const owner = snapshot.lists[model.READING_LIST_ID].words[0];
+    assert.equal(owner.phonetic, undefined);
+    assert.equal(Object.getPrototypeOf(owner).phonetic, undefined);
+    assert.equal(Object.hasOwn(owner, '__proto__'), true, 'JSON metadata remains an ordinary own property');
+    assert.deepEqual(plain(model.deserialize(model.serialize(snapshot))), plain(snapshot));
+});
+
+test('snapshot construction and query results do not expose mutable aliases to canonical data', () => {
+    const seed = { words: [plain(APPLE)], lists: {} };
+    let snapshot = model.createSnapshot(seed);
+    seed.words[0].reviewHistory[0].grade = 0;
+    assert.deepEqual(plain(snapshot.words[0]), APPLE);
+    snapshot = mutate('recordVisit', snapshot, { source: SOURCE_A, article: ARTICLE, at: AT });
+    snapshot = mutate('collect', snapshot, command());
+    const result = query(snapshot);
+    result.terms[0].word.meaning = 'Changed projection';
+    result.terms[0].word.reviewHistory[0].grade = 0;
+    result.terms[0].associations.length = 0;
+    result.terms[0].occurrences[0].quote = 'Changed quote';
+    const visits = model.listVisits(snapshot);
+    visits.length = 0;
+    assert.deepEqual(plain(query(snapshot).terms[0].word), APPLE);
+    assert.equal(query(snapshot).terms[0].associations.length, 1);
+    assert.equal(query(snapshot).terms[0].occurrences[0].quote, 'apple');
+    assert.equal(model.listVisits(snapshot).length, 1);
+});
+
+test('new canonical terms load and review through the production VocabStore reading list', async () => {
+    let snapshot = mutate('collect', model.createSnapshot({ words: [APPLE] }), command({
+        word: { word: 'orchard', meaning: 'A place where fruit trees grow', phonetic: 'ɔːtʃəd' },
+        occurrence: undefined
+    }));
+    const owner = plain(query(snapshot).terms[0].wordRef);
+    assert.equal(owner.listId, model.READING_LIST_ID);
+    const config = { activeListId: 'default' };
+    // Storage seam only: all normalization, list projection and review access below
+    // run through the existing VocabStore implementation.
+    const vocab = {
+        async getConfig() { return plain(config); },
+        async listWords() { return plain(snapshot.words); },
+        async listCollections() { return plain(snapshot.lists); },
+        async activateList(listId) { config.activeListId = listId; return { committed: true }; },
+        async patchWord({ listId, wordId, patch }) {
+            const words = listId === 'default' ? snapshot.words : snapshot.lists[listId].words;
+            const index = words.findIndex((word) => word.id === wordId);
+            assert.notEqual(index, -1, 'VocabStore must address the canonical owner ID');
+            words[index] = { ...words[index], ...plain(patch) };
+            return { committed: true, word: plain(words[index]) };
+        }
+    };
+    const quietConsole = { log() {}, warn() {}, error() {} };
+    const window = {
+        console: quietConsole, Date, Math, JSON, setTimeout, clearTimeout,
+        location: { protocol: 'file:' }, __EMBEDDED_WORDLISTS__: { ielts_core: [] },
+        AppData: { ready: Promise.resolve(), vocab }
+    };
+    const context = { window, console: quietConsole, Date, Math, JSON, setTimeout, clearTimeout };
+    context.globalThis = window;
+    vm.runInNewContext(fs.readFileSync(storeUrl, 'utf8'), context, { filename: storeUrl.pathname });
+    const store = window.VocabStore;
+    await store.init();
+    const list = await store.loadList(owner.listId);
+    assert.equal(list.words.length, 1);
+    assert.equal(list.words[0].id, owner.wordId);
+    assert.equal(list.words[0].meaning, 'A place where fruit trees grow');
+    assert.equal(await store.setActiveList(list), true);
+    assert.equal(store.getNewWords()[0].id, owner.wordId);
+    const review = {
+        easeFactor: 2.4, interval: 7, repetitions: 1, correctCount: 1,
+        lastReviewed: AT, nextReview: '2026-09-15T01:00:00.000Z'
+    };
+    const updated = await store.updateWord(owner.wordId, review);
+    assert.equal(updated.repetitions, 1);
+    assert.equal(store.getDueWords(new Date('2026-09-16T01:00:00.000Z'))[0].id, owner.wordId);
+    assert.equal(query(snapshot).terms[0].word.nextReview, review.nextReview,
+        'reader queries resolve live canonical review progress, not a copied history');
+    snapshot = mutate('clearArticle', snapshot, { articleId: articleId() });
+    snapshot = mutate('collect', snapshot, command({ source: SOURCE_B, word: { word: ' ORCHARD ' }, occurrence: undefined }));
+    assert.equal(query(snapshot).terms[0].word.repetitions, 1);
+    assert.equal(query(snapshot).terms[0].word.nextReview, review.nextReview);
+    assert.equal(snapshot.lists[owner.listId].words.length, 1);
+});

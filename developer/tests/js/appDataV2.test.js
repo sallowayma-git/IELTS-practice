@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const appDataSource = fs.readFileSync(path.join(root, 'js/data/v2/appData.js'), 'utf8');
+const readingModelSource = fs.readFileSync(path.join(root, 'js/data/v2/readingVocabularyModel.js'), 'utf8');
 const catalogSource = fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(root, 'js/data/practiceRecordSource.js'), 'utf8');
 const examSessionSource = fs.readFileSync(path.join(root, 'js/app/examSessionMixin.js'), 'utf8');
@@ -121,7 +122,33 @@ function harness() {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, parseLegacyValue, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)) };
     const sandbox = { console, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(readingModelSource, context, { filename: 'readingVocabularyModel.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
+}
+
+async function testReadingModelUsesLiveVocabularyOwners() {
+    const { app, sandbox } = harness();
+    await app.ready;
+    const model = app.vocab.readingModel;
+    assert.strictEqual(model, sandbox.ReadingVocabularyModel);
+    await app.vocab.saveWords([{
+        id: 'review-apple', word: 'Apple', meaning: 'existing definition',
+        repetitions: 7, interval: 30, nextReview: '2026-10-08T00:00:00.000Z'
+    }]);
+    const before = await app.vocab.listWords();
+    let snapshot = model.createSnapshot({ words: before, lists: await app.vocab.listCollections() });
+    snapshot = model.collect(snapshot, {
+        source: { kind: 'imported', id: 'library-a' }, article: { examId: 'article-a' },
+        word: { word: 'APPLE', meaning: 'must not replace definition' }, manual: true,
+        at: '2026-09-08T00:00:00.000Z'
+    });
+    assert.deepStrictEqual(await app.vocab.listWords(), before, 'pure operations must not silently commit');
+    assert.deepStrictEqual(snapshot.words, before, 'collection must preserve the complete existing review record');
+    await app.vocab.patchWord({ listId: 'default', wordId: 'review-apple', patch: { repetitions: 8 } });
+    snapshot = model.createSnapshot({ words: await app.vocab.listWords(), lists: await app.vocab.listCollections(), reading: snapshot.reading });
+    const term = model.query(snapshot).terms[0];
+    assert.strictEqual(term.word.repetitions, 8, 'reader queries must resolve the current review owner');
+    assert.strictEqual(term.word.meaning, 'existing definition');
+    assert.deepStrictEqual(term.wordRef, { listId: 'default', wordId: 'review-apple' });
 }
 
 async function testReadingCollectionPresenceMetadata() {
@@ -1508,6 +1535,7 @@ async function testRecoveryThirtyDayTtlBoundary() {
 }
 
 async function run() {
+    await testReadingModelUsesLiveVocabularyOwners();
     await testReadingCollectionPresenceMetadata();
     await testClearInterruptedRecoveryIsolation();
     await testRecoveryThirtyDayTtlBoundary();
@@ -2059,6 +2087,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 55 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 56 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

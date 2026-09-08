@@ -2049,6 +2049,9 @@
     }
 
     const vocab = Object.freeze({
+        // Pure schema/relationship operations. Persistence commands consume this
+        // contract; a returned snapshot is not a durable commit acknowledgement.
+        get readingModel() { return global.ReadingVocabularyModel; },
         async listWords() { await ready; return kernel.read('vocab.words'); },
         async saveWords(words, options = {}) {
             await ready; assertArray(words, 'vocab.saveWords requires an array');
