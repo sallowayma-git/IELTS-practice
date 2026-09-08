@@ -1,81 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createPage, openArticle } from './helpers/readingVocabReaderHarness.js';
 import { chromium } from 'playwright';
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const readerSource = fs.readFileSync(path.join(repoRoot, 'js/components/readingVocabReader.js'), 'utf8');
 const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH;
-
-async function createPage(browser, { localWords = [], canonicalWords, canonicalResult } = {}) {
-    const page = await browser.newPage();
-    await page.route('https://reader.test/**', route => route.fulfill({
-        contentType: 'text/html', body: '<!doctype html><html><head></head><body></body></html>'
-    }));
-    await page.goto('https://reader.test/');
-    await page.evaluate(({ localWords, canonicalWords, canonicalResult }) => {
-        localStorage.setItem('ielts_reading_vocab_words_v1', JSON.stringify(localWords));
-        window.__savedWords = [];
-        if (canonicalWords !== undefined || canonicalResult !== undefined) {
-            window.AppData = {
-                ready: Promise.resolve(),
-                vocab: {
-                    listReadingWords: async options => options?.withMeta && canonicalResult !== undefined
-                        ? canonicalResult : (canonicalWords ?? canonicalResult.data),
-                    saveReadingWords: async words => window.__savedWords.push(words)
-                }
-            };
-        }
-        window.__recordedExams = [];
-        window.ReadingBookshelfStore = { recordExamUsed: id => window.__recordedExams.push(id) };
-        window.__spokenWords = [];
-        window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
-        Object.defineProperty(window, 'speechSynthesis', {
-            value: { cancel() {}, speak: utterance => window.__spokenWords.push(utterance.text) }
-        });
-        window.__READING_EXAM_MANIFEST__ = {};
-        window.__READING_EXPLANATION_MANIFEST__ = {};
-        window.__pendingScripts = [];
-        const appendChild = document.head.appendChild.bind(document.head);
-        document.head.appendChild = node => {
-            if (node.tagName === 'SCRIPT' && node.src) {
-                window.__pendingScripts.push(node);
-                return node;
-            }
-            return appendChild(node);
-        };
-        window.__queueOpen = (id, key = id, script = `${id}.js`, options = {}) => {
-            window.__READING_EXAM_MANIFEST__[id] = { examId: id, script };
-            window.__READING_EXPLANATION_MANIFEST__[id] = { examId: id, script: `${id}-explanation.js` };
-            window[key] = window.ReadingVocabReader.open(id, options);
-        };
-        window.__finishScript = (scriptName, id, { error = false, explanation = false, title = id } = {}) => {
-            const index = window.__pendingScripts.findIndex(script => script.src.endsWith(`/${scriptName}`));
-            if (index < 0) throw new Error(`Missing pending script: ${scriptName}`);
-            const [script] = window.__pendingScripts.splice(index, 1);
-            if (error) {
-                script.onerror();
-                return;
-            }
-            if (explanation) {
-                window.__READING_EXPLANATION_DATA__.register(id, {
-                    passageNotes: [{ label: 'Paragraph A', text: title }]
-                });
-            } else {
-                window.__READING_EXAM_DATA__.register(id, {
-                    meta: { title },
-                    passage: { blocks: [{ html: `<div class="paragraph-wrapper"><p><strong>A</strong> This is the <em>${title}</em> passage with enough text for reading.</p></div>` }] },
-                    questionGroups: [{ bodyHtml: `<p>Questions for ${title}</p>` }]
-                });
-            }
-            script.onload();
-        };
-    }, { localWords, canonicalWords, canonicalResult });
-    await page.addScriptTag({ content: readerSource });
-    return page;
-}
 
 test('reading vocab reader preserves text boundaries and the active reading session', async t => {
     const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
@@ -89,14 +17,13 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                 examId: 'exam-a'
             }, {
                 id: 'ordinary-id', word: 'research & development', context: 'A "quoted" context',
-                examTitle: 'Ordinary exam', examId: 'exam-a'
+                examTitle: 'Ordinary exam', examId: 'exam-b'
             }, {
                 id: "alternate-'\"-id", word: '&lt;svg onload=alert(1)&gt;',
-                context: '&#34; & < >', examTitle: 'Title &amp; literal', examId: 'exam-a'
+                context: '&#34; & < >', examTitle: 'Title &amp; literal', examId: 'exam-c'
             }];
-            for (const source of ['local', 'canonical']) {
-                const page = await createPage(browser, source === 'local'
-                    ? { localWords: attacks } : { canonicalWords: attacks });
+            {
+                const page = await createPage(browser, { canonicalWords: attacks });
                 try {
                     const state = await page.evaluate(async () => {
                         await ReadingVocabStore.init();
@@ -104,6 +31,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                         ReadingVocabReader.openModal();
                         const list = document.getElementById('vocab-list');
                         return {
+                            ids: ReadingVocabStore.getAll().map(item => item.id),
                             unsafeNodes: list.querySelectorAll('img, svg, iframe, script, [onclick], [onload], [onerror], [data-extra]').length,
                             rows: [...list.querySelectorAll('.vocab-item')].map(row => ({
                                 id: row.dataset.wordId, word: row.querySelector('.vocab-item__word').textContent,
@@ -114,43 +42,189 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                             }))
                         };
                     });
-                    assert.equal(state.unsafeNodes, 0, `${source} vocabulary must remain inert text`);
-                    assert.deepEqual(state.rows, attacks.map(item => ({
-                        id: item.id, word: item.word, speak: item.word, deleteId: item.id,
+                    assert.equal(state.unsafeNodes, 0, 'Canonical vocabulary must remain inert text');
+                    assert.deepEqual(state.rows, attacks.map((item, index) => ({
+                        id: state.ids[index], word: item.word, speak: item.word, deleteId: state.ids[index],
                         context: `"${item.context}"`, title: item.examTitle
                     })));
                     await page.locator('.vocab-speak-btn').first().click();
                     assert.deepEqual(await page.evaluate(() => window.__spokenWords), [attacks[0].word]);
                     await page.locator('.vocab-delete-btn').first().click();
-                    assert.deepEqual(await page.evaluate(() => ReadingVocabStore.getAll().map(item => item.id)), attacks.slice(1).map(item => item.id));
+                    await page.waitForFunction(() => ReadingVocabStore.getAll().length === 2);
+                    assert.deepEqual(await page.evaluate(() => ReadingVocabStore.getAll().map(item => item.id)), state.ids.slice(1));
                     assert.equal(await page.evaluate(() => !!window.__injected), false);
                 } finally { await page.close(); }
             }
         });
 
-        await t.test('canonical empty and smaller vocab lists replace stale local mirrors without saving them back', async () => {
+        await t.test('canonical snapshots replace stale mirrors without touching local vocabulary storage', async () => {
             const localWords = [{ id: 'old', word: 'stale' }, { id: 'new', word: 'current' }];
             for (const canonicalWords of [[], [localWords[1]]]) {
-                const page = await createPage(browser, { localWords, canonicalResult: { data: canonicalWords, envelope: { revision: 2 } } });
+                const page = await createPage(browser, { localWords, canonicalWords });
                 try {
                     const state = await page.evaluate(async () => {
+                        const reads = [], writes = [];
+                        const get = Storage.prototype.getItem;
+                        const set = Storage.prototype.setItem;
+                        Storage.prototype.getItem = function (key) { reads.push(key); return get.call(this, key); };
+                        Storage.prototype.setItem = function (key, value) { writes.push(key); return set.call(this, key, value); };
                         await ReadingVocabStore.init();
-                        return { words: ReadingVocabStore.getAll(), local: JSON.parse(localStorage.getItem('ielts_reading_vocab_words_v1')), saves: window.__savedWords };
+                        const words = ReadingVocabStore.getAll().map(item => item.word);
+                        Storage.prototype.getItem = get;
+                        Storage.prototype.setItem = set;
+                        return { words, reads, writes, local: JSON.parse(localStorage.getItem('ielts_reading_vocab_words_v1')), saves: __readingAuthority.calls };
                     });
-                    assert.deepEqual(state, { words: canonicalWords, local: canonicalWords, saves: [] });
+                    assert.deepEqual(state, { words: canonicalWords.map(item => item.word), reads: [], writes: [], local: localWords, saves: [] });
                 } finally { await page.close(); }
             }
         });
 
-        await t.test('absent canonical metadata preserves the only local copy when migration has failed', async () => {
+        await t.test('missing or failed canonical authority rejects initialization and never adopts the legacy mirror', async () => {
             const localWords = [{ id: 'legacy', word: 'preserved' }];
-            const page = await createPage(browser, { localWords, canonicalResult: { data: [], envelope: null } });
+            for (const authority of ['missing', 'failed']) {
+                const page = await createPage(browser, { localWords, authority });
+                try {
+                    const state = await page.evaluate(async () => {
+                        let rejected = false;
+                        try { await ReadingVocabStore.init(); } catch (_) { rejected = true; }
+                        return { rejected, words: ReadingVocabStore.getAll(), local: JSON.parse(localStorage.getItem('ielts_reading_vocab_words_v1')), saves: __readingAuthority.calls };
+                    });
+                    assert.deepEqual(state, { rejected: true, words: [], local: localWords, saves: [] });
+                } finally { await page.close(); }
+            }
+        });
+
+        await t.test('manual collection waits for acknowledgement and failed retries preserve the entered word', async () => {
+            const page = await createPage(browser);
+            try {
+                await openArticle(page);
+                await page.evaluate(() => {
+                    ReadingVocabReader.openModal();
+                    __readingAuthority.defer = true;
+                });
+                await page.locator('#vocab-manual-input').fill('acknowledged');
+                await page.locator('#vocab-manual-add-btn').click();
+                await page.waitForFunction(() => __readingAuthority.pending.length === 1);
+                assert.equal(await page.locator('#vocab-manual-input').inputValue(), 'acknowledged');
+                assert.equal(await page.evaluate(() => ReadingVocabStore.getAll().length), 0);
+                await page.evaluate(() => __readingAuthority.pending.shift().reject(new Error('Injected quota failure')));
+                await page.waitForFunction(() => document.querySelector('#vocab-toast')?.textContent.includes('失败'));
+                assert.equal(await page.locator('#vocab-manual-input').inputValue(), 'acknowledged');
+                assert.equal(await page.evaluate(() => ReadingVocabStore.getAll().length), 0);
+                await page.locator('#vocab-manual-add-btn').click();
+                await page.waitForFunction(() => __readingAuthority.pending.length === 1);
+                await page.evaluate(() => __readingAuthority.pending.shift().resolve());
+                await page.waitForFunction(() => document.querySelector('#vocab-manual-input').value === '');
+                assert.deepEqual(await page.evaluate(() => ({
+                    words: ReadingVocabStore.getAll().map(item => item.word),
+                    anchors: __readingAuthority.snapshot.reading.occurrences.length,
+                    manual: __readingAuthority.snapshot.reading.associations[0].manual,
+                    optimisticMarks: document.querySelectorAll('mark.vocab-highlight').length
+                })), { words: ['acknowledged'], anchors: 0, manual: true, optimisticMarks: 0 });
+            } finally { await page.close(); }
+        });
+
+        await t.test('selection failure removes the temporary mark and retry acknowledges one exact occurrence', async () => {
+            const page = await createPage(browser);
+            try {
+                await openArticle(page, 'article', 'water water water');
+                await page.evaluate(() => {
+                    __readingAuthority.defer = true;
+                    __selectText('#vocab-passage-content em', 'water', 1);
+                    document.querySelector('#vocab-reader-body').dispatchEvent(new MouseEvent('mouseup'));
+                });
+                await page.waitForFunction(() => __readingAuthority.pending.length === 1);
+                assert.equal(await page.evaluate(() => ReadingVocabStore.getAll().length), 0);
+                await page.evaluate(() => __readingAuthority.pending.shift().reject(new Error('Injected transaction abort')));
+                await page.waitForFunction(() => document.querySelector('#vocab-toast')?.textContent.includes('失败'));
+                assert.equal(await page.locator('mark.vocab-highlight').count(), 0);
+                assert.equal(await page.evaluate(() => __readingAuthority.snapshot.reading.occurrences.length), 0);
+                assert.match(await page.locator('#vocab-toast').textContent(), /重新|重试/);
+                await page.evaluate(() => {
+                    __selectText('#vocab-passage-content em', 'water', 1);
+                    document.querySelector('#vocab-reader-body').dispatchEvent(new MouseEvent('mouseup'));
+                });
+                await page.waitForFunction(() => __readingAuthority.pending.length === 1);
+                await page.evaluate(() => __readingAuthority.pending.shift().resolve());
+                await page.waitForFunction(() => ReadingVocabStore.getAll().length === 1);
+                assert.equal(await page.locator('mark.vocab-highlight').count(), 1);
+                const saved = await page.evaluate(() => __readingAuthority.snapshot.reading.occurrences[0]);
+                assert.equal(saved.quote, 'water');
+                assert.equal(saved.endOffset - saved.startOffset, 5);
+                assert.equal(await page.evaluate(() => __readingAuthority.snapshot.reading.occurrences.length), 1);
+                await page.evaluate(() => ReadingVocabReader.applyVocabHighlights());
+                assert.equal(await page.locator('mark.vocab-highlight').count(), 1);
+                assert.deepEqual(await page.evaluate(() => {
+                    const mark = document.querySelector('#vocab-passage-content em mark');
+                    return { text: mark.textContent, before: mark.previousSibling.textContent, after: mark.nextSibling.textContent };
+                }), { text: 'water', before: 'water ', after: ' water' });
+            } finally { await page.close(); }
+        });
+
+        await t.test('failed delete and clear preserve the visible collection until a durable retry succeeds', async () => {
+            const page = await createPage(browser);
+            try {
+                await openArticle(page);
+                await page.evaluate(async () => {
+                    await ReadingVocabStore.add('retained', 'article', 'article');
+                    ReadingVocabReader.openModal();
+                    __readingAuthority.fault = 'Injected storage failure';
+                });
+                for (const button of ['.vocab-delete-btn', '#vocab-clear-btn']) {
+                    await page.locator(button).click();
+                    await page.waitForFunction(() => document.querySelector('#vocab-toast')?.textContent.includes('失败'));
+                    assert.equal(await page.locator('.vocab-item').count(), 1);
+                    assert.deepEqual(await page.evaluate(() => ReadingVocabStore.getAll().map(item => item.word)), ['retained']);
+                }
+                await page.evaluate(() => { __readingAuthority.fault = null; });
+                await page.locator('#vocab-clear-btn').click();
+                await page.waitForFunction(() => ReadingVocabStore.getAll().length === 0);
+                assert.equal(await page.locator('.vocab-item').count(), 0);
+            } finally { await page.close(); }
+        });
+
+        await t.test('identical exam IDs stay isolated by library and current-article clear preserves the other library', async () => {
+            const page = await createPage(browser);
             try {
                 const state = await page.evaluate(async () => {
+                    const a = { kind: 'imported', id: 'library-a' };
+                    const b = { kind: 'imported', id: 'library-b' };
                     await ReadingVocabStore.init();
-                    return { words: ReadingVocabStore.getAll(), local: JSON.parse(localStorage.getItem('ielts_reading_vocab_words_v1')), saves: window.__savedWords };
+                    await ReadingVocabStore.add('apple', 'same-exam', 'Library A', '', null, a);
+                    await ReadingVocabStore.add('apple', 'same-exam', 'Library B', '', null, b);
+                    const before = {
+                        all: ReadingVocabStore.getAll().length,
+                        a: ReadingVocabStore.getByExam('same-exam', a).length,
+                        b: ReadingVocabStore.getByExam('same-exam', b).length,
+                        builtin: ReadingVocabStore.getByExam('same-exam').length
+                    };
+                    await ReadingVocabStore.clear('same-exam', a);
+                    return { before, a: ReadingVocabStore.getByExam('same-exam', a).length, b: ReadingVocabStore.getByExam('same-exam', b).length };
                 });
-                assert.deepEqual(state, { words: localWords, local: localWords, saves: [] });
+                assert.deepEqual(state, { before: { all: 1, a: 1, b: 1, builtin: 0 }, a: 0, b: 1 });
+            } finally { await page.close(); }
+        });
+
+        await t.test('unsupported imported source cannot record a visit or collect builtin passage content', async () => {
+            const page = await createPage(browser);
+            try {
+                await openArticle(page);
+                await page.evaluate(async () => {
+                    await ReadingVocabStore.add('retained', 'article', 'Builtin article');
+                    window.__beforeUnsupported = __readingAuthority.calls.length;
+                    await ReadingVocabReader.open('article', { source: { kind: 'imported', id: 'missing-library' } });
+                    ReadingVocabReader.openModal();
+                });
+                await page.locator('#vocab-manual-input').fill('not-collected');
+                await page.locator('#vocab-manual-add-btn').click();
+                const state = await page.evaluate(() => ({
+                    words: ReadingVocabStore.getAll().map(item => item.word),
+                    payload: ReadingVocabReader.currentPayload,
+                    writes: __readingAuthority.calls.length - __beforeUnsupported,
+                    error: !!document.querySelector('.vocab-error-state'),
+                    retainedInput: document.querySelector('#vocab-manual-input').value
+                }));
+                assert.deepEqual(state, { words: ['retained'], payload: null, writes: 0, error: true, retainedInput: 'not-collected' });
             } finally { await page.close(); }
         });
 
@@ -158,7 +232,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
             const page = await createPage(browser);
             try {
                 const state = await page.evaluate(async () => {
-                    __queueOpen('metadata', '__openMetadata');
+                    await __queueOpen('metadata', '__openMetadata');
                     __READING_EXAM_DATA__.register('metadata', {
                         meta: { title: 'Ordinary article', category: '<img src=x onerror="window.__injected=true">', frequency: '&lt;svg&gt; & "quoted"' },
                         passage: { blocks: [{ html: '<p><strong>A</strong> A sufficiently long <em>formatted</em> passage for reading.</p>' }] }
@@ -181,8 +255,8 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                 const page = await createPage(browser);
                 try {
                     const state = await page.evaluate(async error => {
-                        __queueOpen('a', '__openA');
-                        __queueOpen('b', '__openB');
+                        await __queueOpen('a', '__openA');
+                        await __queueOpen('b', '__openB');
                         __finishScript('b.js', 'b');
                         await __openB;
                         __finishScript('a.js', 'a', { error });
@@ -204,11 +278,11 @@ test('reading vocab reader preserves text boundaries and the active reading sess
             const page = await createPage(browser);
             try {
                 const state = await page.evaluate(async () => {
-                    __queueOpen('a', '__openA');
+                    await __queueOpen('a', '__openA');
                     __finishScript('a.js', 'a');
                     await __openA;
                     ReadingVocabReader.currentExplanation = { passageNotes: [{ label: 'Paragraph A', text: 'old cached translation' }] };
-                    __queueOpen('b', '__openB');
+                    await __queueOpen('b', '__openB');
                     const cleared = ReadingVocabReader.currentPayload === null && ReadingVocabReader.currentExam === null && ReadingVocabReader.currentExplanation === null;
                     __finishScript('b.js', 'b');
                     await __openB;
@@ -229,7 +303,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
             const page = await createPage(browser);
             try {
                 const state = await page.evaluate(async () => {
-                    __queueOpen('a', '__openA');
+                    await __queueOpen('a', '__openA');
                     __finishScript('a.js', 'a');
                     await __openA;
                     ReadingVocabReader.switchViewTab('questions');
@@ -245,14 +319,14 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     const queueCapture = () => document.getElementById('vocab-reader-body').dispatchEvent(new MouseEvent('mouseup'));
                     select('#vocab-passage-content em');
                     queueCapture();
-                    __queueOpen('b', '__openB');
+                    await __queueOpen('b', '__openB');
                     __finishScript('b.js', 'b');
                     await __openB;
                     select('#vocab-passage-content em');
                     callbacks.shift()();
                     const staleCount = ReadingVocabStore.getAll().length;
                     queueCapture();
-                    callbacks.shift()();
+                    await callbacks.shift()();
                     const currentWords = ReadingVocabStore.getAll().map(item => ({ word: item.word, examId: item.examId }));
                     select('#vocab-passage-content strong');
                     queueCapture();
@@ -274,7 +348,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                 const page = await createPage(browser);
                 try {
                     const state = await page.evaluate(async error => {
-                        __queueOpen('a', '__openA');
+                        await __queueOpen('a', '__openA');
                         ReadingVocabReader.openModal();
                         ReadingVocabReader.close();
                         const before = document.getElementById('vocab-passage-content').innerHTML;
@@ -294,7 +368,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
             const page = await createPage(browser);
             try {
                 const state = await page.evaluate(async () => {
-                    __queueOpen('a', '__openA');
+                    await __queueOpen('a', '__openA');
                     __finishScript('a.js', 'a');
                     await __openA;
                     ReadingVocabReader.close();
@@ -304,9 +378,9 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                     await Promise.resolve();
                     const closedUnchanged = before === document.getElementById('vocab-trans-text-A').textContent;
                     __READING_EXAM_DATA__.clear();
-                    __queueOpen('a', '__oldOpen', 'old-a.js');
+                    await __queueOpen('a', '__oldOpen', 'old-a.js');
                     ReadingVocabReader.close();
-                    __queueOpen('a', '__newOpen', 'new-a.js');
+                    await __queueOpen('a', '__newOpen', 'new-a.js');
                     __finishScript('new-a.js', 'a', { title: 'new article' });
                     await __newOpen;
                     __finishScript('old-a.js', 'a', { title: 'stale article' });
@@ -323,7 +397,7 @@ test('reading vocab reader preserves text boundaries and the active reading sess
                 const state = await page.evaluate(async () => {
                     const id = "exam');window.__injected=true;//";
                     const scriptName = 'missing-<img src=x onerror=alert(1)>.js';
-                    __queueOpen(id, '__failed', scriptName, { fromPractice: true });
+                    await __queueOpen(id, '__failed', scriptName, { fromPractice: true });
                     const script = __pendingScripts.shift();
                     // Preserve the raw malicious manifest text in the loader's error message.
                     script.onerror();

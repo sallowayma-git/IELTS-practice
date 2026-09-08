@@ -4,6 +4,9 @@ This document records the schema and relationship semantics implemented for
 [#155](https://github.com/sallowayma-git/IELTS-practice/issues/155), part of
 [#149](https://github.com/sallowayma-git/IELTS-practice/issues/149).
 
+The subsequent [persistence contract](Intensive-Reading-Persistence.md) documents
+the acknowledged AppData operations, migration and backup implementation from #156.
+
 The production model is exposed as `ReadingVocabularyModel` and through
 `AppData.vocab.readingModel`. Its operations are synchronous, pure transformations
 of a snapshot containing the existing vocabulary records and the reading

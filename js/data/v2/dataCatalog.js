@@ -138,6 +138,11 @@
             export: true, import: 'patch'
         },
         {
+            logicalKey: 'vocab.readingState', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'replace'
+        },
+        {
             logicalKey: 'vocab.readingVocabWords', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'

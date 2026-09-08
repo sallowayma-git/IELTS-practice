@@ -3,11 +3,13 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const readingModel = createRequire(import.meta.url)(path.join(repoRoot, 'js/data/v2/readingVocabularyModel.js'));
 
 function clone(value) {
     return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -29,9 +31,36 @@ function createVocabFacade(seed = {}) {
     const state = {
         words: clone(seed.words || []),
         collections: clone(seed.collections || {}),
+        reading: readingModel.createSnapshot().reading,
+        allowDefaultWordSeed: seed.authoritativeEmpty !== true,
         config: { activeListId: 'default', ...(clone(seed.config) || {}) }
     };
     const vocab = {
+        async shouldInitializeDefaultWords() {
+            return state.allowDefaultWordSeed && state.words.length === 0;
+        },
+        async initializeDefaultWords({ words }) {
+            if (seed.replaceBeforeSeed) {
+                state.words = [];
+                state.allowDefaultWordSeed = false;
+            }
+            if (!await this.shouldInitializeDefaultWords()) return { committed: false, words: clone(state.words) };
+            await this.replaceListWords({ listId: 'default', words });
+            state.allowDefaultWordSeed = false;
+            return { committed: true, words: clone(state.words) };
+        },
+        async getReadingSnapshot() {
+            return { snapshot: readingModel.createSnapshot({ words: state.words, lists: state.collections, reading: state.reading }), revision: 0, generation: 0 };
+        },
+        async mutateReading(operation, command) {
+            if (seed.failReadingWrite) throw new Error('backend reading write failed');
+            const current = (await this.getReadingSnapshot()).snapshot;
+            const snapshot = readingModel[operation](current, clone(command));
+            state.words = snapshot.words;
+            state.collections = snapshot.lists;
+            state.reading = snapshot.reading;
+            return { saved: true, snapshot: clone(snapshot), revision: 1, generation: 0 };
+        },
         async getConfig() {
             return clone(state.config);
         },
@@ -858,15 +887,16 @@ async function testReadingHighlightUpsertPreservesStudyProgress() {
         meaning: '新释义',
         phonetic: '  /njuː/  ',
         example: 'New example',
-        sourceLabel: 'Reading passage'
+        sourceLabel: 'Reading passage',
+        context: { examId: 'reading-a', libraryConfigurationId: 'library-a' }
     });
     let [stored] = vocabStore.__appDataState.collections['reading-highlights'].words;
 
-    assert.strictEqual(saved.meaning, '新释义');
-    assert.strictEqual(saved.phonetic, 'njuː', '非空音标应写入结构化 phonetic 字段并移除外围斜杠');
-    assert.strictEqual(saved.example, 'New example');
+    assert.strictEqual(saved.meaning, '旧释义', 'collection must preserve the canonical definition');
+    assert.strictEqual(saved.phonetic, 'old-phonetic');
+    assert.strictEqual(saved.example, 'Old example');
     assert.strictEqual(saved.note, '用户记忆笔记');
-    assert.strictEqual(stored.phonetic, 'njuː');
+    assert.strictEqual(stored.phonetic, 'old-phonetic');
     assert.strictEqual(stored.note.includes('音标:'), false, '音标不应再编码进 note 文本');
     assert.strictEqual(stored.easeFactor, 2.2);
     assert.strictEqual(stored.interval, 10);
@@ -881,11 +911,12 @@ async function testReadingHighlightUpsertPreservesStudyProgress() {
         meaning: '再次更新释义',
         phonetic: '   ',
         example: 'Latest example',
-        sourceLabel: 'Another reading passage'
+        sourceLabel: 'Another reading passage',
+        context: { examId: 'reading-b', libraryConfigurationId: 'library-b' }
     });
     [stored] = vocabStore.__appDataState.collections['reading-highlights'].words;
-    assert.strictEqual(savedWithBlankPhonetic.phonetic, 'njuː', '空音标更新必须保留已有结构化音标');
-    assert.strictEqual(stored.phonetic, 'njuː');
+    assert.strictEqual(savedWithBlankPhonetic.phonetic, 'old-phonetic', 'collection preserves the canonical phonetic');
+    assert.strictEqual(stored.phonetic, 'old-phonetic');
     assert.strictEqual(stored.note, '用户记忆笔记', '空音标更新不得破坏用户笔记');
     assert.strictEqual(stored.easeFactor, 2.2);
     assert.strictEqual(stored.interval, 10);
@@ -894,6 +925,38 @@ async function testReadingHighlightUpsertPreservesStudyProgress() {
     assert.strictEqual(stored.lastReviewed, '2026-08-01T00:00:00.000Z');
     assert.strictEqual(stored.nextReview, '2026-08-11T00:00:00.000Z');
     assert.strictEqual(stored.createdAt, '2026-07-01T00:00:00.000Z');
+    assert.strictEqual(vocabStore.__appDataState.reading.associations.length, 2);
+    assert.strictEqual(vocabStore.__appDataState.collections['reading-highlights'].words.length, 1);
+}
+
+async function testReadingCollectionUsesDefaultOwnerAndRejectsFailedWrites() {
+    const seed = { words: [{ id: 'default-apple', word: 'apple', meaning: 'Canonical definition', correctCount: 8 }] };
+    const vocabStore = loadVocabStore({ embeddedWords: [], dataSeed: seed });
+    const payload = { word: 'APPLE', meaning: 'Ignored', context: { examId: 'article-a', libraryConfigurationId: null } };
+    const saved = await vocabStore.upsertReadingHighlightWord(payload);
+    assert.strictEqual(saved.id, 'default-apple');
+    assert.strictEqual(saved.meaning, 'Canonical definition');
+    assert.strictEqual(saved.correctCount, 8);
+    assert.strictEqual(vocabStore.__appDataState.collections['reading-highlights'], undefined);
+    const failed = loadVocabStore({ embeddedWords: [], dataSeed: { ...seed, failReadingWrite: true } });
+    await assert.rejects(failed.upsertReadingHighlightWord(payload), /backend reading write failed/);
+    assert.strictEqual(failed.__appDataState.reading.associations.length, 0);
+    assert.strictEqual(failed.__appDataState.collections['reading-highlights'], undefined);
+}
+
+async function testDefaultBootstrapPreservesAuthoritativeEmptyReplace() {
+    const embeddedWords = [{ id: 'default-apple', word: 'apple', meaning: 'Apple' }];
+    const restored = loadVocabStore({ embeddedWords, dataSeed: { authoritativeEmpty: true } });
+    await restored.init();
+    assert.deepStrictEqual(restored.__appDataState.words, []);
+    assert.strictEqual(restored.getWords().length, 0);
+    assert.strictEqual(restored.__appDataMetrics.replaceListWordsCalls.length, 0);
+
+    const racing = loadVocabStore({ embeddedWords, dataSeed: { replaceBeforeSeed: true } });
+    await racing.init();
+    assert.deepStrictEqual(racing.__appDataState.words, []);
+    assert.strictEqual(racing.getWords().length, 0, 'the committed empty receipt must supersede the bundled snapshot');
+    assert.strictEqual(racing.__appDataMetrics.replaceListWordsCalls.length, 0);
 }
 
 async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
@@ -1085,7 +1148,11 @@ async function main() {
         await testProgressRestorePreservesExistingExplicitPhonetics();
         results.push({ name: '进度恢复保留存量显式音标并采用提交结果', status: 'pass' });
         await testReadingHighlightUpsertPreservesStudyProgress();
-        results.push({ name: '阅读高亮结构化音标更新并保留学习进度', status: 'pass' });
+        results.push({ name: '阅读高亮保留规范词条与两篇文章的关联', status: 'pass' });
+        await testReadingCollectionUsesDefaultOwnerAndRejectsFailedWrites();
+        results.push({ name: '阅读高亮复用默认规范词条并拒绝未持久化的成功', status: 'pass' });
+        await testDefaultBootstrapPreservesAuthoritativeEmptyReplace();
+        results.push({ name: '默认词库初始化保留权威空替换及并发替换结果', status: 'pass' });
         await testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation();
         results.push({ name: '阅读高亮旧 note 音标只投影且显式字段优先', status: 'pass' });
         await testExternalListCommitInvalidatesCacheAndRefreshesActiveList();

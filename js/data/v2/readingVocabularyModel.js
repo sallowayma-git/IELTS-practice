@@ -415,6 +415,141 @@
         return finish(next);
     }
 
+    // Backups merge relationships, never review progress. The authoritative
+    // persistence layer applies deletion tombstones before/after this union.
+    function stableJson(value) {
+        if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+        if (value && typeof value === 'object') {
+            return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson(value[name])}`).join(',')}}`;
+        }
+        return JSON.stringify(value);
+    }
+
+    function mergeMetadata(existing, incoming, clock) {
+        const next = { ...existing };
+        const leftAt = clock ? existing[clock] || '' : '';
+        const rightAt = clock ? incoming[clock] || '' : '';
+        for (const name of Object.keys(incoming)) {
+            if (!own(existing, name) || rightAt > leftAt
+                || (rightAt === leftAt && stableJson(incoming[name]) > stableJson(existing[name]))) {
+                Object.defineProperty(next, name, {
+                    value: incoming[name], enumerable: true, writable: true, configurable: true
+                });
+            }
+        }
+        return next;
+    }
+
+    function mergeVocabulary(next, incoming) {
+        const owners = new Map();
+        for (const listId of allLists(next)) {
+            const words = listWords(next, listId);
+            const ids = new Map();
+            for (const word of words) {
+                if (word && typeof word.id === 'string') ids.set(word.id, (ids.get(word.id) || 0) + 1);
+            }
+            for (const word of words) {
+                if (word && typeof word.word === 'string' && word.word.trim()
+                    && typeof word.id === 'string' && word.id.trim() === word.id && word.id
+                    && ids.get(word.id) === 1) {
+                    const normalized = normalizeTerm(word.word);
+                    if (!owners.has(normalized)) owners.set(normalized, { listId, wordId: word.id });
+                }
+            }
+        }
+        // An explicitly selected existing owner is stronger than list order.
+        for (const term of next.reading.terms) owners.set(term.normalizedTerm, copy(term.wordRef));
+        const preferredIncoming = new Map(incoming.reading.terms.map((term) => [term.normalizedTerm, term.wordRef]));
+
+        for (const listId of allLists(incoming)) {
+            const incomingWords = listWords(incoming, listId);
+            if (listId !== 'default' && !own(next.lists, listId)) {
+                const incomingList = incoming.lists[listId];
+                const list = Array.isArray(incomingList) ? []
+                    : incomingList && Array.isArray(incomingList.words) ? { ...copy(incomingList), words: [] }
+                        : copy(incomingList);
+                Object.defineProperty(next.lists, listId, {
+                    value: list, enumerable: true, writable: true, configurable: true
+                });
+            }
+            if (!incomingWords.length) continue;
+            if (listId !== 'default' && !Array.isArray(next.lists[listId])
+                && !(next.lists[listId] && Array.isArray(next.lists[listId].words))) {
+                fail(`Cannot merge vocabulary into malformed lists.${listId}`);
+            }
+            const destination = listWords(next, listId);
+            const ids = new Set(destination.filter((word) => word && typeof word.id === 'string').map((word) => word.id));
+            let serialized;
+            for (const rawWord of incomingWords) {
+                const word = copy(rawWord);
+                const normalized = word && typeof word.word === 'string' && word.word.trim()
+                    ? normalizeTerm(word.word) : null;
+                if (normalized && owners.has(normalized)) continue;
+                const preferred = normalized && preferredIncoming.get(normalized);
+                if (preferred && (preferred.listId !== listId || preferred.wordId !== word.id)) continue;
+                if (!normalized || !(word && typeof word.id === 'string' && word.id && word.id.trim() === word.id)) {
+                    if (!serialized) serialized = new Set(destination.map(stableJson));
+                    const encoded = stableJson(word);
+                    if (serialized.has(encoded)) continue;
+                    serialized.add(encoded);
+                }
+                if (word && typeof word.id === 'string' && ids.has(word.id)) {
+                    if (!normalized) continue;
+                    const originalId = word.id;
+                    let suffix = 0;
+                    do {
+                        word.id = key('reading-merge-word', listId, originalId, normalized, suffix++);
+                    } while (ids.has(word.id));
+                }
+                destination.push(word);
+                if (word && typeof word.id === 'string') ids.add(word.id);
+                if (normalized && typeof word.id === 'string' && word.id && word.id.trim() === word.id) {
+                    owners.set(normalized, { listId, wordId: word.id });
+                }
+            }
+        }
+        return owners;
+    }
+
+    function merge(existingSnapshot, incomingSnapshot) {
+        const next = writable(existingSnapshot);
+        const incoming = writable(incomingSnapshot);
+        const owners = mergeVocabulary(next, incoming);
+        for (const table of TABLES) {
+            const rows = new Map(next.reading[table].map((row) => [row.id, row]));
+            for (const incomingRow of incoming.reading[table]) {
+                const existing = rows.get(incomingRow.id);
+                let merged = existing ? mergeMetadata(existing, incomingRow,
+                    table === 'visits' ? 'lastVisitedAt' : 'updatedAt') : copy(incomingRow);
+                if (existing && own(existing, 'createdAt')) {
+                    merged.createdAt = existing.createdAt < incomingRow.createdAt ? existing.createdAt : incomingRow.createdAt;
+                }
+                if (existing && own(existing, 'updatedAt')) {
+                    merged.updatedAt = existing.updatedAt > incomingRow.updatedAt ? existing.updatedAt : incomingRow.updatedAt;
+                }
+                if (table === 'terms') {
+                    merged.wordRef = existing ? copy(existing.wordRef) : copy(owners.get(incomingRow.normalizedTerm));
+                } else if (existing && table === 'articles') {
+                    const title = mergeMetadata(
+                        { title: existing.title, titleUpdatedAt: existing.titleUpdatedAt },
+                        { title: incomingRow.title, titleUpdatedAt: incomingRow.titleUpdatedAt }, 'titleUpdatedAt');
+                    merged.title = title.title;
+                    merged.titleUpdatedAt = title.titleUpdatedAt;
+                } else if (existing && table === 'associations') {
+                    merged.manual = existing.manual || incomingRow.manual;
+                } else if (existing && table === 'visits') {
+                    merged.firstVisitedAt = existing.firstVisitedAt < incomingRow.firstVisitedAt
+                        ? existing.firstVisitedAt : incomingRow.firstVisitedAt;
+                    merged.lastVisitedAt = existing.lastVisitedAt > incomingRow.lastVisitedAt
+                        ? existing.lastVisitedAt : incomingRow.lastVisitedAt;
+                }
+                rows.set(merged.id, merged);
+            }
+            next.reading[table] = [...rows.values()].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+        }
+        return finish(next);
+    }
+
     function query(snapshot, options = {}) {
         validate(snapshot);
         object(options, 'query options');
@@ -446,7 +581,7 @@
     const model = Object.freeze({
         SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, termId, occurrenceId,
         createSnapshot, validate, collect, recordVisit, removeOccurrence, removeArticleTerm,
-        clearArticle, deleteCanonicalTerm, query, listVisits, serialize, deserialize
+        clearArticle, deleteCanonicalTerm, merge, query, listVisits, serialize, deserialize
     });
     global.ReadingVocabularyModel = model;
     if (typeof module !== 'undefined' && module.exports) module.exports = model;

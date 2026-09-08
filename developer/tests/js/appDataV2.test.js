@@ -154,16 +154,23 @@ async function testReadingModelUsesLiveVocabularyOwners() {
 async function testReadingCollectionPresenceMetadata() {
     const fixture = harness();
     await fixture.app.ready;
+    const migration = fixture.shared.docs.get('system.migrations').data.readingVocabularyV1;
+    assert.strictEqual(migration.version, 1);
+    assert.strictEqual(migration.completed, true, 'startup commits the reading migration marker with authoritative empty data');
     const readingCollections = [
         ['vocab.readingVocabWords', fixture.app.vocab.listReadingWords, fixture.app.vocab.saveReadingWords],
         ['vocab.readingBookshelfExams', fixture.app.vocab.listReadingBookshelfExams, fixture.app.vocab.saveReadingBookshelfExams]
     ];
+    for (const [logicalKey] of readingCollections) {
+        assert.strictEqual(fixture.shared.docs.get(logicalKey).operationId, fixture.shared.docs.get('system.migrations').operationId,
+            'the initial empty collections and migration marker share a durable commit');
+    }
     for (const [logicalKey, list, save] of readingCollections) {
         assert.deepStrictEqual(await list(), [], 'default reading list callers retain the array API');
-        const absent = await list({ withMeta: true });
-        assert.deepStrictEqual(absent.data, []);
-        assert.strictEqual(absent.envelope, null, 'metadata distinguishes an unmigrated default from an authoritative empty array');
-        await save([]);
+        const migrated = await list({ withMeta: true });
+        assert.deepStrictEqual(migrated.data, []);
+        assert.strictEqual(migrated.envelope.state, 'present', 'migration establishes an authoritative empty collection');
+        await save([], { expectedRevision: migrated.envelope.revision });
         const empty = await list({ withMeta: true });
         assert.deepStrictEqual(empty.data, []);
         assert.strictEqual(empty.envelope.state, 'present');
@@ -173,6 +180,53 @@ async function testReadingCollectionPresenceMetadata() {
         assert.deepStrictEqual(cleared.data, []);
         assert.strictEqual(cleared.envelope.state, 'cleared', 'cleared collections retain their canonical presence');
     }
+}
+
+async function testReadingMergeRetainsOwnersAndRelationships() {
+    const local = harness(); const remote = harness();
+    await Promise.all([local.app.ready, remote.app.ready]);
+    const owner = { id: 'retained-review-owner', word: 'Apple', meaning: 'My definition',
+        repetitions: 9, interval: 45, easeFactor: 2.4,
+        reviewHistory: [{ at: '2026-09-01T00:00:00.000Z', grade: 4 }] };
+    await local.app.vocab.saveWords([owner]);
+    const command = (libraryId) => ({
+        source: { kind: 'imported', id: libraryId }, article: { examId: 'same-exam', title: libraryId },
+        word: { word: 'apple', meaning: 'Imported definition' }, at: '2026-09-08T00:00:00.000Z',
+        occurrence: { scopeId: 'passage', contentVersion: 'original', startOffset: 0, endOffset: 5,
+            quote: 'apple', before: '', after: ' grows here' }
+    });
+    await local.app.vocab.mutateReading('collect', command('library-a'));
+    await remote.app.vocab.mutateReading('collect', command('library-b'));
+    await remote.app.vocab.mutateReading('recordVisit', {
+        source: { kind: 'builtin', id: 'default' }, article: { examId: 'zero-words' },
+        at: '2026-09-08T01:00:00.000Z'
+    });
+    const portable = await remote.app.backups.export({ domains: ['vocab'] });
+    const merge = async () => {
+        const plan = await local.app.backups.previewImport(portable, { practiceMode: 'merge' });
+        const receipt = await local.app.backups.commitImport(plan.id);
+        assert.strictEqual(receipt.committed, true);
+        return (await local.app.vocab.getReadingSnapshot()).snapshot;
+    };
+    const first = await merge();
+    assert.deepStrictEqual(first.words, [owner], 'backup merge preserves the complete existing canonical review record');
+    assert.strictEqual(first.reading.terms.length, 1);
+    assert.deepStrictEqual(first.reading.terms[0].wordRef, { listId: 'default', wordId: owner.id });
+    assert.strictEqual(first.reading.associations.length, 2, 'source-qualified A/B associations survive same-term merge');
+    assert.strictEqual(first.reading.occurrences.length, 2, 'both selected occurrences survive');
+    assert.strictEqual(first.reading.visits.length, 3, 'zero-word bookshelf visits also survive');
+    assert.deepStrictEqual(await merge(), first, 'repeated import is idempotent for vocabulary and reading data');
+
+    const model = local.app.vocab.readingModel;
+    const colliding = model.collect(model.createSnapshot({ words: [
+        { id: owner.id, word: 'banana', meaning: 'A different term' }
+    ] }), { ...command('library-c'), word: { word: 'banana' },
+        occurrence: { scopeId: 'passage', contentVersion: 'original', startOffset: 0, endOffset: 6, quote: 'banana' } });
+    const joined = model.merge(first, colliding);
+    assert.strictEqual(joined.words.length, 2);
+    assert.notStrictEqual(joined.words[0].id, joined.words[1].id, 'an unrelated imported ID collision gets a distinct canonical owner');
+    assert.strictEqual(model.query(joined).terms.find((row) => row.term.normalizedTerm === 'banana').word.meaning, 'A different term');
+    assert.deepStrictEqual(clone(model.merge(joined, colliding)), clone(joined), 'owner collision remapping remains idempotent');
 }
 
 async function testVocabPhoneticMutationProtection() {
@@ -328,7 +382,9 @@ async function testAtomicVocabPhoneticBackfill() {
     }, { operationId: 'phonetic-backfill-atomic' });
     assert.strictEqual(receipt.committed, true);
     assert.strictEqual(receipt.updatedCount, 3, 'every stored duplicate with a missing phonetic must be filled');
-    assert.deepStrictEqual(Object.keys(receipt.revisions), ['vocab.words'], 'the backfill must commit as one list-document mutation');
+    assert.deepStrictEqual(Object.keys(receipt.revisions), ['vocab.words', 'vocab.readingState'],
+        'backfill atomically commits the list with the reading owner consistency fence');
+    assert.strictEqual(fixture.shared.docs.get('vocab.readingState').operationId, 'phonetic-backfill-atomic');
     assert.strictEqual(
         fixture.shared.docs.get('vocab.words').revision,
         revisionBefore + 1,
@@ -487,7 +543,9 @@ async function testV2MergeImportPhoneticProtection() {
     snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
 
     const plan = await fixture.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
-    assert.deepStrictEqual(new Set(plan.keys), new Set(['vocab.words', 'vocab.lists']));
+    assert.deepStrictEqual(new Set(plan.keys), new Set([
+        'vocab.words', 'vocab.lists', 'vocab.readingState', 'vocab.readingVocabWords', 'vocab.readingBookshelfExams'
+    ]), 'vocabulary import includes its reading references and compatibility projections in the same commit');
     assert.strictEqual(plan.destructive, false);
     await fixture.app.backups.commitImport(plan.id);
 
@@ -1537,6 +1595,7 @@ async function testRecoveryThirtyDayTtlBoundary() {
 async function run() {
     await testReadingModelUsesLiveVocabularyOwners();
     await testReadingCollectionPresenceMetadata();
+    await testReadingMergeRetainsOwnersAndRelationships();
     await testClearInterruptedRecoveryIsolation();
     await testRecoveryThirtyDayTtlBoundary();
     await testVocabPhoneticMutationProtection();
@@ -2087,6 +2146,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 56 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 57 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

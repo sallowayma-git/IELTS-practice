@@ -2908,8 +2908,16 @@
                             break;
                         }
                         try {
+                            const savePayload = Object.assign({}, data, {
+                                context: Object.assign({}, data.context || {}, {
+                                    examId,
+                                    libraryConfigurationId: Object.prototype.hasOwnProperty.call(windowInfo, 'libraryConfigurationId')
+                                        ? windowInfo.libraryConfigurationId
+                                        : this._readLaunchLibraryConfigurationId(examId)
+                                })
+                            });
                             const saved = typeof window.saveReadingHighlightVocab === 'function'
-                                ? await window.saveReadingHighlightVocab(data)
+                                ? await window.saveReadingHighlightVocab(savePayload)
                                 : null;
                             this._announceVocabHighlightOutcome(
                                 examId,
@@ -2925,7 +2933,7 @@
                                 data,
                                 sourceWindow || expectedWindow,
                                 false,
-                                'save_failed'
+                                saveError && saveError.code || 'save_failed'
                             );
                         }
                         break;

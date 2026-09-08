@@ -1,8 +1,7 @@
 (function initReadingVocabReader(global) {
     'use strict';
 
-    const STORAGE_KEY = 'ielts_reading_vocab_words_v1';
-    const BOOKSHELF_STORAGE_KEY = 'ielts_reading_bookshelf_exams_v1';
+    const DEFAULT_SOURCE = { kind: 'builtin', id: 'default' };
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -13,174 +12,134 @@
             .replace(/'/g, '&#39;');
     }
 
-    function recordBookshelfExamDirect(examId, examTitle = '', category = '') {
+    async function recordBookshelfExamDirect(examId, examTitle = '', category = '', source = DEFAULT_SOURCE) {
         if (!examId) return;
-        try {
-            if (global.ReadingBookshelfStore && typeof global.ReadingBookshelfStore.recordExamUsed === 'function') {
-                global.ReadingBookshelfStore.recordExamUsed(examId, examTitle, category);
-                return;
-            }
-            const raw = localStorage.getItem(BOOKSHELF_STORAGE_KEY);
-            const records = raw ? JSON.parse(raw) : [];
-            const idx = records.findIndex(r => String(r.examId) === String(examId));
-            const now = Date.now();
-            if (idx !== -1) {
-                records[idx].lastOpenedAt = now;
-                if (examTitle && !records[idx].examTitle) records[idx].examTitle = examTitle;
-                if (category && !records[idx].category) records[idx].category = category;
-            } else {
-                records.unshift({
-                    examId: String(examId),
-                    examTitle: examTitle || '',
-                    category: category || '',
-                    firstUsedAt: now,
-                    lastOpenedAt: now
-                });
-            }
-            localStorage.setItem(BOOKSHELF_STORAGE_KEY, JSON.stringify(records));
-            if (global.ReadingBookshelfStore && typeof global.ReadingBookshelfStore.syncToAppData === 'function') {
-                global.ReadingBookshelfStore.syncToAppData(records);
-            } else if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.saveReadingBookshelfExams === 'function') {
-                global.AppData.vocab.saveReadingBookshelfExams(records).catch(() => {});
-            }
-        } catch (e) {
-            console.warn('[ReadingVocabReader] recordBookshelfExamDirect error:', e);
-        }
+        return ReadingVocabStore.mutate('recordVisit', {
+            source, article: { examId: String(examId), title: examTitle },
+            at: new Date().toISOString()
+        });
     }
 
-    // ============================================================================
-    // 生词本数据管理 (Store)
-    // ============================================================================
+    // This cache is a view of acknowledged AppData state, never a storage authority.
     const ReadingVocabStore = {
-        _cache: null,
+        _state: null,
         _commitBound: false,
+        _loadSequence: 0,
 
-        getAll() {
-            if (this._cache) {
-                return this._cache;
+        async resolveSource(options = {}) {
+            if (options.source) return { ...options.source };
+            const id = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? options.libraryConfigurationId
+                : await global.AppData.library.getActive();
+            return id == null || id === '' ? { ...DEFAULT_SOURCE } : { kind: 'imported', id: String(id) };
+        },
+
+        getAll() { return this.project(); },
+
+        project(articleId = null) {
+            if (!this._state) return [];
+            const snapshot = this._state.snapshot;
+            const model = global.AppData.vocab.readingModel;
+            return model.query(snapshot, articleId ? { articleId } : {}).terms.map(entry => {
+                const associations = entry.associations;
+                const article = snapshot.reading.articles.find(row => row.id === associations[0]?.articleId);
+                return {
+                    ...entry.word, id: entry.term.id, word: entry.word.word,
+                    examId: article?.examId || '', examTitle: article?.title || '',
+                    context: entry.word.example || entry.word.context || '',
+                    associations, occurrences: entry.occurrences,
+                    highlights: entry.occurrences.map(occurrence => {
+                        const relation = associations.find(row => row.id === occurrence.associationId);
+                        const owner = snapshot.reading.articles.find(row => row.id === relation?.articleId);
+                        return { ...occurrence, examId: owner?.examId, scope: occurrence.scopeId, text: occurrence.quote };
+                    })
+                };
+            });
+        },
+
+        getByExam(examId, source = DEFAULT_SOURCE) {
+            if (!examId || !this._state) return [];
+            return this.project(global.AppData.vocab.readingModel.articleId(source, String(examId)));
+        },
+
+        adopt(state) {
+            if (this._state?.generation === state.generation && this._state.revision > state.revision) return;
+            this._state = state;
+            if (typeof global.dispatchEvent === 'function') {
+                global.dispatchEvent(new CustomEvent('reading-vocab-store-updated'));
             }
+        },
+
+        async reload() {
+            const sequence = ++this._loadSequence;
+            await global.AppData.ready;
+            const state = await global.AppData.vocab.getReadingSnapshot();
+            if (sequence === this._loadSequence) this.adopt(state);
+            return state;
+        },
+
+        async mutate(type, command) {
+            if (!this._state) await this.init();
+            const observed = this._state;
+            let result;
             try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed)) {
-                        this._cache = parsed;
-                        return this._cache;
-                    }
-                }
-            } catch (err) {
-                console.warn('[ReadingVocabStore] 读取失败:', err);
+                result = await global.AppData.vocab.mutateReading(type, command, {
+                    observedRevision: observed.revision, observedGeneration: observed.generation
+                });
+            } catch (error) {
+                // The next explicit retry must use the new deletion/replace fence.
+                await this.reload().catch(() => {});
+                throw error;
             }
-            this._cache = [];
-            return this._cache;
+            if (!result || result.saved !== true) throw new Error('Reading save was not acknowledged');
+            ++this._loadSequence;
+            this.adopt(result);
+            return result;
         },
 
-        _save() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(this._cache || []));
-            } catch (err) {
-                console.warn('[ReadingVocabStore] 保存失败:', err);
-            }
-            this.syncToAppData();
-        },
+        // Compatibility flush methods only read authoritative state.
+        async syncToAppData() { return this.reload(); },
+        async flushToAppData() { return this.reload(); },
 
-        async syncToAppData() {
-            try {
-                if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.saveReadingWords === 'function') {
-                    await global.AppData.vocab.saveReadingWords(this._cache || []);
-                }
-            } catch (err) {
-                console.warn('[ReadingVocabStore] syncToAppData failed:', err);
-            }
-        },
-
-        async flushToAppData() {
-            return this.syncToAppData();
-        },
-
-        getByExam(examId) {
-            if (!examId) return [];
-            const all = this.getAll();
-            return all.filter(item => String(item.examId) === String(examId));
-        },
-
-        add(rawWord, examId, examTitle, context = '', highlight = null) {
+        async add(rawWord, examId, examTitle, context = '', highlight = null, source = DEFAULT_SOURCE) {
             const word = this.cleanWord(rawWord);
-            if (!word || word.length > 50) {
-                return { added: false, reason: 'invalid_word' };
-            }
-
-            const all = this.getAll();
-            const lowerWord = word.toLowerCase();
-
-            // 检查当前文章或全局是否存在
-            const existingIndex = all.findIndex(item => item.word.toLowerCase() === lowerWord);
-            if (existingIndex !== -1) {
-                const item = all[existingIndex];
-                item.updatedAt = Date.now();
-                if (examId && !item.examId) {
-                    item.examId = examId;
-                    item.examTitle = examTitle || '';
-                }
-                if (highlight) {
-                    if (!Array.isArray(item.highlights)) {
-                        item.highlights = [];
-                    }
-                    const isDup = item.highlights.some(h =>
-                        String(h.examId) === String(highlight.examId) &&
-                        String(h.scope) === String(highlight.scope) &&
-                        h.startOffset === highlight.startOffset
-                    );
-                    if (!isDup) {
-                        item.highlights.push(highlight);
-                    }
-                }
-                this._save();
-                return { added: true, item: item, isDuplicate: true };
-            }
-
-            const newItem = {
-                id: 'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-                word: word,
-                examId: examId || '',
-                examTitle: examTitle || '',
-                context: context ? String(context).trim().slice(0, 150) : '',
-                createdAt: Date.now(),
-                highlights: highlight ? [highlight] : []
-            };
-
-            all.unshift(newItem);
-            this._save();
-
-            if (examId) {
-                recordBookshelfExamDirect(examId, examTitle);
-            }
-
-            return { added: true, item: newItem, isDuplicate: false };
+            if (!word || word.length > 50) return { added: false, reason: 'invalid_word' };
+            if (!this._state) await this.init();
+            const duplicate = this.getByExam(examId, source).some(item => item.word.toLowerCase() === word.toLowerCase());
+            const occurrence = highlight ? {
+                scopeId: highlight.scopeId || highlight.scope,
+                contentVersion: highlight.contentVersion || 'legacy-reader-v1',
+                startOffset: highlight.startOffset, endOffset: highlight.endOffset,
+                quote: highlight.text || word, before: highlight.before || '', after: highlight.after || ''
+            } : undefined;
+            const result = await this.mutate('collect', {
+                source, article: { examId: String(examId), title: examTitle || '' },
+                word: { word, meaning: '待补充释义', example: String(context || '').trim().slice(0, 150) },
+                ...(occurrence ? { occurrence } : { manual: true }),
+                at: new Date().toISOString()
+            });
+            return { ...result, added: result.added !== false, isDuplicate: duplicate,
+                item: this.getByExam(examId, source).find(item => item.word.toLowerCase() === word.toLowerCase()) };
         },
 
-        remove(wordOrId) {
-            const all = this.getAll();
+        async remove(wordOrId, examId = null, source = DEFAULT_SOURCE) {
+            if (!this._state) await this.init();
             const target = String(wordOrId).trim().toLowerCase();
-            const index = all.findIndex(item => item.id === wordOrId || item.word.toLowerCase() === target);
-            if (index !== -1) {
-                all.splice(index, 1);
-                this._save();
-                return true;
-            }
-            return false;
-        },
-
-        clear(examId = null) {
-            if (!examId) {
-                this._cache = [];
-                this._save();
-                return true;
-            }
-            this._cache = this.getAll().filter(item => String(item.examId) !== String(examId));
-            this._save();
+            const item = this.getAll().find(row => row.id === wordOrId || row.word.toLowerCase() === target);
+            if (!item) return false;
+            await this.mutate(examId ? 'removeArticleTerm' : 'removeTermAssociations', {
+                termId: item.id,
+                ...(examId ? { articleId: global.AppData.vocab.readingModel.articleId(source, String(examId)) } : {})
+            });
             return true;
         },
+
+        async clear(examId = null, source = DEFAULT_SOURCE) {
+            await this.mutate(examId ? 'clearArticle' : 'clearReading', examId
+                ? { articleId: global.AppData.vocab.readingModel.articleId(source, String(examId)) } : {});
+            return true;
+        },
+
 
         cleanWord(str) {
             if (!str) return '';
@@ -189,8 +148,8 @@
                 .trim();
         },
 
-        exportTxt(examId = null, customFilename = null, fallbackTitle = '') {
-            const list = examId ? this.getByExam(examId) : this.getAll();
+        exportTxt(examId = null, customFilename = null, fallbackTitle = '', source = DEFAULT_SOURCE) {
+            const list = examId ? this.getByExam(examId, source) : this.getAll();
             if (!list || list.length === 0) {
                 return false;
             }
@@ -239,49 +198,21 @@
 
         async init() {
             this.bindCommitListener();
-            try {
-                if (global.AppData && global.AppData.ready) {
-                    await global.AppData.ready;
-                }
-                if (global.AppData && global.AppData.vocab && typeof global.AppData.vocab.listReadingWords === 'function') {
-                    const result = await global.AppData.vocab.listReadingWords({ withMeta: true });
-                    const appDataWords = Array.isArray(result)
-                        ? result
-                        : (result && result.envelope ? result.data : null);
-                    if (Array.isArray(appDataWords)) {
-                        // An existing AppData document owns restores, including empty lists.
-                        // An absent document may mean migration failed; preserve the local copy.
-                        this._cache = appDataWords;
-                        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appDataWords)); } catch (_) {}
-                    }
-                }
-            } catch (e) {
-                console.warn('[ReadingVocabStore] init failed:', e);
-            }
+            return this.reload();
         },
 
         bindCommitListener() {
-            if (this._commitBound) return;
-            if (global.AppData && global.AppData.backups && typeof global.AppData.backups.onDataCommitted === 'function') {
-                this._commitBound = true;
-                global.AppData.backups.onDataCommitted(async (event) => {
-                    const targets = event && event.targets;
-                    if (!Array.isArray(targets)) return;
-                    const hasVocab = targets.some(t => t.logicalKey === 'vocab.readingVocabWords');
-                    if (hasVocab) {
-                        try {
-                            const updated = await global.AppData.vocab.listReadingWords();
-                            if (Array.isArray(updated)) {
-                                this._cache = updated;
-                                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                                window.dispatchEvent(new CustomEvent('reading-vocab-store-updated', { detail: { words: updated } }));
-                            }
-                        } catch (err) {
-                            console.warn('[ReadingVocabStore] reload on committed failed:', err);
-                        }
+            if (this._commitBound || !global.AppData?.backups?.onDataCommitted) return;
+            this._commitBound = true;
+            global.AppData.backups.onDataCommitted(event => {
+                if (!event?.targets?.some(target => target.logicalKey?.startsWith('vocab.'))) return;
+                this.reload().catch(error => {
+                    console.warn('[ReadingVocabStore] Unable to refresh committed data:', error);
+                    if (global.ReadingVocabReader?.currentExamId) {
+                        global.ReadingVocabReader.showToast('数据刷新失败，请重新打开生词本重试');
                     }
                 });
-            }
+            });
         }
     };
 
@@ -696,6 +627,7 @@
     // ============================================================================
     const ReadingVocabReader = {
         currentExamId: null,
+        currentSource: DEFAULT_SOURCE,
         currentExam: null,
         currentPayload: null,
         currentExplanation: null,
@@ -920,22 +852,33 @@
             // 手动收录
             const manualInput = overlay.querySelector('#vocab-manual-input');
             const manualAddBtn = overlay.querySelector('#vocab-manual-add-btn');
-            const handleManualAdd = () => {
-                if (!manualInput) return;
+            const handleManualAdd = async () => {
+                if (!manualInput || manualAddBtn?.disabled || !this.currentPayload) return;
                 const val = manualInput.value.trim();
                 if (!val) return;
-                const result = ReadingVocabStore.add(
-                    val,
-                    this.currentExamId,
-                    this.currentExam?.title || '',
-                    ''
-                );
-                if (result.added) {
-                    manualInput.value = '';
-                    this.updateCounts();
-                    this.renderVocabList();
-                    this.applyVocabHighlights(val);
-                    this.showToast(result.isDuplicate ? `"${val}" 已在生词本中` : `✅ "${val}" 已收录并黄色高亮`);
+                const requestId = this._openRequestId;
+                if (manualAddBtn) manualAddBtn.disabled = true;
+                this.showToast('正在保存…');
+                try {
+                    const result = await ReadingVocabStore.add(
+                        val,
+                        this.currentExamId,
+                        this.currentExam?.title || '',
+                        '', null, this.currentSource
+                    );
+                    if (requestId !== this._openRequestId) return;
+                    if (result.added) {
+                        manualInput.value = '';
+                        this.updateCounts();
+                        this.renderVocabList();
+                        this.showToast(result.isDuplicate ? `"${val}" 已在生词本中` : `✅ "${val}" 已收录`);
+                    } else {
+                        this.showToast('未保存，请检查输入后重试');
+                    }
+                } catch (error) {
+                    this.showSaveError(error, '保存失败，请再次点击收录重试');
+                } finally {
+                    if (manualAddBtn) manualAddBtn.disabled = false;
                 }
             };
             if (manualAddBtn) {
@@ -968,7 +911,7 @@
                     const safeArticleName = String(rawArticleName).replace(/[\\/:*?"<>|]/g, '_').trim();
                     const filename = `${dateStr}_${safeArticleName}.txt`;
 
-                    const success = ReadingVocabStore.exportTxt(examId, filename, safeArticleName);
+                    const success = ReadingVocabStore.exportTxt(examId, filename, safeArticleName, this.currentSource);
                     if (success) {
                         this.showToast(`✅ 已导出：${filename}`);
                     } else {
@@ -979,11 +922,11 @@
 
             const clearBtn = overlay.querySelector('#vocab-clear-btn');
             if (clearBtn) {
-                clearBtn.addEventListener('click', () => {
+                clearBtn.addEventListener('click', async () => {
                     const isCurrent = this.modalTab === 'current';
                     const examId = isCurrent ? this.currentExamId : null;
                     const count = isCurrent
-                        ? ReadingVocabStore.getByExam(this.currentExamId).length
+                        ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource).length
                         : ReadingVocabStore.getAll().length;
 
                     if (count === 0) {
@@ -991,14 +934,22 @@
                         return;
                     }
 
-                    ReadingVocabStore.clear(examId);
-                    this.updateCounts();
-                    this.renderVocabList();
-                    const passageContent = overlay.querySelector('#vocab-passage-content');
-                    const questionsContent = overlay.querySelector('#vocab-questions-content');
-                    this.removeVocabHighlights(passageContent);
-                    this.removeVocabHighlights(questionsContent);
-                    this.showToast(isCurrent ? '✅ 本篇生词已清空' : '✅ 全部生词已清空');
+                    clearBtn.disabled = true;
+                    this.showToast('正在保存…');
+                    try {
+                        await ReadingVocabStore.clear(examId, this.currentSource);
+                        this.updateCounts();
+                        this.renderVocabList();
+                        const passageContent = overlay.querySelector('#vocab-passage-content');
+                        const questionsContent = overlay.querySelector('#vocab-questions-content');
+                        this.removeVocabHighlights(passageContent);
+                        this.removeVocabHighlights(questionsContent);
+                        this.showToast(isCurrent ? '✅ 本篇生词已清空' : '✅ 全部生词已清空');
+                    } catch (error) {
+                        this.showSaveError(error, '清空失败，请再次点击清空重试');
+                    } finally {
+                        clearBtn.disabled = false;
+                    }
                 });
             }
 
@@ -1007,8 +958,8 @@
             if (readerBody) {
                 const handleSelectionCapture = () => {
                     const requestId = this._openRequestId;
-                    setTimeout(() => {
-                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden')) return;
+                    setTimeout(async () => {
+                        if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden') || !this.currentPayload) return;
                         const selection = window.getSelection();
                         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
                         const rawText = selection.toString();
@@ -1100,21 +1051,35 @@
                             text: cleanWord
                         };
 
-                        const result = ReadingVocabStore.add(
-                            cleanWord,
-                            this.currentExamId,
-                            this.currentExam?.title || '',
-                            contextSentence,
-                            highlightRecord
-                        );
+                        this.showToast('正在保存…');
+                        try {
+                            const result = await ReadingVocabStore.add(
+                                cleanWord,
+                                this.currentExamId,
+                                this.currentExam?.title || '',
+                                contextSentence,
+                                highlightRecord, this.currentSource
+                            );
 
-                        if (result.added) {
-                            selection.removeAllRanges(); // 取消选中状态，避免残留蓝色选区
-                            this.updateCounts();
-                            if (this.modalOpen) {
-                                this.renderVocabList();
+                            if (requestId !== this._openRequestId) return;
+                            if (result.added) {
+                                selection.removeAllRanges(); // 取消选中状态，避免残留蓝色选区
+                                this.updateCounts();
+                                if (this.modalOpen) {
+                                    this.renderVocabList();
+                                }
+                                this.showToast(`✅ "${cleanWord}" 已收录并黄色高亮`);
+                            } else {
+                                throw new Error('Selection was not saved');
                             }
-                            this.showToast(`✅ "${cleanWord}" 已收录并黄色高亮`);
+                        } catch (error) {
+                            if (wrappedMark.parentNode) {
+                                const parent = wrappedMark.parentNode;
+                                while (wrappedMark.firstChild) parent.insertBefore(wrappedMark.firstChild, wrappedMark);
+                                wrappedMark.remove();
+                                parent.normalize();
+                            }
+                            if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请重新划选重试');
                         }
                     }, 20);
                 };
@@ -1194,12 +1159,20 @@
 
             try {
                 // 加载试卷数据
-                const payload = await loadReadingExamPayload(examId);
+                const [payload, source] = await Promise.all([
+                    loadReadingExamPayload(examId), ReadingVocabStore.resolveSource(options)
+                ]);
                 if (requestId !== this._openRequestId) return;
                 if (!payload) {
                     throw new Error('未找到该试卷的数据文件');
                 }
+                // The current payload registry contains only built-in generated
+                // content. Never attach that content to a different library.
+                if (source.kind !== 'builtin' || source.id !== 'default') {
+                    throw new Error('此来源的全文暂不可用，可在书架中查看或导出生词');
+                }
                 this.currentPayload = payload;
+                this.currentSource = source;
 
                 // 异步加载解析（不阻塞主内容）
                 loadReadingExplanationPayload(examId).then(exp => {
@@ -1216,11 +1189,20 @@
                 // 记录至阅读书架
                 const examTitle = this.currentExam.title || this.currentExam.name || examId;
                 const examCategory = this.currentExam.category || this.currentExam.type || '雅思阅读';
-                recordBookshelfExamDirect(examId, examTitle, examCategory);
+                let saveError = null;
+                try {
+                    await ReadingVocabStore.init();
+                    if (requestId !== this._openRequestId) return;
+                    await recordBookshelfExamDirect(examId, examTitle, examCategory, source);
+                } catch (error) {
+                    saveError = error;
+                }
+                if (requestId !== this._openRequestId) return;
 
                 // 渲染界面
                 this.renderContent();
                 this.updateCounts();
+                if (saveError) this.showSaveError(saveError, '书架记录保存失败，请重新打开文章重试');
             } catch (err) {
                 if (requestId !== this._openRequestId) return;
                 console.error('[ReadingVocabReader] 加载失败:', err);
@@ -1487,7 +1469,7 @@
             if (!this.currentExamId) return;
 
             // 2. 仅获取针对当前篇目已收录的生词（绝不跨篇串显，也绝不全篇正则批量盲高亮）
-            const examItems = ReadingVocabStore.getByExam(this.currentExamId);
+            const examItems = ReadingVocabStore.getByExam(this.currentExamId, this.currentSource);
             if (!examItems || examItems.length === 0) return;
 
             examItems.forEach(item => {
@@ -1497,9 +1479,6 @@
                             this.restoreVocabHighlight(overlay, hl, item.word);
                         }
                     });
-                } else if (item.context && item.word) {
-                    // 兼容旧存量数据：基于 context 句子仅高亮单处实例，绝不全篇乱高亮
-                    this.restoreLegacyHighlightByContext(overlay, item.word, item.context);
                 }
             });
         },
@@ -1775,7 +1754,7 @@
         updateCounts() {
             const overlay = this.ensureOverlay();
             const examId = this.currentExamId;
-            const currentList = ReadingVocabStore.getByExam(examId);
+            const currentList = ReadingVocabStore.getByExam(examId, this.currentSource);
             const allList = ReadingVocabStore.getAll();
 
             const headerCount = overlay.querySelector('#vocab-header-count');
@@ -1797,7 +1776,7 @@
 
             const isCurrent = this.modalTab === 'current';
             const list = isCurrent
-                ? ReadingVocabStore.getByExam(this.currentExamId)
+                ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource)
                 : ReadingVocabStore.getAll();
 
             if (!list || list.length === 0) {
@@ -1839,19 +1818,27 @@
             });
 
             listEl.querySelectorAll('.vocab-delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const id = btn.dataset.delId;
                     const allItems = ReadingVocabStore.getAll();
                     const item = allItems.find(w => w.id === id);
                     const word = item?.word;
-                    ReadingVocabStore.remove(id);
-                    this.updateCounts();
-                    this.renderVocabList();
-                    if (word) {
-                        this.removeVocabHighlightForWord(word);
+                    btn.disabled = true;
+                    this.showToast('正在保存…');
+                    try {
+                        await ReadingVocabStore.remove(id, isCurrent ? this.currentExamId : null, this.currentSource);
+                        this.updateCounts();
+                        this.renderVocabList();
+                        if (word) {
+                            this.removeVocabHighlightForWord(word);
+                        }
+                        this.showToast('已从生词本删除');
+                    } catch (error) {
+                        this.showSaveError(error, '删除失败，请再次点击删除重试');
+                    } finally {
+                        btn.disabled = false;
                     }
-                    this.showToast('已从生词本删除');
                 });
             });
         },
@@ -1876,6 +1863,11 @@
                 modal.classList.remove('active');
                 modal.setAttribute('aria-hidden', 'true');
             }
+        },
+
+        showSaveError(error, retryMessage) {
+            this.showToast(error?.code === 'BACKEND_UNAVAILABLE'
+                ? '存储暂不可用，请刷新页面后重试' : retryMessage);
         },
 
         showToast(msg) {
@@ -1906,8 +1898,8 @@
     // 监听生词更新事件以即时刷新打开的视图
     if (typeof window !== 'undefined') {
         window.addEventListener('reading-vocab-store-updated', () => {
-            if (ReadingVocabReader.modalOpen) {
-                ReadingVocabReader.renderVocabList();
+            if (ReadingVocabReader.currentExamId) {
+                if (ReadingVocabReader.modalOpen) ReadingVocabReader.renderVocabList();
                 ReadingVocabReader.updateCounts();
                 ReadingVocabReader.applyVocabHighlights();
             }
@@ -1922,6 +1914,6 @@
     };
 
     // 启动数据同步初始化
-    ReadingVocabStore.init();
+    ReadingVocabStore.init().catch(error => console.warn('[ReadingVocabStore] Initialization failed:', error));
 
 })(typeof window !== 'undefined' ? window : globalThis);

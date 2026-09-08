@@ -79,6 +79,7 @@
 
     const state = {
         examId: null,
+        libraryConfigurationId: undefined,
         dataKey: null,
         sessionId: null,
         suiteSessionId: null,
@@ -1068,6 +1069,7 @@
     function getReviewDictionaryContext() {
         return {
             examId: state.examId,
+            libraryConfigurationId: state.libraryConfigurationId,
             dataKey: state.dataKey,
             title: state.dataset?.meta?.title || '',
             category: state.dataset?.meta?.category || '',
@@ -2275,9 +2277,9 @@
         ensureVocabReaderStyles();
 
         if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
-            global.ReadingVocabReader.open(examId, { fromPractice: true });
+            global.ReadingVocabReader.open(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
         } else if (typeof global.openReadingVocabReader === 'function') {
-            global.openReadingVocabReader(examId, { fromPractice: true });
+            global.openReadingVocabReader(examId, { fromPractice: true, libraryConfigurationId: state.libraryConfigurationId });
         } else {
             console.warn('[UnifiedReadingPage] ReadingVocabReader 模块未加载');
         }
@@ -8125,6 +8127,9 @@
             }
             if (data.sessionId) {
                 state.sessionId = data.sessionId;
+            }
+            if (Object.prototype.hasOwnProperty.call(data, 'libraryConfigurationId')) {
+                state.libraryConfigurationId = data.libraryConfigurationId;
             }
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
