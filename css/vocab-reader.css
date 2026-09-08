@@ -445,8 +445,8 @@ mark.vocab-highlight,
 .vocab-highlight {
     background-color: #fef08a !important; /* 明亮舒适的经典纯正柔黄 */
     color: #0f172a !important;
-    padding: 2px 4px !important;
-    margin: 0 1px !important;
+    padding: 2px 0 !important;
+    margin: 0 !important;
     border-radius: 4px !important;
     border-bottom: 2px solid #eab308 !important; /* 黄色强化底边 */
     box-decoration-break: clone;
@@ -1665,3 +1665,52 @@ mark.vocab-highlight:active,
         transform: translateY(0) scale(1);
     }
 }
+
+.vocab-occurrence-actions,
+.vocab-occurrence-undo,
+.vocab-anchor-status {
+    flex-shrink: 0;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: #fffbea;
+    color: #493b10;
+    border-top: 1px solid #e5d89a;
+}
+
+.vocab-occurrence-actions:empty,
+.vocab-occurrence-undo:empty,
+.vocab-anchor-status:empty { display: none; }
+
+.vocab-occurrence-undo {
+    position: relative;
+    z-index: 10002;
+}
+
+.vocab-occurrence-row {
+    margin-top: 10px;
+    padding: 10px;
+    border-left: 3px solid #d6b432;
+    background: #fffbea;
+    color: #493b10;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.vocab-occurrence-row > span,
+.vocab-occurrence-row > strong { display: block; margin-bottom: 6px; }
+
+.vocab-occurrence-row[data-anchor-status="unresolved"] { border-color: #b45d18; }
+
+.vocab-reader-overlay [data-action] {
+    border: 1px solid #8a741d;
+    border-radius: 6px;
+    padding: 7px 12px;
+    background: #fff;
+    color: #493b10;
+    cursor: pointer;
+}
+
+.vocab-highlight:focus-visible { outline: 2px solid #315ac8; outline-offset: 2px; }

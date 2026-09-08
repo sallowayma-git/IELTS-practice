@@ -10,20 +10,20 @@ const vocabReaderPath = path.join(root, 'js/components/readingVocabReader.js');
 const cssPath = path.join(root, 'css/vocab-reader.css');
 
 const vocabReaderSource = fs.readFileSync(vocabReaderPath, 'utf8');
+const contentSource = fs.readFileSync(path.join(root, 'js/components/readingVocabContent.js'), 'utf8');
 const cssSource = fs.readFileSync(cssPath, 'utf8');
 
-// 1. 验证 isPassageInstruction 函数存在并能够识别指导语句子
+// Source normalization belongs to the shared content helper.
 assert.match(
-    vocabReaderSource,
-    /function isPassageInstruction\(text\)/,
-    'isPassageInstruction function must be defined'
+    contentSource,
+    /function isInstruction\(text\)/,
+    'The content helper must identify introductory instructions'
 );
 
-// 2. 验证 extractPassageData 函数能够分离指导语与段落
 assert.match(
     vocabReaderSource,
-    /function extractPassageData\(rawHtml/,
-    'extractPassageData function must be defined'
+    /ReadingVocabContent\.normalizePassage\(/,
+    'The reader must use the complete ordered-passage normalizer'
 );
 
 // 3. 验证 Tab 按钮文本改为 "全文"，并且不再是 "全部全文"
@@ -42,13 +42,13 @@ assert.match(
 // 4. 验证段落标题与标签使用英文缩写 Para A、Para B 等，而非中文“段落 A”
 assert.doesNotMatch(
     vocabReaderSource,
-    /data-para="\$\{b\.letter\}">段落 \$\{b\.letter\}<\/button>/,
+    /data-para="\$\{b\.id\}">段落 \$\{b\.letter\}<\/button>/,
     'Tab buttons must not use Chinese 段落'
 );
 
 assert.match(
     vocabReaderSource,
-    /data-para="\$\{b\.letter\}">Para \$\{b\.letter\}<\/button>/,
+    /data-para="\$\{b\.id\}">Para \$\{b\.letter\}<\/button>/,
     'Tab buttons must use English abbreviation Para ${b.letter}'
 );
 

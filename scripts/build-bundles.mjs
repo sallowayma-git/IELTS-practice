@@ -62,6 +62,8 @@ const bundles = {
         'js/app/examSessionMixin.js',
         'js/app/browseController.js',
         'js/components/PDFHandler.js',
+        'js/components/readingVocabContent.js',
+        'js/components/readingVocabAnchors.js',
         'js/components/readingVocabReader.js',
         'js/components/BrowseStateManager.js',
         'js/utils/suiteBackGuard.js',
@@ -106,6 +108,8 @@ const bundles = {
         'js/core/dictionaryService.js',
         'js/runtime/reviewHighlightDictionary.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/components/readingVocabContent.js',
+        'js/components/readingVocabAnchors.js',
         'js/components/readingVocabReader.js',
         'js/runtime/unifiedReadingPage.js'
     ],

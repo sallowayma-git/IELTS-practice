@@ -2,10 +2,14 @@ import fs from 'node:fs';
 
 const source = name => fs.readFileSync(new URL(`../../../../js/${name}`, import.meta.url), 'utf8');
 const modelSource = source('data/v2/readingVocabularyModel.js');
+const contentSource = source('components/readingVocabContent.js');
+const anchorsSource = source('components/readingVocabAnchors.js');
 const readerSource = source('components/readingVocabReader.js');
 
 export async function installReadingAuthority(page, { localWords = [], canonicalWords = [], authority = 'ready' } = {}) {
     await page.addScriptTag({ content: modelSource });
+    await page.addScriptTag({ content: contentSource });
+    await page.addScriptTag({ content: anchorsSource });
     await page.evaluate(({ localWords, canonicalWords, authority }) => {
         localStorage.setItem('ielts_reading_vocab_words_v1', JSON.stringify(localWords));
         const model = window.ReadingVocabularyModel;
@@ -52,7 +56,8 @@ export async function installReadingAuthority(page, { localWords = [], canonical
                         if (type === 'collect') state.snapshot = model.recordVisit(state.snapshot, command);
                         if (type === 'recordVisit' || type === 'collect') window.__recordedExams.push(command.article.examId);
                         state.revision += 1;
-                        return { ...result(), saved: true, added: true };
+                        return { ...result(), saved: true, added: true, changed: true,
+                            revisions: { 'vocab.readingState': state.revision } };
                     }
                 }
             };

@@ -59,7 +59,8 @@ test('reader questions are selectable text with isolated identities and no answe
             questions.querySelector('.vocab-question-options').click();
             return {
                 selected, text: questions.textContent,
-                controls: questions.querySelectorAll('input, textarea, select, button, form, label, [name], [for], [href], [contenteditable], [draggable], [tabindex], [onclick], [onmousedown], .drag-item, .match-dropzone, .drop-target-summary, .draggable-word, .card, .pool-items, .options-pool, .cardpool, [data-question]').length,
+                controls: questions.querySelectorAll('input, textarea, select, button, form, label, [name], [for], [href], [contenteditable], [draggable], [tabindex]:not([data-vocab-scope]), [onclick], [onmousedown], .drag-item, .match-dropzone, .drop-target-summary, .draggable-word, .card, .pool-items, .options-pool, .cardpool, [data-question]').length,
+                keyboardScopes: [...questions.querySelectorAll('[data-vocab-scope]')].map(node => ({ id: node.dataset.vocabScope, tabIndex: node.tabIndex })),
                 duplicateIds: identities.filter((id, index) => identities.indexOf(id) !== index),
                 answer: document.getElementById('answer').value,
                 checked: document.getElementById('choice-a').checked,
@@ -68,6 +69,9 @@ test('reader questions are selectable text with isolated identities and no answe
         });
         assert.equal(state.selected, 'question');
         assert.equal(state.controls, 0);
+        assert.ok(state.keyboardScopes.length > 0, 'Question text remains reachable for keyboard selections');
+        assert.ok(state.keyboardScopes.every(scope => /^questions\/q-\d+\/p-\d+$/.test(scope.id) && scope.tabIndex === 0));
+        assert.equal(new Set(state.keyboardScopes.map(scope => scope.id)).size, state.keyboardScopes.length);
         assert.deepEqual(state.duplicateIds, []);
         assert.equal(state.answer, 'original');
         assert.equal(state.checked, true, 'checked reader radios must be inert before insertion');
