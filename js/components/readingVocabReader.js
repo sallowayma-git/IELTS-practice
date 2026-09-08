@@ -366,11 +366,16 @@
             return { exam: manifestEntryFor(examId) || {}, sourceLabel: '内置题库', generatedKey: examId };
         }
         if (source.kind !== 'imported') throw new Error('原题库来源不可用，已保存的生词仍可查看或导出');
-        const [index, configurations] = await Promise.all([
+        const [index, storedConfigurations] = await Promise.all([
             global.AppData.library.getIndex(source.id),
             global.AppData.library.listConfigurations()
         ]);
-        const configuration = configurations.find(item => (item.id || item.key) === source.id);
+        const configurations = storedConfigurations.map(item => {
+            const id = typeof item === 'string' ? item
+                : [item?.id, item?.key, item?.configId].find(value => value != null && value !== '');
+            return { ...(typeof item === 'object' && item ? item : {}), id: id == null ? '' : String(id) };
+        }).filter(item => item.id);
+        const configuration = configurations.find(item => item.id === source.id);
         const matches = index.filter(item => item && String(item.id || item.examId) === String(examId));
         const sourceLabel = `${configuration?.name || configuration?.title || '导入题库'} · ${source.id}`;
         if (!configuration || matches.length !== 1) {
@@ -382,8 +387,8 @@
             // import key exists in another library the blob cannot prove which
             // source it belongs to, so keep the saved vocabulary available only.
             const otherIndexes = await Promise.all(configurations
-                .filter(item => (item.id || item.key) !== source.id)
-                .map(item => global.AppData.library.getIndex(item.id || item.key)));
+                .filter(item => item.id !== source.id)
+                .map(item => global.AppData.library.getIndex(item.id)));
             if (otherIndexes.some(rows => rows.some(row => row?.sourceKind === 'file-picker' && row.importKey === exam.importKey))) {
                 return { exam: null, sourceLabel, unavailableReason: '多个题库使用同名会话文件，无法确认原文来源；已保存的生词仍可查看或导出' };
             }
@@ -1223,9 +1228,10 @@
                     throw new Error('原题库的文章文件已更改或来源记录冲突，已保存的生词仍可查看或导出');
                 }
                 this.currentContentRef = contentRef;
-                const expectedTitle = options.title || storedArticle?.title;
                 const normalizeTitle = title => String(title || '').trim().replace(/\s+/g, ' ');
-                if (expectedTitle && resolved.exam.title && normalizeTitle(expectedTitle) !== normalizeTitle(resolved.exam.title)) {
+                const resolvedTitle = normalizeTitle(resolved.exam.title);
+                if (resolvedTitle && [storedArticle?.title, options.title].some(title =>
+                    normalizeTitle(title) && normalizeTitle(title) !== resolvedTitle)) {
                     throw new Error('原题库中的文章已更改，已保存的生词仍可查看或导出');
                 }
                 const payload = resolved.generatedKey
@@ -1279,7 +1285,7 @@
                 if (this._sourceReady) {
                     const articleId = global.AppData.vocab.readingModel.articleId(this.currentSource, String(examId));
                     const stored = ReadingVocabStore._state?.snapshot.reading.articles.find(article => article.id === articleId);
-                    this.currentExam = { ...(this.currentExam || {}), title: options.title || stored?.title || this.currentExam?.title || examId };
+                    this.currentExam = { ...(this.currentExam || {}), title: stored?.title || options.title || this.currentExam?.title || examId };
                     overlay.querySelector('#vocab-export-btn').disabled = false;
                     overlay.querySelector('#vocab-clear-btn').disabled = false;
                 }

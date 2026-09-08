@@ -38,13 +38,16 @@ test('reader resolves original libraries, preserves unavailable vocabulary, and 
         assert.match(await page.locator('#vocab-passage-content').innerText(), /Beryl/);
         assert.equal(await page.locator('#vocab-fab-count').innerText(), '0');
         await page.evaluate(() => ReadingVocabStore.add('beryl', 'shared', 'B title', '', null, { kind: 'imported', id: 'b' }));
+        const beforeReplacement = await page.evaluate(() => structuredClone(__readingAuthority.snapshot));
         await page.evaluate(async () => {
             __sourceIndexes.a[0].title = 'Replacement article';
-            await ReadingVocabReader.open('shared', { source: { kind: 'imported', id: 'a' } });
+            await ReadingVocabReader.open('shared', { source: { kind: 'imported', id: 'a' }, title: 'Replacement article' });
         });
         assert.match(await page.locator('[data-source-unavailable]').innerText(), /文章已更改/);
         assert.equal(await page.locator('#vocab-reader-title').innerText(), 'A title');
         assert.equal(await page.locator('#vocab-fab-count').innerText(), '1');
+        assert.equal(await page.evaluate(() => ReadingVocabReader.currentPayload), null);
+        assert.deepEqual(await page.evaluate(() => __readingAuthority.snapshot), beforeReplacement);
         await page.evaluate(() => ReadingVocabReader.open('shared', {
             source: { kind: 'imported', id: 'b' },
             articleId: AppData.vocab.readingModel.articleId({ kind: 'imported', id: 'a' }, 'shared')
@@ -110,18 +113,60 @@ test('rapid opens of the same examId retain only the latest imported source', as
     }
 });
 
-test('file-picker content requires an unambiguous original import key', async () => {
+test('initiating title is validated independently and normalized like the saved title', async () => {
+    const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
+    const page = await createPage(browser, { canonicalWords: [{ word: 'amber', examId: 'shared',
+        examTitle: 'Original title', source: { kind: 'imported', id: 'a' } }] });
+    let contentRequests = 0;
+    try {
+        await page.route('https://reader.test/original.html', route => {
+            contentRequests += 1;
+            return route.fulfill({ contentType: 'text/html', body: '<div id="passage"><p>The original amber article remains available for reading.</p></div>' });
+        });
+        await page.evaluate(() => {
+            AppData.library.getIndex = async () => [{ id: 'shared', title: 'Original title', filename: 'original.html' }];
+            AppData.library.listConfigurations = async () => [{ id: 'a' }];
+        });
+        const originalSnapshot = await page.evaluate(() => structuredClone(__readingAuthority.snapshot));
+        await page.evaluate(() => ReadingVocabReader.open('shared', { source: { kind: 'imported', id: 'a' }, title: 'Stale initiating title' }));
+        assert.match(await page.locator('[data-source-unavailable]').innerText(), /文章已更改/);
+        assert.equal(await page.locator('#vocab-reader-title').innerText(), 'Original title');
+        assert.equal(contentRequests, 0);
+        assert.deepEqual(await page.evaluate(() => __readingAuthority.snapshot), originalSnapshot);
+        await page.evaluate(() => ReadingVocabReader.open('shared', { source: { kind: 'imported', id: 'a' }, title: '  Original\n  title  ' }));
+        assert.equal(await page.locator('[data-source-unavailable]').count(), 0);
+        assert.match(await page.locator('#vocab-passage-content').innerText(), /original amber article/);
+        assert.equal(contentRequests, 1);
+    } finally {
+        await page.close();
+        await browser.close();
+    }
+});
+
+for (const [configurationShape, configurations] of [
+    ['id', [{ id: 'a' }, { id: 'b' }]],
+    ['key', [{ key: 'a' }, { key: 'b' }]],
+    ['configId', [{ configId: 'a' }, { configId: 'b' }]],
+    ['string', ['a', 'b']],
+    ['id with legacy configId competitor', [{ id: 'a' }, { configId: 'b' }]],
+    ['id with legacy string competitor', [{ id: 'a' }, 'b']]
+]) test(`file-picker source and competing import key resolve ${configurationShape} configurations`, async () => {
     const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     const page = await createPage(browser);
     try {
-        const state = await page.evaluate(async () => {
+        const state = await page.evaluate(async configurations => {
             const source = { kind: 'imported', id: 'a' };
             const exam = { id: 'shared', title: 'Original article', sourceKind: 'file-picker', importKey: 'reading:shared.html' };
             const url = URL.createObjectURL(new Blob(['<div id="passage"><p>The original session article with an amber specimen.</p></div>'], { type: 'text/html' }));
             let ambiguous = false;
             let resourceReads = 0;
-            AppData.library.listConfigurations = async () => [{ id: 'a' }, { id: 'b' }];
-            AppData.library.getIndex = async id => id === 'a' || ambiguous ? [exam] : [];
+            const indexReads = [];
+            AppData.library.listConfigurations = async () => configurations;
+            AppData.library.getIndex = async id => {
+                indexReads.push(id);
+                if (!['a', 'b'].includes(id)) throw new Error('Invalid configuration ID');
+                return id === 'a' || ambiguous ? [exam] : [];
+            };
             window.LibraryDiscovery = { resolveRuntimeResource: candidate => {
                 if (Object.keys(candidate).join(',') !== 'importKey') throw new Error('Unsafe examId fallback');
                 resourceReads += 1;
@@ -134,13 +179,14 @@ test('file-picker content requires an unambiguous original import key', async ()
             await ReadingVocabReader.open('shared', { source });
             ReadingVocabReader.openModal();
             URL.revokeObjectURL(url);
-            return { initialContent, resourceReads,
+            return { initialContent, resourceReads, indexReads,
                 unavailable: document.querySelector('[data-source-unavailable]').textContent,
                 words: [...document.querySelectorAll('.vocab-item__word')].map(element => element.textContent),
                 exportEnabled: !document.querySelector('#vocab-export-btn').disabled };
-        });
+        }, configurations);
         assert.match(state.initialContent, /original session article/);
         assert.equal(state.resourceReads, 1);
+        assert.deepEqual(state.indexReads, ['a', 'b', 'a', 'b']);
         assert.match(state.unavailable, /无法确认原文来源/);
         assert.deepEqual(state.words, ['amber']);
         assert.equal(state.exportEnabled, true);

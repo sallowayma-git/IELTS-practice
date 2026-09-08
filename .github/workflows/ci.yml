@@ -50,4 +50,19 @@ jobs:
         run: python developer/tests/ci/check_reading_data_integrity.py
 
       - name: Run unified E2E suite (file:// capable)
+        # Leave time for retained diagnostics before the job's 30-minute limit.
+        timeout-minutes: 15
         run: python developer/tests/e2e/e2e_runner.py
+
+      - name: Upload E2E diagnostics
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_attempt }}
+          path: |
+            developer/tests/e2e/reports/**/*.json
+            developer/tests/e2e/reports/**/*.log
+            developer/tests/e2e/reports/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14

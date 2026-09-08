@@ -368,6 +368,65 @@ async function practiceFirstInvocation(protocol) {
     } finally { await context.close(); }
 }
 
+async function browseReplacedArticle(protocol) {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    const source = { kind: 'imported', id: 'issue166-browse-replacement' };
+    const examId = 'issue166-shared-article';
+    const originalTitle = 'Library A original article';
+    const replacementTitle = 'Replacement at the same article locator';
+    try {
+        await ready(page, protocol);
+        await page.evaluate(async ({ source, examId, originalTitle, protocol, html }) => {
+            let entry = { id: examId, examId, title: originalTitle, category: 'P1', type: 'reading',
+                path: 'developer/tests/e2e/reports/', filename: 'issue159-library-a.html', hasHtml: true, sourceKind: 'custom' };
+            if (protocol === 'file') {
+                const discovered = await LibraryDiscovery.discover([new File([html], 'issue159-library-a.html', { type: 'text/html' })], { type: 'reading' });
+                entry = { ...entry, sourceKind: 'file-picker', sourcePath: discovered.entries[0].sourcePath,
+                    importKey: discovered.entries[0].importKey };
+            }
+            await AppData.library.import({ id: source.id, configuration: { name: 'Browse replacement fixture' }, index: [entry] });
+            await LibraryManager.switchLibraryConfig(source.id);
+        }, { source, examId, originalTitle, protocol, html: fs.readFileSync(path.join(reports, 'issue159-library-a.html'), 'utf8') });
+        await page.locator('nav button[data-view="browse"]').click();
+        const entry = page.locator(`#exam-list-container [data-action="vocab-book"][data-exam-id="${examId}"]`);
+        await entry.waitFor();
+        await entry.click();
+        await readerReady(page, examId);
+        await page.locator('#vocab-fab').click();
+        await page.locator('#vocab-manual-input').fill('retainedoriginal');
+        await page.locator('#vocab-manual-add-btn').click();
+        await poll(() => page.locator('#vocab-fab-count').textContent(), '1', 'original Browse article vocabulary');
+        const originalSnapshot = await snapshot(page);
+        await page.locator('#vocab-modal-close').click();
+        await page.locator('#vocab-reader-back-btn').click();
+        await page.evaluate(async ({ source, replacementTitle }) => {
+            const index = await AppData.library.getIndex(source.id);
+            index[0].title = replacementTitle;
+            await AppData.library.import({ id: source.id, configuration: { name: 'Browse replacement fixture' }, index });
+        }, { source, replacementTitle });
+        // Reload production modules and render the replacement's real Browse
+        // button; its options.title must not override the persisted identity.
+        await ready(page, protocol);
+        await page.locator('nav button[data-view="browse"]').click();
+        await poll(() => entry.getAttribute('data-exam-title'), replacementTitle, 'replacement Browse title');
+        const originalArticle = originalSnapshot.reading.articles.find(row => row.examId === examId);
+        assert.deepEqual(originalArticle.contentRefs, [await entry.getAttribute('data-content-ref')], 'replacement keeps the same content locator');
+        await entry.click();
+        await page.locator('[data-source-unavailable]').waitFor();
+        assert.match(await page.locator('[data-source-unavailable]').textContent(), /文章已更改/);
+        assert.equal(await page.evaluate(() => ReadingVocabReader._openOptions.title), replacementTitle);
+        assert.equal(await page.locator('#vocab-reader-title').textContent(), originalTitle);
+        assert.equal(await page.evaluate(() => ReadingVocabReader.currentPayload), null);
+        assert.equal(await page.locator('#vocab-fab-count').textContent(), '1');
+        assert.deepEqual(await snapshot(page), originalSnapshot, 'blocked Browse opens must preserve the original article and visit');
+        await page.getByRole('button', { name: '查看已保存生词', exact: true }).click();
+        assert.ok((await exportText(page, page.locator('#vocab-export-btn'))).includes('retainedoriginal'));
+        assert.equal(await page.locator('#vocab-manual-add-btn').isEnabled(), false);
+        pass(`${protocol}-browse-replacement-preserves-saved-article-and-vocabulary`);
+    } finally { await context.close(); }
+}
+
 try {
     for (const protocol of ['http', 'https', 'file']) {
         const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -381,6 +440,7 @@ try {
             assert.deepEqual(await page.evaluate(() => AppData.practice.list()), [], 'reader and bookshelf use must not create practice records');
         } finally { await context.close(); }
         await practiceFirstInvocation(protocol);
+        await browseReplacedArticle(protocol);
     }
     report.status = 'pass';
 } catch (error) {
