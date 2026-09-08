@@ -2855,6 +2855,13 @@
                 type: 'button',
                 title: '打开该题全文精读与生词本'
             }, '精读');
+            vocabBtn.dataset.examTitle = exam.title || exam.name || '';
+            if (Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')) {
+                vocabBtn.dataset.libraryConfigurationId = exam.libraryConfigurationId || '';
+                if (exam.libraryConfigurationId && global.AppData?.vocab?.readingModel?.contentRef) {
+                    vocabBtn.dataset.contentRef = global.AppData.vocab.readingModel.contentRef(exam);
+                }
+            }
             if (isSelecting) {
                 vocabBtn.disabled = true;
                 vocabBtn.setAttribute('aria-disabled', 'true');

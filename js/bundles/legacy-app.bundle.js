@@ -2746,6 +2746,11 @@ class ExamSystemApp {
                             return null;
                         })
                         .then(() => {
+                            if (this.currentView !== 'bookshelf'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) return;
                             const bookshelfView = document.getElementById('bookshelf-view');
                             if (bookshelfView) {
                                 bookshelfView.removeAttribute('hidden');

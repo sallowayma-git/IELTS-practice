@@ -1748,8 +1748,15 @@
             vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
             vocabBtn.type = 'button';
             vocabBtn.dataset.action = 'vocab-book';
+            vocabBtn.dataset.examTitle = exam.title || exam.name || '';
             if (exam.id) {
                 vocabBtn.dataset.examId = exam.id;
+            }
+            if (Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')) {
+                vocabBtn.dataset.libraryConfigurationId = exam.libraryConfigurationId || '';
+                if (exam.libraryConfigurationId && global.AppData?.vocab?.readingModel?.contentRef) {
+                    vocabBtn.dataset.contentRef = global.AppData.vocab.readingModel.contentRef(exam);
+                }
             }
             vocabBtn.textContent = '精读';
             vocabBtn.title = '打开该题全文精读与生词本';
@@ -1771,6 +1778,42 @@
     // ============================================================================
 
     var examActionHandlersConfigured = false;
+    var readingLaunchSequence = 0;
+
+    async function launchBrowseReadingVocab(examId, target) {
+        const sequence = ++readingLaunchSequence;
+        const navigation = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration() : null;
+        const options = { returnFocus: target, fromView: 'browse', title: target?.dataset?.examTitle || '',
+            contentRef: target?.dataset?.contentRef || '' };
+        if (target?.dataset && Object.prototype.hasOwnProperty.call(target.dataset, 'libraryConfigurationId')) {
+            options.libraryConfigurationId = target.dataset.libraryConfigurationId || null;
+        }
+        try {
+            // Capture provenance before lazy loading or another library activation.
+            if (!Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')) {
+                options.libraryConfigurationId = await global.AppData.library.getActive();
+            }
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                await global.AppLazyLoader.ensureGroup('exam-data');
+                await global.AppLazyLoader.ensureGroup('browse-runtime');
+            }
+            if (sequence !== readingLaunchSequence || (navigation != null
+                && global.__getAppNavigationIntentGeneration() !== navigation)) return;
+            if (!global.ReadingVocabReader || typeof global.ReadingVocabReader.open !== 'function') {
+                throw new Error('Reading vocabulary reader is unavailable');
+            }
+            return await global.ReadingVocabReader.open(examId, options);
+        } catch (error) {
+            if (sequence !== readingLaunchSequence) return;
+            console.warn('[ExamActions] Opening intensive reading failed:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('未能打开精读，请重试。', 'warning');
+            }
+        }
+    }
+
+    global.launchBrowseReadingVocab = launchBrowseReadingVocab;
 
     function setupExamActionHandlers() {
         if (examActionHandlersConfigured) {
@@ -1834,17 +1877,7 @@
             }
 
             if (action === 'vocab-book') {
-                if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
-                    global.ReadingVocabReader.open(examId);
-                    return;
-                }
-                if (typeof global.openReadingVocabReader === 'function') {
-                    global.openReadingVocabReader(examId);
-                    return;
-                }
-                if (typeof global.showMessage === 'function') {
-                    global.showMessage('生词本阅读模块未就绪', 'warning');
-                }
+                launchBrowseReadingVocab(examId, target);
                 return;
             }
 

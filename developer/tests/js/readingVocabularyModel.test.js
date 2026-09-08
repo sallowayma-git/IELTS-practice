@@ -123,6 +123,116 @@ test('same normalized term in two libraries has one owner and independent articl
     assert.equal(snapshot.lists[model.READING_LIST_ID], undefined, 'linking an existing owner must not create a duplicate review row');
 });
 
+test('content references use source locator fields and ignore article presentation metadata', () => {
+    const exam = {
+        sourceKind: ' imported ', dataKey: ' data-key ', path: ' folder\\nested ',
+        filename: ' section\\article.html ', importKey: ' import-id ', title: 'Original title'
+    };
+    assert.equal(model.contentRef(exam), JSON.stringify([
+        'imported', 'data-key', 'folder/nested', 'section/article.html', 'import-id'
+    ]));
+    assert.equal(model.contentRef(exam), model.contentRef({ ...exam, title: 'Renamed', id: 'another-id' }));
+    for (const field of ['sourceKind', 'dataKey', 'path', 'filename', 'importKey']) {
+        assert.notEqual(model.contentRef(exam), model.contentRef({ ...exam, [field]: 'changed' }), field);
+    }
+    assert.equal(model.contentRef({}), JSON.stringify(['', '', '', '', '']));
+});
+
+test('visits and collections bind the first source reference while keeping legacy article identities', () => {
+    const ref = model.contentRef({ sourceKind: 'imported', path: 'library', filename: 'article.html' });
+    for (const operation of ['recordVisit', 'collect']) {
+        const input = operation === 'collect'
+            ? command({ article: { ...ARTICLE, contentRef: ref } })
+            : { source: SOURCE_A, article: { ...ARTICLE, contentRef: ref }, at: AT };
+        for (const legacy of [false, true]) {
+            let snapshot = model.createSnapshot();
+            if (legacy) snapshot = mutate('recordVisit', snapshot, { source: SOURCE_A, article: ARTICLE, at: AT });
+            snapshot = mutate(operation, snapshot, input);
+            assert.equal(snapshot.reading.articles[0].id, articleId());
+            assert.deepEqual(plain(snapshot.reading.articles[0].contentRefs), [ref]);
+            const once = plain(snapshot);
+            snapshot = mutate(operation, snapshot, input);
+            assert.deepEqual(plain(snapshot), once, 'binding retries must be idempotent');
+            assert.deepEqual(plain(model.deserialize(model.serialize(snapshot))), once);
+            snapshot = mutate('recordVisit', snapshot, { source: SOURCE_A, article: ARTICLE, at: LATER });
+            snapshot = mutate('collect', snapshot, command());
+            snapshot = mutate('clearArticle', snapshot, { articleId: articleId() });
+            assert.deepEqual(plain(snapshot.reading.articles[0].contentRefs), [ref],
+                'legacy commands and relationship deletion retain the content binding');
+        }
+    }
+});
+
+test('changed and ambiguous content bindings reject visits and collections without partial mutation', () => {
+    const bound = mutate('collect', model.createSnapshot(), command({ article: { ...ARTICLE, contentRef: 'source-a' } }));
+    for (const refs of [['source-a'], ['source-a', 'source-b']]) {
+        const snapshot = plain(bound);
+        snapshot.reading.articles[0].contentRefs = refs;
+        const before = plain(snapshot);
+        for (const operation of ['recordVisit', 'collect']) {
+            const ref = refs.length === 1 ? 'source-b' : 'source-a';
+            const input = operation === 'collect'
+                ? command({ article: { ...ARTICLE, title: 'Changed', contentRef: ref }, at: LATER })
+                : { source: SOURCE_A, article: { ...ARTICLE, title: 'Changed', contentRef: ref }, at: LATER };
+            assert.throws(() => model[operation](deepFreeze(snapshot), deepFreeze(input)),
+                /content reference has changed or is ambiguous/);
+            assert.deepEqual(plain(snapshot), before, `${operation} preserves all existing data on conflict`);
+        }
+    }
+});
+
+test('article reference validation accepts legacy snapshots and rejects malformed bindings', () => {
+    const legacy = mutate('recordVisit', model.createSnapshot(), { source: SOURCE_A, article: ARTICLE, at: AT });
+    assert.equal(Object.hasOwn(legacy.reading.articles[0], 'contentRefs'), false);
+    assert.deepEqual(plain(model.deserialize(model.serialize(legacy))), plain(legacy));
+    for (const contentRefs of [null, 'source', [''], [' padded '], [1], ['same', 'same'], ['z', 'a']]) {
+        const invalid = plain(legacy);
+        invalid.reading.articles[0].contentRefs = contentRefs;
+        assert.throws(() => model.validate(invalid));
+        assert.throws(() => model.deserialize(JSON.stringify(invalid)));
+    }
+    const unbound = plain(legacy);
+    unbound.reading.articles[0].contentRefs = [];
+    const bound = mutate('recordVisit', unbound, {
+        source: SOURCE_A, article: { ...ARTICLE, contentRef: 'source-a' }, at: AT
+    });
+    assert.deepEqual(plain(bound.reading.articles[0].contentRefs), ['source-a']);
+    for (const contentRef of [undefined, null, '', ' ', ' padded ', 1, []]) {
+        for (const operation of ['recordVisit', 'collect']) {
+            const input = operation === 'collect' ? command({ article: { ...ARTICLE, contentRef } })
+                : { source: SOURCE_A, article: { ...ARTICLE, contentRef }, at: AT };
+            assert.throws(() => model[operation](deepFreeze(legacy), input));
+        }
+    }
+});
+
+test('backup merges union content bindings without choosing a newer conflicting source', () => {
+    const withRef = (contentRef, at) => mutate('recordVisit', model.createSnapshot(), {
+        source: SOURCE_A, article: { ...ARTICLE, contentRef }, at
+    });
+    const left = withRef('source-z', AT);
+    const right = withRef('source-a', LATER);
+    const legacy = mutate('recordVisit', model.createSnapshot(), { source: SOURCE_A, article: ARTICLE, at: LATER });
+    for (const [existing, incoming] of [[left, right], [right, left]]) {
+        const merged = mutate('merge', existing, incoming);
+        assert.deepEqual(plain(merged.reading.articles[0].contentRefs), ['source-a', 'source-z']);
+        assert.equal(merged.reading.articles.length, 1);
+        assert.deepEqual(plain(mutate('merge', merged, incoming)), plain(merged));
+        const restored = model.deserialize(model.serialize(merged));
+        for (const ref of ['source-a', 'source-z']) {
+            assert.throws(() => model.recordVisit(restored, {
+                source: SOURCE_A, article: { ...ARTICLE, contentRef: ref }, at: LATER
+            }), /ambiguous/);
+        }
+        assert.deepEqual(plain(mutate('merge', merged, legacy).reading.articles[0].contentRefs), ['source-a', 'source-z']);
+    }
+    for (const [existing, incoming] of [[left, legacy], [legacy, left], [left, left]]) {
+        const merged = mutate('merge', existing, incoming);
+        assert.deepEqual(plain(merged.reading.articles[0].contentRefs), ['source-z']);
+    }
+    assert.equal(Object.hasOwn(mutate('merge', legacy, legacy).reading.articles[0], 'contentRefs'), false);
+});
+
 test('repeated selection and repeated requests are idempotent while separate positions, scopes and revisions survive', () => {
     let snapshot = mutate('collect', model.createSnapshot(), command());
     const once = plain(snapshot);

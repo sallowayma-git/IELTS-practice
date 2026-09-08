@@ -14,6 +14,8 @@
         _commitBound: false,
         _loadSequence: 0,
         _loadError: null,
+        _loading: false,
+        _sourceMetadata: new Map(),
 
         getRawRecords() {
             return this.getBookshelfExams().map((exam) => ({
@@ -34,11 +36,12 @@
 
         _adopt(result) {
             if (!result || !result.snapshot) throw new Error('Reading snapshot is unavailable');
-            if (this._revision !== null && result.revision < this._revision) return;
+            if (this._generation === result.generation && this._revision !== null && result.revision < this._revision) return false;
             this._snapshot = result.snapshot;
             this._revision = result.revision;
             this._generation = result.generation;
             this._loadError = null;
+            return true;
         },
 
         _notify(detail = {}) {
@@ -47,6 +50,8 @@
 
         async init() {
             const sequence = ++this._loadSequence;
+            this._loading = true;
+            this._notify({ action: 'loading' });
             try {
                 if (global.AppData && global.AppData.ready) await global.AppData.ready;
                 this.bindCommitListener();
@@ -55,13 +60,16 @@
                     throw new Error('Reading persistence is unavailable');
                 }
                 const result = await vocab.getReadingSnapshot();
+                const metadata = await this._readSourceMetadata(result.snapshot);
                 if (sequence === this._loadSequence) {
-                    this._adopt(result);
+                    if (this._adopt(result)) this._sourceMetadata = metadata;
+                    this._loading = false;
                     this._notify({ action: 'reload' });
                 }
                 return result;
             } catch (error) {
                 if (sequence === this._loadSequence) {
+                    this._loading = false;
                     this._loadError = error;
                     this._notify({ action: 'load-failed' });
                 }
@@ -72,6 +80,28 @@
         // Compatibility flush callers wait for a fresh durable snapshot.
         async flushToAppData() { return this.init(); },
 
+        async _readSourceMetadata(snapshot) {
+            const library = global.AppData && global.AppData.library;
+            const metadata = new Map();
+            if (!library) return metadata;
+            try {
+                const configurations = typeof library.listConfigurations === 'function'
+                    ? await library.listConfigurations() : [];
+                await Promise.all(snapshot.reading.sources.filter((row) => row.kind === 'imported').map(async (source) => {
+                    const config = configurations.find((row) => String(row.id || row.key || row.configId) === source.libraryId);
+                    const index = typeof library.getIndex === 'function' ? await library.getIndex(source.libraryId) : null;
+                    metadata.set(source.id, {
+                        name: config && (config.name || config.title) || source.libraryId,
+                        index: Array.isArray(index) ? index : null
+                    });
+                }));
+            } catch (error) {
+                // Stored vocabulary remains usable when source metadata cannot be read.
+                console.warn('[ReadingBookshelfStore] Source metadata unavailable:', error);
+            }
+            return metadata;
+        },
+
         bindCommitListener() {
             if (this._commitBound) return;
             const backups = global.AppData && global.AppData.backups;
@@ -79,7 +109,7 @@
                 this._commitBound = true;
                 backups.onDataCommitted((event) => {
                     const targets = event && event.targets;
-                    if (Array.isArray(targets) && targets.some((target) => String(target.logicalKey || '').startsWith('vocab.'))) {
+                    if (Array.isArray(targets) && targets.some((target) => /^(vocab|library)\./.test(String(target.logicalKey || '')))) {
                         this.init().catch((error) => console.warn('[ReadingBookshelfStore] Reload failed:', error));
                     }
                 });
@@ -103,6 +133,7 @@
             // An in-flight reload may predate this acknowledgement.
             ++this._loadSequence;
             this._adopt(result);
+            this._loading = false;
             this._notify({ action: type, articleId: command.articleId });
             return result;
         },
@@ -133,8 +164,11 @@
                 const source = { kind: sourceRow.kind, id: sourceRow.libraryId };
                 const related = associations.get(article.id) || [];
                 const visit = visitMap.get(article.id);
-                const meta = source.kind === 'builtin' ? manifest[article.examId] || {} : {};
-                const words = related.map((association) => this._wordForTerm(termMap.get(association.termId))).filter(Boolean);
+                const sourceMeta = this._sourceMetadata.get(article.sourceId);
+                const meta = source.kind === 'builtin' ? manifest[article.examId] || {}
+                    : sourceMeta?.index?.find((row) => String(row.id || row.examId) === article.examId) || {};
+                const termIds = Array.from(new Set(related.map((association) => association.termId)));
+                const words = termIds.map((id) => this._wordForTerm(termMap.get(id))).filter(Boolean);
                 const lastActivityAt = Math.max(
                     visit ? Date.parse(visit.lastVisitedAt) : 0,
                     ...related.map((association) => Date.parse(association.updatedAt)),
@@ -142,9 +176,14 @@
                 );
                 return {
                     articleId: article.id, source, examId: article.examId,
+                    sourceLabel: source.kind === 'builtin' ? '内置题库'
+                        : `导入题库 · ${sourceMeta?.name && sourceMeta.name !== source.id ? `${sourceMeta.name} (${source.id})` : source.id}`,
+                    sourceUnavailable: source.kind === 'imported' && Array.isArray(sourceMeta?.index)
+                        && !sourceMeta.index.some((row) => String(row.id || row.examId) === article.examId),
                     title: article.title || meta.title || meta.name || article.examId,
                     category: meta.category || meta.type || '雅思阅读',
-                    wordCount: words.length, sampleWords: words.slice(0, 6).map((word) => word.word),
+                    wordCount: termIds.length, allWords: words.map((word) => word.word),
+                    sampleWords: words.slice(0, 6).map((word) => word.word),
                     lastActivityAt, hasPdf: Boolean(meta.pdfPath || meta.pdf)
                 };
             }).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -163,6 +202,11 @@
             const reading = this._snapshot.reading;
             const termIds = new Set(reading.associations.filter((row) => !articleId || row.articleId === articleId).map((row) => row.termId));
             return reading.terms.filter((term) => termIds.has(term.id)).map((term) => this._wordForTerm(term)).filter(Boolean);
+        },
+
+        getDistinctWordCount() {
+            if (!this._snapshot) return 0;
+            return new Set(this._snapshot.reading.associations.map((row) => row.termId)).size;
         },
 
         async _articleId(examId, source, articleId) {
@@ -277,8 +321,13 @@
             sortBy: 'recent', // 'recent' | 'words' | 'title'
             filterMode: 'all', // 'all' | 'has-words'
             fromView: null,
-            toastTimer: null
+            toastTimer: null,
+            readerLoading: false,
+            readerError: null
         },
+        _readerRequestId: 0,
+        _readerLoadPromise: null,
+        _lastReaderRequest: null,
 
         mount(targetSelector = '#bookshelf-view', options = {}) {
             if (options && options.fromView) {
@@ -305,7 +354,7 @@
             if (!root) return;
 
             const allExams = ReadingBookshelfStore.getBookshelfExams();
-            const totalWords = allExams.reduce((sum, item) => sum + item.wordCount, 0);
+            const totalWords = ReadingBookshelfStore.getDistinctWordCount();
 
             // 过滤与搜索
             let filtered = allExams.slice();
@@ -314,8 +363,9 @@
                 filtered = filtered.filter(item => {
                     const matchTitle = (item.title || '').toLowerCase().includes(q);
                     const matchCategory = (item.category || '').toLowerCase().includes(q);
-                    const matchWords = (item.sampleWords || []).some(w => w.toLowerCase().includes(q));
-                    return matchTitle || matchCategory || matchWords;
+                    const matchSource = `${item.sourceLabel || ''} ${item.source.kind} ${item.source.id}`.toLowerCase().includes(q);
+                    const matchWords = (item.allWords || []).some(w => w.toLowerCase().includes(q));
+                    return matchTitle || matchCategory || matchSource || matchWords;
                 });
             }
 
@@ -341,6 +391,11 @@
                     ${ReadingBookshelfStore._loadError ? (needsPageReload(ReadingBookshelfStore._loadError)
                         ? '<p role="alert">书架加载失败，请刷新页面后重试。<button type="button" class="btn btn-secondary" data-action="reload-page">刷新页面</button></p>'
                         : '<p role="alert">书架加载失败，已显示的数据保持不变。<button type="button" class="btn btn-secondary" data-action="retry-load">重试加载</button></p>') : ''}
+                    ${this.state.readerLoading ? '<p role="status">正在打开生词本…</p>' : ''}
+                    ${this.state.readerError ? (needsPageReload(this.state.readerError)
+                        ? '<p role="alert">生词本打开失败，请刷新页面后重试。<button type="button" class="btn btn-secondary" data-action="reload-page">刷新页面</button></p>'
+                        : '<p role="alert">生词本打开失败，请重试。<button type="button" class="btn btn-secondary" data-action="retry-reader">重试打开</button></p>') : ''}
+                    ${ReadingBookshelfStore._snapshot && ReadingBookshelfStore._loading ? '<p role="status">正在更新书架…</p>' : ''}
                     <!-- 顶部标题栏与导航 -->
                     <div class="bookshelf-topbar">
                         <div class="bookshelf-topbar__left">
@@ -350,7 +405,7 @@
                             </button>
                             <div class="bookshelf-heading-group">
                                 <h2 class="bookshelf-title">📚 阅读书架</h2>
-                                <p class="bookshelf-subtitle">收录使用过生词本的精读篇目，温故知新，查缺补漏</p>
+                                <p class="bookshelf-subtitle">收录打开过的精读篇目与生词，随时继续阅读与复习</p>
                             </div>
                         </div>
                         <div class="bookshelf-topbar__right">
@@ -376,7 +431,7 @@
                             <span class="bookshelf-stat-icon">🔤</span>
                             <div class="bookshelf-stat-content">
                                 <span class="bookshelf-stat-value">${totalWords}</span>
-                                <span class="bookshelf-stat-label">积累生词</span>
+                                <span class="bookshelf-stat-label">不重复生词</span>
                             </div>
                         </div>
                         <div class="bookshelf-stat-card">
@@ -395,7 +450,7 @@
                             <input
                                 type="text"
                                 class="bookshelf-search-input"
-                                placeholder="搜索篇目名称、分类或单词..."
+                                placeholder="搜索篇目名称、分类、来源或单词..."
                                 value="${this.escapeHtml(this.state.searchQuery)}"
                                 data-action="search-input"
                             />
@@ -468,6 +523,8 @@
                         </h3>
                         <div class="bookshelf-card__meta">
                             <span class="bookshelf-card__time">🕒 ${formattedTime}</span>
+                            <span class="bookshelf-card__source">${this.escapeHtml(exam.sourceLabel)}</span>
+                            ${exam.sourceUnavailable ? '<span class="bookshelf-card__source-state">原题库内容不可用 · 可查看与导出生词</span>' : ''}
                         </div>
 
                         <!-- 生词预览药丸标签 -->
@@ -618,11 +675,7 @@
             const globalNotebookBtn = root.querySelector('[data-action="open-global-notebook"]');
             if (globalNotebookBtn) {
                 globalNotebookBtn.addEventListener('click', () => {
-                    if (global.ReadingVocabReader && typeof global.ReadingVocabReader.openModal === 'function') {
-                        global.ReadingVocabReader.openModal();
-                    } else {
-                        this.showToast('⚠️ 生词本组件正在加载...');
-                    }
+                    this.launchGlobalNotebook(globalNotebookBtn);
                 });
             }
 
@@ -649,6 +702,12 @@
                     await ReadingBookshelfStore.init().catch(() => {});
                     return;
                 }
+                if (e.target.closest('[data-action="retry-reader"]')) {
+                    const request = this._lastReaderRequest;
+                    if (request?.examId) await this.launchExamVocabReader(request.examId, request.source, request.articleId);
+                    else await this.launchGlobalNotebook();
+                    return;
+                }
                 const card = e.target.closest('[data-article-id]');
                 const articleId = card && card.dataset.articleId;
                 const article = ReadingBookshelfStore.getBookshelfExams().find((exam) => exam.articleId === articleId);
@@ -656,7 +715,7 @@
                 const openVocabTrigger = e.target.closest('[data-action="open-reading-vocab"]');
                 if (openVocabTrigger) {
                     const examId = openVocabTrigger.dataset.examId;
-                    await this.launchExamVocabReader(examId, article && article.source, articleId);
+                    await this.launchExamVocabReader(examId, article && article.source, articleId, openVocabTrigger);
                     return;
                 }
 
@@ -664,6 +723,7 @@
                 const openPracticeTrigger = e.target.closest('[data-action="open-exam-practice"]');
                 if (openPracticeTrigger) {
                     const examId = openPracticeTrigger.dataset.examId;
+                    if (!await this.canOpenOriginalSource(article)) return;
                     if (global.app && typeof global.app.openExam === 'function') {
                         global.app.openExam(examId);
                     } else if (typeof global.openExam === 'function') {
@@ -676,6 +736,7 @@
                 const openPdfTrigger = e.target.closest('[data-action="open-exam-pdf"]');
                 if (openPdfTrigger) {
                     const examId = openPdfTrigger.dataset.examId;
+                    if (!await this.canOpenOriginalSource(article)) return;
                     if (typeof global.viewPDF === 'function') {
                         global.viewPDF(examId);
                     }
@@ -810,24 +871,94 @@
             overlay.classList.remove('is-hidden');
         },
 
-        async launchExamVocabReader(examId, source, articleId) {
-            if (!examId) return;
+        async ensureReader() {
+            if (this._readerLoadPromise) return this._readerLoadPromise;
+            this._readerLoadPromise = (async () => {
+                const loader = global.AppLazyLoader;
+                if (loader && typeof loader.ensureGroup === 'function') {
+                    await Promise.all(['exam-data', 'browse-runtime'].map((group) => loader.ensureGroup(group)));
+                }
+                if (!global.ReadingVocabReader || typeof global.ReadingVocabReader.open !== 'function') {
+                    throw new Error('Reading reader is unavailable');
+                }
+                return global.ReadingVocabReader;
+            })();
+            try { return await this._readerLoadPromise; }
+            finally { this._readerLoadPromise = null; }
+        },
 
-            // 确保 ReadingVocabReader 依赖加载
-            if (!global.ReadingVocabReader && global.lazyLoader && typeof global.lazyLoader.ensureGroup === 'function') {
-                try {
-                    await global.lazyLoader.ensureGroup('browse-runtime');
-                } catch (e) {
-                    console.warn('[BookshelfView] 加载 browse-runtime 失败:', e);
+        async launchExamVocabReader(examId, source, articleId, returnFocus) {
+            if (!examId) return;
+            const article = ReadingBookshelfStore.getBookshelfExams().find((row) => row.articleId === articleId);
+            return this.launchReader({ examId, source, articleId, title: article?.title }, returnFocus);
+        },
+
+        async launchGlobalNotebook(returnFocus) {
+            return this.launchReader({}, returnFocus);
+        },
+
+        async launchReader(request, returnFocus) {
+            const requestId = ++this._readerRequestId;
+            const navigation = typeof global.__getAppNavigationIntentGeneration === 'function'
+                ? global.__getAppNavigationIntentGeneration() : null;
+            const isCurrent = () => requestId === this._readerRequestId && (navigation == null
+                || navigation === global.__getAppNavigationIntentGeneration());
+            this._lastReaderRequest = request;
+            this.state.readerLoading = true;
+            this.state.readerError = null;
+            this.render();
+            try {
+                const reader = await this.ensureReader();
+                if (!isCurrent()) return;
+                const options = { ...request, fromView: 'bookshelf', returnFocus };
+                if (request.examId) await reader.open(request.examId, options);
+                else if (typeof reader.openNotebook === 'function') await reader.openNotebook(options);
+                else throw new Error('Reading notebook is unavailable');
+            } catch (error) {
+                if (isCurrent()) {
+                    this.state.readerError = error;
+                    console.warn('[BookshelfView] Reader loading failed:', error);
+                }
+            } finally {
+                if (requestId === this._readerRequestId) {
+                    this.state.readerLoading = false;
+                    this.render();
                 }
             }
+        },
 
-            if (global.ReadingVocabReader && typeof global.ReadingVocabReader.open === 'function') {
-                await global.ReadingVocabReader.open(examId, { source, articleId });
-            } else if (typeof global.openReadingVocabReader === 'function') {
-                await global.openReadingVocabReader(examId, { source, articleId });
-            } else {
-                this.showToast('⚠️ 生词本阅读组件尚未就绪，请稍后重试');
+        async canOpenOriginalSource(article) {
+            if (!article) return false;
+            try {
+                const activeSource = await ReadingBookshelfStore.resolveSource();
+                if (activeSource.kind !== article.source.kind || activeSource.id !== article.source.id) {
+                    this.showToast(`请先切换至原题库「${article.sourceLabel}」，或打开本篇精读查看生词`);
+                    return false;
+                }
+                if (article.source.kind === 'imported') {
+                    const index = await global.AppData.library.getIndex(article.source.id);
+                    if (!index.some((row) => String(row.id || row.examId) === article.examId)) {
+                        this.showToast('⚠️ 原题库内容已不可用，已保存的生词仍可在精读中查看或导出');
+                        return false;
+                    }
+                }
+                await this.ensureReader();
+                const currentSource = await ReadingBookshelfStore.resolveSource();
+                const currentExam = Array.isArray(global.examIndex)
+                    ? global.examIndex.find((row) => String(row.id || row.examId) === article.examId) : null;
+                const indexSource = currentExam && Object.prototype.hasOwnProperty.call(currentExam, 'libraryConfigurationId')
+                    ? (currentExam.libraryConfigurationId == null || currentExam.libraryConfigurationId === ''
+                        ? { kind: 'builtin', id: 'default' }
+                        : { kind: 'imported', id: String(currentExam.libraryConfigurationId) }) : null;
+                if (currentSource.kind !== article.source.kind || currentSource.id !== article.source.id
+                    || (indexSource && (indexSource.kind !== article.source.kind || indexSource.id !== article.source.id))) {
+                    this.showToast('题库已切换或正在更新，请等待原题库加载完成后重试');
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                this.showToast('⚠️ 原题库加载失败，请重试');
+                return false;
             }
         },
 
@@ -846,8 +977,11 @@
             }
         },
 
-        navigateToMoreView() {
+        async navigateToMoreView() {
             const returnTarget = this.state.fromView || 'more';
+            ++this._readerRequestId;
+            this.state.readerLoading = false;
+            this.state.readerError = null;
             this.state.fromView = null;
             const bookshelfView = document.getElementById('bookshelf-view');
             const targetView = document.getElementById(`${returnTarget}-view`);
@@ -859,11 +993,16 @@
 
             if (global.app && typeof global.app.navigateToView === 'function') {
                 try {
-                    global.app.navigateToView(returnTarget);
+                    await global.app.navigateToView(returnTarget);
                     return;
                 } catch (err) {
                     console.warn('[BookshelfView] navigateToView 异常:', err);
                 }
+            }
+
+            if (typeof global.switchView === 'function') {
+                await global.switchView(returnTarget);
+                return;
             }
 
             if (targetView) {
@@ -940,6 +1079,18 @@
             }
         });
         window.addEventListener('reading-vocab-store-updated', () => {
+            const state = global.ReadingVocabStore && global.ReadingVocabStore._state;
+            if (state && ReadingBookshelfStore._adopt(state)) {
+                const sequence = ++ReadingBookshelfStore._loadSequence;
+                ReadingBookshelfStore._loading = false;
+                // Reader acknowledgements can supersede the commit-triggered
+                // reload; still refresh source names and indexes after restores.
+                ReadingBookshelfStore._readSourceMetadata(state.snapshot).then((metadata) => {
+                    if (sequence !== ReadingBookshelfStore._loadSequence) return;
+                    ReadingBookshelfStore._sourceMetadata = metadata;
+                    ReadingBookshelfStore._notify({ action: 'sources-reloaded' });
+                });
+            }
             const root = document.querySelector(BookshelfView.containerSelector);
             if (root && root.offsetParent !== null) {
                 BookshelfView.render();

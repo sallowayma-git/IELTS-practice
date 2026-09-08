@@ -33,6 +33,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium
+          # Node E2E scripts use their own version's default headless shell.
+          node developer/node_modules/playwright/cli.js install chromium --only-shell
 
       - name: Check JS bundle drift
         # The committed files under js/bundles/ must match what the build script
@@ -50,4 +52,19 @@ jobs:
         run: python developer/tests/ci/check_reading_data_integrity.py
 
       - name: Run unified E2E suite (file:// capable)
+        # Leave time for retained diagnostics before the job's 30-minute limit.
+        timeout-minutes: 15
         run: python developer/tests/e2e/e2e_runner.py
+
+      - name: Upload E2E diagnostics
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_attempt }}
+          path: |
+            developer/tests/e2e/reports/**/*.json
+            developer/tests/e2e/reports/**/*.log
+            developer/tests/e2e/reports/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14

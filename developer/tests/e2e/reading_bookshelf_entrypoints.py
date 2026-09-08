@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the reader occurrence regression with Node Playwright's matching headless browser."""
+"""Run the bookshelf regression with Node Playwright's matching headless browser."""
 from pathlib import Path
 import subprocess
 

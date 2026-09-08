@@ -30,7 +30,7 @@ export async function installReadingAuthority(page, { localWords = [], canonical
         if (authority !== 'missing') {
             window.AppData = {
                 ready: Promise.resolve(),
-                library: { getActive: async () => null },
+                library: { getActive: async () => null, getIndex: async () => [], listConfigurations: async () => [] },
                 vocab: {
                     readingModel: model,
                     getReadingSnapshot: async () => {
