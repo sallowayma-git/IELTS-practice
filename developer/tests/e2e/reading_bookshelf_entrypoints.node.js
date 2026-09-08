@@ -11,6 +11,7 @@ import { chromium } from 'playwright';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
+const startedAt = Date.now();
 const builtin = { kind: 'builtin', id: 'default' };
 const vocabulary = ['coral', 'ocean', 'island', 'harbour', 'lagoon', 'turtle', 'beyondpreview'];
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
@@ -53,12 +54,52 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
     await new Promise(resolve => secureServer.close(resolve));
     throw error;
 });
-const report = { generatedAt: new Date().toISOString(), browser: browser.version(),
-    https: 'Local static HTTPS server with an ephemeral certificate; isolated browser ignores certificate validation.', cases: [] };
+const report = { generatedAt: new Date().toISOString(), browser: browser.version(), status: 'running',
+    https: 'Local static HTTPS server with an ephemeral certificate; isolated browser ignores certificate validation.', cases: [], checkpoints: [] };
+const persistReport = () => {
+    report.updatedAt = new Date().toISOString();
+    report.elapsedSeconds = Number(((Date.now() - startedAt) / 1000).toFixed(3));
+    fs.writeFileSync(path.join(reports, 'reading-bookshelf-entrypoints-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+};
+const log = message => console.error(`[issue159 +${((Date.now() - startedAt) / 1000).toFixed(3)}s] ${message}`);
+const recordFailure = error => {
+    report.status = 'fail';
+    report.error ||= error.stack || String(error);
+    persistReport();
+};
+async function checkpoint(name, action) {
+    const entry = { name, status: 'running', startedAt: new Date().toISOString(), elapsedSeconds: (Date.now() - startedAt) / 1000 };
+    report.checkpoints.push(entry);
+    report.currentCheckpoint = name;
+    persistReport();
+    log(`START ${name}`);
+    try {
+        const result = await action();
+        entry.status = 'pass';
+        entry.finishedAt = new Date().toISOString();
+        persistReport();
+        log(`DONE ${name}`);
+        return result;
+    } catch (error) {
+        entry.status = 'fail';
+        entry.error = error.stack || String(error);
+        recordFailure(error);
+        log(`FAIL ${name}: ${error.message || error}`);
+        throw error;
+    }
+}
 const pass = (name, evidence = {}) => {
     report.cases.push({ name, status: 'pass', ...evidence });
-    console.error(`[issue159] ${name}: pass`);
+    persistReport();
+    log(`${name}: pass`);
 };
+
+async function newContext() {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    context.setDefaultTimeout(15_000);
+    context.setDefaultNavigationTimeout(60_000);
+    return context;
+}
 
 async function ready(page, protocol) {
     const url = urlFor(protocol, 'index.html');
@@ -151,9 +192,26 @@ async function expectCounts(page, counts, globalCount) {
 }
 
 async function search(page, query, ids) {
-    await page.locator('.bookshelf-search-input').fill(query);
-    await poll(() => page.locator('.bookshelf-card').evaluateAll(nodes => nodes.map(node => node.dataset.examId).sort()), ids.sort(), `search ${query}`);
-    await page.locator('.bookshelf-search-input').fill('');
+    try {
+        await page.locator('.bookshelf-search-input').fill(query);
+        await poll(() => page.locator('.bookshelf-card').evaluateAll(nodes => nodes.map(node => node.dataset.examId).sort()), ids.sort(), `search ${query}`);
+        await page.locator('.bookshelf-search-input').fill('');
+    } catch (error) {
+        recordFailure(error);
+        report.searchFailure = await page.evaluate(query => ({
+            query, inputValue: document.querySelector('.bookshelf-search-input')?.value,
+            stateQuery: BookshelfView.state.searchQuery,
+            activeElement: document.activeElement?.className,
+            loading: ReadingBookshelfStore._loading, revision: ReadingBookshelfStore._revision,
+            loadSequence: ReadingBookshelfStore._loadSequence,
+            cards: [...document.querySelectorAll('.bookshelf-card')].map(node => ({
+                articleId: node.dataset.articleId, examId: node.dataset.examId,
+                title: node.querySelector('.bookshelf-card__title')?.textContent.trim()
+            }))
+        }), query).catch(diagnosticError => ({ query, error: diagnosticError.message }));
+        persistReport();
+        throw error;
+    }
 }
 
 async function exportText(page, button) {
@@ -235,31 +293,33 @@ async function countsAndControls(page, examA, protocol) {
 }
 
 async function importAndCrossWindow(page, context, examA, examB, protocol) {
-    const donorContext = await browser.newContext({ ignoreHTTPSErrors: true });
+    const donorContext = await checkpoint(`${protocol}-import-donor-context`, () => newContext());
     let backup;
     try {
-        const donor = await donorContext.newPage();
-        await ready(donor, protocol);
-        await collect(donor, 'issue159-restored', vocabulary.map(word => `restored${word}`));
-        backup = await donor.evaluate(() => AppData.backups.export({ domains: ['vocab'] }));
-    } finally { await donorContext.close(); }
+        const donor = await checkpoint(`${protocol}-import-donor-page`, () => donorContext.newPage());
+        await checkpoint(`${protocol}-import-donor-ready`, () => ready(donor, protocol));
+        await checkpoint(`${protocol}-import-donor-collect`, () => collect(donor, 'issue159-restored', vocabulary.map(word => `restored${word}`)));
+        backup = await checkpoint(`${protocol}-import-donor-export`, () => donor.evaluate(() => AppData.backups.export({ domains: ['vocab'] })));
+    } finally { await checkpoint(`${protocol}-import-donor-close`, () => donorContext.close()); }
     for (const replace of [false, true]) {
-        const receipt = await page.evaluate(async ({ backup, replace }) => {
-            const plan = await AppData.backups.previewImport(backup, { replace });
-            return AppData.backups.commitImport(plan.id, { confirmDestructive: replace });
-        }, { backup, replace });
+        const mode = replace ? 'replace' : 'merge';
+        const planId = await checkpoint(`${protocol}-import-${mode}-preview`, () => page.evaluate(async ({ backup, replace }) =>
+            (await AppData.backups.previewImport(backup, { replace })).id, { backup, replace }));
+        const receipt = await checkpoint(`${protocol}-import-${mode}-commit`, () => page.evaluate(({ planId, replace }) =>
+            AppData.backups.commitImport(planId, { confirmDestructive: replace }), { planId, replace }));
         assert.equal(receipt.committed, true);
-        await expectCounts(page, replace ? { 'issue159-restored': 7 } : { [examA]: 0, [examB]: 2, 'issue159-restored': 7 }, replace ? 7 : 9);
-        await search(page, 'restoredbeyondpreview', ['issue159-restored']);
+        await checkpoint(`${protocol}-import-${mode}-original-counts`, () =>
+            expectCounts(page, replace ? { 'issue159-restored': 7 } : { [examA]: 0, [examB]: 2, 'issue159-restored': 7 }, replace ? 7 : 9));
+        await checkpoint(`${protocol}-import-${mode}-original-search`, () => search(page, 'restoredbeyondpreview', ['issue159-restored']));
     }
-    const other = await context.newPage();
+    const other = await checkpoint(`${protocol}-cross-window-page`, () => context.newPage());
     try {
-        await ready(other, protocol);
-        await collect(other, 'issue159-restored', ['otherwindowword']);
-        await expectCounts(page, { 'issue159-restored': 8 }, 8);
-        await search(page, 'otherwindowword', ['issue159-restored']);
-    } finally { await other.close(); }
-    await page.screenshot({ path: path.join(reports, `issue159-${protocol}-bookshelf.png`) });
+        await checkpoint(`${protocol}-cross-window-ready`, () => ready(other, protocol));
+        await checkpoint(`${protocol}-cross-window-collect`, () => collect(other, 'issue159-restored', ['otherwindowword']));
+        await checkpoint(`${protocol}-cross-window-original-counts`, () => expectCounts(page, { 'issue159-restored': 8 }, 8));
+        await checkpoint(`${protocol}-cross-window-original-search`, () => search(page, 'otherwindowword', ['issue159-restored']));
+    } finally { await checkpoint(`${protocol}-cross-window-close`, () => other.close()); }
+    await checkpoint(`${protocol}-import-bookshelf-screenshot`, () => page.screenshot({ path: path.join(reports, `issue159-${protocol}-bookshelf.png`) }));
     pass(`${protocol}-merge-replace-cross-window-refresh`, { distinctGlobalCount: 8 });
 }
 
@@ -288,6 +348,17 @@ async function sourceIdentity(page, protocol) {
         await collect(page, examId, [`source${label.toLowerCase()}word`], source, `Library ${label} original article`);
         ids[label] = await articleId(page, examId, source);
     }
+    const fixtureRevision = await page.evaluate(async () => (await AppData.vocab.getReadingSnapshot()).revision);
+    // Fixture writes acknowledge persistence before the live shelf finishes
+    // replacing its controls. Wait for the final projection before typing.
+    await checkpoint(`${protocol}-source-fixture-projection`, () => poll(() => page.evaluate(({ ids, fixtureRevision }) => {
+        const store = ReadingBookshelfStore;
+        return !store._loading && store._revision === fixtureRevision && Object.values(ids).every(id => {
+            const article = store._snapshot?.reading.articles.find(row => row.id === id);
+            return article && store._sourceMetadata.get(article.sourceId)?.index?.some(row =>
+                String(row.id || row.examId) === article.examId);
+        });
+    }, { ids, fixtureRevision }), true, 'source fixture projection must finish before search input'));
     await search(page, 'Library A original article', [examId]);
     await search(page, 'P1', [examId, examId]);
     for (const label of ['A', 'B']) {
@@ -326,7 +397,7 @@ async function sourceIdentity(page, protocol) {
 }
 
 async function practiceFirstInvocation(protocol) {
-    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const context = await newContext();
     const page = await context.newPage();
     page.on('dialog', dialog => dialog.accept());
     try {
@@ -365,11 +436,14 @@ async function practiceFirstInvocation(protocol) {
         assert.equal(await page.locator('#reading-vocab-header-btn').evaluate(node => node === document.activeElement), true);
         assert.equal(await page.locator('#question-groups input[name="q1"][value="A"]').isChecked(), true);
         pass(`${protocol}-first-practice-panel-entry-controls-return`);
+    } catch (error) {
+        recordFailure(error);
+        throw error;
     } finally { await context.close(); }
 }
 
 async function browseReplacedArticle(protocol) {
-    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const context = await newContext();
     const page = await context.newPage();
     const source = { kind: 'imported', id: 'issue166-browse-replacement' };
     const examId = 'issue166-shared-article';
@@ -424,33 +498,39 @@ async function browseReplacedArticle(protocol) {
         assert.ok((await exportText(page, page.locator('#vocab-export-btn'))).includes('retainedoriginal'));
         assert.equal(await page.locator('#vocab-manual-add-btn').isEnabled(), false);
         pass(`${protocol}-browse-replacement-preserves-saved-article-and-vocabulary`);
+    } catch (error) {
+        recordFailure(error);
+        throw error;
     } finally { await context.close(); }
 }
 
 try {
     for (const protocol of ['http', 'https', 'file']) {
-        const context = await browser.newContext({ ignoreHTTPSErrors: true });
+        const context = await newContext();
         const page = await context.newPage();
         page.on('dialog', dialog => dialog.accept());
         try {
-            const examA = await browseAndColdShelf(page, protocol);
-            const examB = await countsAndControls(page, examA, protocol);
-            await importAndCrossWindow(page, context, examA, examB, protocol);
-            await sourceIdentity(page, protocol);
+            const examA = await checkpoint(`${protocol}-browse-and-cold-shelf`, () => browseAndColdShelf(page, protocol));
+            const examB = await checkpoint(`${protocol}-counts-and-controls`, () => countsAndControls(page, examA, protocol));
+            await checkpoint(`${protocol}-import-and-cross-window`, () => importAndCrossWindow(page, context, examA, examB, protocol));
+            await checkpoint(`${protocol}-source-identity`, () => sourceIdentity(page, protocol));
             assert.deepEqual(await page.evaluate(() => AppData.practice.list()), [], 'reader and bookshelf use must not create practice records');
+        } catch (error) {
+            recordFailure(error);
+            throw error;
         } finally { await context.close(); }
-        await practiceFirstInvocation(protocol);
-        await browseReplacedArticle(protocol);
+        await checkpoint(`${protocol}-practice-first-invocation`, () => practiceFirstInvocation(protocol));
+        await checkpoint(`${protocol}-browse-replaced-article`, () => browseReplacedArticle(protocol));
     }
     report.status = 'pass';
 } catch (error) {
-    report.status = 'fail';
-    report.error = error.stack || String(error);
+    recordFailure(error);
     process.exitCode = 1;
 } finally {
+    persistReport();
     await browser.close();
     await new Promise(resolve => server.close(resolve));
     await new Promise(resolve => secureServer.close(resolve));
     console.log(JSON.stringify(report, null, 2));
-    fs.writeFileSync(path.join(reports, 'reading-bookshelf-entrypoints-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+    persistReport();
 }
