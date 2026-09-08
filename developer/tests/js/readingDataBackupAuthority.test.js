@@ -16,10 +16,11 @@ const bookshelfKey = 'ielts_reading_bookshelf_exams_v1';
 const staleWords = [{ id: 'keep', word: 'keep', examId: 'keep' }, { id: 'removed', word: 'removed', examId: 'removed' }];
 const staleBookshelf = [{ examId: 'keep', firstUsedAt: 10 }, { examId: 'removed', firstUsedAt: 20 }];
 
-async function loadAppData(page, { interceptInstall = false, failReadingMigration = false } = {}) {
+async function loadAppData(page, { interceptInstall = false, failReadingMigration = false, trackReadingMigration = false } = {}) {
     await page.addScriptTag({ content: catalogSource });
     await page.addScriptTag({ content: kernelSource });
     await page.addScriptTag({ content: recordSource });
+    if (trackReadingMigration) await trackReadingMigrationFault(page);
     if (failReadingMigration) {
         await page.evaluate(() => {
             const put = IDBObjectStore.prototype.put;
@@ -65,6 +66,58 @@ async function readingState(page) {
         bookshelf: await AppData.vocab.listReadingBookshelfExams(),
         localWords: JSON.parse(localStorage.getItem(wordsKey) || '[]'),
         localBookshelf: JSON.parse(localStorage.getItem(bookshelfKey) || '[]')
+    }), { wordsKey, bookshelfKey });
+}
+
+async function trackReadingMigrationFault(page) {
+    await page.evaluate(() => {
+        const fault = { enabled: false, logicalKey: null, migrationWrites: 0, installCalls: 0 };
+        window.readingMigrationFault = fault;
+        const put = IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put = function (value, ...args) {
+            // Fail only the migration: a snapshot install could still succeed
+            // and erase the local-only collection if the error is swallowed.
+            if (fault.enabled && value?.logicalKey === fault.logicalKey
+                && value.envelope?.operationId.startsWith('migrate-reading_')) {
+                fault.migrationWrites += 1;
+                throw new DOMException('Reading migration quota regression', 'QuotaExceededError');
+            }
+            return put.call(this, value, ...args);
+        };
+        const internals = window.__AppDataV2Internals;
+        const prototype = internals.DataKernel.prototype;
+        const install = prototype.installSnapshot;
+        prototype.installSnapshot = function (...args) {
+            fault.installCalls += 1;
+            return install.apply(this, args);
+        };
+        window.makeReadingSnapshotForTest = (logicalKey, data) => {
+            const catalog = internals.catalog;
+            const snapshot = {
+                format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: 'partial',
+                envelopes: { [logicalKey]: internals.makeEnvelope(catalog.get(logicalKey), data) }, entities: {}
+            };
+            snapshot.checksum = internals.checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+            return snapshot;
+        };
+    });
+}
+
+async function failReadingMigration(page, logicalKey) {
+    await page.evaluate((logicalKey) => {
+        Object.assign(window.readingMigrationFault, { enabled: true, logicalKey, migrationWrites: 0, installCalls: 0 });
+    }, logicalKey);
+}
+
+async function backupFailureState(page) {
+    return page.evaluate(async ({ wordsKey, bookshelfKey }) => ({
+        settings: await AppData.settings.getAll(),
+        backupIds: (await AppData.backups.list()).map((entry) => entry.id),
+        words: await AppData.vocab.listReadingWords({ withMeta: true }),
+        bookshelf: await AppData.vocab.listReadingBookshelfExams({ withMeta: true }),
+        rawWords: localStorage.getItem(wordsKey),
+        rawBookshelf: localStorage.getItem(bookshelfKey),
+        fault: { ...window.readingMigrationFault }
     }), { wordsKey, bookshelfKey });
 }
 
@@ -184,6 +237,169 @@ test('reading collections retain canonical authority through backup workflows in
             assert.deepEqual(await readingState(page), {
                 words: staleWords, bookshelf: staleBookshelf, localWords: staleWords, localBookshelf: staleBookshelf
             }, 'the preserved legacy copy remains available for the next successful migration');
+        } finally {
+            await context.close();
+        }
+    });
+
+    for (const workflow of ['restore', 'replace-preview', 'replace-commit', 'replace-smaller']) {
+        for (const logicalKey of ['vocab.readingVocabWords', 'vocab.readingBookshelfExams']) {
+            await t.test(`${workflow} aborts when the only legacy copy of ${logicalKey} cannot migrate`, async () => {
+                const context = await browser.newContext();
+                try {
+                    const page = await context.newPage();
+                    await page.goto(url);
+                    await loadAppData(page, { trackReadingMigration: true });
+                    await page.evaluate(async ({ workflow, logicalKey, staleWords, staleBookshelf }) => {
+                        await AppData.settings.patch({ theme: 'original' });
+                        window.targetSnapshot = await AppData.backups.export();
+                        await AppData.backups.create({ id: 'target' });
+                        await AppData.settings.patch({ theme: 'changed' });
+                        if (workflow === 'replace-commit') {
+                            // A legacy tab can introduce local-only records after
+                            // preview, so commit must recheck migration safety.
+                            window.pendingPlan = await AppData.backups.previewImport(window.targetSnapshot, { replace: true });
+                        }
+                        if (workflow === 'replace-smaller') {
+                            const data = logicalKey === 'vocab.readingVocabWords' ? staleWords : staleBookshelf;
+                            window.targetSnapshot = window.makeReadingSnapshotForTest(logicalKey, data.slice(0, 1));
+                            const plan = await AppData.backups.previewImport(window.targetSnapshot, { replace: true });
+                            window.smallerPlanDestructive = plan.destructive;
+                        }
+                    }, { workflow, logicalKey, staleWords, staleBookshelf });
+                    if (workflow === 'replace-smaller') {
+                        assert.equal(await page.evaluate(() => window.smallerPlanDestructive), false,
+                            'present smaller reading arrays must be protected even when the preview is not marked destructive');
+                    }
+                    await setMirrors(page);
+                    await failReadingMigration(page, logicalKey);
+                    const before = await backupFailureState(page);
+                    const failure = await page.evaluate(async (workflow) => {
+                        try {
+                            if (workflow === 'restore') await AppData.backups.restore('target');
+                            else {
+                                const plan = workflow === 'replace-commit'
+                                    ? window.pendingPlan
+                                    : await AppData.backups.previewImport(window.targetSnapshot, { replace: true });
+                                if (workflow === 'replace-preview') {
+                                    await AppData.backups.create({ id: 'pre-import', type: 'pre-import' });
+                                }
+                                await AppData.backups.commitImport(plan.id, { confirmDestructive: true });
+                            }
+                            return null;
+                        } catch (error) {
+                            return { code: error.code, message: error.message };
+                        }
+                    }, workflow);
+                    assert.equal(failure?.code, 'QUOTA_EXCEEDED', 'destructive workflow must surface the required migration failure');
+                    const after = await backupFailureState(page);
+                    assert.ok(after.fault.migrationWrites > 0, 'exercise an actual failed IndexedDB migration write');
+                    assert.equal(after.fault.installCalls, 0, 'abort before attempting snapshot installation');
+                    assert.deepEqual(after.settings, before.settings, 'failed migration must not install target settings');
+                    assert.deepEqual(after.backupIds, before.backupIds, 'do not create a misleading safety backup without the only legacy copy');
+                    assert.equal(after.rawWords, before.rawWords, 'preserve the original words mirror byte for byte');
+                    assert.equal(after.rawBookshelf, before.rawBookshelf, 'preserve the original bookshelf mirror byte for byte');
+                    assert.equal(after[logicalKey === 'vocab.readingVocabWords' ? 'words' : 'bookshelf'].envelope, null,
+                        'failed migration leaves this collection recoverable only from its preserved mirror');
+
+                    await page.evaluate(() => { window.readingMigrationFault.enabled = false; });
+                    if (workflow === 'replace-commit') {
+                        const conflict = await page.evaluate(async () => {
+                            try {
+                                await AppData.backups.commitImport(window.pendingPlan.id, { confirmDestructive: true });
+                                return null;
+                            } catch (error) {
+                                return error.code;
+                            }
+                        });
+                        assert.equal(conflict, 'CONFLICT', 'late migration must preserve the original preview token and require a fresh preview');
+                        assert.equal((await backupFailureState(page)).settings.theme, 'changed');
+                        assert.deepEqual(await readingState(page), {
+                            words: staleWords, bookshelf: staleBookshelf, localWords: staleWords, localBookshelf: staleBookshelf
+                        }, 'successful migration after quota recovery must preserve records when the old plan conflicts');
+                    }
+                    const result = await page.evaluate(async (workflow) => {
+                        let receipt;
+                        let safety;
+                        if (workflow === 'restore') {
+                            receipt = await AppData.backups.restore('target');
+                            safety = (await AppData.backups.list()).find((entry) => entry.id === receipt.preRestoreBackupId);
+                        } else {
+                            // Re-preview after a failed commit so newly migrated
+                            // records are covered by its revision token.
+                            const plan = await AppData.backups.previewImport(window.targetSnapshot, { replace: true });
+                            safety = await AppData.backups.create({ id: 'pre-import-retry', type: 'pre-import' });
+                            receipt = await AppData.backups.commitImport(plan.id, { confirmDestructive: true });
+                        }
+                        return { receipt, safety, settings: await AppData.settings.getAll() };
+                    }, workflow);
+                    assert.equal(result.receipt.committed, true, 'retry succeeds after the migration write becomes available');
+                    assert.equal(result.settings.theme, workflow === 'replace-smaller' ? 'changed' : 'original');
+                    assert.equal(result.safety.data.envelopes['settings.values'].data.theme, 'changed');
+                    assert.deepEqual(result.safety.data.envelopes['vocab.readingVocabWords'].data, staleWords);
+                    assert.deepEqual(result.safety.data.envelopes['vocab.readingBookshelfExams'].data, staleBookshelf);
+                    const words = workflow === 'replace-smaller'
+                        ? (logicalKey === 'vocab.readingVocabWords' ? staleWords.slice(0, 1) : staleWords) : [];
+                    const bookshelf = workflow === 'replace-smaller'
+                        ? (logicalKey === 'vocab.readingBookshelfExams' ? staleBookshelf.slice(0, 1) : staleBookshelf) : [];
+                    assert.deepEqual(await readingState(page), { words, bookshelf, localWords: words, localBookshelf: bookshelf });
+                } finally {
+                    await context.close();
+                }
+            });
+        }
+    }
+
+    await t.test('settings-only import leaves broken reading migration alone, while a safety backup requires it', async () => {
+        const context = await browser.newContext();
+        try {
+            const page = await context.newPage();
+            await page.goto(url);
+            await loadAppData(page, { trackReadingMigration: true });
+            await page.evaluate(async () => {
+                await AppData.settings.patch({ theme: 'original' });
+                window.settingsSnapshot = await AppData.backups.export({ domains: ['settings'] });
+                await AppData.settings.patch({ theme: 'changed' });
+            });
+            await setMirrors(page);
+            await failReadingMigration(page, 'vocab.readingBookshelfExams');
+            const before = await backupFailureState(page);
+            const receipt = await page.evaluate(async () => {
+                const plan = await AppData.backups.previewImport(window.settingsSnapshot, { replace: true });
+                return AppData.backups.commitImport(plan.id, { confirmDestructive: true });
+            });
+            assert.equal(receipt.committed, true);
+            const imported = await backupFailureState(page);
+            assert.equal(imported.settings.theme, 'original');
+            assert.equal(imported.fault.migrationWrites, 0, 'an unrelated partial import must not require reading migration');
+            assert.equal(imported.words.envelope, null);
+            assert.equal(imported.bookshelf.envelope, null);
+            assert.equal(imported.rawWords, before.rawWords);
+            assert.equal(imported.rawBookshelf, before.rawBookshelf);
+
+            const failure = await page.evaluate(async () => {
+                try {
+                    await AppData.backups.create({ id: 'pre-import', type: 'pre-import' });
+                    return null;
+                } catch (error) {
+                    return error.code;
+                }
+            });
+            assert.equal(failure, 'QUOTA_EXCEEDED', 'explicit safety backups must include recoverable local-only collections');
+            const failed = await backupFailureState(page);
+            assert.ok(failed.fault.migrationWrites > 0);
+            assert.equal(failed.fault.installCalls, imported.fault.installCalls);
+            assert.deepEqual(failed.settings, imported.settings);
+            assert.deepEqual(failed.backupIds, before.backupIds, 'a failed backup must not leave an incomplete safety entry');
+            assert.equal(failed.rawWords, before.rawWords);
+            assert.equal(failed.rawBookshelf, before.rawBookshelf);
+
+            const safety = await page.evaluate(async () => {
+                window.readingMigrationFault.enabled = false;
+                return AppData.backups.create({ id: 'pre-import', type: 'pre-import' });
+            });
+            assert.deepEqual(safety.data.envelopes['vocab.readingVocabWords'].data, staleWords);
+            assert.deepEqual(safety.data.envelopes['vocab.readingBookshelfExams'].data, staleBookshelf);
         } finally {
             await context.close();
         }

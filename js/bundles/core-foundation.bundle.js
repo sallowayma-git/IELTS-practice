@@ -4303,6 +4303,14 @@
     }
     async function createImportPlan(parsed, options = {}) {
         const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
+        // Preserve local-only reading data before capturing revisions for any
+        // reading collection this plan will install, including present arrays.
+        const readingKeys = Object.keys(READING_LEGACY_KEYS).filter((key) => {
+            const envelope = asObject(parsed.envelopes)[key];
+            return (replaceDocuments && parsed.scope === 'full')
+                || (envelope && (envelope.state === 'present' || replaceDocuments || options.applyClears === true));
+        });
+        await migrateLegacyReadingData({ required: true, logicalKeys: readingKeys });
         const snapshot = { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: parsed.scope, envelopes: {}, entities: {} };
         const revisionToken = { documents: {}, entities: {}, entityEpochs: {} };
         const keys = []; const clearedKeys = [];
@@ -4428,18 +4436,19 @@
         if (backup.checksum && backup.checksum !== parsed.checksum) throw new AppDataError('VALIDATION', 'Backup checksum mismatch');
         // Validate the target first, then finish intentional migration before
         // capturing the revision token used by the atomic snapshot install.
-        await migrateLegacyReadingData();
+        await migrateLegacyReadingData({ required: true });
         return createImportPlan(parsed, { replace: true });
     }
 
-    async function migrateLegacyReadingData() {
+    async function migrateLegacyReadingData({ required = false, logicalKeys = Object.keys(READING_LEGACY_KEYS) } = {}) {
         for (const [logicalKey, storageKey] of Object.entries(READING_LEGACY_KEYS)) {
+            if (!logicalKeys.includes(logicalKey)) continue;
             try {
-                if (!global.localStorage) return;
                 const current = await kernel.read(logicalKey, { withMeta: true });
                 // A present empty array or a cleared envelope is authoritative too.
                 // Legacy mirrors only seed documents that have never been written.
                 if (current.envelope) continue;
+                if (!global.localStorage) return;
                 const raw = global.localStorage.getItem(storageKey);
                 const parsed = raw ? JSON.parse(raw) : null;
                 if (!Array.isArray(parsed)) continue;
@@ -4447,6 +4456,9 @@
                     operationId: randomId('migrate-reading')
                 });
             } catch (error) {
+                // Startup can retry later; a backup or destructive installation
+                // must not discard a legacy copy that has never reached the kernel.
+                if (required) throw error;
                 if (global.console && console.warn) console.warn('[AppData v2] legacy reading migration skipped:', error);
             }
         }
@@ -4469,7 +4481,7 @@
 
     async function createBackup(options = {}, migrateReading = true) {
         await ready;
-        if (migrateReading) await migrateLegacyReadingData();
+        if (migrateReading) await migrateLegacyReadingData({ required: true });
         const current = await readCollectionMeta('backups.entries');
         const mutation = optionsMutationOptions(options, 'backup-create', { id: options.id || null, type: options.type || 'manual' });
         const backupId = options.id || (options.operationId ? `backup_${checksum({ operationId: String(options.operationId) }).replace(/[^a-z0-9]/gi, '')}` : randomId('backup'));
@@ -4558,9 +4570,6 @@
         async previewImport(payload, options = {}) {
             await ready;
             const parsed = parseImportPayload(payload);
-            // Import callers can create a safety backup between preview and
-            // commit. Migrate before capturing the preview token for that path.
-            await migrateLegacyReadingData();
             const prepared = await createImportPlan(parsed, options);
             const planId = randomId('import-plan');
             const cutoff = Date.now() - (30 * 60 * 1000);
@@ -4575,6 +4584,10 @@
             if (plan.destructive && options.confirmDestructive !== true) {
                 throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
             }
+            // Mirrors may arrive after preview, including callers without a
+            // safety backup. Keep the reviewed token: a late successful migration
+            // changes its revision and requires a new preview instead of data loss.
+            await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
             const mutation = optionsMutationOptions(options, 'import-commit', {
                 planId: plan.id,
                 signature: plan.signature
