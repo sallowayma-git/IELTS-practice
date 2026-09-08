@@ -4,14 +4,7 @@ const source = name => fs.readFileSync(new URL(`../../../../js/${name}`, import.
 const modelSource = source('data/v2/readingVocabularyModel.js');
 const readerSource = source('components/readingVocabReader.js');
 
-// Only persistence acknowledgement is mocked. Relationship updates, projection,
-// range capture and DOM rendering all execute the production implementations.
-export async function createPage(browser, { localWords = [], canonicalWords = [], authority = 'ready' } = {}) {
-    const page = await browser.newPage();
-    await page.route('https://reader.test/**', route => route.fulfill({
-        contentType: 'text/html', body: '<!doctype html><html><head></head><body></body></html>'
-    }));
-    await page.goto('https://reader.test/');
+export async function installReadingAuthority(page, { localWords = [], canonicalWords = [], authority = 'ready' } = {}) {
     await page.addScriptTag({ content: modelSource });
     await page.evaluate(({ localWords, canonicalWords, authority }) => {
         localStorage.setItem('ielts_reading_vocab_words_v1', JSON.stringify(localWords));
@@ -56,7 +49,8 @@ export async function createPage(browser, { localWords = [], canonicalWords = []
                         } else {
                             state.snapshot = model[type](state.snapshot, command);
                         }
-                        if (type === 'recordVisit') window.__recordedExams.push(command.article.examId);
+                        if (type === 'collect') state.snapshot = model.recordVisit(state.snapshot, command);
+                        if (type === 'recordVisit' || type === 'collect') window.__recordedExams.push(command.article.examId);
                         state.revision += 1;
                         return { ...result(), saved: true, added: true };
                     }
@@ -64,6 +58,19 @@ export async function createPage(browser, { localWords = [], canonicalWords = []
             };
         }
         window.__recordedExams = [];
+    }, { localWords, canonicalWords, authority });
+}
+
+// Only persistence acknowledgement is mocked. Relationship updates, projection,
+// range capture and DOM rendering all execute the production implementations.
+export async function createPage(browser, { localWords = [], canonicalWords = [], authority = 'ready' } = {}) {
+    const page = await browser.newPage();
+    await page.route('https://reader.test/**', route => route.fulfill({
+        contentType: 'text/html', body: '<!doctype html><html><head></head><body></body></html>'
+    }));
+    await page.goto('https://reader.test/');
+    await installReadingAuthority(page, { localWords, canonicalWords, authority });
+    await page.evaluate(() => {
         window.ReadingBookshelfStore = { recordExamUsed: id => window.__recordedExams.push(id) };
         window.__spokenWords = [];
         window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
@@ -126,7 +133,7 @@ export async function createPage(browser, { localWords = [], canonicalWords = []
             }
             throw new Error(`Missing selection: ${word}`);
         };
-    }, { localWords, canonicalWords, authority });
+    });
     await page.addScriptTag({ content: readerSource });
     return page;
 }

@@ -16178,6 +16178,94 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     // ============================================================================
+    // Parse in an inert template: even a pre-checked radio must never join a
+    // live practice answer group while the reader content is being prepared.
+    function createReadOnlyQuestionContent(html, namespace) {
+        const template = document.createElement('template');
+        template.innerHTML = html || '';
+        const content = template.content;
+        content.querySelectorAll('script, style, link, iframe, object, embed, template').forEach(node => node.remove());
+
+        const identities = new Map();
+        content.querySelectorAll('[id]').forEach((node, index) => {
+            const originalId = node.id;
+            node.id = `${namespace}-content-${index + 1}`;
+            if (!identities.has(originalId)) identities.set(originalId, node.id);
+        });
+
+        content.querySelectorAll('*').forEach(node => {
+            for (const attribute of [...node.attributes]) {
+                const name = attribute.name.toLowerCase();
+                if (name.startsWith('on') || name.startsWith('data-') || [
+                    'name', 'form', 'for', 'list', 'href', 'xlink:href', 'action', 'formaction',
+                    'contenteditable', 'draggable', 'tabindex', 'autofocus', 'accesskey', 'role',
+                    'aria-controls', 'aria-activedescendant', 'aria-checked', 'aria-selected'
+                ].includes(name)) {
+                    node.removeAttribute(attribute.name);
+                }
+            }
+            ['aria-labelledby', 'aria-describedby', 'headers'].forEach(name => {
+                if (!node.hasAttribute(name)) return;
+                const references = node.getAttribute(name).split(/\s+/).map(id => identities.get(id)).filter(Boolean);
+                if (references.length) node.setAttribute(name, references.join(' '));
+                else node.removeAttribute(name);
+            });
+            // Drop practice drag/drop hooks but retain the surrounding layout.
+            ['dropzone', 'match-dropzone', 'paragraph-dropzone', 'drop-target-summary'].forEach(className => {
+                if (!node.classList.contains(className)) return;
+                node.classList.remove(className);
+                if (!node.textContent.trim()) {
+                    node.textContent = '________';
+                    node.classList.add('vocab-answer-blank');
+                }
+            });
+            ['drag-item', 'draggable-word', 'card'].forEach(className => {
+                if (node.classList.contains(className)) {
+                    node.classList.remove(className);
+                    node.classList.add('vocab-question-option');
+                }
+            });
+            ['pool-items', 'options-pool', 'option-pool', 'cardpool', 'headings-pool', 'pool'].forEach(className => {
+                if (node.classList.contains(className)) {
+                    node.classList.remove(className);
+                    node.classList.add('vocab-question-pool');
+                }
+            });
+        });
+
+        content.querySelectorAll('input, textarea, select, button').forEach(control => {
+            const type = (control.getAttribute('type') || '').toLowerCase();
+            if (['hidden', 'submit', 'reset', 'image'].includes(type) ||
+                (control.tagName === 'BUTTON' && (!type || type === 'submit'))) {
+                control.remove();
+                return;
+            }
+            const replacement = document.createElement('span');
+            if (control.id) replacement.id = control.id;
+            replacement.className = 'vocab-answer-blank';
+            if (control.tagName === 'SELECT') {
+                replacement.className = 'vocab-question-options';
+                replacement.textContent = [...control.options].map(option => option.textContent.trim()).filter(Boolean).join(' / ');
+            } else if (control.tagName === 'BUTTON') {
+                replacement.textContent = control.textContent;
+            } else if (type === 'radio' || type === 'checkbox') {
+                replacement.textContent = type === 'radio' ? '○' : '□';
+                replacement.setAttribute('aria-hidden', 'true');
+            } else {
+                replacement.textContent = '________';
+                replacement.setAttribute('aria-label', 'Answer blank');
+            }
+            control.replaceWith(replacement);
+        });
+        content.querySelectorAll('label, form, fieldset, legend, a').forEach(node => {
+            const replacement = document.createElement(['FORM', 'FIELDSET'].includes(node.tagName) ? 'div' : 'span');
+            for (const attribute of [...node.attributes]) replacement.setAttribute(attribute.name, attribute.value);
+            replacement.append(...node.childNodes);
+            node.replaceWith(replacement);
+        });
+        return content;
+    }
+
     // 阅读器主控制器 (ReadingVocabReader)
     // ============================================================================
     const ReadingVocabReader = {
@@ -16192,6 +16280,40 @@ if (typeof module !== 'undefined' && module.exports) {
         modalOpen: false,
         toastTimer: null,
         _openRequestId: 0,
+        _eventOverlay: null,
+        _eventCleanups: [],
+        _pendingTimers: new Set(),
+        _returnFocus: null,
+        _modalReturnFocus: null,
+
+        clearPendingWork(overlay) {
+            this._pendingTimers.forEach(timer => clearTimeout(timer));
+            this._pendingTimers.clear();
+            this.toastTimer = null;
+            const toast = overlay?.querySelector('#vocab-toast');
+            if (toast) {
+                toast.classList.remove('show');
+                toast.textContent = '';
+            }
+            overlay?.querySelectorAll('.vocab-highlight--pulse').forEach(mark => mark.classList.remove('vocab-highlight--pulse'));
+            const selection = window.getSelection();
+            if (selection && overlay?.contains(selection.anchorNode)) selection.removeAllRanges();
+        },
+
+        defer(callback, delay) {
+            const requestId = this._openRequestId;
+            const timer = setTimeout(() => {
+                if (!this._pendingTimers.delete(timer) || requestId !== this._openRequestId) return;
+                callback();
+            }, delay);
+            this._pendingTimers.add(timer);
+            return timer;
+        },
+
+        unbindEvents() {
+            this._eventCleanups.splice(0).forEach(cleanup => cleanup());
+            this._eventOverlay = null;
+        },
 
         ensureOverlay() {
             let overlay = document.getElementById('reading-vocab-reader-overlay');
@@ -16204,6 +16326,7 @@ if (typeof module !== 'undefined' && module.exports) {
             overlay.className = 'vocab-reader-overlay is-hidden';
             overlay.setAttribute('role', 'dialog');
             overlay.setAttribute('aria-label', '阅读生词本');
+            overlay.setAttribute('aria-hidden', 'true');
 
             overlay.innerHTML = `
                 <div class="vocab-reader-container">
@@ -16321,30 +16444,43 @@ if (typeof module !== 'undefined' && module.exports) {
         },
 
         bindEvents(overlay) {
+            if (this._eventOverlay === overlay) return;
+            this.unbindEvents();
+            this._eventOverlay = overlay;
+            const on = (element, type, callback, options) => {
+                element.addEventListener(type, callback, options);
+                this._eventCleanups.push(() => element.removeEventListener(type, callback, options));
+            };
             // 返回按钮
             const backBtn = overlay.querySelector('#vocab-reader-back-btn');
             if (backBtn) {
-                backBtn.addEventListener('click', () => this.close());
+                on(backBtn, 'click', () => this.close());
             }
 
             // 开启生词本弹窗
             const openModalBtn = overlay.querySelector('#vocab-open-modal-btn');
             const fab = overlay.querySelector('#vocab-fab');
             if (openModalBtn) {
-                openModalBtn.addEventListener('click', () => this.openModal());
+                on(openModalBtn, 'click', () => this.openModal());
             }
             if (fab) {
-                fab.addEventListener('click', () => this.openModal());
+                on(fab, 'click', () => this.openModal());
+                on(fab, 'keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        this.openModal();
+                    }
+                });
             }
 
             // 关闭生词本弹窗
             const closeModalBtn = overlay.querySelector('#vocab-modal-close');
             const modal = overlay.querySelector('#vocab-modal');
             if (closeModalBtn) {
-                closeModalBtn.addEventListener('click', () => this.closeModal());
+                on(closeModalBtn, 'click', () => this.closeModal());
             }
             if (modal) {
-                modal.addEventListener('click', (e) => {
+                on(modal, 'click', (e) => {
                     if (e.target === modal) {
                         this.closeModal();
                     }
@@ -16354,7 +16490,7 @@ if (typeof module !== 'undefined' && module.exports) {
             // 前往阅读书架
             const bookshelfBtn = overlay.querySelector('#vocab-modal-bookshelf-btn');
             if (bookshelfBtn) {
-                bookshelfBtn.addEventListener('click', () => {
+                on(bookshelfBtn, 'click', () => {
                     this.closeModal();
                     this.close();
                     if (global.opener && !global.opener.closed) {
@@ -16388,7 +16524,7 @@ if (typeof module !== 'undefined' && module.exports) {
             const tabCurrent = overlay.querySelector('#v-tab-current');
             const tabAll = overlay.querySelector('#v-tab-all');
             if (tabCurrent) {
-                tabCurrent.addEventListener('click', () => {
+                on(tabCurrent, 'click', () => {
                     this.modalTab = 'current';
                     tabCurrent.classList.add('active');
                     tabAll.classList.remove('active');
@@ -16396,11 +16532,52 @@ if (typeof module !== 'undefined' && module.exports) {
                 });
             }
             if (tabAll) {
-                tabAll.addEventListener('click', () => {
+                on(tabAll, 'click', () => {
                     this.modalTab = 'all';
                     tabAll.classList.add('active');
                     tabCurrent.classList.remove('active');
                     this.renderVocabList();
+                });
+            }
+
+            const readerTabs = overlay.querySelector('#vocab-reader-tabs');
+            if (readerTabs) {
+                on(readerTabs, 'click', event => {
+                    const button = event.target.closest('.vocab-tab-btn');
+                    if (button && readerTabs.contains(button)) this.switchViewTab(button.dataset.para);
+                });
+            }
+
+            const vocabList = overlay.querySelector('#vocab-list');
+            if (vocabList) {
+                on(vocabList, 'click', async event => {
+                    const speakButton = event.target.closest('.vocab-speak-btn');
+                    const deleteButton = event.target.closest('.vocab-delete-btn');
+                    if (speakButton && vocabList.contains(speakButton)) {
+                        event.stopPropagation();
+                        speakWord(speakButton.dataset.speakWord);
+                    } else if (deleteButton && vocabList.contains(deleteButton)) {
+                        event.stopPropagation();
+                        if (deleteButton.disabled) return;
+                        const requestId = this._openRequestId;
+                        const id = deleteButton.dataset.delId;
+                        const item = ReadingVocabStore.getAll().find(word => word.id === id);
+                        const word = item?.word;
+                        deleteButton.disabled = true;
+                        this.showToast('正在保存…');
+                        try {
+                            await ReadingVocabStore.remove(id, this.modalTab === 'current' ? this.currentExamId : null, this.currentSource);
+                            if (requestId !== this._openRequestId) return;
+                            this.updateCounts();
+                            this.renderVocabList();
+                            if (word) this.removeVocabHighlightForWord(word);
+                            this.showToast('已从生词本删除');
+                        } catch (error) {
+                            if (requestId === this._openRequestId) this.showSaveError(error, '删除失败，请再次点击删除重试');
+                        } finally {
+                            deleteButton.disabled = false;
+                        }
+                    }
                 });
             }
 
@@ -16431,16 +16608,16 @@ if (typeof module !== 'undefined' && module.exports) {
                         this.showToast('未保存，请检查输入后重试');
                     }
                 } catch (error) {
-                    this.showSaveError(error, '保存失败，请再次点击收录重试');
+                    if (requestId === this._openRequestId) this.showSaveError(error, '保存失败，请再次点击收录重试');
                 } finally {
                     if (manualAddBtn) manualAddBtn.disabled = false;
                 }
             };
             if (manualAddBtn) {
-                manualAddBtn.addEventListener('click', handleManualAdd);
+                on(manualAddBtn, 'click', handleManualAdd);
             }
             if (manualInput) {
-                manualInput.addEventListener('keydown', (e) => {
+                on(manualInput, 'keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
                         handleManualAdd();
@@ -16451,7 +16628,7 @@ if (typeof module !== 'undefined' && module.exports) {
             // 导出与清空
             const exportBtn = overlay.querySelector('#vocab-export-btn');
             if (exportBtn) {
-                exportBtn.addEventListener('click', () => {
+                on(exportBtn, 'click', () => {
                     const isCurrent = this.modalTab === 'current';
                     const examId = isCurrent ? this.currentExamId : null;
 
@@ -16477,7 +16654,9 @@ if (typeof module !== 'undefined' && module.exports) {
 
             const clearBtn = overlay.querySelector('#vocab-clear-btn');
             if (clearBtn) {
-                clearBtn.addEventListener('click', async () => {
+                on(clearBtn, 'click', async () => {
+                    if (clearBtn.disabled) return;
+                    const requestId = this._openRequestId;
                     const isCurrent = this.modalTab === 'current';
                     const examId = isCurrent ? this.currentExamId : null;
                     const count = isCurrent
@@ -16493,6 +16672,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     this.showToast('正在保存…');
                     try {
                         await ReadingVocabStore.clear(examId, this.currentSource);
+                        if (requestId !== this._openRequestId) return;
                         this.updateCounts();
                         this.renderVocabList();
                         const passageContent = overlay.querySelector('#vocab-passage-content');
@@ -16501,7 +16681,7 @@ if (typeof module !== 'undefined' && module.exports) {
                         this.removeVocabHighlights(questionsContent);
                         this.showToast(isCurrent ? '✅ 本篇生词已清空' : '✅ 全部生词已清空');
                     } catch (error) {
-                        this.showSaveError(error, '清空失败，请再次点击清空重试');
+                        if (requestId === this._openRequestId) this.showSaveError(error, '清空失败，请再次点击清空重试');
                     } finally {
                         clearBtn.disabled = false;
                     }
@@ -16513,7 +16693,7 @@ if (typeof module !== 'undefined' && module.exports) {
             if (readerBody) {
                 const handleSelectionCapture = () => {
                     const requestId = this._openRequestId;
-                    setTimeout(async () => {
+                    this.defer(async () => {
                         if (requestId !== this._openRequestId || overlay.classList.contains('is-hidden') || !this.currentPayload) return;
                         const selection = window.getSelection();
                         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
@@ -16639,11 +16819,11 @@ if (typeof module !== 'undefined' && module.exports) {
                     }, 20);
                 };
 
-                readerBody.addEventListener('mouseup', handleSelectionCapture);
-                readerBody.addEventListener('touchend', handleSelectionCapture);
+                on(readerBody, 'mouseup', handleSelectionCapture);
+                on(readerBody, 'touchend', handleSelectionCapture);
 
                 // 点击黄色高亮生词：朗读发音并轻量提示
-                readerBody.addEventListener('click', (e) => {
+                on(readerBody, 'click', (e) => {
                     const mark = e.target.closest('mark.vocab-highlight');
                     if (mark) {
                         const selection = window.getSelection();
@@ -16660,15 +16840,17 @@ if (typeof module !== 'undefined' && module.exports) {
             }
 
             // ESC 键监听
-            window.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
+            on(window, 'keydown', (e) => {
+                if (e.key === 'Escape' && !overlay.classList.contains('is-hidden')) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (this.modalOpen) {
                         this.closeModal();
                     } else if (overlay && !overlay.classList.contains('is-hidden')) {
                         this.close();
                     }
                 }
-            });
+            }, true);
         },
 
         async open(examId, options = {}) {
@@ -16676,11 +16858,21 @@ if (typeof module !== 'undefined' && module.exports) {
 
             const overlay = this.ensureOverlay();
             const requestId = ++this._openRequestId;
+            const initiatingElement = options.returnFocus || document.activeElement;
+            if (initiatingElement && !overlay.contains(initiatingElement)) this._returnFocus = initiatingElement;
+            this.unbindEvents();
+            this.bindEvents(overlay);
+            this.clearPendingWork(overlay);
             this.currentExamId = examId;
             this.currentExam = null;
             this.currentPayload = null;
             this.currentExplanation = null;
-            this.closeModal();
+            this.closeModal(false);
+            this.modalTab = 'current';
+            overlay.querySelector('#v-tab-current')?.classList.add('active');
+            overlay.querySelector('#v-tab-all')?.classList.remove('active');
+            const manualInput = overlay.querySelector('#vocab-manual-input');
+            if (manualInput) manualInput.value = '';
 
             // 根据来源动态调整返回按钮提示
             const backBtn = overlay.querySelector('#vocab-reader-back-btn');
@@ -16695,7 +16887,9 @@ if (typeof module !== 'undefined' && module.exports) {
 
             // 显示加载状态
             overlay.classList.remove('is-hidden');
+            overlay.setAttribute('aria-hidden', 'false');
             document.body.classList.add('vocab-reader-open');
+            backBtn?.focus({ preventScroll: true });
 
             const titleEl = overlay.querySelector('#vocab-reader-title');
             const badgesEl = overlay.querySelector('#vocab-reader-badges');
@@ -16770,7 +16964,13 @@ if (typeof module !== 'undefined' && module.exports) {
                     retry.type = 'button';
                     retry.className = 'btn btn-primary';
                     retry.textContent = '重试';
-                    retry.addEventListener('click', () => this.open(examId, options));
+                    const handleRetry = () => {
+                        if (requestId === this._openRequestId && retry.isConnected && !overlay.classList.contains('is-hidden')) {
+                            this.open(examId, options);
+                        }
+                    };
+                    retry.addEventListener('click', handleRetry);
+                    this._eventCleanups.push(() => retry.removeEventListener('click', handleRetry));
                     errorState.append(message, retry);
                     passageContent.replaceChildren(errorState);
                 }
@@ -16840,16 +17040,6 @@ if (typeof module !== 'undefined' && module.exports) {
                 });
                 tabsHtml += `<button type="button" class="vocab-tab-btn vocab-tab-btn--questions" data-para="questions">📝 Questions</button>`;
                 tabsContainer.innerHTML = tabsHtml;
-
-                // 绑定 Tab 点击事件
-                tabsContainer.querySelectorAll('.vocab-tab-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        tabsContainer.querySelectorAll('.vocab-tab-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        const target = btn.dataset.para;
-                        this.switchViewTab(target);
-                    });
-                });
             }
 
             // 渲染文章段落
@@ -16883,15 +17073,15 @@ if (typeof module !== 'undefined' && module.exports) {
             if (questionsContent) {
                 const questionGroups = payload?.questionGroups || [];
                 if (questionGroups.length > 0) {
-                    let qHtml = '';
+                    const groups = document.createDocumentFragment();
                     questionGroups.forEach((g, idx) => {
-                        qHtml += `
-                            <div class="vocab-question-group" id="vocab-qgroup-${idx + 1}">
-                                ${g.bodyHtml || ''}
-                            </div>
-                        `;
+                        const group = document.createElement('div');
+                        group.className = 'vocab-question-group';
+                        group.id = `vocab-qgroup-${idx + 1}`;
+                        group.appendChild(createReadOnlyQuestionContent(g.bodyHtml, group.id));
+                        groups.appendChild(group);
                     });
-                    questionsContent.innerHTML = qHtml;
+                    questionsContent.replaceChildren(groups);
                 } else {
                     questionsContent.innerHTML = '<p class="vocab-empty-tip">本篇无额外题目数据</p>';
                 }
@@ -17005,7 +17195,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 }
             }
 
-            setTimeout(() => {
+            this.defer(() => {
                 mark.classList.remove('vocab-highlight--pulse');
             }, 1500);
 
@@ -17271,6 +17461,12 @@ if (typeof module !== 'undefined' && module.exports) {
 
         switchViewTab(target) {
             const overlay = this.ensureOverlay();
+            this.activeTab = target;
+            overlay.querySelectorAll('.vocab-tab-btn').forEach(button => {
+                const active = button.dataset.para === target;
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-selected', String(active));
+            });
             const passageSection = overlay.querySelector('#vocab-passage-section');
             const questionsSection = overlay.querySelector('#vocab-questions-section');
             const cards = overlay.querySelectorAll('.vocab-paragraph-card');
@@ -17364,60 +17560,36 @@ if (typeof module !== 'undefined' && module.exports) {
 
             listEl.innerHTML = html;
 
-            // 绑定发音与删除
-            listEl.querySelectorAll('.vocab-speak-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    speakWord(btn.dataset.speakWord);
-                });
-            });
-
-            listEl.querySelectorAll('.vocab-delete-btn').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const id = btn.dataset.delId;
-                    const allItems = ReadingVocabStore.getAll();
-                    const item = allItems.find(w => w.id === id);
-                    const word = item?.word;
-                    btn.disabled = true;
-                    this.showToast('正在保存…');
-                    try {
-                        await ReadingVocabStore.remove(id, isCurrent ? this.currentExamId : null, this.currentSource);
-                        this.updateCounts();
-                        this.renderVocabList();
-                        if (word) {
-                            this.removeVocabHighlightForWord(word);
-                        }
-                        this.showToast('已从生词本删除');
-                    } catch (error) {
-                        this.showSaveError(error, '删除失败，请再次点击删除重试');
-                    } finally {
-                        btn.disabled = false;
-                    }
-                });
-            });
         },
 
         openModal() {
             const overlay = this.ensureOverlay();
+            this.bindEvents(overlay);
             const modal = overlay.querySelector('#vocab-modal');
             if (modal) {
+                if (!this.modalOpen) this._modalReturnFocus = document.activeElement;
                 this.modalOpen = true;
                 this.updateCounts();
                 this.renderVocabList();
                 modal.classList.add('active');
                 modal.setAttribute('aria-hidden', 'false');
+                modal.querySelector('#vocab-manual-input')?.focus({ preventScroll: true });
             }
         },
 
-        closeModal() {
-            const overlay = this.ensureOverlay();
-            const modal = overlay.querySelector('#vocab-modal');
+        closeModal(restoreFocus = true) {
+            const overlay = document.getElementById('reading-vocab-reader-overlay');
+            const modal = overlay?.querySelector('#vocab-modal');
+            const wasOpen = this.modalOpen;
+            this.modalOpen = false;
             if (modal) {
-                this.modalOpen = false;
                 modal.classList.remove('active');
                 modal.setAttribute('aria-hidden', 'true');
             }
+            if (wasOpen && restoreFocus && this._modalReturnFocus?.isConnected) {
+                this._modalReturnFocus.focus({ preventScroll: true });
+            }
+            this._modalReturnFocus = null;
         },
 
         showSaveError(error, retryMessage) {
@@ -17434,19 +17606,25 @@ if (typeof module !== 'undefined' && module.exports) {
             toast.classList.add('show');
 
             clearTimeout(this.toastTimer);
-            this.toastTimer = setTimeout(() => {
+            this._pendingTimers.delete(this.toastTimer);
+            this.toastTimer = this.defer(() => {
                 toast.classList.remove('show');
             }, 2000);
         },
 
         close() {
             ++this._openRequestId;
-            const overlay = this.ensureOverlay();
+            const overlay = document.getElementById('reading-vocab-reader-overlay');
+            this.clearPendingWork(overlay);
+            this.closeModal(false);
+            this.unbindEvents();
             if (overlay) {
                 overlay.classList.add('is-hidden');
+                overlay.setAttribute('aria-hidden', 'true');
             }
             document.body.classList.remove('vocab-reader-open');
-            this.closeModal();
+            if (this._returnFocus?.isConnected) this._returnFocus.focus({ preventScroll: true });
+            this._returnFocus = null;
         }
     };
 
@@ -17465,7 +17643,7 @@ if (typeof module !== 'undefined' && module.exports) {
     global.ReadingVocabStore = ReadingVocabStore;
     global.ReadingVocabReader = ReadingVocabReader;
     global.openReadingVocabReader = function(examId, options = {}) {
-        ReadingVocabReader.open(examId, options);
+        return ReadingVocabReader.open(examId, options);
     };
 
     // 启动数据同步初始化

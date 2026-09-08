@@ -395,7 +395,7 @@
         const locked = Boolean(enabled);
         state.timerLocked = locked;
         document.body.classList.toggle('timer-locked-mode', locked);
-        document.querySelectorAll('input, textarea, select').forEach((control) => {
+        getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 control.disabled = locked || state.readOnly;
             }
@@ -2263,12 +2263,7 @@
         }
     }
 
-    // Keep the practice entry unavailable until #157 isolates the reader's
-    // question controls from practice radio groups and answer collection.
-    const PRACTICE_VOCAB_READER_ENABLED = false;
-
     function openVocabReaderForCurrentExam() {
-        if (!PRACTICE_VOCAB_READER_ENABLED) return;
         const examId = state.suite?.activeExamId || state.examId;
         if (!examId) {
             console.warn('[UnifiedReadingPage] 无法获取当前试卷 ID');
@@ -2286,7 +2281,6 @@
     }
 
     function ensureReadingVocabButton() {
-        if (!PRACTICE_VOCAB_READER_ENABLED) return null;
         let button = document.getElementById('reading-vocab-header-btn');
         if (button) return button;
         const headerRight = document.querySelector('.header-right');
@@ -5065,9 +5059,35 @@
         });
     }
 
+    function getPracticeAnswerRoot() {
+        // The reader and note editor share this document, but only the rendered
+        // practice questions own answer controls. Never fall back to document.
+        return dom.groups || document.getElementById('question-groups');
+    }
+
+    function getPracticeFormControls() {
+        const roots = [
+            getPracticeAnswerRoot(),
+            dom.left || document.getElementById('left'),
+            document.getElementById('notes-panel'),
+            document.getElementById('reading-note-editor'),
+            document.getElementById('reading-note-drawer')
+        ].filter(Boolean);
+        return Array.from(new Set(roots.flatMap((root) => Array.from(root.querySelectorAll('input, textarea, select')))));
+    }
+
+    function isTextualAnswerControl(field) {
+        const tagName = String(field?.tagName || '').toUpperCase();
+        return tagName === 'SELECT'
+            || tagName === 'TEXTAREA'
+            || (tagName === 'INPUT' && String(field.type || 'text').toLowerCase() === 'text');
+    }
+
     function getCheckboxAnswers() {
         const grouped = new Map();
-        document.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
+        const root = getPracticeAnswerRoot();
+        if (!root) return grouped;
+        root.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
             const name = input.name;
             if (!grouped.has(name)) {
                 grouped.set(name, []);
@@ -5101,11 +5121,13 @@
     }
 
     function getTextualAnswer(questionId) {
+        const root = getPracticeAnswerRoot();
+        if (!root) return '';
         const aliases = resolveAnswerAliases(questionId);
         const fieldMap = new Map();
         aliases.forEach((alias) => {
-            document.querySelectorAll(`[name="${alias}"]`).forEach((field) => {
-                if (!fieldMap.has(field)) {
+            root.querySelectorAll(`[name="${escapeSelector(alias)}"]`).forEach((field) => {
+                if (isTextualAnswerControl(field) && !fieldMap.has(field)) {
                     fieldMap.set(field, true);
                 }
             });
@@ -5113,14 +5135,6 @@
         const fields = Array.from(fieldMap.keys());
         const values = [];
         for (const field of fields) {
-            if (field.type === 'radio') continue;
-            if (field.tagName === 'SELECT') {
-                const value = String(field.value || '').trim();
-                if (value) {
-                    values.push(value);
-                }
-                continue;
-            }
             const value = String(field.value || '').trim();
             if (value) {
                 values.push(value);
@@ -5128,8 +5142,8 @@
         }
         if (!values.length) {
             aliases.forEach((alias) => {
-                const inputById = document.getElementById(`${alias}_input`);
-                if (!inputById || !('value' in inputById)) {
+                const inputById = root.querySelector(`[id="${escapeSelector(`${alias}_input`)}"]`);
+                if (!isTextualAnswerControl(inputById)) {
                     return;
                 }
                 const value = String(inputById.value || '').trim();
@@ -5265,6 +5279,9 @@
     }
 
     function findDropzoneByQuestionId(questionId) {
+        // Matching headings can live beside passage paragraphs in the left pane.
+        const roots = [getPracticeAnswerRoot(), dom.left || document.getElementById('left')].filter(Boolean);
+        if (!roots.length) return null;
         const aliases = resolveAnswerAliases(questionId);
         for (let index = 0; index < aliases.length; index += 1) {
             const alias = aliases[index];
@@ -5282,19 +5299,21 @@
                 `#${escaped}-dropzone`,
                 `#${escaped}-target`
             ].join(', ');
-            let direct = null;
-            try {
-                direct = document.querySelector(selector);
-            } catch (_) {
-                direct = null;
-            }
-            if (direct) {
-                return direct;
-            }
-            const anchor = document.getElementById(`${alias}-anchor`);
-            const paragraphZone = anchor?.parentElement?.querySelector?.('.paragraph-dropzone');
-            if (paragraphZone) {
-                return paragraphZone;
+            for (const root of roots) {
+                let direct = null;
+                try {
+                    direct = root.querySelector(selector);
+                } catch (_) {
+                    direct = null;
+                }
+                if (direct) {
+                    return direct;
+                }
+                const anchor = root.querySelector(`[id="${escapeSelector(`${alias}-anchor`)}"]`);
+                const paragraphZone = anchor?.parentElement?.querySelector?.('.paragraph-dropzone');
+                if (paragraphZone) {
+                    return paragraphZone;
+                }
             }
         }
         return null;
@@ -5350,11 +5369,13 @@
 
     function collectAnswers() {
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        const questionIdsInDataset = new Set(order);
+        const root = getPracticeAnswerRoot();
         const answers = {};
         const checkboxGroups = getCheckboxAnswers();
 
         checkboxGroups.forEach((values, name) => {
-            const questionIds = resolveCheckboxQuestionIds(name);
+            const questionIds = resolveCheckboxQuestionIds(name).filter((questionId) => questionIdsInDataset.has(questionId));
             if (!questionIds.length) {
                 return;
             }
@@ -5372,7 +5393,7 @@
             if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
                 return;
             }
-            const radios = document.querySelectorAll(`input[type="radio"][name="${questionId}"]`);
+            const radios = root?.querySelectorAll(`input[type="radio"][name="${escapeSelector(questionId)}"]`) || [];
             if (radios.length) {
                 const checked = Array.from(radios).find((input) => input.checked);
                 answers[questionId] = checked ? String(checked.value).trim() : '';
@@ -6014,15 +6035,17 @@
     }
 
     function collectChoiceInputsForQuestion(questionId) {
+        const root = getPracticeAnswerRoot();
+        if (!root) return [];
         const normalizedTarget = normalizeQuestionId(questionId);
         // 直接匹配
-        let inputs = document.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
+        let inputs = root.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
         if (inputs.length) {
             return Array.from(inputs);
         }
         // 扫描所有 checkbox/radio 组，匹配 name 展开后的题目序列
         const matched = [];
-        document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+        root.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
             const name = input.name || '';
             const ids = expandQuestionSequence(name);
             if (ids.some((id) => normalizeQuestionId(id) === normalizedTarget)) {
@@ -6213,10 +6236,12 @@
         if (!answers || typeof answers !== 'object') {
             return;
         }
+        const root = getPracticeAnswerRoot();
+        if (!root) return;
 
         const groupedHandledQuestionIds = new Set();
         const groupedChoiceInputs = new Map();
-        document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
+        root.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
             const groupName = String(input.getAttribute('name') || '').trim();
             if (!groupName) return;
             const expandedQuestionIds = expandQuestionSequence(groupName);
@@ -6272,10 +6297,10 @@
             const selectFields = new Set();
             aliases.forEach((alias) => {
                 const escapedAlias = escapeSelector(alias);
-                document.querySelectorAll(
+                root.querySelectorAll(
                     `input[type="radio"][name="${escapedAlias}"], input[type="checkbox"][name="${escapedAlias}"]`
                 ).forEach((field) => choiceFields.add(field));
-                document.querySelectorAll([
+                root.querySelectorAll([
                     `input[name="${escapedAlias}"]`,
                     `textarea[name="${escapedAlias}"]`,
                     `input[id="${escapedAlias}"]`,
@@ -6283,11 +6308,11 @@
                     `input[data-question-id="${escapedAlias}"]`,
                     `textarea[data-question-id="${escapedAlias}"]`
                 ].join(', ')).forEach((field) => {
-                    if (field.type !== 'radio' && field.type !== 'checkbox') {
+                    if (isTextualAnswerControl(field)) {
                         textFields.add(field);
                     }
                 });
-                document.querySelectorAll([
+                root.querySelectorAll([
                     `select[name="${escapedAlias}"]`,
                     `select[id="${escapedAlias}"]`,
                     `select[data-question-id="${escapedAlias}"]`
@@ -6352,7 +6377,7 @@
         if (dom.resetBtn) {
             dom.resetBtn.disabled = state.readOnly;
         }
-        const controls = document.querySelectorAll('input, textarea, select');
+        const controls = getPracticeFormControls();
         controls.forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 // review、普通进行中练习、以及已回传 recordId 的结果页允许编辑笔记；
@@ -6580,6 +6605,10 @@
                 initializeInlineSimulationSuite,
                 activateSuiteSlot,
                 buildResultsFromAnswers,
+                collectAnswers,
+                collectCurrentDraft,
+                setTimerLockMode,
+                setReadOnlyMode,
                 applyAnswersToDom,
                 applyReplayAnswersToDom,
                 captureDom,
@@ -6928,7 +6957,7 @@
             }
         });
         enhanceReviewHighlights();
-        document.querySelectorAll('input, textarea, select').forEach((control) => {
+        getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 control.disabled = false;
             }
@@ -7814,15 +7843,15 @@
     }
 
     function clearCurrentAnswers() {
-        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
-            input.checked = false;
-        });
-        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
+        getPracticeFormControls().forEach((input) => {
             if (input.closest('#notes-panel, #reading-note-editor, #reading-note-drawer')) return;
-            input.value = '';
-        });
-        document.querySelectorAll('select').forEach((select) => {
-            select.selectedIndex = 0;
+            if (input.type === 'radio' || input.type === 'checkbox') {
+                input.checked = false;
+            } else if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            } else if (isTextualAnswerControl(input)) {
+                input.value = '';
+            }
         });
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);

@@ -5278,9 +5278,25 @@
                 const termId = model.termId(command.word.word);
                 const association = committed.snapshot.reading.associations.find((row) => row.articleId === articleId && row.termId === termId);
                 const occurrenceId = command.occurrence && model.occurrenceId(articleId, termId, command.occurrence);
-                if (!association || (occurrenceId && !committed.snapshot.reading.occurrences.some((row) => row.id === occurrenceId))) {
+                const requiresManual = command.manual === true || (!command.occurrence && command.manual !== false);
+                if (!association || (requiresManual && !association.manual)
+                    || (occurrenceId && !committed.snapshot.reading.occurrences.some((row) => row.id === occurrenceId))) {
                     throw new AppDataError('CONFLICT', 'The acknowledged reading selection has since been removed; reload before retrying');
                 }
+            } else if (type === 'recordVisit') {
+                const articleId = model.articleId(command.source, command.article.examId);
+                if (!committed.snapshot.reading.visits.some((row) => row.articleId === articleId)) {
+                    throw new AppDataError('CONFLICT', 'The acknowledged bookshelf visit has since been removed; reload before retrying');
+                }
+            } else {
+                const snapshot = committed.snapshot;
+                let stillRemoved;
+                if (type === 'removeTermAssociations') stillRemoved = !snapshot.reading.associations.some((row) => row.termId === command.termId);
+                else if (type === 'clearReading') stillRemoved = snapshot.reading.associations.length === 0;
+                else if (type === 'removeArticle') stillRemoved = !snapshot.reading.visits.some((row) => row.articleId === command.articleId)
+                    && (command.clearWords !== true || !snapshot.reading.associations.some((row) => row.articleId === command.articleId));
+                else stillRemoved = checksum(model[type](snapshot, command)) === checksum(snapshot);
+                if (!stillRemoved) throw new AppDataError('CONFLICT', 'Newer reading activity superseded the acknowledged removal; reload before retrying');
             }
             return Object.assign({}, receipt, readingResult(committed), { saved: true,
                 added: type === 'collect', changed: checksum(next) !== checksum(current.snapshot) });

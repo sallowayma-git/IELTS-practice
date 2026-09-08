@@ -226,6 +226,10 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
         const [stale, writer] = await pages(t, 2);
         await collect(writer, command('apple', SOURCE_A));
         await collect(writer, command('apple', SOURCE_B));
+        const initialVisit = { source: SOURCE_A, article: ARTICLE, at: AT };
+        await writer.evaluate((input) => AppData.vocab.mutateReading('recordVisit', input, {
+            operationId: 'initial-visit'
+        }), initialVisit);
         await startPausedOperation(stale, 'recordVisit', {
             source: SOURCE_A, article: ARTICLE, at: AT, operationId: 'delayed-visit'
         });
@@ -235,6 +239,11 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
         assert.equal(removal.committed, true);
         const result = await releaseCollect(stale);
         assert.equal(result.error?.code, 'CONFLICT');
+        const replay = await writer.evaluate(async (input) => {
+            try { return { receipt: await AppData.vocab.mutateReading('recordVisit', input, { operationId: 'initial-visit' }) }; }
+            catch (error) { return { code: error.code, committed: error.committed }; }
+        }, initialVisit);
+        assert.deepEqual(replay, { code: 'CONFLICT', committed: false }, 'an old visit receipt cannot claim a deleted bookshelf entry is still saved');
         const after = await snapshot(writer);
         assert.equal(after.reading.visits.length, 1);
         assert.equal(after.reading.associations.length, 1);
@@ -271,7 +280,8 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
         assert.deepEqual(await snapshot(articleA), merged);
     });
 
-    for (const removal of ['deleteCanonicalTerm', 'clearArticle', 'removeArticle']) {
+    for (const removal of ['deleteCanonicalTerm', 'removeOccurrence', 'removeArticleTerm', 'clearArticle',
+        'clearReading', 'removeTermAssociations', 'removeArticle']) {
         await t.test(`${removal} remains effective when an older backup is merged, without deleting unrelated visits or associations`, async (t) => {
             const [page] = await pages(t);
             const oldClock = removal === 'deleteCanonicalTerm' ? { at: '2099-01-01T00:00:00.000Z' } : {};
@@ -279,10 +289,12 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
             await collect(page, initialCollection);
             await collect(page, command('apple', SOURCE_B, oldClock));
             const oldBackup = await page.evaluate(() => AppData.backups.export({ domains: ['vocab'] }));
-            await page.evaluate(({ removal, source, examId }) => AppData.vocab.mutateReading(removal, {
+            await page.evaluate(({ removal, source, examId, selected }) => AppData.vocab.mutateReading(removal, {
                 articleId: AppData.vocab.readingModel.articleId(source, examId),
-                termId: AppData.vocab.readingModel.termId('apple'), clearWords: false
-            }), { removal, source: SOURCE_A, examId: ARTICLE.examId });
+                termId: AppData.vocab.readingModel.termId('apple'), clearWords: false,
+                occurrenceId: AppData.vocab.readingModel.occurrenceId(AppData.vocab.readingModel.articleId(source, examId),
+                    AppData.vocab.readingModel.termId('apple'), selected)
+            }, { operationId: `removal-${removal}` }), { removal, source: SOURCE_A, examId: ARTICLE.examId, selected: command('apple').occurrence });
             if (removal === 'deleteCanonicalTerm') {
                 const replay = await page.evaluate(async ({ operationId, ...input }) => {
                     try { return { receipt: await AppData.vocab.mutateReading('collect', input, { operationId }) }; }
@@ -299,7 +311,12 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
                 assert.equal(merged.reading.associations.length, 0);
                 assert.equal(merged.reading.occurrences.length, 0);
                 assert.equal(merged.reading.visits.length, 2, 'global vocabulary deletion retains both visits');
-            } else if (removal === 'clearArticle') {
+            } else if (['clearReading', 'removeTermAssociations'].includes(removal)) {
+                assert.equal(merged.reading.associations.length, 0);
+                assert.equal(merged.reading.occurrences.length, 0);
+                assert.equal(merged.reading.visits.length, 2);
+                assert.equal(owners.length, 1, 'clearing associations preserves the review owner');
+            } else if (removal !== 'removeArticle') {
                 assert.equal(merged.reading.associations.length, 1);
                 assert.equal(merged.reading.occurrences.length, 1);
                 assert.equal(merged.reading.visits.length, 2, 'clearing a vocabulary article does not remove its bookshelf visit');
@@ -320,8 +337,20 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
                 });
             });
             const recollected = await snapshot(page);
-            assert.equal(recollected.reading.associations.length, removal === 'deleteCanonicalTerm' ? 1 : 2);
+            assert.equal(recollected.reading.associations.length, ['deleteCanonicalTerm', 'clearReading', 'removeTermAssociations'].includes(removal) ? 1 : 2);
             assert.equal(recollected.reading.visits.length, 2);
+            const obsoleteRemoval = await page.evaluate(async ({ removal, source, examId, selected }) => {
+                try {
+                    return { receipt: await AppData.vocab.mutateReading(removal, {
+                        articleId: AppData.vocab.readingModel.articleId(source, examId),
+                        termId: AppData.vocab.readingModel.termId('apple'), clearWords: false,
+                        occurrenceId: AppData.vocab.readingModel.occurrenceId(AppData.vocab.readingModel.articleId(source, examId),
+                            AppData.vocab.readingModel.termId('apple'), selected)
+                    }, { operationId: `removal-${removal}` }) };
+                } catch (error) { return { code: error.code, committed: error.committed }; }
+            }, { removal, source: SOURCE_A, examId: ARTICLE.examId, selected: command('apple').occurrence });
+            assert.deepEqual(obsoleteRemoval, { code: 'CONFLICT', committed: false }, 'an obsolete removal receipt cannot acknowledge removal of a later deliberate recollection');
+            assert.deepEqual(await snapshot(page), recollected, 'replaying a historical removal does not delete newer data');
             if (removal === 'deleteCanonicalTerm') {
                 await importSnapshot(page, oldBackup);
                 assert.deepEqual(await snapshot(page), recollected, 'old future-dated backup rows cannot erase or replace a fresh recollection and review');
@@ -356,6 +385,27 @@ test('reading vocabulary operations are durable, atomic and backup-safe in real 
             assert.deepEqual(await snapshot(writer), before);
         });
     }
+
+    await t.test('replaying a former manual collection cannot report saved for a later occurrence-only association', async (t) => {
+        const [page] = await pages(t);
+        const manual = command('apple', SOURCE_A, { manual: true, operationId: 'manual-original' });
+        delete manual.occurrence;
+        await collect(page, manual);
+        await page.evaluate(({ source, examId }) => AppData.vocab.mutateReading('removeArticleTerm', {
+            articleId: AppData.vocab.readingModel.articleId(source, examId), termId: AppData.vocab.readingModel.termId('apple')
+        }), { source: SOURCE_A, examId: ARTICLE.examId });
+        await collect(page, command('apple', SOURCE_A, { operationId: 'selected-later' }));
+        const before = await snapshot(page);
+        assert.equal(before.reading.associations[0].manual, false);
+        const replay = await page.evaluate(async ({ operationId, ...input }) => {
+            try { return { receipt: await AppData.vocab.mutateReading('collect', input, { operationId }) }; }
+            catch (error) { return { code: error.code, committed: error.committed }; }
+        }, manual);
+        assert.deepEqual(replay, { code: 'CONFLICT', committed: false });
+        assert.deepEqual(await snapshot(page), before, 'a journal replay cannot silently promote the association to manual');
+        assert.equal((await collect(page, { ...manual, operationId: 'manual-fresh' })).committed, true);
+        assert.equal((await snapshot(page)).reading.associations[0].manual, true);
+    });
 
     await t.test('backup roundtrip preserves source identity, manual associations, exact occurrences and zero-word visits', async (t) => {
         const [page] = await pages(t);

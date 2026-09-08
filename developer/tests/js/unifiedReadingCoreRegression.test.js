@@ -81,6 +81,9 @@ function createContext() {
             return [];
         },
         getElementById(id) {
+            if (id === 'question-groups') {
+                return document;
+            }
             if (id === 'timer') {
                 return timer;
             }
