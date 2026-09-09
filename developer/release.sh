@@ -62,6 +62,7 @@ echo ""
 echo "[1/2] Building bundles..."
 if [ -f "scripts/build-bundles.mjs" ]; then
     node scripts/build-bundles.mjs
+    node scripts/build-bundles.mjs --check
     echo "       Bundles generated: js/bundles/"
 else
     echo "       ERROR: scripts/build-bundles.mjs not found!"
@@ -72,9 +73,17 @@ fi
 echo ""
 echo "[2/2] Creating distribution zip..."
 
-# 清理旧的 dist 目录
-rm -rf "${DIST_DIR}"
+# Preserve other versions and extracted qualification evidence.
 mkdir -p "${DIST_DIR}"
+if [ "$(cd "${DIST_DIR}" && pwd -P)" != "$(pwd -P)/dist" ]; then
+    echo "ERROR: the release output directory must remain inside the project."
+    exit 1
+fi
+if [ -d "${ZIP_PATH}" ]; then
+    echo "ERROR: the release archive path is a directory: ${ZIP_PATH}"
+    exit 1
+fi
+rm -f "${ZIP_PATH}"
 
 LISTENING_ZIP_INPUTS=()
 LISTENING_EXCLUDE_PATTERNS=("assets/generated/listening-exams/" "assets/generated/listening-exams/*" "ListeningPractice/" "ListeningPractice/*")
@@ -98,8 +107,10 @@ ZIP_INPUTS=(
     css/
     js/bundles/
     assets/
-    ReadingPractice/
 )
+if [ -d "ReadingPractice" ]; then
+    ZIP_INPUTS+=("ReadingPractice/")
+fi
 if [ ${#LISTENING_ZIP_INPUTS[@]} -gt 0 ]; then
     ZIP_INPUTS+=("${LISTENING_ZIP_INPUTS[@]}")
 fi
@@ -114,6 +125,10 @@ zip -r "${ZIP_PATH}" \
        "*.mp4" \
        "*.md" \
        "*.py" \
+       "*.pyc" \
+       "*/__pycache__" \
+       "*/__pycache__/" \
+       "*/__pycache__/*" \
        "assets/developer/*" \
        ".git/*" \
        ".gitignore" \
@@ -158,9 +173,15 @@ require_entry "css/main.css"
 require_entry "css/heroui-bridge.css"
 require_entry "css/theme-switcher-scroll.css"
 require_entry "css/onboarding.css"
+require_entry "css/vocab-reader.css"
+require_entry "assets/images/favicon.svg"
+require_entry "assets/images/logo.svg"
 require_entry "assets/vendor/three.min.js"
+require_entry "assets/wordlists/ielts_core.bundle.js"
+require_entry "assets/wordlists/ecdict_reading.bundle.js"
 require_entry "assets/generated/reading-exams/manifest.js"
 require_entry "assets/generated/reading-exams/reading-practice-unified.html"
+require_entry "assets/generated/reading-explanations/manifest.js"
 require_entry "js/bundles/runtime-entry.bundle.js"
 require_entry "js/bundles/core-foundation.bundle.js"
 require_entry "js/bundles/ui-shell.bundle.js"
@@ -192,10 +213,13 @@ if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then
 fi
 
 reject_entry_prefix "templates/"
+reject_entry_prefix "developer/"
 reject_entry_prefix "ListeningPractice/vip/"
 reject_entry_pattern '(^|/)~\$[^/]*$'
 reject_entry_pattern '^ListeningPractice/.*\.(MOV|mov|MP4|mp4)$'
 reject_entry_pattern '^assets/scripts/.*\.py$'
+reject_entry_pattern '(^|/)__pycache__(/|$)'
+reject_entry_pattern '\.pyc$'
 reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'
 
 rm -f "${ZIP_LIST}"
