@@ -87,9 +87,10 @@ function Test-ZipExcluded {
         if ($name -like '~$*') { return $true }
 
         $extension = [System.IO.Path]::GetExtension($name)
-        if ($extension -in @('.MOV', '.mov', '.MP4', '.mp4', '.md', '.py')) { return $true }
+        if ($extension -in @('.MOV', '.mov', '.MP4', '.mp4', '.md', '.py', '.pyc')) { return $true }
     }
 
+    if ($entry -match '(^|/)__pycache__(/|$)') { return $true }
     if ($entry -eq '.gitignore') { return $true }
     if ($entry -eq '.git' -or $entry.StartsWith('.git/', [System.StringComparison]::Ordinal)) { return $true }
     if ($entry -eq '.claude' -or $entry.StartsWith('.claude/', [System.StringComparison]::Ordinal)) { return $true }
@@ -250,15 +251,32 @@ if (-not (Test-Path -LiteralPath $BuildScript)) {
 if ($LASTEXITCODE -ne 0) {
     throw "bundle build failed with exit code $LASTEXITCODE"
 }
+& node $BuildScript --check
+if ($LASTEXITCODE -ne 0) {
+    throw "bundle verification failed with exit code $LASTEXITCODE"
+}
 Write-Host '       Bundles generated: js/bundles/'
 
 Write-Host ''
 Write-Host '[2/2] Creating distribution zip...'
 
-if (Test-Path -LiteralPath $DistDir) {
-    Remove-Item -LiteralPath $DistDir -Recurse -Force
+[void](New-Item -ItemType Directory -Path $DistDir -Force)
+if ((Get-Item -LiteralPath $DistDir).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    throw 'The release output directory must not be a symbolic link or junction.'
 }
-[void](New-Item -ItemType Directory -Path $DistDir)
+$resolvedDistDir = (Resolve-Path -LiteralPath $DistDir).Path
+$resolvedZipPath = [System.IO.Path]::GetFullPath($ZipPath)
+if (-not $resolvedDistDir.Equals((Join-Path $ProjectRoot 'dist'), [System.StringComparison]::OrdinalIgnoreCase) -or
+    -not [System.IO.Path]::GetDirectoryName($resolvedZipPath).Equals($resolvedDistDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The release archive must remain inside the project dist directory.'
+}
+# Keep other release versions and extracted qualification evidence intact.
+if (Test-Path -LiteralPath $resolvedZipPath) {
+    if ((Get-Item -LiteralPath $resolvedZipPath).PSIsContainer) {
+        throw "The release archive path is a directory: $resolvedZipPath"
+    }
+    Remove-Item -LiteralPath $resolvedZipPath -Force
+}
 
 $zipInputs = [System.Collections.Generic.List[string]]::new()
 @('index.html', 'css', 'js/bundles', 'assets', 'ReadingPractice') | ForEach-Object {
@@ -302,9 +320,15 @@ Require-ZipEntry $zipEntries 'css/main.css'
 Require-ZipEntry $zipEntries 'css/heroui-bridge.css'
 Require-ZipEntry $zipEntries 'css/theme-switcher-scroll.css'
 Require-ZipEntry $zipEntries 'css/onboarding.css'
+Require-ZipEntry $zipEntries 'css/vocab-reader.css'
+Require-ZipEntry $zipEntries 'assets/images/favicon.svg'
+Require-ZipEntry $zipEntries 'assets/images/logo.svg'
 Require-ZipEntry $zipEntries 'assets/vendor/three.min.js'
+Require-ZipEntry $zipEntries 'assets/wordlists/ielts_core.bundle.js'
+Require-ZipEntry $zipEntries 'assets/wordlists/ecdict_reading.bundle.js'
 Require-ZipEntry $zipEntries 'assets/generated/reading-exams/manifest.js'
 Require-ZipEntry $zipEntries 'assets/generated/reading-exams/reading-practice-unified.html'
+Require-ZipEntry $zipEntries 'assets/generated/reading-explanations/manifest.js'
 Require-ZipEntry $zipEntries 'js/bundles/runtime-entry.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/core-foundation.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/ui-shell.bundle.js'
@@ -336,10 +360,13 @@ if ($IncludeLocalListening -and (Test-Path -LiteralPath (Join-Path $ProjectRoot 
 }
 
 Reject-ZipEntryPrefix $zipEntries 'templates/'
+Reject-ZipEntryPrefix $zipEntries 'developer/'
 Reject-ZipEntryPrefix $zipEntries 'ListeningPractice/vip/'
 Reject-ZipEntryPattern $zipEntries '(^|/)~\$[^/]*$'
 Reject-ZipEntryPattern $zipEntries '^ListeningPractice/.*\.(MOV|mov|MP4|mp4)$'
 Reject-ZipEntryPattern $zipEntries '^assets/scripts/.*\.py$'
+Reject-ZipEntryPattern $zipEntries '(^|/)__pycache__(/|$)'
+Reject-ZipEntryPattern $zipEntries '\.pyc$'
 Reject-ZipEntryPattern $zipEntries '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'
 
 $zipSize = Format-ReleaseSize (Get-Item -LiteralPath $ZipPath).Length

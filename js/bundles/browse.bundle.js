@@ -16217,27 +16217,14 @@ if (typeof module !== 'undefined' && module.exports) {
                 .trim();
         },
 
-        exportTxt(examId = null, customFilename = null, fallbackTitle = '', source = DEFAULT_SOURCE) {
-            const list = examId ? this.getByExam(examId, source) : this.getAll();
-            if (!list || list.length === 0) {
-                return false;
-            }
-
-            // 只需要单词，不需要例句和其他内容，且每个单词一行（自动去重）
-            const words = [];
-            const seen = new Set();
-            list.forEach(item => {
-                const raw = typeof item === 'string' ? item : item?.word;
-                const w = (raw || '').trim();
-                if (w && !seen.has(w.toLowerCase())) {
-                    seen.add(w.toLowerCase());
-                    words.push(w);
-                }
-            });
-
-            if (words.length === 0) {
-                return false;
-            }
+        async exportTxt(examId = null, customFilename = null, fallbackTitle = '', source = DEFAULT_SOURCE) {
+            // A later background refresh can supersede this read's cache update
+            // while still pending. Export the fetched durable snapshot itself.
+            const { snapshot } = await this.init();
+            const model = global.AppData.vocab.readingModel;
+            const articleId = examId ? model.articleId(source, String(examId)) : null;
+            const result = model.toPlainText(snapshot, articleId ? { articleId } : {});
+            if (result.count === 0) return false;
 
             let filename = customFilename;
             if (!filename) {
@@ -16247,22 +16234,26 @@ if (typeof module !== 'undefined' && module.exports) {
                 const day = String(now.getDate()).padStart(2, '0');
                 const dateStr = `${year}-${month}-${day}`;
 
-                const rawTitle = fallbackTitle || list[0]?.examTitle || examId || '生词本';
-                const safeTitle = String(rawTitle).replace(/[\\/:*?"<>|]/g, '_').trim();
+                const article = snapshot.reading.articles.find((row) => row.id === articleId);
+                const rawTitle = fallbackTitle || article?.title || examId || '全部精读生词';
+                const safeTitle = String(rawTitle).replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
                 filename = `${dateStr}_${safeTitle}.txt`;
             }
 
-            const content = words.join('\n');
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            return true;
+            try {
+                a.click();
+            } finally {
+                document.body.removeChild(a);
+                // Let the browser start consuming the object URL before release.
+                setTimeout(() => URL.revokeObjectURL(url), 0);
+            }
+            return { filename, count: result.count };
         },
 
         async init() {
@@ -16837,7 +16828,7 @@ if (typeof module !== 'undefined' && module.exports) {
                                     <h3>📖 我的生词本</h3>
                                     <div class="vocab-modal-tabs">
                                         <button type="button" class="v-tab-btn active" id="v-tab-current">本篇 (<span id="v-count-current">0</span>)</button>
-                                        <button type="button" class="v-tab-btn" id="v-tab-all">全部 (<span id="v-count-all">0</span>)</button>
+                                        <button type="button" class="v-tab-btn" id="v-tab-all">全部精读生词 (<span id="v-count-all">0</span>)</button>
                                     </div>
                                 </div>
                                 <div class="vocab-modal-header-actions">
@@ -16860,7 +16851,7 @@ if (typeof module !== 'undefined' && module.exports) {
                             <!-- 底部操作栏 -->
                             <div class="vocab-modal-footer">
                                 <button type="button" class="v-action-btn v-export-btn" id="vocab-export-btn">
-                                    <span>⬇️ 导出为 TXT</span>
+                                    <span>⬇️ 导出本篇生词 TXT</span>
                                 </button>
                                 <button type="button" class="v-action-btn v-clear-btn" id="vocab-clear-btn">
                                     <span>🗑️ 清空生词</span>
@@ -17062,26 +17053,24 @@ if (typeof module !== 'undefined' && module.exports) {
             // 导出与清空
             const exportBtn = overlay.querySelector('#vocab-export-btn');
             if (exportBtn) {
-                on(exportBtn, 'click', () => {
+                on(exportBtn, 'click', async () => {
+                    if (exportBtn.disabled) return;
+                    const requestId = this._openRequestId;
                     const isCurrent = this.modalTab === 'current';
                     const examId = isCurrent ? this.currentExamId : null;
-
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth() + 1).padStart(2, '0');
-                    const day = String(now.getDate()).padStart(2, '0');
-                    const dateStr = `${year}-${month}-${day}`;
-
-                    // 当前文章名字
-                    const rawArticleName = (this.currentExam?.title || this.examData?.title || (isCurrent ? '当前文章' : '全部生词'));
-                    const safeArticleName = String(rawArticleName).replace(/[\\/:*?"<>|]/g, '_').trim();
-                    const filename = `${dateStr}_${safeArticleName}.txt`;
-
-                    const success = ReadingVocabStore.exportTxt(examId, filename, safeArticleName, this.currentSource);
-                    if (success) {
-                        this.showToast(`✅ 已导出：${filename}`);
-                    } else {
-                        this.showToast('⚠️ 当前生词本为空，暂无可导出内容');
+                    const title = isCurrent ? (this.currentExam?.title || this.examData?.title || '当前文章') : '全部精读生词';
+                    exportBtn.disabled = true;
+                    try {
+                        const result = await ReadingVocabStore.exportTxt(examId, null, title, this.currentSource);
+                        if (requestId !== this._openRequestId) return;
+                        this.showToast(result ? `✅ 已导出 ${result.count} 个生词（${result.filename}）`
+                            : '⚠️ 当前生词本为空，暂无可导出内容');
+                    } catch (error) {
+                        if (requestId !== this._openRequestId) return;
+                        this.showToast(error?.code === 'BACKEND_UNAVAILABLE'
+                            ? '⚠️ 生词读取失败，请刷新页面后重试导出' : '⚠️ 生词读取失败，请重试导出');
+                    } finally {
+                        if (requestId === this._openRequestId) exportBtn.disabled = false;
                     }
                 });
             }
@@ -17870,6 +17859,8 @@ if (typeof module !== 'undefined' && module.exports) {
             if (!listEl) return;
 
             const isCurrent = this.modalTab === 'current';
+            const exportLabel = overlay.querySelector('#vocab-export-btn span');
+            if (exportLabel) exportLabel.textContent = isCurrent ? '⬇️ 导出本篇生词 TXT' : '⬇️ 导出全部精读生词 TXT';
             const list = isCurrent
                 ? (this._sourceReady ? ReadingVocabStore.getByExam(this.currentExamId, this.currentSource) : [])
                 : ReadingVocabStore.getAll();

@@ -5388,13 +5388,6 @@
             return words.find((word) => word.id === ref.wordId) || null;
         },
 
-        _getWords(articleId) {
-            if (!this._snapshot) return [];
-            const reading = this._snapshot.reading;
-            const termIds = new Set(reading.associations.filter((row) => !articleId || row.articleId === articleId).map((row) => row.termId));
-            return reading.terms.filter((term) => termIds.has(term.id)).map((term) => this._wordForTerm(term)).filter(Boolean);
-        },
-
         getDistinctWordCount() {
             if (!this._snapshot) return 0;
             return new Set(this._snapshot.reading.associations.map((row) => row.termId)).size;
@@ -5413,90 +5406,42 @@
         },
 
         async exportExamTxt(examId, examTitle, source, articleId) {
-            await this.init();
             const id = await this._articleId(examId, source, articleId);
-            const examWords = this._getWords(id);
-            if (examWords.length === 0) {
-                return false;
-            }
-
-            const words = [];
-            const seen = new Set();
-            examWords.forEach(item => {
-                const w = (typeof item === 'string' ? item : item?.word || '').trim();
-                if (w && !seen.has(w.toLowerCase())) {
-                    seen.add(w.toLowerCase());
-                    words.push(w);
-                }
-            });
-
-            if (words.length === 0) {
-                return false;
-            }
-
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const dateStr = `${year}-${month}-${day}`;
-
-            const rawTitle = examTitle || examWords[0]?.examTitle || examId || '阅读生词本';
-            const safeTitle = String(rawTitle).replace(/[\\/:*?"<>|]/g, '_').trim();
-            const filename = `${dateStr}_${safeTitle}.txt`;
-
-            const content = words.join('\n');
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            return { filename, count: words.length };
+            return this._exportTxt(id, examTitle || examId || '阅读生词本');
         },
 
         async exportAllBookshelfTxt() {
-            await this.init();
-            const vocabWords = this._getWords();
+            return this._exportTxt(null, '全部精读生词');
+        },
 
-            if (vocabWords.length === 0) {
-                return false;
-            }
-
-            const words = [];
-            const seen = new Set();
-            vocabWords.forEach(item => {
-                const w = (typeof item === 'string' ? item : item?.word || '').trim();
-                if (w && !seen.has(w.toLowerCase())) {
-                    seen.add(w.toLowerCase());
-                    words.push(w);
-                }
-            });
-
-            if (words.length === 0) {
-                return false;
-            }
+        async _exportTxt(articleId, title) {
+            // init may defer cache adoption to a later pending refresh; its
+            // returned snapshot is still the durable read for this export.
+            const { snapshot } = await this.init();
+            const result = global.AppData.vocab.readingModel.toPlainText(snapshot, articleId ? { articleId } : {});
+            if (result.count === 0) return false;
 
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
-            const filename = `${dateStr}_书架全部阅读生词.txt`;
+            const safeTitle = String(title).replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
+            const filename = `${dateStr}_${safeTitle}.txt`;
 
-            const content = words.join('\n');
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            return { filename, count: words.length };
+            try {
+                a.click();
+            } finally {
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 0);
+            }
+            return { filename, count: result.count };
         }
     };
 
@@ -5600,8 +5545,8 @@
                             </div>
                         </div>
                         <div class="bookshelf-topbar__right">
-                            <button type="button" class="btn btn-secondary bookshelf-export-all-btn" data-action="export-all-bookshelf" ${totalWords === 0 ? 'disabled' : ''} title="一键导出书架全部生词为 TXT">
-                                📥 导出全部生词
+                            <button type="button" class="btn btn-secondary bookshelf-export-all-btn" data-action="export-all-bookshelf" ${totalWords === 0 ? 'disabled' : ''} title="导出全部精读生词 TXT，包含所有文章，不受当前搜索和筛选影响">
+                                📥 导出全部精读生词
                             </button>
                             <button type="button" class="btn btn-primary bookshelf-notebook-btn" data-action="open-global-notebook" title="打开生词本总览">
                                 📖 打开生词本
@@ -5855,7 +5800,7 @@
                 exportAllBtn.addEventListener('click', async () => {
                     try {
                         const res = await ReadingBookshelfStore.exportAllBookshelfTxt();
-                        this.showToast(res ? `✅ 已导出 ${res.count} 个生词（${res.filename}）` : '⚠️ 书架暂无生词可导出');
+                        this.showToast(res ? `✅ 已导出 ${res.count} 个生词（${res.filename}）` : '⚠️ 暂无精读生词可导出');
                     } catch (error) {
                         this.showToast(needsPageReload(error) ? '⚠️ 生词读取失败，请刷新页面后重试导出' : '⚠️ 生词读取失败，请重试导出');
                     }

@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,6 +58,13 @@ jobs:
         timeout-minutes: 15
         run: python developer/tests/e2e/e2e_runner.py
 
+      - name: Qualify fresh intensive-reading release package
+        timeout-minutes: 6
+        env:
+          READING_RELEASE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          READING_RELEASE_REVIEWED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python developer/tests/ci/qualify_reading_release.py
+
       - name: Upload E2E diagnostics
         if: always()
         timeout-minutes: 3
@@ -66,5 +75,6 @@ jobs:
             developer/tests/e2e/reports/**/*.json
             developer/tests/e2e/reports/**/*.log
             developer/tests/e2e/reports/**/*.png
+            developer/tests/e2e/reports/**/*.txt
           if-no-files-found: ignore
           retention-days: 14

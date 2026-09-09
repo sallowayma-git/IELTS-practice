@@ -3220,6 +3220,21 @@
         return copy({ terms: rows, distinctTermCount: rows.length, occurrenceCount: rows.reduce((sum, row) => sum + row.occurrences.length, 0) });
     }
 
+    function toPlainText(snapshot, options = {}) {
+        // query selects the distinct union of article associations, including
+        // missing sources, and resolves each term's canonical display owner.
+        // Order uses normalized canonical identity, compared as UTF-16 code
+        // units rather than locale collation, so every entry point agrees.
+        const entries = query(snapshot, options).terms.sort((left, right) => (
+            left.term.normalizedTerm < right.term.normalizedTerm ? -1
+                : left.term.normalizedTerm > right.term.normalizedTerm ? 1 : 0
+        ));
+        // Whitespace (including CR/LF and Unicode separators) stays inside one
+        // term. TXT has LF separators, no header, BOM, or trailing newline.
+        const words = entries.map((entry) => entry.word.word.replace(/\s+/g, ' ').trim());
+        return { content: words.join('\n'), count: words.length };
+    }
+
     function listVisits(snapshot) { validate(snapshot); return copy(snapshot.reading.visits); }
     function serialize(snapshot) { validate(snapshot); return JSON.stringify(snapshot); }
     function deserialize(value) {
@@ -3234,7 +3249,7 @@
     const model = Object.freeze({
         SCHEMA_VERSION, READING_LIST_ID, normalizeTerm, sourceId, articleId, contentRef, termId, occurrenceId,
         createSnapshot, validate, collect, recordVisit, removeOccurrence, removeArticleTerm,
-        clearArticle, deleteCanonicalTerm, merge, query, listVisits, serialize, deserialize
+        clearArticle, deleteCanonicalTerm, merge, query, toPlainText, listVisits, serialize, deserialize
     });
     global.ReadingVocabularyModel = model;
     if (typeof module !== 'undefined' && module.exports) module.exports = model;
