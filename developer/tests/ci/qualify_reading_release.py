@@ -19,7 +19,7 @@ REPORTS = ROOT / "developer/tests/e2e/reports/reading-release-package"
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+    return subprocess.check_output(["git", *args], cwd=ROOT, encoding="utf-8").strip()
 
 
 def digest(path: Path) -> str:
