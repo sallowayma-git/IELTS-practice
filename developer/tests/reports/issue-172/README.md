@@ -1,5 +1,17 @@
 # Issue #172 validation
 
+The results below describe the initial implementation at `7bdf6c08713dfb0f641b870372350cee26f73a14`.
+The subsequent signing/identity repair is described in [signing-boundary.md](signing-boundary.md):
+release sidecars are signed before their identity is embedded, and a mandatory
+gate verifies the final host/sidecar pair before publication. Historical results
+below do not constitute validation of that repair.
+
+[signing-fix-validation.json](signing-fix-validation.json) records the repair's
+tested code blobs: 45 release checks, the required static 28/28 then native
+16/16 regression sequence, fresh Windows freeze/smoke, rebuilt unsigned MSI/NSIS
+payload checks, and actual-host rejection of changed, mismatched, or missing
+sidecars. Production signing and native macOS acceptance remain pending.
+
 The release workflow now prepares a matching native sidecar in each consuming job before Tauri compilation. Each job installs both pinned Python dependency locks, freezes and smokes its own executable, and uploads the resulting manifest and smoke report. The release matrix explicitly binds Windows x86_64, macOS ARM64, and Linux x86_64 targets to their Python architectures.
 
 [validation.json](validation.json) records the signed implementation revision, tested workflow and test-file Git blobs, generated artifact hashes, commands, and gate results. Testing preceded that implementation commit on identical code; this evidence is added in a separate documentation commit.
@@ -26,7 +38,7 @@ No thresholds or flow assertions were changed. The new workflow tests also rejec
 
 These are local unsigned Windows packaging and regression results. They do not claim a passing tag-release workflow, installed/signed release acceptance, or overall CI success.
 
-- Windows operating-system signing and updater verification remain pending. [signing-boundary.md](signing-boundary.md) records a pre-existing signing/sidecar-hash interaction found through source inspection; no production-signed artifact was tested.
+- Windows production signing and updater verification remain pending; see [signing-boundary.md](signing-boundary.md) for the repair and final-artifact gate. No production-signed artifact is covered by the historical results above.
 - macOS ARM64 and Linux x86_64 native freeze, smoke, packaging, and release verification remain pending.
 - The separate visual-regression gate is tracked in [#175](https://github.com/sallowayma-git/IELTS-practice/issues/175).
 

@@ -12,6 +12,15 @@ import verify_tauri_bundle
 import verify_updater_manifest
 
 
+def load_tests(loader, tests, pattern):
+    import packaged_sidecar_test
+    import sidecar_signing_test
+
+    tests.addTests(loader.loadTestsFromModule(packaged_sidecar_test))
+    tests.addTests(loader.loadTestsFromModule(sidecar_signing_test))
+    return tests
+
+
 def workflow_block(document: str, key: str, indent: int = 0) -> str:
     lines = document.splitlines()
     heading = f"{' ' * indent}{key}:"
@@ -122,6 +131,30 @@ class WorkflowTriggerTests(unittest.TestCase):
         self.assertIn("architecture: ${{ matrix.pythonArchitecture }}", job)
         macos = next(entry for entry in entries if entry["platformKey"] == "macos")
         self.assertEqual(macos["args"].strip("'\""), "--target aarch64-apple-darwin")
+        self.assertEqual(
+            {entry["platformKey"]: entry["sidecarArgs"].strip("'\"") for entry in entries},
+            {"windows": "--sign", "macos": "--sign", "linux": ""},
+        )
+
+    def test_signed_sidecar_identity_is_final_before_compile_and_checked_after_bundle(self) -> None:
+        job = workflow_block(self.release, "tauri-release", indent=2)
+        build = "run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }} ${{ matrix.sidecarArgs }}"
+        bundle = "uses: tauri-apps/tauri-action@v0"
+        verify = "run: python developer/tests/ci/verify_packaged_sidecar.py --platform ${{ matrix.platformKey }}"
+        for certificate in ("Import macOS Developer ID certificate", "Import Windows Authenticode certificate"):
+            self.assertLess(job.index(certificate), job.index(build))
+        self.assertLess(job.index(build), job.index(bundle))
+        pinned_cli = "npm install --global @tauri-apps/cli@${{ env.TAURI_CLI_VERSION }}"
+        self.assertLess(job.index(pinned_cli), job.index(bundle))
+        self.assertIn("tauriScript: tauri", job)
+        self.assertLess(job.index(bundle), job.index(verify))
+        step = next(step for step in job.split("\n      - ") if verify in step)
+        self.assertIn("if: matrix.platformKey != 'linux'", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("continue-on-error", job)
+        publish = workflow_block(self.release, "publish-release", indent=2)
+        self.assertIn("needs: tauri-release", publish)
+        self.assertNotIn("if: always()", publish)
 
 
 class ReleaseConfigTests(unittest.TestCase):
@@ -180,6 +213,11 @@ class ReleaseConfigTests(unittest.TestCase):
             },
         )
         self.assertTrue(macos["macOS"]["hardenedRuntime"])
+        self.assertEqual(macos["externalBin"], [])
+        self.assertEqual(
+            macos["macOS"]["files"],
+            {"MacOS/ielts-agent-runtime": "binaries/ielts-agent-runtime-aarch64-apple-darwin"},
+        )
 
 
 class BundleVerificationTests(unittest.TestCase):

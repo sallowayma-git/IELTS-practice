@@ -1,40 +1,55 @@
-# Issue #172: signing and sidecar identity boundary
+# Issue #172: signing and sidecar identity
 
-This note records a source-level acceptance limitation. It is not a fix or a
-signed-release verification result.
+The initial implementation prepared unsigned sidecars, then compiled the host
+with their complete SHA-256. Windows/macOS bundling subsequently changed their
+bytes while signing, so the installed host would reject its sidecar with
+`BuildIdentityMismatch`. Although the underlying identity contract predated
+#177, enabling this release path made the incompatibility a blocking integration
+issue. A documentation-only acceptance caveat did not prevent publication.
 
-## Evidence
+## Repair
 
-- `developer/tests/ci/build_agent_runtime_sidecar.py:90` hashes the frozen sidecar;
-  the builder runs its smoke check before writing the SHA-256 manifest at line 114.
-- `src-tauri/build.rs:35` verifies those complete file bytes, then embeds that
-  identity into the host at line 41. `src-tauri/src/cognitive_runtime.rs:2339`
-  hashes the installed sidecar's complete file bytes and rejects a mismatch with
-  `BuildIdentityMismatch`.
-- In Tauri CLI v2.11.4, Windows bundling signs an unsigned external binary in place
-  after host compilation. Already validly signed sidecars are skipped.
-  [Official Windows bundler source, lines 280-312](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle.rs#L280-L312).
-  The default signing command invokes SignTool on that file.
-  [Official signing implementation, lines 148-170](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/windows/sign.rs#L148-L170).
-- On macOS, the same version copies external binaries into the application bundle,
-  adds them to its signing targets, and signs them before the application bundle.
-  [Official macOS bundler source, lines 91-121](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/macos/app.rs#L91-L121).
-- Local observation on 2026-09-10: `Get-AuthenticodeSignature` reported `NotSigned`
-  for `src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.exe` after the
-  native freeze.
+Release jobs import their platform certificate before invoking the sidecar
+builder with `--sign`. The builder publishes the manifest only after signing,
+signature verification, and the existing native smoke succeed.
+The packaging action explicitly uses the installed, pinned Tauri CLI rather
+than automatically downloading a floating major-version CLI.
 
-## Interpretation and scope
+- Windows signs the staged executable using the configured Authenticode
+  certificate and timestamp service. Tauri skips an already validly signed
+  external binary, preserving the bytes whose hash is embedded in the host.
+  [Tauri CLI 2.11.4 Windows bundler](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle.rs#L280-L312).
+- macOS passes the Developer ID signing identity to PyInstaller so both the
+  embedded libraries and the final onefile executable are signed. Signing only
+  the outer executable would not satisfy hardened-runtime library validation.
+  The release overlay copies that executable to `Contents/MacOS` using
+  `bundle.macOS.files`, instead of submitting it to Tauri's external-binary
+  signing pass again. Tauri still signs and notarizes the enclosing application.
+  [Tauri CLI 2.11.4 copy/sign ordering](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/macos/app.rs#L91-L121).
+- Linux and ordinary unsigned development builds retain the existing preparation
+  path. The base `externalBin` configuration and runtime whole-file SHA-256
+  enforcement remain unchanged.
 
-Signing changes the file bytes after the host has embedded their earlier digest.
-The source-level consequence is a mismatch when the installed signed sidecar is
-validated. No production-signed artifact was built or launched to reproduce this
-interaction; the local unsigned Windows packaging checks do not cover it.
+## Mandatory final-artifact gate
 
-The sidecar builder, `src-tauri/build.rs`, runtime hash verification, base Tauri
-configuration, and release signing-overlay generator were unchanged from
-`IELTS-WRITING-FEAT@7cea156319d20ed2f780bfa228686e427cbac8fd` during this review
-(`git diff --exit-code` against that revision for those paths returned zero).
-The #172 workflow patch preserves existing signing gates. This interaction is an
-existing signing/identity contract defect exposed by restoring release preparation,
-not a newly introduced hash-validation regression. Signed Windows and macOS
-acceptance remains unverified and requires separate validation.
+After bundling, `verify_packaged_sidecar.py` checks both Windows installer
+payloads (MSI administrative extraction and NSIS extraction) or the final signed
+macOS `.app`. It runs the extracted/final host with `--verify-sidecar`, which
+uses the same compiled identity and verification function as normal sidecar
+startup, without initializing the GUI or user database. It then smokes that
+exact sibling sidecar, with an independent report for each artifact.
+
+Missing or ambiguous artifacts, mismatched bytes, diagnostic failure, startup
+failure, and timeout all fail the consuming release job. `publish-release`
+continues to depend on successful completion of the complete release matrix.
+This gate also detects a future bundler change that re-signs the prepared file.
+
+## Evidence boundary
+
+`validation.json` remains the historical unsigned-Windows evidence for the
+initial implementation. It does not validate this repair or a production-signed
+release. Fresh repair validation is recorded in
+[signing-fix-validation.json](signing-fix-validation.json). Production certificate
+use, native macOS packaging/notarization, signed installed behavior, updater
+verification, and a complete tag workflow still require their actual platform
+evidence before #172 and #169 can close. The separate visual gate remains #175.

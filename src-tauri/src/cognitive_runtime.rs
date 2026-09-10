@@ -2336,7 +2336,7 @@ fn validate_embed_request(request: &ielts_domain::EmbeddingRequest) -> Result<()
     Ok(())
 }
 
-fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
+pub(crate) fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
     let path = sidecar_hash_path()?;
     let bytes = std::fs::read(&path)
         .map_err(|error| RuntimeHostError::Process(format!("cannot read {}: {error}", path.display())))?;
