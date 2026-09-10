@@ -33,6 +33,18 @@ jobs:
       - name: Install frontend deps
         run: npm --prefix apps/writing-vue ci --no-fund --no-audit
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Build and smoke native sidecar before static compilation
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target x86_64-pc-windows-msvc
+      - name: Upload shipping sidecar evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-shipping-sidecar-evidence
+          path: |
+            developer/tests/benchmarks/reports/m3_sidecar_release.json
+            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.sha256
+          if-no-files-found: error
       - name: Tauri + Vue static gate
         run: python developer/tests/ci/run_static_suite.py
       - name: Install pinned Playwright
@@ -79,6 +91,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -89,6 +104,18 @@ jobs:
       - name: Build frontend required by the Tauri test crate
         run: npm --prefix apps/writing-vue run build
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Build and smoke native sidecar before workspace tests
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target x86_64-pc-windows-msvc
+      - name: Upload workspace sidecar evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-rust-sidecar-evidence
+          path: |
+            developer/tests/benchmarks/reports/m3_sidecar_release.json
+            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.sha256
+          if-no-files-found: error
       - name: Rust workspace tests
         run: cargo test --workspace --locked
 
@@ -100,19 +127,32 @@ jobs:
         include:
           - platform: windows-2022
             platformKey: windows
+            target: x86_64-pc-windows-msvc
+            pythonArchitecture: x64
+            sidecarArgs: '--sign'
             args: ''
           - platform: macos-latest
             platformKey: macos
+            target: aarch64-apple-darwin
+            pythonArchitecture: arm64
+            sidecarArgs: '--sign'
             args: '--target aarch64-apple-darwin'
           - platform: ubuntu-22.04
             platformKey: linux
+            target: x86_64-unknown-linux-gnu
+            pythonArchitecture: x64
+            sidecarArgs: ''
             args: ''
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.pythonArchitecture }}
       - name: Linux deps
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -126,6 +166,10 @@ jobs:
       - name: Install frontend deps
         run: npm --prefix apps/writing-vue ci --no-fund --no-audit
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Install pinned Tauri CLI
+        run: npm install --global @tauri-apps/cli@${{ env.TAURI_CLI_VERSION }} --no-fund --no-audit
       - name: Import macOS Developer ID certificate
         if: matrix.platformKey == 'macos'
         uses: apple-actions/import-codesign-certs@v3
@@ -148,6 +192,21 @@ jobs:
           $actual = ($certificate.Thumbprint -replace ' ', '').ToUpperInvariant()
           $expected = ($env:WINDOWS_CERTIFICATE_THUMBPRINT -replace ' ', '').ToUpperInvariant()
           if ($actual -ne $expected) { throw "Imported certificate thumbprint mismatch: $actual" }
+      - name: Build and smoke matching native sidecar before packaging
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }} ${{ matrix.sidecarArgs }}
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+      - name: Upload native sidecar evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sidecar-${{ matrix.target }}
+          path: |
+            developer/tests/benchmarks/reports/m3_sidecar_release.json
+            src-tauri/binaries/ielts-agent-runtime-${{ matrix.target }}.sha256
+          if-no-files-found: error
       - name: Generate fail-closed release config
         run: python developer/tests/ci/prepare_tauri_release.py --require-signing-key --platform ${{ matrix.platformKey }} --tag "${{ github.ref_name }}" --output developer/tests/e2e/reports/tauri.release.generated.json
         env:
@@ -182,7 +241,11 @@ jobs:
           releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true
+          tauriScript: tauri
           args: ${{ matrix.args }} --config developer/tests/e2e/reports/tauri.release.generated.json
+      - name: Verify packaged host identity and sidecar startup
+        if: matrix.platformKey != 'linux'
+        run: python developer/tests/ci/verify_packaged_sidecar.py --platform ${{ matrix.platformKey }} --report developer/tests/e2e/reports/packaged-sidecar-${{ matrix.platformKey }}.json
       - name: Verify signed updater bundle
         run: python developer/tests/ci/verify_tauri_bundle.py --platform ${{ matrix.platformKey }} --require-updater --require-signatures --report developer/tests/e2e/reports/tauri-bundle-${{ matrix.platform }}.json
       - name: Verify operating-system code signature
@@ -196,6 +259,7 @@ jobs:
             target/**/release/bundle/**
             developer/tests/e2e/reports/tauri-bundle-${{ matrix.platform }}.json
             developer/tests/e2e/reports/code-sign-${{ matrix.platform }}.json
+            developer/tests/e2e/reports/packaged-sidecar-*.json
           if-no-files-found: error
 
   publish-release:

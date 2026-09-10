@@ -128,6 +128,7 @@ def main() -> int:
     parser.add_argument("--target", default=host_target())
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--build-id")
+    parser.add_argument("--report", type=Path, default=REPORT)
     args = parser.parse_args()
     suffix = ".exe" if sys.platform == "win32" else ""
     binary = args.binary or (
@@ -138,6 +139,8 @@ def main() -> int:
         raise SystemExit(f"frozen sidecar is missing: {binary}")
     digest = hashlib.sha256(binary.read_bytes()).hexdigest()
     build_id = args.build_id or digest
+    if build_id != digest:
+        raise SystemExit("sidecar bytes do not match the expected build identity")
     environment = {
         key: os.environ[key]
         for key in ("SystemRoot", "WINDIR", "TEMP", "TMP")
@@ -288,7 +291,7 @@ def main() -> int:
     report = {
         "schemaVersion": 1,
         "target": args.target,
-        "binary": f"src-tauri/binaries/ielts-agent-runtime-{args.target}{suffix}",
+        "binary": str(binary),
         "sha256": digest,
         "protocolVersion": 1,
         "capabilities": expected_capabilities,
@@ -300,8 +303,8 @@ def main() -> int:
         "thresholds": thresholds,
         "status": "pass" if all(thresholds.values()) else "fail",
     }
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if report["status"] != "pass":
         raise SystemExit(f"M3 sidecar release metrics failed: {thresholds}")
     print(json.dumps(report, separators=(",", ":")))

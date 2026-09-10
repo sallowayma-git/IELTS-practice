@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "purpose": "PR #177 signing and sidecar identity repair",
+  "baseCommit": "cbd8a543a7cfae9274d5906592f918afcd5b070f",
+  "implementationBlobs": {
+    ".github/workflows/release.yml": "9c47c628d95f97247949f68305b14ba4404c3f12",
+    "developer/tests/ci/build_agent_runtime_sidecar.py": "7b79d03619e2082d526a345bb2a9f71d1c371b53",
+    "developer/tests/ci/prepare_tauri_release.py": "4245967d8fcddb4ec4e7ffdd9ce0bee751e08d1e",
+    "developer/tests/ci/release_contract_test.py": "5040602f56f5aea4ddee87d61df1f6aeb22bc067",
+    "developer/tests/ci/smoke_agent_runtime_sidecar.py": "564c327e0cc5317acff4f1727d85b92285553a49",
+    "developer/tests/ci/verify_packaged_sidecar.py": "c233cab65709c9d8f1964c6e0aee7ee3df22c128",
+    "developer/tests/ci/sidecar_signing_test.py": "67909ad420640ffe44e85c9a4591352d33495e15",
+    "developer/tests/ci/packaged_sidecar_test.py": "1ffc3c402a6f9a39004b47eba61e3df6a375f085",
+    "src-tauri/src/main.rs": "bfb2de5675239e5460116f491dec08a2dfa293a9",
+    "src-tauri/src/lib.rs": "0d56caf0ccd658430def26530f7f087ca7274e0c",
+    "src-tauri/src/cognitive_runtime.rs": "07c0fc0a85eef20771806bbd10797ec9b482fc02"
+  },
+  "environment": {
+    "platform": "Windows x86_64",
+    "python": "3.12.14",
+    "rust": "1.98.1",
+    "tauriCli": "2.11.4"
+  },
+  "releaseContracts": {
+    "command": "python developer/tests/ci/release_contract_test.py",
+    "passed": 45,
+    "failed": 0
+  },
+  "freshUnsignedFreeze": {
+    "sha256": "ece253138d0a715a34b5ef45e5e9e04e12a1fb70ed1587d5aaab735650580472",
+    "capabilities": {
+      "runtime.health": "1",
+      "runtime.shutdown": "1",
+      "memory.candidates.extract": "1",
+      "memory.candidates.generate": "1",
+      "dream.daily": "1",
+      "planner.study_plan": "1"
+    },
+    "coldStartMs": 1256.349,
+    "thresholds": {
+      "unpackedSize": true,
+      "compressedSize": true,
+      "installerDelta": true,
+      "idleRss": true,
+      "coldStart": true
+    },
+    "status": "pass"
+  },
+  "requiredRegressionSequence": [
+    {
+      "command": "python developer/tests/ci/run_static_suite.py",
+      "generatedAt": "2026-09-10T17:30:29.787774+00:00",
+      "summary": {
+        "total": 28,
+        "passed": 28,
+        "failed": 0
+      }
+    },
+    {
+      "command": "python developer/tests/e2e/suite_practice_flow.py",
+      "generatedAt": "2026-09-10T17:40:35.457431+00:00",
+      "status": "passed",
+      "checks": {
+        "launch": "passed",
+        "vueRoutes": "passed",
+        "uiRouteVisuals": "passed",
+        "readingIpc": "passed",
+        "agentIpcBoundary": "passed",
+        "agentWorkspaceRun": "passed",
+        "readingArchiveBoundary": "passed",
+        "historyRetentionBoundary": "passed",
+        "bundledResources": "passed",
+        "readingView": "passed",
+        "readingPerformance": "passed",
+        "notesDialog": "passed",
+        "readingSubmitBoundary": "passed",
+        "backupPathBoundary": "passed",
+        "updaterBoundary": "passed",
+        "sqliteRestart": "passed"
+      }
+    }
+  ],
+  "windowsPackaging": {
+    "command": "tauri build --ci",
+    "status": "passed",
+    "productionCertificateUsed": false,
+    "artifacts": [
+      {
+        "kind": "msi",
+        "name": "IELTS Practice_0.1.0_x64_en-US.msi",
+        "artifactSha256": "a64615acce11bf75df69177d5a8b485631350ccf90d1c1db39cb237cf936ff41",
+        "hostSha256": "2b5b21de43e6c3833fe5e5fb4ff3090986b52b04fc1162a41c175783bc72a79d",
+        "sidecarSha256": "ece253138d0a715a34b5ef45e5e9e04e12a1fb70ed1587d5aaab735650580472",
+        "identityStatus": "passed",
+        "smokeStatus": "pass",
+        "coldStartMs": 1136.786,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        }
+      },
+      {
+        "kind": "nsis",
+        "name": "IELTS Practice_0.1.0_x64-setup.exe",
+        "artifactSha256": "6fc230ed8721e127950b49a55a10b5ba2cc441b47ec8760be8a5f766ab2226e3",
+        "hostSha256": "e0faacafbd52fd11212922e0b074d2943938f85cba6887976f362e009b0d4bab",
+        "sidecarSha256": "ece253138d0a715a34b5ef45e5e9e04e12a1fb70ed1587d5aaab735650580472",
+        "identityStatus": "passed",
+        "smokeStatus": "pass",
+        "coldStartMs": 1169.28,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        }
+      }
+    ]
+  },
+  "packagedSidecarGate": {
+    "command": "python developer/tests/ci/verify_packaged_sidecar.py --platform windows --report <report.json>",
+    "status": "passed",
+    "errors": []
+  },
+  "actualHostDiagnosticExitCodes": {
+    "matching": 0,
+    "changedBytes": 1,
+    "differentBuild": 1,
+    "missingSidecar": 1
+  },
+  "evidenceBoundary": [
+    "Windows installers were administratively extracted, not installed.",
+    "Windows production certificate signing and updater verification remain pending.",
+    "macOS signing, native packaging and notarization require an actual platform run.",
+    "Linux native release acceptance and the complete tag workflow remain pending.",
+    "The independent visual gate is tracked in #175; #172 and #169 remain open."
+  ]
+}

@@ -11,6 +11,12 @@ pub mod commands;
 
 use tauri::Manager;
 
+/// Check the installed sidecar against this executable's compiled identity,
+/// without opening a window or touching application data.
+pub fn verify_bundled_sidecar() -> Result<(), String> {
+    cognitive_runtime::verify_sidecar_hash().map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     app::logging::init();

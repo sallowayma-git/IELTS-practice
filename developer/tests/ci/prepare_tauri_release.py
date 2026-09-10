@@ -103,9 +103,16 @@ def platform_bundle_overlay(
             ),
         )
         return {
+            # Tauri re-signs externalBin entries after host compilation. Copy
+            # the PyInstaller-signed sidecar as nested code without re-signing
+            # it; the outer app signature still seals this file.
+            "externalBin": [],
             "macOS": {
                 "signingIdentity": environment["APPLE_SIGNING_IDENTITY"].strip(),
                 "hardenedRuntime": True,
+                "files": {
+                    "MacOS/ielts-agent-runtime": "binaries/ielts-agent-runtime-aarch64-apple-darwin",
+                },
             }
         }
     raise ValueError(f"unsupported release platform: {platform_name}")
