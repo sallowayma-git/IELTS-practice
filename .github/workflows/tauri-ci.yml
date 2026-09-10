@@ -6,7 +6,7 @@ on:
   push:
     branches: [main, master, 'IELTS-*']
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'IELTS-*']
 
 permissions:
   contents: read
@@ -33,6 +33,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix apps/writing-vue ci --no-fund --no-audit
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Build and smoke native sidecar before static compilation
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py
       - name: Run static gate
         run: python developer/tests/ci/run_static_suite.py
       - name: Upload static gate report
@@ -49,6 +53,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -59,6 +66,10 @@ jobs:
       - name: Compile Vue test assets (no desktop package)
         run: npm --prefix apps/writing-vue run build
       - uses: Swatinem/rust-cache@v2
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Build and smoke native sidecar before workspace tests
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py
       - name: Run all Rust workspace tests
         run: cargo test --workspace --locked
 
