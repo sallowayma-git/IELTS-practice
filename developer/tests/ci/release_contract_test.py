@@ -12,19 +12,20 @@ import verify_tauri_bundle
 import verify_updater_manifest
 
 
-def top_level_block(document: str, key: str) -> str:
+def workflow_block(document: str, key: str, indent: int = 0) -> str:
     lines = document.splitlines()
+    heading = f"{' ' * indent}{key}:"
     start = next(
-        (index for index, line in enumerate(lines) if line == f"{key}:"),
+        (index for index, line in enumerate(lines) if line == heading),
         None,
     )
     if start is None:
-        raise AssertionError(f"missing top-level workflow key: {key}")
+        raise AssertionError(f"missing workflow key: {key}")
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
         line = lines[index]
-        if line and not line[0].isspace():
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
             end = index
             break
     return "\n".join(lines[start:end])
@@ -39,7 +40,7 @@ class WorkflowTriggerTests(unittest.TestCase):
         cls.release = (workflows / "release.yml").read_text(encoding="utf-8")
 
     def test_branch_ci_runs_gates_without_packaging_the_desktop_app(self) -> None:
-        trigger = top_level_block(self.branch_ci, "on")
+        trigger = workflow_block(self.branch_ci, "on")
         self.assertIn("push:", trigger)
         self.assertIn("branches:", trigger)
         self.assertNotIn("tags:", trigger)
@@ -53,7 +54,7 @@ class WorkflowTriggerTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.branch_ci)
 
     def test_release_is_tag_only_and_owns_desktop_packaging(self) -> None:
-        trigger = top_level_block(self.release, "on")
+        trigger = workflow_block(self.release, "on")
         self.assertIn("push:", trigger)
         self.assertIn("tags:", trigger)
         self.assertIn("- 'v*'", trigger)
@@ -62,6 +63,65 @@ class WorkflowTriggerTests(unittest.TestCase):
         self.assertNotIn("workflow_dispatch:", trigger)
         self.assertIn("cargo tauri build", self.release)
         self.assertIn("tauri-apps/tauri-action", self.release)
+
+    def test_release_prepares_sidecar_in_every_consuming_job(self) -> None:
+        consumers = (
+            ("shipping-gate", "x86_64-pc-windows-msvc", "run: python developer/tests/ci/run_static_suite.py"),
+            ("rust-test", "x86_64-pc-windows-msvc", "run: cargo test --workspace --locked"),
+            ("tauri-release", "${{ matrix.target }}", "uses: tauri-apps/tauri-action@v0"),
+        )
+        for job_name, target, consumer in consumers:
+            with self.subTest(job=job_name):
+                self.assert_sidecar_preparation(job_name, target, consumer)
+
+    def assert_sidecar_preparation(self, job_name: str, target: str, consumer: str) -> None:
+        job = workflow_block(self.release, job_name, indent=2)
+        install = (
+            "run: python -m pip install --disable-pip-version-check "
+            "-r agent-runtime-python/requirements-build.lock "
+            "-r agent-runtime-python/requirements.lock"
+        )
+        markers = (
+            "uses: actions/setup-python@v5",
+            install,
+            f"run: python developer/tests/ci/build_agent_runtime_sidecar.py --target {target}",
+            consumer,
+        )
+        positions = []
+        for marker in markers:
+            self.assertEqual(job.count(marker), 1, marker)
+            positions.append(job.index(marker))
+        self.assertEqual(positions, sorted(positions))
+        python_step = next(step for step in job.split("\n      - ") if markers[0] in step)
+        self.assertIn("python-version: '3.12'", python_step)
+        for step in job.split("\n      - "):
+            if any(marker in step for marker in markers[:3]):
+                self.assertNotIn("\n        if:", step)
+                self.assertNotIn("continue-on-error:", step)
+
+    def test_release_matrix_matches_native_sidecar_targets(self) -> None:
+        job = workflow_block(self.release, "tauri-release", indent=2)
+        matrix = workflow_block(job, "include", indent=8)
+        entries = [
+            dict(line.strip().split(": ", 1) for line in entry.splitlines())
+            for entry in matrix.split("          - ")[1:]
+        ]
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(
+            {
+                entry["platformKey"]: (entry["platform"], entry.get("target"), entry.get("pythonArchitecture"))
+                for entry in entries
+            },
+            {
+                "windows": ("windows-2022", "x86_64-pc-windows-msvc", "x64"),
+                "macos": ("macos-latest", "aarch64-apple-darwin", "arm64"),
+                "linux": ("ubuntu-22.04", "x86_64-unknown-linux-gnu", "x64"),
+            },
+        )
+        self.assertIn("targets: ${{ matrix.target }}", job)
+        self.assertIn("architecture: ${{ matrix.pythonArchitecture }}", job)
+        macos = next(entry for entry in entries if entry["platformKey"] == "macos")
+        self.assertEqual(macos["args"].strip("'\""), "--target aarch64-apple-darwin")
 
 
 class ReleaseConfigTests(unittest.TestCase):
