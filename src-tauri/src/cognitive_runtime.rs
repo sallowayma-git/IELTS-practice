@@ -2455,6 +2455,10 @@ pub(crate) fn decode_frame(
 }
 
 #[cfg(test)]
+#[path = "../../developer/tests/rust/runtime_capability_contract.rs"]
+mod capability_contract_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
