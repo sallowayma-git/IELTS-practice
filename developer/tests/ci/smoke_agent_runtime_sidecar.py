@@ -161,6 +161,7 @@ def main() -> int:
                 "runtime.handshake",
                 {
                     "hostProtocolVersion": 1,
+                    # Request a subset: the response must still advertise the full set.
                     "requestedCapabilities": [
                         "runtime.health",
                         "runtime.shutdown",
@@ -174,11 +175,14 @@ def main() -> int:
         handshake = read_frame(process.stdout)
         cold_start_ms = (time.perf_counter() - started) * 1000
         metadata = handshake.get("result", {})
+        # Keep this release contract independent of the Python runtime constant.
         expected_capabilities = {
             "runtime.health": "1",
             "runtime.shutdown": "1",
             "memory.candidates.extract": "1",
             "memory.candidates.generate": "1",
+            "dream.daily": "1",
+            "planner.study_plan": "1",
         }
         if handshake.get("ok") is not True:
             raise RuntimeError(f"handshake failed: {handshake}")
