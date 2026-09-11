@@ -29,6 +29,27 @@ unconfigured and cannot download updates.
 
 ## Release
 
+Before creating a version tag, run the complete release gates on the candidate
+branch or commit's branch:
+
+```powershell
+gh workflow run release.yml --ref <candidate-branch>
+```
+
+A manual run executes the same `shipping-gate` and `rust-test` jobs as a tag
+release. Both jobs prepare a fresh Windows sidecar in their own workspace before
+Tauri compilation. The shipping job runs the static suite, shared visual assertion
+tests, all 17 visual scripts, and the packaged native practice flow; the workspace
+job then runs the complete Rust test suite. Reports, screenshots, native driver
+diagnostics, the tested host, and its matching sidecar are uploaded as evidence.
+
+Manual runs have read-only repository permissions and skip the complete signing,
+release attachment, and publication jobs, including when dispatched on a tag.
+Only a `v*` tag push can enter those jobs. Passing a manual run establishes the
+shipping and workspace gates; production signatures, notarization, signed bundle
+and updater verification, and installed update/restart acceptance still require
+their actual release evidence.
+
 1. Set the same semantic version in `src-tauri/tauri.conf.json`,
    `src-tauri/Cargo.toml`, and `apps/writing-vue/package.json`.
 2. Run the required gates in order:

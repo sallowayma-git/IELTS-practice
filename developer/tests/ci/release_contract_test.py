@@ -66,16 +66,52 @@ class WorkflowTriggerTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.branch_ci)
 
-    def test_release_is_tag_only_and_owns_desktop_packaging(self) -> None:
+    def test_release_supports_manual_gates_and_owns_desktop_packaging(self) -> None:
         trigger = workflow_block(self.release, "on")
         self.assertIn("push:", trigger)
         self.assertIn("tags:", trigger)
         self.assertIn("- 'v*'", trigger)
         self.assertNotIn("branches:", trigger)
         self.assertNotIn("pull_request:", trigger)
-        self.assertNotIn("workflow_dispatch:", trigger)
-        self.assertIn("cargo tauri build", self.release)
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertIn("tauri build --ci --no-bundle", self.release)
         self.assertIn("tauri-apps/tauri-action", self.release)
+
+    def test_manual_runs_cannot_sign_attach_or_publish_a_release(self) -> None:
+        self.assertEqual(workflow_block(self.release, "permissions"), "permissions:\n  contents: read\n")
+        tag_push_only = "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+        for name in ("tauri-release", "publish-release"):
+            with self.subTest(job=name):
+                job = workflow_block(self.release, name, indent=2)
+                # A dispatch on a tag must also stop before certificate import,
+                # signing, or creating draft assets. Guard the complete job.
+                self.assertIn(f"\n    {tag_push_only}\n", job)
+                self.assertIn("\n    permissions:\n      contents: write\n", job)
+                self.assertNotIn("always()", job)
+                self.assertNotIn("continue-on-error", job)
+        for name in ("shipping-gate", "rust-test"):
+            job = workflow_block(self.release, name, indent=2)
+            self.assertNotIn("\n    if:", job)
+            self.assertNotIn("contents: write", job)
+            self.assertNotIn("secrets.", job)
+
+    def test_shipping_runs_all_regressions_before_workspace_acceptance(self) -> None:
+        job = workflow_block(self.release, "shipping-gate", indent=2)
+        markers = (
+            "run: python developer/tests/ci/run_static_suite.py",
+            "run: python developer/tests/e2e/visual_test_support_test.py",
+            "run: python developer/tests/e2e/run_visual_regressions.py",
+            "run: tauri build --ci --no-bundle",
+            "./developer/tests/ci/run_native_practice_acceptance.ps1",
+        )
+        positions = [job.index(marker) for marker in markers]
+        self.assertEqual(positions, sorted(positions))
+        for marker in markers:
+            step = next(step for step in job.split("\n      - ") if marker in step)
+            self.assertNotIn("\n        if:", step)
+            self.assertNotIn("continue-on-error", step)
+        self.assertIn("developer/tests/e2e/reports/native-diagnostics/**", job)
+        self.assertIn("needs: shipping-gate", workflow_block(self.release, "rust-test", indent=2))
 
     def test_release_prepares_sidecar_in_every_consuming_job(self) -> None:
         consumers = (

@@ -1,24 +1,28 @@
-# Tag release — Tauri 2 only (Electron packaging removed)
+# Tauri 2 release. Manual runs verify the shipping gates; v* pushes publish.
 
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   TAURI_CLI_VERSION: 2.11.4
   TAURI_DRIVER_VERSION: 2.0.6
   PY_PLAYWRIGHT_VERSION: 1.61.0
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
   shipping-gate:
     runs-on: windows-2022
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -33,6 +37,8 @@ jobs:
       - name: Install frontend deps
         run: npm --prefix apps/writing-vue ci --no-fund --no-audit
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Install pinned sidecar build and runtime dependencies
         run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
       - name: Build and smoke native sidecar before static compilation
@@ -51,19 +57,21 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check "playwright==$env:PY_PLAYWRIGHT_VERSION"
           python -m playwright install chromium
+      - name: Test shared visual assertions
+        run: python developer/tests/e2e/visual_test_support_test.py
       - name: Run visual regression matrix
         run: python developer/tests/e2e/run_visual_regressions.py
       - name: Install Tauri WebDriver tooling
         shell: pwsh
         run: |
-          cargo install tauri-cli --version $env:TAURI_CLI_VERSION --locked
+          npm install --global "@tauri-apps/cli@$env:TAURI_CLI_VERSION" --no-fund --no-audit
           cargo install tauri-driver --version $env:TAURI_DRIVER_VERSION --locked
       - name: Install matching WebView2 EdgeDriver
         id: edge-driver
         shell: pwsh
         run: ./developer/tests/ci/install_edge_webdriver.ps1
       - name: Build packaged Tauri application
-        run: cargo tauri build --no-bundle
+        run: tauri build --ci --no-bundle
       - name: Packaged Tauri WebView gate
         shell: pwsh
         env:
@@ -71,7 +79,7 @@ jobs:
           TAURI_NATIVE_DRIVER: ${{ steps.edge-driver.outputs.driver-path }}
         run: |
           $env:TAURI_DRIVER = (Get-Command tauri-driver).Source
-          python developer/tests/e2e/suite_practice_flow.py
+          ./developer/tests/ci/run_native_practice_acceptance.ps1
       - name: Upload gate evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,13 +89,17 @@ jobs:
             developer/tests/e2e/reports/static-ci-report.json
             developer/tests/e2e/reports/suite-practice-flow-report.json
             developer/tests/e2e/reports/tauri-driver.log
+            developer/tests/e2e/reports/native-diagnostics/**
             developer/tests/e2e/reports/visual-ci-evidence/**
             developer/tests/e2e/reports/*-current.png
+            target/release/ielts-practice-tauri.exe
+            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc*
           if-no-files-found: error
 
   rust-test:
     needs: shipping-gate
     runs-on: windows-2022
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -121,6 +133,9 @@ jobs:
 
   tauri-release:
     needs: rust-test
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -264,6 +279,9 @@ jobs:
 
   publish-release:
     needs: tauri-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
