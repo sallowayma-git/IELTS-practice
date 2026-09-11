@@ -29,6 +29,27 @@ unconfigured and cannot download updates.
 
 ## Release
 
+Before creating a version tag, run the complete release gates on the candidate
+branch:
+
+```powershell
+gh workflow run release.yml --ref <candidate-branch>
+```
+
+A manual run executes the same `shipping-gate` and `rust-test` jobs as a tag
+release. Both jobs prepare a fresh Windows sidecar in their own workspace before
+Tauri compilation. The shipping job runs the static suite, shared visual assertion
+tests, all 17 visual scripts, and the packaged native practice flow; the workspace
+job then runs the complete Rust test suite. Reports, screenshots, native driver
+diagnostics, the tested host, and its matching sidecar are uploaded as evidence.
+
+Manual runs have read-only repository permissions and skip the complete signing,
+release attachment, and publication jobs, including when dispatched on a tag.
+Only a `v*` tag push can enter those jobs. Passing a manual run establishes the
+shipping and workspace gates; production signatures, notarization, signed bundle
+and updater verification, and installed update/restart acceptance still require
+their actual release evidence.
+
 1. Set the same semantic version in `src-tauri/tauri.conf.json`,
    `src-tauri/Cargo.toml`, and `apps/writing-vue/package.json`.
 2. Run the required gates in order:
@@ -40,8 +61,12 @@ unconfigured and cannot download updates.
 
 3. Push an annotated `vX.Y.Z` tag. The tag must match all three shipping versions.
 4. The release workflow builds Windows, macOS arm64, and Linux bundles. Each job
-   verifies an installable package, updater archive, and matching `.sig` before it
-   can complete.
+   verifies an installable package and every updater artifact's matching `.sig`
+   before it can complete. With `createUpdaterArtifacts: true`, Tauri 2 signs the
+   Windows `.exe`/`.msi` and Linux `.AppImage`/`.deb`/`.rpm` files directly;
+   macOS uses `.app.tar.gz`. Windows/Linux v1-compatible wrappers are not release
+   inputs. The pinned [Tauri CLI signing implementation](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-cli/src/bundle.rs)
+   defines these artifacts.
 5. Windows additionally passes `signtool verify`; macOS passes strict `codesign`
    verification and Gatekeeper `spctl` assessment after notarization.
 6. The release remains draft until `latest.json` contains signed HTTPS entries for
