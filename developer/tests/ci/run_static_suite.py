@@ -290,6 +290,10 @@ def main() -> int:
             [sys.executable, "developer/tests/ci/check_reading_data_integrity.py"],
         ),
         run_command(
+            "Native reading resource checksums",
+            [sys.executable, "developer/tests/ci/verify_reading_resources.py"],
+        ),
+        run_command(
             "Python cognitive protocol",
             [
                 sys.executable,

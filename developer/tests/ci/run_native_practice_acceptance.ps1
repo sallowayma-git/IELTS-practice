@@ -28,6 +28,9 @@ $flowExit = 1
 try {
     python (Join-Path $repository 'developer/tests/e2e/suite_practice_flow.py')
     $flowExit = $LASTEXITCODE
+    if ($flowExit -ne 0) {
+        python (Join-Path $repository 'developer/tests/e2e/probe_native_startup.py')
+    }
 } finally {
     $env:TAURI_NATIVE_DRIVER = $nativeDriver
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousArguments

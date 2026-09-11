@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from verify_packaged_sidecar import exactly_one
+from verify_reading_resources import verify_reading_resources
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +50,8 @@ def verify_deb() -> dict[str, object]:
         sidecar = host.with_name("ielts-agent-runtime")
         digest = sha256(sidecar)
         subprocess.run([str(host), "--verify-sidecar"], check=True, timeout=30)
+        manifest = exactly_one(list(Path(temporary).rglob("reading/manifest.json")), "reading manifest")
+        reading_resources = verify_reading_resources(manifest.parent)
         subprocess.run([
             sys.executable, str(ROOT / "developer/tests/ci/smoke_agent_runtime_sidecar.py"),
             "--target", "x86_64-unknown-linux-gnu", "--binary", str(sidecar),
@@ -58,6 +61,7 @@ def verify_deb() -> dict[str, object]:
             "status": "passed", "kind": "deb", "sidecarSha256": digest,
             "hostSha256": sha256(host), "artifactSha256": sha256(package),
             "identityStatus": "passed", "smokeStatus": "passed",
+            "readingResources": reading_resources,
         }
 
 
@@ -75,7 +79,7 @@ def main() -> int:
         result, filename = {"status": "failed"}, "packaged-sidecar.json"
         try:
             result = verify_deb()
-        except (OSError, ValueError, subprocess.SubprocessError) as error:
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
             result["error"] = str(error)
     (REPORT / filename).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))

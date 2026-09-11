@@ -15,9 +15,13 @@ import verify_updater_manifest
 def load_tests(loader, tests, pattern):
     import packaged_sidecar_test
     import sidecar_signing_test
+    import sidecar_memory_test
+    import reading_resource_test
 
     tests.addTests(loader.loadTestsFromModule(packaged_sidecar_test))
     tests.addTests(loader.loadTestsFromModule(sidecar_signing_test))
+    tests.addTests(loader.loadTestsFromModule(sidecar_memory_test))
+    tests.addTests(loader.loadTestsFromModule(reading_resource_test))
     return tests
 
 

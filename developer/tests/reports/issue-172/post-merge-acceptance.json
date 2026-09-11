@@ -37,7 +37,7 @@
   "priorWindowsPackagingEvidence": "signing-fix-validation.json",
   "remainingAcceptance": [
     "A complete passing release shipping-gate, including the independently tracked visual regression gate.",
-    "macOS ARM64 and Linux x86_64 native freeze, smoke and desktop packaging evidence.",
+    "Fresh three-platform package evidence with raw reading-resource hashes and positive process-tree RSS, followed by a passing Windows native practice flow.",
     "Production-signed Windows and macOS packages, including macOS notarization and platform signature verification.",
     "Installed-application and updater acceptance with the production release configuration.",
     "A complete passing tag-release workflow covering all supported platforms."
@@ -52,7 +52,7 @@
       "requirement": "Consistent signing/release channel for the sidecar and installer; signed binaries/updater at release."
     },
     {
-      "document": "developer/docs/IELTS_Practice_Rust_Tauri_重构任务书.md",
+      "document": "developer/docs/IELTS_Practice_Rust_Tauri_\u91cd\u6784\u4efb\u52a1\u4e66.md",
       "sections": [
         "Phase 2",
         "Phase 10"
@@ -141,7 +141,7 @@
     "nativeFailure": "The DevTools target detached during initial navigation to tauri.localhost; the browser connection then closed.",
     "nativeDriverVersion": "131.0.2903.86",
     "diagnosticsArtifact": "native-acceptance-required-regressions",
-    "platformMatrix": "in progress; all three native freezes, smoke checks, and Rust workspace suites passed",
+    "platformMatrix": "All three platform build, workspace, identity and protocol steps completed. Their original memory gate did not measure the complete process tree, and the Windows package failed a subsequent GUI startup check; these runs are not full acceptance.",
     "currentHarnessVerifiedRemotely": false
   },
   "requiredRegressionSequence": {
@@ -243,5 +243,72 @@
       "platformMatrix": "skipped after required-regressions failed",
       "currentHarnessVerifiedRemotely": false
     }
-  ]
+  ],
+  "windowsResourceFailure": {
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+    "buildCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
+    "msiSha256": "0defc0a1c54b3044bf97cb7db1bc67cc8fac7d9d560e0809c6baa11788306f61",
+    "hostSha256": "f1ced31f7f654984fba8df9502e8f4aae68a32edc699b3595abe214516f04067",
+    "payloadsChecked": 225,
+    "checksumFailures": 225,
+    "firstPayload": {
+      "file": "payloads/p1-high-01.json",
+      "expected": "3dfe904bd6422173fdfd7846fadf7ce9d1b86c99d932d7006071ff4a137a93a1",
+      "actual": "811156f204da7fc8a9593e7699e1a185cf9bb5e26c6b5d0986df7358b89c54b2",
+      "CRLF": 110,
+      "normalized": "3dfe904bd6422173fdfd7846fadf7ce9d1b86c99d932d7006071ff4a137a93a1"
+    },
+    "nativeExitCode": 101,
+    "nativeError": "Failed to setup app: error encountered during setup hook: validation error: reading resource checksum mismatch: p1-high-01",
+    "cause": "core.autocrlf=true changed LF payload bytes to CRLF; native startup hashes raw bytes. Parsing JSON alone did not detect the corruption.",
+    "fix": "Pin hashed payloads to LF in .gitattributes; validate raw-byte hashes in the static gate and extracted Windows/macOS/Linux packages.",
+    "regressionTests": "A real core.autocrlf=true checkout preserves the hashes; CRLF corruption is rejected even when parsed JSON and sidecar identity are unchanged.",
+    "remoteFixStatus": "pending"
+  },
+  "processTreeMemoryVerification": {
+    "previousGap": "Windows sampled only the PyInstaller bootloader; macOS and Linux returned zero and skipped the RSS gate.",
+    "fix": "Measure the bootloader and every runtime descendant on each supported platform. Zero, inaccessible and over-budget measurements fail.",
+    "maxIdleRssBytes": 157286400,
+    "releaseContractTestsPassed": 56,
+    "windows": {
+      "target": "x86_64-pc-windows-msvc",
+      "sha256": "6ebf1cdde33a8c9e85a708f08cbea00c04ee6947532ef2ef1a94efda44050984",
+      "coldStartMs": 907.246,
+      "idleRssBytes": 36155392,
+      "idleRssScope": "process-tree",
+      "idleRssProcessCount": 2,
+      "thresholds": {
+        "unpackedSize": true,
+        "compressedSize": true,
+        "installerDelta": true,
+        "idleRss": true,
+        "coldStart": true
+      },
+      "status": "pass"
+    },
+    "macosAndLinux": "Fresh native measurements pending."
+  },
+  "resourceFixLocalVerification": {
+    "testedBaseCommit": "b0ddc87226660ef4b82c8c21f42bc9a614a5b3a2",
+    "gitDirty": true,
+    "static": {
+      "generatedAt": "2026-09-11T10:53:10.367492+00:00",
+      "summary": {
+        "total": 29,
+        "passed": 29,
+        "failed": 0
+      }
+    },
+    "native": {
+      "generatedAt": "2026-09-11T10:53:46.867351+00:00",
+      "passed": 16,
+      "applicationSha256": "98c8083ce37a4f8aca3c8502ad5dcba30b7a9c483a6c202433aa3a7ee4018e76"
+    },
+    "releaseContractTestsPassed": 56,
+    "commandSequence": [
+      "python developer/tests/ci/run_static_suite.py",
+      "python developer/tests/e2e/suite_practice_flow.py"
+    ],
+    "corruptedCiMsiRejectedByPackageGate": true
+  }
 }

@@ -14,6 +14,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from verify_reading_resources import verify_reading_resources
+
 
 ROOT = Path(__file__).resolve().parents[3]
 SMOKE = ROOT / "developer/tests/ci/smoke_agent_runtime_sidecar.py"
@@ -117,12 +119,14 @@ def verify_pair(directory: Path, platform: str, smoke_report: Path) -> dict[str,
     try:
         run_checked([str(host), "--verify-sidecar"], 30)
         result["identityStatus"] = "passed"
+        resources = host.parent if platform == "windows" else host.parent.parent / "Resources"
+        result["readingResources"] = verify_reading_resources(resources / "reading")
         run_checked([
             sys.executable, str(SMOKE), "--target", TARGETS[platform],
             "--binary", str(sidecar), "--build-id", digest, "--report", str(smoke_report),
         ], 120)
         result["status"] = "passed"
-    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
         result["error"] = str(error)
     return result
 
