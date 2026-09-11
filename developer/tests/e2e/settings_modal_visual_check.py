@@ -20,8 +20,13 @@ def install_tauri_mock(page):
         invoke: async (command) => {
           if (command === 'list_settings') return { ok: true, data: [] };
           if (command === 'history_get_retention_policy') return { ok: true, data: { maxTerminalAttempts: 100 } };
-          if (command === 'ai_list_configs') return { ok: true, data: [] };
-          if (command === 'writing_prompt_list') return { ok: true, data: [] };
+          if (command === 'ai_list_configs') return { ok: true, data: [{
+            id: 1, config_name: 'Visual fixture', provider: 'openai', default_model: 'fixture-model',
+            is_enabled: true, is_default: true, has_secret: true,
+          }] };
+          if (command === 'writing_prompt_list') return { ok: true, data: [{
+            id: 1, task_type: 'task2', version: 'visual-fixture', is_active: true,
+          }] };
           if (command === 'writing_topic_statistics') return { ok: true, data: { total: 0, byTaskType: [] } };
           if (command === 'get_app_info') return { host: 'Tauri', tauriVersion: '2', version: '0.1.0' };
           if (command === 'get_app_data_paths') return { appData: 'C:/atlas/data', backups: 'C:/atlas/backups' };
@@ -148,6 +153,11 @@ def main():
                 for tab_name in ("模型参数", "数据管理", "关于", "提示词", "API 配置"):
                     page.locator(".settings-tabs .settings-tab").filter(has_text=tab_name).click()
                     page.wait_for_timeout(30)
+                    if tab_name == '模型参数':
+                        page.locator('.mode-card').filter(has_text='自定义模式').click()
+                        page.wait_for_selector('.custom-temperature-panel')
+                    if tab_name in ('提示词', 'API 配置'):
+                        page.wait_for_selector('.settings-detail-panel .settings-list__row')
                     detail_surfaces[tab_name] = read_detail_surface_geometry(page)
                     assert_detail_surfaces(f"{name}: {tab_name}", detail_surfaces[tab_name])
                     assert_flat_surfaces(

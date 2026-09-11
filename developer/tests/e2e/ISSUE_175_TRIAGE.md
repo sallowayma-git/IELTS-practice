@@ -52,6 +52,15 @@ layout property or increases the timeout.
 
 ## Validation and evidence
 
+The shared surface assertion checks computed background-color alpha as well as
+background images and shadows. It accepts opaque legacy and modern CSS colors,
+and rejects transparent, translucent, and `color-mix(..., transparent)` results.
+The Windows visual job first runs `visual_test_support_test.py` against Chromium,
+including alpha `0.999`, multiple matched surfaces, gradient, and shadow cases.
+Settings fixtures include populated lists and the custom temperature panel;
+their card backgrounds use opaque theme tokens. Reading Library configuration
+checks the painted `.backup-list-card`, whose outer container only owns layout.
+
 Run `python developer/tests/e2e/run_visual_regressions.py` against the production
 Vue build. It still executes every one of the original 17 scripts. The artifact
 contains each script's log, fresh screenshots, fresh per-case JSON reports,

@@ -2224,6 +2224,7 @@ function updateSegmentedIndicators() {
 .practice-library .hero-settings-group > .hero-panel,
 .practice-library .backup-list-card {
   padding: 18px;
+  background: var(--anth-surface);
 }
 
 .practice-library .settings-file-input {

@@ -207,7 +207,7 @@ def main():
                 config = config_geometry["config"]
                 if not config:
                     raise AssertionError(f"{name}: library config is missing")
-                assert_flat_surfaces(page, '[data-reading-library-config-list]', f'{name}: config')
+                assert_flat_surfaces(page, '[data-reading-library-config-list] > .backup-list-card', f'{name}: config')
                 capture_state(page, f'reading-config-{name}')
                 page.locator(".reading-library-config-list .backup-list-dismiss").click()
                 page.wait_for_selector("[data-reading-library-config-list]", state="detached")
