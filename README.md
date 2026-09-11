@@ -4,9 +4,18 @@ IELTS Atlas 是基于 **Tauri 2 + Rust + Vue + SQLite** 的本地优先 IELTS �
 
 ## 开发
 
+前置条件：Node.js 20+、Python 3.12+、Rust stable（rustup）。
+
 ```bash
+# 1. 安装 Python sidecar 依赖并冻结运行时到 src-tauri/binaries/
+python -m pip install -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+python developer/tests/ci/build_agent_runtime_sidecar.py
+
+# 2. 安装前端依赖并构建
 npm run prepare:writing
 npm run build:writing
+
+# 3. 启动 Tauri 开发
 cargo tauri dev
 ```
 
