@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "issue": 172,
+  "status": "incomplete",
+  "mergedCommit": "077fbc1d9ec6191278b11c749a46fac82c6cec41",
+  "implementationTree": "ec32ad1d8ae411888e0f5cb28910cad38908a3b6",
+  "workflowRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360",
+  "remoteStaticGate": {
+    "status": "passed",
+    "passed": 28,
+    "failed": 0,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989590167"
+  },
+  "remoteRustWorkspace": {
+    "status": "passed",
+    "suites": 52,
+    "passed": 507,
+    "failed": 0,
+    "ignored": 0,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989589981",
+    "freshSidecar": {
+      "status": "pass",
+      "target": "x86_64-pc-windows-msvc",
+      "sha256": "3f62c58a51d8406f31dd2d5fa33693cf302d945bdc264dc1255ecfa1b58199ee",
+      "coldStartMs": 722.822,
+      "allExistingThresholdsPassed": true
+    }
+  },
+  "remoteVisualGate": {
+    "status": "failed",
+    "executed": 17,
+    "passed": 1,
+    "failed": 16,
+    "trackedBy": 175,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989590185"
+  },
+  "priorWindowsPackagingEvidence": "signing-fix-validation.json",
+  "remainingAcceptance": [
+    "A complete passing release shipping-gate, including the independently tracked visual regression gate.",
+    "macOS ARM64 and Linux x86_64 native freeze, smoke and desktop packaging evidence.",
+    "Production-signed Windows and macOS packages, including macOS notarization and platform signature verification.",
+    "Installed-application and updater acceptance with the production release configuration.",
+    "A complete passing tag-release workflow covering all supported platforms."
+  ],
+  "requirementsProvenance": [
+    {
+      "document": "developer/docs/IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md",
+      "sections": [
+        "17.14 Sidecar Packaging / Supply-chain Gate",
+        "20.12 CI layers / Release"
+      ],
+      "requirement": "Consistent signing/release channel for the sidecar and installer; signed binaries/updater at release."
+    },
+    {
+      "document": "developer/docs/IELTS_Practice_Rust_Tauri_重构任务书.md",
+      "sections": [
+        "Phase 2",
+        "Phase 10"
+      ],
+      "requirement": "Shell development may defer signing exercises until keys are available; final release acceptance still requires signing and platform validation."
+    },
+    {
+      "document": "developer/docs/phase10-release-runbook.md",
+      "sections": [
+        "Required repository secrets",
+        "Release"
+      ],
+      "requirement": "The implementation specifies Windows Authenticode, Apple signing/notarization and Tauri updater credentials."
+    }
+  ],
+  "closureEligible": false,
+  "nativePickerVerification": {
+    "testedBaseCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
+    "testedHarnessBlob": "1b7022895523aa4a8df450f2f7c17fcfc24ff52b",
+    "commandSequence": [
+      "python developer/tests/ci/run_static_suite.py",
+      "python developer/tests/e2e/suite_practice_flow.py"
+    ],
+    "static": {
+      "total": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    "nativeStatus": "passed",
+    "nativeChecks": {
+      "launch": "passed",
+      "vueRoutes": "passed",
+      "uiRouteVisuals": "passed",
+      "readingIpc": "passed",
+      "agentIpcBoundary": "passed",
+      "agentWorkspaceRun": "passed",
+      "readingArchiveBoundary": "passed",
+      "historyRetentionBoundary": "passed",
+      "bundledResources": "passed",
+      "readingView": "passed",
+      "readingPerformance": "passed",
+      "notesDialog": "passed",
+      "readingSubmitBoundary": "passed",
+      "backupPathBoundary": "passed",
+      "updaterBoundary": "passed",
+      "sqliteRestart": "passed"
+    },
+    "nativeGeneratedAt": "2026-09-11T17:06:53.064435+08:00",
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "productionSourceChanged": false
+  }
+}
