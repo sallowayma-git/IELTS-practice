@@ -30,7 +30,7 @@ unconfigured and cannot download updates.
 ## Release
 
 Before creating a version tag, run the complete release gates on the candidate
-branch or commit's branch:
+branch:
 
 ```powershell
 gh workflow run release.yml --ref <candidate-branch>
@@ -61,8 +61,12 @@ their actual release evidence.
 
 3. Push an annotated `vX.Y.Z` tag. The tag must match all three shipping versions.
 4. The release workflow builds Windows, macOS arm64, and Linux bundles. Each job
-   verifies an installable package, updater archive, and matching `.sig` before it
-   can complete.
+   verifies an installable package and every updater artifact's matching `.sig`
+   before it can complete. With `createUpdaterArtifacts: true`, Tauri 2 signs the
+   Windows `.exe`/`.msi` and Linux `.AppImage`/`.deb`/`.rpm` files directly;
+   macOS uses `.app.tar.gz`. Windows/Linux v1-compatible wrappers are not release
+   inputs. The pinned [Tauri CLI signing implementation](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-cli/src/bundle.rs)
+   defines these artifacts.
 5. Windows additionally passes `signtool verify`; macOS passes strict `codesign`
    verification and Gatekeeper `spctl` assessment after notarization.
 6. The release remains draft until `latest.json` contains signed HTTPS entries for

@@ -203,7 +203,7 @@ class ReleaseConfigTests(unittest.TestCase):
             prepare_tauri_release.DEFAULT_ENDPOINT,
             "A" * 64,
         )
-        self.assertTrue(overlay["bundle"]["createUpdaterArtifacts"])
+        self.assertIs(overlay["bundle"]["createUpdaterArtifacts"], True)
         updater = overlay["plugins"]["updater"]
         self.assertEqual(updater["endpoints"], [prepare_tauri_release.DEFAULT_ENDPOINT])
         self.assertEqual(updater["pubkey"], "A" * 64)
@@ -294,27 +294,90 @@ class BundleVerificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             installer = root / "IELTS Practice_0.1.0_x64-setup.exe"
-            updater = root / "IELTS Practice_0.1.0_x64-setup.nsis.zip"
-            signature = Path(f"{updater}.sig")
-            for path in (installer, updater, signature):
+            msi = root / "IELTS Practice_0.1.0_x64.msi"
+            files = [installer, msi, Path(f"{installer}.sig"), Path(f"{msi}.sig")]
+            for path in files:
                 path.write_bytes(b"artifact")
             result = verify_tauri_bundle.verify_artifacts(
-                [installer, updater, signature],
+                files,
                 "windows",
                 require_updater=True,
                 require_signatures=True,
             )
             self.assertEqual(result["status"], "passed")
+            self.assertEqual(set(result["updaterArchives"]), {str(installer), str(msi)})
+
+    def test_linux_v2_updaters_use_native_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            packages = [
+                root / f"IELTS-Practice_0.1.0_amd64{suffix}"
+                for suffix in (".AppImage", ".deb", ".rpm")
+            ]
+            files = packages + [Path(f"{package}.sig") for package in packages]
+            for path in files:
+                path.write_bytes(b"artifact")
+            result = verify_tauri_bundle.verify_artifacts(files, "linux", True, True)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(set(result["updaterArchives"]), {str(package) for package in packages})
+
+    def test_macos_still_requires_the_signed_app_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dmg = root / "IELTS Practice_0.1.0_aarch64.dmg"
+            archive = root / "IELTS Practice.app.tar.gz"
+            signature = Path(f"{archive}.sig")
+            files = [dmg, archive, signature]
+            for path in files:
+                path.write_bytes(b"artifact")
+            result = verify_tauri_bundle.verify_artifacts(files, "macos", True, True)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["updaterArchives"], [str(archive)])
+
+    def test_every_native_updater_requires_its_own_nonempty_signature(self) -> None:
+        cases = (
+            ("windows", "setup.exe"), ("windows", "app.msi"),
+            ("linux", "app.AppImage"), ("linux", "app.deb"), ("linux", "app.rpm"),
+        )
+        for platform_name, name in cases:
+            with self.subTest(platform=platform_name, name=name), tempfile.TemporaryDirectory() as directory:
+                artifact = Path(directory) / name
+                artifact.write_bytes(b"artifact")
+                result = verify_tauri_bundle.verify_artifacts([artifact], platform_name, True, True)
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
+                signature = Path(f"{artifact}.sig")
+                signature.write_bytes(b"")
+                result = verify_tauri_bundle.verify_artifacts([artifact, signature], platform_name, True, True)
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
+
+    def test_legacy_archive_signature_cannot_replace_native_package_signature(self) -> None:
+        cases = (
+            ("windows", "app.nsis.zip", "app-setup.exe"),
+            ("windows", "app.msi.zip", "app.msi"),
+            ("linux", "app.AppImage.tar.gz", "app.AppImage"),
+        )
+        for platform_name, name, native_name in cases:
+            with self.subTest(platform=platform_name, name=name), tempfile.TemporaryDirectory() as directory:
+                artifact = Path(directory) / native_name
+                legacy = Path(directory) / name
+                signature = Path(f"{legacy}.sig")
+                artifact.write_bytes(b"artifact")
+                legacy.write_bytes(b"legacy archive")
+                signature.write_bytes(b"legacy signature")
+                result = verify_tauri_bundle.verify_artifacts(
+                    [artifact, legacy, signature], platform_name, True, True,
+                )
+                self.assertEqual(result["updaterArchives"], [str(artifact)])
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
 
     def test_missing_signature_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             installer = root / "IELTS Practice_0.1.0_amd64.AppImage"
-            updater = root / "IELTS Practice_0.1.0_amd64.AppImage.tar.gz"
-            for path in (installer, updater):
-                path.write_bytes(b"artifact")
+            installer.write_bytes(b"artifact")
             result = verify_tauri_bundle.verify_artifacts(
-                [installer, updater],
+                [installer],
                 "linux",
                 require_updater=True,
                 require_signatures=True,

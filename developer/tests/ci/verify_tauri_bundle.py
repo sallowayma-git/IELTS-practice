@@ -51,14 +51,16 @@ def is_installable(path: Path, platform_name: str) -> bool:
     return lower_name.endswith(".dmg")
 
 
-def is_updater_archive(path: Path, platform_name: str) -> bool:
+def is_updater_artifact(path: Path, platform_name: str) -> bool:
     lower_name = path.name.lower()
     if lower_name.endswith(".sig"):
         return False
     suffixes = {
-        "windows": (".nsis.zip", ".msi.zip"),
+        # createUpdaterArtifacts=true signs native installers in Tauri 2.
+        # ZIP/tar wrappers on Windows/Linux belong to v1Compatible mode.
+        "windows": (".exe", ".msi"),
         "macos": (".app.tar.gz",),
-        "linux": (".appimage.tar.gz",),
+        "linux": (".appimage", ".deb", ".rpm"),
     }
     return lower_name.endswith(suffixes[platform_name])
 
@@ -77,11 +79,11 @@ def verify_artifacts(
     if not installables:
         errors.append(f"no installable {platform_name} bundle found")
 
-    updater_archives = [path for path in files if is_updater_archive(path, platform_name)]
-    if require_updater and not updater_archives:
-        errors.append(f"no {platform_name} updater archive found")
+    updater_artifacts = [path for path in files if is_updater_artifact(path, platform_name)]
+    if require_updater and not updater_artifacts:
+        errors.append(f"no {platform_name} updater artifact found")
 
-    publishable_artifacts = [*installables, *updater_archives]
+    publishable_artifacts = sorted(set(installables + updater_artifacts))
     empty_artifacts = [str(path) for path in publishable_artifacts if path.stat().st_size == 0]
     if empty_artifacts:
         errors.append(f"zero-byte publishable artifacts: {empty_artifacts}")
@@ -89,8 +91,8 @@ def verify_artifacts(
     signatures: list[Path] = []
     missing_signatures: list[str] = []
     file_set = {path.resolve() for path in files}
-    for archive in updater_archives:
-        signature = Path(f"{archive}.sig")
+    for artifact in updater_artifacts:
+        signature = Path(f"{artifact}.sig")
         if signature.resolve() in file_set and signature.stat().st_size > 0:
             signatures.append(signature)
         elif require_signatures:
@@ -102,7 +104,8 @@ def verify_artifacts(
         "status": "failed" if errors else "passed",
         "errors": errors,
         "installables": [str(path) for path in installables],
-        "updaterArchives": [str(path) for path in updater_archives],
+        # Preserve the report field used by existing acceptance evidence.
+        "updaterArchives": [str(path) for path in updater_artifacts],
         "signatures": [str(path) for path in signatures],
     }
 
