@@ -27,6 +27,8 @@ jobs:
         with:
           node-version: 20
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Install native build prerequisites
         run: |
           npm --prefix apps/writing-vue ci --no-fund --no-audit
@@ -119,6 +121,8 @@ jobs:
       - name: Build frontend for workspace tests
         run: npm --prefix apps/writing-vue run build
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Rust workspace acceptance
         run: cargo test --workspace --locked
       - name: Build native desktop bundles
