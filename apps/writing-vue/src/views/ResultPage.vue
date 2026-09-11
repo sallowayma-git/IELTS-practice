@@ -445,11 +445,12 @@ function writeNew() {
 }
 
 .result-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  align-items: start;
   gap: 24px;
   max-width: 1600px;
   margin: 0 auto;
-  height: calc(100vh - 120px);
 }
 
 .glass-card {
@@ -466,18 +467,17 @@ function writeNew() {
 }
 
 .essay-panel {
-  flex: 1.2;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .right-panel {
-  flex: 0.8;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  padding-right: 12px;
+  overflow: visible;
 }
 
 .border-base {
@@ -500,6 +500,8 @@ function writeNew() {
 
 .essay-head {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: space-between;
   align-items: flex-end;
 }
@@ -538,6 +540,7 @@ function writeNew() {
 
 .view-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -856,6 +859,22 @@ function writeNew() {
 .custom-scroll::-webkit-scrollbar-thumb {
   background: var(--atlas-accent-ring);
   border-radius: 4px;
+}
+
+@media (max-width: 1040px) {
+  .result-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .glass-card {
+    padding: 18px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

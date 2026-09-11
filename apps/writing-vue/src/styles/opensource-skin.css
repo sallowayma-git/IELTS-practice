@@ -257,7 +257,8 @@
 
 .atlas-source-ui :is(input, textarea, select):focus,
 .atlas-source-ui :is(input, textarea, select, button, a):focus-visible {
-  outline: none;
+  outline: 2px solid var(--anth-accent-strong);
+  outline-offset: 2px;
   border-color: var(--anth-accent);
   box-shadow: var(--anth-ring-focus);
 }
@@ -411,12 +412,13 @@
   .atlas-source-ui .nav-links {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
     border-radius: var(--anth-radius-md);
   }
 
   .atlas-source-ui .nav-item {
     justify-content: center;
-    min-height: 40px;
+    min-height: 44px;
   }
 }
 
@@ -655,11 +657,31 @@
   word-break: break-all;
 }
 
+.atlas-source-ui .settings-detail-panel > .settings-panel {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ════════════════════════════════════════════════════════════════════
  * Dialogs — the single sanctioned modal implementation.
  * Markup contract: .dialog-overlay > .dialog (optionally + .card) with
  * .dialog-actions row. Page-local overrides may set width/height only.
  * ════════════════════════════════════════════════════════════════════ */
+/* Fixed overlays must escape the main/nav stacking boundary and lock the
+   document scroll owner. Hidden Library overlays do not participate. */
+html:has(.atlas-source-ui :is(.dialog-overlay, .settings-detail-modal, .suite-mode-selector-modal.show, .pdf-viewer-overlay, .clock-overlay:not(.is-hidden))),
+body:has(.atlas-source-ui :is(.dialog-overlay, .settings-detail-modal, .suite-mode-selector-modal.show, .pdf-viewer-overlay, .clock-overlay:not(.is-hidden))),
+.atlas-source-ui:has(:is(.dialog-overlay, .settings-detail-modal, .suite-mode-selector-modal.show, .pdf-viewer-overlay, .clock-overlay:not(.is-hidden))) {
+  overflow: hidden;
+}
+
+.atlas-source-ui .app-main:has(:is(.dialog-overlay, .settings-detail-modal, .suite-mode-selector-modal.show, .pdf-viewer-overlay, .clock-overlay:not(.is-hidden))) {
+  z-index: var(--anth-z-overlay);
+}
+
 .atlas-source-ui .dialog-overlay,
 .atlas-source-ui .overlay {
   position: fixed;
@@ -1036,6 +1058,12 @@
 /* Result page */
 .atlas-source-ui .result-page {
   color: var(--anth-ink);
+}
+
+.atlas-source-ui .result-page .view-controls > .btn-brand {
+  background: var(--anth-accent-strong);
+  color: var(--anth-accent-contrast);
+  border-color: var(--anth-accent-strong);
 }
 
 /* Topic manage */

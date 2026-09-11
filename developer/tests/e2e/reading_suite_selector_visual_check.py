@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_document_unlocked
 
 
 BASE_URL = os.environ.get("READING_SUITE_SELECTOR_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -109,6 +110,8 @@ def read_geometry(page):
             bodyScrollWidth: document.body.scrollWidth,
             appMainZ: style(document.querySelector('.app-main'))?.zIndex || '',
             navZ: style(document.querySelector('.nav-shell'))?.zIndex || '',
+            modalAboveNav: Boolean(modal?.contains(document.elementFromPoint(innerWidth / 2, 8))),
+            documentLocked: [document.documentElement, document.body].every(node => getComputedStyle(node).overflowY === 'hidden'),
           };
         }
         """
@@ -125,10 +128,10 @@ def assert_bounded(name, geometry):
     body = geometry["bodyRect"]
     if not body:
         raise AssertionError(f"{name}: modal body is not bounded")
-    if geometry["appMainZ"] != "130":
-        raise AssertionError(f"{name}: app-main stacking context was not raised above navigation")
-    if geometry["navZ"] != "120":
-        raise AssertionError(f"{name}: navigation stacking contract changed")
+    if int(geometry["appMainZ"]) <= int(geometry["navZ"]) or not geometry['modalAboveNav']:
+        raise AssertionError(f"{name}: suite selector is obscured by navigation")
+    if not geometry['documentLocked']:
+        raise AssertionError(f"{name}: suite selector leaves the background scrollable")
 
 
 def assert_options(name, geometry):
@@ -190,6 +193,7 @@ def main():
                 page.wait_for_function("() => document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
                 page.mouse.click(2, 2)
                 page.wait_for_function("() => !document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
+                assert_document_unlocked(page, name)
 
                 report.append({"name": name, "geometry": geometry})
                 page.close()

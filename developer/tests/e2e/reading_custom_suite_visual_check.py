@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_flat_surfaces
 
 from reading_suite_selector_visual_check import CASES, install_tauri_mock
 
@@ -77,6 +78,7 @@ def read_geometry(page):
               whiteSpace: style(node)?.whiteSpace || '',
             })),
             confirmDisabled: Boolean(confirm?.disabled),
+            confirmOpacity: style(confirm)?.opacity,
             confirmRect: rect(confirm),
             cancelRect: rect(cancel),
           };
@@ -92,8 +94,6 @@ def assert_geometry(name, geometry, filled_count, ready=False):
     bar = geometry["barRect"]
     if not bar or bar["left"] < -1 or bar["right"] > width + 1:
         raise AssertionError(f"{name}: custom suite bar escapes viewport width")
-    if geometry["barShadow"] not in ("none", "rgba(0, 0, 0, 0)"):
-        raise AssertionError(f"{name}: custom suite bar remains a nested raised card")
     chips = geometry["chips"]
     if len(chips) != 3 or sum(chip["filled"] for chip in chips) != filled_count:
         raise AssertionError(f"{name}: P1/P2/P3 progress state is incorrect")
@@ -139,6 +139,7 @@ def main():
 
                 selecting = read_geometry(page)
                 assert_geometry(f"{name}: selecting", selecting, 0)
+                assert_flat_surfaces(page, '.custom-suite-selection-bar', f'{name}: selection')
                 if "P1" not in selecting["currentText"]:
                     raise AssertionError(f"{name}: custom flow did not begin at P1")
 
@@ -153,8 +154,10 @@ def main():
                 choose(page, "custom-p3", 3)
                 ready = read_geometry(page)
                 assert_geometry(f"{name}: ready", ready, 3, ready=True)
-                if ready["barBackground"] == selecting["barBackground"]:
-                    raise AssertionError(f"{name}: ready workflow surface lacks state contrast")
+                # Readiness is expressed by the completion text and enabled action,
+                # while the current skin keeps the surrounding card neutral.
+                if ready['currentText'] == selecting['currentText'] or ready['confirmOpacity'] == selecting['confirmOpacity']:
+                    raise AssertionError(f"{name}: ready workflow lacks a visible completion/action state")
                 page.screenshot(path=str(REPORT_DIR / f"reading-custom-suite-ready-{name}-current.png"))
 
                 page.locator("[data-custom-suite-cancel]").click()
