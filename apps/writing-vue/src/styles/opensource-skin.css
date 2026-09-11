@@ -691,6 +691,11 @@ body:has(.atlas-source-ui :is(.dialog-overlay, .settings-detail-modal, .suite-mo
   align-items: center;
   justify-content: center;
   padding: var(--anth-space-5);
+}
+
+.atlas-source-ui .dialog-overlay,
+.atlas-source-ui .overlay,
+.atlas-source-ui .suite-mode-selector-modal.show {
   background: var(--lg-bg-scrim);
 }
 
@@ -700,10 +705,14 @@ body:has(.atlas-source-ui :is(.dialog-overlay, .settings-detail-modal, .suite-mo
   max-height: min(86vh, 860px);
   overflow-y: auto;
   padding: var(--anth-space-6);
+  box-shadow: var(--anth-shadow-lg);
+}
+
+.atlas-source-ui .dialog,
+.atlas-source-ui .suite-mode-selector-content {
   background: var(--anth-surface);
   border: 1px solid var(--anth-border-strong);
   border-radius: var(--anth-radius-xl);
-  box-shadow: var(--anth-shadow-lg);
 }
 
 .atlas-source-ui .dialog h3 {
