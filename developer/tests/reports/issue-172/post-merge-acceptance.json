@@ -133,6 +133,67 @@
     "behavior": "Select the single live WebDriver window. Fill and confirm only the folder dialog owned by the staged test executable, checking the requested folder address before final confirmation."
   },
   "remoteNativeAcceptance": {
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34584228082",
+    "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+    "status": "failed",
+    "staticPassed": 28,
+    "releaseHostBuild": "passed",
+    "nativeFailure": "WebDriver disconnected from DevTools while obtaining window handles before Vue mount.",
+    "nativeDriverVersion": "131.0.2903.86",
+    "platformMatrix": "skipped after required-regressions failed",
+    "currentHarnessVerifiedRemotely": false
+  },
+  "requiredRegressionSequence": {
+    "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+    "gitDirty": false,
+    "steps": [
+      {
+        "command": "python developer/tests/ci/run_static_suite.py",
+        "generatedAt": "2026-09-11T09:32:28.623164+00:00",
+        "summary": {
+          "total": 28,
+          "passed": 28,
+          "failed": 0
+        }
+      },
+      {
+        "command": "python developer/tests/e2e/suite_practice_flow.py",
+        "generatedAt": "2026-09-11T09:33:08.263880+00:00",
+        "status": "passed",
+        "passed": 16
+      }
+    ],
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "nativeDriverVersion": "Microsoft Edge WebDriver 143.0.3650.96 (d55fe85d014134f7b4677688f46db9d610ddcfd5)"
+  },
+  "integratedRevisionCI": {
+    "testedCommit": "4ee52fcd245829a9855d1c693291f7afac081fc5",
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34584845715",
+    "status": "failed",
+    "static": {
+      "passed": 28,
+      "failed": 0,
+      "jobId": 103216560427
+    },
+    "rustWorkspace": {
+      "passed": 507,
+      "failed": 0,
+      "ignored": 0,
+      "resultSuites": 52,
+      "jobId": 103216560566
+    },
+    "visual": {
+      "executed": 17,
+      "passed": 1,
+      "failed": 16,
+      "trackedBy": 175,
+      "jobId": 103216560235
+    },
+    "pullRequestHead": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+    "testedTree": "57a3b5592c937b0c883c1b8bd454785559af7696",
+    "treeMatchesPullRequestHead": true
+  },
+  "previousRemoteNativeAcceptance": {
     "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34581348883",
     "testedCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
     "status": "failed",
@@ -141,5 +202,12 @@
     "nativeFailure": "WebDriver reported no such window before Vue mount.",
     "platformMatrix": "skipped after required-regressions failed",
     "currentHarnessVerifiedRemotely": false
+  },
+  "diagnosticWrapperVerification": {
+    "command": "developer/tests/ci/run_native_practice_acceptance.ps1",
+    "nativePassed": 16,
+    "generatedAt": "2026-09-11T09:50:16.103380+00:00",
+    "edgeDriverLogProduced": true,
+    "productionSourceChanged": false
   }
 }

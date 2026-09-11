@@ -2,6 +2,7 @@ name: Native release acceptance
 
 # Evidence collection for #172. This branch never publishes a release.
 on:
+  workflow_dispatch:
   push:
     branches: [codex/issue-172-release-acceptance]
 
@@ -48,7 +49,7 @@ jobs:
           TAURI_NATIVE_DRIVER: ${{ steps.edge-driver.outputs.driver-path }}
         run: |
           $env:TAURI_DRIVER = (Get-Command tauri-driver).Source
-          python developer/tests/e2e/suite_practice_flow.py
+          ./developer/tests/ci/run_native_practice_acceptance.ps1
       - name: Upload required regression evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,12 +59,18 @@ jobs:
             developer/tests/e2e/reports/static-ci-report.json
             developer/tests/e2e/reports/suite-practice-flow-report.json
             developer/tests/e2e/reports/tauri-driver.log
+            developer/tests/e2e/reports/native-diagnostics/**
             developer/tests/e2e/reports/*-current.png
             developer/tests/benchmarks/reports/m3_sidecar_release.json
+            target/release/ielts-practice-tauri.exe
+            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc*
           if-no-files-found: error
 
   native-acceptance:
     needs: required-regressions
+    # Collect the independent platform evidence after the required sequence,
+    # even if it fails. Its failure still fails the complete workflow.
+    if: ${{ !cancelled() }}
     name: Native acceptance (${{ matrix.target }})
     timeout-minutes: 60
     strategy:
