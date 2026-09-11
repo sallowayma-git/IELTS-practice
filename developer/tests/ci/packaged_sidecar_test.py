@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 
 import smoke_agent_runtime_sidecar as smoke
 import verify_packaged_sidecar as gate
+from reading_resource_test import write_reading_pack
 
 
 def write_pair(directory: Path, platform: str = "windows", content: bytes = b"final sidecar") -> tuple[Path, Path]:
@@ -21,6 +22,8 @@ def write_pair(directory: Path, platform: str = "windows", content: bytes = b"fi
     host = directory / f"ielts-practice-tauri{suffix}"
     sidecar.write_bytes(content)
     host.write_bytes(hashlib.sha256(content).hexdigest().encode("ascii"))
+    resources = directory if platform == "windows" else directory.parent / "Resources"
+    write_reading_pack(resources / "reading")
     return host, sidecar
 
 
@@ -132,6 +135,17 @@ class PackagedSidecarTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["identityStatus"], "pending")
         self.assertIn("identity mismatch", result["error"])
+        self.assertEqual(run.call_count, 1)
+
+    def test_packaged_reading_corruption_fails_even_with_matching_sidecar(self) -> None:
+        host, _ = write_pair(self.root / "image")
+        payload = host.parent / "reading/payloads/example.json"
+        payload.write_bytes(payload.read_bytes().replace(b"\n", b"\r\n"))
+        with patch.object(gate.subprocess, "Popen", side_effect=fake_process) as run:
+            result = gate.verify_pair(host.parent, "windows", self.report)
+        self.assertEqual(result["identityStatus"], "passed")
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("reading resource checksum mismatch", result["error"])
         self.assertEqual(run.call_count, 1)
 
     def test_host_from_different_build_fails_before_smoke(self) -> None:

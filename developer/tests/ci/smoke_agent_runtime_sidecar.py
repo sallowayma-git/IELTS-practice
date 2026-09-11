@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import gzip
 import hashlib
 import json
@@ -16,6 +15,8 @@ import sys
 import time
 from pathlib import Path
 from typing import BinaryIO
+
+import psutil
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -87,40 +88,26 @@ def response_for(call: dict, result: dict) -> dict:
     }
 
 
-def working_set_bytes(pid: int) -> int:
-    if sys.platform != "win32":
-        return 0
+def process_tree_rss_bytes(pid: int) -> tuple[int, int]:
+    """Include the frozen runtime child, not only PyInstaller's bootloader."""
+    root = psutil.Process(pid)
+    processes = [root, *root.children(recursive=True)]
+    samples = [process.memory_info().rss for process in processes]
+    if any(sample <= 0 for sample in samples):
+        raise RuntimeError("sidecar process memory measurement was unavailable")
+    return sum(samples), len(processes)
 
-    class ProcessMemoryCounters(ctypes.Structure):
-        _fields_ = [
-            ("cb", ctypes.c_ulong),
-            ("PageFaultCount", ctypes.c_ulong),
-            ("PeakWorkingSetSize", ctypes.c_size_t),
-            ("WorkingSetSize", ctypes.c_size_t),
-            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-            ("PagefileUsage", ctypes.c_size_t),
-            ("PeakPagefileUsage", ctypes.c_size_t),
-        ]
 
-    query_information = 0x0400
-    read_memory = 0x0010
-    handle = ctypes.windll.kernel32.OpenProcess(query_information | read_memory, False, pid)
-    if not handle:
-        raise ctypes.WinError()
-    try:
-        counters = ProcessMemoryCounters()
-        counters.cb = ctypes.sizeof(counters)
-        ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-            handle, ctypes.byref(counters), counters.cb
-        )
-        if not ok:
-            raise ctypes.WinError()
-        return int(counters.WorkingSetSize)
-    finally:
-        ctypes.windll.kernel32.CloseHandle(handle)
+def release_thresholds(unpacked_bytes: int, compressed_bytes: int,
+                       installer_delta_bytes: int, idle_rss_bytes: int,
+                       cold_start_ms: float) -> dict[str, bool]:
+    return {
+        "unpackedSize": unpacked_bytes <= MAX_UNPACKED_BYTES,
+        "compressedSize": compressed_bytes <= MAX_UNPACKED_BYTES,
+        "installerDelta": installer_delta_bytes <= MAX_INSTALLER_DELTA_BYTES,
+        "idleRss": 0 < idle_rss_bytes <= MAX_IDLE_RSS_BYTES,
+        "coldStart": sys.platform != "win32" or cold_start_ms <= MAX_WINDOWS_COLD_START_MS,
+    }
 
 
 def main() -> int:
@@ -203,7 +190,7 @@ def main() -> int:
         health = read_frame(process.stdout)
         if health.get("result", {}).get("state") != "ready":
             raise RuntimeError("frozen sidecar did not become ready")
-        idle_rss_bytes = working_set_bytes(process.pid)
+        idle_rss_bytes, idle_rss_process_count = process_tree_rss_bytes(process.pid)
 
         write_frame(
             process.stdin,
@@ -281,13 +268,10 @@ def main() -> int:
     unpacked_bytes = binary.stat().st_size
     compressed_bytes = len(gzip.compress(binary.read_bytes(), compresslevel=9))
     installer_delta_bytes = unpacked_bytes
-    thresholds = {
-        "unpackedSize": unpacked_bytes <= MAX_UNPACKED_BYTES,
-        "compressedSize": compressed_bytes <= MAX_UNPACKED_BYTES,
-        "installerDelta": installer_delta_bytes <= MAX_INSTALLER_DELTA_BYTES,
-        "idleRss": sys.platform != "win32" or idle_rss_bytes <= MAX_IDLE_RSS_BYTES,
-        "coldStart": sys.platform != "win32" or cold_start_ms <= MAX_WINDOWS_COLD_START_MS,
-    }
+    thresholds = release_thresholds(
+        unpacked_bytes, compressed_bytes, installer_delta_bytes,
+        idle_rss_bytes, cold_start_ms,
+    )
     report = {
         "schemaVersion": 1,
         "target": args.target,
@@ -300,6 +284,8 @@ def main() -> int:
         "installerDeltaUpperBoundBytes": installer_delta_bytes,
         "coldStartMs": round(cold_start_ms, 3),
         "idleRssBytes": idle_rss_bytes,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": idle_rss_process_count,
         "thresholds": thresholds,
         "status": "pass" if all(thresholds.values()) else "fail",
     }

@@ -105,6 +105,7 @@ def binary_metadata(app: Path, tauri: str | None, native: str | None, build_perf
     return {
         "gitCommit": git_value("rev-parse", "HEAD"),
         "gitDirty": bool(status),
+        "gitStatus": status,
         "binaryPath": str(app.resolve()) if app.is_file() else str(app),
         "binarySha256": sha256_file(app) if app.is_file() else None,
         "binarySize": app.stat().st_size if app.is_file() else None,
@@ -205,6 +206,12 @@ def wait_for_vue(driver: Driver, timeout_seconds: int = 30):
     deadline = time.time() + timeout_seconds
     last = None
     while time.time() < deadline:
+        windows = driver.call("GET", f"/session/{driver.sid}/window/handles").get("value", [])
+        last = {"windowHandles": windows}
+        if len(windows) != 1:
+            time.sleep(0.25)
+            continue
+        driver.call("POST", f"/session/{driver.sid}/window", {"handle": windows[0]})
         last = driver.script("""
             const root = document.querySelector('#app');
             return {
@@ -334,11 +341,12 @@ class FakeAgentProvider:
         self.thread.join(timeout=5)
 
 
-def drive_windows_folder_picker(path: Path) -> tuple[threading.Thread, dict]:
+def drive_windows_folder_picker(path: Path, application: Path) -> tuple[threading.Thread, dict]:
     if os.name != "nt":
         raise RuntimeError("packaged workspace picker automation currently requires Windows")
     state: dict = {"status": "waiting"}
     resolved = str(path.resolve())
+    expected_application = str(application.resolve()).casefold()
 
     def worker() -> None:
         try:
@@ -346,14 +354,43 @@ def drive_windows_folder_picker(path: Path) -> tuple[threading.Thread, dict]:
 
             user32 = ctypes.windll.user32
             kernel32 = ctypes.windll.kernel32
-            kernel32.GlobalAlloc.restype = ctypes.c_void_p
-            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
-            kernel32.GlobalLock.restype = ctypes.c_void_p
-            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
-            user32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
-            user32.SetClipboardData.restype = ctypes.c_void_p
+            kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.QueryFullProcessImageNameW.argtypes = [
+                wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD),
+            ]
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+            user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+            user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
             user32.GetDlgItem.restype = wintypes.HWND
+            user32.IsWindowVisible.argtypes = [wintypes.HWND]
+            user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+            user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+            user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+            user32.SendMessageTimeoutW.argtypes = [
+                wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t),
+            ]
+            user32.SendMessageTimeoutW.restype = wintypes.LPARAM
             callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+            user32.EnumChildWindows.argtypes = [wintypes.HWND, callback_type, wintypes.LPARAM]
+
+            def belongs_to_test_application(hwnd) -> bool:
+                process_id = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+                process = kernel32.OpenProcess(0x1000, False, process_id.value)
+                if not process:
+                    return False
+                try:
+                    length = wintypes.DWORD(32768)
+                    image = ctypes.create_unicode_buffer(length.value)
+                    valid = kernel32.QueryFullProcessImageNameW(process, 0, image, ctypes.byref(length))
+                    return bool(valid) and image.value.casefold() == expected_application
+                finally:
+                    kernel32.CloseHandle(process)
 
             def window_text(hwnd) -> str:
                 length = user32.GetWindowTextLengthW(hwnd)
@@ -373,7 +410,8 @@ def drive_windows_folder_picker(path: Path) -> tuple[threading.Thread, dict]:
 
                 @callback_type
                 def collect(hwnd, _lparam):
-                    if user32.IsWindowVisible(hwnd) and class_name(hwnd) == "#32770":
+                    if (user32.IsWindowVisible(hwnd) and class_name(hwnd) == "#32770"
+                            and belongs_to_test_application(hwnd)):
                         candidates.append(hwnd)
                     return True
 
@@ -387,48 +425,49 @@ def drive_windows_folder_picker(path: Path) -> tuple[threading.Thread, dict]:
             if dialog is None:
                 raise RuntimeError("workspace folder dialog was not found")
 
-            encoded = (resolved + "\0").encode("utf-16-le")
-            handle = kernel32.GlobalAlloc(0x0002, len(encoded))
-            if not handle:
-                raise RuntimeError("failed to allocate clipboard memory")
-            pointer = kernel32.GlobalLock(handle)
-            ctypes.memmove(pointer, encoded, len(encoded))
-            kernel32.GlobalUnlock(handle)
-            if not user32.OpenClipboard(None):
-                raise RuntimeError("failed to open clipboard")
-            try:
-                user32.EmptyClipboard()
-                if not user32.SetClipboardData(13, handle):
-                    raise RuntimeError("failed to set clipboard path")
-            finally:
-                user32.CloseClipboard()
-
-            def key(vk: int, up: bool = False) -> None:
-                user32.keybd_event(vk, 0, 0x0002 if up else 0, 0)
-
-            def chord(modifier: int, value: int) -> None:
-                key(modifier)
-                key(value)
-                key(value, True)
-                key(modifier, True)
-
-            user32.SetForegroundWindow(dialog)
-            time.sleep(0.15)
-            chord(0x11, ord("L"))
-            time.sleep(0.1)
-            chord(0x11, ord("V"))
-            key(0x0D)
-            key(0x0D, True)
-            time.sleep(0.6)
+            edit = user32.GetDlgItem(dialog, 1152)  # edt1: native folder-name field.
+            if not edit or not user32.IsWindowVisible(edit) or class_name(edit) != 'Edit':
+                raise RuntimeError('workspace folder-name edit was not found')
+            address = ctypes.create_unicode_buffer(resolved)
+            result = ctypes.c_size_t()
+            sent = user32.SendMessageTimeoutW(
+                edit, 0x000C, 0, ctypes.cast(address, ctypes.c_void_p).value,
+                0x0002, 1000, ctypes.byref(result),
+            )
+            if not sent or not result.value:
+                raise RuntimeError('workspace folder name could not be filled')
             confirm = user32.GetDlgItem(dialog, 1)
             if not confirm:
-                raise RuntimeError("workspace folder confirmation button was not found")
-            user32.PostMessageW(confirm, 0x00F5, 0, 0)
+                raise RuntimeError('workspace folder confirmation button was not found')
+            if not user32.PostMessageW(dialog, 0x0111, 1, confirm):
+                raise RuntimeError('workspace folder selection could not be submitted')
             state.update({
                 "status": "submitted",
                 "dialogTitle": window_text(dialog),
                 "buttonTitle": window_text(confirm),
             })
+            # Submitting an absolute folder name navigates there first. Confirm
+            # only after the address bar identifies the requested test folder.
+            deadline = time.monotonic() + 5
+            while user32.IsWindowVisible(dialog) and time.monotonic() < deadline:
+                addresses = []
+
+                @callback_type
+                def collect_address(hwnd, _lparam):
+                    if user32.IsWindowVisible(hwnd) and class_name(hwnd) == "ToolbarWindow32":
+                        addresses.append(window_text(hwnd))
+                    return True
+
+                user32.EnumChildWindows(dialog, collect_address, 0)
+                if any(address.casefold().endswith(resolved.casefold()) for address in addresses):
+                    if not user32.PostMessageW(dialog, 0x0111, 1, confirm):
+                        raise RuntimeError("workspace folder confirmation could not be submitted")
+                    break
+                time.sleep(0.1)
+            while user32.IsWindowVisible(dialog) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            if user32.IsWindowVisible(dialog):
+                raise RuntimeError("workspace folder dialog did not complete the requested selection")
         except Exception as error:
             state.update({"status": "failed", "error": str(error)})
 
@@ -624,7 +663,11 @@ def main() -> int:
             stdout=driver_log,
             stderr=subprocess.STDOUT,
             text=True,
-            env={**os.environ, "APPDATA": isolated_app_data.name},
+            env={
+                **os.environ,
+                "APPDATA": isolated_app_data.name,
+                "WEBVIEW2_USER_DATA_FOLDER": str(Path(isolated_app_data.name) / "webview"),
+            },
         )
         status = None
         deadline = time.monotonic() + 30
@@ -714,7 +757,7 @@ def main() -> int:
         if not isinstance(selected_ai, dict) or not selected_ai.get("ok"):
             raise RuntimeError(f"packaged Agent default provider selection failed: {selected_ai}")
 
-        picker_thread, picker_state = drive_windows_folder_picker(Path(agent_workspace.name))
+        picker_thread, picker_state = drive_windows_folder_picker(Path(agent_workspace.name), runtime_app)
         clicked = driver.script("""
             location.hash = '#/agent';
             const consoleRoot = document.querySelector('[data-agent-console]');
@@ -1002,7 +1045,7 @@ def main() -> int:
         saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'e2e', key:'restartMarker', value:arguments[0]}})", [marker])
         if not isinstance(saved, dict) or not saved.get("ok"): raise RuntimeError(f"upsert_setting failed: {saved}")
         driver.close()
-        driver.create(str(app.resolve()))
+        driver.create(str(runtime_app))
         wait_for_vue(driver)
         restored = driver.script("return window.__TAURI_INTERNALS__.invoke('list_settings', {namespace:'e2e'})")
         values = (restored or {}).get("data", []) if isinstance(restored, dict) else []

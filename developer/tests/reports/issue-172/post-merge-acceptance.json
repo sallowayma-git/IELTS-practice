@@ -1,0 +1,592 @@
+{
+  "schemaVersion": 1,
+  "issue": 172,
+  "status": "incomplete",
+  "mergedCommit": "077fbc1d9ec6191278b11c749a46fac82c6cec41",
+  "implementationTree": "ec32ad1d8ae411888e0f5cb28910cad38908a3b6",
+  "workflowRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360",
+  "remoteStaticGate": {
+    "status": "passed",
+    "passed": 28,
+    "failed": 0,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989590167"
+  },
+  "remoteRustWorkspace": {
+    "status": "passed",
+    "suites": 52,
+    "passed": 507,
+    "failed": 0,
+    "ignored": 0,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989589981",
+    "freshSidecar": {
+      "status": "pass",
+      "target": "x86_64-pc-windows-msvc",
+      "sha256": "3f62c58a51d8406f31dd2d5fa33693cf302d945bdc264dc1255ecfa1b58199ee",
+      "coldStartMs": 722.822,
+      "allExistingThresholdsPassed": true
+    }
+  },
+  "remoteVisualGate": {
+    "status": "failed",
+    "executed": 17,
+    "passed": 1,
+    "failed": 16,
+    "trackedBy": 175,
+    "job": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34512429360/job/102989590185"
+  },
+  "priorWindowsPackagingEvidence": "signing-fix-validation.json",
+  "remainingAcceptance": [
+    "A complete passing release shipping-gate, including the independently tracked visual regression gate.",
+    "Production-signed Windows and macOS packages, including macOS notarization and platform signature verification.",
+    "Installed-application and updater acceptance with the production release configuration.",
+    "A complete passing tag-release workflow covering all supported platforms.",
+    "Resolve documentation and fresh-clone/source-ZIP reproduction in #173 before closing parent #169 or original report #168."
+  ],
+  "requirementsProvenance": [
+    {
+      "document": "developer/docs/IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md",
+      "sections": [
+        "17.14 Sidecar Packaging / Supply-chain Gate",
+        "20.12 CI layers / Release"
+      ],
+      "requirement": "Consistent signing/release channel for the sidecar and installer; signed binaries/updater at release."
+    },
+    {
+      "document": "developer/docs/IELTS_Practice_Rust_Tauri_\u91cd\u6784\u4efb\u52a1\u4e66.md",
+      "sections": [
+        "Phase 2",
+        "Phase 10"
+      ],
+      "requirement": "Shell development may defer signing exercises until keys are available; final release acceptance still requires signing and platform validation."
+    },
+    {
+      "document": "developer/docs/phase10-release-runbook.md",
+      "sections": [
+        "Required repository secrets",
+        "Release"
+      ],
+      "requirement": "The implementation specifies Windows Authenticode, Apple signing/notarization and Tauri updater credentials."
+    }
+  ],
+  "closureEligible": false,
+  "nativePickerVerification": {
+    "testedBaseCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
+    "testedHarnessBlob": "1b7022895523aa4a8df450f2f7c17fcfc24ff52b",
+    "commandSequence": [
+      "python developer/tests/ci/run_static_suite.py",
+      "python developer/tests/e2e/suite_practice_flow.py"
+    ],
+    "static": {
+      "total": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    "nativeStatus": "passed",
+    "nativeChecks": {
+      "launch": "passed",
+      "vueRoutes": "passed",
+      "uiRouteVisuals": "passed",
+      "readingIpc": "passed",
+      "agentIpcBoundary": "passed",
+      "agentWorkspaceRun": "passed",
+      "readingArchiveBoundary": "passed",
+      "historyRetentionBoundary": "passed",
+      "bundledResources": "passed",
+      "readingView": "passed",
+      "readingPerformance": "passed",
+      "notesDialog": "passed",
+      "readingSubmitBoundary": "passed",
+      "backupPathBoundary": "passed",
+      "updaterBoundary": "passed",
+      "sqliteRestart": "passed"
+    },
+    "nativeGeneratedAt": "2026-09-11T17:06:53.064435+08:00",
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "productionSourceChanged": false
+  },
+  "nativeHarnessVerification": {
+    "testedBaseCommit": "147f3aa7320a1a53caa83e8989fc5e1b1f23cfe1",
+    "testedHarnessBlob": "7135449b8e6baaee15f0d5d46f1fb7a8b8164ddd",
+    "command": "python developer/tests/e2e/suite_practice_flow.py",
+    "nativeStatus": "passed",
+    "nativeChecks": {
+      "launch": "passed",
+      "vueRoutes": "passed",
+      "uiRouteVisuals": "passed",
+      "readingIpc": "passed",
+      "agentIpcBoundary": "passed",
+      "agentWorkspaceRun": "passed",
+      "readingArchiveBoundary": "passed",
+      "historyRetentionBoundary": "passed",
+      "bundledResources": "passed",
+      "readingView": "passed",
+      "readingPerformance": "passed",
+      "notesDialog": "passed",
+      "readingSubmitBoundary": "passed",
+      "backupPathBoundary": "passed",
+      "updaterBoundary": "passed",
+      "sqliteRestart": "passed"
+    },
+    "nativeGeneratedAt": "2026-09-11T09:25:33.937824+00:00",
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "productionSourceChanged": false,
+    "behavior": "Select the single live WebDriver window. Fill and confirm only the folder dialog owned by the staged test executable, checking the requested folder address before final confirmation."
+  },
+  "remoteNativeAcceptance": {
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34591595477",
+    "testedCommit": "1c5583fd605debfac432aafa1352690460717c05",
+    "testedTree": "7f5de1dcc2dd00b15af7d3347a43ca78a7a7753f",
+    "status": "passed",
+    "requiredRegressionSequence": {
+      "status": "passed",
+      "static": {
+        "total": 29,
+        "passed": 29,
+        "failed": 0
+      },
+      "nativePassed": 16,
+      "nativeGeneratedAt": "2026-09-11T11:03:53.651711+00:00",
+      "binarySha256": "dadf2cf218ad6e0a99d5e5ce1275349f3f0cb185a5abe1e09676c3709c6ebd09",
+      "gitDirty": true,
+      "jobId": 103237894822,
+      "artifactId": 10196072451
+    },
+    "nativeDriverVersion": "Microsoft Edge WebDriver 131.0.2903.86 (cf5bf303997cad93d7a0bede234d3c3dc01cc63d)",
+    "currentHarnessVerifiedRemotely": true
+  },
+  "requiredRegressionSequence": {
+    "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+    "gitDirty": false,
+    "steps": [
+      {
+        "command": "python developer/tests/ci/run_static_suite.py",
+        "generatedAt": "2026-09-11T09:32:28.623164+00:00",
+        "summary": {
+          "total": 28,
+          "passed": 28,
+          "failed": 0
+        }
+      },
+      {
+        "command": "python developer/tests/e2e/suite_practice_flow.py",
+        "generatedAt": "2026-09-11T09:33:08.263880+00:00",
+        "status": "passed",
+        "passed": 16
+      }
+    ],
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "nativeDriverVersion": "Microsoft Edge WebDriver 143.0.3650.96 (d55fe85d014134f7b4677688f46db9d610ddcfd5)"
+  },
+  "integratedRevisionCI": {
+    "testedCommit": "9ea4b758388bf87abd178133264b1558b56fb727",
+    "testedTree": "7f5de1dcc2dd00b15af7d3347a43ca78a7a7753f",
+    "pullRequestHead": "1c5583fd605debfac432aafa1352690460717c05",
+    "treeMatchesPullRequestHead": true,
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34591599993",
+    "status": "failed",
+    "static": {
+      "passed": 29,
+      "failed": 0,
+      "jobId": 103237909381
+    },
+    "rustWorkspace": {
+      "passed": 507,
+      "failed": 0,
+      "ignored": 0,
+      "resultSuites": 52,
+      "jobId": 103237909214
+    },
+    "visual": {
+      "executed": 17,
+      "passed": 1,
+      "failed": 16,
+      "trackedBy": 175,
+      "jobId": 103237909372
+    }
+  },
+  "diagnosticWrapperVerification": {
+    "command": "developer/tests/ci/run_native_practice_acceptance.ps1",
+    "nativePassed": 16,
+    "generatedAt": "2026-09-11T09:50:16.103380+00:00",
+    "edgeDriverLogProduced": true,
+    "productionSourceChanged": false
+  },
+  "crossRuntimeVerification": {
+    "buildCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
+    "artifactRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+    "applicationSha256": "98c8083ce37a4f8aca3c8502ad5dcba30b7a9c483a6c202433aa3a7ee4018e76",
+    "testedHarnessBlob": "9bdbf9bef9905768aad7e99d88cfe50a16688267",
+    "command": "developer/tests/ci/run_native_practice_acceptance.ps1",
+    "behavior": "Use a fresh WebView2 data directory for each complete test and restart the same staged executable with its resources.",
+    "results": [
+      {
+        "runtimeVersion": "143.0.3650.96",
+        "passed": 16,
+        "generatedAt": "2026-09-11T10:15:45.730094+00:00"
+      },
+      {
+        "runtimeVersion": "131.0.2903.86",
+        "passed": 16,
+        "generatedAt": "2026-09-11T10:16:40.363654+00:00"
+      }
+    ]
+  },
+  "previousRemoteNativeAcceptances": [
+    {
+      "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34581348883",
+      "testedCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
+      "status": "failed",
+      "staticPassed": 28,
+      "releaseHostBuild": "passed",
+      "nativeFailure": "WebDriver reported no such window before Vue mount.",
+      "platformMatrix": "skipped after required-regressions failed",
+      "currentHarnessVerifiedRemotely": false
+    },
+    {
+      "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34584228082",
+      "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+      "status": "failed",
+      "staticPassed": 28,
+      "releaseHostBuild": "passed",
+      "nativeFailure": "WebDriver disconnected from DevTools while obtaining window handles before Vue mount.",
+      "nativeDriverVersion": "131.0.2903.86",
+      "platformMatrix": "skipped after required-regressions failed",
+      "currentHarnessVerifiedRemotely": false
+    },
+    {
+      "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+      "testedCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
+      "status": "failed",
+      "staticPassed": 28,
+      "releaseHostBuild": "passed",
+      "nativeFailure": "The DevTools target detached during initial navigation to tauri.localhost; the browser connection then closed.",
+      "nativeDriverVersion": "131.0.2903.86",
+      "diagnosticsArtifact": "native-acceptance-required-regressions",
+      "platformMatrix": "All three platform build, workspace, identity and protocol steps completed. Their original memory gate did not measure the complete process tree, and the Windows package failed a subsequent GUI startup check; these runs are not full acceptance.",
+      "currentHarnessVerifiedRemotely": false
+    }
+  ],
+  "windowsResourceFailure": {
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+    "buildCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
+    "msiSha256": "0defc0a1c54b3044bf97cb7db1bc67cc8fac7d9d560e0809c6baa11788306f61",
+    "hostSha256": "f1ced31f7f654984fba8df9502e8f4aae68a32edc699b3595abe214516f04067",
+    "payloadsChecked": 225,
+    "checksumFailures": 225,
+    "firstPayload": {
+      "file": "payloads/p1-high-01.json",
+      "expected": "3dfe904bd6422173fdfd7846fadf7ce9d1b86c99d932d7006071ff4a137a93a1",
+      "actual": "811156f204da7fc8a9593e7699e1a185cf9bb5e26c6b5d0986df7358b89c54b2",
+      "CRLF": 110,
+      "normalized": "3dfe904bd6422173fdfd7846fadf7ce9d1b86c99d932d7006071ff4a137a93a1"
+    },
+    "nativeExitCode": 101,
+    "nativeError": "Failed to setup app: error encountered during setup hook: validation error: reading resource checksum mismatch: p1-high-01",
+    "cause": "core.autocrlf=true changed LF payload bytes to CRLF; native startup hashes raw bytes. Parsing JSON alone did not detect the corruption.",
+    "fix": "Pin hashed payloads to LF in .gitattributes; validate raw-byte hashes in the static gate and extracted Windows/macOS/Linux packages.",
+    "regressionTests": "A real core.autocrlf=true checkout preserves the hashes; CRLF corruption is rejected even when parsed JSON and sidecar identity are unchanged.",
+    "remoteFixStatus": "The Windows required regression job passed all 29 static and 16 native checks at 1c5583fd605debfac432aafa1352690460717c05."
+  },
+  "processTreeMemoryVerification": {
+    "previousGap": "Windows sampled only the PyInstaller bootloader; macOS and Linux returned zero and skipped the RSS gate.",
+    "fix": "Measure the bootloader and every runtime descendant on each supported platform. Zero, inaccessible and over-budget measurements fail.",
+    "maxIdleRssBytes": 157286400,
+    "releaseContractTestsPassed": 56,
+    "windows": {
+      "target": "x86_64-pc-windows-msvc",
+      "sha256": "6ebf1cdde33a8c9e85a708f08cbea00c04ee6947532ef2ef1a94efda44050984",
+      "coldStartMs": 907.246,
+      "idleRssBytes": 36155392,
+      "idleRssScope": "process-tree",
+      "idleRssProcessCount": 2,
+      "thresholds": {
+        "unpackedSize": true,
+        "compressedSize": true,
+        "installerDelta": true,
+        "idleRss": true,
+        "coldStart": true
+      },
+      "status": "pass"
+    },
+    "macosAndLinux": "Positive process-tree RSS and every existing size/memory/protocol gate passed on both native platforms; see nativePlatformMatrix.",
+    "windowsCi": {
+      "sha256": "d1b23fc2be9ec861fc911ce37cefec3dd2f0892001dcfece1454e6273b62edcb",
+      "coldStartMs": 817.443,
+      "idleRssBytes": 35565568,
+      "idleRssScope": "process-tree",
+      "idleRssProcessCount": 2,
+      "thresholds": {
+        "unpackedSize": true,
+        "compressedSize": true,
+        "installerDelta": true,
+        "idleRss": true,
+        "coldStart": true
+      },
+      "status": "pass"
+    }
+  },
+  "resourceFixLocalVerification": {
+    "testedBaseCommit": "b0ddc87226660ef4b82c8c21f42bc9a614a5b3a2",
+    "gitDirty": true,
+    "static": {
+      "generatedAt": "2026-09-11T10:53:10.367492+00:00",
+      "summary": {
+        "total": 29,
+        "passed": 29,
+        "failed": 0
+      }
+    },
+    "native": {
+      "generatedAt": "2026-09-11T10:53:46.867351+00:00",
+      "passed": 16,
+      "applicationSha256": "98c8083ce37a4f8aca3c8502ad5dcba30b7a9c483a6c202433aa3a7ee4018e76"
+    },
+    "releaseContractTestsPassed": 56,
+    "commandSequence": [
+      "python developer/tests/ci/run_static_suite.py",
+      "python developer/tests/e2e/suite_practice_flow.py"
+    ],
+    "corruptedCiMsiRejectedByPackageGate": true
+  },
+  "nativePlatformMatrix": [
+    {
+      "platform": "windows",
+      "sourceCommit": "1c5583fd605debfac432aafa1352690460717c05",
+      "sourceTree": "7f5de1dcc2dd00b15af7d3347a43ca78a7a7753f",
+      "target": "x86_64-pc-windows-msvc",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "architecture": "AMD64",
+      "python": "3.12.10",
+      "productionSigning": false,
+      "updaterAcceptance": false,
+      "installedApplicationAcceptance": false,
+      "boundary": "Native unsigned build evidence only; production release acceptance remains separate.",
+      "artifactId": 10196340169,
+      "freshSmoke": {
+        "status": "pass",
+        "sha256": "c02c5800008e42d3cc0f300977f6e6ce4d0b7ee6409f2743735a37f1072fa012",
+        "coldStartMs": 1051.832,
+        "idleRssBytes": 35586048,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": 2,
+        "unpackedBytes": 12902022,
+        "compressedBytes": 12690932,
+        "installerDeltaUpperBoundBytes": 12902022,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        }
+      },
+      "packagedVerification": [
+        {
+          "kind": "msi",
+          "status": "passed",
+          "artifactSha256": "2cd0219ff21cbd49c5f801fb20607e29e4d5b8037699b1b914d1ca744ef6fce8",
+          "applicationSha256": "c90312fa8e135236f0fae1852c7dca6b81ccb66308fbd9dfd46b417624330c80",
+          "sidecarSha256": "c02c5800008e42d3cc0f300977f6e6ce4d0b7ee6409f2743735a37f1072fa012",
+          "identityStatus": "passed",
+          "readingResources": {
+            "status": "passed",
+            "verifiedPayloads": 225,
+            "hashScope": "raw-bytes"
+          },
+          "smoke": {
+            "status": "pass",
+            "sha256": "c02c5800008e42d3cc0f300977f6e6ce4d0b7ee6409f2743735a37f1072fa012",
+            "coldStartMs": 1370.079,
+            "idleRssBytes": 35889152,
+            "idleRssScope": "process-tree",
+            "idleRssProcessCount": 2,
+            "unpackedBytes": 12902022,
+            "compressedBytes": 12690932,
+            "installerDeltaUpperBoundBytes": 12902022,
+            "thresholds": {
+              "unpackedSize": true,
+              "compressedSize": true,
+              "installerDelta": true,
+              "idleRss": true,
+              "coldStart": true
+            }
+          }
+        },
+        {
+          "kind": "nsis",
+          "status": "passed",
+          "artifactSha256": "60967c844edac88483c14c0617ca0187a4cd4803abad2f834c6d55fc39e402ed",
+          "applicationSha256": "caa69c7b577124f1d80bd264762258d374451a8a829767b5d8674857f3c704b6",
+          "sidecarSha256": "c02c5800008e42d3cc0f300977f6e6ce4d0b7ee6409f2743735a37f1072fa012",
+          "identityStatus": "passed",
+          "readingResources": {
+            "status": "passed",
+            "verifiedPayloads": 225,
+            "hashScope": "raw-bytes"
+          },
+          "smoke": {
+            "status": "pass",
+            "sha256": "c02c5800008e42d3cc0f300977f6e6ce4d0b7ee6409f2743735a37f1072fa012",
+            "coldStartMs": 796.745,
+            "idleRssBytes": 35647488,
+            "idleRssScope": "process-tree",
+            "idleRssProcessCount": 2,
+            "unpackedBytes": 12902022,
+            "compressedBytes": 12690932,
+            "installerDeltaUpperBoundBytes": 12902022,
+            "thresholds": {
+              "unpackedSize": true,
+              "compressedSize": true,
+              "installerDelta": true,
+              "idleRss": true,
+              "coldStart": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "platform": "macos",
+      "sourceCommit": "1c5583fd605debfac432aafa1352690460717c05",
+      "sourceTree": "7f5de1dcc2dd00b15af7d3347a43ca78a7a7753f",
+      "target": "aarch64-apple-darwin",
+      "host": "macOS-26.6.2-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.10",
+      "productionSigning": false,
+      "updaterAcceptance": false,
+      "installedApplicationAcceptance": false,
+      "boundary": "Native unsigned build evidence only; production release acceptance remains separate.",
+      "artifactId": 10196194910,
+      "freshSmoke": {
+        "status": "pass",
+        "sha256": "905bcab141ee7bfc4597de94e37fcbb939f9978df70769d82da908869295951f",
+        "coldStartMs": 300.855,
+        "idleRssBytes": 39272448,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": 2,
+        "unpackedBytes": 11736560,
+        "compressedBytes": 11565890,
+        "installerDeltaUpperBoundBytes": 11736560,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        }
+      },
+      "packagedVerification": [
+        {
+          "kind": "app",
+          "status": "passed",
+          "applicationSha256": "57d789574c5e48db200753276fd9e84ab5d98dd00033ca5ab0217ca543ba6202",
+          "sidecarSha256": "905bcab141ee7bfc4597de94e37fcbb939f9978df70769d82da908869295951f",
+          "identityStatus": "passed",
+          "readingResources": {
+            "status": "passed",
+            "verifiedPayloads": 225,
+            "hashScope": "raw-bytes"
+          },
+          "smoke": {
+            "status": "pass",
+            "sha256": "905bcab141ee7bfc4597de94e37fcbb939f9978df70769d82da908869295951f",
+            "coldStartMs": 224.774,
+            "idleRssBytes": 39305216,
+            "idleRssScope": "process-tree",
+            "idleRssProcessCount": 2,
+            "unpackedBytes": 11736560,
+            "compressedBytes": 11565890,
+            "installerDeltaUpperBoundBytes": 11736560,
+            "thresholds": {
+              "unpackedSize": true,
+              "compressedSize": true,
+              "installerDelta": true,
+              "idleRss": true,
+              "coldStart": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "platform": "linux",
+      "sourceCommit": "1c5583fd605debfac432aafa1352690460717c05",
+      "sourceTree": "7f5de1dcc2dd00b15af7d3347a43ca78a7a7753f",
+      "target": "x86_64-unknown-linux-gnu",
+      "host": "Linux-6.8.0-1064-azure-x86_64-with-glibc2.35",
+      "architecture": "x86_64",
+      "python": "3.12.14",
+      "productionSigning": false,
+      "updaterAcceptance": false,
+      "installedApplicationAcceptance": false,
+      "boundary": "Native unsigned build evidence only; production release acceptance remains separate.",
+      "artifactId": 10196281550,
+      "freshSmoke": {
+        "status": "pass",
+        "sha256": "ccf953db76411189b80b32ebe347dbb4844de82d0561fec07d9b6cfa76a36e4d",
+        "coldStartMs": 328.208,
+        "idleRssBytes": 32927744,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": 2,
+        "unpackedBytes": 25860808,
+        "compressedBytes": 25647464,
+        "installerDeltaUpperBoundBytes": 25860808,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        }
+      },
+      "packagedVerification": [
+        {
+          "status": "passed",
+          "kind": "deb",
+          "sidecarSha256": "ccf953db76411189b80b32ebe347dbb4844de82d0561fec07d9b6cfa76a36e4d",
+          "hostSha256": "21e0d629f319340436f01ef715bbe2b6da59d0014d86841dfe5d05321c54ea33",
+          "artifactSha256": "e2bb7974797c8833ac1322278bd25353c2c5147bf2a47bc8d7168454ce8e6c83",
+          "identityStatus": "passed",
+          "readingResources": {
+            "status": "passed",
+            "verifiedPayloads": 225,
+            "hashScope": "raw-bytes"
+          },
+          "smoke": {
+            "status": "pass",
+            "sha256": "ccf953db76411189b80b32ebe347dbb4844de82d0561fec07d9b6cfa76a36e4d",
+            "coldStartMs": 334.92,
+            "idleRssBytes": 33026048,
+            "idleRssScope": "process-tree",
+            "idleRssProcessCount": 2,
+            "unpackedBytes": 25860808,
+            "compressedBytes": 25647464,
+            "installerDeltaUpperBoundBytes": 25860808,
+            "thresholds": {
+              "unpackedSize": true,
+              "compressedSize": true,
+              "installerDelta": true,
+              "idleRss": true,
+              "coldStart": true
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "finalEvidenceMetadataVerification": {
+    "testedBaseCommit": "1c5583fd605debfac432aafa1352690460717c05",
+    "change": "Record the existing git status text beside the dirty flag.",
+    "static": {
+      "total": 29,
+      "passed": 29,
+      "failed": 0
+    },
+    "nativePassed": 16,
+    "nativeGeneratedAt": "2026-09-11T11:10:50.943983+00:00",
+    "binarySha256": "dadf2cf218ad6e0a99d5e5ce1275349f3f0cb185a5abe1e09676c3709c6ebd09",
+    "gitStatus": "M developer/tests/e2e/packaged_tauri_flow.py\n M developer/tests/reports/issue-172/post-merge-acceptance.json"
+  },
+  "generatedAt": "2026-09-11T11:14:23.738758+00:00"
+}
