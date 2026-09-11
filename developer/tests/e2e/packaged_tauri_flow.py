@@ -662,7 +662,11 @@ def main() -> int:
             stdout=driver_log,
             stderr=subprocess.STDOUT,
             text=True,
-            env={**os.environ, "APPDATA": isolated_app_data.name},
+            env={
+                **os.environ,
+                "APPDATA": isolated_app_data.name,
+                "WEBVIEW2_USER_DATA_FOLDER": str(Path(isolated_app_data.name) / "webview"),
+            },
         )
         status = None
         deadline = time.monotonic() + 30
@@ -1040,7 +1044,7 @@ def main() -> int:
         saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'e2e', key:'restartMarker', value:arguments[0]}})", [marker])
         if not isinstance(saved, dict) or not saved.get("ok"): raise RuntimeError(f"upsert_setting failed: {saved}")
         driver.close()
-        driver.create(str(app.resolve()))
+        driver.create(str(runtime_app))
         wait_for_vue(driver)
         restored = driver.script("return window.__TAURI_INTERNALS__.invoke('list_settings', {namespace:'e2e'})")
         values = (restored or {}).get("data", []) if isinstance(restored, dict) else []

@@ -133,14 +133,15 @@
     "behavior": "Select the single live WebDriver window. Fill and confirm only the folder dialog owned by the staged test executable, checking the requested folder address before final confirmation."
   },
   "remoteNativeAcceptance": {
-    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34584228082",
-    "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+    "testedCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
     "status": "failed",
     "staticPassed": 28,
     "releaseHostBuild": "passed",
-    "nativeFailure": "WebDriver disconnected from DevTools while obtaining window handles before Vue mount.",
+    "nativeFailure": "The DevTools target detached during initial navigation to tauri.localhost; the browser connection then closed.",
     "nativeDriverVersion": "131.0.2903.86",
-    "platformMatrix": "skipped after required-regressions failed",
+    "diagnosticsArtifact": "native-acceptance-required-regressions",
+    "platformMatrix": "in progress; all three native freezes, smoke checks, and Rust workspace suites passed",
     "currentHarnessVerifiedRemotely": false
   },
   "requiredRegressionSequence": {
@@ -193,21 +194,54 @@
     "testedTree": "57a3b5592c937b0c883c1b8bd454785559af7696",
     "treeMatchesPullRequestHead": true
   },
-  "previousRemoteNativeAcceptance": {
-    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34581348883",
-    "testedCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
-    "status": "failed",
-    "staticPassed": 28,
-    "releaseHostBuild": "passed",
-    "nativeFailure": "WebDriver reported no such window before Vue mount.",
-    "platformMatrix": "skipped after required-regressions failed",
-    "currentHarnessVerifiedRemotely": false
-  },
   "diagnosticWrapperVerification": {
     "command": "developer/tests/ci/run_native_practice_acceptance.ps1",
     "nativePassed": 16,
     "generatedAt": "2026-09-11T09:50:16.103380+00:00",
     "edgeDriverLogProduced": true,
     "productionSourceChanged": false
-  }
+  },
+  "crossRuntimeVerification": {
+    "buildCommit": "9b7065264a464219ce20df1612d18117ddd0ce21",
+    "artifactRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34586431627",
+    "applicationSha256": "98c8083ce37a4f8aca3c8502ad5dcba30b7a9c483a6c202433aa3a7ee4018e76",
+    "testedHarnessBlob": "9bdbf9bef9905768aad7e99d88cfe50a16688267",
+    "command": "developer/tests/ci/run_native_practice_acceptance.ps1",
+    "behavior": "Use a fresh WebView2 data directory for each complete test and restart the same staged executable with its resources.",
+    "results": [
+      {
+        "runtimeVersion": "143.0.3650.96",
+        "passed": 16,
+        "generatedAt": "2026-09-11T10:15:45.730094+00:00"
+      },
+      {
+        "runtimeVersion": "131.0.2903.86",
+        "passed": 16,
+        "generatedAt": "2026-09-11T10:16:40.363654+00:00"
+      }
+    ]
+  },
+  "previousRemoteNativeAcceptances": [
+    {
+      "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34581348883",
+      "testedCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
+      "status": "failed",
+      "staticPassed": 28,
+      "releaseHostBuild": "passed",
+      "nativeFailure": "WebDriver reported no such window before Vue mount.",
+      "platformMatrix": "skipped after required-regressions failed",
+      "currentHarnessVerifiedRemotely": false
+    },
+    {
+      "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34584228082",
+      "testedCommit": "c9f77ad725a38bc383f21527c9ebd4a699f53e25",
+      "status": "failed",
+      "staticPassed": 28,
+      "releaseHostBuild": "passed",
+      "nativeFailure": "WebDriver disconnected from DevTools while obtaining window handles before Vue mount.",
+      "nativeDriverVersion": "131.0.2903.86",
+      "platformMatrix": "skipped after required-regressions failed",
+      "currentHarnessVerifiedRemotely": false
+    }
+  ]
 }

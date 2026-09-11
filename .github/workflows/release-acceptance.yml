@@ -11,6 +11,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
   required-regressions:
