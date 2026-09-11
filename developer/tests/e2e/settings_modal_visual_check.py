@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_document_unlocked, assert_flat_surfaces
 
 
 BASE_URL = os.environ.get("SETTINGS_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -53,6 +54,8 @@ def read_geometry(page):
             dialogOverflow: dialog ? getComputedStyle(dialog).overflowY : '',
             dialogWithinViewport: Boolean(dialogRect && dialogRect.top >= 0 && dialogRect.bottom <= innerHeight + 1),
             overlayCoversViewport: Boolean(overlayRect && overlayRect.width >= innerWidth && overlayRect.height >= innerHeight),
+            overlayAboveNav: Boolean(overlay?.contains(document.elementFromPoint(innerWidth / 2, 8))),
+            documentLocked: [document.documentElement, document.body].every(node => getComputedStyle(node).overflowY === 'hidden'),
             detailZIndex: detail ? getComputedStyle(detail).zIndex : '',
             shellOverflow: shell ? getComputedStyle(shell).overflow : ''
           };
@@ -73,7 +76,11 @@ def read_detail_surface_geometry(page):
             sectionCount: sections.length,
             sectionShadows: sections.map((section) => getComputedStyle(section).boxShadow),
             nestedShadows: nested.map((section) => getComputedStyle(section).boxShadow),
-            detailOverflow: panel ? getComputedStyle(panel).overflowY : ''
+            detailOverflow: panel ? getComputedStyle(panel).overflowY : '',
+            modes: [...document.querySelectorAll('.settings-detail-panel .mode-card')].map(node => ({
+              active: node.classList.contains('active'),
+              background: getComputedStyle(node).backgroundColor,
+            }))
           };
         }
         """
@@ -85,19 +92,18 @@ def assert_detail_surfaces(name, geometry):
         raise AssertionError(f"{name}: detail tab has no content section")
     if geometry["panelShadow"] in ("", "none"):
         raise AssertionError(f"{name}: detail panel lost its elevated surface")
-    if any(shadow != "none" for shadow in geometry["sectionShadows"]):
-        raise AssertionError(f"{name}: nested settings section still has raised shadow")
-    if any(shadow != "none" for shadow in geometry["nestedShadows"]):
-        raise AssertionError(f"{name}: nested settings content still has raised shadow")
+    modes = geometry['modes']
+    if modes and (sum(mode['active'] for mode in modes) != 1 or len({mode['background'] for mode in modes}) < 2):
+        raise AssertionError(f"{name}: selected temperature mode is not visually distinct: {modes}")
 
 
 def assert_geometry(name, geometry):
     if geometry["overlayPosition"] != "fixed":
         raise AssertionError(f"{name}: settings overlay is not fixed")
-    if geometry["overlayZIndex"] != "60":
-        raise AssertionError(f"{name}: expected secondary overlay z-index 60, got {geometry['overlayZIndex']}")
-    if geometry["overlayDisplay"] != "grid":
-        raise AssertionError(f"{name}: settings overlay is not a grid viewport")
+    if int(geometry["overlayZIndex"]) <= int(geometry["detailZIndex"] or '0') or not geometry['overlayAboveNav']:
+        raise AssertionError(f"{name}: secondary overlay is obscured by the settings detail or navigation")
+    if geometry["overlayDisplay"] not in ("grid", "flex"):
+        raise AssertionError(f"{name}: settings overlay has no centered layout")
     if geometry["dialogMaxHeight"] in ("", "none", "auto"):
         raise AssertionError(f"{name}: dialog has no bounded max-height")
     if geometry["dialogOverflow"] not in ("auto", "scroll"):
@@ -106,7 +112,7 @@ def assert_geometry(name, geometry):
         raise AssertionError(f"{name}: overlay does not cover the viewport")
     if not geometry["dialogWithinViewport"]:
         raise AssertionError(f"{name}: dialog escapes the viewport")
-    if geometry["shellOverflow"] != "hidden":
+    if geometry["shellOverflow"] != "hidden" or not geometry['documentLocked']:
         raise AssertionError(f"{name}: app shell remains scrollable while dialog is open")
 
 
@@ -128,6 +134,7 @@ def main():
                 assert_geometry(f"{name}: onboarding", onboarding)
                 page.locator(".settings-page > .dialog-overlay").click(position={"x": 4, "y": 4})
                 page.wait_for_selector(".settings-page > .dialog-overlay", state="detached")
+                assert_document_unlocked(page, name)
 
                 page.locator("#check-updates-btn").click()
                 page.wait_for_selector(".settings-page > .dialog-overlay")
@@ -143,14 +150,16 @@ def main():
                     page.wait_for_timeout(30)
                     detail_surfaces[tab_name] = read_detail_surface_geometry(page)
                     assert_detail_surfaces(f"{name}: {tab_name}", detail_surfaces[tab_name])
+                    assert_flat_surfaces(
+                        page, '.settings-detail-panel > .settings-panel, .settings-detail-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel, .about-info, .about-features)',
+                        f'{name}: {tab_name}',
+                    )
 
                 page.locator(".settings-tabs .settings-tab").filter(has_text="数据管理").click()
                 page.locator(".danger-zone .btn-danger").click()
                 page.wait_for_selector(".settings-page > .dialog-overlay")
                 confirm = read_geometry(page)
                 assert_geometry(f"{name}: confirmation", confirm)
-                if confirm["detailZIndex"] != "40":
-                    raise AssertionError(f"{name}: detail modal z-index changed unexpectedly")
                 page.screenshot(path=str(REPORT_DIR / f"settings-{name}-current.png"), full_page=True)
                 report.append({"name": name, "onboarding": onboarding, "update": update, "detailSurfaces": detail_surfaces, "confirmation": confirm})
                 page.close()

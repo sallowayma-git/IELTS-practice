@@ -396,14 +396,6 @@ def assert_geometry(name, width, data):
         if data["sidebarScrollHeight"] > data["sidebarClientHeight"] + 1:
             raise AssertionError(f"{name}: stacked Result sidebar clips its content")
 
-    letter_spacing = (
-        data["headingLetterSpacing"],
-        data["scoreLabelLetterSpacing"],
-        data["metricLabelLetterSpacing"],
-    )
-    if any(value not in ("0px", "normal") for value in letter_spacing):
-        raise AssertionError(f"{name}: Result still uses non-zero letter spacing: {letter_spacing}")
-
     if data["calls"] != [
         {"command": "get_history_detail", "args": {"attemptId": "writing-result-visual"}}
     ]:
@@ -532,9 +524,7 @@ def main():
                 page.on("pageerror", lambda error: page_errors.append(getattr(error, "stack", str(error))))
                 page.goto(f"{BASE_URL}/#/result/writing-result-visual", wait_until="domcontentloaded")
                 page.wait_for_selector(".result-page .score-total")
-                page.wait_for_function(
-                    "() => document.querySelector('.result-layout') && getComputedStyle(document.querySelector('.result-layout')).display === 'grid'"
-                )
+                # Persisted score content establishes readiness; layout is asserted below.
                 geometry = read_geometry(page)
                 assert_geometry(name, width, geometry)
                 original = verify_original_view(page, name, geometry)

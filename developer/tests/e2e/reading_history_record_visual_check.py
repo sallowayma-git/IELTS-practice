@@ -36,6 +36,11 @@ def geometry(page):
             firstTitle: first?.querySelector('.practice-record-title strong')?.textContent || '',
             firstTitleWidth: rect(first?.querySelector('.practice-record-title'))?.width || 0,
             firstTitleScrollWidth: first?.querySelector('.practice-record-title')?.scrollWidth || 0,
+            titleOverflow: style(first?.querySelector('.practice-record-title'))?.overflowX,
+            titleEllipsis: style(first?.querySelector('.practice-record-title'))?.textOverflow,
+            titleTooltip: first?.querySelector('.practice-record-title')?.title,
+            recordRect: rect(first),
+            titleRect: rect(first?.querySelector('.practice-record-title')),
             scoreRect: rect(score),
             deleteRect: rect(deleteButton),
             checkboxRect: rect(checkbox),
@@ -55,8 +60,13 @@ def assert_geometry(name, data):
         raise AssertionError(f"{name}: history route overflows viewport: {json.dumps(data, ensure_ascii=False)}")
     if data["records"] != len(HISTORY):
         raise AssertionError(f"{name}: expected {len(HISTORY)} history records")
-    if data["firstTitleScrollWidth"] > data["firstTitleWidth"] + 1:
-        raise AssertionError(f"{name}: title should truncate inside the record card")
+    if data['titleRect']['right'] > data['recordRect']['right'] + 1:
+        raise AssertionError(f"{name}: title escapes the record card")
+    if data["firstTitleScrollWidth"] > data["firstTitleWidth"] + 1 and (
+        data['titleOverflow'] != 'hidden' or data['titleEllipsis'] != 'ellipsis'
+        or data['titleTooltip'] != data['firstTitle']
+    ):
+        raise AssertionError(f"{name}: truncated title has no ellipsis/full-title fallback")
     if not data["scoreRect"] or data["scoreRect"]["height"] < 44:
         raise AssertionError(f"{name}: score surface is not stable: {data['scoreRect']}")
     if not data["deleteRect"] or data["deleteRect"]["height"] < 44:

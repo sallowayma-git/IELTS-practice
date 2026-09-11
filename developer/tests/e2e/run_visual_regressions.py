@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import socket
 import subprocess
@@ -12,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from importlib.metadata import version
 from pathlib import Path
 
 
@@ -138,6 +140,25 @@ def current_artifacts(started_ns: int) -> list[Path]:
     )
 
 
+def source_metadata() -> dict[str, object]:
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ['git', *args], cwd=ROOT, capture_output=True, text=True,
+            check=True, timeout=10,
+        ).stdout.strip()
+
+    run_id = os.environ.get('GITHUB_RUN_ID')
+    repository = os.environ.get('GITHUB_REPOSITORY')
+    return {
+        'gitCommit': git('rev-parse', 'HEAD'),
+        'gitDirty': bool(git('status', '--porcelain', '--untracked-files=normal')),
+        'platform': platform.platform(),
+        'pythonVersion': platform.python_version(),
+        'playwrightVersion': version('playwright'),
+        'runUrl': f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{repository}/actions/runs/{run_id}" if run_id and repository else None,
+    }
+
+
 def main() -> int:
     if not (DIST / "index.html").is_file():
         raise SystemExit("dist/writing is missing; run the Vue production build first")
@@ -153,9 +174,11 @@ def main() -> int:
     process: subprocess.Popen[bytes] | None = None
     results: list[dict[str, object]] = []
     startup_error: str | None = None
+    metadata: dict[str, object] = {}
 
     with server_log_path.open("wb") as server_log:
         try:
+            metadata = source_metadata()
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -223,6 +246,13 @@ def main() -> int:
     for screenshot in screenshots:
         shutil.copy2(screenshot, EVIDENCE / screenshot.name)
 
+    case_reports = sorted(
+        path for path in REPORTS.glob('*-report.json')
+        if path != REPORT and path.stat().st_mtime_ns >= started_ns
+    )
+    for case_report in case_reports:
+        shutil.copy2(case_report, EVIDENCE / case_report.name)
+
     expected_count = sum(len(scripts) for _, scripts in SCRIPT_GROUPS)
     passed = (
         startup_error is None
@@ -235,12 +265,14 @@ def main() -> int:
         "status": "passed" if passed else "failed",
         "exitCode": 0 if passed else 1,
         "target": "vue-u1-u25-visual-state-regressions",
+        "metadata": metadata,
         "baseUrl": base_url,
         "expectedScripts": expected_count,
         "executedScripts": len(results),
         "startupError": startup_error,
         "scripts": results,
         "screenshots": [str((EVIDENCE / path.name).relative_to(ROOT)) for path in screenshots],
+        "caseReports": [str((EVIDENCE / path.name).relative_to(ROOT)) for path in case_reports],
     }
     serialized = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     REPORT.write_text(serialized, encoding="utf-8")

@@ -2778,9 +2778,9 @@ onBeforeUnmount(() => {
 }
 
 .settings-page .mode-card.active {
-  border-color: color-mix(in srgb, var(--atlas-accent) 16%, transparent);
-  background:
-    var(--atlas-sheen);
+  border-color: var(--anth-accent);
+  background: var(--anth-accent-soft);
+  box-shadow: var(--anth-shadow-xs);
 }
 
 .settings-page .mode-header {

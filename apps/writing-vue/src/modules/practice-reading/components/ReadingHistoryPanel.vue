@@ -427,6 +427,7 @@
             <a
               href="#"
               class="practice-record-title"
+              :title="record.title || '无标题'"
               data-record-action="details"
               :data-record-id="record.id"
               @click.prevent.stop="$emit('open-reading-review', record)"
