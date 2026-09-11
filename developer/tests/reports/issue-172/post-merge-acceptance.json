@@ -103,5 +103,43 @@
     "nativeGeneratedAt": "2026-09-11T17:06:53.064435+08:00",
     "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
     "productionSourceChanged": false
+  },
+  "nativeHarnessVerification": {
+    "testedBaseCommit": "147f3aa7320a1a53caa83e8989fc5e1b1f23cfe1",
+    "testedHarnessBlob": "7135449b8e6baaee15f0d5d46f1fb7a8b8164ddd",
+    "command": "python developer/tests/e2e/suite_practice_flow.py",
+    "nativeStatus": "passed",
+    "nativeChecks": {
+      "launch": "passed",
+      "vueRoutes": "passed",
+      "uiRouteVisuals": "passed",
+      "readingIpc": "passed",
+      "agentIpcBoundary": "passed",
+      "agentWorkspaceRun": "passed",
+      "readingArchiveBoundary": "passed",
+      "historyRetentionBoundary": "passed",
+      "bundledResources": "passed",
+      "readingView": "passed",
+      "readingPerformance": "passed",
+      "notesDialog": "passed",
+      "readingSubmitBoundary": "passed",
+      "backupPathBoundary": "passed",
+      "updaterBoundary": "passed",
+      "sqliteRestart": "passed"
+    },
+    "nativeGeneratedAt": "2026-09-11T09:25:33.937824+00:00",
+    "applicationSha256": "2a6843d308e9af057c2970c60be9a184522b94cff7ec065b0914c16290e11f0c",
+    "productionSourceChanged": false,
+    "behavior": "Select the single live WebDriver window. Fill and confirm only the folder dialog owned by the staged test executable, checking the requested folder address before final confirmation."
+  },
+  "remoteNativeAcceptance": {
+    "run": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34581348883",
+    "testedCommit": "113636f8aa2e1dcebfddcfc621a00aea0781e1cd",
+    "status": "failed",
+    "staticPassed": 28,
+    "releaseHostBuild": "passed",
+    "nativeFailure": "WebDriver reported no such window before Vue mount.",
+    "platformMatrix": "skipped after required-regressions failed",
+    "currentHarnessVerifiedRemotely": false
   }
 }

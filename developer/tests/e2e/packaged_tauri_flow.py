@@ -205,6 +205,12 @@ def wait_for_vue(driver: Driver, timeout_seconds: int = 30):
     deadline = time.time() + timeout_seconds
     last = None
     while time.time() < deadline:
+        windows = driver.call("GET", f"/session/{driver.sid}/window/handles").get("value", [])
+        last = {"windowHandles": windows}
+        if len(windows) != 1:
+            time.sleep(0.25)
+            continue
+        driver.call("POST", f"/session/{driver.sid}/window", {"handle": windows[0]})
         last = driver.script("""
             const root = document.querySelector('#app');
             return {
@@ -357,10 +363,7 @@ def drive_windows_folder_picker(path: Path, application: Path) -> tuple[threadin
             user32.GetWindowThreadProcessId.restype = wintypes.DWORD
             user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
             user32.GetDlgItem.restype = wintypes.HWND
-            user32.GetForegroundWindow.restype = wintypes.HWND
-            user32.SetForegroundWindow.argtypes = [wintypes.HWND]
             user32.IsWindowVisible.argtypes = [wintypes.HWND]
-            user32.IsChild.argtypes = [wintypes.HWND, wintypes.HWND]
             user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
             user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
             user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
@@ -370,18 +373,9 @@ def drive_windows_folder_picker(path: Path, application: Path) -> tuple[threadin
                 wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t),
             ]
             user32.SendMessageTimeoutW.restype = wintypes.LPARAM
-
-            class GuiThreadInfo(ctypes.Structure):
-                _fields_ = [
-                    ("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD),
-                    ("hwndActive", wintypes.HWND), ("hwndFocus", wintypes.HWND),
-                    ("hwndCapture", wintypes.HWND), ("hwndMenuOwner", wintypes.HWND),
-                    ("hwndMoveSize", wintypes.HWND), ("hwndCaret", wintypes.HWND),
-                    ("rcCaret", wintypes.RECT),
-                ]
-
-            user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GuiThreadInfo)]
             callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+            user32.EnumChildWindows.argtypes = [wintypes.HWND, callback_type, wintypes.LPARAM]
 
             def belongs_to_test_application(hwnd) -> bool:
                 process_id = wintypes.DWORD()
@@ -430,50 +424,49 @@ def drive_windows_folder_picker(path: Path, application: Path) -> tuple[threadin
             if dialog is None:
                 raise RuntimeError("workspace folder dialog was not found")
 
-            def key(vk: int, up: bool = False) -> None:
-                user32.keybd_event(vk, 0, 0x0002 if up else 0, 0)
-
-            def chord(modifier: int, value: int) -> None:
-                key(modifier)
-                key(value)
-                key(value, True)
-                key(modifier, True)
-
-            user32.SetForegroundWindow(dialog)
-            time.sleep(0.15)
-            if user32.GetForegroundWindow() != dialog:
-                raise RuntimeError("workspace folder dialog did not receive foreground focus")
-            chord(0x11, ord("L"))
-            time.sleep(0.1)
-            process_id = wintypes.DWORD()
-            thread_id = user32.GetWindowThreadProcessId(dialog, ctypes.byref(process_id))
-            gui = GuiThreadInfo(cbSize=ctypes.sizeof(GuiThreadInfo))
-            if not user32.GetGUIThreadInfo(thread_id, ctypes.byref(gui)):
-                raise RuntimeError("workspace folder dialog focus could not be inspected")
-            if not user32.IsChild(dialog, gui.hwndFocus) or class_name(gui.hwndFocus) != "Edit":
-                raise RuntimeError("workspace folder address edit did not receive focus")
+            edit = user32.GetDlgItem(dialog, 1152)  # edt1: native folder-name field.
+            if not edit or not user32.IsWindowVisible(edit) or class_name(edit) != 'Edit':
+                raise RuntimeError('workspace folder-name edit was not found')
             address = ctypes.create_unicode_buffer(resolved)
             result = ctypes.c_size_t()
             sent = user32.SendMessageTimeoutW(
-                gui.hwndFocus, 0x000C, 0, ctypes.cast(address, ctypes.c_void_p).value,
+                edit, 0x000C, 0, ctypes.cast(address, ctypes.c_void_p).value,
                 0x0002, 1000, ctypes.byref(result),
             )
             if not sent or not result.value:
-                raise RuntimeError("workspace folder address could not be filled")
-            if user32.GetForegroundWindow() != dialog:
-                raise RuntimeError("workspace folder dialog lost foreground focus")
-            key(0x0D)
-            key(0x0D, True)
-            time.sleep(0.6)
+                raise RuntimeError('workspace folder name could not be filled')
             confirm = user32.GetDlgItem(dialog, 1)
             if not confirm:
-                raise RuntimeError("workspace folder confirmation button was not found")
-            user32.PostMessageW(confirm, 0x00F5, 0, 0)
+                raise RuntimeError('workspace folder confirmation button was not found')
+            if not user32.PostMessageW(dialog, 0x0111, 1, confirm):
+                raise RuntimeError('workspace folder selection could not be submitted')
             state.update({
                 "status": "submitted",
                 "dialogTitle": window_text(dialog),
                 "buttonTitle": window_text(confirm),
             })
+            # Submitting an absolute folder name navigates there first. Confirm
+            # only after the address bar identifies the requested test folder.
+            deadline = time.monotonic() + 5
+            while user32.IsWindowVisible(dialog) and time.monotonic() < deadline:
+                addresses = []
+
+                @callback_type
+                def collect_address(hwnd, _lparam):
+                    if user32.IsWindowVisible(hwnd) and class_name(hwnd) == "ToolbarWindow32":
+                        addresses.append(window_text(hwnd))
+                    return True
+
+                user32.EnumChildWindows(dialog, collect_address, 0)
+                if any(address.casefold().endswith(resolved.casefold()) for address in addresses):
+                    if not user32.PostMessageW(dialog, 0x0111, 1, confirm):
+                        raise RuntimeError("workspace folder confirmation could not be submitted")
+                    break
+                time.sleep(0.1)
+            while user32.IsWindowVisible(dialog) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            if user32.IsWindowVisible(dialog):
+                raise RuntimeError("workspace folder dialog did not complete the requested selection")
         except Exception as error:
             state.update({"status": "failed", "error": str(error)})
 
