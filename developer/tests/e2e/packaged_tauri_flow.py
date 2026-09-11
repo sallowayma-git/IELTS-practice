@@ -105,6 +105,7 @@ def binary_metadata(app: Path, tauri: str | None, native: str | None, build_perf
     return {
         "gitCommit": git_value("rev-parse", "HEAD"),
         "gitDirty": bool(status),
+        "gitStatus": status,
         "binaryPath": str(app.resolve()) if app.is_file() else str(app),
         "binarySha256": sha256_file(app) if app.is_file() else None,
         "binarySize": app.stat().st_size if app.is_file() else None,
