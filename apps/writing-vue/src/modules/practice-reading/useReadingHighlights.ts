@@ -555,10 +555,18 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
   }
 
   function positionSelectionToolbar(rect: DOMRect) {
-    const top = window.scrollY + rect.top - 44
-    const left = window.scrollX + rect.left + (rect.width / 2) - 110
-    selectionToolbarStyle.top = `${Math.max(8, Math.round(top > 0 ? top : window.scrollY + rect.bottom + 8))}px`
-    selectionToolbarStyle.left = `${Math.max(8, Math.round(left))}px`
+    const TOOLBAR_HEIGHT = 40
+    const TOOLBAR_WIDTH = 240
+    const MARGIN = 8
+    // Use viewport coordinates for fixed positioning
+    let top = rect.top - TOOLBAR_HEIGHT - MARGIN
+    if (top < MARGIN) {
+      top = rect.bottom + MARGIN
+    }
+    let left = rect.left + (rect.width / 2) - (TOOLBAR_WIDTH / 2)
+    left = Math.max(8, Math.min(left, window.innerWidth - TOOLBAR_WIDTH - 8))
+    selectionToolbarStyle.top = `${Math.round(top)}px`
+    selectionToolbarStyle.left = `${Math.round(left)}px`
     selectionToolbarVisible.value = true
   }
 
