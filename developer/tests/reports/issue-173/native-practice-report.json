@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-12T06:36:34.347980+00:00",
+  "status": "passed",
+  "exitCode": 0,
+  "target": "packaged-tauri-2",
+  "metadata": {
+    "gitCommit": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+    "gitDirty": false,
+    "gitStatus": null,
+    "binaryPath": "<validation-workspace>\\.tmp\\i173\\clone\\target\\release\\ielts-practice-tauri.exe",
+    "binarySha256": "5dc4b29f5b0224ce99a849eb1a969c098391e195e279fb299e0a629e4a5e5f88",
+    "binarySize": 27113984,
+    "binaryModifiedAt": "2026-09-12T06:26:45.555477+00:00",
+    "buildPerformed": false,
+    "tauriDriverVersion": null,
+    "nativeDriverVersion": "Microsoft Edge WebDriver 143.0.3650.96 (d55fe85d014134f7b4677688f46db9d610ddcfd5)",
+    "driverLog": "<validation-workspace>\\developer\\tests\\e2e\\reports\\tauri-driver.log",
+    "driverUrl": "http://127.0.0.1:65320",
+    "nativeDriverPort": 65321,
+    "stagedRuntimePath": "<native-test-temp>/ielts-tauri-e2e-2pt63zt5\\ielts-practice-tauri.exe",
+    "uiRouteVisuals": {
+      "library": {
+        "height": 514.921875,
+        "offenders": [],
+        "scrollWidth": 1440,
+        "textLength": 11801,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\library-current.png"
+      },
+      "compose": {
+        "height": 910.78125,
+        "offenders": [],
+        "scrollWidth": 1425,
+        "textLength": 107,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\compose-current.png"
+      },
+      "topics": {
+        "height": 1796.78125,
+        "offenders": [],
+        "scrollWidth": 1425,
+        "textLength": 2741,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\topics-current.png"
+      },
+      "settings": {
+        "height": 537.171875,
+        "offenders": [],
+        "scrollWidth": 1440,
+        "textLength": 576,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\settings-current.png"
+      },
+      "history": {
+        "height": 654.609375,
+        "offenders": [],
+        "scrollWidth": 1440,
+        "textLength": 149,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\history-current.png"
+      },
+      "agent": {
+        "height": 845.5625,
+        "offenders": [],
+        "scrollWidth": 1425,
+        "textLength": 499,
+        "viewportWidth": 1440,
+        "width": 1120,
+        "screenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\agent-current.png"
+      }
+    },
+    "agentWorkspaceRun": {
+      "runId": "8cdb8966-e53b-4142-99e8-6ec954358298",
+      "output": "Packaged Agent run completed from the local fake provider.",
+      "toolCalls": [
+        {
+          "arguments": {
+            "path": "note.txt",
+            "valid": true
+          },
+          "callId": "packaged-read-1",
+          "completedAt": "2026-09-12T06:36:28.760814700+00:00",
+          "error": null,
+          "result": {
+            "bytes": 34,
+            "path": "note.txt",
+            "sha256": "3a96791a505e07c9516ea17a72b2da23ef1e50311bd4632018554bdca7f8c315"
+          },
+          "round": 1,
+          "runId": "8cdb8966-e53b-4142-99e8-6ec954358298",
+          "sequence": 1,
+          "startedAt": "2026-09-12T06:36:28.760254400+00:00",
+          "status": "succeeded",
+          "toolName": "read_file"
+        }
+      ],
+      "trace": {
+        "actualModel": "packaged-fake-model-actual",
+        "hasContent": true,
+        "latencyMs": 5,
+        "promptHash": "322ffaf7dca2636ba47c8421dd176eaff4ae129b4a17236204385baa870e505a",
+        "providerRequestId": "packaged-request-final",
+        "retryCount": 0,
+        "runKind": "workspace",
+        "usage": {
+          "inputTokens": 14,
+          "outputTokens": 6
+        }
+      },
+      "providerRounds": 2,
+      "workspacePicker": {
+        "status": "submitted",
+        "dialogTitle": "选择文件夹",
+        "buttonTitle": "选择文件夹"
+      }
+    },
+    "readingNavigationMs": [
+      140.4,
+      145.9,
+      137.2,
+      144.7,
+      137.9
+    ],
+    "readingP95Ms": 145.9,
+    "readingP95BudgetMs": 3000,
+    "readingLayout": {
+      "children": [
+        {
+          "className": "pane reading-pane passage-panel",
+          "gridColumn": "auto",
+          "gridRow": "auto",
+          "height": 748.8125,
+          "id": "left",
+          "position": "static",
+          "tag": "MAIN",
+          "width": 719,
+          "x": 1,
+          "y": 138.1875
+        },
+        {
+          "className": "",
+          "gridColumn": "auto",
+          "gridRow": "auto",
+          "height": 748.8125,
+          "id": "reading-divider",
+          "position": "relative",
+          "tag": "DIV",
+          "width": 10,
+          "x": 740,
+          "y": 138.1875
+        },
+        {
+          "className": "pane reading-pane question-panel",
+          "gridColumn": "auto",
+          "gridRow": "auto",
+          "height": 748.8125,
+          "id": "right",
+          "position": "static",
+          "tag": "SECTION",
+          "width": 669,
+          "x": 770,
+          "y": 138.1875
+        }
+      ],
+      "display": "grid",
+      "divider": {
+        "height": 748.8125,
+        "width": 10,
+        "x": 740,
+        "y": 138.1875
+      },
+      "gridTemplateColumns": "719px 10px 669px",
+      "left": {
+        "height": 748.8125,
+        "width": 719,
+        "x": 1,
+        "y": 138.1875
+      },
+      "passageHtml": {
+        "height": 1662.59375,
+        "width": 660,
+        "x": 23,
+        "y": 178.1875
+      },
+      "right": {
+        "height": 748.8125,
+        "width": 669,
+        "x": 770,
+        "y": 138.1875
+      },
+      "viewport": {
+        "devicePixelRatio": 1,
+        "height": 960,
+        "width": 1440
+      },
+      "workspace": {
+        "height": 750.8125,
+        "width": 1440,
+        "x": 0,
+        "y": 137.1875
+      }
+    },
+    "readingScreenshot": "<validation-workspace>\\developer\\tests\\e2e\\reports\\reading-practice-current.png"
+  },
+  "checks": {
+    "launch": "passed",
+    "vueRoutes": "passed",
+    "uiRouteVisuals": "passed",
+    "readingIpc": "passed",
+    "agentIpcBoundary": "passed",
+    "agentWorkspaceRun": "passed",
+    "readingArchiveBoundary": "passed",
+    "historyRetentionBoundary": "passed",
+    "bundledResources": "passed",
+    "readingView": "passed",
+    "readingPerformance": "passed",
+    "notesDialog": "passed",
+    "readingSubmitBoundary": "passed",
+    "backupPathBoundary": "passed",
+    "updaterBoundary": "passed",
+    "sqliteRestart": "passed"
+  }
+}

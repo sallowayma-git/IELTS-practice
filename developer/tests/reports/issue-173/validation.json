@@ -1,0 +1,527 @@
+{
+  "schemaVersion": 1,
+  "issue": "https://github.com/sallowayma-git/IELTS-practice/issues/173",
+  "status": "passed",
+  "recordedAt": "2026-09-12T06:40:15.051633+00:00",
+  "testedSource": {
+    "baseCommit": "7ab167472aefca02d2b53bdfcd66bd5649b53626",
+    "documentationCommit": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+    "tree": "493dfb7073af430c2fdae23f142b8ec43c58139a",
+    "gitHubCommitSignatureVerified": true,
+    "documentationBlobs": {
+      "README.md": "4e1cafde7469f311c584e4afa14c4a668399dd0c",
+      "developer/docs/phase10-release-runbook.md": "1ae5ba3268febc3af4547b2af8a47ddbb8c8c164",
+      "developer/tests/ci/README.md": "20e9b3b4c852a03bcfa03d8fe2bb6cbe301cb8fa"
+    },
+    "scope": "Three documentation files; shipping sources, build scripts, workflows, dependency locks, and integrity checks are unchanged from the integrated #172 revision."
+  },
+  "environment": {
+    "os": "Windows 11 x64 (10.0.22631)",
+    "nativeTarget": "x86_64-pc-windows-msvc",
+    "python": "3.12.14",
+    "rust": "1.98.1",
+    "node": "24.19.0",
+    "npm": "10.8.2",
+    "tauriCli": "2.11.4",
+    "tauriDriver": "2.0.6",
+    "isolation": "Independent downloaded source directories, Python virtual environments, frontend installs, native freezes, and empty native build output directories. Existing native toolchain and Cargo registry/download caches were available; no compiled target, frontend distribution, or sidecar was copied from another checkout.",
+    "toolLocations": "npm global installation prefixes and tool caches were placed inside the validation workspace. The source ZIP build did not initialize Git or inherit enclosing repository metadata.",
+    "cargoBuildJobs": 1,
+    "pythonPackageSetup": "Both requirements locks installed into each fresh venv; pip check passed; no editable source package or PYTHONPATH override."
+  },
+  "sourceAcquisition": {
+    "sourceRevision": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+    "archiveUrl": "https://github.com/sallowayma-git/IELTS-practice/archive/a27a706d2ebc9293cafc98d8b78bc87232e4ec22.zip",
+    "archiveSha256": "0555387e8f7df75e2c1400e33c0222313359474b2ac9ec659de4450135925c24",
+    "archiveBytes": 10151521,
+    "verifiedFiles": 1396,
+    "everyZipFileMatchesGitBlob": true,
+    "gitDirectoryPresent": false,
+    "extraction": "Removed only the archive top-level directory; every source file retains its exact Git blob bytes."
+  },
+  "cloneAcquisition": {
+    "command": "git clone --depth 1 --single-branch --branch codex/issue-173-reproducible-setup https://github.com/sallowayma-git/IELTS-practice.git .tmp/i173/clone",
+    "verifiedHead": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+    "initialGitStatus": ""
+  },
+  "sources": {
+    "clone": {
+      "initialState": {
+        "source": "clone",
+        "sourceCommit": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+        "nativeTarget": "x86_64-pc-windows-msvc",
+        "recordedAt": "2026-09-12T05:50:17.5204407Z",
+        "gitDirectoryPresent": true,
+        "sidecarExecutablePresent": false,
+        "trackedManifestPresent": true,
+        "targetDirectoryPresent": false,
+        "frontendDistPresent": false,
+        "frontendDependenciesPresent": false,
+        "pythonVenvPresent": false
+      },
+      "commands": [
+        {
+          "name": "venv",
+          "command": "python -m venv .tmp/venv",
+          "startedAt": "2026-09-12T05:50:17.5933352Z",
+          "completedAt": "2026-09-12T05:50:20.9989651Z",
+          "durationSeconds": 3.406,
+          "exitCode": 0,
+          "log": "setup-venv.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "outputTail": ""
+        },
+        {
+          "name": "python-version",
+          "command": "python --version",
+          "startedAt": "2026-09-12T05:50:21.0227917Z",
+          "completedAt": "2026-09-12T05:50:21.0360091Z",
+          "durationSeconds": 0.013,
+          "exitCode": 0,
+          "log": "setup-python-version.log",
+          "logSha256": "6877d6d2b9c7405cc7f999574eed2c9d7d7199eb9bfb91c3b4be8b48e4c3221a",
+          "outputTail": "Python 3.12.14"
+        },
+        {
+          "name": "frontend-install",
+          "command": "npm.cmd --prefix apps/writing-vue ci --no-fund --no-audit",
+          "startedAt": "2026-09-12T05:50:21.0395988Z",
+          "completedAt": "2026-09-12T05:50:25.5530909Z",
+          "durationSeconds": 4.513,
+          "exitCode": 0,
+          "log": "setup-frontend-install.log",
+          "logSha256": "6a618291fa99456462e9f5375146d138c6fae68150c136d4d144e331c2418bb7",
+          "outputTail": "\nadded 53 packages in 4s"
+        },
+        {
+          "name": "tauri-install",
+          "command": "npm.cmd install --global @tauri-apps/cli@2.11.4 --no-fund --no-audit",
+          "startedAt": "2026-09-12T05:51:05.0891161Z",
+          "completedAt": "2026-09-12T05:51:10.0089282Z",
+          "durationSeconds": 4.92,
+          "exitCode": 0,
+          "log": "dependencies-tauri-install.log",
+          "logSha256": "2343408ce47ddd78085aa6ead264c6939378ca2b08c98d6dad742a06d3a0816e",
+          "outputTail": "\nadded 2 packages in 5s\nnpm notice\nnpm notice New major version of npm available! 10.8.2 -> 12.0.2\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2\nnpm notice To update run: npm install -g npm@12.0.2\nnpm notice"
+        },
+        {
+          "name": "python-dependencies",
+          "command": "python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock",
+          "startedAt": "2026-09-12T05:51:10.0438260Z",
+          "completedAt": "2026-09-12T05:51:36.5561851Z",
+          "durationSeconds": 26.512,
+          "exitCode": 0,
+          "log": "dependencies-python-dependencies.log",
+          "logSha256": "2c38beaa61607c7a4de0a3397a362d432657a275af2b19569fd78c73843df7fe",
+          "outputTail": "Downloading pyinstaller_hooks_contrib-2026.6-py3-none-any.whl (457 kB)\nDownloading pywin32_ctypes-0.2.3-py3-none-any.whl (30 kB)\nDownloading setuptools-83.0.0-py3-none-any.whl (1.0 MB)\n   ---------------------------------------- 1.0/1.0 MB 6.0 MB/s eta 0:00:00\nDownloading annotated_types-0.8.0-py3-none-any.whl (13 kB)\nDownloading pydantic-2.13.4-py3-none-any.whl (472 kB)\nDownloading pydantic_core-2.46.4-cp312-cp312-win_amd64.whl (2.1 MB)\n   ---------------------------------------- 2.1/2.1 MB 5.0 MB/s eta 0:00:00\nDownloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)\nDownloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)\nInstalling collected packages: altgraph, typing-extensions, setuptools, pywin32-ctypes, psutil, pefile, packaging, annotated-types, typing-inspection, pyinstaller-hooks-contrib, pydantic-core, pyinstaller, pydantic\nSuccessfully installed altgraph-0.17.5 annotated-types-0.8.0 packaging-26.2 pefile-2024.8.26 psutil-7.2.2 pydantic-2.13.4 pydantic-core-2.46.4 pyinstaller-6.21.0 pyinstaller-hooks-contrib-2026.6 pywin32-ctypes-0.2.3 setuptools-83.0.0 typing-extensions-4.16.0 typing-inspection-0.4.4"
+        },
+        {
+          "name": "pip-check",
+          "command": "python -m pip check",
+          "startedAt": "2026-09-12T05:51:36.5605589Z",
+          "completedAt": "2026-09-12T05:51:36.9508606Z",
+          "durationSeconds": 0.39,
+          "exitCode": 0,
+          "log": "dependencies-pip-check.log",
+          "logSha256": "672aec65a45bed50e70229c70934a7eebf0462595c459b83023027645d57cccf",
+          "outputTail": "No broken requirements found."
+        },
+        {
+          "name": "sidecar",
+          "command": "python developer/tests/ci/build_agent_runtime_sidecar.py",
+          "startedAt": "2026-09-12T05:52:04.1196855Z",
+          "completedAt": "2026-09-12T05:52:16.5020535Z",
+          "durationSeconds": 12.382,
+          "exitCode": 0,
+          "log": "freeze-sidecar.log",
+          "logSha256": "7ac638e5ddbecc3b4149e41c6da19afdb1de25e21def73b3daa950a2f5ee6c7d",
+          "outputTail": "10036 INFO: Building EXE because EXE-00.toc is non existent\n10036 INFO: Building EXE from EXE-00.toc\n10036 INFO: Copying bootloader EXE to <validation-workspace>\\.tmp\\i173\\clone\\target\\agent-runtime-sidecar\\dist\\ielts-agent-runtime.exe\n10039 INFO: Copying icon to EXE\n10041 INFO: Copying 0 resources to EXE\n10041 INFO: Embedding manifest in EXE\n10041 INFO: Appending PKG archive to EXE\n10077 INFO: Fixing EXE headers\n10147 INFO: Building EXE from EXE-00.toc completed successfully.\n10149 INFO: Build complete! The results are available in: <validation-workspace>\\.tmp\\i173\\clone\\target\\agent-runtime-sidecar\\dist\n{\"schemaVersion\":1,\"target\":\"x86_64-pc-windows-msvc\",\"binary\":\"D:\\\\(Origin)IELTS-Practice\\\\docs\\\\local-workspaces\\\\IELTS-Practice-Issue-168\\\\.tmp\\\\i173\\\\clone\\\\src-tauri\\\\binaries\\\\.ielts-agent-runtime-x86_64-pc-windows-msvc.staged.exe\",\"sha256\":\"4e575ba0f7f038edfb2559857327a0c5d60e3ec4434cc93da1a7041848341a20\",\"protocolVersion\":1,\"capabilities\":{\"runtime.health\":\"1\",\"runtime.shutdown\":\"1\",\"memory.candidates.extract\":\"1\",\"memory.candidates.generate\":\"1\",\"dream.daily\":\"1\",\"planner.study_plan\":\"1\"},\"unpackedBytes\":13368185,\"compressedBytes\":13147966,\"installerDeltaUpperBoundBytes\":13368185,\"coldStartMs\":985.035,\"idleRssBytes\":37027840,\"idleRssScope\":\"process-tree\",\"idleRssProcessCount\":2,\"thresholds\":{\"unpackedSize\":true,\"compressedSize\":true,\"installerDelta\":true,\"idleRss\":true,\"coldStart\":true},\"status\":\"pass\"}\nbuilt src-tauri\\binaries\\ielts-agent-runtime-x86_64-pc-windows-msvc.exe sha256=4e575ba0f7f038edfb2559857327a0c5d60e3ec4434cc93da1a7041848341a20"
+        },
+        {
+          "name": "tauri-release",
+          "command": "tauri.cmd build --ci --no-bundle",
+          "startedAt": "2026-09-12T05:54:24.4770984Z",
+          "completedAt": "2026-09-12T06:26:46.6863636Z",
+          "durationSeconds": 1942.209,
+          "exitCode": 0,
+          "log": "build-tauri-release.log",
+          "logSha256": "471c6e83a244101da53508b076903b78def3e5b62b558b0a9a806760b2cb78ea",
+          "outputTail": "warning: linker stdout: 正在创建库 <validation-workspace>\\.tmp\\i173\\clone\\target\\release\\deps\\ielts_practice_tauri_lib.dll.lib 和对象 <validation-workspace>\\.tmp\\i173\\clone\\target\\release\\deps\\ielts_practice_tauri_lib.dll.exp\n  |\n  = note: `#[warn(linker_messages)]` on by default\n\nwarning: `ielts-practice-tauri` (lib) generated 4 warnings\nwarning: linker stdout: 正在创建库 <validation-workspace>\\.tmp\\i173\\clone\\target\\release\\deps\\ielts_practice_tauri.lib 和对象 <validation-workspace>\\.tmp\\i173\\clone\\target\\release\\deps\\ielts_practice_tauri.exp\n  |\n  = note: `#[warn(linker_messages)]` on by default\n\nwarning: `ielts-practice-tauri` (bin \"ielts-practice-tauri\") generated 1 warning\n    Finished `release` profile [optimized] target(s) in 32m 13s\n       Built application at: <validation-workspace>\\.tmp\\i173\\clone\\target\\release\\ielts-practice-tauri.exe"
+        },
+        {
+          "name": "host-sidecar",
+          "command": "python -c 'import subprocess; subprocess.run([\"target/release/ielts-practice-tauri.exe\", \"--verify-sidecar\"], check=True, timeout=30)'",
+          "startedAt": "2026-09-12T06:28:13.0193637Z",
+          "completedAt": "2026-09-12T06:28:13.2291263Z",
+          "durationSeconds": 0.21,
+          "exitCode": 0,
+          "log": "identity-host-sidecar.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "outputTail": "",
+          "argv": [
+            "python",
+            "-c",
+            "import subprocess; subprocess.run([\"target/release/ielts-practice-tauri.exe\", \"--verify-sidecar\"], check=True, timeout=30)"
+          ]
+        },
+        {
+          "name": "reading-resources",
+          "command": "python developer/tests/ci/verify_reading_resources.py target/release/reading",
+          "startedAt": "2026-09-12T06:28:13.2736472Z",
+          "completedAt": "2026-09-12T06:28:14.3737078Z",
+          "durationSeconds": 1.1,
+          "exitCode": 0,
+          "log": "identity-reading-resources.log",
+          "logSha256": "8732f65b823772f9be8f9cf997de7a12593bb7401691b2ec6a4906bb32ba9a07",
+          "outputTail": "{\"status\": \"passed\", \"verifiedPayloads\": 225, \"hashScope\": \"raw-bytes\"}"
+        }
+      ],
+      "freshFreezeAttempts": 1,
+      "sidecarSmoke": {
+        "schemaVersion": 1,
+        "target": "x86_64-pc-windows-msvc",
+        "binary": "<validation-workspace>\\.tmp\\i173\\clone\\src-tauri\\binaries\\.ielts-agent-runtime-x86_64-pc-windows-msvc.staged.exe",
+        "sha256": "4e575ba0f7f038edfb2559857327a0c5d60e3ec4434cc93da1a7041848341a20",
+        "protocolVersion": 1,
+        "capabilities": {
+          "runtime.health": "1",
+          "runtime.shutdown": "1",
+          "memory.candidates.extract": "1",
+          "memory.candidates.generate": "1",
+          "dream.daily": "1",
+          "planner.study_plan": "1"
+        },
+        "unpackedBytes": 13368185,
+        "compressedBytes": 13147966,
+        "installerDeltaUpperBoundBytes": 13368185,
+        "coldStartMs": 985.035,
+        "idleRssBytes": 37027840,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": 2,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        },
+        "status": "pass"
+      },
+      "sidecarIdentity": {
+        "sha256": "4e575ba0f7f038edfb2559857327a0c5d60e3ec4434cc93da1a7041848341a20",
+        "manifest": "4e575ba0f7f038edfb2559857327a0c5d60e3ec4434cc93da1a7041848341a20",
+        "bytes": 13368185
+      },
+      "releaseHost": {
+        "sha256": "5dc4b29f5b0224ce99a849eb1a969c098391e195e279fb299e0a629e4a5e5f88",
+        "bytes": 27113984
+      },
+      "builtSidecarMatchesPublishedManifest": true,
+      "documentationMatchesTestedCommit": true,
+      "buildInputsMatchTestedCommit": true,
+      "timingScope": "Command timings describe successful invocations; initialState.recordedAt marks the beginning of each source preparation. These are functional reproduction results, not cold-build performance benchmarks. Build intermediates stayed within the respective source directory."
+    },
+    "zip": {
+      "initialState": {
+        "source": "zip",
+        "sourceCommit": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+        "nativeTarget": "x86_64-pc-windows-msvc",
+        "recordedAt": "2026-09-12T05:50:32.9663201Z",
+        "gitDirectoryPresent": false,
+        "sidecarExecutablePresent": false,
+        "trackedManifestPresent": true,
+        "targetDirectoryPresent": false,
+        "frontendDistPresent": false,
+        "frontendDependenciesPresent": false,
+        "pythonVenvPresent": false
+      },
+      "commands": [
+        {
+          "name": "venv",
+          "command": "python -m venv .tmp/venv",
+          "startedAt": "2026-09-12T05:50:33.0088278Z",
+          "completedAt": "2026-09-12T05:50:36.1906824Z",
+          "durationSeconds": 3.182,
+          "exitCode": 0,
+          "log": "setup-venv.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "outputTail": ""
+        },
+        {
+          "name": "python-version",
+          "command": "python --version",
+          "startedAt": "2026-09-12T05:50:36.2089956Z",
+          "completedAt": "2026-09-12T05:50:36.2266701Z",
+          "durationSeconds": 0.018,
+          "exitCode": 0,
+          "log": "setup-python-version.log",
+          "logSha256": "6877d6d2b9c7405cc7f999574eed2c9d7d7199eb9bfb91c3b4be8b48e4c3221a",
+          "outputTail": "Python 3.12.14"
+        },
+        {
+          "name": "frontend-install",
+          "command": "npm.cmd --prefix apps/writing-vue ci --no-fund --no-audit",
+          "startedAt": "2026-09-12T05:50:36.2298781Z",
+          "completedAt": "2026-09-12T05:50:40.6900328Z",
+          "durationSeconds": 4.46,
+          "exitCode": 0,
+          "log": "setup-frontend-install.log",
+          "logSha256": "6a618291fa99456462e9f5375146d138c6fae68150c136d4d144e331c2418bb7",
+          "outputTail": "\nadded 53 packages in 4s"
+        },
+        {
+          "name": "tauri-install",
+          "command": "npm.cmd install --global @tauri-apps/cli@2.11.4 --no-fund --no-audit",
+          "startedAt": "2026-09-12T05:51:05.2108286Z",
+          "completedAt": "2026-09-12T05:51:13.1277153Z",
+          "durationSeconds": 7.917,
+          "exitCode": 0,
+          "log": "dependencies-tauri-install.log",
+          "logSha256": "f6ce8479b4e50bc4482294ee1d06682cffd2bc84874965976bdc1b970907224b",
+          "outputTail": "\nadded 2 packages in 8s\nnpm notice\nnpm notice New major version of npm available! 10.8.2 -> 12.0.2\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2\nnpm notice To update run: npm install -g npm@12.0.2\nnpm notice"
+        },
+        {
+          "name": "python-dependencies",
+          "command": "python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock",
+          "startedAt": "2026-09-12T05:51:13.1574669Z",
+          "completedAt": "2026-09-12T05:51:38.4886504Z",
+          "durationSeconds": 25.331,
+          "exitCode": 0,
+          "log": "dependencies-python-dependencies.log",
+          "logSha256": "422b1f89011bb07347b800661ae2b6173a5073494533011d3a32f0a3481c662a",
+          "outputTail": "Downloading pyinstaller_hooks_contrib-2026.6-py3-none-any.whl (457 kB)\nDownloading pywin32_ctypes-0.2.3-py3-none-any.whl (30 kB)\nDownloading setuptools-83.0.0-py3-none-any.whl (1.0 MB)\n   ---------------------------------------- 1.0/1.0 MB 3.2 MB/s eta 0:00:00\nDownloading annotated_types-0.8.0-py3-none-any.whl (13 kB)\nDownloading pydantic-2.13.4-py3-none-any.whl (472 kB)\nDownloading pydantic_core-2.46.4-cp312-cp312-win_amd64.whl (2.1 MB)\n   ---------------------------------------- 2.1/2.1 MB 5.8 MB/s eta 0:00:00\nDownloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)\nDownloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)\nInstalling collected packages: altgraph, typing-extensions, setuptools, pywin32-ctypes, psutil, pefile, packaging, annotated-types, typing-inspection, pyinstaller-hooks-contrib, pydantic-core, pyinstaller, pydantic\nSuccessfully installed altgraph-0.17.5 annotated-types-0.8.0 packaging-26.2 pefile-2024.8.26 psutil-7.2.2 pydantic-2.13.4 pydantic-core-2.46.4 pyinstaller-6.21.0 pyinstaller-hooks-contrib-2026.6 pywin32-ctypes-0.2.3 setuptools-83.0.0 typing-extensions-4.16.0 typing-inspection-0.4.4"
+        },
+        {
+          "name": "pip-check",
+          "command": "python -m pip check",
+          "startedAt": "2026-09-12T05:51:38.4935944Z",
+          "completedAt": "2026-09-12T05:51:38.8346621Z",
+          "durationSeconds": 0.341,
+          "exitCode": 0,
+          "log": "dependencies-pip-check.log",
+          "logSha256": "672aec65a45bed50e70229c70934a7eebf0462595c459b83023027645d57cccf",
+          "outputTail": "No broken requirements found."
+        },
+        {
+          "name": "sidecar",
+          "command": "python developer/tests/ci/build_agent_runtime_sidecar.py",
+          "startedAt": "2026-09-12T05:52:41.9918943Z",
+          "completedAt": "2026-09-12T05:52:53.3850733Z",
+          "durationSeconds": 11.393,
+          "exitCode": 0,
+          "log": "freeze-sidecar.log",
+          "logSha256": "db38334d8c96e771a7cb32b673fe57366d67aca3bddee47053c093a4ff7b72c8",
+          "outputTail": "9411 INFO: Building EXE because EXE-00.toc is non existent\n9411 INFO: Building EXE from EXE-00.toc\n9412 INFO: Copying bootloader EXE to <validation-workspace>\\.tmp\\i173\\zip\\target\\agent-runtime-sidecar\\dist\\ielts-agent-runtime.exe\n9414 INFO: Copying icon to EXE\n9416 INFO: Copying 0 resources to EXE\n9416 INFO: Embedding manifest in EXE\n9418 INFO: Appending PKG archive to EXE\n9425 INFO: Fixing EXE headers\n9480 INFO: Building EXE from EXE-00.toc completed successfully.\n9482 INFO: Build complete! The results are available in: <validation-workspace>\\.tmp\\i173\\zip\\target\\agent-runtime-sidecar\\dist\n{\"schemaVersion\":1,\"target\":\"x86_64-pc-windows-msvc\",\"binary\":\"D:\\\\(Origin)IELTS-Practice\\\\docs\\\\local-workspaces\\\\IELTS-Practice-Issue-168\\\\.tmp\\\\i173\\\\zip\\\\src-tauri\\\\binaries\\\\.ielts-agent-runtime-x86_64-pc-windows-msvc.staged.exe\",\"sha256\":\"7101fcaa5b4b4a0c56a4f49952477009204223820b932d7d7f640a1af4b3835d\",\"protocolVersion\":1,\"capabilities\":{\"runtime.health\":\"1\",\"runtime.shutdown\":\"1\",\"memory.candidates.extract\":\"1\",\"memory.candidates.generate\":\"1\",\"dream.daily\":\"1\",\"planner.study_plan\":\"1\"},\"unpackedBytes\":13365269,\"compressedBytes\":13145525,\"installerDeltaUpperBoundBytes\":13365269,\"coldStartMs\":697.204,\"idleRssBytes\":37179392,\"idleRssScope\":\"process-tree\",\"idleRssProcessCount\":2,\"thresholds\":{\"unpackedSize\":true,\"compressedSize\":true,\"installerDelta\":true,\"idleRss\":true,\"coldStart\":true},\"status\":\"pass\"}\nbuilt src-tauri\\binaries\\ielts-agent-runtime-x86_64-pc-windows-msvc.exe sha256=7101fcaa5b4b4a0c56a4f49952477009204223820b932d7d7f640a1af4b3835d"
+        },
+        {
+          "name": "tauri-release",
+          "command": "tauri.cmd build --ci --no-bundle",
+          "startedAt": "2026-09-12T06:27:15.9357569Z",
+          "completedAt": "2026-09-12T06:31:56.6440952Z",
+          "durationSeconds": 280.708,
+          "exitCode": 0,
+          "log": "build-tauri-release.log",
+          "logSha256": "9bba997210059c36f7c788d424dbf807a90db07828c8b560758aa6c92a3ad4d7",
+          "outputTail": "warning: linker stdout: 正在创建库 <validation-workspace>\\.tmp\\i173\\zip\\target\\release\\deps\\ielts_practice_tauri_lib.dll.lib 和对象 <validation-workspace>\\.tmp\\i173\\zip\\target\\release\\deps\\ielts_practice_tauri_lib.dll.exp\n  |\n  = note: `#[warn(linker_messages)]` on by default\n\nwarning: `ielts-practice-tauri` (lib) generated 4 warnings\nwarning: linker stdout: 正在创建库 <validation-workspace>\\.tmp\\i173\\zip\\target\\release\\deps\\ielts_practice_tauri.lib 和对象 <validation-workspace>\\.tmp\\i173\\zip\\target\\release\\deps\\ielts_practice_tauri.exp\n  |\n  = note: `#[warn(linker_messages)]` on by default\n\nwarning: `ielts-practice-tauri` (bin \"ielts-practice-tauri\") generated 1 warning\n    Finished `release` profile [optimized] target(s) in 4m 32s\n       Built application at: <validation-workspace>\\.tmp\\i173\\zip\\target\\release\\ielts-practice-tauri.exe"
+        },
+        {
+          "name": "host-sidecar",
+          "command": "python -c 'import subprocess; subprocess.run([\"target/release/ielts-practice-tauri.exe\", \"--verify-sidecar\"], check=True, timeout=30)'",
+          "argv": [
+            "python",
+            "-c",
+            "import subprocess; subprocess.run([\"target/release/ielts-practice-tauri.exe\", \"--verify-sidecar\"], check=True, timeout=30)"
+          ],
+          "startedAt": "2026-09-12T06:32:42.6093045Z",
+          "completedAt": "2026-09-12T06:32:43.0332294Z",
+          "durationSeconds": 0.424,
+          "exitCode": 0,
+          "log": "identity-host-sidecar.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "outputTail": ""
+        },
+        {
+          "name": "reading-resources",
+          "command": "python developer/tests/ci/verify_reading_resources.py target/release/reading",
+          "argv": [
+            "python",
+            "developer/tests/ci/verify_reading_resources.py",
+            "target/release/reading"
+          ],
+          "startedAt": "2026-09-12T06:32:43.0698630Z",
+          "completedAt": "2026-09-12T06:32:43.5050847Z",
+          "durationSeconds": 0.435,
+          "exitCode": 0,
+          "log": "identity-reading-resources.log",
+          "logSha256": "8732f65b823772f9be8f9cf997de7a12593bb7401691b2ec6a4906bb32ba9a07",
+          "outputTail": "{\"status\": \"passed\", \"verifiedPayloads\": 225, \"hashScope\": \"raw-bytes\"}"
+        }
+      ],
+      "freshFreezeAttempts": 1,
+      "sidecarSmoke": {
+        "schemaVersion": 1,
+        "target": "x86_64-pc-windows-msvc",
+        "binary": "<validation-workspace>\\.tmp\\i173\\zip\\src-tauri\\binaries\\.ielts-agent-runtime-x86_64-pc-windows-msvc.staged.exe",
+        "sha256": "7101fcaa5b4b4a0c56a4f49952477009204223820b932d7d7f640a1af4b3835d",
+        "protocolVersion": 1,
+        "capabilities": {
+          "runtime.health": "1",
+          "runtime.shutdown": "1",
+          "memory.candidates.extract": "1",
+          "memory.candidates.generate": "1",
+          "dream.daily": "1",
+          "planner.study_plan": "1"
+        },
+        "unpackedBytes": 13365269,
+        "compressedBytes": 13145525,
+        "installerDeltaUpperBoundBytes": 13365269,
+        "coldStartMs": 697.204,
+        "idleRssBytes": 37179392,
+        "idleRssScope": "process-tree",
+        "idleRssProcessCount": 2,
+        "thresholds": {
+          "unpackedSize": true,
+          "compressedSize": true,
+          "installerDelta": true,
+          "idleRss": true,
+          "coldStart": true
+        },
+        "status": "pass"
+      },
+      "sidecarIdentity": {
+        "sha256": "7101fcaa5b4b4a0c56a4f49952477009204223820b932d7d7f640a1af4b3835d",
+        "manifest": "7101fcaa5b4b4a0c56a4f49952477009204223820b932d7d7f640a1af4b3835d",
+        "bytes": 13365269
+      },
+      "releaseHost": {
+        "sha256": "e4488b0e6da78fc981d1f09e82960eaccc71fe075aaf13eb7459a44c7d3c074e",
+        "bytes": 27111424
+      },
+      "builtSidecarMatchesPublishedManifest": true,
+      "documentationMatchesTestedCommit": true,
+      "buildInputsMatchTestedCommit": true,
+      "timingScope": "Command timings describe successful invocations; initialState.recordedAt marks the beginning of each source preparation. These are functional reproduction results, not cold-build performance benchmarks. Build intermediates stayed within the respective source directory."
+    }
+  },
+  "workspaceRegressions": {
+    "sourceCommit": "a27a706d2ebc9293cafc98d8b78bc87232e4ec22",
+    "executionLocation": "Original task workspace at the same signed source commit; existing compilation cache and matching checked executable/manifest were available.",
+    "commands": [
+      {
+        "name": "frontend",
+        "command": "npm.cmd --prefix apps/writing-vue run build",
+        "startedAt": "2026-09-12T06:11:08.7576068Z",
+        "completedAt": "2026-09-12T06:11:17.7492589Z",
+        "durationSeconds": 8.992,
+        "exitCode": 0,
+        "log": "workspace-frontend.log",
+        "logSha256": "90e62b01445ed996aaa18091d2b57c4085c6ba67a5b9f599afd3fa3caa8d41c0",
+        "outputTail": "../../dist/writing/assets/HistoryPage-CJwn3ES7.js                 38.30 kB │ gzip: 12.80 kB\n../../dist/writing/assets/AgentConsolePage-Kr7yeMef.js            40.17 kB │ gzip: 13.88 kB\n../../dist/writing/assets/SettingsPage-CoCbJbz7.js                47.05 kB │ gzip: 14.96 kB\n../../dist/writing/assets/PracticeLibraryPage-CJn_ScsM.js         88.62 kB │ gzip: 25.08 kB\n../../dist/writing/assets/index-J683GKQx.js                      109.59 kB │ gzip: 42.96 kB\n../../dist/writing/assets/PracticeReadingPage-CkmcTsu7.js        138.94 kB │ gzip: 42.90 kB\n✓ built in 3.58s\nnpm notice\nnpm notice New major version of npm available! 10.8.2 -> 12.0.2\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2\nnpm notice To update run: npm install -g npm@12.0.2\nnpm notice"
+      },
+      {
+        "name": "cargo-check",
+        "command": "cargo check --workspace --locked",
+        "startedAt": "2026-09-12T06:11:17.8559304Z",
+        "completedAt": "2026-09-12T06:12:03.6427534Z",
+        "durationSeconds": 45.787,
+        "exitCode": 0,
+        "log": "workspace-cargo-check.log",
+        "logSha256": "8c687960fdff792f354e5b65be89175b2503335cb312b17c541ddb74710729f1",
+        "outputTail": "273 | |     run_id: String,\n274 | | ) -> CommandResponse<bool> {\n    | |__________________________^ function `agent_cancel_run` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: `ielts-practice-tauri` (lib) generated 3 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 45.18s"
+      },
+      {
+        "name": "cargo-tests",
+        "command": "cargo test --workspace --locked",
+        "startedAt": "2026-09-12T06:12:03.6608528Z",
+        "completedAt": "2026-09-12T06:25:08.7036090Z",
+        "durationSeconds": 785.043,
+        "exitCode": 0,
+        "log": "workspace-cargo-tests.log",
+        "logSha256": "9f28035b7519e7e3e749164a1a099ab6e1b27c32499fc9fe9716ef43cec1b046",
+        "outputTail": "   Doc-tests ielts_domain\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n   Doc-tests ielts_practice_tauri_lib\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n"
+      }
+    ],
+    "suiteResults": 52,
+    "passed": 507,
+    "failed": 0,
+    "ignored": 0
+  },
+  "windowsRequiredRegressions": {
+    "executionLocation": "Original task workspace at the same signed source commit. The native flow explicitly used the newly built fresh-clone release host.",
+    "driverPreparation": [
+      {
+        "name": "tauri-driver",
+        "command": "cargo install tauri-driver --version 2.0.6 --locked",
+        "startedAt": "2026-09-12T05:55:28.9683761Z",
+        "completedAt": "2026-09-12T05:58:00.5418056Z",
+        "durationSeconds": 151.573,
+        "exitCode": 0,
+        "log": "drivers-tauri-driver.log",
+        "logSha256": "973bd7c8e11a2f038013900ead950f1ed2a6ce1d8fc7788966ca124eae1ca46b",
+        "outputTail": "   Compiling env_home v0.1.0\n   Compiling tower-service v0.3.3\n   Compiling hyper-util v0.1.19\n   Compiling which v8.0.0\n   Compiling futures v0.3.31\n   Compiling win32job v2.0.0\n   Compiling http-body-util v0.1.2\n   Compiling pico-args v0.5.0\n   Compiling tauri-driver v2.0.6\n    Finished `release` profile [optimized] target(s) in 2m 30s\n  Installing <validation-workspace>\\target\\issue-170-tools\\cargo\\bin\\tauri-driver.exe\n   Installed package `tauri-driver v2.0.6` (executable `tauri-driver.exe`)"
+      },
+      {
+        "name": "edgedriver",
+        "command": "pwsh -NoProfile -File ./developer/tests/ci/install_edge_webdriver.ps1 -Destination .tmp/edgedriver",
+        "startedAt": "2026-09-12T05:58:00.6035363Z",
+        "completedAt": "2026-09-12T05:58:06.1861317Z",
+        "durationSeconds": 5.583,
+        "exitCode": 0,
+        "log": "drivers-edgedriver.log",
+        "logSha256": "160613c2351bf0b0c53c67bbee5c66bc5c6040a8421cf806d1ba6f3e7a6fb8bf",
+        "outputTail": "WebView2 runtime: C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\143.0.3650.96\\msedgewebview2.exe\nEdgeUpdate registration: HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\nMatched EdgeDriver: <validation-workspace>\\.tmp\\i173\\clone\\.tmp\\edgedriver\\msedgedriver.exe (143.0.3650.96)"
+      }
+    ],
+    "commandsInOrder": [
+      {
+        "name": "static",
+        "command": "python developer/tests/ci/run_static_suite.py",
+        "argv": [
+          "python",
+          "developer/tests/ci/run_static_suite.py"
+        ],
+        "startedAt": "2026-09-12T06:33:01.4467911Z",
+        "completedAt": "2026-09-12T06:36:12.4988022Z",
+        "durationSeconds": 191.052,
+        "exitCode": 0,
+        "log": "gates-static.log",
+        "logSha256": "1c01c9d0aecdf795aa4afcf17c81b6f98bcd20a38330ef6ae28bf4ee2e644849",
+        "outputTail": "      \"status\": \"pass\",\n      \"exitCode\": 0,\n      \"detail\": \"M4 learner-model contract verified\"\n    }\n  ],\n  \"excludedRetiredHosts\": [\n    \"Electron\",\n    \"Fastify\",\n    \"root index.html\",\n    \"file:// E2E host\"\n  ]\n}"
+      },
+      {
+        "name": "native-practice",
+        "command": "python developer/tests/e2e/suite_practice_flow.py",
+        "argv": [
+          "python",
+          "developer/tests/e2e/suite_practice_flow.py"
+        ],
+        "startedAt": "2026-09-12T06:36:12.6330312Z",
+        "completedAt": "2026-09-12T06:36:34.9946064Z",
+        "durationSeconds": 22.362,
+        "exitCode": 0,
+        "log": "gates-native-practice.log",
+        "logSha256": "3ff662af731ac473eec1c54407e045b8fda7dd247b5c7cdd18dba7c91d4ae48b",
+        "outputTail": "    \"readingArchiveBoundary\": \"passed\",\n    \"historyRetentionBoundary\": \"passed\",\n    \"bundledResources\": \"passed\",\n    \"readingView\": \"passed\",\n    \"readingPerformance\": \"passed\",\n    \"notesDialog\": \"passed\",\n    \"readingSubmitBoundary\": \"passed\",\n    \"backupPathBoundary\": \"passed\",\n    \"updaterBoundary\": \"passed\",\n    \"sqliteRestart\": \"passed\"\n  }\n}"
+      }
+    ],
+    "staticSummary": {
+      "total": 29,
+      "passed": 29,
+      "failed": 0
+    },
+    "nativePassed": 16,
+    "nativeFailed": 0,
+    "nativeBinaryMatchesFreshClone": true,
+    "staticReport": "static-ci-report.json",
+    "nativeReport": "native-practice-report.json"
+  },
+  "evidenceBoundary": {
+    "local": "Both fresh source paths completed the documented Windows native freeze/full smoke and tauri build --ci --no-bundle. Host-sidecar identity and all 225 reading payloads were verified in each release output. Workspace checks and the required static-then-native practice sequence ran in the original task workspace at the same source commit, with the native flow targeting the fresh-clone release executable.",
+    "otherPlatforms": "macOS ARM64 and Linux x64 are supported preparation instructions backed by the release sibling evidence below, not local #173 reproductions.",
+    "releaseSiblingIssue": "https://github.com/sallowayma-git/IELTS-practice/issues/172",
+    "releaseSiblingImplementationPr": "https://github.com/sallowayma-git/IELTS-practice/pull/182",
+    "releaseSiblingNativeRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34624179018",
+    "releaseSiblingShippingRun": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/34624175205",
+    "parentTracker": "https://github.com/sallowayma-git/IELTS-practice/issues/169"
+  }
+}
