@@ -27,6 +27,67 @@ The private key must never be committed. A release fails before build if the pri
 key or updater public key is missing. Development builds remain explicitly
 unconfigured and cannot download updates.
 
+## Local sidecar and gate prerequisites
+
+For a clean clone or GitHub source ZIP, complete the [README setup](../../README.md#开发前置)
+first: native system dependencies, Rust stable, Node/npm, the pinned Tauri CLI,
+and an isolated Python 3.12 environment of the matching native architecture.
+Run all commands from the repository root, using that same Python environment.
+
+```text
+npm --prefix apps/writing-vue ci --no-fund --no-audit
+npm install --global @tauri-apps/cli@2.11.4 --no-fund --no-audit
+python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+python developer/tests/ci/build_agent_runtime_sidecar.py --target <host-target>
+```
+
+Replace `<host-target>` with the matching row below. Omitting `--target` detects
+the supported host automatically; it does not default every platform to Windows.
+Cross-platform freezing is rejected, including running an x64 Python interpreter
+for the macOS ARM64 target.
+
+| Native host | Python architecture | Sidecar and Rust target | Production sidecar option |
+| --- | --- | --- | --- |
+| Windows x64 | x64 | `x86_64-pc-windows-msvc` | `--sign` |
+| macOS Apple Silicon | arm64 | `aarch64-apple-darwin` | `--sign` |
+| Linux x64 (release runner: Ubuntu 22.04) | x64 | `x86_64-unknown-linux-gnu` | none |
+
+The builder freezes and smokes the native executable before publishing
+`src-tauri/binaries/ielts-agent-runtime-<host-target>[.exe]` and
+`ielts-agent-runtime-<host-target>.sha256`. Keep the pair together. An existing
+manifest alone is not a prepared sidecar. Tauri's `build.rs` must continue to
+verify the executable's SHA-256 against the manifest. Rebuild after runtime or
+lock-file changes; never patch the manifest to bypass a failed build or smoke.
+The current independent smoke contract does not import the source package, so
+no editable package installation or `PYTHONPATH` override is required.
+
+For local validation, omit `--sign`, then run `tauri build --ci --no-bundle`.
+For workspace tests, generate the frontend with
+`npm --prefix apps/writing-vue run build` before `cargo test --workspace --locked`.
+Sidecar preparation precedes every Tauri dev/build, workspace compilation, and
+static suite that compiles Tauri. The [Windows regression instructions](../../README.md#windows-必需回归)
+also install `tauri-driver` 2.0.6, download the matching EdgeDriver, and set the
+explicit freshly built host path before the required static-then-native sequence.
+Those local gates currently require Windows; native macOS/Linux packaging uses
+the platform jobs below.
+
+Each consuming CI/release job prepares its own sidecar: `tauri-ci.yml` static and
+workspace jobs, `release.yml` shipping and workspace jobs, and each native release
+matrix job. Job `needs` dependencies do not transfer files. A transferred artifact
+would still need the matching platform/architecture, executable, and manifest.
+Production Windows/macOS jobs import their certificates first and pass `--sign`:
+the builder signs and verifies the staged bytes before hashing and smoking them.
+Linux produces its native executable and manifest without that option. Existing
+host signing, notarization, bundle, and updater verification remain required.
+
+The release sibling [#172 acceptance](https://github.com/sallowayma-git/IELTS-practice/issues/172)
+links the [three-platform native run](https://github.com/sallowayma-git/IELTS-practice/actions/runs/34624179018)
+and the [actual release shipping/workspace gates](https://github.com/sallowayma-git/IELTS-practice/actions/runs/34624175205),
+tested at `86ee69206633aac6e1ea3920e633e08da0a1cbb8` and integrated with the identical
+tree at `7ab167472aefca02d2b53bdfcd66bd5649b53626`. These are unsigned development
+acceptance results. A local Windows reproduction does not establish macOS/Linux
+reproduction or production release readiness.
+
 ## Release
 
 Before creating a version tag, run the complete release gates on the candidate
@@ -52,7 +113,8 @@ their actual release evidence.
 
 1. Set the same semantic version in `src-tauri/tauri.conf.json`,
    `src-tauri/Cargo.toml`, and `apps/writing-vue/package.json`.
-2. Run the required gates in order:
+2. Complete the local sidecar, release host build, and Windows driver preparation
+   above, then run the required gates in order:
 
    ```powershell
    python developer/tests/ci/run_static_suite.py
@@ -61,7 +123,8 @@ their actual release evidence.
 
 3. Push an annotated `vX.Y.Z` tag. The tag must match all three shipping versions.
 4. The release workflow builds Windows, macOS arm64, and Linux bundles. Each job
-   verifies an installable package and every updater artifact's matching `.sig`
+   first freezes its matching native sidecar and manifest, then verifies an
+   installable package and every updater artifact's matching `.sig`
    before it can complete. With `createUpdaterArtifacts: true`, Tauri 2 signs the
    Windows `.exe`/`.msi` and Linux `.AppImage`/`.deb`/`.rpm` files directly;
    macOS uses `.app.tar.gz`. Windows/Linux v1-compatible wrappers are not release
