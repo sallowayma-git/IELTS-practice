@@ -1614,7 +1614,10 @@ async function testLegacyBrowseGradingUpgrade() {
     const summaries = await upgraded.app.practice.list({ projection: 'light' });
     const index = state.buildIndex(summaries);
     assert.strictEqual(index.get(key('p1')).percentage, 100, 'a newer scoreless import must not replace the valid attempt');
-    assert.deepStrictEqual([...index.keys()].sort(), ['p1', 'p5', 'p7'].map(key).sort());
+    assert.strictEqual(index.get(key('p10')).percentage, 100,
+        'an older endTime-only attempt must not replace a newer perfect result with its import time');
+    assert.strictEqual(index.get(key('p10')).wrong, false);
+    assert.deepStrictEqual([...index.keys()].sort(), ['p1', 'p5', 'p7', 'p10', 'p11', 'p12', 'p13', 'p14'].map(key).sort());
     assert.deepStrictEqual(upgraded.shared.reads, ['practiceSummaries', 'practiceDetails'],
         'old summaries resolve available details in one snapshot without loading annotations');
     assert.strictEqual(index.get(key('p5')).percentage, 0, 'detail-backed zero scores remain graded');
@@ -1628,9 +1631,32 @@ async function testLegacyBrowseGradingUpgrade() {
     assert.strictEqual(summaries.find(row => row.id === 'ungraded').graded, false);
     assert.strictEqual(summaries.find(row => row.id === 'draft').status, 'draft');
     assert.strictEqual(Object.hasOwn(scoreless, 'scoreInfo'), false, 'light rows do not expose detail payloads');
+    const submissionTimes = {
+        'end-time-older': '2026-09-01T00:00:00Z',
+        'end-time-newer': '2026-09-02T00:00:00Z',
+        'authored-completion': '2026-09-02T00:00:00Z',
+        'invalid-end-time': '2026-09-02T00:00:00Z',
+        'authored-date': '2026-09-02T00:00:00Z',
+        'end-time-with-timestamp': '2026-09-01T00:00:00Z'
+    };
+    const storedOlder = fixture.entities.practiceSummaries.find(row => row.id === 'end-time-older');
+    assert.strictEqual(storedOlder.completedAt, fixture.importedAt,
+        'the base importer fixture must contain the synthetic completion time from the reported reproduction');
     for (const projection of ['light', 'summary', 'detail', 'full']) {
         assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection })).browseScore.earned, null);
-        assert.strictEqual(state.buildIndex(await upgraded.app.practice.list({ projection })).get(key('p1')).percentage, 100);
+        const projected = await upgraded.app.practice.list({ projection });
+        const projectedIndex = state.buildIndex(projected);
+        assert.strictEqual(projectedIndex.get(key('p1')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).timestamp, Date.parse(submissionTimes['end-time-newer']));
+        for (const [id, submittedAt] of Object.entries(submissionTimes)) {
+            const expected = Date.parse(submittedAt);
+            assert.strictEqual(projected.find(row => row.id === id).browseScore.submittedAt, expected, `${projection} list: ${id}`);
+            const record = await upgraded.app.practice.get(id, { projection });
+            assert.strictEqual(record.browseScore.submittedAt, expected, `${projection} get: ${id}`);
+            if (id === 'end-time-older') assert.strictEqual(record.completedAt, fixture.importedAt,
+                'Browse compatibility must preserve the existing history fields');
+        }
     }
     const fresh = harness();
     const plan = await fresh.app.backups.previewImport({ practice_records: fixture.sourceRecords });
@@ -1646,6 +1672,9 @@ async function testLegacyBrowseGradingUpgrade() {
     // A deleted/missing detail cannot turn an ambiguous display zero into grading.
     upgraded.shared.entities.get('practiceDetails').delete('scoreless');
     assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection: 'light' })).browseScore.earned, null);
+    upgraded.shared.entities.get('practiceDetails').delete('end-time-older');
+    assert.strictEqual((await upgraded.app.practice.get('end-time-older', { projection: 'light' })).browseScore.submittedAt,
+        Date.parse(submissionTimes['end-time-older']), 'retained summary endTime remains usable without a detail record');
 }
 
 async function run() {

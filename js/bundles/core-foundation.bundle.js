@@ -3529,6 +3529,12 @@
         return jsonValue(record, 'canonical practice record');
     }
 
+    function firstSubmissionTime(...values) {
+        return values.filter(value => value != null && value !== '')
+            .map(value => new Date(value).getTime())
+            .find(value => Number.isFinite(value) && value > 0) ?? null;
+    }
+
     function browseScoreFields(source) {
         const score = asObject(source.scoreInfo);
         const realScore = asObject(asObject(source.realData).scoreInfo);
@@ -3540,11 +3546,8 @@
             browseScore: hasOwn(source, 'browseScore') ? clone(asObject(source.browseScore)) : {
                 earned: firstNonNegative(source.correctAnswers, source.correctAnswersCount, score.correctAnswers, score.correct, realScore.correctAnswers, realScore.correct),
                 possible: firstNonNegative(source.totalQuestions, source.questionCount, score.totalQuestions, score.total, realScore.totalQuestions, realScore.total),
-                submittedAt: [source.completedAt, source.endTime, source.date, source.timestamp,
-                    rawData.completedAt, rawData.endTime, rawData.date, rawData.timestamp]
-                    .filter(value => value != null && value !== '')
-                    .map(value => new Date(value).getTime())
-                    .find(value => Number.isFinite(value) && value > 0) ?? null
+                submittedAt: firstSubmissionTime(source.completedAt, source.endTime, source.date, source.timestamp,
+                    rawData.completedAt, rawData.endTime, rawData.date, rawData.timestamp)
             }
         };
     }
@@ -3684,13 +3687,24 @@
         const source = Object.assign({}, summary, asObject(detail));
         if (!hasOwn(source, 'browseScore')) {
             const evidence = browseScoreFields(asObject(detail)).browseScore;
+            const score = browseScoreFields(source).browseScore;
             // Older summaries supplied a display zero even when no score existed.
             // A positive saved count is evidence; zero needs corroborating detail.
             // Root-only legacy zeros cannot be distinguished from missing scores.
             const saved = firstNonNegative(summary.correctAnswers);
-            source.browseScore = Object.assign({}, browseScoreFields(source).browseScore, {
+            source.browseScore = Object.assign({}, score, {
                 earned: saved > 0 || (saved === 0 && evidence.earned !== null)
-                    ? saved : evidence.earned
+                    ? saved : evidence.earned,
+                // The old normalizer copied timestamp (possibly import time) to
+                // completedAt, then completedAt to date. Distinct values remain
+                // authored evidence; endTime was never synthesized. Prefer these
+                // before falling back to the potentially generated aliases.
+                submittedAt: firstSubmissionTime(
+                    source.completedAt !== source.timestamp ? source.completedAt : null,
+                    source.endTime,
+                    source.date !== source.completedAt ? source.date : null,
+                    score.submittedAt
+                )
             });
         }
         return browseScoreFields(source);

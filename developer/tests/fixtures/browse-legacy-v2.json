@@ -129,6 +129,77 @@
           "gradable": false
         }
       ]
+    },
+    {
+      "id": "end-time-older",
+      "examId": "p10",
+      "type": "reading",
+      "endTime": "2026-09-01T00:00:00Z",
+      "totalQuestions": 10,
+      "correctAnswers": 5,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "end-time-newer",
+      "examId": "p10",
+      "type": "reading",
+      "completedAt": "2026-09-02T00:00:00Z",
+      "totalQuestions": 10,
+      "correctAnswers": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "authored-completion",
+      "examId": "p11",
+      "type": "reading",
+      "completedAt": "2026-09-02T00:00:00Z",
+      "endTime": "2026-09-01T00:00:00Z",
+      "timestamp": "2026-09-17T00:00:00.000Z",
+      "totalQuestions": 10,
+      "correctAnswers": 5,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "invalid-end-time",
+      "examId": "p12",
+      "type": "reading",
+      "completedAt": "2026-09-02T00:00:00Z",
+      "endTime": "invalid",
+      "totalQuestions": 10,
+      "correctAnswers": 5,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "authored-date",
+      "examId": "p13",
+      "type": "reading",
+      "date": "2026-09-02T00:00:00Z",
+      "timestamp": "2026-09-17T00:00:00.000Z",
+      "totalQuestions": 10,
+      "correctAnswers": 5,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "end-time-with-timestamp",
+      "examId": "p14",
+      "type": "reading",
+      "endTime": "2026-09-01T00:00:00Z",
+      "timestamp": "2026-09-17T00:00:00.000Z",
+      "totalQuestions": 10,
+      "correctAnswers": 5,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
     }
   ],
   "entities": {
@@ -383,6 +454,162 @@
             "questionTypeErrorCounts": {}
           }
         ]
+      },
+      {
+        "id": "end-time-older",
+        "sessionId": "end-time-older",
+        "examId": "p10",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-17T00:00:00.000Z",
+        "completedAt": "2026-09-17T00:00:00.000Z",
+        "date": "2026-09-17T00:00:00.000Z",
+        "startTime": null,
+        "endTime": "2026-09-01T00:00:00Z",
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 5,
+        "accuracy": 0.5,
+        "percentage": 50,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p10",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "end-time-newer",
+        "sessionId": "end-time-newer",
+        "examId": "p10",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-02T00:00:00Z",
+        "completedAt": "2026-09-02T00:00:00Z",
+        "date": "2026-09-02T00:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 10,
+        "accuracy": 1,
+        "percentage": 100,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p10",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "authored-completion",
+        "sessionId": "authored-completion",
+        "examId": "p11",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-17T00:00:00.000Z",
+        "completedAt": "2026-09-02T00:00:00Z",
+        "date": "2026-09-02T00:00:00Z",
+        "startTime": null,
+        "endTime": "2026-09-01T00:00:00Z",
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 5,
+        "accuracy": 0.5,
+        "percentage": 50,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p11",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "invalid-end-time",
+        "sessionId": "invalid-end-time",
+        "examId": "p12",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-02T00:00:00Z",
+        "completedAt": "2026-09-02T00:00:00Z",
+        "date": "2026-09-02T00:00:00Z",
+        "startTime": null,
+        "endTime": "invalid",
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 5,
+        "accuracy": 0.5,
+        "percentage": 50,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p12",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "authored-date",
+        "sessionId": "authored-date",
+        "examId": "p13",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-17T00:00:00.000Z",
+        "completedAt": "2026-09-17T00:00:00.000Z",
+        "date": "2026-09-02T00:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 5,
+        "accuracy": 0.5,
+        "percentage": 50,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p13",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "end-time-with-timestamp",
+        "sessionId": "end-time-with-timestamp",
+        "examId": "p14",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-17T00:00:00.000Z",
+        "completedAt": "2026-09-17T00:00:00.000Z",
+        "date": "2026-09-17T00:00:00.000Z",
+        "startTime": null,
+        "endTime": "2026-09-01T00:00:00Z",
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 5,
+        "accuracy": 0.5,
+        "percentage": 50,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p14",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
       }
     ],
     "practiceDetails": [
@@ -498,6 +725,60 @@
         "answerDetails": {},
         "scoreInfo": {},
         "questionTypePerformance": {}
+      },
+      {
+        "recordId": "end-time-older",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "end-time-newer",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "authored-completion",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "invalid-end-time",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "authored-date",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "end-time-with-timestamp",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
       }
     ],
     "practiceAnnotations": [
@@ -524,7 +805,26 @@
       },
       {
         "recordId": "suite"
+      },
+      {
+        "recordId": "end-time-older"
+      },
+      {
+        "recordId": "end-time-newer"
+      },
+      {
+        "recordId": "authored-completion"
+      },
+      {
+        "recordId": "invalid-end-time"
+      },
+      {
+        "recordId": "authored-date"
+      },
+      {
+        "recordId": "end-time-with-timestamp"
       }
     ]
-  }
+  },
+  "importedAt": "2026-09-17T00:00:00.000Z"
 }
