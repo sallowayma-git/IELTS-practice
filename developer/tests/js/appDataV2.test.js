@@ -1592,7 +1592,93 @@ async function testRecoveryThirtyDayTtlBoundary() {
     }
 }
 
+async function testLegacyBrowseGradingUpgrade() {
+    const fixture = JSON.parse(fs.readFileSync(path.join(root, 'developer/tests/fixtures/browse-legacy-v2.json'), 'utf8'));
+    const upgraded = harness();
+    await upgraded.app.ready;
+    // These are the actual persisted layers from the base revision importer,
+    // installed unchanged to model opening an existing v2 database on upgrade.
+    for (const [store, rows] of Object.entries(fixture.entities)) {
+        for (const data of rows) {
+            const recordId = data.recordId || data.id;
+            upgraded.shared.entities.get(store).set(recordId, {
+                recordId, data: clone(data), revision: 1, checksum: checksum(data),
+                operationId: 'base-import', updatedAt: '2026-09-03T00:00:00Z'
+            });
+        }
+    }
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/services/browseLearningState.js'), 'utf8'), upgraded.context);
+    const state = upgraded.sandbox.BrowseLearningState;
+    const key = id => JSON.stringify([null, 'reading', id]);
+    upgraded.shared.reads = [];
+    const summaries = await upgraded.app.practice.list({ projection: 'light' });
+    const index = state.buildIndex(summaries);
+    assert.strictEqual(index.get(key('p1')).percentage, 100, 'a newer scoreless import must not replace the valid attempt');
+    assert.strictEqual(index.get(key('p10')).percentage, 100,
+        'an older endTime-only attempt must not replace a newer perfect result with its import time');
+    assert.strictEqual(index.get(key('p10')).wrong, false);
+    assert.deepStrictEqual([...index.keys()].sort(), ['p1', 'p5', 'p7', 'p10', 'p11', 'p12', 'p13', 'p14'].map(key).sort());
+    assert.deepStrictEqual(upgraded.shared.reads, ['practiceSummaries', 'practiceDetails'],
+        'old summaries resolve available details in one snapshot without loading annotations');
+    assert.strictEqual(index.get(key('p5')).percentage, 0, 'detail-backed zero scores remain graded');
+    assert.strictEqual(index.get(key('p7')).percentage, 0, 'suite details retain explicit child zero scores');
+    const scoreless = summaries.find(row => row.id === 'scoreless');
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history display counts remain compatible');
+    assert.strictEqual(scoreless.browseScore.earned, null);
+    assert.strictEqual(summaries.find(row => row.id === 'ambiguous-zero').browseScore.earned, null,
+        'irreversibly ambiguous old zeros stay unknown');
+    assert.strictEqual(summaries.find(row => row.id === 'ungradable').gradable, false);
+    assert.strictEqual(summaries.find(row => row.id === 'ungraded').graded, false);
+    assert.strictEqual(summaries.find(row => row.id === 'draft').status, 'draft');
+    assert.strictEqual(Object.hasOwn(scoreless, 'scoreInfo'), false, 'light rows do not expose detail payloads');
+    const submissionTimes = {
+        'end-time-older': '2026-09-01T00:00:00Z',
+        'end-time-newer': '2026-09-02T00:00:00Z',
+        'authored-completion': '2026-09-02T00:00:00Z',
+        'invalid-end-time': '2026-09-02T00:00:00Z',
+        'authored-date': '2026-09-02T00:00:00Z',
+        'end-time-with-timestamp': '2026-09-01T00:00:00Z'
+    };
+    const storedOlder = fixture.entities.practiceSummaries.find(row => row.id === 'end-time-older');
+    assert.strictEqual(storedOlder.completedAt, fixture.importedAt,
+        'the base importer fixture must contain the synthetic completion time from the reported reproduction');
+    for (const projection of ['light', 'summary', 'detail', 'full']) {
+        assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection })).browseScore.earned, null);
+        const projected = await upgraded.app.practice.list({ projection });
+        const projectedIndex = state.buildIndex(projected);
+        assert.strictEqual(projectedIndex.get(key('p1')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).timestamp, Date.parse(submissionTimes['end-time-newer']));
+        for (const [id, submittedAt] of Object.entries(submissionTimes)) {
+            const expected = Date.parse(submittedAt);
+            assert.strictEqual(projected.find(row => row.id === id).browseScore.submittedAt, expected, `${projection} list: ${id}`);
+            const record = await upgraded.app.practice.get(id, { projection });
+            assert.strictEqual(record.browseScore.submittedAt, expected, `${projection} get: ${id}`);
+            if (id === 'end-time-older') assert.strictEqual(record.completedAt, fixture.importedAt,
+                'Browse compatibility must preserve the existing history fields');
+        }
+    }
+    const fresh = harness();
+    const plan = await fresh.app.backups.previewImport({ practice_records: fixture.sourceRecords });
+    await fresh.app.backups.commitImport(plan.id);
+    const direct = state.buildIndex((await fresh.app.practice.list({ projection: 'light' }))
+        .filter(row => row.id !== 'ambiguous-zero'));
+    assert.deepStrictEqual([...index], [...direct], 'recoverable upgrade evidence agrees with direct import on this head');
+    fresh.shared.reads = [];
+    await fresh.app.practice.list({ projection: 'light' });
+    assert.deepStrictEqual(fresh.shared.reads, [], 'modern summaries keep the cheap summary-only read');
+    assert.strictEqual(upgraded.shared.mutations.length, 0, 'compatibility reads never rewrite historical records');
+
+    // A deleted/missing detail cannot turn an ambiguous display zero into grading.
+    upgraded.shared.entities.get('practiceDetails').delete('scoreless');
+    assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection: 'light' })).browseScore.earned, null);
+    upgraded.shared.entities.get('practiceDetails').delete('end-time-older');
+    assert.strictEqual((await upgraded.app.practice.get('end-time-older', { projection: 'light' })).browseScore.submittedAt,
+        Date.parse(submissionTimes['end-time-older']), 'retained summary endTime remains usable without a detail record');
+}
+
 async function run() {
+    await testLegacyBrowseGradingUpgrade();
     await testReadingModelUsesLiveVocabularyOwners();
     await testReadingCollectionPresenceMetadata();
     await testReadingMergeRetainsOwnersAndRelationships();
@@ -2146,6 +2232,50 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 57 }));
+    const browseFixture = harness();
+    await browseFixture.app.ready;
+    const browseApi = browseFixture.app.preferences;
+    const favoriteA = JSON.stringify([null, 'reading', 'same-id']);
+    const favoriteB = JSON.stringify(['custom', 'reading', 'same-id']);
+    await browseApi.patchBrowse({ autoScrollEnabled: false, learningState: 'wrong', favoritesOnly: true });
+    await Promise.all([browseApi.setReadingFavorite(favoriteA, true), browseApi.setReadingFavorite(favoriteB, true)]);
+    await browseApi.patchBrowse({ learningState: 'all', favoritesOnly: false });
+    let browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(Object.keys(browseSaved.readingFavorites).length, 2, 'reset and concurrent favorites preserve both sources');
+    assert.strictEqual(browseSaved.autoScrollEnabled, false, 'favorites preserve existing preferences');
+    await browseApi.setReadingFavorite(favoriteA, false);
+    browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(browseSaved.readingFavorites[favoriteA], undefined);
+    assert.strictEqual(browseSaved.readingFavorites[favoriteB], true);
+    const scoreless = browseFixture.app.practice.projectLight({
+        id: 'scoreless-browse', type: 'reading', totalQuestions: 10,
+        metadata: { libraryConfigurationId: null }
+    });
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history retains its existing display default');
+    assert.strictEqual(scoreless.browseScore.earned, null, 'Browse preserves unknown grading instead of inventing a zero score');
+    assert.strictEqual(browseFixture.app.practice.projectLight(scoreless).browseScore.earned, null,
+        'reprojecting or importing a summary must preserve unknown grading');
+    assert.strictEqual(browseFixture.app.practice.projectLight({
+        id: 'answer-key-only', correctAnswers: { 1: 'A' }, totalQuestions: 1
+    }).browseScore.earned, null, 'an answer key without a graded score is not a zero-score submission');
+    const datedBrowse = browseFixture.app.practice.projectLight({
+        id: 'imported-completion-time', type: 'reading', endTime: '2026-08-01T10:00:00Z',
+        correctAnswers: 5, totalQuestions: 10
+    });
+    assert.strictEqual(datedBrowse.browseScore.submittedAt, Date.parse('2026-08-01T10:00:00Z'),
+        'canonical bookkeeping defaults must not replace the actual submission time');
+    assert.strictEqual(scoreless.browseScore.submittedAt, null, 'unknown submission time stays unknown');
+    const sourceSuite = await browseFixture.app.practice.finalizeSuite({ record: {
+        id: 'source-suite', type: 'reading', metadata: { libraryConfigurationId: 'current' },
+        suiteEntries: [{ examId: 'same-id', scoreInfo: { correct: 5.5, total: 10 },
+            rawData: { libraryConfigurationId: 'launch-source', endTime: '2026-09-01T10:00:00Z' } }]
+    } });
+    const sourceSummary = (await browseFixture.app.practice.get(sourceSuite.record.id, { projection: 'light' })).suiteEntrySummaries[0];
+    assert.strictEqual(sourceSummary.metadata.libraryConfigurationId, 'launch-source', 'suite source is captured at passage launch');
+    assert.strictEqual(sourceSummary.browseScore.earned, 5.5);
+    assert.strictEqual(sourceSummary.completedAt, '2026-09-01T10:00:00Z');
+    assert.strictEqual(sourceSummary.browseScore.submittedAt, Date.parse('2026-09-01T10:00:00Z'));
+
+    console.log(JSON.stringify({ status: 'pass', tests: 60 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

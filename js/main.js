@@ -3252,6 +3252,11 @@ async function setupBrowseControls(options = {}) {
     }
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
+    if (window.BrowseLearningControls) {
+        await window.BrowseLearningControls.ready();
+        if (!isBrowseControlsSetupCurrent(options)) return false;
+        window.BrowseLearningControls.setup();
+    }
     return true;
 }
 
@@ -4259,6 +4264,7 @@ async function performSearch(
     if (!isCurrent()) {
         return false;
     }
+    if (await setupBrowseControls({ isCurrent }) === false || !isCurrent()) return false;
     const searchBase = getBrowseFilteredExamBase(examIndexSnapshot);
     console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {

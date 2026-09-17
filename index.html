@@ -290,6 +290,27 @@
                                 低频
                             </button>
                         </div>
+                        <div id="browse-learning-controls" class="browse-learning-controls">
+                            <button id="browse-learning-trigger" class="browse-learning-trigger" type="button"
+                                aria-expanded="false" aria-controls="browse-learning-panel" aria-label="阅读筛选">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                    <path d="M4 7h16M7 12h10M10 17h4"></path>
+                                </svg>
+                                <span id="browse-learning-label">筛选</span>
+                            </button>
+                            <div id="browse-learning-panel" class="browse-learning-panel" hidden>
+                                <fieldset aria-describedby="browse-learning-help">
+                                    <legend>阅读练习状态</legend>
+                                    <label><input type="radio" name="browse-learning-state" value="all" checked>全部状态</label>
+                                    <label><input type="radio" name="browse-learning-state" value="unattempted">未完成</label>
+                                    <label><input type="radio" name="browse-learning-state" value="completed">已完成</label>
+                                    <label><input type="radio" name="browse-learning-state" value="wrong">需复习 · 最近得分低于 60%</label>
+                                </fieldset>
+                                <p id="browse-learning-help">未完成包含尚无有效评分的篇章，含仅有草稿或中断记录的篇章。</p>
+                                <label class="browse-favorites-option"><input id="browse-favorites-only" type="checkbox">仅看收藏</label>
+                                <button id="browse-learning-reset" type="button">重置筛选</button>
+                            </div>
+                        </div>
                         <div class="browse-sort-wrapper">
                             <select
                                 id="browse-sort-select"

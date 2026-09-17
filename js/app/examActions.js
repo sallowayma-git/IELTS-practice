@@ -144,7 +144,9 @@
     function applyBrowsePostFilters(exams, sortMode, frequencyFilter) {
         const deduplicated = deduplicateExams(exams);
         const frequencyFiltered = applyBrowseFrequencyFilter(deduplicated, frequencyFilter);
-        return applyExamSort(frequencyFiltered, sortMode);
+        const learningFiltered = global.BrowseLearningControls
+            ? global.BrowseLearningControls.filter(frequencyFiltered) : frequencyFiltered;
+        return applyExamSort(learningFiltered, sortMode);
     }
 
     function hasListeningEntries(exams) {
@@ -1010,6 +1012,7 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
+            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
             return false;
@@ -1114,6 +1117,8 @@
         try {
             await preferences.patchBrowse({
                 frequencyFilter: 'all',
+                learningState: 'all',
+                favoritesOnly: false,
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -1143,7 +1148,9 @@
     function isPersistedBrowseReset(browse, requireStateManager) {
         if (!browse || !isAllBrowseFilter(browse.lastFilter)
             || !isAllBrowseFilter(browse.filter)
-            || browse.frequencyFilter !== 'all') {
+            || browse.frequencyFilter !== 'all'
+            || (browse.learningState != null && browse.learningState !== 'all')
+            || browse.favoritesOnly === true) {
             return false;
         }
         if (!requireStateManager) {
@@ -1669,6 +1676,7 @@
         const infoContent = document.createElement('div');
         const title = document.createElement('h4');
         title.textContent = exam.title || '';
+        if (global.BrowseLearningControls) global.BrowseLearningControls.decorateCard(exam, title);
         const meta = document.createElement('div');
         meta.className = 'exam-meta';
 
