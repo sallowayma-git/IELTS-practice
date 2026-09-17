@@ -2738,10 +2738,10 @@ body.blue-dark-mode .external-backup-banner__dismiss {
     align-items: center;
     gap: 6px;
     padding: 0 12px;
-    border: 1px solid var(--shui-border, #cbd5e1);
+    border: 1px solid var(--shui-surface-border, #cbd5e1);
     border-radius: 999px;
-    background: var(--shui-surface, #fff);
-    color: var(--shui-text, #1d1d1f);
+    background: var(--shui-surface-bg, #fff);
+    color: var(--shui-text-strong, #1d1d1f);
     font: inherit;
     font-size: 0.85rem;
     cursor: pointer;
@@ -2749,8 +2749,8 @@ body.blue-dark-mode .external-backup-banner__dismiss {
 
 #browse-view .browse-learning-trigger.active {
     border-color: var(--shui-accent, #2563eb);
-    color: var(--shui-accent, #2563eb);
-    background: color-mix(in srgb, var(--shui-accent, #2563eb) 10%, var(--shui-surface, #fff));
+    color: var(--shui-text-strong, #1d1d1f);
+    background: color-mix(in srgb, var(--shui-accent, #2563eb) 10%, var(--shui-surface-bg, #fff));
 }
 
 #browse-view .browse-learning-panel {
@@ -2761,10 +2761,12 @@ body.blue-dark-mode .external-backup-banner__dismiss {
     width: 292px;
     max-width: calc(100vw - 48px);
     padding: 16px;
-    border: 1px solid var(--shui-border, #cbd5e1);
+    border: 1px solid var(--shui-surface-border, #cbd5e1);
     border-radius: 16px;
-    background: var(--shui-surface, #fff);
-    color: var(--shui-text, #1d1d1f);
+    background: var(--shui-surface-bg, #fff);
+    color: var(--shui-text-strong, #1d1d1f);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
 }
 
@@ -2786,11 +2788,11 @@ body.blue-dark-mode .external-backup-banner__dismiss {
     color: var(--shui-text-muted, #64748b);
     margin: 8px 0;
 }
-#browse-view .browse-favorites-option { border-top: 1px solid var(--shui-border, #cbd5e1); padding-top: 8px; }
+#browse-view .browse-favorites-option { border-top: 1px solid var(--shui-surface-border, #cbd5e1); padding-top: 8px; }
 #browse-learning-reset {
     border: 0;
     background: transparent;
-    color: var(--shui-accent, #2563eb);
+    color: var(--shui-text-strong, #1d1d1f);
     font: inherit;
     font-size: 0.82rem;
     padding: 8px 0 0;

@@ -39,8 +39,8 @@
     function percentage(record) {
         if (!eligible(record)) return null;
         const score = object(record.scoreInfo || object(record.realData).scoreInfo);
-        // New summaries preserve missing scores as null, before the history
-        // display's zero defaults. Older summaries use their saved counts.
+        // AppData resolves old summaries against available detail evidence;
+        // browseScore preserves unknown grading before history's display zeros.
         const earned = number(own(record, 'browseScore')
             ? object(record.browseScore).earned
             : record.correctAnswers ?? score.correctAnswers ?? score.correct);

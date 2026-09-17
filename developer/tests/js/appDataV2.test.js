@@ -1592,7 +1592,64 @@ async function testRecoveryThirtyDayTtlBoundary() {
     }
 }
 
+async function testLegacyBrowseGradingUpgrade() {
+    const fixture = JSON.parse(fs.readFileSync(path.join(root, 'developer/tests/fixtures/browse-legacy-v2.json'), 'utf8'));
+    const upgraded = harness();
+    await upgraded.app.ready;
+    // These are the actual persisted layers from the base revision importer,
+    // installed unchanged to model opening an existing v2 database on upgrade.
+    for (const [store, rows] of Object.entries(fixture.entities)) {
+        for (const data of rows) {
+            const recordId = data.recordId || data.id;
+            upgraded.shared.entities.get(store).set(recordId, {
+                recordId, data: clone(data), revision: 1, checksum: checksum(data),
+                operationId: 'base-import', updatedAt: '2026-09-03T00:00:00Z'
+            });
+        }
+    }
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/services/browseLearningState.js'), 'utf8'), upgraded.context);
+    const state = upgraded.sandbox.BrowseLearningState;
+    const key = id => JSON.stringify([null, 'reading', id]);
+    upgraded.shared.reads = [];
+    const summaries = await upgraded.app.practice.list({ projection: 'light' });
+    const index = state.buildIndex(summaries);
+    assert.strictEqual(index.get(key('p1')).percentage, 100, 'a newer scoreless import must not replace the valid attempt');
+    assert.deepStrictEqual([...index.keys()].sort(), ['p1', 'p5', 'p7'].map(key).sort());
+    assert.deepStrictEqual(upgraded.shared.reads, ['practiceSummaries', 'practiceDetails'],
+        'old summaries resolve available details in one snapshot without loading annotations');
+    assert.strictEqual(index.get(key('p5')).percentage, 0, 'detail-backed zero scores remain graded');
+    assert.strictEqual(index.get(key('p7')).percentage, 0, 'suite details retain explicit child zero scores');
+    const scoreless = summaries.find(row => row.id === 'scoreless');
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history display counts remain compatible');
+    assert.strictEqual(scoreless.browseScore.earned, null);
+    assert.strictEqual(summaries.find(row => row.id === 'ambiguous-zero').browseScore.earned, null,
+        'irreversibly ambiguous old zeros stay unknown');
+    assert.strictEqual(summaries.find(row => row.id === 'ungradable').gradable, false);
+    assert.strictEqual(summaries.find(row => row.id === 'ungraded').graded, false);
+    assert.strictEqual(summaries.find(row => row.id === 'draft').status, 'draft');
+    assert.strictEqual(Object.hasOwn(scoreless, 'scoreInfo'), false, 'light rows do not expose detail payloads');
+    for (const projection of ['light', 'summary', 'detail', 'full']) {
+        assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection })).browseScore.earned, null);
+        assert.strictEqual(state.buildIndex(await upgraded.app.practice.list({ projection })).get(key('p1')).percentage, 100);
+    }
+    const fresh = harness();
+    const plan = await fresh.app.backups.previewImport({ practice_records: fixture.sourceRecords });
+    await fresh.app.backups.commitImport(plan.id);
+    const direct = state.buildIndex((await fresh.app.practice.list({ projection: 'light' }))
+        .filter(row => row.id !== 'ambiguous-zero'));
+    assert.deepStrictEqual([...index], [...direct], 'recoverable upgrade evidence agrees with direct import on this head');
+    fresh.shared.reads = [];
+    await fresh.app.practice.list({ projection: 'light' });
+    assert.deepStrictEqual(fresh.shared.reads, [], 'modern summaries keep the cheap summary-only read');
+    assert.strictEqual(upgraded.shared.mutations.length, 0, 'compatibility reads never rewrite historical records');
+
+    // A deleted/missing detail cannot turn an ambiguous display zero into grading.
+    upgraded.shared.entities.get('practiceDetails').delete('scoreless');
+    assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection: 'light' })).browseScore.earned, null);
+}
+
 async function run() {
+    await testLegacyBrowseGradingUpgrade();
     await testReadingModelUsesLiveVocabularyOwners();
     await testReadingCollectionPresenceMetadata();
     await testReadingMergeRetainsOwnersAndRelationships();
@@ -2190,6 +2247,6 @@ async function run() {
     assert.strictEqual(sourceSummary.completedAt, '2026-09-01T10:00:00Z');
     assert.strictEqual(sourceSummary.browseScore.submittedAt, Date.parse('2026-09-01T10:00:00Z'));
 
-    console.log(JSON.stringify({ status: 'pass', tests: 59 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 60 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

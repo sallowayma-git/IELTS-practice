@@ -415,6 +415,53 @@
         return lightFromCanonical(canonicalizeRecord(record));
     }
 
+    function needsBrowseScoreUpgrade(summary) {
+        return !hasOwn(summary, 'browseScore')
+            || asArray(summary.suiteEntrySummaries).some(entry => !hasOwn(entry, 'browseScore'));
+    }
+
+    function legacyBrowseScoreFields(summary, detail) {
+        const source = Object.assign({}, summary, asObject(detail));
+        if (!hasOwn(source, 'browseScore')) {
+            const evidence = browseScoreFields(asObject(detail)).browseScore;
+            // Older summaries supplied a display zero even when no score existed.
+            // A positive saved count is evidence; zero needs corroborating detail.
+            // Root-only legacy zeros cannot be distinguished from missing scores.
+            const saved = firstNonNegative(summary.correctAnswers);
+            source.browseScore = Object.assign({}, browseScoreFields(source).browseScore, {
+                earned: saved > 0 || (saved === 0 && evidence.earned !== null)
+                    ? saved : evidence.earned
+            });
+        }
+        return browseScoreFields(source);
+    }
+
+    function upgradeBrowseSummary(summary, detail) {
+        if (!needsBrowseScoreUpgrade(summary)) return summary;
+        const entries = asArray(asObject(detail).suiteEntries);
+        return Object.assign({}, summary, legacyBrowseScoreFields(summary, detail), {
+            suiteEntrySummaries: entries.length
+                ? entries.map(entry => lightSuiteEntry(entry, String(summary.type || '').replace(/-suite$/, '')))
+                : asArray(summary.suiteEntrySummaries).map(entry => Object.assign({}, entry, legacyBrowseScoreFields(entry, null)))
+        });
+    }
+
+    async function resolveBrowseSummaries(summaries) {
+        const legacyIds = summaries.filter(needsBrowseScoreUpgrade).map(practiceLayerId);
+        if (!legacyIds.length) return summaries;
+        // Read matching summaries and details together so an intervening restore
+        // or replacement cannot mix grading evidence from different revisions.
+        // Modern light reads remain summary-only; annotations are never loaded.
+        const snapshot = await kernel.readPracticeSnapshot(legacyIds, { stores: ['practiceSummaries', 'practiceDetails'] });
+        const current = new Map(asArray(snapshot.practiceSummaries).map(row => [practiceLayerId(row), row]));
+        const details = new Map(asArray(snapshot.practiceDetails).map(row => [practiceLayerId(row), row]));
+        return summaries.map(summary => {
+            if (!needsBrowseScoreUpgrade(summary)) return summary;
+            const id = practiceLayerId(summary);
+            return current.has(id) ? upgradeBrowseSummary(current.get(id), details.get(id)) : null;
+        }).filter(Boolean);
+    }
+
     function firstNonEmpty(...values) {
         let first;
         for (const value of values) {
@@ -838,17 +885,18 @@
         const find = (store) => asArray(layers[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
         const summary = find('practiceSummaries');
         if (!summary) return null;
-        if (mode === 'light' || mode === 'summary') return clone(summary);
+        if (mode === 'light' || mode === 'summary') return (await resolveBrowseSummaries([summary]))[0] || null;
         const detail = find('practiceDetails');
-        if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(summary, detail, null, mode);
-        return joinPracticeRecord(summary, detail, find('practiceAnnotations'), mode);
+        const light = upgradeBrowseSummary(summary, detail);
+        if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(light, detail, null, mode);
+        return joinPracticeRecord(light, detail, find('practiceAnnotations'), mode);
     }
     const practice = Object.freeze({
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
             const summaries = await kernel.listEntities('practiceSummaries');
-            if (projection === 'light' || projection === 'summary') return summaries;
+            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(summaries);
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;

@@ -1,0 +1,530 @@
+{
+  "baseCommit": "f657654d6c5136ea8296b060efec85c232ec215c",
+  "description": "Persisted v2 layers produced by the base revision AppData backup importer from sourceRecords. Legacy root-only zeros have lost grading evidence.",
+  "sourceRecords": [
+    {
+      "id": "valid",
+      "examId": "p1",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 10
+    },
+    {
+      "id": "scoreless",
+      "examId": "p1",
+      "type": "reading",
+      "completedAt": "2026-09-02T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      }
+    },
+    {
+      "id": "ungradable",
+      "examId": "p2",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 4,
+      "gradable": false
+    },
+    {
+      "id": "ungraded",
+      "examId": "p3",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 4,
+      "graded": false
+    },
+    {
+      "id": "draft",
+      "examId": "p4",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 4,
+      "status": "draft"
+    },
+    {
+      "id": "zero-with-evidence",
+      "examId": "p5",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "scoreInfo": {
+        "correct": 0,
+        "total": 10
+      }
+    },
+    {
+      "id": "ambiguous-zero",
+      "examId": "p6",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 10,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 0
+    },
+    {
+      "id": "suite",
+      "examId": "suite-parent",
+      "type": "reading",
+      "completedAt": "2026-09-01T10:00:00Z",
+      "totalQuestions": 30,
+      "metadata": {
+        "libraryConfigurationId": null
+      },
+      "correctAnswers": 20,
+      "suiteEntries": [
+        {
+          "id": "suite-zero",
+          "examId": "p7",
+          "type": "reading",
+          "completedAt": "2026-09-01T10:00:00Z",
+          "totalQuestions": 10,
+          "metadata": {
+            "libraryConfigurationId": null
+          },
+          "correctAnswers": 0
+        },
+        {
+          "id": "suite-scoreless",
+          "examId": "p8",
+          "type": "reading",
+          "completedAt": "2026-09-01T10:00:00Z",
+          "totalQuestions": 10,
+          "metadata": {
+            "libraryConfigurationId": null
+          }
+        },
+        {
+          "id": "suite-ungradable",
+          "examId": "p9",
+          "type": "reading",
+          "completedAt": "2026-09-01T10:00:00Z",
+          "totalQuestions": 10,
+          "metadata": {
+            "libraryConfigurationId": null
+          },
+          "correctAnswers": 4,
+          "gradable": false
+        }
+      ]
+    }
+  ],
+  "entities": {
+    "practiceSummaries": [
+      {
+        "id": "valid",
+        "sessionId": "valid",
+        "examId": "p1",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 10,
+        "accuracy": 1,
+        "percentage": 100,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p1",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "scoreless",
+        "sessionId": "scoreless",
+        "examId": "p1",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-02T10:00:00Z",
+        "completedAt": "2026-09-02T10:00:00Z",
+        "date": "2026-09-02T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 0,
+        "accuracy": 0,
+        "percentage": 0,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p1",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "ungradable",
+        "sessionId": "ungradable",
+        "examId": "p2",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 4,
+        "accuracy": 0.4,
+        "percentage": 40,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p2",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "ungraded",
+        "sessionId": "ungraded",
+        "examId": "p3",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 4,
+        "accuracy": 0.4,
+        "percentage": 40,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p3",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "draft",
+        "sessionId": "draft",
+        "examId": "p4",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 4,
+        "accuracy": 0.4,
+        "percentage": 40,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p4",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "zero-with-evidence",
+        "sessionId": "zero-with-evidence",
+        "examId": "p5",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 0,
+        "accuracy": 0,
+        "percentage": 0,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p5",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "ambiguous-zero",
+        "sessionId": "ambiguous-zero",
+        "examId": "p6",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 10,
+        "correctAnswers": 0,
+        "accuracy": 0,
+        "percentage": 0,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "p6",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": []
+      },
+      {
+        "id": "suite",
+        "sessionId": "suite",
+        "examId": "suite-parent",
+        "title": "",
+        "type": "reading",
+        "mode": null,
+        "timestamp": "2026-09-01T10:00:00Z",
+        "completedAt": "2026-09-01T10:00:00Z",
+        "date": "2026-09-01T10:00:00Z",
+        "startTime": null,
+        "endTime": null,
+        "duration": 0,
+        "totalQuestions": 30,
+        "correctAnswers": 20,
+        "accuracy": 0.6666666666666666,
+        "percentage": 66.66666666666666,
+        "score": null,
+        "questionTypeErrorCounts": {},
+        "metadata": {
+          "examId": "suite-parent",
+          "libraryConfigurationId": null
+        },
+        "suite": null,
+        "suiteEntrySummaries": [
+          {
+            "id": "suite-zero",
+            "sessionId": null,
+            "examId": "p7",
+            "title": "",
+            "type": "reading",
+            "date": "2026-09-01T10:00:00Z",
+            "duration": 0,
+            "totalQuestions": 10,
+            "correctAnswers": 0,
+            "accuracy": 0,
+            "percentage": 0,
+            "questionTypeErrorCounts": {}
+          },
+          {
+            "id": "suite-scoreless",
+            "sessionId": null,
+            "examId": "p8",
+            "title": "",
+            "type": "reading",
+            "date": "2026-09-01T10:00:00Z",
+            "duration": 0,
+            "totalQuestions": 10,
+            "correctAnswers": 0,
+            "accuracy": 0,
+            "percentage": 0,
+            "questionTypeErrorCounts": {}
+          },
+          {
+            "id": "suite-ungradable",
+            "sessionId": null,
+            "examId": "p9",
+            "title": "",
+            "type": "reading",
+            "date": "2026-09-01T10:00:00Z",
+            "duration": 0,
+            "totalQuestions": 10,
+            "correctAnswers": 4,
+            "accuracy": 0.4,
+            "percentage": 40,
+            "questionTypeErrorCounts": {}
+          }
+        ]
+      }
+    ],
+    "practiceDetails": [
+      {
+        "recordId": "valid",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "scoreless",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "ungradable",
+        "gradable": false,
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "ungraded",
+        "graded": false,
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "draft",
+        "status": "draft",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "zero-with-evidence",
+        "scoreInfo": {
+          "correct": 0,
+          "total": 10
+        },
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "ambiguous-zero",
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      },
+      {
+        "recordId": "suite",
+        "suiteEntries": [
+          {
+            "id": "suite-zero",
+            "examId": "p7",
+            "type": "reading",
+            "completedAt": "2026-09-01T10:00:00Z",
+            "totalQuestions": 10,
+            "metadata": {
+              "libraryConfigurationId": null
+            },
+            "correctAnswers": 0
+          },
+          {
+            "id": "suite-scoreless",
+            "examId": "p8",
+            "type": "reading",
+            "completedAt": "2026-09-01T10:00:00Z",
+            "totalQuestions": 10,
+            "metadata": {
+              "libraryConfigurationId": null
+            }
+          },
+          {
+            "id": "suite-ungradable",
+            "examId": "p9",
+            "type": "reading",
+            "completedAt": "2026-09-01T10:00:00Z",
+            "totalQuestions": 10,
+            "metadata": {
+              "libraryConfigurationId": null
+            },
+            "correctAnswers": 4,
+            "gradable": false
+          }
+        ],
+        "answers": {},
+        "correctAnswerMap": {},
+        "answerComparison": {},
+        "answerDetails": {},
+        "scoreInfo": {},
+        "questionTypePerformance": {}
+      }
+    ],
+    "practiceAnnotations": [
+      {
+        "recordId": "valid"
+      },
+      {
+        "recordId": "scoreless"
+      },
+      {
+        "recordId": "ungradable"
+      },
+      {
+        "recordId": "ungraded"
+      },
+      {
+        "recordId": "draft"
+      },
+      {
+        "recordId": "zero-with-evidence"
+      },
+      {
+        "recordId": "ambiguous-zero"
+      },
+      {
+        "recordId": "suite"
+      }
+    ]
+  }
+}

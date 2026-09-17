@@ -42,8 +42,8 @@
     function percentage(record) {
         if (!eligible(record)) return null;
         const score = object(record.scoreInfo || object(record.realData).scoreInfo);
-        // New summaries preserve missing scores as null, before the history
-        // display's zero defaults. Older summaries use their saved counts.
+        // AppData resolves old summaries against available detail evidence;
+        // browseScore preserves unknown grading before history's display zeros.
         const earned = number(own(record, 'browseScore')
             ? object(record.browseScore).earned
             : record.correctAnswers ?? score.correctAnswers ?? score.correct);
@@ -20803,6 +20803,8 @@ window.BrowseStateManager = BrowseStateManager;
     let selection = { learningState: 'all', favoritesOnly: false };
     let favorites = new Set();
     let readyPromise = null;
+    let preferencesRevision = 0;
+    let commitBound = false;
     let selectionRevision = 0;
     let bound = false;
     const labels = { all: '全部状态', unattempted: '未完成', completed: '已完成', wrong: '需复习' };
@@ -20814,13 +20816,32 @@ window.BrowseStateManager = BrowseStateManager;
     }
 
     function ready() {
+        if (!commitBound && global.AppData.backups?.onDataCommitted) {
+            commitBound = true;
+            global.AppData.backups.onDataCommitted(async (event) => {
+                if (!event?.targets?.some(target => target.logicalKey === 'preferences.values')) return;
+                preferencesRevision += 1;
+                readyPromise = null;
+                const previous = favorites;
+                const previousSelection = selection;
+                await ready();
+                sync();
+                const changed = previous.size !== favorites.size || [...previous].some(key => !favorites.has(key))
+                    || previousSelection.learningState !== selection.learningState
+                    || previousSelection.favoritesOnly !== selection.favoritesOnly;
+                if (changed && byId('browse-view')?.classList.contains('active')) await refresh();
+            });
+        }
         if (!readyPromise) {
+            const revision = preferencesRevision;
             readyPromise = global.AppData.preferences.getBrowse().then((preferences) => {
+                if (revision !== preferencesRevision) return ready();
                 favorites = readFavorites(preferences);
                 if (selectionRevision === 0) {
                     selection = global.BrowseLearningState.normalizeSelection(preferences);
                 }
             }).catch((error) => {
+                if (revision !== preferencesRevision) return ready();
                 readyPromise = null;
                 console.warn('[Browse] Learning preferences could not be read; keeping current controls:', error);
             });

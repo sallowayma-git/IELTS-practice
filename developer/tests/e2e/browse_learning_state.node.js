@@ -103,6 +103,48 @@ async function syncRecords(page) {
     });
 }
 
+async function verifyThemeContrast(page, mode) {
+    const contrasts = [];
+    const original = await page.locator('body').getAttribute('data-bg-theme');
+    for (const theme of [null, 'ascii-flower']) {
+        await page.evaluate(theme => {
+            if (theme) document.body.setAttribute('data-bg-theme', theme);
+            else document.body.removeAttribute('data-bg-theme');
+        }, theme);
+        const values = await page.evaluate(() => {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 1;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            const rgba = color => {
+                context.clearRect(0, 0, 1, 1);
+                context.fillStyle = color;
+                context.fillRect(0, 0, 1, 1);
+                return [...context.getImageData(0, 0, 1, 1).data].map(value => value / 255);
+            };
+            const over = (front, back) => front.slice(0, 3).map((value, i) => value * front[3] + back[i] * (1 - front[3]));
+            const luminance = color => color.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+                .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
+            return ['browse-learning-trigger', 'browse-learning-reset'].map(id => {
+                const element = document.getElementById(id);
+                const chain = [];
+                for (let current = element; current; current = current.parentElement) chain.unshift(current);
+                const background = chain.reduce((color, node) => over(rgba(getComputedStyle(node).backgroundColor), color), [1, 1, 1]);
+                const text = over(rgba(getComputedStyle(element).color), background);
+                const lights = [luminance(text), luminance(background)].sort((a, b) => a - b);
+                return { id, ratio: (lights[1] + 0.05) / (lights[0] + 0.05) };
+            });
+        });
+        for (const value of values) assert(value.ratio >= 4.5, `${theme || 'default'} ${value.id} contrast ${value.ratio} must reach 4.5:1`);
+        contrasts.push({ theme: theme || 'default', values });
+        await page.screenshot({ path: path.join(reports, `browse-learning-${mode}-${theme || 'default'}-contrast.png`), fullPage: false });
+    }
+    await page.evaluate(theme => {
+        if (theme) document.body.setAttribute('data-bg-theme', theme);
+        else document.body.removeAttribute('data-bg-theme');
+    }, original);
+    return contrasts;
+}
+
 try {
     browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'],
         ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
@@ -147,6 +189,7 @@ try {
         });
         await syncRecords(page);
         await expectIds(page, exams.map(exam => exam.id));
+        await page.evaluate(() => window.AppData.backups.create({ id: 'browse-empty-favorites' }));
         const favorite = page.locator(`.exam-item[data-exam-id="${exams[2].id}"] .browse-favorite-button`);
         await favorite.focus();
         await page.keyboard.press('Space');
@@ -196,6 +239,7 @@ try {
         await syncRecords(page);
         await expectIds(page, [exams[0].id, exams[1].id, exams[4].id, exams[5].id]);
         await openMenu(page);
+        const contrast = await verifyThemeContrast(page, mode);
         await page.screenshot({ path: path.join(reports, `browse-learning-${mode}-desktop.png`), fullPage: false });
         await page.setViewportSize({ width: 390, height: 844 });
         await page.locator('#browse-learning-panel').scrollIntoViewIfNeeded();
@@ -226,8 +270,50 @@ try {
         await expectIds(page, exams.map(exam => exam.id));
         assert.equal(await page.locator('#browse-learning-label').textContent(), '筛选');
         assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
+        console.log(`[${mode}] same-page backup restore`);
+        await page.evaluate(() => window.AppData.backups.create({ id: 'browse-saved-favorite' }));
+        await page.locator('nav button[data-view="settings"]').click();
+        await page.locator('#backup-list-btn').click();
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('[data-backup-action="restore"][data-backup-id="browse-empty-favorites"]').click();
+        await page.waitForFunction(() => window.AppData.preferences.getBrowse()
+            .then(prefs => Object.keys(prefs?.readingFavorites || {}).length === 0));
+        // Wait for Settings' delayed post-restore list refresh before dismissing.
+        await page.locator('#backup-list-modal .backup-entry[data-backup-id^="pre_restore_"]').first().waitFor();
+        await page.locator('#backup-list-modal [data-backup-action="close-modal"]').click();
+        await openBrowse(page);
+        await expectIds(page, exams.map(exam => exam.id));
+        await page.waitForFunction(() => document.querySelectorAll('.browse-favorite-button[aria-pressed="true"]').length === 0);
+        assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 0);
+        await openMenu(page);
+        await page.locator('#browse-favorites-only').check();
+        await expectIds(page, []);
+        await page.waitForFunction(() => window.AppData.preferences.getBrowse().then(prefs => prefs.favoritesOnly === true));
+        await page.waitForFunction(() => !window.__isBrowseUserResultsRequestInFlight(window.__getBrowseResultsRequestId()));
+        await page.evaluate(async () => {
+            // The filter's scroll adjustment persists after a 150ms debounce.
+            // Wait for preference commits to settle before taking a restore plan;
+            // a real intervening write must still fail snapshot revalidation.
+            await new Promise(resolve => {
+                let timer;
+                const settled = () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => { unsubscribe(); resolve(); }, 250);
+                };
+                const unsubscribe = window.AppData.backups.onDataCommitted(event => {
+                    if (event.targets.some(target => target.logicalKey === 'preferences.values')) settled();
+                });
+                settled();
+            });
+            await window.flushBrowsePreferenceWrites();
+        });
+        // Restore a nonempty map while Browse is active: no navigation or reload
+        // may be needed to update both the filtered results and star state.
+        await page.evaluate(() => window.AppData.backups.restore('browse-saved-favorite'));
+        await expectIds(page, [exams[2].id]);
+        assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
         assert.deepEqual(errors, []);
-        report.cases.push({ mode, status: 'pass', assertions: 'grading, suites, favorites, composition, keyboard, reload, provenance, reset, responsive menu' });
+        report.cases.push({ mode, status: 'pass', contrast, assertions: 'grading, suites, favorites, composition, keyboard, reload, provenance, reset, same-page restore, theme contrast, responsive menu' });
         await context.close();
     }
     report.status = 'pass';

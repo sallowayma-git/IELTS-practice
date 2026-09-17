@@ -168,3 +168,55 @@ test('cards and filters share the accepted provenance-scoped completion projecti
     assert.equal(getCardStatus(exam()).percentage, 100);
     assert.equal(window.getBrowseLearningStatus(exam()).wrong, false);
 });
+
+test('committed restored preferences reload favorites without a page reload', async () => {
+    let listener;
+    let reads = 0;
+    const favorite = id => ({ learningState: 'all', favoritesOnly: true,
+        readingFavorites: { [JSON.stringify([null, 'reading', id])]: true } });
+    let saved = favorite('p1');
+    const { window, context } = harness({
+        AppData: {
+            preferences: { getBrowse: async () => { reads += 1; return saved; } },
+            backups: { onDataCommitted: callback => { listener = callback; } }
+        }, getBrowseLearningStatus: () => null
+    });
+    vm.runInContext(source('components/browseLearningControls.js'), context);
+    const controls = window.BrowseLearningControls;
+    const exams = [exam(), exam('p2')];
+    await controls.ready();
+    assert.deepEqual(controls.filter(exams), [exams[0]]);
+    await listener({ targets: [{ logicalKey: 'backups.entries' }] });
+    assert.equal(reads, 1, 'unrelated commits retain the cached projection');
+    saved = favorite('p2');
+    await listener({ targets: [{ logicalKey: 'preferences.values' }] });
+    assert.deepEqual(controls.filter(exams), [exams[1]], 'restored stars and Favorites-only use the new map');
+    saved = { ...saved, readingFavorites: {} };
+    await listener({ targets: [{ logicalKey: 'preferences.values' }] });
+    assert.deepEqual(controls.filter(exams), [], 'restoring an empty map clears all favorite results');
+});
+
+test('a stale preference read cannot overwrite a committed restore or a user reset', async () => {
+    let listener;
+    let finishOld;
+    let reads = 0;
+    const oldRead = new Promise(resolve => { finishOld = resolve; });
+    const restored = { favoritesOnly: true, readingFavorites: { [JSON.stringify([null, 'reading', 'p2'])]: true } };
+    const { window, context } = harness({
+        AppData: {
+            preferences: { getBrowse: () => ++reads === 1 ? oldRead : Promise.resolve(restored) },
+            backups: { onDataCommitted: callback => { listener = callback; } }
+        }, getBrowseLearningStatus: () => null
+    });
+    vm.runInContext(source('components/browseLearningControls.js'), context);
+    const controls = window.BrowseLearningControls;
+    const pending = controls.ready();
+    await listener({ targets: [{ logicalKey: 'preferences.values' }] });
+    finishOld({ favoritesOnly: true, readingFavorites: { [JSON.stringify([null, 'reading', 'p1'])]: true } });
+    await pending;
+    const exams = [exam(), exam('p2')];
+    assert.deepEqual(controls.filter(exams), [exams[1]]);
+    controls.resetSelection();
+    await listener({ targets: [{ logicalKey: 'preferences.values' }] });
+    assert.equal(controls.filter(exams), exams, 'the committed refresh preserves the explicit reset');
+});
