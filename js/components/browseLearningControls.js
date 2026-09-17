@@ -16,15 +16,14 @@
 
     function ready() {
         if (!readyPromise) {
-            const revision = selectionRevision;
             readyPromise = global.AppData.preferences.getBrowse().then((preferences) => {
                 favorites = readFavorites(preferences);
-                if (revision === selectionRevision) {
+                if (selectionRevision === 0) {
                     selection = global.BrowseLearningState.normalizeSelection(preferences);
                 }
             }).catch((error) => {
                 readyPromise = null;
-                throw error;
+                console.warn('[Browse] Learning preferences could not be read; keeping current controls:', error);
             });
         }
         return readyPromise;

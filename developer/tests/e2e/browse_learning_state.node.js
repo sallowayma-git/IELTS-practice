@@ -61,10 +61,40 @@ async function choose(page, value) {
 }
 async function visibleIds(page) { return page.locator('#exam-list-container .exam-item').evaluateAll(items => items.map(item => item.dataset.examId)); }
 async function expectIds(page, expected) {
-    await page.waitForFunction(ids => {
-        const actual = Array.from(document.querySelectorAll('#exam-list-container .exam-item'), item => item.dataset.examId).sort();
-        return JSON.stringify(actual) === JSON.stringify(ids.slice().sort());
-    }, expected);
+    try {
+        await page.waitForFunction(ids => {
+            const actual = Array.from(document.querySelectorAll('#exam-list-container .exam-item'), item => item.dataset.examId).sort();
+            return JSON.stringify(actual) === JSON.stringify(ids.slice().sort());
+        }, expected);
+    } catch (error) {
+        const actual = await visibleIds(page);
+        const selection = await page.evaluate(async () => {
+            const prefs = await window.AppData.preferences.getBrowse();
+            return { learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly,
+                label: document.querySelector('#browse-learning-label')?.textContent };
+        });
+        throw new Error(`Unexpected Browse results: ${JSON.stringify({ expected, actual, selection })}`, { cause: error });
+    }
+}
+async function resetFilters(page) {
+    await page.evaluate(() => {
+        const reset = window.resetBrowseViewToAll;
+        window.resetBrowseViewToAll = (...args) => {
+            window.resetBrowseViewToAll = reset;
+            window.__browseAcceptanceReset = reset(...args);
+            return window.__browseAcceptanceReset;
+        };
+    });
+    await page.locator('#browse-learning-reset').click();
+    // Rendering is optimistic; wait for the reset owner to finish its durable
+    // preference write before a following reload or keyboard interaction.
+    const reset = await page.evaluate(async () => {
+        const result = await window.__browseAcceptanceReset;
+        delete window.__browseAcceptanceReset;
+        const prefs = await window.AppData.preferences.getBrowse();
+        return { succeeded: result !== false, learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly };
+    });
+    assert.deepEqual(reset, { succeeded: true, learningState: 'all', favoritesOnly: false });
 }
 async function syncRecords(page) {
     await page.evaluate(async () => {
@@ -85,6 +115,7 @@ try {
         const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1365, height: 900 } });
         const page = await context.newPage();
         page.setDefaultTimeout(12000);
+        page.setDefaultNavigationTimeout(60000);
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         console.log(`[${mode}] boot`);
@@ -171,7 +202,7 @@ try {
         await page.screenshot({ path: path.join(reports, `browse-learning-${mode}-mobile.png`), fullPage: false });
         const panelBox = await page.locator('#browse-learning-panel').boundingBox();
         assert(panelBox.x >= 0 && panelBox.x + panelBox.width <= 390, 'menu fits the narrow viewport');
-        await page.locator('#browse-learning-reset').click();
+        await resetFilters(page);
         await expectIds(page, exams.map(exam => exam.id));
         const persisted = await page.evaluate(async () => {
             await window.flushBrowsePreferenceWrites();
@@ -187,7 +218,7 @@ try {
         await expectIds(page, [exams[2].id, exams[3].id]);
         await page.keyboard.press('Escape');
         await openMenu(page);
-        await page.locator('#browse-learning-reset').click();
+        await resetFilters(page);
         await expectIds(page, exams.map(exam => exam.id));
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true);

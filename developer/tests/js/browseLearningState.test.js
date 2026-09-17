@@ -117,6 +117,41 @@ test('an explicit reset wins delayed preference hydration and retains favorites'
     assert.equal(window.BrowseLearningControls.filter([exam(), exam('p2')]).length, 2);
 });
 
+test('failed learning preference reads keep Browse usable and retry saved selections', async () => {
+    let reads = 0;
+    const { window, context, state } = harness({
+        AppData: { preferences: { getBrowse: async () => {
+            if (++reads === 1) throw new Error('Transient preference read failure');
+            return { learningState: 'completed', favoritesOnly: true,
+                readingFavorites: { [state.identity(exam(), true)]: true } };
+        } } },
+        getBrowseLearningStatus: (item) => item.id === 'p1' ? { percentage: 90 } : null
+    });
+    vm.runInContext(source('components/browseLearningControls.js'), context);
+    await assert.doesNotReject(window.BrowseLearningControls.ready());
+    const exams = [exam(), exam('p2')];
+    assert.equal(window.BrowseLearningControls.filter(exams), exams, 'default results remain available');
+    await window.BrowseLearningControls.ready();
+    assert.equal(reads, 2);
+    assert.deepEqual(window.BrowseLearningControls.filter(exams), [exams[0]]);
+});
+
+test('retrying failed preference hydration cannot overwrite an explicit reset', async () => {
+    let reads = 0;
+    const { window, context } = harness({
+        AppData: { preferences: { getBrowse: async () => {
+            if (++reads === 1) throw new Error('Transient preference read failure');
+            return { learningState: 'completed', favoritesOnly: true };
+        } } }, getBrowseLearningStatus: () => null
+    });
+    vm.runInContext(source('components/browseLearningControls.js'), context);
+    await window.BrowseLearningControls.ready();
+    window.BrowseLearningControls.resetSelection();
+    await window.BrowseLearningControls.ready();
+    const exams = [exam(), exam('p2')];
+    assert.equal(window.BrowseLearningControls.filter(exams), exams);
+});
+
 test('cards and filters share the accepted provenance-scoped completion projection', () => {
     const { window, context } = harness();
     vm.runInContext(source('views/legacyViewBundle.js'), context);
