@@ -2146,6 +2146,50 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 57 }));
+    const browseFixture = harness();
+    await browseFixture.app.ready;
+    const browseApi = browseFixture.app.preferences;
+    const favoriteA = JSON.stringify([null, 'reading', 'same-id']);
+    const favoriteB = JSON.stringify(['custom', 'reading', 'same-id']);
+    await browseApi.patchBrowse({ autoScrollEnabled: false, learningState: 'wrong', favoritesOnly: true });
+    await Promise.all([browseApi.setReadingFavorite(favoriteA, true), browseApi.setReadingFavorite(favoriteB, true)]);
+    await browseApi.patchBrowse({ learningState: 'all', favoritesOnly: false });
+    let browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(Object.keys(browseSaved.readingFavorites).length, 2, 'reset and concurrent favorites preserve both sources');
+    assert.strictEqual(browseSaved.autoScrollEnabled, false, 'favorites preserve existing preferences');
+    await browseApi.setReadingFavorite(favoriteA, false);
+    browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(browseSaved.readingFavorites[favoriteA], undefined);
+    assert.strictEqual(browseSaved.readingFavorites[favoriteB], true);
+    const scoreless = browseFixture.app.practice.projectLight({
+        id: 'scoreless-browse', type: 'reading', totalQuestions: 10,
+        metadata: { libraryConfigurationId: null }
+    });
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history retains its existing display default');
+    assert.strictEqual(scoreless.browseScore.earned, null, 'Browse preserves unknown grading instead of inventing a zero score');
+    assert.strictEqual(browseFixture.app.practice.projectLight(scoreless).browseScore.earned, null,
+        'reprojecting or importing a summary must preserve unknown grading');
+    assert.strictEqual(browseFixture.app.practice.projectLight({
+        id: 'answer-key-only', correctAnswers: { 1: 'A' }, totalQuestions: 1
+    }).browseScore.earned, null, 'an answer key without a graded score is not a zero-score submission');
+    const datedBrowse = browseFixture.app.practice.projectLight({
+        id: 'imported-completion-time', type: 'reading', endTime: '2026-08-01T10:00:00Z',
+        correctAnswers: 5, totalQuestions: 10
+    });
+    assert.strictEqual(datedBrowse.browseScore.submittedAt, Date.parse('2026-08-01T10:00:00Z'),
+        'canonical bookkeeping defaults must not replace the actual submission time');
+    assert.strictEqual(scoreless.browseScore.submittedAt, null, 'unknown submission time stays unknown');
+    const sourceSuite = await browseFixture.app.practice.finalizeSuite({ record: {
+        id: 'source-suite', type: 'reading', metadata: { libraryConfigurationId: 'current' },
+        suiteEntries: [{ examId: 'same-id', scoreInfo: { correct: 5.5, total: 10 },
+            rawData: { libraryConfigurationId: 'launch-source', endTime: '2026-09-01T10:00:00Z' } }]
+    } });
+    const sourceSummary = (await browseFixture.app.practice.get(sourceSuite.record.id, { projection: 'light' })).suiteEntrySummaries[0];
+    assert.strictEqual(sourceSummary.metadata.libraryConfigurationId, 'launch-source', 'suite source is captured at passage launch');
+    assert.strictEqual(sourceSummary.browseScore.earned, 5.5);
+    assert.strictEqual(sourceSummary.completedAt, '2026-09-01T10:00:00Z');
+    assert.strictEqual(sourceSummary.browseScore.submittedAt, Date.parse('2026-09-01T10:00:00Z'));
+
+    console.log(JSON.stringify({ status: 'pass', tests: 59 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

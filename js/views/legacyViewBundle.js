@@ -2765,6 +2765,7 @@
             }
         }
         title.appendChild(document.createTextNode(exam.title || ''));
+        if (global.BrowseLearningControls) global.BrowseLearningControls.decorateCard(exam, title);
 
         var meta = this._createElement('div', { className: 'exam-meta' });
         var metaText;
@@ -2963,7 +2964,7 @@
             className: className,
             ariaHidden: 'true'
         });
-        dot.title = '最近正确率 ' + Math.round(percentage) + '%';
+        dot.title = '最近正确率 ' + Number(percentage.toFixed(2)) + '%';
         return dot;
     };
 
@@ -3349,6 +3350,8 @@
         return {
             byExamId: byExamId,
             byTitle: byTitle,
+            learningByIdentity: global.BrowseLearningState
+                ? global.BrowseLearningState.buildIndex(recordSnapshot) : new Map(),
             records: recordSnapshot,
             ready: true
         };
@@ -3387,6 +3390,9 @@
     }
 
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
+        if (global.BrowseLearningState && exam && exam.type === 'reading') {
+            return getBrowseLearningStatus(exam);
+        }
         var index = ensureBrowseCompletionIndex();
         var byId = null;
         var byTitle = null;
@@ -3998,6 +4004,13 @@
         return parts.join(' · ');
     };
 
+    function getBrowseLearningStatus(exam) {
+        const index = ensureBrowseCompletionIndex();
+        const key = global.BrowseLearningState && global.BrowseLearningState.identity(exam, true);
+        return key && index.learningByIdentity ? index.learningByIdentity.get(key) || null : null;
+    }
+
+    global.getBrowseLearningStatus = getBrowseLearningStatus;
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
     global.PracticeTrendRenderer = PracticeTrendRenderer;

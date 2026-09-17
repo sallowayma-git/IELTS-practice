@@ -3174,10 +3174,16 @@
         const record = jsonValue(input, 'practice record');
         record.id = idOf(record, ['id', 'recordId', 'sessionId']) || randomId('record');
         record.sessionId = idOf(record, ['sessionId']) || record.id;
+        // Capture grading evidence and submission time before normalization
+        // supplies display zeros or bookkeeping timestamps for legacy records.
+        record.browseScore = browseScoreFields(record).browseScore;
         record.timestamp = record.timestamp || record.completedAt || record.date || nowIso();
         record.completedAt = record.completedAt || record.timestamp;
         record.type = record.type || record.examType || (record.metadata && record.metadata.type) || 'practice';
         record.metadata = asObject(record.metadata);
+        if (!hasOwn(record.metadata, 'libraryConfigurationId') && hasOwn(record, 'libraryConfigurationId')) {
+            record.metadata.libraryConfigurationId = record.libraryConfigurationId;
+        }
         if (!record.metadata.examId && record.examId) record.metadata.examId = record.examId;
         if (!record.examId && record.metadata.examId) record.examId = record.metadata.examId;
         normalizePracticeAnswers(record);
@@ -3192,11 +3198,37 @@
         return jsonValue(record, 'canonical practice record');
     }
 
+    function browseScoreFields(source) {
+        const score = asObject(source.scoreInfo);
+        const realScore = asObject(asObject(source.realData).scoreInfo);
+        const rawData = asObject(source.rawData);
+        return {
+            status: source.status || asObject(source.metadata).status || null,
+            graded: source.graded,
+            gradable: source.gradable,
+            browseScore: hasOwn(source, 'browseScore') ? clone(asObject(source.browseScore)) : {
+                earned: firstNonNegative(source.correctAnswers, source.correctAnswersCount, score.correctAnswers, score.correct, realScore.correctAnswers, realScore.correct),
+                possible: firstNonNegative(source.totalQuestions, source.questionCount, score.totalQuestions, score.total, realScore.totalQuestions, realScore.total),
+                submittedAt: [source.completedAt, source.endTime, source.date, source.timestamp,
+                    rawData.completedAt, rawData.endTime, rawData.date, rawData.timestamp]
+                    .filter(value => value != null && value !== '')
+                    .map(value => new Date(value).getTime())
+                    .find(value => Number.isFinite(value) && value > 0) ?? null
+            }
+        };
+    }
+
     function lightSuiteEntry(source, fallbackType = null) {
         const entry = asObject(source);
+        const rawData = asObject(entry.rawData);
         const scoreInfo = asObject(entry.scoreInfo);
         const realScoreInfo = asObject(asObject(entry.realData).scoreInfo);
-        const metadata = asObject(entry.metadata);
+        const metadata = Object.assign({}, asObject(entry.metadata));
+        for (const candidate of [entry, asObject(rawData.metadata), rawData]) {
+            if (!hasOwn(metadata, 'libraryConfigurationId') && hasOwn(candidate, 'libraryConfigurationId')) {
+                metadata.libraryConfigurationId = candidate.libraryConfigurationId;
+            }
+        }
         const totalQuestions = firstNonNegative(entry.totalQuestions, scoreInfo.totalQuestions, scoreInfo.total, realScoreInfo.totalQuestions, realScoreInfo.total) ?? 0;
         const correctAnswers = firstNonNegative(entry.correctAnswers, scoreInfo.correctAnswers, scoreInfo.correct, realScoreInfo.correctAnswers, realScoreInfo.correct) ?? 0;
         const explicitAccuracy = entry.accuracy ?? scoreInfo.accuracy ?? realScoreInfo.accuracy;
@@ -3206,12 +3238,17 @@
         ) || 0;
         const percentage = Number(entry.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0;
         return jsonValue({
+            ...browseScoreFields(entry),
             id: entry.id || null,
             sessionId: entry.sessionId || null,
             examId: entry.examId || metadata.examId || null,
             title: entry.title || entry.examTitle || metadata.examTitle || metadata.title || '',
             type: entry.type || metadata.type || fallbackType,
             date: entry.date || entry.completedAt || entry.timestamp || null,
+            completedAt: entry.completedAt || entry.endTime || rawData.completedAt || rawData.endTime || null,
+            metadata: Object.fromEntries(['libraryConfigurationId', 'dataSource', 'source']
+                .filter((field) => Object.prototype.hasOwnProperty.call(metadata, field))
+                .map((field) => [field, clone(metadata[field])])),
             duration: Number(entry.duration ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
             totalQuestions,
             correctAnswers,
@@ -3237,6 +3274,7 @@
             'practice light accuracy'
         ) || 0;
         return jsonValue({
+            ...browseScoreFields(source),
             id: source.id,
             sessionId: source.sessionId,
             examId: source.examId || source.metadata.examId || null,
@@ -3655,9 +3693,17 @@
                 if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
                 const next = jsonValue(entry, 'practice suite entry');
                 const entryMetadata = asObject(next.metadata);
+                const rawData = asObject(next.rawData);
+                const rawMetadata = asObject(rawData.metadata);
                 const entryId = hasOwn(entryMetadata, 'libraryConfigurationId')
                     ? normalizeLibraryConfigurationId(entryMetadata.libraryConfigurationId)
-                    : normalizedId;
+                    : hasOwn(next, 'libraryConfigurationId')
+                        ? normalizeLibraryConfigurationId(next.libraryConfigurationId)
+                        : hasOwn(rawMetadata, 'libraryConfigurationId')
+                            ? normalizeLibraryConfigurationId(rawMetadata.libraryConfigurationId)
+                            : hasOwn(rawData, 'libraryConfigurationId')
+                                ? normalizeLibraryConfigurationId(rawData.libraryConfigurationId)
+                                : normalizedId;
                 next.metadata = Object.assign({}, entryMetadata, { libraryConfigurationId: entryId });
                 return next;
             });
@@ -5872,7 +5918,33 @@
             return kernel.mutate([{ logicalKey: 'preferences.values', data: next, expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], mutation);
         }));
     }
+    async function setReadingFavorite(identity, favorite, options = {}) {
+        const parts = JSON.parse(identity);
+        if (!Array.isArray(parts) || parts.length !== 3 || parts[1] !== 'reading'
+            || (parts[0] !== null && typeof parts[0] !== 'string') || !parts[2]) {
+            throw new AppDataError('VALIDATION', 'A reading favorite requires a library and passage identity');
+        }
+        await ready;
+        const mutation = optionsMutationOptions(options, 'reading-favorite', { identity, favorite: !!favorite });
+        return enqueuePreferenceMutation(() => retryMergeConflict(options, async () => {
+            const current = await kernel.read('preferences.values', { withMeta: true });
+            const values = asObject(current.data);
+            const browse = asObject(values.browse);
+            const favorites = Object.assign({}, asObject(browse.readingFavorites));
+            if (favorite) favorites[identity] = true;
+            else delete favorites[identity];
+            const next = Object.assign({}, values, {
+                browse: Object.assign({}, browse, { readingFavorites: favorites })
+            });
+            return kernel.mutate([{
+                logicalKey: 'preferences.values', data: next,
+                expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+            }], mutation);
+        }));
+    }
+
     const preferences = Object.freeze({
+        setReadingFavorite,
         async getAll() { return readPreferences(); },
         async getTheme() { return (await readPreferences())[PREFERENCE_FIELDS.theme] ?? null; }, async setTheme(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.theme, value, options); },
         async getBrowse() { return clone((await readPreferences())[PREFERENCE_FIELDS.browse] ?? null); }, async setBrowse(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.browse, value, options); }, async patchBrowse(value, options) { return patchPreference(PREFERENCE_FIELDS.browse, value, options); },

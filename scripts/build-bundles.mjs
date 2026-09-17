@@ -55,6 +55,7 @@ const bundles = {
         'js/components/onboardingTour.js'
     ],
     'js/bundles/browse.bundle.js': [
+        'js/services/browseLearningState.js',
         'js/views/legacyViewBundle.js',
         'js/data/practiceRecordSource.js',
         'js/app/examActions.js',
@@ -70,6 +71,7 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/utils/answerComparisonUtils.js',
         'js/utils/BrowsePreferencesUtils.js',
+        'js/components/browseLearningControls.js',
         'js/components/interruptedPracticeHistory.js',
         'js/main.js'
     ],
