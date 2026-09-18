@@ -6245,7 +6245,7 @@
                 const metadata = Object.assign({}, realData?.metadata || {}, {
                     examId,
                     examTitle: exam.title || realData?.title || '',
-                    category: exam.category || realData?.category || realData?.metadata?.category || 'unknown',
+                    category: realData?.category || realData?.metadata?.category || 'unknown',
                     frequency: exam.frequency || realData?.frequency || realData?.metadata?.frequency || 'unknown',
                     type: exam.type || realData?.type || realData?.practiceType || null,
                     // 启动时捕获的题库配置 ID；优先取 realData.metadata 显式值，再回退到启动时

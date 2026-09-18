@@ -698,6 +698,24 @@
                     </div>
                 </div>
 
+                <section class="hero-panel hero-section reading-analytics" aria-labelledby="reading-analytics-title">
+                    <div class="hero-panel__header">
+                        <h3 id="reading-analytics-title" class="hero-panel__title">阅读专项统计</h3>
+                        <label class="reading-analytics__range" for="reading-analytics-range">
+                            统计时段
+                            <select id="reading-analytics-range">
+                                <option value="all">全部历史</option>
+                                <option value="7">近 7 天</option>
+                                <option value="30">近 30 天</option>
+                                <option value="90">近 90 天</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="reading-analytics-content" aria-live="polite">
+                        <p>正在读取阅读统计…</p>
+                    </div>
+                </section>
+
                 <div class="practice-history hero-panel hero-section">
                     <div class="hero-panel__header">
                         <h3 class="hero-panel__title">

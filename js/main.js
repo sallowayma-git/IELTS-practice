@@ -1999,6 +1999,10 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
+    if (window.ReadingAnalyticsPanel) {
+        window.ReadingAnalyticsPanel.update(records, { recordType: examType, query: historyQuery });
+    }
+
     const trendRenderer = ensurePracticeTrendRenderer();
     if (trendRenderer && typeof trendRenderer.update === 'function') {
         trendRenderer.update(recordsToShow);

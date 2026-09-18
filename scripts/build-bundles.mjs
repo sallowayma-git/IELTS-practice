@@ -56,6 +56,8 @@ const bundles = {
     ],
     'js/bundles/browse.bundle.js': [
         'js/services/browseLearningState.js',
+        'js/services/readingAnalytics.js',
+        'js/components/readingAnalyticsPanel.js',
         'js/views/legacyViewBundle.js',
         'js/data/practiceRecordSource.js',
         'js/app/examActions.js',

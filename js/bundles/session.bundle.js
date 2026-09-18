@@ -637,7 +637,12 @@
                         session.sequence = sequence.map((entry) => {
                             const indexed = byId.get(String(entry.examId));
                             return indexed
-                                ? { ...entry, exam: indexed, title: entry.title || indexed.title, category: entry.category || indexed.category }
+                                ? { ...entry, exam: {
+                                    ...indexed,
+                                    category: entry.category || entry.exam?.category || '',
+                                    ...(Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                                        ? { libraryConfigurationId: entry.exam.libraryConfigurationId } : {})
+                                }, title: entry.title || indexed.title, category: entry.category || entry.exam?.category || '' }
                                 : entry;
                         });
                     }
@@ -1841,6 +1846,8 @@
                         : true,
                     results: (session.results || []).map(r => ({
                         examId: r.examId, title: r.title, category: r.category,
+                        sessionId: r.sessionId, metadata: r.metadata, browseScore: r.browseScore,
+                        questionTypePerformance: r.questionTypePerformance,
                         duration: r.duration, scoreInfo: r.scoreInfo,
                         answers: r.answers, answerComparison: r.answerComparison,
                         markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
@@ -3062,6 +3069,10 @@
                         examId: entry.examId,
                         title: entry.title,
                         category: entry.category,
+                        sessionId: entry.sessionId,
+                        metadata: entry.metadata,
+                        browseScore: entry.browseScore,
+                        questionTypePerformance: entry.questionTypePerformance,
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
@@ -3153,6 +3164,8 @@
                         suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
                         suiteEntryCount: suiteEntries.length,
+                        ...(Object.prototype.hasOwnProperty.call(session.sequence?.[0]?.exam || {}, 'libraryConfigurationId')
+                            ? { libraryConfigurationId: session.sequence[0].exam.libraryConfigurationId } : {}),
                         startedAt: startTimeIso,
                         completedAt: endTimeIso
                     },
@@ -3512,8 +3525,15 @@
                     return false;
                 }
 
+                const launchLibraryId = window.AppData?.library?.getActive
+                    ? await window.AppData.library.getActive() : null;
                 const normalizedSequence = Array.isArray(sequence)
-                    ? sequence.filter(item => item && item.examId && item.exam)
+                    ? sequence.filter(item => item && item.examId && item.exam).map(item => ({
+                        ...item,
+                        exam: { ...item.exam, libraryConfigurationId:
+                            Object.prototype.hasOwnProperty.call(item.exam, 'libraryConfigurationId')
+                                ? item.exam.libraryConfigurationId : launchLibraryId }
+                    }))
                     : [];
                 if (!normalizedSequence.length) {
                     window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
@@ -3693,6 +3713,20 @@
                 examId: exam.id,
                 title: exam.title,
                 category: exam.category,
+                sessionId: rawData?.sessionId || null,
+                metadata: {
+                    libraryConfigurationId: Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')
+                        ? exam.libraryConfigurationId
+                        : (typeof this._readLaunchLibraryConfigurationId === 'function'
+                            ? this._readLaunchLibraryConfigurationId(exam.id, rawData) : null)
+                },
+                // Preserve original scoring evidence before compatibility display fallbacks.
+                browseScore: {
+                    earned: toNumber(score.correct, null),
+                    possible: toNumber(score.total, null),
+                    submittedAt: rawData?.endTime || rawData?.completedAt || null
+                },
+                questionTypePerformance: this._cloneSuitePlainObject(rawData?.questionTypePerformance || {}),
                 duration,
                 scoreInfo: {
                     correct,

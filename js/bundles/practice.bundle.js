@@ -3937,6 +3937,26 @@ class PracticeRecorder {
         });
     }
 
+    captureScoreEvidence(record = {}) {
+        if (record.browseScore && typeof record.browseScore === 'object') return { ...record.browseScore };
+        const firstNumber = (...values) => {
+            for (const value of values) {
+                if ((typeof value === 'number' || (typeof value === 'string' && value.trim()))
+                    && Number.isFinite(Number(value))) return Number(value);
+            }
+            return null;
+        };
+        const info = record.scoreInfo || record.realData?.scoreInfo || {};
+        const submittedAt = [record.completedAt, record.endTime, record.date, record.timestamp]
+            .filter(value => value != null && value !== '')
+            .map(value => new Date(value).getTime()).find(value => Number.isFinite(value) && value > 0) ?? null;
+        return {
+            earned: firstNumber(record.correctAnswers, record.correctAnswersCount, info.correct, info.correctAnswers),
+            possible: firstNumber(record.totalQuestions, info.total, info.totalQuestions),
+            submittedAt
+        };
+    }
+
     normalizePracticeType(rawType) {
         const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
@@ -4897,6 +4917,7 @@ class PracticeRecorder {
             examEntry,
             type
         );
+        metadata.category = results?.category || results?.metadata?.category || session.metadata?.category || '';
         let suiteSessionId = payload.suiteSessionId
             || metadata?.suiteSessionId
             || session?.metadata?.suiteSessionId
@@ -4979,7 +5000,10 @@ class PracticeRecorder {
             startTime: resolvedStartTime,
             endTime: resolvedEndTime,
             duration: Math.floor(durationMs / 1000),
-            status: 'completed',
+            status: results?.status || 'completed',
+            graded: results?.graded,
+            gradable: results?.gradable,
+            browseScore: this.captureScoreEvidence({ ...results, endTime: resolvedEndTime }),
             type,
             date: recordDate,
             score: resolvedScore,
@@ -5471,6 +5495,8 @@ class PracticeRecorder {
         );
         const annotations = this.resolveAnnotationState(recordData, [recordData.metadata || {}]);
         metadata.markedQuestions = this.clonePlainObject(annotations.markedQuestions);
+        // The active index can belong to another library by the time this save runs.
+        metadata.category = recordData.category || recordData.metadata?.category || '';
 
         return {
             // 基础信息
@@ -5487,6 +5513,9 @@ class PracticeRecorder {
 
             // 成绩信息
             status: recordData.status || 'completed',
+            graded: recordData.graded,
+            gradable: recordData.gradable,
+            browseScore: this.captureScoreEvidence(recordData),
             type: inferredType,
             score: Number(recordData.score) || 0,
             totalQuestions: Number(recordData.totalQuestions) || 0,
@@ -6133,7 +6162,10 @@ class PracticeRecorder {
             duration: realData.duration || 0,
 
             // 成绩信息
-            status: 'completed',
+            status: realData.status || 'completed',
+            graded: realData.graded,
+            gradable: realData.gradable,
+            browseScore: this.captureScoreEvidence({ ...realData, endTime: realData.endTime || now.toISOString() }),
             score: score,
             totalQuestions: totalQuestions,
             correctAnswers: score, // 正确答案数等于分数
@@ -6150,7 +6182,7 @@ class PracticeRecorder {
             // 元数据
             metadata: {
                 examTitle: exam.title || '',
-                category: exam.category || '',
+                category: realData.category || realData.metadata?.category || '',
                 frequency: exam.frequency || '',
                 markedQuestions: this.clonePlainObject(annotations.markedQuestions),
                 collectionMethod: 'automatic',

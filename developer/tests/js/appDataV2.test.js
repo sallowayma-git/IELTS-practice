@@ -2267,7 +2267,9 @@ async function run() {
     assert.strictEqual(scoreless.browseScore.submittedAt, null, 'unknown submission time stays unknown');
     const sourceSuite = await browseFixture.app.practice.finalizeSuite({ record: {
         id: 'source-suite', type: 'reading', metadata: { libraryConfigurationId: 'current' },
-        suiteEntries: [{ examId: 'same-id', scoreInfo: { correct: 5.5, total: 10 },
+        suiteEntries: [{ examId: 'same-id', sessionId: 'analytics-child-session', category: 'P3',
+            questionTypePerformance: { 'multiple-choice': { correct: 5.5, total: 10 } },
+            scoreInfo: { correct: 5.5, total: 10 },
             rawData: { libraryConfigurationId: 'launch-source', endTime: '2026-09-01T10:00:00Z' } }]
     } });
     const sourceSummary = (await browseFixture.app.practice.get(sourceSuite.record.id, { projection: 'light' })).suiteEntrySummaries[0];
@@ -2275,6 +2277,31 @@ async function run() {
     assert.strictEqual(sourceSummary.browseScore.earned, 5.5);
     assert.strictEqual(sourceSummary.completedAt, '2026-09-01T10:00:00Z');
     assert.strictEqual(sourceSummary.browseScore.submittedAt, Date.parse('2026-09-01T10:00:00Z'));
+
+    assert.strictEqual(sourceSummary.sessionId, 'analytics-child-session');
+    assert.strictEqual(sourceSummary.readingAnalytics.category, 'P3');
+    assert.strictEqual(sourceSummary.readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(sourceSummary.readingAnalytics.questionTypes['multiple-choice'].possible, 10);
+    assert.strictEqual(browseFixture.app.practice.projectLight(sourceSuite.record).suiteEntrySummaries[0].readingAnalytics.category, 'P3');
+    const projectedAgain = browseFixture.app.practice.projectLight(await browseFixture.app.practice.get('source-suite', { projection: 'light' }));
+    assert.strictEqual(projectedAgain.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(scoreless.readingAnalytics.category, null);
+    assert.deepStrictEqual(Object.keys(scoreless.readingAnalytics.questionTypes), []);
+    const incompleteTypes = browseFixture.app.practice.projectLight({
+        id: 'analytics-incomplete-types', correctAnswers: 1, totalQuestions: 2,
+        questionTypePerformance: { 'multiple-choice': { correct: .5 }, other: { total: 0 } },
+        questionTypeErrorCounts: { 'multiple-choice': 3 }
+    });
+    assert.strictEqual(incompleteTypes.readingAnalytics.questionTypes['multiple-choice'].possible, null);
+    assert.strictEqual(incompleteTypes.readingAnalytics.questionTypes.other.earned, null);
+    const legacyAnalytics = browseFixture.shared.entities.get('practiceSummaries').get('source-suite');
+    delete legacyAnalytics.data.readingAnalytics;
+    delete legacyAnalytics.data.suiteEntrySummaries[0].readingAnalytics;
+    // The new field must recover from detail without relying on today's library.
+    const recoveredAnalytics = await browseFixture.app.practice.get('source-suite', { projection: 'light' });
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.category, 'P3');
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].metadata.libraryConfigurationId, 'launch-source');
 
     console.log(JSON.stringify({ status: 'pass', tests: 60 }));
 }

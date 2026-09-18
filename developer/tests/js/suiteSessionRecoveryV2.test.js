@@ -210,14 +210,19 @@ async function main() {
             const durable = Array.from(passageHarness.durableSessions.values())[0];
             assert.equal(durable.currentIndex, 1);
             assert.equal(durable.results[0].examId, 'p1');
+            assert.equal(durable.results[0].questionTypePerformance['multiple-choice'].correct, .5);
+            assert.equal(durable.results[0].metadata.libraryConfigurationId, 'suite-launch-source');
+            assert.equal(durable.results[0].browseScore.earned, .5);
             return { closed: false, name: 'passage-two' };
         };
+        passageHarness.sequence[0].exam.libraryConfigurationId = 'suite-launch-source';
         assert.equal(await passageApp._launchSuiteSessionFromSequence(passageHarness.sequence, { flowMode: 'simulation' }), true);
         const passageOutcome = await passageApp.handleSuitePracticeComplete('p1', {
             suiteSessionId: passageApp.currentSuiteSession.id,
             submissionId: 'passage-one-submit',
             duration: 10,
-            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            scoreInfo: { correct: .5, total: 1, accuracy: .5, percentage: 50 },
+            questionTypePerformance: { 'multiple-choice': { correct: .5, total: 1 } },
             answers: { q1: 'A' },
             answerComparison: {}
         }, firstPassageWindow);
