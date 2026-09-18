@@ -65,6 +65,45 @@ test('missing children use separate parent-only scores or a disclosed partial ch
     assert.equal(recovered.suiteOnly.attempts, 0);
 });
 
+test('explicit legacy suite links deduplicate submissions without supplying passage identity', () => {
+    const child = record('embedded', 1, 2, { metadata: {}, title: 'Embedded' });
+    const parent = record('legacy-suite', 1, 2, {
+        metadata: { suiteEntryCount: 2 }, title: 'Legacy suite', suiteEntries: [child]
+    });
+    const standalone = record('standalone', 1, 2, {
+        metadata: {}, title: 'Stale copy', suiteSessionId: parent.sessionId
+    });
+    const result = aggregate([standalone, parent]);
+    assert.equal(result.total.attempts, 1);
+    assert.equal(result.total.earned, 1);
+    assert.equal(result.total.possible, 2);
+    assert.equal(result.total.distinctPassages, 0);
+    assert.equal(result.coverage.unknownIdentity, 1);
+    assert.equal(result.coverage.missingSuiteChildren, 1);
+    assert.equal(aggregate([standalone, parent], { query: 'stale' }).total.attempts, 0);
+    const oldParent = { ...parent, suiteEntries: [{ ...child, date: new Date(now - 100 * 86400000).toISOString() }] };
+    assert.equal(aggregate([standalone, oldParent], { days: 7, now }).total.attempts, 0);
+    const retake = record('retake', 9, 10, { metadata: {} });
+    assert.equal(aggregate([standalone, parent, retake]).total.accuracy, 10 / 12);
+    const recovered = aggregate([{ ...parent, suiteEntries: [], suiteMode: true }, standalone]);
+    assert.equal(recovered.total.attempts, 1);
+    assert.equal(recovered.total.distinctPassages, 0);
+});
+
+test('explicit suite links never deduplicate conflicting known library sources', () => {
+    const child = record('child', 1, 2, { metadata: { libraryConfigurationId: 'A' } });
+    const standalone = record('child', 9, 10, {
+        metadata: { libraryConfigurationId: 'B' }, suiteSessionId: 'suite'
+    });
+    for (const metadata of [{ libraryConfigurationId: 'A' }, {}]) {
+        const parent = record('suite', 1, 2, { metadata, suiteEntries: [child] });
+        const result = aggregate([standalone, parent]);
+        assert.equal(result.total.attempts, 2);
+        assert.equal(result.total.accuracy, 10 / 12);
+        assert.equal(result.total.distinctPassages, 2);
+    }
+});
+
 test('source and saved category are independent of Browse, including same IDs across libraries', () => {
     const a = record('same', 1, 2, { metadata: { libraryConfigurationId: 'A', category: 'P1' } });
     const b = record('same', 3, 4, { metadata: { libraryConfigurationId: 'B', category: 'P3' } });

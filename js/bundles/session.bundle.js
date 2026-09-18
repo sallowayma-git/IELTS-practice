@@ -616,7 +616,23 @@
                 let currentExamIndex = null;
                 if (session._restoredFromStorage === true && typeof this._fetchSuiteExamIndex === 'function') {
                     try {
+                        const readActiveSource = async () => window.AppData?.library?.getActive
+                            ? window.AppData.library.getActive() : null;
+                        const matchesSavedSource = source => sequence.every(entry =>
+                            !Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                            || entry.exam.libraryConfigurationId === source);
+                        const activeSource = await readActiveSource();
+                        if (!matchesSavedSource(activeSource)) {
+                            window.showMessage && window.showMessage('请切回开始套题时使用的题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
                         currentExamIndex = await this._fetchSuiteExamIndex();
+                        // The library can change while the index is loading. Never
+                        // replace saved definitions with content from another source.
+                        if (await readActiveSource() !== activeSource) {
+                            window.showMessage && window.showMessage('题库已切换，请切回原题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
                     } catch (validationError) {
                         console.warn('[SuitePractice] 无法验证恢复目标，保留快照供稍后重试:', validationError);
                         window.showMessage && window.showMessage('暂时无法读取当前题库，未完成套题仍会保留。', 'warning');

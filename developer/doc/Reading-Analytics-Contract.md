@@ -38,7 +38,10 @@ This contract applies to the Reading analytics panel on the practice-record page
   metrics. Preserve exact child record/session IDs and parent session linkage.
   Deduplicate exact record/session representations within a source and passage;
   also deduplicate an explicitly linked standalone child against that parent's
-  child. Do not deduplicate by exam ID or a nearby timestamp alone.
+  child. Exact parent linkage can deduplicate a legacy child's representations
+  with unknown provenance without supplying a distinct-passage identity. Known
+  conflicting library sources remain separate. Do not deduplicate by exam ID
+  or a nearby timestamp alone.
 - Resolve duplicates before applying the history search or date window. Saved
   suite children take precedence over their standalone representations.
 - If some children or scores are missing, aggregate only available eligible
@@ -73,8 +76,13 @@ This contract applies to the Reading analytics panel on the practice-record page
   summaries are resolved with matching detail snapshots when needed; annotations
   and the active catalog are not read. No destructive migration is required.
 - New suite metadata is captured from the launched sequence and carried through
-  recovery/finalization. Historical fields unavailable in either summary or
-  detail stay unknown; no guessed enrichment from today's catalog is allowed.
+  recovery/finalization. When a saved suite identifies its source, resuming
+  requires that library; a source mismatch retains the recovery snapshot until
+  the original library is selected.
+  Flat completion payloads retain raw scores and eligibility flags before
+  compatibility display defaults, including genuine graded zeros.
+  Historical fields unavailable in either summary or detail stay unknown;
+  no guessed enrichment from today's catalog is allowed.
 
 ## Delivery checks
 

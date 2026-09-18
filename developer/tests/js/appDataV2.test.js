@@ -1677,7 +1677,77 @@ async function testLegacyBrowseGradingUpgrade() {
         Date.parse(submissionTimes['end-time-older']), 'retained summary endTime remains usable without a detail record');
 }
 
+async function testCompletionEvidenceThroughLightAnalytics() {
+    const { app, sandbox, context } = harness();
+    await app.ready;
+    for (const file of ['js/core/practiceCore.js', 'js/core/practiceRecorder.js', 'js/services/readingAnalytics.js']) {
+        vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
+    }
+    sandbox.resolveActiveLibraryIndex = async () => [];
+    const recorder = Object.create(sandbox.PracticeRecorder.prototype);
+    recorder.activeSessions = new Map();
+    recorder.sessionListeners = new Map();
+    recorder.sessionStartGenerations = new WeakMap();
+    recorder.practiceTypeCache = new Map();
+    recorder.dispatchSessionEvent = () => {};
+    const endTime = '2026-09-19T01:00:00.000Z';
+    for (const [id, fields, attempts, scored, earned, possible] of [
+        ['missing', {}, 1, 0, null, null],
+        ['denominator-only', { totalQuestions: 2 }, 1, 0, null, 2],
+        ['ungradable', { gradable: false, scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['ungraded', { graded: false, scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['interrupted', { status: 'interrupted', scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['graded-zero', { graded: true, correctAnswers: 0, totalQuestions: 2 }, 1, 1, 0, 2],
+        ['fractional', { scoreInfo: { correct: .5, total: 2 },
+            questionTypePerformance: { mcq: { correct: .5, total: 2 } } }, 1, 1, .5, 2],
+        ['weighted', { scoreInfo: { correct: 9, total: 10 } }, 1, 1, 9, 10],
+        ['saved-unknown', { correctAnswers: 0, totalQuestions: 2,
+            browseScore: { earned: null, possible: null, submittedAt: null } }, 1, 0, null, null]
+    ]) {
+        const examId = 'flat-reading';
+        recorder.activeSessions.set(examId, {
+            sessionId: id, startTime: endTime, lastActivity: endTime, progress: {}, answers: {},
+            metadata: { type: 'reading', category: 'P1', libraryConfigurationId: 'A' }
+        });
+        const saved = await recorder.handleSessionCompleted({
+            examId, sessionId: id, answers: { q1: 'A', q2: 'B' }, endTime, ...fields
+        });
+        const light = await app.practice.get(saved.id, { projection: 'light' });
+        assert.strictEqual(light.browseScore.earned, earned, `${id}: earned evidence`);
+        assert.strictEqual(light.browseScore.possible, possible, `${id}: denominator evidence`);
+        assert.strictEqual(light.browseScore.submittedAt, id === 'saved-unknown' ? null : Date.parse(endTime));
+        for (const field of ['status', 'graded', 'gradable']) {
+            if (Object.hasOwn(fields, field)) assert.strictEqual(light[field], fields[field], `${id}: ${field}`);
+        }
+        const result = sandbox.ReadingAnalytics.aggregate([light]);
+        assert.strictEqual(result.total.attempts, attempts, `${id}: eligible submissions`);
+        assert.strictEqual(result.total.scored, scored, `${id}: scored submissions`);
+        assert.strictEqual(result.total.accuracy, scored ? earned / possible : null, `${id}: accuracy`);
+    }
+    const combined = sandbox.ReadingAnalytics.aggregate(await app.practice.list({ projection: 'light' }));
+    assert.strictEqual(combined.total.attempts, 6);
+    assert.strictEqual(combined.total.scored, 3);
+    assert.strictEqual(combined.total.accuracy, 9.5 / 14);
+    assert.strictEqual(combined.questionTypes['multiple-choice'].accuracy, .5 / 2);
+
+    // Legacy records are projected without stamping today's launch provenance.
+    const child = { id: 'embedded', examId: 'legacy-p1', correctAnswers: 1, totalQuestions: 2 };
+    const legacyRecords = [{
+        id: 'legacy-suite', sessionId: 'legacy-suite-session', type: 'reading', suiteMode: true,
+        suiteEntries: [child], metadata: { suiteEntryCount: 2 }
+    }, {
+        ...child, id: 'standalone', type: 'reading', suiteSessionId: 'legacy-suite-session'
+    }];
+    const legacy = sandbox.ReadingAnalytics.aggregate(legacyRecords.map(record => app.practice.projectLight(record)));
+    assert.strictEqual(legacy.total.attempts, 1);
+    assert.strictEqual(legacy.total.earned, 1);
+    assert.strictEqual(legacy.total.possible, 2);
+    assert.strictEqual(legacy.total.distinctPassages, 0);
+    assert.strictEqual(legacy.coverage.missingSuiteChildren, 1);
+}
+
 async function run() {
+    await testCompletionEvidenceThroughLightAnalytics();
     await testLegacyBrowseGradingUpgrade();
     await testReadingModelUsesLiveVocabularyOwners();
     await testReadingCollectionPresenceMetadata();
@@ -2303,6 +2373,6 @@ async function run() {
     assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
     assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].metadata.libraryConfigurationId, 'launch-source');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 60 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 61 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

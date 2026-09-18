@@ -24,7 +24,7 @@ function createHarness() {
     const durableSessions = new Map();
     const durableWrites = [];
     const durableDiscards = [];
-    const controls = { saveActiveSession: null, discardActiveSession: null };
+    const controls = { saveActiveSession: null, discardActiveSession: null, activeLibraryId: null };
     const messages = [];
     const windowStub = {
         location: { protocol: 'http:', href: 'http://localhost/' },
@@ -50,6 +50,7 @@ function createHarness() {
         clearInterval,
         AppData: {
             ready: Promise.resolve(),
+            library: { async getActive() { return controls.activeLibraryId; } },
             recovery: {
                 windowSession: sessionStore,
                 async listActiveSessions() {
@@ -124,6 +125,63 @@ async function main() {
     assert.equal(await firstApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     assert.equal(sessionStore.peek('simulation').status, 'active');
     assert.equal(durableWrites.length, 1);
+
+    for (const savedSource of ['A', null]) {
+        const recovery = createHarness();
+        recovery.controls.activeLibraryId = savedSource;
+        const original = recovery.makeApp();
+        original.openExam = async () => ({ closed: false });
+        const savedSequence = recovery.sequence.map(entry => ({
+            ...entry, exam: { ...entry.exam, path: `${savedSource || 'builtin'}/${entry.examId}.html` }
+        }));
+        assert.equal(await original._launchSuiteSessionFromSequence(savedSequence), true);
+        const snapshot = structuredClone(recovery.sessionStore.peek('simulation'));
+        recovery.controls.activeLibraryId = 'B';
+        const restored = recovery.makeApp();
+        restored.initializeSuiteMode();
+        await restored._suiteRecoveryReady;
+        restored._fetchSuiteExamIndex = async () => recovery.sequence.map(entry => ({
+            ...entry.exam, category: 'P3', path: `B/${entry.examId}.html`, libraryConfigurationId: 'B'
+        }));
+        let openedDefinition = null;
+        restored.openExam = async (_id, options) => {
+            openedDefinition = options.examDefinition;
+            return { closed: false };
+        };
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), false, 'same IDs in another source must not resume');
+        assert.equal(openedDefinition, null);
+        assert.deepEqual(recovery.sessionStore.peek('simulation'), snapshot, 'source mismatch preserves the recovery snapshot');
+        assert.equal(recovery.durableDiscards.length, 0);
+        assert.equal(restored.currentSuiteSession.sequence[0].exam.path, savedSequence[0].exam.path);
+
+        recovery.controls.activeLibraryId = savedSource;
+        restored._fetchSuiteExamIndex = async () => savedSequence.map(entry => ({ ...entry.exam, category: 'P3' }));
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), true, 'switching back permits recovery');
+        assert.equal(openedDefinition.path, savedSequence[0].exam.path);
+        assert.equal(openedDefinition.category, 'P1');
+        const result = restored._normalizeSuiteResult(openedDefinition, { scoreInfo: { correct: 1, total: 2 } });
+        assert.equal(result.metadata.libraryConfigurationId, savedSource);
+        assert.equal(result.category, 'P1');
+    }
+
+    {
+        const recovery = createHarness();
+        recovery.controls.activeLibraryId = 'A';
+        const original = recovery.makeApp();
+        original.openExam = async () => ({ closed: false });
+        await original._launchSuiteSessionFromSequence(recovery.sequence);
+        const snapshot = structuredClone(recovery.sessionStore.peek('simulation'));
+        const restored = recovery.makeApp();
+        restored.initializeSuiteMode();
+        await restored._suiteRecoveryReady;
+        restored._fetchSuiteExamIndex = async () => {
+            recovery.controls.activeLibraryId = 'B';
+            return recovery.sequence.map(entry => entry.exam);
+        };
+        restored.openExam = async () => { throw new Error('must not open after a library switch during lookup'); };
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), false);
+        assert.deepEqual(recovery.sessionStore.peek('simulation'), snapshot);
+    }
 
     // Durable AppData is authoritative whenever it is available. A fast mirror
     // without a matching durable entity is cleared instead of being promoted.

@@ -185,17 +185,33 @@
                 const link = parentId(record);
                 const childSource = provenance(record);
                 return link && [parent.id, parent.sessionId].includes(link)
-                    && source.known && childSource.known && source.id === childSource.id;
+                    && !(source.known && childSource.known && source.id !== childSource.id);
             });
             linked.forEach(record => consumed.add(record));
             if (!eligible(parent) || type(parent) !== 'reading') continue;
             const entries = children(parent);
             // Exact parent linkage can recover passages when only standalone children survived.
-            for (const record of entries.concat(linked)) addObservation(record, parent);
+            // This linkage also identifies duplicate representations when passage
+            // provenance is unknown. Keep the saved child without enriching its identity.
+            const passages = entries.slice();
+            for (const record of linked) {
+                const recordSource = provenance(record, parent);
+                const recordExamId = record.examId || object(record.metadata).examId;
+                const duplicate = passages.some(entry => {
+                    const entrySource = provenance(entry, parent);
+                    if (recordSource.known && entrySource.known && recordSource.id !== entrySource.id) return false;
+                    const entryExamId = entry.examId || object(entry.metadata).examId;
+                    if (recordExamId && entryExamId) return String(recordExamId) === String(entryExamId);
+                    return [record.id, record.sessionId].filter(Boolean)
+                        .some(id => [entry.id, entry.sessionId].includes(id));
+                });
+                if (!duplicate) passages.push(record);
+            }
+            for (const record of passages) addObservation(record, parent);
             if (!matchesQuery(parent) || type(parent) !== 'reading') continue;
             const expected = number(object(parent.readingAnalytics).expectedPassages
                 ?? object(parent.metadata).suiteEntryCount);
-            const available = new Set(entries.concat(linked).map((record, index) => identity(record, parent) || `unknown-${index}`)).size;
+            const available = new Set(passages.map((record, index) => identity(record, parent) || `unknown-${index}`)).size;
             if (!entries.length && !linked.length) {
                 if (inWindow(parent)) {
                     coverage.suiteWithoutChildren += 1;

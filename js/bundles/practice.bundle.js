@@ -4515,6 +4515,11 @@ class PracticeRecorder {
             derivedExamId: payload.derivedExamId || payload.metadata?.derivedExamId || null,
             rawExamId: payload.examId || null,
             results: {
+                // Capture the raw submission before compatibility score defaults.
+                browseScore: this.captureScoreEvidence(payload),
+                status: payload.status || payload.metadata?.status,
+                graded: payload.graded,
+                gradable: payload.gradable,
                 score: toNumber(scoreInfo.score, correctAnswers),
                 totalQuestions,
                 correctAnswers,
