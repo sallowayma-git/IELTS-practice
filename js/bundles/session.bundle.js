@@ -626,7 +626,9 @@
                             window.showMessage && window.showMessage('请切回开始套题时使用的题库后继续，未完成套题仍会保留。', 'warning');
                             return false;
                         }
-                        currentExamIndex = await this._fetchSuiteExamIndex();
+                        // Bind the lookup itself to the checked source: active
+                        // library reads before/after loading cannot detect A -> B -> A.
+                        currentExamIndex = await this._fetchSuiteExamIndex({ libraryConfigurationId: activeSource });
                         // The library can change while the index is loading. Never
                         // replace saved definitions with content from another source.
                         if (await readActiveSource() !== activeSource) {
@@ -3239,8 +3241,10 @@
             return committed;
         },
 
-        async _fetchSuiteExamIndex() {
-            const list = await window.resolveActiveLibraryIndex();
+        async _fetchSuiteExamIndex(options = {}) {
+            const list = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? await window.LibraryManager.getInstance().resolveIndexForConfiguration(options.libraryConfigurationId)
+                : await window.resolveActiveLibraryIndex();
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 

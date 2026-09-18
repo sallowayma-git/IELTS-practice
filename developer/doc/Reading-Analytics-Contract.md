@@ -78,7 +78,9 @@ This contract applies to the Reading analytics panel on the practice-record page
 - New suite metadata is captured from the launched sequence and carried through
   recovery/finalization. When a saved suite identifies its source, resuming
   requires that library; a source mismatch retains the recovery snapshot until
-  the original library is selected.
+  the original library is selected. Recovery resolves exam definitions explicitly
+  for that checked source, so switching A -> B -> A during an asynchronous lookup
+  cannot replace A's saved content with B's definitions.
   Flat completion payloads retain raw scores and eligibility flags before
   compatibility display defaults, including genuine graded zeros.
   Historical fields unavailable in either summary or detail stay unknown;
