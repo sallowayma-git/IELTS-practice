@@ -31,6 +31,7 @@ E2E_CASES = [
     "browse_preference_toggle_flow.py",
     "browse_learning_state.py",
     "reading_analytics.py",
+    "reading_timing.py",
     "reading_single_flow.py",
     "reading_reader_isolation.py",
     "reading_reader_occurrences.py",

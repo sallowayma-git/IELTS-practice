@@ -964,6 +964,7 @@
             );
             return {
                 answers: this._cloneSuiteDraftPlainObject(answerSource),
+                readingTiming: this._cloneSuitePlainObject(draftSource.readingTiming || data.readingTiming || null),
                 highlights: highlightSource.slice(),
                 noteText: noteTextSource,
                 notes: this._cloneSuitePlainObject(notesSource),
@@ -1863,6 +1864,7 @@
                         examId: r.examId, title: r.title, category: r.category,
                         sessionId: r.sessionId, metadata: r.metadata, browseScore: r.browseScore,
                         questionTypePerformance: r.questionTypePerformance,
+                        readingTiming: r.readingTiming,
                         duration: r.duration, scoreInfo: r.scoreInfo,
                         answers: r.answers, answerComparison: r.answerComparison,
                         markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
@@ -3088,6 +3090,7 @@
                         metadata: entry.metadata,
                         browseScore: entry.browseScore,
                         questionTypePerformance: entry.questionTypePerformance,
+                        readingTiming: entry.readingTiming || draft?.readingTiming || null,
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
@@ -3744,6 +3747,7 @@
                     submittedAt: rawData?.endTime || rawData?.completedAt || null
                 },
                 questionTypePerformance: this._cloneSuitePlainObject(rawData?.questionTypePerformance || {}),
+                readingTiming: this._cloneSuitePlainObject(rawData?.readingTiming || null),
                 duration,
                 scoreInfo: {
                     correct,

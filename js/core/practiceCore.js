@@ -940,6 +940,7 @@
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
                 category: entry.category || (entry.metadata && entry.metadata.category) || '套题',
                 duration: ensureNumber(entry.duration, 0),
+                ...(entry.readingTiming ? { readingTiming: clonePlainObject(entry.readingTiming) } : {}),
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
                 correctAnswerMap: entryCorrectMap,
@@ -1134,6 +1135,7 @@
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
             questionTypePerformance: recordData.questionTypePerformance || {},
+            ...(recordData.readingTiming ? { readingTiming: clonePlainObject(recordData.readingTiming) } : {}),
             metadata,
             frequency: recordData.frequency || metadata.frequency || null,
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
@@ -1400,6 +1402,7 @@
             correctAnswerMap,
             answerComparison,
             questionTypePerformance: rawPayload.questionTypePerformance || {},
+            ...(rawPayload.readingTiming ? { readingTiming: clonePlainObject(rawPayload.readingTiming) } : {}),
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,

@@ -21,6 +21,7 @@
     const RECOVERY_KEYS = Object.freeze({
         activeSession: 'recovery.activeSessions',
         draft: 'recovery.drafts',
+        readingTiming: 'recovery.readingTiming',
         interrupted: 'recovery.interrupted',
         rejectedCompletion: 'recovery.rejectedCompletions'
     });
@@ -345,6 +346,7 @@
         ) || 0;
         const percentage = Number(entry.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0;
         return jsonValue({
+            ...readingTimingSummaryFields(entry),
             ...browseScoreFields(entry),
             readingAnalytics: readingAnalyticsFields(entry),
             id: entry.id || null,
@@ -382,6 +384,7 @@
             'practice light accuracy'
         ) || 0;
         return jsonValue({
+            ...readingTimingSummaryFields(source),
             ...browseScoreFields(source),
             readingAnalytics: readingAnalyticsFields(source),
             id: source.id,
@@ -527,7 +530,7 @@
         return first === undefined ? {} : clone(first);
     }
 
-    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics']);
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics', 'readingTimingSummary']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
 
     function withoutRawData(value) {
@@ -538,6 +541,12 @@
             if (key !== 'realData' && key !== 'rawData') clean[key] = withoutRawData(item);
         }
         return clean;
+    }
+
+    function readingTimingSummaryFields(source) {
+        const timing = global.ReadingTiming?.extract(source);
+        const summary = timing ? global.ReadingTiming.summary(timing) : source.readingTimingSummary;
+        return summary?.version === 1 ? { readingTimingSummary: clone(summary) } : {};
     }
 
     function splitPracticeRecord(input) {
@@ -552,7 +561,7 @@
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
                 for (const replayKey of [
-                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance', 'readingTiming',
                     'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
                     'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
                 ]) {
@@ -575,7 +584,7 @@
         }
         // Accept the old mirror only as an input normalization boundary; it is never persisted.
         const realData = asObject(source.realData); const rawData = asObject(source.rawData);
-        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance', 'readingTiming']) {
             if (!hasOwn(detail, key)) detail[key] = firstNonEmpty(source[key], realData[key], rawData[key]);
         }
         for (const key of ANNOTATION_FIELDS) {
@@ -965,8 +974,11 @@
             const recordInput = await practiceRecordWithLibraryProvenance(source, command);
             if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
             const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
-            const receipt = await retryMergeConflict(command || {}, async () => kernel.mutateEntities(
-                practiceUpserts(recordId, layers, await practiceLayersForUpsert(recordId)), mutation));
+            const receipt = await retryMergeConflict(command || {}, async () => {
+                const existing = await practiceLayersForUpsert(recordId);
+                return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
+                    { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+            });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
         async finalizeSuite(command) {
@@ -983,7 +995,8 @@
             const receipt = await retryMergeConflict(command, async () => {
                 const existing = await practiceLayersForUpsert(recordId);
                 const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
+                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
+                    { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
             });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
@@ -1236,8 +1249,109 @@
         }
         return results;
     }
+    function requireReadingTiming(value) {
+        const normalized = global.ReadingTiming?.normalize(value);
+        if (!normalized) throw new AppDataError('VALIDATION', 'Invalid Reading timing snapshot');
+        return normalized;
+    }
+    function validateTimingAdvance(before, next) {
+        if (next.unallocatedMs < before.unallocatedMs || next.units.length !== before.units.length
+            || next.parentAttemptId !== before.parentAttemptId || next.sequenceIndex !== before.sequenceIndex
+            || checksum(next.questionOrder) !== checksum(before.questionOrder)
+            || checksum(next.unsupportedQuestionIds) !== checksum(before.unsupportedQuestionIds)
+            || before.partialReasons.some(reason => !next.partialReasons.includes(reason))
+            || next.units.some((unit, i) => unit.id !== before.units[i].id
+                || checksum(unit.questionIds) !== checksum(before.units[i].questionIds)
+                || unit.durationMs < before.units[i].durationMs)) {
+            throw new AppDataError('VALIDATION', 'Reading timing totals, coverage or mapping regressed');
+        }
+    }
+    async function mutateReadingTiming(value, acquire, savedSnapshot = null) {
+        await ready;
+        const snapshot = requireReadingTiming(value);
+        const saved = savedSnapshot && requireReadingTiming(savedSnapshot);
+        if (saved && (saved.attemptId !== snapshot.attemptId || !global.ReadingTiming.sameSource(saved, snapshot))) {
+            throw new AppDataError('VALIDATION', 'Reading timing draft identity mismatch');
+        }
+        const key = RECOVERY_KEYS.readingTiming;
+        return enqueueRecoveryMutation(key, () => retryMergeConflict({}, async () => {
+            const current = await readCollectionMeta(key);
+            const index = current.items.findIndex(item => item.id === snapshot.attemptId);
+            const previous = index >= 0 ? current.items[index] : null;
+            if (previous?.recordId) throw new AppDataError('TIMING_FINALIZED', 'Reading timing is already submitted');
+            if (previous && !global.ReadingTiming.sameSource(previous.snapshot, snapshot)) {
+                throw new AppDataError('VALIDATION', 'Reading timing source mismatch');
+            }
+            let next = clone(snapshot);
+            if (acquire && previous) {
+                next = requireReadingTiming(previous.snapshot);
+                // A host draft can commit after the last periodic checkpoint.
+                // Only the current writer's newer cumulative snapshot may advance it.
+                if (saved?.writer === next.writer && saved.revision >= next.revision) {
+                    if (saved.revision === next.revision && checksum(saved) !== checksum(next)) {
+                        throw new AppDataError('VALIDATION', 'Conflicting Reading timing draft revision');
+                    }
+                    validateTimingAdvance(next, saved);
+                    next = clone(saved);
+                }
+                next.writer = snapshot.writer;
+                next.revision++;
+                if (!next.partialReasons.includes('recovery-tail')) next.partialReasons.push('recovery-tail');
+            } else if (!acquire) {
+                if (!previous || previous.snapshot.writer !== snapshot.writer) {
+                    throw new AppDataError('TIMING_STALE_WRITER', 'Reading timing writer has changed');
+                }
+                const before = requireReadingTiming(previous.snapshot);
+                if (snapshot.revision < before.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Stale Reading timing snapshot');
+                if (snapshot.revision === before.revision) {
+                    if (checksum(snapshot) !== checksum(before)) throw new AppDataError('VALIDATION', 'Conflicting Reading timing revision');
+                    return clone(previous);
+                }
+                validateTimingAdvance(before, snapshot);
+            }
+            const item = { id: next.attemptId, snapshot: next, updatedAt: nowIso(), recordId: null };
+            if (index >= 0) current.items[index] = item; else current.items.push(item);
+            await kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }],
+                { operationId: randomId('reading-timing') });
+            return clone(item);
+        }));
+    }
+    async function sealReadingTiming(record, recordId, existing = {}, consumedChildren = new Set()) {
+        const values = [record, ...asArray(record.suiteEntries)].map(value => global.ReadingTiming?.extract(value)).filter(Boolean);
+        // Record immutability outlives the recovery journal's retention period.
+        const savedValues = [existing, ...asArray(existing?.suiteEntries)].map(value => global.ReadingTiming?.extract(value)).filter(Boolean);
+        for (const saved of savedValues) {
+            if (!values.some(value => checksum(value) === checksum(saved))) {
+                throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+            }
+        }
+        if (!values.length) return [];
+        const key = RECOVERY_KEYS.readingTiming;
+        const current = await readCollectionMeta(key);
+        let changed = false;
+        for (const value of values) {
+            const item = current.items.find(entry => entry.id === value.attemptId);
+            // Imported/historical records have no live writer to seal.
+            if (!item) continue;
+            if (item.recordId === recordId) {
+                if (checksum(item.snapshot) !== checksum(value)) throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+                continue;
+            }
+            if ((item.recordId && !consumedChildren.has(item.recordId)) || item.snapshot.writer !== value.writer || !value.frozen
+                || checksum(item.snapshot) !== checksum(value)) {
+                throw new AppDataError('TIMING_STALE_WRITER', 'Submitted Reading timing does not match its saved writer');
+            }
+            item.recordId = recordId;
+            item.updatedAt = nowIso();
+            changed = true;
+        }
+        return changed ? [{ logicalKey: key, data: current.items, expectedRevision: current.revision }] : [];
+    }
     const recovery = Object.freeze({
         windowSession,
+        async acquireReadingTiming(value, savedSnapshot) { return mutateReadingTiming(value, true, savedSnapshot); },
+        async saveReadingTiming(value) { return mutateReadingTiming(value, false); },
+        async getReadingTiming(id) { return readRecovery('readingTiming', id); },
         async clear(options = {}) { return clearAllRecovery(options); },
         async listActiveSessions() { return readRecovery('activeSession'); },
         async getActiveSession(id) { return readRecovery('activeSession', id); },

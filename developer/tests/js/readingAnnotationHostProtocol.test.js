@@ -621,7 +621,40 @@ async function testSubmittedRecordAnnouncementRequiresCanonicalPersistence() {
     );
 }
 
+async function testInlineSuiteReloadKeepsWindowAndSuiteGuards() {
+    const harness = createHarness({ id: 'unused' });
+    const inits = [];
+    harness.app._sendExamInitEnvelope = async (examId, target, extras, registration) => {
+        if (extras.examId) inits.push({ examId, target, extras: clone(extras), registration });
+    };
+    const { examWindow, info, handler } = bindLiveProtocol(harness, 'p1');
+    info.suiteSessionId = 'suite-live';
+    info.suiteFlowMode = 'simulation';
+    harness.app.currentSuiteSession = {
+        id: 'suite-live', flowMode: 'simulation', activeExamId: 'p3', currentIndex: 2,
+        sequence: [{ examId: 'p1' }, { examId: 'p2' }, { examId: 'p3' }],
+        draftsByExam: { p1: { answers: { q1: 'A' } }, p3: { answers: { q1: 'B' } } },
+        suiteTimerRunning: false, suiteTimerPausedOffsetMs: 123, suiteTimerPausedAtMs: 1000
+    };
+    const payload = { examId: 'p3', suiteSessionId: 'suite-live' };
+    await send(handler, examWindow, payload, 'REQUEST_INIT', { origin: 'https://untrusted.invalid' });
+    await send(handler, examWindow, payload, 'REQUEST_INIT', { source: { ...examWindow } });
+    await send(handler, examWindow, { ...payload, suiteSessionId: 'another-suite' }, 'REQUEST_INIT');
+    await send(handler, examWindow, { ...payload, examId: 'outside-suite' }, 'REQUEST_INIT');
+    assert.strictEqual(inits.length, 0, 'reload cannot bypass window, origin or suite scope');
+    await send(handler, examWindow, payload, 'REQUEST_INIT');
+    assert.strictEqual(inits.length, 1);
+    assert.strictEqual(inits[0].examId, 'p1', 'retain the original registered window identity');
+    assert.strictEqual(inits[0].target, examWindow);
+    assert.strictEqual(inits[0].registration.windowInfo, info);
+    assert.strictEqual(inits[0].extras.examId, 'p3');
+    assert.strictEqual(inits[0].extras.suiteSequenceIndex, 2);
+    assert.deepStrictEqual(inits[0].extras.draftsByExam, harness.app.currentSuiteSession.draftsByExam);
+    assert.strictEqual(inits[0].extras.suiteTimerRunning, false);
+}
+
 async function main() {
+    await testInlineSuiteReloadKeepsWindowAndSuiteGuards();
     await testSingleRecordTokenGateAndMerge();
     await testSuiteEntryScopedMerge();
     await testAnnotationWritesAreSerialized();

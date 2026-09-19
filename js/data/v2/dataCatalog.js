@@ -88,6 +88,11 @@
             export: true, import: 'merge-by-id'
         },
         {
+            logicalKey: 'recovery.readingTiming', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'recovery.interrupted', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'
