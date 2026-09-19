@@ -283,6 +283,29 @@ async function main() {
             );
         });
 
+        await record('normalization preserves unknown scores and category before compatibility defaults', async () => {
+            const { recorder, state } = createHarness();
+            recorder.practiceTypeCache = new Map();
+            const normalizedUnknown = recorder.normalizeRecordForAppData({ id: 'unknown-evidence', examId: 'reading-p1', type: 'reading',
+                gradable: false, answers: { q1: 'A' }, metadata: { libraryConfigurationId: 'old-source' } },
+            [{ id: 'reading-p1', type: 'reading', category: 'P3' }]);
+            await recorder.savePracticeRecord(normalizedUnknown);
+            const saved = state.commands[0].record;
+            assert.strictEqual(saved.correctAnswers, 0, 'legacy display default remains compatible');
+            assert.strictEqual(saved.browseScore.earned, null);
+            assert.strictEqual(saved.browseScore.possible, null);
+            assert.strictEqual(saved.browseScore.submittedAt, null);
+            assert.strictEqual(saved.gradable, false);
+            assert.strictEqual(saved.metadata.category, '', 'the current index must not invent a historical category');
+            const partial = recorder.createRealPracticeRecord({ id: 'reading-p1', category: 'P1' }, {
+                scoreInfo: { correct: .5, total: 2 }, duration: 0, endTime: '2026-09-18T00:00:00Z'
+            });
+            assert.strictEqual(partial.browseScore.earned, .5);
+            assert.strictEqual(partial.browseScore.possible, 2);
+            const normalized = recorder.normalizeRecordForAppData({ ...partial, browseScore: { earned: null, possible: null } });
+            assert.strictEqual(normalized.browseScore.earned, null, 're-saving cannot promote display zeros into scores');
+        });
+
         await record('internal retries reuse one operation id', async () => {
             const { recorder, state } = createHarness();
             state.failCompleteAttempts = 1;

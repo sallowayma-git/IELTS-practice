@@ -613,7 +613,25 @@
                 let currentExamIndex = null;
                 if (session._restoredFromStorage === true && typeof this._fetchSuiteExamIndex === 'function') {
                     try {
-                        currentExamIndex = await this._fetchSuiteExamIndex();
+                        const readActiveSource = async () => window.AppData?.library?.getActive
+                            ? window.AppData.library.getActive() : null;
+                        const matchesSavedSource = source => sequence.every(entry =>
+                            !Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                            || entry.exam.libraryConfigurationId === source);
+                        const activeSource = await readActiveSource();
+                        if (!matchesSavedSource(activeSource)) {
+                            window.showMessage && window.showMessage('请切回开始套题时使用的题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
+                        // Bind the lookup itself to the checked source: active
+                        // library reads before/after loading cannot detect A -> B -> A.
+                        currentExamIndex = await this._fetchSuiteExamIndex({ libraryConfigurationId: activeSource });
+                        // The library can change while the index is loading. Never
+                        // replace saved definitions with content from another source.
+                        if (await readActiveSource() !== activeSource) {
+                            window.showMessage && window.showMessage('题库已切换，请切回原题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
                     } catch (validationError) {
                         console.warn('[SuitePractice] 无法验证恢复目标，保留快照供稍后重试:', validationError);
                         window.showMessage && window.showMessage('暂时无法读取当前题库，未完成套题仍会保留。', 'warning');
@@ -634,7 +652,12 @@
                         session.sequence = sequence.map((entry) => {
                             const indexed = byId.get(String(entry.examId));
                             return indexed
-                                ? { ...entry, exam: indexed, title: entry.title || indexed.title, category: entry.category || indexed.category }
+                                ? { ...entry, exam: {
+                                    ...indexed,
+                                    category: entry.category || entry.exam?.category || '',
+                                    ...(Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                                        ? { libraryConfigurationId: entry.exam.libraryConfigurationId } : {})
+                                }, title: entry.title || indexed.title, category: entry.category || entry.exam?.category || '' }
                                 : entry;
                         });
                     }
@@ -1838,6 +1861,8 @@
                         : true,
                     results: (session.results || []).map(r => ({
                         examId: r.examId, title: r.title, category: r.category,
+                        sessionId: r.sessionId, metadata: r.metadata, browseScore: r.browseScore,
+                        questionTypePerformance: r.questionTypePerformance,
                         duration: r.duration, scoreInfo: r.scoreInfo,
                         answers: r.answers, answerComparison: r.answerComparison,
                         markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
@@ -3059,6 +3084,10 @@
                         examId: entry.examId,
                         title: entry.title,
                         category: entry.category,
+                        sessionId: entry.sessionId,
+                        metadata: entry.metadata,
+                        browseScore: entry.browseScore,
+                        questionTypePerformance: entry.questionTypePerformance,
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
@@ -3150,6 +3179,8 @@
                         suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
                         suiteEntryCount: suiteEntries.length,
+                        ...(Object.prototype.hasOwnProperty.call(session.sequence?.[0]?.exam || {}, 'libraryConfigurationId')
+                            ? { libraryConfigurationId: session.sequence[0].exam.libraryConfigurationId } : {}),
                         startedAt: startTimeIso,
                         completedAt: endTimeIso
                     },
@@ -3207,8 +3238,10 @@
             return committed;
         },
 
-        async _fetchSuiteExamIndex() {
-            const list = await window.resolveActiveLibraryIndex();
+        async _fetchSuiteExamIndex(options = {}) {
+            const list = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? await window.LibraryManager.getInstance().resolveIndexForConfiguration(options.libraryConfigurationId)
+                : await window.resolveActiveLibraryIndex();
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
@@ -3509,8 +3542,15 @@
                     return false;
                 }
 
+                const launchLibraryId = window.AppData?.library?.getActive
+                    ? await window.AppData.library.getActive() : null;
                 const normalizedSequence = Array.isArray(sequence)
-                    ? sequence.filter(item => item && item.examId && item.exam)
+                    ? sequence.filter(item => item && item.examId && item.exam).map(item => ({
+                        ...item,
+                        exam: { ...item.exam, libraryConfigurationId:
+                            Object.prototype.hasOwnProperty.call(item.exam, 'libraryConfigurationId')
+                                ? item.exam.libraryConfigurationId : launchLibraryId }
+                    }))
                     : [];
                 if (!normalizedSequence.length) {
                     window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
@@ -3690,6 +3730,20 @@
                 examId: exam.id,
                 title: exam.title,
                 category: exam.category,
+                sessionId: rawData?.sessionId || null,
+                metadata: {
+                    libraryConfigurationId: Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')
+                        ? exam.libraryConfigurationId
+                        : (typeof this._readLaunchLibraryConfigurationId === 'function'
+                            ? this._readLaunchLibraryConfigurationId(exam.id, rawData) : null)
+                },
+                // Preserve original scoring evidence before compatibility display fallbacks.
+                browseScore: {
+                    earned: toNumber(score.correct, null),
+                    possible: toNumber(score.total, null),
+                    submittedAt: rawData?.endTime || rawData?.completedAt || null
+                },
+                questionTypePerformance: this._cloneSuitePlainObject(rawData?.questionTypePerformance || {}),
                 duration,
                 scoreInfo: {
                     correct,

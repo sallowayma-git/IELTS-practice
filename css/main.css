@@ -8409,6 +8409,49 @@ body.blue-dark-mode .practice-timer-field input[type="number"] {
     color: var(--surface-subtle);
 }
 
+/* Reading Analytics: score points, submissions and distinct passages have separate units. */
+.reading-analytics { min-width: 0; }
+.reading-analytics__range { display: flex; align-items: center; gap: .65rem; font-size: .875rem; }
+.reading-analytics__range select {
+    padding: .5rem .75rem;
+    border: 1px solid var(--border-color, #cbd5e1);
+    border-radius: .6rem;
+    background: var(--surface-card, #fff);
+    color: var(--text-primary, #172033);
+    font: inherit;
+}
+.reading-analytics__summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0;
+}
+.reading-analytics__summary > div {
+    border: 1px solid var(--border-color, #cbd5e1);
+    border-radius: .85rem;
+    padding: 1rem;
+}
+.reading-analytics__summary dt { font-size: .875rem; }
+.reading-analytics__summary dd { margin: .5rem 0; font-size: 1.4rem; font-weight: 700; }
+.reading-analytics__summary p,
+.reading-analytics__scope,
+.reading-analytics__coverage { font-size: .85rem; line-height: 1.7; color: var(--text-secondary, #475569); }
+.reading-analytics__summary p { margin: 0; }
+.reading-analytics__table-wrap { max-width: 100%; overflow-x: auto; margin-top: 1.25rem; }
+.reading-analytics table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.reading-analytics caption { text-align: left; font-weight: 650; margin-bottom: .5rem; }
+.reading-analytics th, .reading-analytics td {
+    text-align: left;
+    padding: .7rem .65rem;
+    border-bottom: 1px solid var(--border-color, #cbd5e1);
+    white-space: nowrap;
+}
+.reading-analytics__empty { padding: .5rem 0; }
+@media (max-width: 760px) {
+    .reading-analytics__summary { grid-template-columns: minmax(0, 1fr); }
+    .reading-analytics .hero-panel__header { flex-wrap: wrap; gap: .75rem; }
+}
+
 body.bloom-dark-mode .practice-settings-block__head h4,
 body.blue-dark-mode .practice-settings-block__head h4,
 body.bloom-dark-mode .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4,
@@ -8428,4 +8471,3 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
         grid-template-columns: minmax(0, 1fr);
     }
 }
-

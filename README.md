@@ -167,6 +167,7 @@ assets/generated/listening-exams/listening-index.compat.js
 - 练习热力图：按日期展示练习频率。
 - 中高频进度：展示重点题库或优先级题目的练习进度。
 - 阅读错题雷达：根据最近阅读记录统计错题题型分布。
+- 阅读专项统计：按总得分 / 总分展示题型与 P1/P2/P3 加权正确率，区分篇章提交次数和已识别的不同篇章数；支持全部历史及近 7/30/90 天，遵循记录类型和历史搜索范围。重复提交均计入，套题按子篇去重，缺失分母、题型、分类或来源时显示数据覆盖情况。详细口径见 [Reading Analytics contract](developer/doc/Reading-Analytics-Contract.md)。
 - 历史列表：按全部、阅读、听力等维度筛选记录。
 - 批量管理：支持选择多条记录并批量删除。
 - Markdown 导出：支持将练习历史导出为 Markdown 报告。

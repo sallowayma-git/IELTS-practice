@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const source = fs.readFileSync(path.join(repoRoot, 'js/app/suitePracticeMixin.js'), 'utf8');
+const libraryManagerSource = fs.readFileSync(path.join(repoRoot, 'js/services/libraryManager.js'), 'utf8');
 
 function createSessionStore() {
     const values = new Map();
@@ -24,7 +25,7 @@ function createHarness() {
     const durableSessions = new Map();
     const durableWrites = [];
     const durableDiscards = [];
-    const controls = { saveActiveSession: null, discardActiveSession: null };
+    const controls = { saveActiveSession: null, discardActiveSession: null, activeLibraryId: null };
     const messages = [];
     const windowStub = {
         location: { protocol: 'http:', href: 'http://localhost/' },
@@ -50,6 +51,7 @@ function createHarness() {
         clearInterval,
         AppData: {
             ready: Promise.resolve(),
+            library: { async getActive() { return controls.activeLibraryId; } },
             recovery: {
                 windowSession: sessionStore,
                 async listActiveSessions() {
@@ -85,7 +87,8 @@ function createHarness() {
     windowStub.AppData = sandbox.AppData;
     windowStub.ExamSystemAppMixins = {};
     sandbox.globalThis = windowStub;
-    vm.runInContext(source, vm.createContext(sandbox), { filename: 'js/app/suitePracticeMixin.js' });
+    const context = vm.createContext(sandbox);
+    vm.runInContext(source, context, { filename: 'js/app/suitePracticeMixin.js' });
     const mixin = windowStub.ExamSystemAppMixins.suitePractice;
     const sequence = ['p1', 'p2', 'p3'].map((examId, index) => ({
         examId,
@@ -104,7 +107,7 @@ function createHarness() {
         app.cleanupExamSession = async () => {};
         return app;
     };
-    return { sessionStore, durableSessions, durableWrites, durableDiscards, controls, messages, makeApp, sequence };
+    return { sessionStore, durableSessions, durableWrites, durableDiscards, controls, messages, makeApp, sequence, window: windowStub, context };
 }
 
 async function main() {
@@ -124,6 +127,146 @@ async function main() {
     assert.equal(await firstApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     assert.equal(sessionStore.peek('simulation').status, 'active');
     assert.equal(durableWrites.length, 1);
+
+    for (const savedSource of ['A', null]) {
+        const recovery = createHarness();
+        recovery.controls.activeLibraryId = savedSource;
+        const original = recovery.makeApp();
+        original.openExam = async () => ({ closed: false });
+        const savedSequence = recovery.sequence.map(entry => ({
+            ...entry, exam: { ...entry.exam, path: `${savedSource || 'builtin'}/${entry.examId}.html` }
+        }));
+        assert.equal(await original._launchSuiteSessionFromSequence(savedSequence), true);
+        const snapshot = structuredClone(recovery.sessionStore.peek('simulation'));
+        recovery.controls.activeLibraryId = 'B';
+        const restored = recovery.makeApp();
+        restored.initializeSuiteMode();
+        await restored._suiteRecoveryReady;
+        restored._fetchSuiteExamIndex = async () => recovery.sequence.map(entry => ({
+            ...entry.exam, category: 'P3', path: `B/${entry.examId}.html`, libraryConfigurationId: 'B'
+        }));
+        let openedDefinition = null;
+        restored.openExam = async (_id, options) => {
+            openedDefinition = options.examDefinition;
+            return { closed: false };
+        };
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), false, 'same IDs in another source must not resume');
+        assert.equal(openedDefinition, null);
+        assert.deepEqual(recovery.sessionStore.peek('simulation'), snapshot, 'source mismatch preserves the recovery snapshot');
+        assert.equal(recovery.durableDiscards.length, 0);
+        assert.equal(restored.currentSuiteSession.sequence[0].exam.path, savedSequence[0].exam.path);
+
+        recovery.controls.activeLibraryId = savedSource;
+        restored._fetchSuiteExamIndex = async () => savedSequence.map(entry => ({ ...entry.exam, category: 'P3' }));
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), true, 'switching back permits recovery');
+        assert.equal(openedDefinition.path, savedSequence[0].exam.path);
+        assert.equal(openedDefinition.category, 'P1');
+        const result = restored._normalizeSuiteResult(openedDefinition, { scoreInfo: { correct: 1, total: 2 } });
+        assert.equal(result.metadata.libraryConfigurationId, savedSource);
+        assert.equal(result.category, 'P1');
+    }
+
+    {
+        const recovery = createHarness();
+        recovery.controls.activeLibraryId = 'A';
+        const original = recovery.makeApp();
+        original.openExam = async () => ({ closed: false });
+        await original._launchSuiteSessionFromSequence(recovery.sequence);
+        const snapshot = structuredClone(recovery.sessionStore.peek('simulation'));
+        const restored = recovery.makeApp();
+        restored.initializeSuiteMode();
+        await restored._suiteRecoveryReady;
+        restored._fetchSuiteExamIndex = async () => {
+            recovery.controls.activeLibraryId = 'B';
+            return recovery.sequence.map(entry => entry.exam);
+        };
+        restored.openExam = async () => { throw new Error('must not open after a library switch during lookup'); };
+        assert.equal(await restored.resumeSuitePractice(snapshot.id), false);
+        assert.deepEqual(recovery.sessionStore.peek('simulation'), snapshot);
+    }
+
+    // Use the production LibraryManager and fetch helper: a second active-source
+    // read inside the resolver used to allow A -> B -> A to relabel B's content.
+    for (const savedSource of ['A', null]) {
+        for (const switchBack of [true, false]) {
+            const recovery = createHarness();
+            recovery.controls.activeLibraryId = savedSource;
+            const original = recovery.makeApp();
+            original.openExam = async () => ({ closed: false });
+            const savedSequence = recovery.sequence.map(entry => ({
+                ...entry, exam: { ...entry.exam, type: 'reading', path: `${savedSource || 'builtin'}/${entry.examId}.html` }
+            }));
+            assert.equal(await original._launchSuiteSessionFromSequence(savedSequence), true);
+            const snapshot = structuredClone(recovery.sessionStore.peek('simulation'));
+            const restored = recovery.makeApp();
+            restored.initializeSuiteMode();
+            await restored._suiteRecoveryReady;
+            const durableSnapshot = structuredClone(recovery.durableSessions.get(snapshot.id));
+            const writeCount = recovery.durableWrites.length;
+            const sourceReads = [];
+            let indexEntered;
+            let releaseIndex;
+            const indexEnteredPromise = new Promise(resolve => { indexEntered = resolve; });
+            const indexReleasePromise = new Promise(resolve => { releaseIndex = resolve; });
+            const waitForIndex = async source => {
+                sourceReads.push(source);
+                indexEntered();
+                await indexReleasePromise;
+            };
+            let firstActiveRead = true;
+            recovery.window.AppData.library.getActive = async () => {
+                const source = recovery.controls.activeLibraryId;
+                if (firstActiveRead) {
+                    firstActiveRead = false;
+                    recovery.controls.activeLibraryId = 'B';
+                }
+                return source;
+            };
+            recovery.window.AppData.library.getIndex = async source => {
+                await waitForIndex(source);
+                return recovery.sequence.map(entry => ({
+                    ...entry.exam, type: 'reading', category: 'P3', path: `${source}/${entry.examId}.html`
+                }));
+            };
+            recovery.window.ensureExamDataScripts = async () => waitForIndex(null);
+            recovery.window.getReadingExamIndex = () => savedSequence.map(entry => ({ ...entry.exam, category: 'P3' }));
+            vm.runInContext(libraryManagerSource, recovery.context, { filename: 'js/services/libraryManager.js' });
+            let openedDefinition = null;
+            restored.openExam = async (_id, options) => {
+                openedDefinition = options.examDefinition;
+                return { closed: false };
+            };
+
+            const resume = restored.resumeSuitePractice(snapshot.id);
+            await indexEnteredPromise;
+            assert.equal(recovery.controls.activeLibraryId, 'B', 'the library switches while recovery awaits its index');
+            if (switchBack) recovery.controls.activeLibraryId = savedSource;
+            releaseIndex();
+            assert.equal(await resume, switchBack);
+            if (switchBack) {
+                assert.equal(openedDefinition.path, savedSequence[0].exam.path, 'A -> B -> A must never load B content with A provenance');
+                assert.equal(openedDefinition.libraryConfigurationId, savedSource);
+                assert.equal(openedDefinition.category, 'P1');
+                for (const stored of [recovery.sessionStore.peek('simulation'), recovery.durableSessions.get(snapshot.id)]) {
+                    stored.sequence.forEach((entry, index) => {
+                        assert.equal(entry.exam.path, savedSequence[index].exam.path);
+                        assert.equal(entry.exam.libraryConfigurationId, savedSource);
+                        assert.equal(entry.category, savedSequence[index].category);
+                    });
+                }
+                const result = restored._normalizeSuiteResult(openedDefinition, { scoreInfo: { correct: 1, total: 2 } });
+                assert.equal(result.metadata.libraryConfigurationId, savedSource);
+                assert.equal(result.category, 'P1');
+            } else {
+                assert.equal(openedDefinition, null);
+                assert.deepEqual(recovery.sessionStore.peek('simulation'), snapshot);
+                assert.deepEqual(recovery.durableSessions.get(snapshot.id), durableSnapshot);
+                assert.equal(recovery.durableWrites.length, writeCount);
+                assert.equal(recovery.durableDiscards.length, 0);
+            }
+            assert.deepEqual(sourceReads, [savedSource], 'the index lookup must be bound to the captured source');
+        }
+    }
 
     // Durable AppData is authoritative whenever it is available. A fast mirror
     // without a matching durable entity is cleared instead of being promoted.
@@ -210,14 +353,19 @@ async function main() {
             const durable = Array.from(passageHarness.durableSessions.values())[0];
             assert.equal(durable.currentIndex, 1);
             assert.equal(durable.results[0].examId, 'p1');
+            assert.equal(durable.results[0].questionTypePerformance['multiple-choice'].correct, .5);
+            assert.equal(durable.results[0].metadata.libraryConfigurationId, 'suite-launch-source');
+            assert.equal(durable.results[0].browseScore.earned, .5);
             return { closed: false, name: 'passage-two' };
         };
+        passageHarness.sequence[0].exam.libraryConfigurationId = 'suite-launch-source';
         assert.equal(await passageApp._launchSuiteSessionFromSequence(passageHarness.sequence, { flowMode: 'simulation' }), true);
         const passageOutcome = await passageApp.handleSuitePracticeComplete('p1', {
             suiteSessionId: passageApp.currentSuiteSession.id,
             submissionId: 'passage-one-submit',
             duration: 10,
-            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            scoreInfo: { correct: .5, total: 1, accuracy: .5, percentage: 50 },
+            questionTypePerformance: { 'multiple-choice': { correct: .5, total: 1 } },
             answers: { q1: 'A' },
             answerComparison: {}
         }, firstPassageWindow);

@@ -3221,6 +3221,39 @@
         };
     }
 
+    // Additive, small analytics snapshot. Never derive a denominator from errors,
+    // answers or percentages, and never consult the currently selected library.
+    function readingAnalyticsFields(source) {
+        if (asObject(source.readingAnalytics).version === 1) return clone(source.readingAnalytics);
+        const metadata = asObject(source.metadata);
+        const raw = asObject(source.rawData);
+        const real = asObject(source.realData);
+        const number = (value) => (typeof value === 'number' || (typeof value === 'string' && value.trim()))
+            && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+        const performance = [source, real, raw, asObject(raw.realData)]
+            .map(item => asObject(item.questionTypePerformance))
+            .find(item => Object.keys(item).length) || {};
+        const questionTypes = Object.fromEntries(Object.entries(performance).map(([type, value]) => {
+            const metrics = asObject(value);
+            return [type, {
+                earned: number(metrics.correct ?? metrics.correctAnswers),
+                possible: number(metrics.total ?? metrics.totalQuestions)
+            }];
+        }));
+        const category = String(source.category || metadata.category || real.category || raw.category || '').trim().toUpperCase();
+        const suite = asObject(source.suite);
+        return {
+            version: 1,
+            category: ['P1', 'P2', 'P3'].includes(category) ? category : null,
+            questionTypes,
+            isSuite: Boolean(source.suiteMode || source.multiSuite || /-suite$/.test(source.type || '')
+                || Object.keys(suite).length || asArray(source.suiteEntries).length || asArray(source.suiteEntrySummaries).length
+                || metadata.suiteEntryCount || metadata.suiteCount),
+            expectedPassages: number(metadata.suiteEntryCount ?? suite.totalExams),
+            parentSessionId: source.suiteSessionId || metadata.suiteSessionId || null
+        };
+    }
+
     function lightSuiteEntry(source, fallbackType = null) {
         const entry = asObject(source);
         const rawData = asObject(entry.rawData);
@@ -3242,6 +3275,7 @@
         const percentage = Number(entry.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0;
         return jsonValue({
             ...browseScoreFields(entry),
+            readingAnalytics: readingAnalyticsFields(entry),
             id: entry.id || null,
             sessionId: entry.sessionId || null,
             examId: entry.examId || metadata.examId || null,
@@ -3278,6 +3312,7 @@
         ) || 0;
         return jsonValue({
             ...browseScoreFields(source),
+            readingAnalytics: readingAnalyticsFields(source),
             id: source.id,
             sessionId: source.sessionId,
             examId: source.examId || source.metadata.examId || null,
@@ -3335,7 +3370,7 @@
                 'dataSource', 'source', 'libraryConfigurationId'
             ].filter((field) => hasOwn(metadata, field)).map((field) => [field, clone(metadata[field])])),
             suite: source.suite == null ? null : clone(asObject(source.suite)),
-            suiteEntrySummaries: asArray(source.suiteEntries).map((entry) => lightSuiteEntry(
+            suiteEntrySummaries: asArray(hasOwn(source, 'suiteEntries') ? source.suiteEntries : source.suiteEntrySummaries).map((entry) => lightSuiteEntry(
                 entry,
                 String(source.type || '').replace(/-suite$/, '') || null
             ))
@@ -3349,7 +3384,9 @@
 
     function needsBrowseScoreUpgrade(summary) {
         return !hasOwn(summary, 'browseScore')
-            || asArray(summary.suiteEntrySummaries).some(entry => !hasOwn(entry, 'browseScore'));
+            || asObject(summary.readingAnalytics).version !== 1
+            || asArray(summary.suiteEntrySummaries).some(entry => !hasOwn(entry, 'browseScore')
+                || asObject(entry.readingAnalytics).version !== 1);
     }
 
     function legacyBrowseScoreFields(summary, detail) {
@@ -3383,9 +3420,11 @@
         if (!needsBrowseScoreUpgrade(summary)) return summary;
         const entries = asArray(asObject(detail).suiteEntries);
         return Object.assign({}, summary, legacyBrowseScoreFields(summary, detail), {
+            readingAnalytics: readingAnalyticsFields(Object.assign({}, summary, asObject(detail))),
             suiteEntrySummaries: entries.length
                 ? entries.map(entry => lightSuiteEntry(entry, String(summary.type || '').replace(/-suite$/, '')))
-                : asArray(summary.suiteEntrySummaries).map(entry => Object.assign({}, entry, legacyBrowseScoreFields(entry, null)))
+                : asArray(summary.suiteEntrySummaries).map(entry => Object.assign({}, entry,
+                    legacyBrowseScoreFields(entry, null), { readingAnalytics: readingAnalyticsFields(entry) }))
         });
     }
 
@@ -3417,7 +3456,7 @@
         return first === undefined ? {} : clone(first);
     }
 
-    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
 
     function withoutRawData(value) {
