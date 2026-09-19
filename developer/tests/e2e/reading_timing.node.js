@@ -38,6 +38,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 await new Promise(resolve => secureServer.listen(0, '127.0.0.1', resolve));
 let browser;
 const report = { status: 'running', cases: [], hosting: 'Isolated local HTTPS static hosting under /IELTS-practice/; no production deployment.' };
+const writeReport = () => fs.writeFileSync(path.join(reports, 'reading-timing-report.json'), JSON.stringify(report, null, 2));
 
 const snapshot = page => page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft().readingTiming);
 async function ready(page) {
@@ -166,6 +167,8 @@ try {
     ];
     for (const [mode, url] of modes) {
         if (process.env.READING_TIMING_MODE && process.env.READING_TIMING_MODE !== mode) continue;
+        report.activeMode = mode;
+        writeReport();
         console.log(`[${mode}] Reading timing acceptance`);
         const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1365, height: 1000 } });
         await context.addInitScript(() => { window.__IELTS_READING_PAGE_TEST_HOOKS__ = true; });
@@ -432,8 +435,10 @@ try {
             ownership: 'stale writer, duplicate snapshot/finalization and finalized takeover checked',
             background: 'controlled visibility/focus lifecycle in headless Chromium; not a native OS backgrounding test',
             browser: browser.version() });
+        writeReport();
         await context.close();
     }
+    delete report.activeMode;
     report.status = 'pass';
 } catch (error) {
     report.status = 'fail'; report.error = error.stack;
@@ -443,6 +448,6 @@ try {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));
     await new Promise(resolve => secureServer.close(resolve));
-    fs.writeFileSync(path.join(reports, 'reading-timing-report.json'), JSON.stringify(report, null, 2));
+    writeReport();
     console.log(JSON.stringify(report, null, 2));
 }

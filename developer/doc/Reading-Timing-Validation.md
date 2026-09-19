@@ -113,6 +113,13 @@ wall clock. Both defects failed this regression before their fixes.
 
 `developer/tests/e2e/reading_timing.py` runs the Node Playwright acceptance script.
 It is also registered with the existing E2E runner.
+Its three-mode run has a 360-second process budget; other runner cases retain
+their 180-second budgets and the CI unified step retains its 15-minute limit.
+CI on `b5016db3522b63f1951902599ab634fc05f7504a` passed the first two modes
+but reached the previous 180-second aggregate deadline during HTTPS. The runner
+now records each case's budget, and timing acceptance checkpoints its mode
+results so an interrupted run retains completed coverage. Individual state
+waits and timer-advancement assertions are unchanged.
 
 | Loading mode | Single passage | Inline suite |
 | --- | --- | --- |
