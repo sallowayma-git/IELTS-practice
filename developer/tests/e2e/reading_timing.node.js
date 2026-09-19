@@ -48,7 +48,7 @@ async function ready(page) {
     const close = page.locator('[data-library-action="close"]');
     if (await close.isVisible()) await close.click();
 }
-async function readingReady(page, { initialFailure = false, restored = false } = {}) {
+async function readingReady(page, { initialFailure = false, restored = false, beforeRetry = null } = {}) {
     page.on('dialog', dialog => { console.log('dialog:', dialog.message()); dialog.accept(); });
     await page.bringToFront();
     let failedWrites = 0;
@@ -59,6 +59,7 @@ async function readingReady(page, { initialFailure = false, restored = false } =
             failedWrites = await page.evaluate(() => window.__timingAcquisitionWrites);
             assert.ok(failedWrites >= 1);
             await page.locator('#reading-timing-status').evaluate(node => { node.open = true; });
+            await beforeRetry?.(page);
             await page.evaluate(() => { window.__timingAcquisitionBlocked = false; });
             await page.getByRole('button', { name: '重试计时保存', exact: true }).click();
         }
@@ -81,6 +82,26 @@ async function readingReady(page, { initialFailure = false, restored = false } =
         assert.ok((await snapshot(page)).partialReasons.includes(restored ? 'recovery-tail' : 'save-failed'));
         assert.match(await page.locator('[data-timing-save]').innerText(), /最近确认保存/);
     }
+}
+async function resumeBeforeRetry(page, requirePaused = false) {
+    const running = await page.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot().running);
+    if (requirePaused) assert.equal(running, false);
+    if (running) await page.locator('#timer').click();
+    await page.locator('#timer').click();
+    assert.equal(await page.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot().running), true);
+    assert.equal(await snapshot(page), null, 'timing remains unavailable while the learner resumes');
+}
+async function assertResumedTimingAdvances(page) {
+    const before = await snapshot(page);
+    const timerBefore = await page.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot());
+    assert.equal(before.paused, false);
+    assert.equal(timerBefore.running, true);
+    await page.waitForTimeout(2100);
+    const after = await snapshot(page);
+    const timerAfter = await page.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot());
+    assert.equal(timerAfter.running, true);
+    assert.ok(timerAfter.elapsedSeconds >= timerBefore.elapsedSeconds + 1);
+    assert.ok(after.totalMs > before.totalMs + 1000);
 }
 async function select(page, questionId) {
     await page.locator(`.q-item[data-question-id="${questionId}"]`).click();
@@ -245,7 +266,10 @@ try {
         assert.equal(restored.totalMs, paused.totalMs);
         assert.equal(restored.paused, true);
         assert.ok(restored.partialReasons.includes('recovery-tail'));
-        await reading.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerRunning(true));
+        await reading.reload();
+        await readingReady(reading, { initialFailure: true, restored: true, beforeRetry: resumeBeforeRetry });
+        assert.equal((await snapshot(reading)).attemptId, paused.attemptId);
+        await assertResumedTimingAdvances(reading);
         await select(reading, first);
         await reading.locator('#reading-timing-status').evaluate(node => { node.open = true; });
         await reading.evaluate(() => {
@@ -328,6 +352,13 @@ try {
         await readingReady(suite, { initialFailure: true, restored: true });
         assert.equal((await snapshot(suite)).attemptId, childIds[2]);
         assert.equal((await snapshot(suite)).paused, true);
+        await suite.reload();
+        await readingReady(suite, { initialFailure: true, restored: true, beforeRetry: page => resumeBeforeRetry(page, true) });
+        assert.equal((await snapshot(suite)).attemptId, childIds[2]);
+        const passageBefore = await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.checkpointActiveSuiteDuration());
+        await assertResumedTimingAdvances(suite);
+        const passageAfter = await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.checkpointActiveSuiteDuration());
+        assert.ok(passageAfter > passageBefore + 1000);
         await suite.locator('#submit-btn').click();
         const suiteRecord = await waitRecord(page, 'suite');
         assert.equal(suiteRecord.suiteEntries.length, 3);
@@ -354,7 +385,7 @@ try {
         assert.doesNotMatch(await page.locator('.reading-timing-record').innerText(), /已测总时长.*0 秒/);
         assert.equal(errors.length, 0, errors.join('\n'));
         report.cases.push({ mode, status: 'pass', singleTotalMs: frozen.totalMs, suiteTotalMs: totals.totalMs,
-            reviewRegressions: 'pool pointerdown before drop, cross-passage pause/resume/revisit, initial acquisition retry in single and suite practice',
+            reviewRegressions: 'pool pointerdown before drop, cross-passage pause/resume/revisit, initial acquisition retry, explicit resume before retry in restored single and suite practice',
             ownership: 'stale writer, duplicate snapshot/finalization and finalized takeover checked',
             background: 'controlled visibility/focus lifecycle in headless Chromium; not a native OS backgrounding test',
             browser: browser.version() });

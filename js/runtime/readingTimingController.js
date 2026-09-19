@@ -11,7 +11,7 @@
             this.writer = token();
             this.entries = new Map();
             this.loading = new Map();
-            this.initializedAttempts = new Set();
+            this.pauseRestorations = new Map();
             this.failedActivation = null;
             this.active = null;
             this.generation = 0;
@@ -87,20 +87,28 @@
             }
             const key = this.key(ctx);
             if (this.active?.key === key) { this.refresh(); return; }
+            const attemptKey = JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]);
+            if (!this.pauseRestorations.has(attemptKey)) {
+                this.pauseRestorations.set(attemptKey, { timerRevision: ctx.timerInteractionRevision ?? 0, handled: false });
+            }
+            const restoration = this.pauseRestorations.get(attemptKey);
             if (this.failedActivation?.key !== key) this.failedActivation = null;
             this.stop();
             this.active = null;
             const generation = ++this.generation;
             try {
                 const entry = await this.loadEntry(ctx, draft);
-                if (generation !== this.generation || this.key(this.context()) !== key || !this.context().editable) return;
+                const current = this.context();
+                if (generation !== this.generation || this.key(current) !== key || !current.editable) return;
                 this.active = entry;
-                // Restore pause once for the page's attempt. Inactive suite
-                // children retain old flags and must follow the live suite state.
-                const attemptKey = JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]);
-                if (!this.initializedAttempts.has(attemptKey)) {
-                    this.initializedAttempts.add(attemptKey);
-                    if (entry.meter.value.paused) ctx.restorePause?.();
+                // Retain the first activation's timer revision through failures,
+                // retries and repeated INITs. Later learner actions supersede the
+                // saved pause; inactive children also follow the live suite state.
+                if (!restoration.handled) {
+                    restoration.handled = true;
+                    if (entry.meter.value.paused && (current.timerInteractionRevision ?? 0) === restoration.timerRevision) {
+                        ctx.restorePause?.();
+                    }
                 }
                 this.failedActivation = null;
                 this.error = '';

@@ -188,6 +188,7 @@
 
     const interaction = {
         timerRunning: true,
+        timerInteractionRevision: 0,
         timerInterval: null,
         lastRange: null,
         currentHighlightNode: null,
@@ -206,6 +207,7 @@
             sequenceIndex: state.suite?.inline ? state.suite.currentIndex : state.simulationCtx?.currentIndex,
             examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
             dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
+            timerInteractionRevision: interaction.timerInteractionRevision,
             editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted
                 && state.submissionStatus === 'draft' && !state.suite.activating,
             restorePause: () => setTimerRunning(false)
@@ -600,7 +602,10 @@
         ensurePracticeTimerBridge();
         const timer = document.getElementById('timer');
         if (timer) {
-            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+            timer.addEventListener('click', event => {
+                if (event.isTrusted) interaction.timerInteractionRevision++;
+                setTimerRunning(!interaction.timerRunning);
+            });
         }
         if (!interaction.timerInterval) {
             interaction.timerInterval = global.setInterval(() => {

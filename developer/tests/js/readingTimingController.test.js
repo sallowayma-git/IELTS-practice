@@ -14,7 +14,7 @@ function harness(options = {}) {
     const acquisitions = [];
     const saves = [];
     const context = { sessionId: 'session-a', parentAttemptId: 'suite-a', sequenceIndex: 0,
-        examId: 'p1', libraryConfigurationId: null, editable: true, running: true,
+        examId: 'p1', libraryConfigurationId: null, editable: true, running: true, timerInteractionRevision: 0,
         dataset: { questionOrder: ['q1', 'q2'], questionGroups: [{ questionIds: ['q1', 'q2'] }] },
         restorePause() { pauseRestores++; context.running = false; } };
     const row = snapshot => ({ snapshot: plain(snapshot), updatedAt: new Date(10000 + clock).toISOString() });
@@ -42,6 +42,7 @@ function harness(options = {}) {
         get pauseRestores() { return pauseRestores; },
         advance(ms) { clock += ms; controller.refresh(); },
         setRunning(running) { context.running = running; controller.refresh(); },
+        interactTimer(running) { context.timerInteractionRevision++; context.running = running; controller.refresh(); },
         async move(examId, sequenceIndex, draft = null) {
             controller.stop();
             Object.assign(context, { examId, sequenceIndex });
@@ -95,11 +96,85 @@ test('restored pause applies once per attempt, including uncached inactive suite
 test('a different restored attempt can still restore its own pause', async () => {
     const h = harness();
     await h.controller.activate();
+    h.interactTimer(true);
     h.context.sessionId = 'session-b';
     h.context.parentAttemptId = 'suite-b';
     await h.controller.activate(h.draft());
     assert.equal(h.context.running, false);
     assert.equal(h.pauseRestores, 1);
+});
+
+test('an explicit resume survives repeated failed acquisition and a successful retry', async () => {
+    const h = harness({ acquire(_snapshot, _previous, count) {
+        if (count < 3) throw new Error('Storage temporarily full');
+    } });
+    h.context.running = false;
+    const draft = h.draft();
+    await h.controller.activate(draft);
+    h.interactTimer(true);
+    h.advance(2000);
+    await h.controller.retry();
+    assert.equal(h.controller.active, null);
+    await h.controller.retry();
+    assert.equal(h.context.running, true);
+    assert.equal(h.pauseRestores, 0);
+    assert.equal(h.controller.snapshot().attemptId, draft.readingTiming.attemptId);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs);
+    h.advance(2000);
+    assert.equal(h.controller.snapshot().paused, false);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs + 2000);
+});
+
+test('pending acquisition honors the latest timer action across repeated activation', async () => {
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const h = harness({ acquire: () => pending });
+    h.context.running = false;
+    const draft = h.draft();
+    const firstActivation = h.controller.activate(draft);
+    h.interactTimer(true);
+    const repeatedActivation = h.controller.activate(draft);
+    h.advance(2000);
+    release();
+    await Promise.all([firstActivation, repeatedActivation]);
+    assert.equal(h.acquisitions.length, 1);
+    assert.equal(h.context.running, true);
+    assert.equal(h.pauseRestores, 0);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs);
+    h.advance(1000);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs + 1000);
+});
+
+test('pause restoration still applies after pending acquisition without a new timer action', async () => {
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const h = harness({ acquire: () => pending });
+    const draft = h.draft();
+    const activation = h.controller.activate(draft);
+    h.advance(2000);
+    release();
+    await activation;
+    assert.equal(h.context.running, false);
+    assert.equal(h.pauseRestores, 1);
+    h.advance(2000);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs);
+});
+
+test('pause after a pending resume remains the latest explicit timer intent', async () => {
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const h = harness({ acquire: () => pending });
+    h.context.running = false;
+    const draft = h.draft();
+    const activation = h.controller.activate(draft);
+    h.interactTimer(true);
+    h.interactTimer(false);
+    release();
+    await activation;
+    assert.equal(h.context.running, false);
+    assert.equal(h.pauseRestores, 0);
+    h.advance(2000);
+    assert.equal(h.controller.snapshot().totalMs, draft.readingTiming.totalMs);
 });
 
 test('retry recovers initial acquisition with the original saved identity, groups and totals', async () => {

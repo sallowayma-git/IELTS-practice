@@ -41,7 +41,7 @@ outside the sequence cannot use this route.
 
 ## PR #189 review regressions
 
-The controller regression suite now covers the three review findings and their
+The controller regression suite now covers the review findings and their
 recovery boundaries:
 
 - Trusted pointer presses on `.drag-item`, `.draggable-word` and `.card` select
@@ -57,6 +57,12 @@ recovery boundaries:
   successful acquisition starts partial measurement without filling the failed
   interval. Retry after a later checkpoint failure still saves the existing
   entry. A retry cannot activate a different passage or a non-editable attempt.
+- A learner's explicit resume during failed or pending acquisition supersedes
+  the saved pause. The controller retains the timer interaction revision from
+  the attempt's first activation across retries and repeated activation calls.
+  Deferred-acquisition tests cover resume, resume followed by pause, and no new
+  timer action; the last case still restores the saved pause. A timer action in
+  one attempt does not prevent another attempt from restoring its own pause.
 
 The real-page acceptance script also exercises pool pointerdown from both
 unallocated time and another selected group, and uses timer/navigation clicks
@@ -68,6 +74,13 @@ duplicate initialization messages cannot mask the failure. Retry must acquire
 ownership, restore saved totals and pause state, and show a durable-save
 acknowledgement. These checks run in all three loading modes below, alongside
 the existing post-acquisition save-failure test.
+
+The follow-up browser case restores a paused inline suite with acquisition
+blocked, resumes through the timer, makes storage writable and clicks retry.
+Both the existing suite/passage timers and foreground timing must continue over
+the following two seconds. Single-passage practice also exercises an explicit
+resume before retry. The adjacent refresh case makes no new timer action and
+must remain paused, preserving the normal restoration behavior.
 
 ## Browser acceptance
 
@@ -112,7 +125,7 @@ maximum recovery loss under failed or delayed writes.
 | --- | --- |
 | `node scripts/build-bundles.mjs` | Pass; existing eight duplicate-symbol warnings remain |
 | `node scripts/build-bundles.mjs --check` | Pass; all 14 generated outputs current |
-| `node --test --test-concurrency=1 'developer/tests/js/**/*.test.js'` | 371 passed, zero failed |
+| `node --test --test-concurrency=1 'developer/tests/js/**/*.test.js'` | 375 passed, zero failed |
 | Focused timing, persistence, host protocol, AppData and DataKernel tests | Pass |
 | `python developer/tests/e2e/full_reset_flow.py` | Pass |
 | `python developer/tests/e2e/suite_practice_flow.py` | Pass |
