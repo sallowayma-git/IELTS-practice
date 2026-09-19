@@ -20190,6 +20190,11 @@
             syncPagePauseState(detail.running);
             readingTimingController?.refresh();
             readingTimingController?.save().catch(() => {});
+            if (state.simulationMode && state.simulationContextReady && state.suiteSessionId) {
+                // A reload requests the host's timer state. Publish pause/resume
+                // with its draft now instead of relying on an unload message.
+                syncSimulationDraftSnapshot('timer');
+            }
         });
     }
 

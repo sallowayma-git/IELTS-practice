@@ -53,6 +53,11 @@ async function readingReady(page, { initialFailure = false, restored = false, be
     await page.bringToFront();
     let failedWrites = 0;
     try {
+        await page.waitForFunction(() => {
+            const state = window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState();
+            return state?.sessionReadySent && !state.suiteActivating
+                && (!state.simulationMode || state.simulationContextReady);
+        });
         if (initialFailure) {
             await page.waitForFunction(() => document.querySelector('[data-timing-save]')?.textContent.includes('计时不可用'));
             assert.equal(await page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState().active || null), null);
@@ -90,6 +95,40 @@ async function resumeBeforeRetry(page, requirePaused = false) {
     await page.locator('#timer').click();
     assert.equal(await page.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot().running), true);
     assert.equal(await snapshot(page), null, 'timing remains unavailable while the learner resumes');
+}
+async function waitForSuiteTimerSync(host, suite, running) {
+    const state = await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState());
+    const timer = await suite.evaluate(() => window.__IELTS_PRACTICE_TIMER__.getSnapshot());
+    const timing = await snapshot(suite);
+    assert.equal(timer.running, running, 'the child timer must already have the expected state');
+    if (timing) assert.equal(timing.paused, !running);
+    const expected = { suiteId: state.suiteSessionId, examId: state.examId, timer, timing };
+    try {
+        // A child snapshot is not an acknowledgement from the host. Wait for
+        // both the live suite and its recovery mirror before crossing reload.
+        await host.waitForFunction(({ suiteId, examId, timer, timing }) => {
+            const session = window.app?.currentSuiteSession;
+            const mirror = window.AppData?.recovery.windowSession.get('simulation');
+            return [session, mirror].every(value => value?.id === suiteId
+                && value.activeExamId === examId
+                && value.suiteTimerRunning === timer.running
+                && (value.suiteTimerPausedAtMs || null) === timer.pausedAtMs
+                && value.suiteTimerPausedOffsetMs === timer.pausedOffsetMs
+                && (!timing || (value.draftsByExam?.[examId]?.readingTiming?.attemptId === timing.attemptId
+                    && value.draftsByExam[examId].readingTiming.paused === timing.paused
+                    && value.draftsByExam[examId].readingTiming.totalMs >= timing.totalMs)));
+        }, expected, { timeout: 10000 });
+    } catch (error) {
+        const observed = await host.evaluate(examId => {
+            const summarize = value => value && ({ id: value.id, activeExamId: value.activeExamId,
+                running: value.suiteTimerRunning, pausedAtMs: value.suiteTimerPausedAtMs,
+                pausedOffsetMs: value.suiteTimerPausedOffsetMs, timing: value.draftsByExam?.[examId]?.readingTiming });
+            return { host: summarize(window.app?.currentSuiteSession),
+                mirror: summarize(window.AppData?.recovery.windowSession.get('simulation')) };
+        }, state.examId);
+        report.suiteTimerSyncFailure = { expected, observed };
+        throw error;
+    }
 }
 async function assertResumedTimingAdvances(page) {
     const before = await snapshot(page);
@@ -346,14 +385,18 @@ try {
         assert.ok((await snapshot(suite)).totalMs > resumed.totalMs + 500);
         await suite.locator('#part-section-3 .part-nav-name').click();
         await suite.waitForFunction(id => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming?.attemptId === id, childIds[2]);
-        await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerRunning(false));
-        await suite.waitForTimeout(1700);
+        await suite.locator('#timer').click();
+        await waitForSuiteTimerSync(page, suite, false);
         await suite.reload();
         await readingReady(suite, { initialFailure: true, restored: true });
         assert.equal((await snapshot(suite)).attemptId, childIds[2]);
         assert.equal((await snapshot(suite)).paused, true);
+        await waitForSuiteTimerSync(page, suite, false);
         await suite.reload();
-        await readingReady(suite, { initialFailure: true, restored: true, beforeRetry: page => resumeBeforeRetry(page, true) });
+        await readingReady(suite, { initialFailure: true, restored: true, beforeRetry: async restoredSuite => {
+            await resumeBeforeRetry(restoredSuite, true);
+            await waitForSuiteTimerSync(page, restoredSuite, true);
+        } });
         assert.equal((await snapshot(suite)).attemptId, childIds[2]);
         const passageBefore = await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.checkpointActiveSuiteDuration());
         await assertResumedTimingAdvances(suite);
@@ -385,7 +428,7 @@ try {
         assert.doesNotMatch(await page.locator('.reading-timing-record').innerText(), /已测总时长.*0 秒/);
         assert.equal(errors.length, 0, errors.join('\n'));
         report.cases.push({ mode, status: 'pass', singleTotalMs: frozen.totalMs, suiteTotalMs: totals.totalMs,
-            reviewRegressions: 'pool pointerdown before drop, cross-passage pause/resume/revisit, initial acquisition retry, explicit resume before retry in restored single and suite practice',
+            reviewRegressions: 'pool pointerdown before drop, cross-passage pause/resume/revisit, initial acquisition retry, explicit resume before retry in restored single and suite practice, child/host/recovery timer convergence before both suite reloads and resume while acquisition is blocked',
             ownership: 'stale writer, duplicate snapshot/finalization and finalized takeover checked',
             background: 'controlled visibility/focus lifecycle in headless Chromium; not a native OS backgrounding test',
             browser: browser.version() });

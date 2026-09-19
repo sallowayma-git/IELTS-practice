@@ -82,6 +82,23 @@ the following two seconds. Single-passage practice also exercises an explicit
 resume before retry. The adjacent refresh case makes no new timer action and
 must remain paused, preserving the normal restoration behavior.
 
+The subsequent CI failure at `e8247b13d38a0e13d5e2c24e670c634fa07e32ab`
+exposed a missing synchronization boundary before the second suite reload.
+An added pre-reload check also reproduces the underlying stale host state:
+the child timer is stopped and its timing draft is paused, while the host and
+its recovery mirror still report a running timer after ten seconds. The old
+setup relied on an unload message to propagate that state.
+
+Suite timer changes now immediately publish the current timer and draft through
+the existing host protocol, including pause restoration and a resume made while
+timing acquisition is unavailable. The browser test waits for initialization
+to finish and verifies matching child, host and recovery-mirror state before
+each reload. These checks compare the suite/exam identity, running state, pause
+timestamp and offset, and available timing identity, pause state and totals.
+They replace the fixed pre-reload delay. The restored-paused assertion and the
+explicit-resume/time-advancement assertions remain strict. A failed convergence
+check retains all three observed states in `reading-timing-report.json`.
+
 ## Browser acceptance
 
 `developer/tests/e2e/reading_timing.py` runs the Node Playwright acceptance script.
