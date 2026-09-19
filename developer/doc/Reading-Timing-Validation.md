@@ -99,6 +99,16 @@ They replace the fixed pre-reload delay. The restored-paused assertion and the
 explicit-resume/time-advancement assertions remain strict. A failed convergence
 check retains all three observed states in `reading-timing-report.json`.
 
+The same convergence check also caught recovered timing missing from the host
+draft despite matching paused timers. Inline draft capture had updated the
+publication fingerprint before periodic synchronization compared it, suppressing
+new timing data. Only the publication path now advances that fingerprint, and
+local captures receive strictly increasing timestamps so same-millisecond
+updates survive the draft merge and host freshness fences. A deterministic
+regression verifies periodic publication when timing becomes available, retained
+deduplication of unchanged drafts, and publication of a local edit with a fixed
+wall clock. Both defects failed this regression before their fixes.
+
 ## Browser acceptance
 
 `developer/tests/e2e/reading_timing.py` runs the Node Playwright acceptance script.

@@ -1731,15 +1731,16 @@
             noteOutlines: collectNoteOutlines(),
             markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
-            updatedAt: Date.now()
+            // The host and mergeDraft reject equal timestamps. Preserve a new
+            // local capture even when acquisition and a timer event share a tick.
+            updatedAt: Math.max(Date.now(), (Number(slot.draft?.updatedAt) || 0) + 1)
         });
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
         checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
-        state.simulationDraftFingerprint = reason === 'activate'
-            ? state.simulationDraftFingerprint
-            : buildDraftFingerprint(draft);
+        // Local capture is not publication. The sync path owns the fingerprint
+        // so a later periodic sync can still deliver newly acquired timing.
         return draft;
     }
 
@@ -6657,6 +6658,7 @@
                 buildResultsFromAnswers,
                 collectAnswers,
                 collectCurrentDraft,
+                syncSimulationDraftSnapshot,
                 setTimerLockMode,
                 setReadOnlyMode,
                 applyAnswersToDom,
