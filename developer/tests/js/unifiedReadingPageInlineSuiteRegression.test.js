@@ -186,7 +186,7 @@ function loadHooks() {
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, document, windowSession, getCloseCount };
+    return { context, hooks, window, document, windowSession, getCloseCount };
 }
 
 function plain(value) {
@@ -393,6 +393,53 @@ async function testInlineReinitSnapshot() {
     const stored = windowSession.get('simulation-draft:suite-1:reading-p1');
     assert(stored, 'reinit snapshot must persist the window-session draft');
     assert.deepStrictEqual(plain(stored.draft.answers), { q1: 'A' }, 'persisted mirror must use the captured draft');
+}
+
+async function testInlineDraftPublication() {
+    const { context, hooks, window } = loadHooks();
+    let clock = 1000;
+    context.Date = class extends Date { static now() { return clock; } };
+    loadScript('js/services/readingTiming.js', context);
+    const messages = [];
+    const dataset = { meta: { title: 'P1' }, questionOrder: ['q1'], questionGroups: [] };
+    const slot = { examId: 'reading-p1', dataset,
+        draft: { answers: {}, updatedAt: 999 }, durationMs: 0 };
+    hooks.setTestState({
+        examId: 'reading-p1', sessionId: 'session-sync', suiteSessionId: 'suite-sync',
+        simulationMode: true, simulationContextReady: true, sessionReadySent: true,
+        parentWindow: { postMessage(message) { messages.push(plain(message)); } },
+        parentOrigin: 'http://localhost', dataset,
+        suite: { inline: true, activeExamId: 'reading-p1', currentIndex: 0,
+            sequence: [{ examId: 'reading-p1' }], slotsByExamId: new Map([['reading-p1', slot]]) }
+    });
+    hooks.syncSimulationDraftSnapshot('activate');
+    assert.strictEqual(messages.length, 1);
+    assert.strictEqual(messages[0].data.draft.readingTiming, null);
+
+    // Timing can become available after the initial acquisition failure without
+    // another edit or timer action. Its first periodic publication must not be
+    // mistaken for a draft already delivered to the host.
+    clock++;
+    slot.draft.readingTiming = new window.ReadingTiming.Meter(dataset, {
+        attemptId: 'timing-sync', examId: 'reading-p1', libraryConfigurationId: null, writer: 'writer'
+    }).snapshot();
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 2, 'new timing must reach the host on the next periodic sync');
+    assert.strictEqual(messages[1].data.draft.readingTiming.attemptId, 'timing-sync');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 2, 'unchanged drafts must still be deduplicated');
+
+    // Keep the wall clock fixed: a local capture followed by publication must
+    // retain the newer edit and pass the host's strict updatedAt fence.
+    window.scrollY = 321;
+    hooks.captureInlineSuiteDraftBeforeReinit('snapshot');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 3, 'a local capture must not mark a draft as published');
+    assert.strictEqual(messages[2].data.draft.scrollY, 321);
+    assert.ok(messages[2].data.draftUpdatedAt > messages[1].data.draftUpdatedAt,
+        'successive draft captures need increasing timestamps even in the same millisecond');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 3);
 }
 
 async function testWindowSessionMessageGuard() {
@@ -915,6 +962,7 @@ async function testSubmitAcknowledgementStateMachine() {
 }
 
 async function main() {
+    await testInlineDraftPublication();
     await testDraftArbitration();
     await testSuiteTimerModePrecedence();
     await testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRows();

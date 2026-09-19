@@ -16,6 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_PATH = REPORT_DIR / "e2e-unified-report.json"
 CASE_TIMEOUT_SECONDS = 180
+# Reading timing runs complete single/suite scenarios in three hosting modes.
+# Keep its combined budget bounded without changing other cases' deadlines.
+CASE_TIMEOUT_OVERRIDES = {"reading_timing.py": 360}
 PROCESS_CLEANUP_TIMEOUT_SECONDS = 5
 REPORT_REPLACE_ATTEMPTS = 10
 REPORT_REPLACE_RETRY_SECONDS = 0.1
@@ -31,6 +34,7 @@ E2E_CASES = [
     "browse_preference_toggle_flow.py",
     "browse_learning_state.py",
     "reading_analytics.py",
+    "reading_timing.py",
     "reading_single_flow.py",
     "reading_reader_isolation.py",
     "reading_reader_occurrences.py",
@@ -96,10 +100,12 @@ def _run_case(script_name: str) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     stdout_path = output_dir / f"{Path(script_name).stem}.stdout.log"
     stderr_path = output_dir / f"{Path(script_name).stem}.stderr.log"
+    timeout_seconds = CASE_TIMEOUT_OVERRIDES.get(script_name, CASE_TIMEOUT_SECONDS)
     result = {
         "name": script_name,
         "status": "fail",
         "exitCode": 1,
+        "timeoutSeconds": timeout_seconds,
         "startedAt": started_at.isoformat(),
         "stdoutPath": stdout_path.relative_to(REPO_ROOT).as_posix(),
         "stderrPath": stderr_path.relative_to(REPO_ROOT).as_posix(),
@@ -123,11 +129,11 @@ def _run_case(script_name: str) -> dict:
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
                 )
                 try:
-                    result["exitCode"] = process.wait(timeout=CASE_TIMEOUT_SECONDS)
+                    result["exitCode"] = process.wait(timeout=timeout_seconds)
                     result["status"] = "pass" if result["exitCode"] == 0 else "fail"
                 except subprocess.TimeoutExpired:
                     result["exitCode"] = 124
-                    result["detail"] = f"timeout after {CASE_TIMEOUT_SECONDS} seconds"
+                    result["detail"] = f"timeout after {timeout_seconds} seconds"
                     cleanup_errors = _terminate_process_tree(process)
                     if cleanup_errors:
                         result["cleanupErrors"] = cleanup_errors

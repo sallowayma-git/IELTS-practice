@@ -2545,6 +2545,14 @@
                     : '';
                 const permitsPreInitWithoutToken = type === 'REQUEST_INIT'
                     || (type === 'SESSION_READY' && data.initialized !== true);
+                // Inline navigation keeps one registered window while its URL
+                // changes to another suite passage. Reload must retain that
+                // registration, source/origin checks and suite identity.
+                const isInlineSuiteInitRequest = type === 'REQUEST_INIT'
+                    && sourceMatched && windowInfo.suiteFlowMode === 'simulation'
+                    && windowInfo.suiteSessionId === activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && isPayloadExamInActiveSuite;
                 if (!permitsPreInitWithoutToken && (
                     !expectedWindowSessionToken
                     || !payloadWindowSessionToken
@@ -2554,7 +2562,7 @@
                     return;
                 }
                 const canRoutePayloadExamInActiveSuite = Boolean(
-                    suiteRoutableMessageTypes.has(type)
+                    (suiteRoutableMessageTypes.has(type) || isInlineSuiteInitRequest)
                     && isPayloadExamInActiveSuite
                     && activeSuiteSessionId
                     && payloadSuiteSessionId
@@ -2743,7 +2751,7 @@
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_ACTIVE_EXAM_CHANGE'
                         || type === 'SIMULATION_SUBMIT'
-                        || type === 'SESSION_READY')
+                        || type === 'SESSION_READY' || isInlineSuiteInitRequest)
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
@@ -2880,7 +2888,19 @@
                         this.handleDataCollectionError(examId, data);
                         break;
                     case 'REQUEST_INIT':
-                        sendInitEnvelope(sourceWindow || examWindow);
+                        if (isInlineSuiteInitRequest) {
+                            const suite = this.currentSuiteSession;
+                            await this._sendExamInitEnvelope(examId, sourceWindow, {
+                                examId: routedExamId,
+                                suiteSequenceIndex: activeSuiteSequence.findIndex(entry => String(entry.examId) === routedExamId),
+                                draftsByExam: this._cloneReadingDraftValue(suite.draftsByExam || {}),
+                                suiteTimerRunning: suite.suiteTimerRunning !== false,
+                                suiteTimerPausedOffsetMs: suite.suiteTimerPausedOffsetMs || 0,
+                                suiteTimerPausedAtMs: suite.suiteTimerPausedAtMs || null
+                            }, expectedRegistration);
+                        } else {
+                            sendInitEnvelope(sourceWindow || examWindow);
+                        }
                         break;
                     case 'PRACTICE_RESET_REQUEST':
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow, expectedRegistration);
@@ -4253,6 +4273,7 @@
             const libraryConfigurationId = this._readLaunchLibraryConfigurationId(examId, windowInfo);
             return {
                 id: this._readingDraftId(examId, libraryConfigurationId),
+                readingTiming: this._cloneReadingDraftValue(source.readingTiming || null),
                 examId: String(examId),
                 libraryConfigurationId: libraryConfigurationId == null ? null : String(libraryConfigurationId),
                 sessionId,

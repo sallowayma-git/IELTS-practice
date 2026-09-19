@@ -188,6 +188,7 @@
 
     const interaction = {
         timerRunning: true,
+        timerInteractionRevision: 0,
         timerInterval: null,
         lastRange: null,
         currentHighlightNode: null,
@@ -199,6 +200,24 @@
     const testOverrides = {
         renderExplanations: null
     };
+    let readingTimingController = null;
+    function readingTimingContext() {
+        return {
+            sessionId: state.sessionId, parentAttemptId: state.suiteSessionId || null,
+            sequenceIndex: state.suite?.inline ? state.suite.currentIndex : state.simulationCtx?.currentIndex,
+            examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
+            dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
+            timerInteractionRevision: interaction.timerInteractionRevision,
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted
+                && state.submissionStatus === 'draft' && !state.suite.activating,
+            restorePause: () => setTimerRunning(false)
+        };
+    }
+    async function activateReadingTiming(draft = null) {
+        if (!global.ReadingTimingController) return;
+        if (!readingTimingController) readingTimingController = new global.ReadingTimingController(readingTimingContext);
+        await readingTimingController.activate(draft);
+    }
 
     function parseOptionalNumber(value) {
         if (value === null || value === undefined) {
@@ -393,6 +412,7 @@
 
     function setTimerLockMode(enabled) {
         const locked = Boolean(enabled);
+        if (locked) readingTimingController?.stop();
         state.timerLocked = locked;
         document.body.classList.toggle('timer-locked-mode', locked);
         getPracticeFormControls().forEach((control) => {
@@ -582,7 +602,10 @@
         ensurePracticeTimerBridge();
         const timer = document.getElementById('timer');
         if (timer) {
-            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+            timer.addEventListener('click', event => {
+                if (event.isTrusted) interaction.timerInteractionRevision++;
+                setTimerRunning(!interaction.timerRunning);
+            });
         }
         if (!interaction.timerInterval) {
             interaction.timerInterval = global.setInterval(() => {
@@ -1537,6 +1560,7 @@
     function cloneDraftRecord(draft) {
         const source = draft && typeof draft === 'object' ? draft : {};
         return {
+            readingTiming: global.ReadingTiming?.normalize(source.readingTiming) || null,
             answers: source.answers && typeof source.answers === 'object'
                 ? { ...source.answers }
                 : {},
@@ -1578,6 +1602,7 @@
             ? Number(next.updatedAt)
             : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now());
         const merged = Object.assign(buildEmptyDraft(), base, next, {
+            readingTiming: nextDraft?.readingTiming ? next.readingTiming : base.readingTiming,
             answers: next.answers && typeof next.answers === 'object'
                 ? { ...next.answers }
                 : { ...base.answers },
@@ -1698,6 +1723,7 @@
             return null;
         }
         const draft = mergeDraft(slot.draft, {
+            readingTiming: readingTimingController?.snapshot() || slot.draft?.readingTiming || null,
             answers: collectAnswers(),
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -1705,15 +1731,16 @@
             noteOutlines: collectNoteOutlines(),
             markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
-            updatedAt: Date.now()
+            // The host and mergeDraft reject equal timestamps. Preserve a new
+            // local capture even when acquisition and a timer event share a tick.
+            updatedAt: Math.max(Date.now(), (Number(slot.draft?.updatedAt) || 0) + 1)
         });
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
         checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
-        state.simulationDraftFingerprint = reason === 'activate'
-            ? state.simulationDraftFingerprint
-            : buildDraftFingerprint(draft);
+        // Local capture is not publication. The sync path owns the fingerprint
+        // so a later periodic sync can still deliver newly acquired timing.
         return draft;
     }
 
@@ -1899,6 +1926,7 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        readingTimingController?.stop();
         const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
         state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
@@ -1940,6 +1968,7 @@
         if (!options.skipDraftSync) {
             syncSimulationDraftSnapshot('activate');
         }
+        if (state.sessionReadySent) await activateReadingTiming(slot.draft);
         if (!options.silent) {
             postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
                 examId: targetExamId,
@@ -4083,6 +4112,7 @@
         if (targetPartKey === currentPartKey) {
             if (questionId) {
                 scrollToQuestion(questionId);
+                readingTimingController?.select(questionId);
             }
             return;
         }
@@ -4093,6 +4123,7 @@
                 activateSuiteSlot(targetExamId).then((activated) => {
                     if (activated && questionId) {
                         scrollToQuestion(questionId);
+                        readingTimingController?.select(questionId);
                     }
                 }).catch((error) => {
                     console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
@@ -6371,6 +6402,7 @@
     }
 
     function setReadOnlyMode(enabled, reason = '') {
+        if (enabled) readingTimingController?.stop();
         state.readOnly = Boolean(enabled);
         state.readOnlyReason = state.readOnly
             ? (reason || state.readOnlyReason || 'readonly')
@@ -6626,6 +6658,7 @@
                 buildResultsFromAnswers,
                 collectAnswers,
                 collectCurrentDraft,
+                syncSimulationDraftSnapshot,
                 setTimerLockMode,
                 setReadOnlyMode,
                 applyAnswersToDom,
@@ -6658,6 +6691,15 @@
                 stopSimulationDraftSync,
                 attachActionListeners,
                 syncPrimaryActionButtons,
+                getReadingTimingState() {
+                    return readingTimingController && {
+                        context: { ...readingTimingContext(), dataset: null },
+                        active: readingTimingController.active?.key,
+                        entries: [...readingTimingController.entries.keys()],
+                        loading: [...readingTimingController.loading.keys()],
+                        error: readingTimingController.error
+                    };
+                },
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -7504,6 +7546,7 @@
         const answers = collectAnswers();
         const updatedAt = Date.now();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             answers,
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -7712,6 +7755,7 @@
         const results = buildResults();
         const timerSnapshot = getPracticeTimerSnapshot();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
@@ -7789,6 +7833,7 @@
             Object.assign(aggregatedQuestionTypeMap, prefixSuiteMap(entry.examId, results.questionTypeMap || {}));
             mergeQuestionTypePerformance(aggregatedQuestionTypePerformance, results.questionTypePerformance || {});
             suiteEntries.push({
+                readingTiming: readingTimingController?.snapshot(entry.examId) || draft.readingTiming || null,
                 examId: entry.examId,
                 title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
                 category: slot.category || entry.category || slot.dataset?.meta?.category || '',
@@ -7909,6 +7954,7 @@
         const payload = {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
+                readingTiming: snapshot.readingTiming || null,
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
                 noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -7919,7 +7965,7 @@
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
             draftUpdatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
-            resultSnapshot: snapshot.results,
+            resultSnapshot: { ...snapshot.results, readingTiming: snapshot.readingTiming || null },
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
             noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -7943,9 +7989,21 @@
             handleExitClick();
             return;
         }
-        if (state.readOnly || state.submissionStatus !== 'draft') {
+        if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
             return;
         }
+        state.timingSubmitPending = true;
+        try {
+            const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
+                const slot = getSuiteSlot(entry.examId);
+                return { context: { ...readingTimingContext(), examId: entry.examId, sequenceIndex,
+                    dataset: slot?.dataset }, draft: slot?.draft };
+            }) : [];
+            await readingTimingController?.freezeAll(passages);
+        } catch (_) {
+            global.alert?.('计时保存失败，请展开“阅读前台关联时长”重试保存后再次提交。作答仍然保留。');
+            return;
+        } finally { state.timingSubmitPending = false; }
         const submissionSnapshot = state.suite?.inline
             ? buildInlineSuiteSubmissionSnapshot()
             : buildSubmissionSnapshot();
@@ -7964,6 +8022,7 @@
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         beginSubmission(messageType, Object.assign({
+            readingTiming: submissionSnapshot.readingTiming || null,
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
@@ -8272,6 +8331,7 @@
                 applyDraftToDom(singleDraft);
                 state.readingDraftFingerprint = buildDraftFingerprint(singleDraft);
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : singleDraft);
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
             refreshReadingDraftSyncLifecycle();
@@ -8442,6 +8502,7 @@
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);
                 persistSimulationDraftMirror(cloneDraftSafely(draft));
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : draft);
             refreshSimulationDraftSyncLifecycle();
             updateNavStatuses();
             return;
@@ -8525,6 +8586,13 @@
             syncActiveSuiteTimer(detail.running, Date.now());
             interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
+            readingTimingController?.refresh();
+            readingTimingController?.save().catch(() => {});
+            if (state.simulationMode && state.simulationContextReady && state.suiteSessionId) {
+                // A reload requests the host's timer state. Publish pause/resume
+                // with its draft now instead of relying on an unload message.
+                syncSimulationDraftSnapshot('timer');
+            }
         });
     }
 

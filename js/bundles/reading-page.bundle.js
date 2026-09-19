@@ -293,6 +293,11 @@
             export: true, import: 'merge-by-id'
         },
         {
+            logicalKey: 'recovery.readingTiming', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'recovery.interrupted', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'
@@ -1393,6 +1398,10 @@
         async mutateEntities(operations, options = {}) {
             this._assertReady(); if (!Array.isArray(operations) || !operations.length) throw validation('mutateEntities requires operations');
             const opId = operationId(options.operationId); const items = operations.map(normalizeEntityOperation); const seen = new Set();
+            // Optional document updates share the entity transaction (e.g. sealing a
+            // timing writer with its submitted record). Revision fences stay atomic.
+            const documents = options.documentChanges?.length
+                ? this._documentSpec(options.documentChanges, options).changes : [];
             for (const item of items) { const key = `${item.store}/${item.recordId || '*'}`; if (seen.has(key)) throw validation(`Duplicate entity operation: ${key}`); seen.add(key); }
             for (const store of ENTITY_STORES) {
                 const scoped = items.filter((item) => item.store === store);
@@ -1406,8 +1415,9 @@
                 operationId: opId,
                 warnings,
                 pending: [],
-                fingerprint: requestFingerprint(options, { operations: items, warnings }, warnings),
-                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store))))
+                fingerprint: requestFingerprint(options, { operations: items,
+                    ...(documents.length ? { documents: documents.map(({ entry, ...item }) => item) } : {}), warnings }, warnings),
+                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey)))))
             };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -1424,9 +1434,23 @@
                                 ? tx.objectStore(item.store).getAll()
                                 : tx.objectStore(item.store).get(item.recordId)
                         }));
-                        let remaining = reads.length;
+                        const documentReads = documents.map(change => ({ change,
+                            request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
+                        let remaining = reads.length + documentReads.length;
                         const finish = () => {
                             const revisions = {};
+                            for (const { change, request } of documentReads) {
+                                const current = request.result?.envelope || null;
+                                if (current && !validateEnvelope(change.entry, current)) throw corruption(`Invalid stored envelope: ${change.logicalKey}`);
+                                const revision = current ? Number(current.revision) : 0;
+                                if (change.expectedRevision !== null && change.expectedRevision !== revision) {
+                                    throw new AppDataError('CONFLICT', `Revision conflict for ${change.logicalKey}`);
+                                }
+                                const envelope = makeEnvelope(change.entry, change.data, { state: change.state,
+                                    revision: incrementCounter(revision, change.logicalKey), operationId: spec.operationId, normalized: true });
+                                tx.objectStore(storeFor(change.logicalKey)).put({ logicalKey: change.logicalKey, envelope: canonicalizeJson(envelope) });
+                                revisions[change.logicalKey] = envelope.revision;
+                            }
                             const affectedStores = new Set();
                             for (const read of reads) {
                                 const item = read.item;
@@ -1478,7 +1502,7 @@
                             putJournal(tx, journalRow, journal, spec, receipt);
                             done(receipt);
                         };
-                        for (const read of reads) {
+                        for (const read of reads.concat(documentReads)) {
                             read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
                             read.request.onsuccess = () => {
                                 remaining -= 1;
@@ -1487,7 +1511,8 @@
                         }
                     };
                 } }));
-                this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type })), receipt); return receipt;
+                this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type }))
+                    .concat(documents.map(change => ({ logicalKey: change.logicalKey }))), receipt); return receipt;
             } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
         }
         async exportSnapshot(options = {}) {
@@ -2926,6 +2951,238 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/services/readingTiming.js ===== */
+(function installReadingTiming(global) {
+    'use strict';
+    const clone = value => value == null ? null : JSON.parse(JSON.stringify(value));
+    const integer = value => Number.isSafeInteger(value) && value >= 0;
+    const text = value => typeof value === 'string' && value.trim().length > 0;
+    const sameSource = (a, b) => a?.examId === b?.examId
+        && Object.prototype.hasOwnProperty.call(a || {}, 'libraryConfigurationId')
+        && Object.prototype.hasOwnProperty.call(b || {}, 'libraryConfigurationId')
+        && a.libraryConfigurationId === b.libraryConfigurationId;
+
+    function normalize(value) {
+        if (!value || value.version !== 1 || value.measurement !== 'foreground-selection'
+            || !text(value.attemptId) || !text(value.examId) || !text(value.writer)
+            || !(value.libraryConfigurationId === null || text(value.libraryConfigurationId))
+            || !integer(value.revision) || !integer(value.unallocatedMs) || !integer(value.totalMs)
+            || (value.paused !== undefined && typeof value.paused !== 'boolean')
+            || (value.parentAttemptId != null && !text(value.parentAttemptId))
+            || (value.sequenceIndex != null && !integer(value.sequenceIndex))
+            || typeof value.frozen !== 'boolean' || !Array.isArray(value.units)
+            || !Array.isArray(value.questionOrder) || !Array.isArray(value.unsupportedQuestionIds)
+            || !Array.isArray(value.partialReasons) || !value.partialReasons.every(text)) return null;
+        const order = new Set(value.questionOrder);
+        if (!order.size || order.size !== value.questionOrder.length || !value.questionOrder.every(text)) return null;
+        const seen = new Set();
+        const ids = new Set();
+        let total = value.unallocatedMs;
+        for (const unit of value.units) {
+            if (!unit || !text(unit.id) || ids.has(unit.id) || !integer(unit.durationMs)
+                || !Array.isArray(unit.questionIds) || !unit.questionIds.length
+                || unit.kind !== (unit.questionIds.length === 1 ? 'question' : 'group')) return null;
+            ids.add(unit.id);
+            for (const q of unit.questionIds) {
+                if (!order.has(q) || seen.has(q)) return null;
+                seen.add(q);
+            }
+            total += unit.durationMs;
+        }
+        for (const q of value.unsupportedQuestionIds) {
+            if (!order.has(q) || seen.has(q)) return null;
+            seen.add(q);
+        }
+        if (seen.size !== order.size || !integer(total) || total !== value.totalMs
+            || (value.unsupportedQuestionIds.length && !value.partialReasons.includes('unsupported-mapping'))) return null;
+        return clone(value);
+    }
+
+    function mapping(dataset) {
+        const raw = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : [];
+        const order = [...new Set(raw.filter(text))];
+        const parent = new Map(order.map(q => [q, q]));
+        const unsupported = new Set(order.filter(q => raw.filter(v => v === q).length !== 1));
+        const root = q => parent.get(q) === q ? q : root(parent.get(q));
+        for (const group of Array.isArray(dataset?.questionGroups) ? dataset.questionGroups : []) {
+            const members = Array.isArray(group?.questionIds) ? group.questionIds : [];
+            if (!members.length) continue;
+            const known = members.filter(q => parent.has(q));
+            if (known.length !== members.length || new Set(members).size !== members.length) {
+                known.forEach(q => unsupported.add(q));
+                continue;
+            }
+            known.slice(1).forEach(q => parent.set(root(q), root(known[0])));
+        }
+        // An ambiguous member makes its entire overlapping authored group unsupported.
+        const badRoots = new Set([...unsupported].map(root));
+        const groups = new Map();
+        for (const q of order) {
+            if (badRoots.has(root(q))) { unsupported.add(q); continue; }
+            if (!groups.has(root(q))) groups.set(root(q), []);
+            groups.get(root(q)).push(q);
+        }
+        return {
+            questionOrder: order,
+            unsupportedQuestionIds: order.filter(q => unsupported.has(q)),
+            units: [...groups.values()].map(questionIds => ({
+                id: `unit:${JSON.stringify(questionIds)}`, questionIds,
+                kind: questionIds.length > 1 ? 'group' : 'question', durationMs: 0
+            }))
+        };
+    }
+
+    class Meter {
+        constructor(dataset, identity, saved = null) {
+            const previous = normalize(saved);
+            if (saved && (!previous || !sameSource(previous, identity) || previous.attemptId !== identity.attemptId
+                || (previous.parentAttemptId ?? null) !== (identity.parentAttemptId ?? null)
+                || (previous.sequenceIndex ?? null) !== (identity.sequenceIndex ?? null))) {
+                throw new Error('Invalid Reading timing identity or snapshot');
+            }
+            this.value = previous || {
+                version: 1, measurement: 'foreground-selection', ...clone(identity),
+                ...mapping(dataset), revision: 0, unallocatedMs: 0, totalMs: 0,
+                frozen: false, partialReasons: []
+            };
+            this.value.writer = identity.writer;
+            this.eligible = false;
+            this.active = null;
+            this.anchor = null;
+            if (this.value.unsupportedQuestionIds.length) this.partial('unsupported-mapping');
+        }
+        partial(reason) {
+            if (!this.value.partialReasons.includes(reason)) {
+                this.value.partialReasons.push(reason);
+                this.value.revision++;
+            }
+        }
+        tick(now) {
+            if (!Number.isFinite(now)) { this.partial('invalid-clock'); this.anchor = null; this.active = null; return; }
+            if (this.anchor !== null) {
+                const delta = now - this.anchor;
+                if (delta < 0 || delta > 5000) {
+                    if (this.eligible) this.partial(delta < 0 ? 'invalid-clock' : 'unobserved-gap');
+                    this.active = null;
+                } else if (this.eligible && !this.value.frozen && delta > 0) {
+                    const unit = this.value.units.find(item => item.id === this.active);
+                    if (unit) unit.durationMs += delta;
+                    else this.value.unallocatedMs += delta;
+                    this.value.revision++;
+                }
+            }
+            this.anchor = now;
+        }
+        eligibility(enabled, now) {
+            this.tick(now);
+            const next = Boolean(enabled && !this.value.frozen);
+            if (next !== this.eligible || !next) this.active = null;
+            this.eligible = next;
+        }
+        select(questionId, now) {
+            this.tick(now);
+            if (!this.eligible || this.value.frozen) return;
+            this.active = this.value.units.find(unit => unit.questionIds.includes(questionId))?.id || null;
+        }
+        freeze(now) {
+            this.eligibility(false, now);
+            if (!this.value.frozen) { this.value.frozen = true; this.value.revision++; }
+        }
+        thaw(now) {
+            this.anchor = now;
+            this.active = null;
+            if (this.value.frozen) { this.value.frozen = false; this.value.revision++; }
+        }
+        snapshot(now) {
+            if (now !== undefined) this.tick(now);
+            const value = clone(this.value);
+            value.unallocatedMs = Math.floor(value.unallocatedMs);
+            value.units.forEach(unit => { unit.durationMs = Math.floor(unit.durationMs); });
+            value.totalMs = value.unallocatedMs + value.units.reduce((sum, unit) => sum + unit.durationMs, 0);
+            return value;
+        }
+    }
+
+    function extract(record) {
+        for (const source of [record, record?.realData, record?.rawData]) {
+            if (source && Object.prototype.hasOwnProperty.call(source, 'readingTiming')) {
+                const value = normalize(source.readingTiming);
+                if (!value || (record.examId && record.examId !== value.examId)
+                    || (Object.prototype.hasOwnProperty.call(record.metadata || {}, 'libraryConfigurationId')
+                        && record.metadata.libraryConfigurationId !== value.libraryConfigurationId)) return null;
+                return value;
+            }
+        }
+        return null;
+    }
+
+    function summary(value) {
+        const timing = normalize(value);
+        if (!timing) return null;
+        const { version, measurement, attemptId, examId, libraryConfigurationId, parentAttemptId,
+            sequenceIndex, revision, totalMs, unallocatedMs, partialReasons } = timing;
+        return { version, measurement, attemptId, examId, libraryConfigurationId, parentAttemptId,
+            sequenceIndex, revision, totalMs, unallocatedMs, attributedMs: totalMs - unallocatedMs,
+            coverage: partialReasons.length ? 'partial' : 'complete', partialReasons };
+    }
+
+    function aggregate(entries) {
+        const unique = new Map();
+        const conflicted = new Set();
+        const fingerprint = value => JSON.stringify([value.writer, value.revision, value.parentAttemptId,
+            value.sequenceIndex, value.frozen, value.paused, value.totalMs, value.unallocatedMs,
+            value.questionOrder, value.unsupportedQuestionIds, value.partialReasons,
+            value.units.map(unit => [unit.id, unit.kind, unit.questionIds, unit.durationMs])]);
+        let unavailable = 0;
+        for (const entry of entries || []) {
+            const value = extract(entry);
+            if (!value) { unavailable++; continue; }
+            const key = JSON.stringify([value.libraryConfigurationId, value.examId, value.attemptId]);
+            if (conflicted.has(key)) continue;
+            const previous = unique.get(key);
+            if (previous && previous.revision === value.revision && fingerprint(previous) !== fingerprint(value)) {
+                unique.delete(key);
+                conflicted.add(key);
+                continue;
+            }
+            if (!previous || value.revision > previous.revision) unique.set(key, value);
+        }
+        unavailable += conflicted.size;
+        const values = [...unique.values()];
+        return { totalMs: values.reduce((n, value) => n + value.totalMs, 0),
+            unallocatedMs: values.reduce((n, value) => n + value.unallocatedMs, 0),
+            measuredChildren: values.length, unavailable,
+            partial: unavailable > 0 || values.some(value => value.partialReasons.length > 0) };
+    }
+
+    function format(ms) {
+        if (!integer(ms)) return '不可用';
+        if (ms > 0 && ms < 1000) return '不足 1 秒';
+        const seconds = Math.floor(ms / 1000);
+        return seconds >= 60 ? `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `${seconds} 秒`;
+    }
+    const help = '仅累计阅读页可见、窗口有焦点且练习运行时的前台时长。题目选择只表示时间关联，不代表注意力或思考时间；无操作时仍可能累计。操作文章或通用笔记会取消关联。后台、失焦、暂停、复盘及关闭页面的时间不计入。多题共用题组不拆分。每 5 秒及状态切换时请求保存，恢复可能丢失未保存尾段，超过 5 秒的未观测间隔会被舍弃。显示取整，合计使用原始毫秒。';
+    const escape = value => String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const label = unit => unit.questionIds.map(q => /^q/i.test(q) ? q.toUpperCase() : `Q${q}`).join('、');
+    function render(record) {
+        const suite = Array.isArray(record?.suiteEntries) && record.suiteEntries.length;
+        if (suite) {
+            const total = aggregate(record.suiteEntries);
+            const totals = total.measuredChildren
+                ? `已测总时长 ${format(total.totalMs)}；已关联 ${format(total.totalMs - total.unallocatedMs)}；未分配 ${format(total.unallocatedMs)}`
+                : '总时长不可用：无可靠计时数据';
+            return `<section class="reading-timing-record"><h4>阅读前台关联时长</h4><p>已计时篇章 ${total.measuredChildren}；不可用 ${total.unavailable}${total.partial ? ' · 部分计时' : ''}。${totals}。</p><p>${help}</p>${record.suiteEntries.map(entry => `<details><summary>${escape(entry.title || entry.examId || '篇章')}</summary>${render(entry)}</details>`).join('')}</section>`;
+        }
+        const value = extract(record);
+        if (!value) return '<section class="reading-timing-record"><h4>阅读前台关联时长</h4><p>不可用：无可靠计时数据。不会从整场用时估算分题时间。</p></section>';
+        return `<section class="reading-timing-record"><h4>阅读前台关联时长${value.partialReasons.length ? ' · 部分计时' : ''}</h4><p>${help}</p>${value.partialReasons.length ? '<p>仅展示已恢复或已观测的累计时间，未覆盖的时段不可用。</p>' : ''}<p>已测总时长：${format(value.totalMs)}；已关联：${format(value.totalMs - value.unallocatedMs)}；未分配前台时长：${format(value.unallocatedMs)}</p><table class="answer-table"><thead><tr><th>计时单位</th><th>关联前台时长</th></tr></thead><tbody>${value.units.map(unit => `<tr><td>${unit.kind === 'group' ? '题组' : '题目'} ${escape(label(unit))}${unit.kind === 'group' ? `<small>（${unit.questionIds.map(q => `${escape(q)} 计入本题组`).join('；')}）</small>` : ''}</td><td>${format(unit.durationMs)}</td></tr>`).join('')}${value.unsupportedQuestionIds.map(q => `<tr><td>${escape(q)}</td><td>不可用：无法可靠关联</td></tr>`).join('')}</tbody></table></section>`;
+    }
+
+    global.ReadingTiming = Object.freeze({ normalize, mapping, Meter, extract, summary, aggregate, sameSource, format, help, label });
+    global.ReadingTimingView = Object.freeze({ render });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/data/v2/appData.js ===== */
 (function installAppData(global) {
     'use strict';
@@ -2950,6 +3207,7 @@
     const RECOVERY_KEYS = Object.freeze({
         activeSession: 'recovery.activeSessions',
         draft: 'recovery.drafts',
+        readingTiming: 'recovery.readingTiming',
         interrupted: 'recovery.interrupted',
         rejectedCompletion: 'recovery.rejectedCompletions'
     });
@@ -3274,6 +3532,7 @@
         ) || 0;
         const percentage = Number(entry.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0;
         return jsonValue({
+            ...readingTimingSummaryFields(entry),
             ...browseScoreFields(entry),
             readingAnalytics: readingAnalyticsFields(entry),
             id: entry.id || null,
@@ -3311,6 +3570,7 @@
             'practice light accuracy'
         ) || 0;
         return jsonValue({
+            ...readingTimingSummaryFields(source),
             ...browseScoreFields(source),
             readingAnalytics: readingAnalyticsFields(source),
             id: source.id,
@@ -3456,7 +3716,7 @@
         return first === undefined ? {} : clone(first);
     }
 
-    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics']);
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics', 'readingTimingSummary']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
 
     function withoutRawData(value) {
@@ -3467,6 +3727,12 @@
             if (key !== 'realData' && key !== 'rawData') clean[key] = withoutRawData(item);
         }
         return clean;
+    }
+
+    function readingTimingSummaryFields(source) {
+        const timing = global.ReadingTiming?.extract(source);
+        const summary = timing ? global.ReadingTiming.summary(timing) : source.readingTimingSummary;
+        return summary?.version === 1 ? { readingTimingSummary: clone(summary) } : {};
     }
 
     function splitPracticeRecord(input) {
@@ -3481,7 +3747,7 @@
                 const next = Object.assign({}, asObject(entry));
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
                 for (const replayKey of [
-                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance',
+                    'answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance', 'readingTiming',
                     'startTime', 'startedAt', 'endTime', 'completedAt', 'timestamp', 'date',
                     'duration', 'durationSeconds', 'duration_seconds', 'elapsedSeconds', 'elapsed_seconds', 'timeSpent', 'time_spent'
                 ]) {
@@ -3504,7 +3770,7 @@
         }
         // Accept the old mirror only as an input normalization boundary; it is never persisted.
         const realData = asObject(source.realData); const rawData = asObject(source.rawData);
-        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance', 'readingTiming']) {
             if (!hasOwn(detail, key)) detail[key] = firstNonEmpty(source[key], realData[key], rawData[key]);
         }
         for (const key of ANNOTATION_FIELDS) {
@@ -3894,8 +4160,11 @@
             const recordInput = await practiceRecordWithLibraryProvenance(source, command);
             if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
             const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
-            const receipt = await retryMergeConflict(command || {}, async () => kernel.mutateEntities(
-                practiceUpserts(recordId, layers, await practiceLayersForUpsert(recordId)), mutation));
+            const receipt = await retryMergeConflict(command || {}, async () => {
+                const existing = await practiceLayersForUpsert(recordId);
+                return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
+                    { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+            });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
         async finalizeSuite(command) {
@@ -3912,7 +4181,8 @@
             const receipt = await retryMergeConflict(command, async () => {
                 const existing = await practiceLayersForUpsert(recordId);
                 const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
+                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
+                    { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
             });
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
@@ -4165,8 +4435,109 @@
         }
         return results;
     }
+    function requireReadingTiming(value) {
+        const normalized = global.ReadingTiming?.normalize(value);
+        if (!normalized) throw new AppDataError('VALIDATION', 'Invalid Reading timing snapshot');
+        return normalized;
+    }
+    function validateTimingAdvance(before, next) {
+        if (next.unallocatedMs < before.unallocatedMs || next.units.length !== before.units.length
+            || next.parentAttemptId !== before.parentAttemptId || next.sequenceIndex !== before.sequenceIndex
+            || checksum(next.questionOrder) !== checksum(before.questionOrder)
+            || checksum(next.unsupportedQuestionIds) !== checksum(before.unsupportedQuestionIds)
+            || before.partialReasons.some(reason => !next.partialReasons.includes(reason))
+            || next.units.some((unit, i) => unit.id !== before.units[i].id
+                || checksum(unit.questionIds) !== checksum(before.units[i].questionIds)
+                || unit.durationMs < before.units[i].durationMs)) {
+            throw new AppDataError('VALIDATION', 'Reading timing totals, coverage or mapping regressed');
+        }
+    }
+    async function mutateReadingTiming(value, acquire, savedSnapshot = null) {
+        await ready;
+        const snapshot = requireReadingTiming(value);
+        const saved = savedSnapshot && requireReadingTiming(savedSnapshot);
+        if (saved && (saved.attemptId !== snapshot.attemptId || !global.ReadingTiming.sameSource(saved, snapshot))) {
+            throw new AppDataError('VALIDATION', 'Reading timing draft identity mismatch');
+        }
+        const key = RECOVERY_KEYS.readingTiming;
+        return enqueueRecoveryMutation(key, () => retryMergeConflict({}, async () => {
+            const current = await readCollectionMeta(key);
+            const index = current.items.findIndex(item => item.id === snapshot.attemptId);
+            const previous = index >= 0 ? current.items[index] : null;
+            if (previous?.recordId) throw new AppDataError('TIMING_FINALIZED', 'Reading timing is already submitted');
+            if (previous && !global.ReadingTiming.sameSource(previous.snapshot, snapshot)) {
+                throw new AppDataError('VALIDATION', 'Reading timing source mismatch');
+            }
+            let next = clone(snapshot);
+            if (acquire && previous) {
+                next = requireReadingTiming(previous.snapshot);
+                // A host draft can commit after the last periodic checkpoint.
+                // Only the current writer's newer cumulative snapshot may advance it.
+                if (saved?.writer === next.writer && saved.revision >= next.revision) {
+                    if (saved.revision === next.revision && checksum(saved) !== checksum(next)) {
+                        throw new AppDataError('VALIDATION', 'Conflicting Reading timing draft revision');
+                    }
+                    validateTimingAdvance(next, saved);
+                    next = clone(saved);
+                }
+                next.writer = snapshot.writer;
+                next.revision++;
+                if (!next.partialReasons.includes('recovery-tail')) next.partialReasons.push('recovery-tail');
+            } else if (!acquire) {
+                if (!previous || previous.snapshot.writer !== snapshot.writer) {
+                    throw new AppDataError('TIMING_STALE_WRITER', 'Reading timing writer has changed');
+                }
+                const before = requireReadingTiming(previous.snapshot);
+                if (snapshot.revision < before.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Stale Reading timing snapshot');
+                if (snapshot.revision === before.revision) {
+                    if (checksum(snapshot) !== checksum(before)) throw new AppDataError('VALIDATION', 'Conflicting Reading timing revision');
+                    return clone(previous);
+                }
+                validateTimingAdvance(before, snapshot);
+            }
+            const item = { id: next.attemptId, snapshot: next, updatedAt: nowIso(), recordId: null };
+            if (index >= 0) current.items[index] = item; else current.items.push(item);
+            await kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }],
+                { operationId: randomId('reading-timing') });
+            return clone(item);
+        }));
+    }
+    async function sealReadingTiming(record, recordId, existing = {}, consumedChildren = new Set()) {
+        const values = [record, ...asArray(record.suiteEntries)].map(value => global.ReadingTiming?.extract(value)).filter(Boolean);
+        // Record immutability outlives the recovery journal's retention period.
+        const savedValues = [existing, ...asArray(existing?.suiteEntries)].map(value => global.ReadingTiming?.extract(value)).filter(Boolean);
+        for (const saved of savedValues) {
+            if (!values.some(value => checksum(value) === checksum(saved))) {
+                throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+            }
+        }
+        if (!values.length) return [];
+        const key = RECOVERY_KEYS.readingTiming;
+        const current = await readCollectionMeta(key);
+        let changed = false;
+        for (const value of values) {
+            const item = current.items.find(entry => entry.id === value.attemptId);
+            // Imported/historical records have no live writer to seal.
+            if (!item) continue;
+            if (item.recordId === recordId) {
+                if (checksum(item.snapshot) !== checksum(value)) throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+                continue;
+            }
+            if ((item.recordId && !consumedChildren.has(item.recordId)) || item.snapshot.writer !== value.writer || !value.frozen
+                || checksum(item.snapshot) !== checksum(value)) {
+                throw new AppDataError('TIMING_STALE_WRITER', 'Submitted Reading timing does not match its saved writer');
+            }
+            item.recordId = recordId;
+            item.updatedAt = nowIso();
+            changed = true;
+        }
+        return changed ? [{ logicalKey: key, data: current.items, expectedRevision: current.revision }] : [];
+    }
     const recovery = Object.freeze({
         windowSession,
+        async acquireReadingTiming(value, savedSnapshot) { return mutateReadingTiming(value, true, savedSnapshot); },
+        async saveReadingTiming(value) { return mutateReadingTiming(value, false); },
+        async getReadingTiming(id) { return readRecovery('readingTiming', id); },
         async clear(options = {}) { return clearAllRecovery(options); },
         async listActiveSessions() { return readRecovery('activeSession'); },
         async getActiveSession(id) { return readRecovery('activeSession', id); },
@@ -10959,6 +11330,277 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/runtime/readingTimingController.js ===== */
+(function installReadingTimingController(global) {
+    'use strict';
+    const timing = global.ReadingTiming;
+    if (!timing) return;
+    const now = () => global.performance.now();
+    const token = () => global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+    class Controller {
+        constructor(context) {
+            this.context = context;
+            this.writer = token();
+            this.entries = new Map();
+            this.loading = new Map();
+            this.pauseRestorations = new Map();
+            this.failedActivation = null;
+            this.active = null;
+            this.generation = 0;
+            this.error = '';
+            this.keyboardFocusAt = -Infinity;
+            this.attach();
+            this.interval = global.setInterval(() => {
+                this.refresh();
+                if (this.active && now() - this.active.savedClock >= 4500) this.save(this.active).catch(() => {});
+            }, 1000);
+        }
+        key(ctx) { return JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId, ctx.examId, ctx.sequenceIndex ?? null]); }
+        eligible() {
+            const ctx = this.context();
+            return Boolean(ctx.editable && ctx.running && document.visibilityState === 'visible'
+                && document.hasFocus() && this.active?.owned && this.active.key === this.key(ctx));
+        }
+        refresh() {
+            this.active?.meter.eligibility(this.eligible(), now());
+            if (this.active && !this.active.meter.value.frozen && this.active.meter.value.paused !== !this.context().running) {
+                this.active.meter.value.paused = !this.context().running;
+                this.active.meter.value.revision++;
+            }
+            this.render();
+        }
+        stop() {
+            if (this.active) {
+                this.active.meter.eligibility(false, now());
+                this.save(this.active).catch(() => {});
+            }
+            this.render();
+        }
+        async loadEntry(ctx, draft) {
+            const key = this.key(ctx);
+            const existing = this.entries.get(key);
+            if (existing) return existing;
+            if (!this.loading.has(key)) {
+                this.loading.set(key, this.createEntry(ctx, draft).finally(() => this.loading.delete(key)));
+            }
+            return this.loading.get(key);
+        }
+        async createEntry(ctx, draft) {
+            const key = this.key(ctx);
+            const previous = timing.normalize(draft?.readingTiming);
+            if (draft?.readingTiming && (!previous || !timing.sameSource(previous, ctx))) throw new Error('草稿计时与题库来源不一致');
+            const identity = { attemptId: previous?.attemptId || key, examId: ctx.examId,
+                libraryConfigurationId: ctx.libraryConfigurationId, writer: this.writer,
+                parentAttemptId: ctx.parentAttemptId || null, sequenceIndex: ctx.sequenceIndex ?? null };
+            const initial = new timing.Meter(ctx.dataset, identity, previous);
+            // Empty inline slots are created during rendering, even for a new
+            // attempt. Only a restored draft or prior learner work predates v1.
+            const legacyDraft = draft && (Number(draft.updatedAt) < global.performance.timeOrigin
+                || Object.keys(draft.answers || {}).length || draft.noteText
+                || draft.highlights?.length || draft.notes?.length || draft.markedQuestions?.length);
+            if (legacyDraft && !previous) initial.partial('legacy-start');
+            if (previous) initial.partial('recovery-tail');
+            if (this.failedActivation?.key === key) initial.partial('save-failed');
+            const row = await global.AppData.recovery.acquireReadingTiming(initial.snapshot(), previous);
+            const entry = { key, meter: new timing.Meter(ctx.dataset, identity, row.snapshot), owned: true,
+                savedAt: Date.parse(row.updatedAt), savedClock: now(), acknowledged: row.snapshot, pending: null, saving: null };
+            this.entries.set(key, entry);
+            return entry;
+        }
+        async activate(draft = null) {
+            const ctx = this.context();
+            if (!ctx.sessionId || !ctx.examId || !ctx.dataset || !ctx.editable
+                || !Object.prototype.hasOwnProperty.call(ctx, 'libraryConfigurationId')
+                || ctx.libraryConfigurationId === undefined) {
+                this.generation++;
+                this.failedActivation = null;
+                this.stop();
+                return;
+            }
+            const key = this.key(ctx);
+            if (this.active?.key === key) { this.refresh(); return; }
+            const attemptKey = JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]);
+            if (!this.pauseRestorations.has(attemptKey)) {
+                this.pauseRestorations.set(attemptKey, { timerRevision: ctx.timerInteractionRevision ?? 0, handled: false });
+            }
+            const restoration = this.pauseRestorations.get(attemptKey);
+            if (this.failedActivation?.key !== key) this.failedActivation = null;
+            this.stop();
+            this.active = null;
+            const generation = ++this.generation;
+            try {
+                const entry = await this.loadEntry(ctx, draft);
+                const current = this.context();
+                if (generation !== this.generation || this.key(current) !== key || !current.editable) return;
+                this.active = entry;
+                // Retain the first activation's timer revision through failures,
+                // retries and repeated INITs. Later learner actions supersede the
+                // saved pause; inactive children also follow the live suite state.
+                if (!restoration.handled) {
+                    restoration.handled = true;
+                    if (entry.meter.value.paused && (current.timerInteractionRevision ?? 0) === restoration.timerRevision) {
+                        ctx.restorePause?.();
+                    }
+                }
+                this.failedActivation = null;
+                this.error = '';
+                this.refresh();
+            } catch (error) {
+                if (generation !== this.generation || this.key(this.context()) !== key || !this.context().editable) return;
+                this.failedActivation = { key, draft };
+                this.error = error.code === 'TIMING_FINALIZED' ? '该次计时已经提交' : `计时不可用：${error.message}`;
+                this.render();
+            }
+        }
+        async retry() {
+            const ctx = this.context();
+            if (!ctx.editable) return;
+            const key = this.key(ctx);
+            if (this.active?.key === key) return this.save();
+            if (this.failedActivation?.key === key) return this.activate(this.failedActivation.draft);
+        }
+        snapshot(examId = null) {
+            const entry = examId
+                ? [...this.entries.values()].find(item => item.meter.value.examId === examId)
+                : (this.active?.key === this.key(this.context()) ? this.active : null);
+            return entry ? entry.meter.snapshot(now()) : null;
+        }
+        async save(entry = this.active) {
+            if (!entry?.owned) return;
+            const snapshot = entry.meter.snapshot(now());
+            if (entry.acknowledged?.revision === snapshot.revision && !entry.pending) return;
+            entry.pending = snapshot;
+            if (entry.saving) return entry.saving;
+            entry.saving = (async () => {
+                while (entry.pending) {
+                    const next = entry.pending;
+                    entry.pending = null;
+                    try {
+                        const row = await global.AppData.recovery.saveReadingTiming(next);
+                        entry.acknowledged = row.snapshot;
+                        entry.savedAt = Date.parse(row.updatedAt);
+                        entry.savedClock = now();
+                        if (entry === this.active) this.error = '';
+                    } catch (error) {
+                        entry.meter.partial('save-failed');
+                        if (['TIMING_STALE_WRITER', 'TIMING_FINALIZED'].includes(error.code)) {
+                            entry.owned = false;
+                            entry.meter.eligibility(false, now());
+                        }
+                        this.error = entry.owned ? '计时保存失败，未保存的尾段可能丢失；可重试保存。' : '计时已由另一窗口接管或提交。';
+                        throw error;
+                    } finally { this.render(); }
+                }
+            })().finally(() => { entry.saving = null; });
+            return entry.saving;
+        }
+        select(questionId) {
+            if (!this.active || !this.context().editable) return;
+            // A fresh learner action after a failed submission explicitly resumes
+            // answering. A retry without editing retains the same frozen snapshot.
+            if (this.active.meter.value.frozen) this.active.meter.thaw(now());
+            this.refresh();
+            this.active.meter.select(questionId, now());
+            this.save(this.active).catch(() => {});
+            this.render();
+        }
+        async freezeAll(passages = []) {
+            for (const entry of this.entries.values()) entry.meter.freeze(now());
+            // A restored inline suite may submit without revisiting its inactive
+            // children. Recover and seal their own committed totals as well.
+            for (const passage of passages) {
+                const entry = await this.loadEntry(passage.context, passage.draft);
+                entry.meter.freeze(now());
+            }
+            this.render();
+            await Promise.all([...this.entries.values()].map(entry => this.save(entry)));
+        }
+        attach() {
+            const gesture = event => {
+                if (event.isTrusted) this.keyboardFocusAt = event.type === 'keydown' && event.key === 'Tab' ? now() : -Infinity;
+            };
+            document.addEventListener('pointerdown', gesture, true);
+            document.addEventListener('keydown', gesture, true);
+            const select = event => {
+                if (!event.isTrusted || !this.active || !this.context().editable) return;
+                if (event.type === 'focusin' && now() - this.keyboardFocusAt > 150) return;
+                const target = event.target;
+                if (!target?.closest) return;
+                if (target.closest('#reading-note-editor, #reading-note-drawer')) { this.select(null); return; }
+                if (!target.closest('#question-groups, #left')) return;
+                const control = target.closest('input,select,textarea,.dropzone,.drop-zone,.match-dropzone,.paragraph-dropzone,.drop-target-summary')
+                    || target.closest('.drag-item,.draggable-word,.card')
+                    || target.closest('label')?.control;
+                if (!control) { if (target.closest('#left')) this.select(null); return; }
+                const name = control.getAttribute('name') || control.dataset.questionId || control.dataset.question || control.dataset.target || control.id || '';
+                const order = this.active.meter.value.questionOrder;
+                const question = order.find(q => q.replace(/^q/i, '') === name.replace(/^q/i, ''));
+                const group = control.closest('[data-question-ids]');
+                const members = (group?.dataset.questionIds || '').split(',').filter(Boolean);
+                this.select(question || (members.length ? members[0] : null));
+            };
+            for (const type of ['pointerdown', 'focusin', 'input', 'change', 'drop']) document.addEventListener(type, select, true);
+            global.addEventListener('blur', () => this.stop());
+            global.addEventListener('focus', () => this.refresh());
+            document.addEventListener('visibilitychange', () => document.hidden ? this.stop() : this.refresh());
+            global.addEventListener('pagehide', () => this.stop());
+            global.addEventListener('beforeunload', () => this.stop());
+            document.addEventListener('freeze', () => this.stop());
+            global.addEventListener('pageshow', async event => {
+                if (event.persisted && this.active) {
+                    const row = await global.AppData.recovery.getReadingTiming(this.active.meter.value.attemptId).catch(() => null);
+                    if (!row || row.recordId || row.snapshot.writer !== this.writer) this.active.owned = false;
+                }
+                this.refresh();
+            });
+        }
+        render() {
+            const parent = document.getElementById('right');
+            if (!parent) return;
+            let panel = document.getElementById('reading-timing-status');
+            if (!panel) {
+                panel = document.createElement('details');
+                panel.id = 'reading-timing-status';
+                panel.style.cssText = 'margin:8px 12px;padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;font-size:12px;line-height:1.6;';
+                const title = document.createElement('summary');
+                title.dataset.timingLabel = '';
+                panel.appendChild(title);
+                const help = document.createElement('p');
+                help.textContent = timing.help;
+                panel.appendChild(help);
+                const status = document.createElement('p');
+                status.dataset.timingSave = '';
+                status.setAttribute('role', 'status');
+                panel.appendChild(status);
+                const clear = document.createElement('button');
+                clear.type = 'button'; clear.textContent = '切换为未分配前台时长';
+                clear.style.cssText = 'padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;margin-right:8px;';
+                clear.addEventListener('click', () => this.select(null));
+                panel.appendChild(clear);
+                const retry = document.createElement('button');
+                retry.type = 'button'; retry.textContent = '重试计时保存';
+                retry.style.cssText = 'padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;';
+                retry.addEventListener('click', () => this.retry().catch(() => {}));
+                panel.appendChild(retry);
+                parent.prepend(panel);
+            }
+            const meter = this.active?.meter;
+            const value = meter?.snapshot();
+            const unit = value?.units.find(item => item.id === meter.active);
+            const association = unit ? `${unit.kind === 'group' ? '题组' : '题目'} ${timing.label(unit)}` : '未分配前台时长';
+            panel.querySelector('[data-timing-label]').textContent = !value ? '阅读前台关联时长：不可用'
+                : `${meter.eligible ? `${association} · ${timing.format(unit?.durationMs ?? value.unallocatedMs)}`
+                    : `计时停止 · 已测总时长 ${timing.format(value.totalMs)}`}${value.partialReasons.length ? ' · 部分计时' : ''}`;
+            panel.querySelector('[data-timing-save]').textContent = this.error || (this.active?.savedAt
+                ? `最近确认保存：${new Date(this.active.savedAt).toLocaleTimeString()}；已测总时长 ${timing.format(value.totalMs)}`
+                : '等待练习初始化；尚无可靠计时数据。');
+        }
+    }
+    global.ReadingTimingController = Controller;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/runtime/unifiedReadingPage.js ===== */
 (function initUnifiedReadingPage(global) {
     'use strict';
@@ -11150,6 +11792,7 @@
 
     const interaction = {
         timerRunning: true,
+        timerInteractionRevision: 0,
         timerInterval: null,
         lastRange: null,
         currentHighlightNode: null,
@@ -11161,6 +11804,24 @@
     const testOverrides = {
         renderExplanations: null
     };
+    let readingTimingController = null;
+    function readingTimingContext() {
+        return {
+            sessionId: state.sessionId, parentAttemptId: state.suiteSessionId || null,
+            sequenceIndex: state.suite?.inline ? state.suite.currentIndex : state.simulationCtx?.currentIndex,
+            examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
+            dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
+            timerInteractionRevision: interaction.timerInteractionRevision,
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted
+                && state.submissionStatus === 'draft' && !state.suite.activating,
+            restorePause: () => setTimerRunning(false)
+        };
+    }
+    async function activateReadingTiming(draft = null) {
+        if (!global.ReadingTimingController) return;
+        if (!readingTimingController) readingTimingController = new global.ReadingTimingController(readingTimingContext);
+        await readingTimingController.activate(draft);
+    }
 
     function parseOptionalNumber(value) {
         if (value === null || value === undefined) {
@@ -11355,6 +12016,7 @@
 
     function setTimerLockMode(enabled) {
         const locked = Boolean(enabled);
+        if (locked) readingTimingController?.stop();
         state.timerLocked = locked;
         document.body.classList.toggle('timer-locked-mode', locked);
         getPracticeFormControls().forEach((control) => {
@@ -11544,7 +12206,10 @@
         ensurePracticeTimerBridge();
         const timer = document.getElementById('timer');
         if (timer) {
-            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+            timer.addEventListener('click', event => {
+                if (event.isTrusted) interaction.timerInteractionRevision++;
+                setTimerRunning(!interaction.timerRunning);
+            });
         }
         if (!interaction.timerInterval) {
             interaction.timerInterval = global.setInterval(() => {
@@ -12499,6 +13164,7 @@
     function cloneDraftRecord(draft) {
         const source = draft && typeof draft === 'object' ? draft : {};
         return {
+            readingTiming: global.ReadingTiming?.normalize(source.readingTiming) || null,
             answers: source.answers && typeof source.answers === 'object'
                 ? { ...source.answers }
                 : {},
@@ -12540,6 +13206,7 @@
             ? Number(next.updatedAt)
             : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now());
         const merged = Object.assign(buildEmptyDraft(), base, next, {
+            readingTiming: nextDraft?.readingTiming ? next.readingTiming : base.readingTiming,
             answers: next.answers && typeof next.answers === 'object'
                 ? { ...next.answers }
                 : { ...base.answers },
@@ -12660,6 +13327,7 @@
             return null;
         }
         const draft = mergeDraft(slot.draft, {
+            readingTiming: readingTimingController?.snapshot() || slot.draft?.readingTiming || null,
             answers: collectAnswers(),
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -12667,15 +13335,16 @@
             noteOutlines: collectNoteOutlines(),
             markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
-            updatedAt: Date.now()
+            // The host and mergeDraft reject equal timestamps. Preserve a new
+            // local capture even when acquisition and a timer event share a tick.
+            updatedAt: Math.max(Date.now(), (Number(slot.draft?.updatedAt) || 0) + 1)
         });
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
         checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
-        state.simulationDraftFingerprint = reason === 'activate'
-            ? state.simulationDraftFingerprint
-            : buildDraftFingerprint(draft);
+        // Local capture is not publication. The sync path owns the fingerprint
+        // so a later periodic sync can still deliver newly acquired timing.
         return draft;
     }
 
@@ -12861,6 +13530,7 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        readingTimingController?.stop();
         const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
         state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
@@ -12902,6 +13572,7 @@
         if (!options.skipDraftSync) {
             syncSimulationDraftSnapshot('activate');
         }
+        if (state.sessionReadySent) await activateReadingTiming(slot.draft);
         if (!options.silent) {
             postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
                 examId: targetExamId,
@@ -15045,6 +15716,7 @@
         if (targetPartKey === currentPartKey) {
             if (questionId) {
                 scrollToQuestion(questionId);
+                readingTimingController?.select(questionId);
             }
             return;
         }
@@ -15055,6 +15727,7 @@
                 activateSuiteSlot(targetExamId).then((activated) => {
                     if (activated && questionId) {
                         scrollToQuestion(questionId);
+                        readingTimingController?.select(questionId);
                     }
                 }).catch((error) => {
                     console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
@@ -17333,6 +18006,7 @@
     }
 
     function setReadOnlyMode(enabled, reason = '') {
+        if (enabled) readingTimingController?.stop();
         state.readOnly = Boolean(enabled);
         state.readOnlyReason = state.readOnly
             ? (reason || state.readOnlyReason || 'readonly')
@@ -17588,6 +18262,7 @@
                 buildResultsFromAnswers,
                 collectAnswers,
                 collectCurrentDraft,
+                syncSimulationDraftSnapshot,
                 setTimerLockMode,
                 setReadOnlyMode,
                 applyAnswersToDom,
@@ -17620,6 +18295,15 @@
                 stopSimulationDraftSync,
                 attachActionListeners,
                 syncPrimaryActionButtons,
+                getReadingTimingState() {
+                    return readingTimingController && {
+                        context: { ...readingTimingContext(), dataset: null },
+                        active: readingTimingController.active?.key,
+                        entries: [...readingTimingController.entries.keys()],
+                        loading: [...readingTimingController.loading.keys()],
+                        error: readingTimingController.error
+                    };
+                },
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -18466,6 +19150,7 @@
         const answers = collectAnswers();
         const updatedAt = Date.now();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             answers,
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -18674,6 +19359,7 @@
         const results = buildResults();
         const timerSnapshot = getPracticeTimerSnapshot();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
@@ -18751,6 +19437,7 @@
             Object.assign(aggregatedQuestionTypeMap, prefixSuiteMap(entry.examId, results.questionTypeMap || {}));
             mergeQuestionTypePerformance(aggregatedQuestionTypePerformance, results.questionTypePerformance || {});
             suiteEntries.push({
+                readingTiming: readingTimingController?.snapshot(entry.examId) || draft.readingTiming || null,
                 examId: entry.examId,
                 title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
                 category: slot.category || entry.category || slot.dataset?.meta?.category || '',
@@ -18871,6 +19558,7 @@
         const payload = {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
+                readingTiming: snapshot.readingTiming || null,
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
                 noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -18881,7 +19569,7 @@
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
             draftUpdatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
-            resultSnapshot: snapshot.results,
+            resultSnapshot: { ...snapshot.results, readingTiming: snapshot.readingTiming || null },
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
             noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -18905,9 +19593,21 @@
             handleExitClick();
             return;
         }
-        if (state.readOnly || state.submissionStatus !== 'draft') {
+        if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
             return;
         }
+        state.timingSubmitPending = true;
+        try {
+            const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
+                const slot = getSuiteSlot(entry.examId);
+                return { context: { ...readingTimingContext(), examId: entry.examId, sequenceIndex,
+                    dataset: slot?.dataset }, draft: slot?.draft };
+            }) : [];
+            await readingTimingController?.freezeAll(passages);
+        } catch (_) {
+            global.alert?.('计时保存失败，请展开“阅读前台关联时长”重试保存后再次提交。作答仍然保留。');
+            return;
+        } finally { state.timingSubmitPending = false; }
         const submissionSnapshot = state.suite?.inline
             ? buildInlineSuiteSubmissionSnapshot()
             : buildSubmissionSnapshot();
@@ -18926,6 +19626,7 @@
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         beginSubmission(messageType, Object.assign({
+            readingTiming: submissionSnapshot.readingTiming || null,
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
@@ -19234,6 +19935,7 @@
                 applyDraftToDom(singleDraft);
                 state.readingDraftFingerprint = buildDraftFingerprint(singleDraft);
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : singleDraft);
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
             refreshReadingDraftSyncLifecycle();
@@ -19404,6 +20106,7 @@
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);
                 persistSimulationDraftMirror(cloneDraftSafely(draft));
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : draft);
             refreshSimulationDraftSyncLifecycle();
             updateNavStatuses();
             return;
@@ -19487,6 +20190,13 @@
             syncActiveSuiteTimer(detail.running, Date.now());
             interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
+            readingTimingController?.refresh();
+            readingTimingController?.save().catch(() => {});
+            if (state.simulationMode && state.simulationContextReady && state.suiteSessionId) {
+                // A reload requests the host's timer state. Publish pause/resume
+                // with its draft now instead of relying on an unload message.
+                syncSimulationDraftSnapshot('timer');
+            }
         });
     }
 
@@ -19551,6 +20261,7 @@
     "js/core/vocabScheduler.js",
     "js/core/practiceReviewScheduler.js",
     "js/data/v2/readingVocabularyModel.js",
+    "js/services/readingTiming.js",
     "js/data/v2/appData.js",
     "js/runtime/readingExamRegistry.js",
     "js/runtime/readingExplanationRegistry.js",
@@ -19565,6 +20276,7 @@
     "js/components/readingVocabContent.js",
     "js/components/readingVocabAnchors.js",
     "js/components/readingVocabReader.js",
+    "js/runtime/readingTimingController.js",
     "js/runtime/unifiedReadingPage.js"
 ]);
     }

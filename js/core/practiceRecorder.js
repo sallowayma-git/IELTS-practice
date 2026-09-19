@@ -618,6 +618,7 @@ class PracticeRecorder {
                 answerDetails,
                 answerComparison: normalizedComparison,
                 questionTypePerformance: payload.questionTypePerformance || {},
+                ...(payload.readingTiming ? { readingTiming: this.clonePlainObject(payload.readingTiming) } : {}),
                 interactions: payload.interactions || [],
                 ...annotations,
                 questionTypeMap,
@@ -1107,6 +1108,7 @@ class PracticeRecorder {
             correctAnswerMap,
             scoreInfo,
             questionTypePerformance: results?.questionTypePerformance || {},
+            ...(results?.readingTiming ? { readingTiming: this.clonePlainObject(results.readingTiming) } : {}),
             ...annotations,
             metadata,
             suiteSessionId,
@@ -1620,6 +1622,7 @@ class PracticeRecorder {
             correctAnswerMap,
             scoreInfo: Object.assign({}, recordData.scoreInfo || {}, { details: answerDetails }),
             questionTypePerformance: recordData.questionTypePerformance || {},
+            ...(recordData.readingTiming ? { readingTiming: this.clonePlainObject(recordData.readingTiming) } : {}),
             ...annotations,
             realData: Object.assign({}, recordData.realData || {}, {
                 answers: answerMap,
@@ -2268,6 +2271,7 @@ class PracticeRecorder {
             answerComparison,
             questionTypeMap,
             questionTypePerformance: this.extractQuestionTypePerformance(realData),
+            ...(realData.readingTiming ? { readingTiming: this.clonePlainObject(realData.readingTiming) } : {}),
             ...annotations,
 
             // 元数据
