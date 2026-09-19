@@ -39,6 +39,36 @@ on a later passage keeps the existing window registration and restores all
 child drafts. Requests from another window/origin, another suite or an exam
 outside the sequence cannot use this route.
 
+## PR #189 review regressions
+
+The controller regression suite now covers the three review findings and their
+recovery boundaries:
+
+- Trusted pointer presses on `.drag-item`, `.draggable-word` and `.card` select
+  the enclosing authored group before any drop, including presses on nested
+  text. An assigned draggable inside a passage drop zone retains that zone's
+  question mapping. Synthetic pointer events do not select a unit.
+- Pausing on P1, navigating to P2, resuming there and revisiting P1 leaves the
+  suite running and accumulating time. Saved pause state applies once per
+  restored attempt; both cached and newly loaded inactive children respect the
+  current suite state. A different restored attempt can still restore its pause.
+- Retrying an initial acquisition failure preserves the saved draft's attempt
+  identity, grouping and cumulative totals. Repeated failures remain retryable;
+  successful acquisition starts partial measurement without filling the failed
+  interval. Retry after a later checkpoint failure still saves the existing
+  entry. A retry cannot activate a different passage or a non-editable attempt.
+
+The real-page acceptance script also exercises pool pointerdown from both
+unallocated time and another selected group, and uses timer/navigation clicks
+for the cross-passage pause/resume/revisit sequence. In single and inline-suite
+practice, a temporary IndexedDB quota failure blocks initial acquisition on each
+document load, including refresh with a saved draft. The fault remains active
+until the test makes storage writable and clicks the visible retry button, so
+duplicate initialization messages cannot mask the failure. Retry must acquire
+ownership, restore saved totals and pause state, and show a durable-save
+acknowledgement. These checks run in all three loading modes below, alongside
+the existing post-acquisition save-failure test.
+
 ## Browser acceptance
 
 `developer/tests/e2e/reading_timing.py` runs the Node Playwright acceptance script.
@@ -82,7 +112,7 @@ maximum recovery loss under failed or delayed writes.
 | --- | --- |
 | `node scripts/build-bundles.mjs` | Pass; existing eight duplicate-symbol warnings remain |
 | `node scripts/build-bundles.mjs --check` | Pass; all 14 generated outputs current |
-| `node --test --test-concurrency=1 'developer/tests/js/**/*.test.js'` | 363 passed, zero failed |
+| `node --test --test-concurrency=1 'developer/tests/js/**/*.test.js'` | 371 passed, zero failed |
 | Focused timing, persistence, host protocol, AppData and DataKernel tests | Pass |
 | `python developer/tests/e2e/full_reset_flow.py` | Pass |
 | `python developer/tests/e2e/suite_practice_flow.py` | Pass |

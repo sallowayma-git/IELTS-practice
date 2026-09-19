@@ -11344,6 +11344,8 @@
             this.writer = token();
             this.entries = new Map();
             this.loading = new Map();
+            this.initializedAttempts = new Set();
+            this.failedActivation = null;
             this.active = null;
             this.generation = 0;
             this.error = '';
@@ -11399,6 +11401,7 @@
                 || draft.highlights?.length || draft.notes?.length || draft.markedQuestions?.length);
             if (legacyDraft && !previous) initial.partial('legacy-start');
             if (previous) initial.partial('recovery-tail');
+            if (this.failedActivation?.key === key) initial.partial('save-failed');
             const row = await global.AppData.recovery.acquireReadingTiming(initial.snapshot(), previous);
             const entry = { key, meter: new timing.Meter(ctx.dataset, identity, row.snapshot), owned: true,
                 savedAt: Date.parse(row.updatedAt), savedClock: now(), acknowledged: row.snapshot, pending: null, saving: null };
@@ -11409,24 +11412,45 @@
             const ctx = this.context();
             if (!ctx.sessionId || !ctx.examId || !ctx.dataset || !ctx.editable
                 || !Object.prototype.hasOwnProperty.call(ctx, 'libraryConfigurationId')
-                || ctx.libraryConfigurationId === undefined) { this.stop(); return; }
+                || ctx.libraryConfigurationId === undefined) {
+                this.generation++;
+                this.failedActivation = null;
+                this.stop();
+                return;
+            }
             const key = this.key(ctx);
             if (this.active?.key === key) { this.refresh(); return; }
+            if (this.failedActivation?.key !== key) this.failedActivation = null;
             this.stop();
             this.active = null;
             const generation = ++this.generation;
             try {
                 const entry = await this.loadEntry(ctx, draft);
-                if (generation !== this.generation || this.key(this.context()) !== key) return;
+                if (generation !== this.generation || this.key(this.context()) !== key || !this.context().editable) return;
                 this.active = entry;
-                if (entry.meter.value.paused) ctx.restorePause?.();
+                // Restore pause once for the page's attempt. Inactive suite
+                // children retain old flags and must follow the live suite state.
+                const attemptKey = JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]);
+                if (!this.initializedAttempts.has(attemptKey)) {
+                    this.initializedAttempts.add(attemptKey);
+                    if (entry.meter.value.paused) ctx.restorePause?.();
+                }
+                this.failedActivation = null;
                 this.error = '';
                 this.refresh();
             } catch (error) {
-                if (generation !== this.generation) return;
+                if (generation !== this.generation || this.key(this.context()) !== key || !this.context().editable) return;
+                this.failedActivation = { key, draft };
                 this.error = error.code === 'TIMING_FINALIZED' ? '该次计时已经提交' : `计时不可用：${error.message}`;
                 this.render();
             }
+        }
+        async retry() {
+            const ctx = this.context();
+            if (!ctx.editable) return;
+            const key = this.key(ctx);
+            if (this.active?.key === key) return this.save();
+            if (this.failedActivation?.key === key) return this.activate(this.failedActivation.draft);
         }
         snapshot(examId = null) {
             const entry = examId
@@ -11498,6 +11522,7 @@
                 if (target.closest('#reading-note-editor, #reading-note-drawer')) { this.select(null); return; }
                 if (!target.closest('#question-groups, #left')) return;
                 const control = target.closest('input,select,textarea,.dropzone,.drop-zone,.match-dropzone,.paragraph-dropzone,.drop-target-summary')
+                    || target.closest('.drag-item,.draggable-word,.card')
                     || target.closest('label')?.control;
                 if (!control) { if (target.closest('#left')) this.select(null); return; }
                 const name = control.getAttribute('name') || control.dataset.questionId || control.dataset.question || control.dataset.target || control.id || '';
@@ -11548,7 +11573,7 @@
                 const retry = document.createElement('button');
                 retry.type = 'button'; retry.textContent = '重试计时保存';
                 retry.style.cssText = 'padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;';
-                retry.addEventListener('click', () => this.save().catch(() => {}));
+                retry.addEventListener('click', () => this.retry().catch(() => {}));
                 panel.appendChild(retry);
                 parent.prepend(panel);
             }

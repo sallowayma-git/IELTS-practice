@@ -48,20 +48,38 @@ async function ready(page) {
     const close = page.locator('[data-library-action="close"]');
     if (await close.isVisible()) await close.click();
 }
-async function readingReady(page) {
+async function readingReady(page, { initialFailure = false, restored = false } = {}) {
     page.on('dialog', dialog => { console.log('dialog:', dialog.message()); dialog.accept(); });
     await page.bringToFront();
+    let failedWrites = 0;
     try {
-        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.collectCurrentDraft()?.readingTiming, null, { timeout: 25000 });
+        if (initialFailure) {
+            await page.waitForFunction(() => document.querySelector('[data-timing-save]')?.textContent.includes('计时不可用'));
+            assert.equal(await page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState().active || null), null);
+            failedWrites = await page.evaluate(() => window.__timingAcquisitionWrites);
+            assert.ok(failedWrites >= 1);
+            await page.locator('#reading-timing-status').evaluate(node => { node.open = true; });
+            await page.evaluate(() => { window.__timingAcquisitionBlocked = false; });
+            await page.getByRole('button', { name: '重试计时保存', exact: true }).click();
+        }
+        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.active
+            && window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming, null, { timeout: 25000 });
     } catch (error) {
         console.log(await page.evaluate(() => {
             const state = window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState();
             return { url: location.href, timing: document.getElementById('reading-timing-status')?.textContent,
+                acquisitionWrites: window.__timingAcquisitionWrites,
+                timingState: window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState(),
                 state: state && { examId: state.examId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
                     suiteInline: state.suiteInline, suiteActivating: state.suiteActivating, reviewMode: state.reviewMode,
                     readOnly: state.readOnly, submissionStatus: state.submissionStatus } };
         }));
         throw error;
+    }
+    if (initialFailure) {
+        assert.ok(await page.evaluate(count => window.__timingAcquisitionWrites > count, failedWrites));
+        assert.ok((await snapshot(page)).partialReasons.includes(restored ? 'recovery-tail' : 'save-failed'));
+        assert.match(await page.locator('[data-timing-save]').innerText(), /最近确认保存/);
     }
 }
 async function select(page, questionId) {
@@ -133,9 +151,25 @@ try {
         assert.equal(ownership.full.duration, 99);
         assert.equal(ownership.backup, true);
 
+        // Hold the initial storage fault until retry so duplicate INIT messages
+        // cannot hide it. Repeat on reload to exercise retry with restored drafts.
+        await context.addInitScript(() => {
+            const originalPut = IDBObjectStore.prototype.put;
+            window.__timingAcquisitionWrites = 0;
+            window.__timingAcquisitionBlocked = true;
+            IDBObjectStore.prototype.put = function (value, ...args) {
+                if (this.name === 'documents' && value.logicalKey === 'recovery.readingTiming') {
+                    window.__timingAcquisitionWrites++;
+                    if (window.__timingAcquisitionBlocked) {
+                        throw new DOMException('Simulated initial timing write failure', 'QuotaExceededError');
+                    }
+                }
+                return originalPut.call(this, value, ...args);
+            };
+        });
         const [reading] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => window.app.openExam('p1-high-01'))]);
         reading.on('console', message => { if (message.type() === 'error') console.log('reading error:', message.text()); });
-        await readingReady(reading);
+        await readingReady(reading, { initialFailure: true });
         await reading.waitForTimeout(1200);
         const initial = await snapshot(reading);
         assert.ok(initial.unallocatedMs > 500);
@@ -157,10 +191,27 @@ try {
         const afterFocus = await snapshot(reading);
         assert.equal(afterFocus.units[0].durationMs, beforeFocus.units[0].durationMs);
         assert.ok(afterFocus.unallocatedMs > beforeFocus.unallocatedMs + 500);
+        // Hold a pool option before any drop: attribution must switch at pointerdown,
+        // both from unallocated time and from a different previously selected group.
+        const heading = reading.locator('.drag-item[data-heading="viii"]');
+        for (const previousQuestion of [null, 'q9']) {
+            if (previousQuestion) await select(reading, previousQuestion);
+            else await reading.locator('#left p').first().click();
+            await heading.hover();
+            await reading.mouse.down();
+            try {
+                const pressed = await snapshot(reading);
+                await reading.waitForTimeout(1100);
+                const held = await snapshot(reading);
+                assert.ok(held.units[0].durationMs > pressed.units[0].durationMs + 500);
+                assert.equal(held.unallocatedMs, pressed.unallocatedMs);
+                assert.equal(held.units[1].durationMs, pressed.units[1].durationMs);
+            } finally { await reading.mouse.up(); }
+        }
         await control.click();
         await reading.waitForTimeout(1100);
         assert.ok((await snapshot(reading)).units[0].durationMs > afterFocus.units[0].durationMs + 500);
-        await reading.locator('.drag-item[data-heading="viii"]').dragTo(control);
+        await heading.dragTo(control);
         assert.match(await control.innerText(), /viii/);
         // Headless Chromium keeps every page focused/visible after bringToFront.
         // Drive the DOM lifecycle boundary explicitly and exercise the real meter.
@@ -188,7 +239,7 @@ try {
         await reading.waitForTimeout(1500);
         assert.equal((await snapshot(reading)).totalMs, paused.totalMs);
         await reading.reload();
-        await readingReady(reading);
+        await readingReady(reading, { initialFailure: true, restored: true });
         const restored = await snapshot(reading);
         assert.equal(restored.attemptId, paused.attemptId);
         assert.equal(restored.totalMs, paused.totalMs);
@@ -238,7 +289,7 @@ try {
             return window.app._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation', frequencyScope: 'all' });
         })]);
         suite.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log('suite:', message.text()); });
-        await readingReady(suite);
+        await readingReady(suite, { initialFailure: true });
         const childIds = [];
         for (let i = 0; i < 3; i++) {
             const state = await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState());
@@ -255,13 +306,28 @@ try {
         await suite.locator('#part-section-1 .part-nav-name').click();
         await suite.waitForTimeout(1100);
         assert.equal((await snapshot(suite)).attemptId, childIds[0]);
+        await suite.locator('#timer').click();
+        assert.equal((await snapshot(suite)).paused, true);
+        await suite.locator('#part-section-2 .part-nav-name').click();
+        await suite.waitForFunction(id => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming?.attemptId === id, childIds[1]);
+        assert.equal((await snapshot(suite)).paused, true);
+        await suite.locator('#timer').click();
+        assert.equal((await snapshot(suite)).paused, false);
+        await suite.locator('#part-section-1 .part-nav-name').click();
+        await suite.waitForFunction(id => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming?.attemptId === id, childIds[0]);
+        assert.equal(await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState().context.running), true);
+        const resumed = await snapshot(suite);
+        assert.equal(resumed.paused, false);
+        await suite.waitForTimeout(1100);
+        assert.ok((await snapshot(suite)).totalMs > resumed.totalMs + 500);
         await suite.locator('#part-section-3 .part-nav-name').click();
         await suite.waitForFunction(id => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming?.attemptId === id, childIds[2]);
         await suite.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerRunning(false));
         await suite.waitForTimeout(1700);
         await suite.reload();
-        await readingReady(suite);
+        await readingReady(suite, { initialFailure: true, restored: true });
         assert.equal((await snapshot(suite)).attemptId, childIds[2]);
+        assert.equal((await snapshot(suite)).paused, true);
         await suite.locator('#submit-btn').click();
         const suiteRecord = await waitRecord(page, 'suite');
         assert.equal(suiteRecord.suiteEntries.length, 3);
@@ -288,6 +354,7 @@ try {
         assert.doesNotMatch(await page.locator('.reading-timing-record').innerText(), /已测总时长.*0 秒/);
         assert.equal(errors.length, 0, errors.join('\n'));
         report.cases.push({ mode, status: 'pass', singleTotalMs: frozen.totalMs, suiteTotalMs: totals.totalMs,
+            reviewRegressions: 'pool pointerdown before drop, cross-passage pause/resume/revisit, initial acquisition retry in single and suite practice',
             ownership: 'stale writer, duplicate snapshot/finalization and finalized takeover checked',
             background: 'controlled visibility/focus lifecycle in headless Chromium; not a native OS backgrounding test',
             browser: browser.version() });
