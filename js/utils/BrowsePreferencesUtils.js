@@ -8,6 +8,9 @@
     let browsePreferencesReady = null;
     let browsePreferencesHydrated = false;
     let browsePreferenceWriteQueue = Promise.resolve();
+    let browsePreferenceWriteSequence = 0;
+    const ownBrowsePreferenceOperationIds = new Set();
+    let browsePreferenceCommitListenerBound = false;
     const pendingBrowsePreferenceWrites = [];
     let browseAnchorProjection = null;
     let browseAnchorProjectionRevision = 0;
@@ -110,6 +113,33 @@
         return next;
     }
 
+    function bindBrowsePreferenceCommitListener() {
+        if (browsePreferenceCommitListenerBound) {
+            return;
+        }
+        const backups = global.AppData && global.AppData.backups;
+        if (!backups || typeof backups.onDataCommitted !== 'function') {
+            return;
+        }
+        browsePreferenceCommitListenerBound = true;
+        backups.onDataCommitted((event) => {
+            const targets = Array.isArray(event && event.targets) ? event.targets : [];
+            if (!targets.some((target) => target && target.logicalKey === 'preferences.values')) {
+                return;
+            }
+            const operationId = event && event.receipt && event.receipt.operationId
+                ? String(event.receipt.operationId)
+                : (event && event.operationId ? String(event.operationId) : '');
+            if (operationId && ownBrowsePreferenceOperationIds.delete(operationId)) {
+                return;
+            }
+            // Backup restores and legacy preference writers may commit outside
+            // this queue. Force the next queued partial write to merge against
+            // the new durable baseline instead of resurrecting stale cache.
+            browsePreferencesHydrated = false;
+        });
+    }
+
     function mergeBrowseAnchors(currentAnchors = {}, updates) {
         const next = Object.assign({}, currentAnchors);
         if (!updates || typeof updates !== 'object') {
@@ -153,6 +183,7 @@
     }
 
     function loadBrowsePreferencesFromStorage() {
+        bindBrowsePreferenceCommitListener();
         if (!browsePreferencesReady) {
             browsePreferencesReady = Promise.resolve().then(async () => {
                 if (!global.AppData || !global.AppData.preferences) return;
@@ -218,12 +249,14 @@
     }
 
     function enqueueBrowsePreferenceWrite(partial = {}, options = {}) {
+        bindBrowsePreferenceCommitListener();
         const request = {
             partial: Object.assign({}, partial),
             replaceListAnchors: options.replaceListAnchors === true,
             anchorRevision: Number.isFinite(Number(options.anchorRevision))
                 ? Number(options.anchorRevision)
-                : null
+                : null,
+            operationId: `browse-preference-${Date.now()}-${++browsePreferenceWriteSequence}`
         };
         pendingBrowsePreferenceWrites.push(request);
         const preview = pendingBrowsePreferenceWrites.reduce(
@@ -249,17 +282,13 @@
         const outcome = browsePreferenceWriteQueue.then(async () => {
             await global.AppData.ready;
             if (browsePreferencesReady) await browsePreferencesReady;
-            // Browse preferences can also be changed by backup restores and
-            // legacy controllers outside this queue. Refresh the accepted
-            // baseline before creating a full snapshot so a partial write
-            // cannot resurrect stale state (especially sort/favorites).
-            const persisted = await global.AppData.preferences.getBrowse();
-            if (persisted && typeof persisted === 'object') {
-                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
-                browsePreferencesHydrated = true;
-            } else if (!browsePreferencesHydrated) {
-                // A lazy bundle may be evaluated before AppData is exposed;
-                // still mark the first storage read as the accepted baseline.
+            // A lazy bundle may be queued before AppData is exposed. Hydrate
+            // that first queued write before merging it with the default
+            // preview; once the accepted baseline is loaded, subsequent
+            // writes must stay on this queue and must not start an unrelated
+            // preference read that can block the caller's flush barrier.
+            if (!browsePreferencesHydrated) {
+                const persisted = await global.AppData.preferences.getBrowse();
                 browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
                 browsePreferencesHydrated = true;
             }
@@ -268,7 +297,13 @@
                 request.partial,
                 request
             );
-            await global.AppData.preferences.patchBrowse(next);
+            ownBrowsePreferenceOperationIds.add(request.operationId);
+            try {
+                await global.AppData.preferences.patchBrowse(next, { operationId: request.operationId });
+            } catch (error) {
+                ownBrowsePreferenceOperationIds.delete(request.operationId);
+                throw error;
+            }
             browsePreferencesCache = next;
             if (request.anchorRevision != null
                 && browseAnchorPersistenceDebt

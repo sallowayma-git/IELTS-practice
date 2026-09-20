@@ -3358,8 +3358,8 @@ assert.strictEqual(
 );
 assert.strictEqual(
     authoritativeDurableReads,
-    authoritativeDurableReadsAfterPreferencesLoad + 2,
-    'the authoritative drain must refresh the queue baseline and verify the storage adapter after flushing'
+    authoritativeDurableReadsAfterPreferencesLoad + 1,
+    'the authoritative drain must verify the storage adapter after flushing its write queue'
 );
 assert.deepStrictEqual(
     authoritativeDurableBrowse.lastFilter,
@@ -3381,8 +3381,8 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(
     authoritativeDurableReads,
-    authoritativeDurableReadsAfterPreferencesLoad + 4,
-    'the successful retry must refresh the queue baseline and perform a fresh durable readback'
+    authoritativeDurableReadsAfterPreferencesLoad + 2,
+    'the successful retry must perform a fresh durable readback'
 );
 assert.strictEqual(
     authoritativePersistedReads,
