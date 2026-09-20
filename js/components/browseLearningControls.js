@@ -7,6 +7,12 @@
     let preferencesRevision = 0;
     let commitBound = false;
     let selectionRevision = 0;
+    // State/favorites resets are allowed to happen while the first durable
+    // preference read is still in flight (for example, when navigation enters
+    // Browse immediately after a reload). Keep a separate fence for sort so a
+    // reset cannot accidentally make the persisted ordering look like the
+    // default ordering when that read settles.
+    let sortSelectionRevision = 0;
     let bound = false;
     const labels = { all: '全部状态', unattempted: '未完成', completed: '已完成', wrong: '需复习' };
     const sortModes = new Set(['default', 'frequency-desc', 'difficulty-desc']);
@@ -41,11 +47,18 @@
             readyPromise = global.AppData.preferences.getBrowse().then((preferences) => {
                 if (revision !== preferencesRevision) return ready();
                 favorites = readFavorites(preferences);
+                const hydratedSortMode = normalizeSortMode(preferences && preferences.sortMode);
                 if (selectionRevision === 0) {
                     selection = Object.assign(global.BrowseLearningState.normalizeSelection(preferences), {
-                        sortMode: normalizeSortMode(preferences && preferences.sortMode)
+                        sortMode: hydratedSortMode
                     });
                     global.__browseSortMode = selection.sortMode;
+                } else if (sortSelectionRevision === 0) {
+                    // resetSelection intentionally fences only learning state
+                    // and favorites. Adopt the durable sort once hydration
+                    // completes, even if that reset won the state race.
+                    selection = Object.assign({}, selection, { sortMode: hydratedSortMode });
+                    global.__browseSortMode = hydratedSortMode;
                 }
             }).catch((error) => {
                 if (revision !== preferencesRevision) return ready();
@@ -110,6 +123,7 @@
     function resetSelection(options = {}) {
         selectionRevision += 1;
         const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
+        if (options.resetSort === true) sortSelectionRevision += 1;
         selection = { learningState: 'all', favoritesOnly: false, sortMode };
         global.__browseSortMode = sortMode;
         sync();
@@ -129,11 +143,13 @@
         });
         panel.addEventListener('change', () => {
             selectionRevision += 1;
+            const nextSortMode = normalizeSortMode(panel.querySelector('[name="browse-sort-mode"]:checked')?.value || selection.sortMode);
+            if (nextSortMode !== selection.sortMode) sortSelectionRevision += 1;
             selection = Object.assign(global.BrowseLearningState.normalizeSelection({
                 learningState: panel.querySelector('[name="browse-learning-state"]:checked').value,
                 favoritesOnly: byId('browse-favorites-only').checked
             }), {
-                sortMode: normalizeSortMode(panel.querySelector('[name="browse-sort-mode"]:checked')?.value || selection.sortMode)
+                sortMode: nextSortMode
             });
             global.__browseSortMode = selection.sortMode;
             sync();

@@ -117,6 +117,29 @@ test('an explicit reset wins delayed preference hydration and retains favorites'
     assert.equal(window.BrowseLearningControls.filter([exam(), exam('p2')]).length, 2);
 });
 
+test('a reset before hydration preserves the persisted sort mode', async () => {
+    let resolve;
+    const gate = new Promise(done => { resolve = done; });
+    const { window, context } = harness({
+        AppData: { preferences: { getBrowse: () => gate } }
+    });
+    vm.runInContext(source('components/browseLearningControls.js'), context);
+    const pending = window.BrowseLearningControls.ready();
+
+    // Navigation may reset learning state before the first browse preference
+    // read settles. That reset must not fence the independently persisted sort.
+    window.BrowseLearningControls.resetSelection();
+    resolve({ learningState: 'completed', favoritesOnly: true, sortMode: 'difficulty-desc' });
+    await pending;
+
+    assert.equal(window.__browseSortMode, 'difficulty-desc');
+    assert.deepEqual(
+        window.BrowseLearningControls.filter([exam(), exam('p2')]),
+        [exam(), exam('p2')],
+        'the reset still owns learning state and favorites'
+    );
+});
+
 test('failed learning preference reads keep Browse usable and retry saved selections', async () => {
     let reads = 0;
     const { window, context, state } = harness({
