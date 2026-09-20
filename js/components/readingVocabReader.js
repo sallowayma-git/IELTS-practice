@@ -776,7 +776,7 @@
                                     </div>
                                 </div>
                                 <div class="vocab-modal-header-actions">
-                                    <button type="button" class="vocab-modal-bookshelf-btn" id="vocab-modal-bookshelf-btn" title="查看阅读书架">📚 书架</button>
+                                    <button type="button" class="shui-glass-btn vocab-modal-bookshelf-btn" id="vocab-modal-bookshelf-btn" title="查看阅读书架">📚 书架</button>
                                     <button type="button" class="vocab-modal-close" id="vocab-modal-close" title="关闭">✖</button>
                                 </div>
                             </div>
@@ -1313,6 +1313,24 @@
         },
 
         openNotebook(options = {}) {
+            // The global notebook is a first-class app view. Keep the legacy
+            // reader modal only as a fallback for isolated reader contexts
+            // where the app shell has not loaded the notebook view yet.
+            if (global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function') {
+                return global.ReadingNotebookView.open({
+                    ...options,
+                    fromView: options.fromView || global.app?.currentView || 'bookshelf'
+                });
+            }
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return Promise.resolve(global.AppLazyLoader.ensureGroup('more-tools'))
+                    .then(() => global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function'
+                        ? global.ReadingNotebookView.open({
+                            ...options,
+                            fromView: options.fromView || global.app?.currentView || 'bookshelf'
+                        })
+                        : this.open(null, { ...options, notebook: true }));
+            }
             return this.open(null, { ...options, notebook: true });
         },
 

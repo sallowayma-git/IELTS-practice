@@ -396,124 +396,6 @@
 })(window);
 
 
-/* ===== js/components/readingAnalyticsPanel.js ===== */
-(function (global) {
-    'use strict';
-
-    let records = [];
-    let options = {};
-    const points = value => Number(value.toFixed(4)).toLocaleString('zh-CN', { maximumFractionDigits: 4 });
-    const accuracy = value => value === null ? '暂无可用成绩' : `${(value * 100).toFixed(1)}%`;
-    const fraction = value => value.scored ? `${points(value.earned)} / ${points(value.possible)} 分` : '分母未知或无有效成绩';
-
-    function node(tag, text, className) {
-        const element = document.createElement(tag);
-        if (text != null) element.textContent = text;
-        if (className) element.className = className;
-        return element;
-    }
-
-    function table(title, headers, rows) {
-        const container = node('div', null, 'reading-analytics__table-wrap');
-        const tableNode = node('table');
-        tableNode.appendChild(node('caption', title));
-        const head = node('thead');
-        const header = node('tr');
-        headers.forEach(text => {
-            const cell = node('th', text);
-            cell.scope = 'col';
-            header.appendChild(cell);
-        });
-        head.appendChild(header);
-        tableNode.appendChild(head);
-        const body = node('tbody');
-        rows.forEach(cells => {
-            const row = node('tr');
-            cells.forEach((text, index) => {
-                const cell = node(index ? 'td' : 'th', text);
-                if (!index) cell.scope = 'row';
-                row.appendChild(cell);
-            });
-            body.appendChild(row);
-        });
-        tableNode.appendChild(body);
-        container.appendChild(tableNode);
-        return container;
-    }
-
-    function render() {
-        const container = document.getElementById('reading-analytics-content');
-        const range = document.getElementById('reading-analytics-range');
-        if (!container || !global.ReadingAnalytics) return;
-        const result = global.ReadingAnalytics.aggregate(records, { ...options, days: range && range.value });
-        const { total, coverage } = result;
-        container.replaceChildren();
-        const scope = node('p', null, 'reading-analytics__scope');
-        scope.id = 'reading-analytics-scope';
-        scope.textContent = `${result.days ? `近 ${result.days} 天（含今天，按本地日期）` : '全部保存历史'} · `
-            + `${options.recordType === 'listening' ? '当前类型：听力' : '阅读记录'} · 每次有效提交均计入`
-            + (options.query ? ` · 搜索：${options.query}` : '');
-        container.appendChild(scope);
-        if (options.recordType === 'listening') {
-            container.appendChild(node('p', '当前选择的是听力记录，阅读统计不包含听力成绩。'));
-            return;
-        }
-        if (!total.attempts) container.appendChild(node('p', '当前范围暂无可统计的阅读篇章提交。', 'reading-analytics__empty'));
-        const cards = node('dl', null, 'reading-analytics__summary');
-        const card = (label, value, note) => {
-            const item = node('div');
-            item.appendChild(node('dt', label));
-            item.appendChild(node('dd', value));
-            item.appendChild(node('p', note));
-            cards.appendChild(item);
-        };
-        card('篇章加权正确率', accuracy(total.accuracy), `${fraction(total)} · 总得分 ÷ 总分`);
-        card('篇章提交次数', `${total.attempts} 次`, `可评分 ${total.scored} / ${total.attempts} 次，包含重复练习`);
-        card('已识别的不同篇章', total.attempts > coverage.unknownIdentity ? `${total.distinctPassages} 篇` : '暂无可用身份',
-            `来源与篇章身份已知 ${total.attempts - coverage.unknownIdentity} / ${total.attempts} 次`);
-        container.appendChild(cards);
-        container.appendChild(table('P1 / P2 / P3 表现', ['分类', '加权正确率', '得分 / 总分', '可评分 / 提交', '已识别篇章'],
-            Object.entries(result.categories).map(([category, value]) => [category, accuracy(value.accuracy),
-                fraction(value), `${value.scored} / ${value.attempts} 次`, `${value.distinctPassages} 篇`])));
-        container.appendChild(node('p', `分类已知 ${total.attempts - coverage.unknownCategory} / ${total.attempts} 次；`
-            + `分类未知 ${coverage.unknownCategory} 次仍可参与有有效分母的篇章总分统计。`, 'reading-analytics__coverage'));
-        const typeRows = Object.entries(result.questionTypes).map(([type, value]) => [
-            global.ReadingAnalytics.typeNames[type], accuracy(value.accuracy), fraction(value), `${value.scored} 次`
-        ]);
-        if (typeRows.length) container.appendChild(table('题型表现', ['题型', '加权正确率', '得分 / 总分', '贡献提交'], typeRows));
-        else container.appendChild(node('p', '题型表现暂无可用数据：需要保存各题型的得分与总分。', 'reading-analytics__empty'));
-        container.appendChild(node('p', `题型完整覆盖 ${coverage.completeQuestionTypes} / ${total.scored} 次可评分提交；`
-            + `已识别题型分值 ${points(coverage.classifiedPossible)} / ${points(total.possible)} 分。`
-            + '缺失或无法识别的题型不计入题型表。', 'reading-analytics__coverage'));
-        if (coverage.suiteWithoutChildren) {
-            container.appendChild(node('p', `另有 ${coverage.suiteWithoutChildren} 条套题仅保存整体记录：`
-                + `${accuracy(result.suiteOnly.accuracy)}（${fraction(result.suiteOnly)}，`
-                + `可评分 ${result.suiteOnly.scored} / ${result.suiteOnly.attempts} 条）。`
-                + '这些总分单独展示，不计入上方篇章或题型统计。', 'reading-analytics__coverage'));
-        }
-        container.appendChild(node('p', `成绩或分母不可用 ${coverage.unknownScore} 次；`
-            + `已知缺失套题子篇 ${coverage.missingSuiteChildren} 篇；`
-            + (result.days ? `日期未知而排除 ${coverage.excludedUndated} 条。` : `日期未知 ${coverage.unknownDate} 条。`),
-        'reading-analytics__coverage'));
-        container.appendChild(node('p', '统计仅使用已保存的阅读提交，排除草稿、中断、演示及明确不可评分记录。'
-            + '套题按子篇统计；缺失信息保留为未知，不从当前题库推测。', 'reading-analytics__scope'));
-    }
-
-    function update(nextRecords, nextOptions = {}) {
-        records = Array.isArray(nextRecords) ? nextRecords : [];
-        options = nextOptions;
-        const range = document.getElementById('reading-analytics-range');
-        if (range && !range.dataset.analyticsBound) {
-            range.dataset.analyticsBound = 'true';
-            range.addEventListener('change', render);
-        }
-        render();
-    }
-
-    global.ReadingAnalyticsPanel = { update };
-})(window);
-
-
 /* ===== js/views/legacyViewBundle.js ===== */
 (function (global) {
     'use strict';
@@ -788,16 +670,149 @@
             total: options.totalId || 'total-practiced',
             average: options.averageId || 'avg-score',
             duration: options.durationId || 'study-time',
-            streak: options.streakId || 'streak-days'
+            streak: options.streakId || 'streak-days',
+            accuracyCard: options.accuracyCardId || 'practice-accuracy-card',
+            accuracyLabel: options.accuracyLabelId || 'practice-accuracy-label',
+            accuracyMeta: options.accuracyMetaId || 'practice-accuracy-meta'
         };
+        this.accuracyMode = 'average';
+        this.accuracyRecords = [];
+        this.accuracyExamType = 'all';
+        this.summary = {};
+        this.accuracyBound = false;
+        this._hydratePracticeDashboardPreferences();
     }
 
     PracticeDashboardView.prototype.updateSummary = function updateSummary(summary) {
         summary = summary || {};
+        this.summary = summary;
         this._setText(this.ids.total, typeof summary.totalPracticed === 'number' ? summary.totalPracticed : 0);
-        this._setText(this.ids.average, formatPercentage(summary.averageScore));
+        if (this.accuracyMode === 'average') {
+            this._setText(this.ids.average, formatPercentage(summary.averageScore));
+        }
         this._setText(this.ids.duration, formatMinutes(summary.totalStudyMinutes));
         this._setText(this.ids.streak, typeof summary.streak === 'number' ? summary.streak : 0);
+        this._ensureAccuracyInteractions();
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype.updateAccuracy = function updateAccuracy(records, examType) {
+        this.accuracyRecords = ensureArray(records).slice();
+        this.accuracyExamType = examType || 'all';
+        this._ensureAccuracyInteractions();
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype._hydratePracticeDashboardPreferences = function _hydratePracticeDashboardPreferences() {
+        var self = this;
+        var markReady = function () {
+            if (typeof document !== 'undefined') {
+                var view = document.getElementById('practice-view');
+                if (view) view.classList.add('practice-dashboard-ready');
+            }
+        };
+        if (!window.AppData || !window.AppData.preferences || typeof window.AppData.preferences.getPracticeDashboard !== 'function') {
+            markReady();
+            return;
+        }
+        Promise.resolve(window.AppData.ready)
+            .then(function () { return window.AppData.preferences.getPracticeDashboard(); })
+            .then(function (preference) {
+                var next = preference || {};
+                self.accuracyMode = next.accuracyMode === 'weighted' ? 'weighted' : 'average';
+                var practiceView = document.getElementById('practice-view');
+                if (practiceView) {
+                    practiceView.classList.toggle('is-practice-summary-collapsed', next.summaryCollapsed === true);
+                    var region = document.getElementById('practice-summary-region');
+                    var button = document.getElementById('practice-summary-toggle');
+                    if (region) {
+                        region.setAttribute('aria-hidden', next.summaryCollapsed === true ? 'true' : 'false');
+                        region.inert = next.summaryCollapsed === true;
+                    }
+                    if (button) {
+                        button.setAttribute('aria-expanded', next.summaryCollapsed === true ? 'false' : 'true');
+                        button.setAttribute('aria-label', next.summaryCollapsed === true ? '展开练习统计卡片' : '折叠练习统计卡片');
+                    }
+                }
+                self._renderAccuracy();
+                markReady();
+            })
+            .catch(function () { markReady(); });
+    };
+
+    PracticeDashboardView.prototype.setAccuracyMode = function setAccuracyMode(mode) {
+        this.accuracyMode = mode === 'weighted' ? 'weighted' : 'average';
+        if (window.AppData && window.AppData.preferences && typeof window.AppData.preferences.patchPracticeDashboard === 'function') {
+            window.AppData.preferences.patchPracticeDashboard({ accuracyMode: this.accuracyMode }).catch(function (error) {
+                console.warn('[PracticeDashboard] 正确率偏好保存失败:', error);
+            });
+        }
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype._renderAccuracy = function _renderAccuracy() {
+        if (typeof document === 'undefined') return;
+        var label = document.getElementById(this.ids.accuracyLabel);
+        var meta = document.getElementById(this.ids.accuracyMeta);
+        var value = document.getElementById(this.ids.average);
+        var card = document.getElementById(this.ids.accuracyCard);
+        if (!label || !meta || !value) return;
+        if (this.accuracyMode === 'average') {
+            label.textContent = '平均正确率';
+            meta.textContent = '全部正式记录';
+            value.textContent = formatPercentage(this.summary && this.summary.averageScore);
+        } else {
+            label.textContent = '加权平均正确率';
+            if (this.accuracyExamType === 'listening') {
+                value.textContent = '—';
+                meta.textContent = '仅适用于阅读';
+            } else {
+                var result = global.ReadingAnalytics && typeof global.ReadingAnalytics.aggregate === 'function'
+                    ? global.ReadingAnalytics.aggregate(this.accuracyRecords, { recordType: 'all' }) : null;
+                value.textContent = result && result.total && result.total.accuracy != null
+                    ? (Math.round(result.total.accuracy * 1000) / 10) + '%' : '—';
+                meta.textContent = result && result.total && result.total.accuracy != null ? '总得分 ÷ 总分' : '暂无成绩';
+            }
+        }
+        if (card) {
+            card.setAttribute('aria-label', this.accuracyMode === 'weighted' ? '加权平均正确率，点击设置' : '平均正确率，点击设置');
+            card.querySelectorAll('[data-practice-accuracy-mode]').forEach(function (option) {
+                var active = option.dataset.practiceAccuracyMode === this.accuracyMode;
+                option.classList.toggle('active', active);
+                option.setAttribute('aria-pressed', active ? 'true' : 'false');
+            }, this);
+        }
+    };
+
+    PracticeDashboardView.prototype._ensureAccuracyInteractions = function _ensureAccuracyInteractions() {
+        if (this.accuracyBound || typeof document === 'undefined') return;
+        var card = document.getElementById(this.ids.accuracyCard);
+        if (!card) return;
+        this.accuracyBound = true;
+        var self = this;
+        var flip = function () {
+            card.classList.toggle('is-flipped');
+            card.setAttribute('aria-pressed', card.classList.contains('is-flipped') ? 'true' : 'false');
+        };
+        card.addEventListener('click', function (event) {
+            var option = event.target && event.target.closest ? event.target.closest('[data-practice-accuracy-mode]') : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setAccuracyMode(option.dataset.practiceAccuracyMode);
+                card.classList.remove('is-flipped');
+                card.setAttribute('aria-pressed', 'false');
+                return;
+            }
+            flip();
+        });
+        card.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            var option = event.target && event.target.closest ? event.target.closest('[data-practice-accuracy-mode]') : null;
+            if (option) return;
+            event.preventDefault();
+            flip();
+        });
     };
 
     PracticeDashboardView.prototype._setText = function _setText(id, value) {
@@ -1665,9 +1680,17 @@
             highFill: options.highFillId || 'practice-priority-high-fill',
             mediumFill: options.mediumFillId || 'practice-priority-medium-fill',
             highAccuracy: options.highAccuracyId || 'practice-priority-high-accuracy',
-            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy'
+            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy',
+            partsP1Accuracy: options.partsP1AccuracyId || 'practice-parts-p1-accuracy',
+            partsP2Accuracy: options.partsP2AccuracyId || 'practice-parts-p2-accuracy',
+            partsP3Accuracy: options.partsP3AccuracyId || 'practice-parts-p3-accuracy',
+            partsP1Score: options.partsP1ScoreId || 'practice-parts-p1-score',
+            partsP2Score: options.partsP2ScoreId || 'practice-parts-p2-score',
+            partsP3Score: options.partsP3ScoreId || 'practice-parts-p3-score',
+            partsUnavailable: options.partsUnavailableId || 'practice-parts-unavailable'
         };
         this.records = [];
+        this.partsRecords = [];
         this.exams = [];
         this.examType = 'all';
         // 优先沿用用户上次选中的组件；显式传入 defaultWidget 时只作为兜底。
@@ -1680,6 +1703,7 @@
     PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
         options = options || {};
         this.records = Array.isArray(records) ? records.slice() : [];
+        this.partsRecords = Array.isArray(options.partsRecords) ? options.partsRecords.slice() : this.records.slice();
         this.exams = Array.isArray(exams) ? exams.slice() : [];
         this.examType = options.examType || 'all';
         this._ensureInteractions();
@@ -1698,7 +1722,8 @@
         if (titleElem) {
             titleElem.textContent = this.activeWidget === 'radar'
                 ? '阅读错题雷达'
-                : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
+                : (this.activeWidget === 'priority' ? '中高频余量'
+                    : (this.activeWidget === 'parts' ? 'P1 / P2 / P3 表现' : '练习热力图'));
         }
 
         var contents = card.querySelectorAll('.practice-custom-widget-content');
@@ -1718,6 +1743,8 @@
             this._renderGroup('medium', stats.medium);
         } else if (this.activeWidget === 'radar') {
             this._renderRadarChart();
+        } else if (this.activeWidget === 'parts') {
+            this._renderParts();
         }
 
         this._syncOptionState();
@@ -1817,6 +1844,30 @@
         );
 
         drawRadarChart(canvas, dataPoints);
+    };
+
+    PracticePriorityRenderer.prototype._renderParts = function _renderParts() {
+        var unavailable = document.getElementById(this.ids.partsUnavailable);
+        var rows = document.querySelectorAll('.practice-parts-widget__row');
+        var listening = this.examType === 'listening';
+        if (unavailable) unavailable.hidden = !listening;
+        rows.forEach(function (row) { row.hidden = listening; });
+        if (listening) return;
+        var result = global.ReadingAnalytics && typeof global.ReadingAnalytics.aggregate === 'function'
+            ? global.ReadingAnalytics.aggregate(this.partsRecords, { recordType: 'all' })
+            : null;
+        var categories = result && result.categories ? result.categories : {};
+        ['P1', 'P2', 'P3'].forEach(function (category) {
+            var key = category.toLowerCase();
+            var value = categories[category] || {};
+            var possible = Number(value.possible) || 0;
+            var earned = Number(value.earned) || 0;
+            var accuracy = value.accuracy == null ? '—' : Math.round(Number(value.accuracy) * 1000) / 10 + '%';
+            this._setText('parts' + category + 'Accuracy', accuracy);
+            this._setText('parts' + category + 'Score', possible > 0
+                ? (Math.round(earned * 10) / 10) + ' / ' + (Math.round(possible * 10) / 10) + ' 分'
+                : '暂无成绩');
+        }, this);
     };
 
     PracticePriorityRenderer.prototype.flipToBack = function flipToBack() {
@@ -2105,9 +2156,9 @@
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
     }
 
-    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
+    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达 / P1-P3 表现）持久化，
     // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
-    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'parts'];
     var persistedPracticeWidget = null;
     if (window.AppData && window.AppData.preferences) {
         window.AppData.ready.then(function () { return window.AppData.preferences.getPracticeWidget(); }).then(function (value) {
@@ -5757,7 +5808,7 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
-            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
+            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection({ resetSort: true });
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
             return false;
@@ -5864,6 +5915,7 @@
                 frequencyFilter: 'all',
                 learningState: 'all',
                 favoritesOnly: false,
+                sortMode: 'default',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -5895,7 +5947,8 @@
             || !isAllBrowseFilter(browse.filter)
             || browse.frequencyFilter !== 'all'
             || (browse.learningState != null && browse.learningState !== 'all')
-            || browse.favoritesOnly === true) {
+            || browse.favoritesOnly === true
+            || (browse.sortMode != null && browse.sortMode !== 'default')) {
             return false;
         }
         if (!requireStateManager) {
@@ -17390,7 +17443,7 @@ if (typeof module !== 'undefined' && module.exports) {
                                     </div>
                                 </div>
                                 <div class="vocab-modal-header-actions">
-                                    <button type="button" class="vocab-modal-bookshelf-btn" id="vocab-modal-bookshelf-btn" title="查看阅读书架">📚 书架</button>
+                                    <button type="button" class="shui-glass-btn vocab-modal-bookshelf-btn" id="vocab-modal-bookshelf-btn" title="查看阅读书架">📚 书架</button>
                                     <button type="button" class="vocab-modal-close" id="vocab-modal-close" title="关闭">✖</button>
                                 </div>
                             </div>
@@ -17927,6 +17980,24 @@ if (typeof module !== 'undefined' && module.exports) {
         },
 
         openNotebook(options = {}) {
+            // The global notebook is a first-class app view. Keep the legacy
+            // reader modal only as a fallback for isolated reader contexts
+            // where the app shell has not loaded the notebook view yet.
+            if (global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function') {
+                return global.ReadingNotebookView.open({
+                    ...options,
+                    fromView: options.fromView || global.app?.currentView || 'bookshelf'
+                });
+            }
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return Promise.resolve(global.AppLazyLoader.ensureGroup('more-tools'))
+                    .then(() => global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function'
+                        ? global.ReadingNotebookView.open({
+                            ...options,
+                            fromView: options.fromView || global.app?.currentView || 'bookshelf'
+                        })
+                        : this.open(null, { ...options, notebook: true }));
+            }
             return this.open(null, { ...options, notebook: true });
         },
 
@@ -21212,7 +21283,7 @@ window.BrowseStateManager = BrowseStateManager;
 (function (global) {
     'use strict';
 
-    let selection = { learningState: 'all', favoritesOnly: false };
+    let selection = { learningState: 'all', favoritesOnly: false, sortMode: 'default' };
     let favorites = new Set();
     let readyPromise = null;
     let preferencesRevision = 0;
@@ -21220,6 +21291,8 @@ window.BrowseStateManager = BrowseStateManager;
     let selectionRevision = 0;
     let bound = false;
     const labels = { all: '全部状态', unattempted: '未完成', completed: '已完成', wrong: '需复习' };
+    const sortModes = new Set(['default', 'frequency-desc', 'difficulty-desc']);
+    const normalizeSortMode = (value) => sortModes.has(String(value || '').trim()) ? String(value).trim() : 'default';
     const byId = (id) => document.getElementById(id);
 
     function readFavorites(preferences) {
@@ -21240,7 +21313,8 @@ window.BrowseStateManager = BrowseStateManager;
                 sync();
                 const changed = previous.size !== favorites.size || [...previous].some(key => !favorites.has(key))
                     || previousSelection.learningState !== selection.learningState
-                    || previousSelection.favoritesOnly !== selection.favoritesOnly;
+                    || previousSelection.favoritesOnly !== selection.favoritesOnly
+                    || previousSelection.sortMode !== selection.sortMode;
                 if (changed && byId('browse-view')?.classList.contains('active')) await refresh();
             });
         }
@@ -21250,7 +21324,10 @@ window.BrowseStateManager = BrowseStateManager;
                 if (revision !== preferencesRevision) return ready();
                 favorites = readFavorites(preferences);
                 if (selectionRevision === 0) {
-                    selection = global.BrowseLearningState.normalizeSelection(preferences);
+                    selection = Object.assign(global.BrowseLearningState.normalizeSelection(preferences), {
+                        sortMode: normalizeSortMode(preferences && preferences.sortMode)
+                    });
+                    global.__browseSortMode = selection.sortMode;
                 }
             }).catch((error) => {
                 if (revision !== preferencesRevision) return ready();
@@ -21268,13 +21345,17 @@ window.BrowseStateManager = BrowseStateManager;
         panel.querySelectorAll('[name="browse-learning-state"]').forEach((input) => {
             input.checked = input.value === selection.learningState;
         });
+        panel.querySelectorAll('[name="browse-sort-mode"]').forEach((input) => {
+            input.checked = input.value === selection.sortMode;
+        });
         byId('browse-favorites-only').checked = selection.favoritesOnly;
-        const active = selection.learningState !== 'all' || selection.favoritesOnly;
-        const text = [selection.learningState !== 'all' ? labels[selection.learningState] : '',
+        const active = selection.learningState !== 'all' || selection.favoritesOnly || selection.sortMode !== 'default';
+        const text = [selection.sortMode !== 'default' ? (selection.sortMode === 'frequency-desc' ? '频率高→低' : '难度高→低') : '',
+            selection.learningState !== 'all' ? labels[selection.learningState] : '',
             selection.favoritesOnly ? '收藏' : ''].filter(Boolean).join(' · ');
         trigger.classList.toggle('active', active);
-        byId('browse-learning-label').textContent = active ? text : '筛选';
-        trigger.setAttribute('aria-label', active ? `阅读筛选：${text}` : '阅读筛选');
+        byId('browse-learning-label').textContent = '排序筛选';
+        trigger.setAttribute('aria-label', active ? `排序筛选：${text}` : '排序筛选');
     }
 
     function close(restoreFocus = false) {
@@ -21295,9 +21376,11 @@ window.BrowseStateManager = BrowseStateManager;
         if (global.showMessage) global.showMessage('筛选或收藏未能保存，请重试。', 'error');
     }
 
-    function resetSelection() {
+    function resetSelection(options = {}) {
         selectionRevision += 1;
-        selection = { learningState: 'all', favoritesOnly: false };
+        const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
+        selection = { learningState: 'all', favoritesOnly: false, sortMode };
+        global.__browseSortMode = sortMode;
         sync();
     }
 
@@ -21315,17 +21398,28 @@ window.BrowseStateManager = BrowseStateManager;
         });
         panel.addEventListener('change', () => {
             selectionRevision += 1;
-            selection = global.BrowseLearningState.normalizeSelection({
+            selection = Object.assign(global.BrowseLearningState.normalizeSelection({
                 learningState: panel.querySelector('[name="browse-learning-state"]:checked').value,
                 favoritesOnly: byId('browse-favorites-only').checked
+            }), {
+                sortMode: normalizeSortMode(panel.querySelector('[name="browse-sort-mode"]:checked')?.value || selection.sortMode)
             });
+            global.__browseSortMode = selection.sortMode;
             sync();
-            global.AppData.preferences.patchBrowse(selection).catch(report);
+            global.AppData.preferences.patchBrowse({
+                learningState: selection.learningState,
+                favoritesOnly: selection.favoritesOnly,
+                sortMode: selection.sortMode
+            }).catch(report);
             refresh().catch(report);
         });
         byId('browse-learning-reset').addEventListener('click', () => {
             close(true);
-            global.resetBrowseViewToAll().catch(report);
+            resetSelection();
+            global.AppData.preferences.patchBrowse({
+                learningState: 'all',
+                favoritesOnly: false
+            }).then(() => refresh()).catch(report);
         });
         const wrapper = byId('browse-learning-controls');
         wrapper.addEventListener('keydown', (event) => {
@@ -21339,7 +21433,7 @@ window.BrowseStateManager = BrowseStateManager;
             if (!wrapper.contains(event.target)) close();
         });
         wrapper.addEventListener('focusout', (event) => {
-            if (event.relatedTarget && !wrapper.contains(event.relatedTarget)) close();
+            if (!event.relatedTarget || !wrapper.contains(event.relatedTarget)) close();
         });
     }
 
@@ -23607,8 +23701,8 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
-    if (window.ReadingAnalyticsPanel) {
-        window.ReadingAnalyticsPanel.update(records, { recordType: examType, query: historyQuery });
+    if (dashboard && typeof dashboard.updateAccuracy === 'function') {
+        dashboard.updateAccuracy(records, examType);
     }
 
     const trendRenderer = ensurePracticeTrendRenderer();
@@ -23618,7 +23712,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
 
     const priorityRenderer = ensurePracticePriorityRenderer();
     if (priorityRenderer && typeof priorityRenderer.update === 'function') {
-        priorityRenderer.update(recordsForInsights, examIndex, { examType });
+        priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records });
     }
 
     // --- 4. Render history list ---
@@ -24663,7 +24757,6 @@ async function initializeBrowseView(options = {}) {
             }
         }
 
-        setupBrowseSortControl();
         setupBrowseFrequencyFilterControl();
         if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
@@ -24845,11 +24938,10 @@ async function setupBrowseControls(options = {}) {
             return setupBrowseControls(options);
         }
         if (!browseControlsSeeded) {
-            // A user frequency/sort intent that happened while storage was being
+            // A user frequency intent that happened while storage was being
             // read owns the controls. The older preference snapshot must not
             // overwrite it when the await settles.
             if (browseControlsSeedReadRevision === browseControlsMutationRevision && browse) {
-                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
                 updateBrowseFrequencyButtons(
                     browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
                 );
@@ -24862,7 +24954,6 @@ async function setupBrowseControls(options = {}) {
     if (!isBrowseControlsSetupCurrent(options)) {
         return false;
     }
-    setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
     if (window.BrowseLearningControls) {
         await window.BrowseLearningControls.ready();
@@ -24880,28 +24971,6 @@ async function persistBrowsePreference(patch) {
     }
     const current = await window.AppData.preferences.getBrowse() || {};
     await window.AppData.preferences.setBrowse(Object.assign({}, current, patch));
-}
-
-function setupBrowseSortControl() {
-    const sortSelect = document.getElementById('browse-sort-select');
-    if (!sortSelect || sortSelect.dataset.bound === 'true') {
-        return;
-    }
-    const normalizeSortMode = (value) => {
-        const mode = String(value || 'default').trim().toLowerCase();
-        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
-    };
-    let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
-    if (!savedMode) savedMode = 'default';
-    sortSelect.value = normalizeSortMode(savedMode);
-    window.__browseSortMode = sortSelect.value;
-    sortSelect.addEventListener('change', () => {
-        browseControlsMutationRevision += 1;
-        window.__browseSortMode = normalizeSortMode(sortSelect.value);
-        persistBrowsePreference({ sortMode: window.__browseSortMode }).catch(console.warn);
-        refreshBrowseResults({ foreground: true });
-    });
-    sortSelect.dataset.bound = 'true';
 }
 
 function updateBrowseFrequencyButtons(filter) {
@@ -26810,7 +26879,6 @@ ensurePracticeSessionSyncListener();
         global.AppLazyLoader.markProvided([
     "js/services/browseLearningState.js",
     "js/services/readingAnalytics.js",
-    "js/components/readingAnalyticsPanel.js",
     "js/views/legacyViewBundle.js",
     "js/data/practiceRecordSource.js",
     "js/app/examActions.js",

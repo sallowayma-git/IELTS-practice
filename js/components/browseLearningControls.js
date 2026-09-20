@@ -1,7 +1,7 @@
 (function (global) {
     'use strict';
 
-    let selection = { learningState: 'all', favoritesOnly: false };
+    let selection = { learningState: 'all', favoritesOnly: false, sortMode: 'default' };
     let favorites = new Set();
     let readyPromise = null;
     let preferencesRevision = 0;
@@ -9,6 +9,8 @@
     let selectionRevision = 0;
     let bound = false;
     const labels = { all: '全部状态', unattempted: '未完成', completed: '已完成', wrong: '需复习' };
+    const sortModes = new Set(['default', 'frequency-desc', 'difficulty-desc']);
+    const normalizeSortMode = (value) => sortModes.has(String(value || '').trim()) ? String(value).trim() : 'default';
     const byId = (id) => document.getElementById(id);
 
     function readFavorites(preferences) {
@@ -29,7 +31,8 @@
                 sync();
                 const changed = previous.size !== favorites.size || [...previous].some(key => !favorites.has(key))
                     || previousSelection.learningState !== selection.learningState
-                    || previousSelection.favoritesOnly !== selection.favoritesOnly;
+                    || previousSelection.favoritesOnly !== selection.favoritesOnly
+                    || previousSelection.sortMode !== selection.sortMode;
                 if (changed && byId('browse-view')?.classList.contains('active')) await refresh();
             });
         }
@@ -39,7 +42,10 @@
                 if (revision !== preferencesRevision) return ready();
                 favorites = readFavorites(preferences);
                 if (selectionRevision === 0) {
-                    selection = global.BrowseLearningState.normalizeSelection(preferences);
+                    selection = Object.assign(global.BrowseLearningState.normalizeSelection(preferences), {
+                        sortMode: normalizeSortMode(preferences && preferences.sortMode)
+                    });
+                    global.__browseSortMode = selection.sortMode;
                 }
             }).catch((error) => {
                 if (revision !== preferencesRevision) return ready();
@@ -57,13 +63,17 @@
         panel.querySelectorAll('[name="browse-learning-state"]').forEach((input) => {
             input.checked = input.value === selection.learningState;
         });
+        panel.querySelectorAll('[name="browse-sort-mode"]').forEach((input) => {
+            input.checked = input.value === selection.sortMode;
+        });
         byId('browse-favorites-only').checked = selection.favoritesOnly;
-        const active = selection.learningState !== 'all' || selection.favoritesOnly;
-        const text = [selection.learningState !== 'all' ? labels[selection.learningState] : '',
+        const active = selection.learningState !== 'all' || selection.favoritesOnly || selection.sortMode !== 'default';
+        const text = [selection.sortMode !== 'default' ? (selection.sortMode === 'frequency-desc' ? '频率高→低' : '难度高→低') : '',
+            selection.learningState !== 'all' ? labels[selection.learningState] : '',
             selection.favoritesOnly ? '收藏' : ''].filter(Boolean).join(' · ');
         trigger.classList.toggle('active', active);
-        byId('browse-learning-label').textContent = active ? text : '筛选';
-        trigger.setAttribute('aria-label', active ? `阅读筛选：${text}` : '阅读筛选');
+        byId('browse-learning-label').textContent = '排序筛选';
+        trigger.setAttribute('aria-label', active ? `排序筛选：${text}` : '排序筛选');
     }
 
     function close(restoreFocus = false) {
@@ -84,9 +94,11 @@
         if (global.showMessage) global.showMessage('筛选或收藏未能保存，请重试。', 'error');
     }
 
-    function resetSelection() {
+    function resetSelection(options = {}) {
         selectionRevision += 1;
-        selection = { learningState: 'all', favoritesOnly: false };
+        const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
+        selection = { learningState: 'all', favoritesOnly: false, sortMode };
+        global.__browseSortMode = sortMode;
         sync();
     }
 
@@ -104,17 +116,28 @@
         });
         panel.addEventListener('change', () => {
             selectionRevision += 1;
-            selection = global.BrowseLearningState.normalizeSelection({
+            selection = Object.assign(global.BrowseLearningState.normalizeSelection({
                 learningState: panel.querySelector('[name="browse-learning-state"]:checked').value,
                 favoritesOnly: byId('browse-favorites-only').checked
+            }), {
+                sortMode: normalizeSortMode(panel.querySelector('[name="browse-sort-mode"]:checked')?.value || selection.sortMode)
             });
+            global.__browseSortMode = selection.sortMode;
             sync();
-            global.AppData.preferences.patchBrowse(selection).catch(report);
+            global.AppData.preferences.patchBrowse({
+                learningState: selection.learningState,
+                favoritesOnly: selection.favoritesOnly,
+                sortMode: selection.sortMode
+            }).catch(report);
             refresh().catch(report);
         });
         byId('browse-learning-reset').addEventListener('click', () => {
             close(true);
-            global.resetBrowseViewToAll().catch(report);
+            resetSelection();
+            global.AppData.preferences.patchBrowse({
+                learningState: 'all',
+                favoritesOnly: false
+            }).then(() => refresh()).catch(report);
         });
         const wrapper = byId('browse-learning-controls');
         wrapper.addEventListener('keydown', (event) => {
@@ -128,7 +151,7 @@
             if (!wrapper.contains(event.target)) close();
         });
         wrapper.addEventListener('focusout', (event) => {
-            if (event.relatedTarget && !wrapper.contains(event.relatedTarget)) close();
+            if (!event.relatedTarget || !wrapper.contains(event.relatedTarget)) close();
         });
     }
 

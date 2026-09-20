@@ -1012,7 +1012,7 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
-            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
+            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection({ resetSort: true });
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
             return false;
@@ -1119,6 +1119,7 @@
                 frequencyFilter: 'all',
                 learningState: 'all',
                 favoritesOnly: false,
+                sortMode: 'default',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -1150,7 +1151,8 @@
             || !isAllBrowseFilter(browse.filter)
             || browse.frequencyFilter !== 'all'
             || (browse.learningState != null && browse.learningState !== 'all')
-            || browse.favoritesOnly === true) {
+            || browse.favoritesOnly === true
+            || (browse.sortMode != null && browse.sortMode !== 'default')) {
             return false;
         }
         if (!requireStateManager) {

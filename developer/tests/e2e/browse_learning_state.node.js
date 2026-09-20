@@ -77,24 +77,15 @@ async function expectIds(page, expected) {
     }
 }
 async function resetFilters(page) {
-    await page.evaluate(() => {
-        const reset = window.resetBrowseViewToAll;
-        window.resetBrowseViewToAll = (...args) => {
-            window.resetBrowseViewToAll = reset;
-            window.__browseAcceptanceReset = reset(...args);
-            return window.__browseAcceptanceReset;
-        };
-    });
     await page.locator('#browse-learning-reset').click();
-    // Rendering is optimistic; wait for the reset owner to finish its durable
-    // preference write before a following reload or keyboard interaction.
     const reset = await page.evaluate(async () => {
-        const result = await window.__browseAcceptanceReset;
-        delete window.__browseAcceptanceReset;
+        if (typeof window.flushBrowsePreferenceWrites === 'function') await window.flushBrowsePreferenceWrites();
         const prefs = await window.AppData.preferences.getBrowse();
-        return { succeeded: result !== false, learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly };
+        return { learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly, sortMode: prefs.sortMode };
     });
-    assert.deepEqual(reset, { succeeded: true, learningState: 'all', favoritesOnly: false });
+    assert.equal(reset.learningState, 'all');
+    assert.equal(reset.favoritesOnly, false);
+    assert.equal(reset.sortMode, 'difficulty-desc');
 }
 async function syncRecords(page) {
     await page.evaluate(async () => {
@@ -217,7 +208,8 @@ try {
         await page.locator('[data-frequency-filter="low"]').click();
         await expectIds(page, []);
         await page.locator('[data-frequency-filter="low"]').click();
-        await page.locator('#browse-sort-select').selectOption('difficulty-desc');
+        await openMenu(page);
+        await page.locator('[name="browse-sort-mode"][value="difficulty-desc"]').check();
         await expectIds(page, [exams[2].id]);
         console.log(`[${mode}] reload and source isolation`);
         await page.reload();
@@ -268,7 +260,7 @@ try {
         await page.waitForFunction(() => window.app?.isInitialized === true);
         await page.evaluate(() => window.browseCategory('P1', 'reading'));
         await expectIds(page, exams.map(exam => exam.id));
-        assert.equal(await page.locator('#browse-learning-label').textContent(), '筛选');
+        assert.equal(await page.locator('#browse-learning-label').textContent(), '排序筛选');
         assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
         console.log(`[${mode}] same-page backup restore`);
         await page.evaluate(() => window.AppData.backups.create({ id: 'browse-saved-favorite' }));

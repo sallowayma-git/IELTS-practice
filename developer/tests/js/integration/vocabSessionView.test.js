@@ -666,10 +666,14 @@ async function run() {
 
     await record('list modal body owns the table scroll', () => {
         const css = readSource('css/main.css');
+        const dialogRule = css.match(/\.vocab-list-modal__dialog\s*\{([^}]*)\}/);
         const bodyRule = css.match(/\.vocab-list-modal__body\s*\{([^}]*)\}/);
         const tableWrapRule = css.match(/\.vocab-list-table-wrap\s*\{([^}]*)\}/);
+        assert.ok(dialogRule, 'Missing list modal dialog rule');
         assert.ok(bodyRule, 'Missing list modal body rule');
         assert.ok(tableWrapRule, 'Missing table wrapper rule');
+        assert.match(dialogRule[1], /height:\s*min\(90vh,\s*900px\)/);
+        assert.match(dialogRule[1], /max-height:\s*calc\(100vh\s*-\s*32px\)/);
         assert.match(bodyRule[1], /flex:\s*1 1 220px/);
         assert.match(bodyRule[1], /min-height:\s*0/);
         assert.match(bodyRule[1], /overflow:\s*hidden/);

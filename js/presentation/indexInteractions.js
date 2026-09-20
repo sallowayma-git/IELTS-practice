@@ -313,6 +313,12 @@ function ensureSettings() {
         if (collapsed && region.contains(global.document.activeElement)) {
             button.focus();
         }
+        if (global.AppData && global.AppData.preferences
+            && typeof global.AppData.preferences.patchPracticeDashboard === 'function') {
+            global.AppData.preferences.patchPracticeDashboard({ summaryCollapsed: collapsed }).catch(function (error) {
+                console.warn('[PracticeDashboard] 折叠偏好保存失败:', error);
+            });
+        }
         refreshPracticeSummaryDependentLayout();
     }
 
