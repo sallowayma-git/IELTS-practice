@@ -16,9 +16,11 @@ test('Browse uses one persisted sort/filter entry point', () => {
     assert.match(html, /name="browse-sort-mode" value="frequency-desc"/);
     assert.match(html, /name="browse-sort-mode" value="difficulty-desc"/);
     assert.match(source, /sortMode: 'default'/);
-    assert.match(source, /patchBrowse\(\{[\s\S]*sortMode: selection\.sortMode/);
+    assert.match(source, /persistSelection\(\{[\s\S]*sortMode: selection\.sortMode/);
     assert.match(source, /global\.__browseSortMode = selection\.sortMode/);
     assert.match(source, /const sortMode = options\.resetSort === true \? 'default' : selection\.sortMode/);
-    assert.match(source, /patchBrowse\(\{\s*learningState: 'all',\s*favoritesOnly: false\s*\}\)/);
+    assert.match(source, /persistSelection\(\{\s*learningState: 'all',\s*favoritesOnly: false\s*\}\)/);
+    assert.match(source, /saveBrowseViewPreferences/);
+    assert.match(source, /flushBrowsePreferenceWrites/);
     assert.match(source, /event\.key === 'Escape'/);
 });

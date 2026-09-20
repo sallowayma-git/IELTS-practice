@@ -211,6 +211,8 @@ try {
         await openMenu(page);
         await page.locator('[name="browse-sort-mode"][value="difficulty-desc"]').check();
         await expectIds(page, [exams[2].id]);
+        await page.waitForFunction(() => window.AppData.preferences.getBrowse()
+            .then(prefs => prefs.sortMode === 'difficulty-desc'));
         console.log(`[${mode}] reload and source isolation`);
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true);
@@ -250,6 +252,11 @@ try {
         assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
         await page.locator('#browse-learning-trigger').focus();
         await page.keyboard.press('Enter');
+        // The panel contains independent sort and learning-state radio
+        // groups. Focus the state group's current option before exercising
+        // native ArrowDown navigation so the assertion cannot accidentally
+        // mutate the preserved sort mode.
+        await page.locator('[name="browse-learning-state"][value="all"]').focus();
         await page.keyboard.press('ArrowDown');
         await expectIds(page, [exams[2].id, exams[3].id]);
         await page.keyboard.press('Escape');

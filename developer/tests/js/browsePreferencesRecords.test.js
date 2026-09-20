@@ -29,7 +29,8 @@ function createHarness({
     records = [],
     initialBrowse = null,
     browseReadGate = null,
-    browseWriteHook = null
+    browseWriteHook = null,
+    deferAppData = false
 } = {}) {
     let persistedBrowse = initialBrowse ? structuredClone(initialBrowse) : null;
     let failNextWrite = false;
@@ -38,26 +39,30 @@ function createHarness({
         getElementById() { return null; },
         querySelector() { return null; }
     };
-    const windowStub = {
-        AppData: {
-            ready: Promise.resolve(),
-            preferences: {
-                async getBrowse() {
-                    if (browseReadGate) await browseReadGate;
-                    return persistedBrowse ? structuredClone(persistedBrowse) : null;
-                },
-                async patchBrowse(value) {
-                    if (failNextWrite) {
-                        failNextWrite = false;
-                        throw new Error('injected preference commit failure');
-                    }
-                    if (typeof browseWriteHook === 'function') {
-                        await browseWriteHook(structuredClone(value));
-                    }
-                    persistedBrowse = structuredClone(value);
-                    return { committed: true };
+    const appData = {
+        ready: Promise.resolve(),
+        preferences: {
+            async getBrowse() {
+                if (browseReadGate) await browseReadGate;
+                return persistedBrowse ? structuredClone(persistedBrowse) : null;
+            },
+            async patchBrowse(value) {
+                if (failNextWrite) {
+                    failNextWrite = false;
+                    throw new Error('injected preference commit failure');
                 }
+                if (typeof browseWriteHook === 'function') {
+                    await browseWriteHook(structuredClone(value));
+                }
+                persistedBrowse = structuredClone(value);
+                return { committed: true };
             }
+        }
+    };
+    const windowStub = {
+        AppData: deferAppData ? null : appData,
+        enableAppData() {
+            windowStub.AppData = appData;
         },
         addEventListener() {},
         failNextBrowsePreferenceWrite() { failNextWrite = true; }
@@ -408,6 +413,29 @@ async function testFirstReadCanAwaitPersistedPreferences() {
     recordResult('首次浏览状态等待 AppData hydration', hydrated);
 }
 
+async function testQueuedPartialWriteHydratesLateAppData() {
+    const { window, readPersistedBrowse } = createHarness({
+        initialBrowse: {
+            sortMode: 'difficulty-desc',
+            learningState: 'completed'
+        },
+        deferAppData: true
+    });
+    window.getBrowseViewPreferences();
+    await Promise.resolve();
+    window.enableAppData();
+    window.saveBrowseViewPreferences({ learningState: 'all' });
+    await window.flushBrowsePreferenceWrites();
+    const persisted = readPersistedBrowse();
+    assert.strictEqual(persisted.learningState, 'all');
+    assert.strictEqual(
+        persisted.sortMode,
+        'difficulty-desc',
+        'a queued partial write must hydrate storage before replacing the default preview'
+    );
+    recordResult('浏览偏好队列写入前完成延迟 hydration', persisted);
+}
+
 async function main() {
     try {
         await testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
@@ -418,6 +446,7 @@ async function main() {
         await testConsecutiveAnchorSnapshotsReplacePendingPredecessor();
         await testFailedPreferenceWriteDoesNotReplaceCommittedCache();
         await testFirstReadCanAwaitPersistedPreferences();
+        await testQueuedPartialWriteHydratesLateAppData();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

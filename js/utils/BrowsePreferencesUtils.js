@@ -6,6 +6,7 @@
 
     let browsePreferencesCache = null;
     let browsePreferencesReady = null;
+    let browsePreferencesHydrated = false;
     let browsePreferenceWriteQueue = Promise.resolve();
     const pendingBrowsePreferenceWrites = [];
     let browseAnchorProjection = null;
@@ -100,6 +101,15 @@
         };
     }
 
+    function normalizeBrowsePreferencesSnapshot(parsed) {
+        const next = Object.assign({}, getDefaultBrowsePreferences(), parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
+        return next;
+    }
+
     function mergeBrowseAnchors(currentAnchors = {}, updates) {
         const next = Object.assign({}, currentAnchors);
         if (!updates || typeof updates !== 'object') {
@@ -148,20 +158,12 @@
                 if (!global.AppData || !global.AppData.preferences) return;
                 await global.AppData.ready;
                 const parsed = await global.AppData.preferences.getBrowse();
-                const defaults = getDefaultBrowsePreferences();
-                const next = Object.assign({}, defaults, parsed || {});
-                if (!next.scrollPositions || typeof next.scrollPositions !== 'object') next.scrollPositions = {};
-                next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-                browsePreferencesCache = next;
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(parsed);
+                browsePreferencesHydrated = true;
             }).catch((error) => console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error));
         }
         try {
-            const next = Object.assign({}, getDefaultBrowsePreferences(), browsePreferencesCache || {});
-            if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
-                next.scrollPositions = {};
-            }
-            next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-            return next;
+            return normalizeBrowsePreferencesSnapshot(browsePreferencesCache);
         } catch (error) {
             console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
             return getDefaultBrowsePreferences();
@@ -194,7 +196,7 @@
 
     function mergeBrowsePreferences(current, partial = {}, options = {}) {
         const replaceListAnchors = options.replaceListAnchors === true;
-        return {
+        return Object.assign({}, current, partial, {
             scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
             listAnchors: replaceListAnchors
                 ? mergeBrowseAnchors({}, partial.listAnchors)
@@ -205,7 +207,7 @@
             lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
                 ? (partial.lastFilter || null)
                 : current.lastFilter
-        };
+        });
     }
 
     function removePendingBrowsePreferenceWrite(request) {
@@ -247,6 +249,20 @@
         const outcome = browsePreferenceWriteQueue.then(async () => {
             await global.AppData.ready;
             if (browsePreferencesReady) await browsePreferencesReady;
+            // Browse preferences can also be changed by backup restores and
+            // legacy controllers outside this queue. Refresh the accepted
+            // baseline before creating a full snapshot so a partial write
+            // cannot resurrect stale state (especially sort/favorites).
+            const persisted = await global.AppData.preferences.getBrowse();
+            if (persisted && typeof persisted === 'object') {
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
+                browsePreferencesHydrated = true;
+            } else if (!browsePreferencesHydrated) {
+                // A lazy bundle may be evaluated before AppData is exposed;
+                // still mark the first storage read as the accepted baseline.
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
+                browsePreferencesHydrated = true;
+            }
             const next = mergeBrowsePreferences(
                 getBrowseViewPreferences(),
                 request.partial,

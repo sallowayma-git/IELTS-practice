@@ -6375,8 +6375,30 @@
             const entries = global.ReadingVocabStore?.getAll?.() || [];
             const query = String(this.state.searchQuery || '').trim().toLowerCase();
             if (!query) return entries;
+            const articles = Array.isArray(global.ReadingVocabStore?._state?.snapshot?.reading?.articles)
+                ? global.ReadingVocabStore._state.snapshot.reading.articles : [];
+            const articlesById = new Map(articles
+                .filter(article => article && typeof article === 'object' && article.id)
+                .map(article => [article.id, article]));
             return entries.filter(item => {
+                // Associations are the authoritative many-to-many links. A word
+                // can have a secondary/manual article association without an
+                // occurrence, so occurrence-derived titles are not sufficient
+                // for notebook search. The normalized projection keeps only the
+                // article id on each association; resolve that id back to the
+                // article metadata when indexing the search text.
+                const associationText = (item.associations || []).flatMap(association => {
+                    const article = articlesById.get(association.articleId)
+                        || association.article || association.articleMetadata
+                        || association.metadata?.article || null;
+                    return [association.examId, association.examTitle, association.title,
+                        association.metadata?.examId, association.metadata?.examTitle,
+                        article?.id, article?.examId, article?.title, article?.sourceId,
+                        article?.metadata?.examId, article?.metadata?.examTitle,
+                        ...(article?.contentRefs || [])].filter(Boolean);
+                });
                 const sourceText = [item.examTitle, item.examId, item.context,
+                    ...associationText,
                     ...(item.highlights || []).map(row => row.text || '')].join(' ').toLowerCase();
                 return [item.word, sourceText].join(' ').toLowerCase().includes(query);
             });

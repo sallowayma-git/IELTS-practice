@@ -43,6 +43,22 @@ async function sync(page) {
     await page.evaluate(() => ensurePracticeRecordsSync('reading-analytics-e2e', { forceRender: true, requirePostCommitRead: true }));
 }
 
+async function readReadingAnalyticsMetrics(page) {
+    return page.evaluate(() => {
+        const text = id => document.getElementById(id)?.textContent?.trim() || '';
+        return {
+            weightedAccuracy: text('avg-score'),
+            weightedLabel: text('practice-accuracy-label'),
+            weightedMeta: text('practice-accuracy-meta'),
+            parts: {
+                p1: text('practice-parts-p1-accuracy'),
+                p2: text('practice-parts-p2-accuracy'),
+                p3: text('practice-parts-p3-accuracy')
+            }
+        };
+    });
+}
+
 try {
     browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'],
         ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
@@ -112,7 +128,14 @@ try {
         await page.waitForFunction(() => document.getElementById('avg-score')?.textContent === '72.5%');
         await page.evaluate(() => searchPracticeHistory(''));
         await sync(page);
-        const beforeSwitch = await panel.innerText();
+        // The trend, heatmap and history list are intentionally asynchronous
+        // projections of the active library and may change while the shared
+        // reading metrics remain stable. Select the parts widget explicitly,
+        // then compare only the product invariants required across a library
+        // switch.
+        await page.locator('#practice-custom-card [aria-label="配置自定义组件"]').click();
+        await page.locator('#practice-custom-card [data-practice-widget="parts"]').click();
+        const beforeSwitch = await readReadingAnalyticsMetrics(page);
         await page.evaluate(async () => {
             const source = (await window.resolveActiveLibraryIndex()).filter(exam => exam.type === 'reading').slice(0, 3);
             const index = source.map((exam, i) => ({ ...exam, id: ['a', 'b', 'c'][i], category: 'P2' }));
@@ -121,7 +144,8 @@ try {
         });
         await page.locator('nav button[data-view="practice"]').click();
         await sync(page);
-        assert.equal(await panel.innerText(), beforeSwitch);
+        assert.deepEqual(await readReadingAnalyticsMetrics(page), beforeSwitch,
+            'weighted accuracy and P1/P2/P3 metrics must survive a library switch');
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
         const closeAfterReload = page.locator('[data-library-action="close"]');

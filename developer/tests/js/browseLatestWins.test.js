@@ -3337,7 +3337,7 @@ authoritativeSandbox.getPersistedBrowseFilter = () => {
 };
 vm.runInContext(source, authoritativeContext, { filename: 'js/main.js' });
 const authoritativeInitialization = authoritativeSandbox.initializeBrowseView({ skipLoad: true });
-for (let attempt = 0; attempt < 16 && authoritativePreferencePatches.length === 0; attempt += 1) {
+for (let attempt = 0; attempt < 64 && authoritativePreferencePatches.length === 0; attempt += 1) {
     await Promise.resolve();
 }
 assert.strictEqual(
@@ -3358,8 +3358,8 @@ assert.strictEqual(
 );
 assert.strictEqual(
     authoritativeDurableReads,
-    authoritativeDurableReadsAfterPreferencesLoad + 1,
-    'the authoritative drain must verify the storage adapter after flushing its write queue'
+    authoritativeDurableReadsAfterPreferencesLoad + 2,
+    'the authoritative drain must refresh the queue baseline and verify the storage adapter after flushing'
 );
 assert.deepStrictEqual(
     authoritativeDurableBrowse.lastFilter,
@@ -3381,8 +3381,8 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(
     authoritativeDurableReads,
-    authoritativeDurableReadsAfterPreferencesLoad + 2,
-    'the successful retry must perform a fresh durable readback'
+    authoritativeDurableReadsAfterPreferencesLoad + 4,
+    'the successful retry must refresh the queue baseline and perform a fresh durable readback'
 );
 assert.strictEqual(
     authoritativePersistedReads,

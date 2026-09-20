@@ -94,6 +94,19 @@
         if (global.showMessage) global.showMessage('筛选或收藏未能保存，请重试。', 'error');
     }
 
+    function persistSelection(patch) {
+        // Keep learning-control writes in the same queue as scroll/filter
+        // preferences. E2E callers use flushBrowsePreferenceWrites() as the
+        // durable barrier, so a direct patchBrowse promise would otherwise be
+        // invisible to that barrier and a reset could still read stale state.
+        if (typeof global.saveBrowseViewPreferences === 'function'
+            && typeof global.flushBrowsePreferenceWrites === 'function') {
+            global.saveBrowseViewPreferences(patch);
+            return global.flushBrowsePreferenceWrites();
+        }
+        return global.AppData.preferences.patchBrowse(patch);
+    }
+
     function resetSelection(options = {}) {
         selectionRevision += 1;
         const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
@@ -124,7 +137,7 @@
             });
             global.__browseSortMode = selection.sortMode;
             sync();
-            global.AppData.preferences.patchBrowse({
+            persistSelection({
                 learningState: selection.learningState,
                 favoritesOnly: selection.favoritesOnly,
                 sortMode: selection.sortMode
@@ -134,7 +147,7 @@
         byId('browse-learning-reset').addEventListener('click', () => {
             close(true);
             resetSelection();
-            global.AppData.preferences.patchBrowse({
+            persistSelection({
                 learningState: 'all',
                 favoritesOnly: false
             }).then(() => refresh()).catch(report);

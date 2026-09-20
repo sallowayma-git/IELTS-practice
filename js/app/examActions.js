@@ -1012,7 +1012,11 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
-            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection({ resetSort: true });
+            // Reset the learning-state/favorites filters without changing the
+            // user's sort choice. The reset control and activation recovery
+            // share this owner, so changing sort here would make a persisted
+            // difficulty/frequency ordering disappear on the next refresh.
+            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
             return false;
@@ -1119,7 +1123,6 @@
                 frequencyFilter: 'all',
                 learningState: 'all',
                 favoritesOnly: false,
-                sortMode: 'default',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -1151,8 +1154,7 @@
             || !isAllBrowseFilter(browse.filter)
             || browse.frequencyFilter !== 'all'
             || (browse.learningState != null && browse.learningState !== 'all')
-            || browse.favoritesOnly === true
-            || (browse.sortMode != null && browse.sortMode !== 'default')) {
+            || browse.favoritesOnly === true) {
             return false;
         }
         if (!requireStateManager) {

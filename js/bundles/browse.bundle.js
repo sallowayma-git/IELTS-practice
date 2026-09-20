@@ -5808,7 +5808,11 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
-            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection({ resetSort: true });
+            // Reset the learning-state/favorites filters without changing the
+            // user's sort choice. The reset control and activation recovery
+            // share this owner, so changing sort here would make a persisted
+            // difficulty/frequency ordering disappear on the next refresh.
+            if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);
             return false;
@@ -5915,7 +5919,6 @@
                 frequencyFilter: 'all',
                 learningState: 'all',
                 favoritesOnly: false,
-                sortMode: 'default',
                 filter: { category: 'all', type: 'all' }
             });
             return true;
@@ -5947,8 +5950,7 @@
             || !isAllBrowseFilter(browse.filter)
             || browse.frequencyFilter !== 'all'
             || (browse.learningState != null && browse.learningState !== 'all')
-            || browse.favoritesOnly === true
-            || (browse.sortMode != null && browse.sortMode !== 'default')) {
+            || browse.favoritesOnly === true) {
             return false;
         }
         if (!requireStateManager) {
@@ -20311,6 +20313,7 @@ window.BrowseStateManager = BrowseStateManager;
 
     let browsePreferencesCache = null;
     let browsePreferencesReady = null;
+    let browsePreferencesHydrated = false;
     let browsePreferenceWriteQueue = Promise.resolve();
     const pendingBrowsePreferenceWrites = [];
     let browseAnchorProjection = null;
@@ -20405,6 +20408,15 @@ window.BrowseStateManager = BrowseStateManager;
         };
     }
 
+    function normalizeBrowsePreferencesSnapshot(parsed) {
+        const next = Object.assign({}, getDefaultBrowsePreferences(), parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
+        return next;
+    }
+
     function mergeBrowseAnchors(currentAnchors = {}, updates) {
         const next = Object.assign({}, currentAnchors);
         if (!updates || typeof updates !== 'object') {
@@ -20453,20 +20465,12 @@ window.BrowseStateManager = BrowseStateManager;
                 if (!global.AppData || !global.AppData.preferences) return;
                 await global.AppData.ready;
                 const parsed = await global.AppData.preferences.getBrowse();
-                const defaults = getDefaultBrowsePreferences();
-                const next = Object.assign({}, defaults, parsed || {});
-                if (!next.scrollPositions || typeof next.scrollPositions !== 'object') next.scrollPositions = {};
-                next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-                browsePreferencesCache = next;
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(parsed);
+                browsePreferencesHydrated = true;
             }).catch((error) => console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error));
         }
         try {
-            const next = Object.assign({}, getDefaultBrowsePreferences(), browsePreferencesCache || {});
-            if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
-                next.scrollPositions = {};
-            }
-            next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-            return next;
+            return normalizeBrowsePreferencesSnapshot(browsePreferencesCache);
         } catch (error) {
             console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
             return getDefaultBrowsePreferences();
@@ -20499,7 +20503,7 @@ window.BrowseStateManager = BrowseStateManager;
 
     function mergeBrowsePreferences(current, partial = {}, options = {}) {
         const replaceListAnchors = options.replaceListAnchors === true;
-        return {
+        return Object.assign({}, current, partial, {
             scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
             listAnchors: replaceListAnchors
                 ? mergeBrowseAnchors({}, partial.listAnchors)
@@ -20510,7 +20514,7 @@ window.BrowseStateManager = BrowseStateManager;
             lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
                 ? (partial.lastFilter || null)
                 : current.lastFilter
-        };
+        });
     }
 
     function removePendingBrowsePreferenceWrite(request) {
@@ -20552,6 +20556,20 @@ window.BrowseStateManager = BrowseStateManager;
         const outcome = browsePreferenceWriteQueue.then(async () => {
             await global.AppData.ready;
             if (browsePreferencesReady) await browsePreferencesReady;
+            // Browse preferences can also be changed by backup restores and
+            // legacy controllers outside this queue. Refresh the accepted
+            // baseline before creating a full snapshot so a partial write
+            // cannot resurrect stale state (especially sort/favorites).
+            const persisted = await global.AppData.preferences.getBrowse();
+            if (persisted && typeof persisted === 'object') {
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
+                browsePreferencesHydrated = true;
+            } else if (!browsePreferencesHydrated) {
+                // A lazy bundle may be evaluated before AppData is exposed;
+                // still mark the first storage read as the accepted baseline.
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
+                browsePreferencesHydrated = true;
+            }
             const next = mergeBrowsePreferences(
                 getBrowseViewPreferences(),
                 request.partial,
@@ -21376,6 +21394,19 @@ window.BrowseStateManager = BrowseStateManager;
         if (global.showMessage) global.showMessage('筛选或收藏未能保存，请重试。', 'error');
     }
 
+    function persistSelection(patch) {
+        // Keep learning-control writes in the same queue as scroll/filter
+        // preferences. E2E callers use flushBrowsePreferenceWrites() as the
+        // durable barrier, so a direct patchBrowse promise would otherwise be
+        // invisible to that barrier and a reset could still read stale state.
+        if (typeof global.saveBrowseViewPreferences === 'function'
+            && typeof global.flushBrowsePreferenceWrites === 'function') {
+            global.saveBrowseViewPreferences(patch);
+            return global.flushBrowsePreferenceWrites();
+        }
+        return global.AppData.preferences.patchBrowse(patch);
+    }
+
     function resetSelection(options = {}) {
         selectionRevision += 1;
         const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
@@ -21406,7 +21437,7 @@ window.BrowseStateManager = BrowseStateManager;
             });
             global.__browseSortMode = selection.sortMode;
             sync();
-            global.AppData.preferences.patchBrowse({
+            persistSelection({
                 learningState: selection.learningState,
                 favoritesOnly: selection.favoritesOnly,
                 sortMode: selection.sortMode
@@ -21416,7 +21447,7 @@ window.BrowseStateManager = BrowseStateManager;
         byId('browse-learning-reset').addEventListener('click', () => {
             close(true);
             resetSelection();
-            global.AppData.preferences.patchBrowse({
+            persistSelection({
                 learningState: 'all',
                 favoritesOnly: false
             }).then(() => refresh()).catch(report);

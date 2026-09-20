@@ -4,6 +4,18 @@
     if (!timing) return;
     const now = () => global.performance.now();
     const token = () => global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const ACQUISITION_RETRY_BASE_MS = 1000;
+    const ACQUISITION_RETRY_MAX_MS = 30000;
+    const NON_RETRYABLE_ACQUISITION_ERRORS = new Set([
+        'TIMING_FINALIZED',
+        'TIMING_STALE_WRITER',
+        'TIMING_STALE_REVISION',
+        'VALIDATION'
+    ]);
+
+    function isRetryableAcquisitionError(error) {
+        return !NON_RETRYABLE_ACQUISITION_ERRORS.has(String(error?.code || '').trim().toUpperCase());
+    }
 
     class Controller {
         constructor(context) {
@@ -16,6 +28,9 @@
             this.active = null;
             this.generation = 0;
             this.error = '';
+            this.retryTimer = null;
+            this.retryAttempt = 0;
+            this.retryKey = null;
             this.keyboardFocusAt = -Infinity;
             this.attach();
             this.interval = global.setInterval(() => {
@@ -43,6 +58,36 @@
                 this.save(this.active).catch(() => {});
             }
             this.render();
+        }
+        clearAcquisitionRetry(resetAttempt = true) {
+            if (this.retryTimer !== null && typeof global.clearTimeout === 'function') {
+                global.clearTimeout(this.retryTimer);
+            }
+            this.retryTimer = null;
+            if (resetAttempt) this.retryAttempt = 0;
+            this.retryKey = null;
+        }
+        scheduleAcquisitionRetry(key, draft) {
+            if (this.retryTimer !== null || typeof global.setTimeout !== 'function') return;
+            const context = this.context();
+            if (!this.failedActivation || this.failedActivation.key !== key
+                || this.key(context) !== key || !context.editable) return;
+            const attempt = this.retryAttempt++;
+            const delay = Math.min(ACQUISITION_RETRY_MAX_MS,
+                ACQUISITION_RETRY_BASE_MS * (2 ** Math.min(attempt, 5)));
+            this.retryKey = key;
+            this.retryTimer = global.setTimeout(() => {
+                this.retryTimer = null;
+                const current = this.context();
+                if (!this.failedActivation || this.failedActivation.key !== key
+                    || this.key(current) !== key || !current.editable) {
+                    if (this.failedActivation?.key === key) this.failedActivation = null;
+                    this.retryAttempt = 0;
+                    this.retryKey = null;
+                    return;
+                }
+                return this.activate(draft, { automaticRetry: true });
+            }, delay);
         }
         async loadEntry(ctx, draft) {
             const key = this.key(ctx);
@@ -75,18 +120,21 @@
             this.entries.set(key, entry);
             return entry;
         }
-        async activate(draft = null) {
+        async activate(draft = null, options = {}) {
             const ctx = this.context();
             if (!ctx.sessionId || !ctx.examId || !ctx.dataset || !ctx.editable
                 || !Object.prototype.hasOwnProperty.call(ctx, 'libraryConfigurationId')
                 || ctx.libraryConfigurationId === undefined) {
                 this.generation++;
+                this.clearAcquisitionRetry();
                 this.failedActivation = null;
                 this.stop();
                 return;
             }
             const key = this.key(ctx);
             if (this.active?.key === key) { this.refresh(); return; }
+            const preservingRetryBackoff = options.automaticRetry === true && this.retryKey === key;
+            this.clearAcquisitionRetry(!preservingRetryBackoff);
             const attemptKey = JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]);
             if (!this.pauseRestorations.has(attemptKey)) {
                 this.pauseRestorations.set(attemptKey, { timerRevision: ctx.timerInteractionRevision ?? 0, handled: false });
@@ -111,12 +159,14 @@
                     }
                 }
                 this.failedActivation = null;
+                this.clearAcquisitionRetry();
                 this.error = '';
                 this.refresh();
             } catch (error) {
                 if (generation !== this.generation || this.key(this.context()) !== key || !this.context().editable) return;
                 this.failedActivation = { key, draft };
                 this.error = error.code === 'TIMING_FINALIZED' ? '该次计时已经提交' : `计时不可用：${error.message}`;
+                if (isRetryableAcquisitionError(error)) this.scheduleAcquisitionRetry(key, draft);
                 this.render();
             }
         }
@@ -125,7 +175,11 @@
             if (!ctx.editable) return;
             const key = this.key(ctx);
             if (this.active?.key === key) return this.save();
-            if (this.failedActivation?.key === key) return this.activate(this.failedActivation.draft);
+            if (this.failedActivation?.key === key) {
+                const draft = this.failedActivation.draft;
+                this.clearAcquisitionRetry();
+                return this.activate(draft);
+            }
         }
         snapshot(examId = null) {
             const entry = examId
