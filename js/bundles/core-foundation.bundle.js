@@ -2936,6 +2936,11 @@
 
     const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations', 'reviewState']);
+    // 复盘调度状态按“一条练习记录一个状态”建模：套题也只有根级一个 reviewState。
+    // 套题子篇的标注（highlights/notes/...）会拆进 annotations.suiteEntries[examId]，
+    // 但 reviewState 绝不能跟着进去——否则一套题会出现 N 份互相矛盾的调度状态，
+    // 且 full 投影回灌时会把子篇状态覆盖回根级。
+    const SUITE_ENTRY_ANNOTATION_FIELDS = new Set(Array.from(ANNOTATION_FIELDS).filter((field) => field !== 'reviewState'));
 
     function withoutRawData(value) {
         if (Array.isArray(value)) return value.map(withoutRawData);
@@ -2966,11 +2971,16 @@
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
-                for (const annotationKey of ANNOTATION_FIELDS) {
+                for (const annotationKey of SUITE_ENTRY_ANNOTATION_FIELDS) {
                     if (hasOwn(next, annotationKey)) { annotation[annotationKey] = next[annotationKey]; delete next[annotationKey]; }
                     if (next.realData && hasOwn(next.realData, annotationKey)) delete next.realData[annotationKey];
                     if (next.rawData && hasOwn(next.rawData, annotationKey)) delete next.rawData[annotationKey];
                 }
+                // 子篇上出现的 reviewState 一律丢弃（旧格式导入 / full 投影回灌都可能带上它），
+                // 既不进 detail 也不进 annotations.suiteEntries。
+                delete next.reviewState;
+                if (next.realData) delete next.realData.reviewState;
+                if (next.rawData) delete next.rawData.reviewState;
                 delete next.realData; delete next.rawData;
                 if (Object.keys(annotation).length) {
                     if (!annotations.suiteEntries) annotations.suiteEntries = {};
@@ -3066,64 +3076,109 @@
         return validIso(summary.completedAt || summary.timestamp || summary.date) || nowIso();
     }
 
+    // 复盘状态不是练习事实：它既不能被一次重新落库覆盖，也不能因为自身损坏而
+    // 阻断练习记录保存（那等于用调度元数据换掉用户真实成绩）。非法状态一律按“没有状态”
+    // 处理——listReviewQueue 同样会跳过它，用户重新完成一次练习即可重新入队。
+    function safeReviewState(value) {
+        if (!value) return null;
+        try { return practiceReviewScheduler.normalizeState(value); }
+        catch (_) { return null; }
+    }
+
+    function reviewWrongCount(summary) {
+        const total = Number(summary && summary.totalQuestions);
+        const correct = Number(summary && summary.correctAnswers);
+        if (!Number.isFinite(total) || !Number.isFinite(correct)) return 0;
+        return Math.max(0, total - correct);
+    }
+
     function prepareReviewLayersForUpsert(layers, existing) {
         const next = clone(layers);
-        const persistedAnnotations = asObject(existing && existing.annotations && existing.annotations.data);
-        const persistedState = persistedAnnotations.reviewState;
+        // 已存在的持久化状态优先级最高：同一 recordId 再次落库（补写/合并重试）
+        // 不得重置用户已经复盘出来的间隔。
+        const persistedState = safeReviewState(asObject(existing && existing.annotations && existing.annotations.data).reviewState);
         if (persistedState) {
-            next.annotations.reviewState = practiceReviewScheduler.normalizeState(persistedState);
+            next.annotations.reviewState = persistedState;
             return next;
         }
-        if (next.annotations.reviewState) {
-            next.annotations.reviewState = practiceReviewScheduler.normalizeState(next.annotations.reviewState);
+        const importedState = safeReviewState(next.annotations.reviewState);
+        if (importedState) {
+            next.annotations.reviewState = importedState;
             return next;
         }
+        delete next.annotations.reviewState;
         const summary = next.summary;
-        const isNew = !(existing && existing.summary);
-        const wrongCount = Math.max(0, Number(summary.totalQuestions) - Number(summary.correctAnswers));
-        if (isNew && wrongCount > 0 && practiceType(summary) === 'reading' && isRealPracticeRecord(summary)) {
+        // 墓碑行（practiceLayersForUpsert 在 revision>0 但记录已删除时给出 data:null）
+        // 不算“已存在记录”，删除后重新完成的练习应当重新入队。
+        const isNew = !(existing && existing.summary && existing.summary.data);
+        if (isNew
+            && reviewWrongCount(summary) > 0
+            && practiceType(summary) === 'reading'
+            && isRealPracticeRecord(summary)) {
             next.annotations.reviewState = practiceReviewScheduler.createInitialState(reviewReferenceTime(summary));
         }
         return next;
     }
 
+    function practiceTimeValue(record) {
+        const raw = record && (record.date || record.completedAt || record.timestamp);
+        const parsed = Date.parse(raw);
+        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    }
+
+    // 队列顺序是产品承诺的一部分（先到期、再按计划时间、错题多的先做），
+    // 最后必须落到一个稳定键，否则同分记录在两次渲染间会互换位置。
     function reviewQueueComparator(left, right) {
         if (left.isDue !== right.isDue) return left.isDue ? -1 : 1;
         const dueOrder = String(left.reviewState.nextReview).localeCompare(String(right.reviewState.nextReview));
         if (dueOrder) return dueOrder;
         if (left.wrongCount !== right.wrongCount) return right.wrongCount - left.wrongCount;
-        const dateOrder = String(left.date || left.completedAt || left.timestamp || '')
-            .localeCompare(String(right.date || right.completedAt || right.timestamp || ''));
-        if (dateOrder) return dateOrder;
+        const leftTime = practiceTimeValue(left);
+        const rightTime = practiceTimeValue(right);
+        if (leftTime !== rightTime) return leftTime - rightTime;
         return String(left.id || '').localeCompare(String(right.id || ''));
     }
 
+    function localDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // “未来 7 天负荷”只由当前 reviewState 推导：今日格子额外吃下所有逾期任务，
+    // 因为它们就是用户今天真正要做的量。这里不生产任何无法从状态还原的分母
+    // （例如“原计划 N / 已完成 M”），避免 UI 承诺数据层无法保证的口径。
     function buildReviewQueueStats(records, now) {
         const start = new Date(now); start.setHours(0, 0, 0, 0);
-        const end = new Date(start); end.setDate(end.getDate() + 1);
         const buckets = Array.from({ length: 7 }, (_unused, index) => {
             const date = new Date(start); date.setDate(date.getDate() + index);
-            return { date: date.toISOString(), count: 0 };
+            return { date: date.toISOString(), dateKey: localDateKey(date), count: 0, includesOverdue: index === 0 };
         });
+        const dayMs = 24 * 60 * 60 * 1000;
         let dueToday = 0;
         let overdue = 0;
         let completedToday = 0;
         for (const record of records) {
             const due = new Date(record.reviewState.nextReview);
-            if (due < start) overdue += 1;
-            else if (due < end) dueToday += 1;
-            const reviewed = record.reviewState.lastReviewed ? new Date(record.reviewState.lastReviewed) : null;
-            if (reviewed && reviewed >= start && reviewed < end) completedToday += 1;
-            for (let index = 0; index < buckets.length; index += 1) {
-                const bucketStart = new Date(start); bucketStart.setDate(bucketStart.getDate() + index);
-                const bucketEnd = new Date(bucketStart); bucketEnd.setDate(bucketEnd.getDate() + 1);
-                if (due >= bucketStart && due < bucketEnd) { buckets[index].count += 1; break; }
+            const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            const dayOffset = Math.round((dueDay.getTime() - start.getTime()) / dayMs);
+            if (dayOffset < 0) {
+                overdue += 1;
+                buckets[0].count += 1;
+            } else if (dayOffset < buckets.length) {
+                if (dayOffset === 0) dueToday += 1;
+                buckets[dayOffset].count += 1;
             }
+            const reviewed = record.reviewState.lastReviewed ? new Date(record.reviewState.lastReviewed) : null;
+            if (reviewed && localDateKey(reviewed) === localDateKey(start)) completedToday += 1;
         }
         return {
             dueToday,
             overdue,
+            dueNow: dueToday + overdue,
             completedToday,
+            total: records.length,
             futureSevenDayTotal: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
             buckets
         };
@@ -3475,14 +3530,11 @@
             for (const summary of asArray(snapshot.practiceSummaries)) {
                 if (!isRealPracticeRecord(summary) || practiceType(summary) !== 'reading') continue;
                 const annotations = asObject(annotationsById.get(practiceLayerId(summary)));
-                if (!annotations.reviewState) continue;
-                let reviewState;
-                try { reviewState = practiceReviewScheduler.normalizeState(annotations.reviewState); }
-                catch (_) { continue; }
-                const wrongCount = Math.max(0, Number(summary.totalQuestions) - Number(summary.correctAnswers));
+                const reviewState = safeReviewState(annotations.reviewState);
+                if (!reviewState) continue;
+                const wrongCount = reviewWrongCount(summary);
                 records.push(Object.assign({}, clone(summary), {
                     reviewState,
-                    review: clone(reviewState),
                     wrongCount,
                     isDue: new Date(reviewState.nextReview) <= now
                 }));
@@ -3526,8 +3578,10 @@
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
                 if (!annotations.reviewState) throw new AppDataError('VALIDATION', `Practice record is not scheduled for review: ${recordId}`);
                 const normalized = practiceReviewScheduler.normalizeState(annotations.reviewState);
+                // 同一 reviewAttemptId 只允许生效一次：跨标签页重复提交、宿主重放 ACK
+                // 或用户连点评分按钮都不得把间隔推进两次。
                 if (normalized.lastReviewAttemptId === reviewAttemptId) {
-                    return { committed: false, noop: true, operationId: mutation.operationId, revisions: {} };
+                    return Object.assign(await kernel.journalNoop(mutation), { noop: true, duplicate: true });
                 }
                 try {
                     annotations.reviewState = practiceReviewScheduler.scheduleOutcome(
@@ -3552,14 +3606,17 @@
                 const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
                 if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
+                // 标注补丁只承载内容（highlights/notes/marks/scrollY）。复盘调度状态的唯一
+                // 写入口是 recordReviewOutcome：否则题目页可以借标注同步伪造复盘进度。
+                const patch = clone(asObject(command.patch)); delete patch.reviewState;
                 const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
                 if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
                     if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
-                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(asObject(command.patch))) });
+                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(patch)) });
                 } else {
                     if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
-                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
-                    Object.assign(annotations, clone(asObject(command.patch)));
+                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(patch)) });
+                    Object.assign(annotations, clone(patch));
                 }
                 return kernel.mutateEntities([{
                     type: 'upsert',
@@ -5502,6 +5559,7 @@
     var WRITE_DELAY_MS = 8000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
+    var BANNER_ID = 'external-backup-permission-banner';
 
     var state = {
         ready: false,
@@ -5523,6 +5581,7 @@
         silentFlushTimer: null,
         unsubscribeCommitted: null,
         visibilityHandler: null,
+        statusListeners: [],
         meta: {
             directoryName: null,
             lastWriteAt: null,
@@ -6944,7 +7003,180 @@
         return modal;
     }
 
+    // ------------------------------------------------------------------
+    // 权限恢复与状态广播
+    //
+    // 启动阶段永远只 queryPermission（见 ensureReady）：自动 requestPermission
+    // 既拿不到 transient activation，也会在用户什么都没点的时候弹系统对话框。
+    // 恢复授权只能由下面的 reauthorize() 承担，且必须由真实点击直接调用。
+    // ------------------------------------------------------------------
+    function onStatusChange(listener) {
+        if (typeof listener !== 'function') return function noop() {};
+        state.statusListeners.push(listener);
+        try {
+            listener(getStatus());
+        } catch (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+        }
+        return function unsubscribe() {
+            var index = state.statusListeners.indexOf(listener);
+            if (index >= 0) state.statusListeners.splice(index, 1);
+        };
+    }
+
+    function notifyStatusChange() {
+        if (!state.statusListeners.length) return;
+        var status = getStatus();
+        state.statusListeners.slice().forEach(function invoke(listener) {
+            try {
+                listener(status);
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+            }
+        });
+    }
+
+    /**
+     * 只能由用户点击直接调用：requestPermission 必须是这条路径上的第一个 await，
+     * 否则 transient activation 会在前面的 await 里过期，浏览器会直接拒绝弹窗。
+     */
+    async function reauthorize() {
+        if (!supportsFileSystemAccess()) return { success: false, reason: 'unsupported' };
+        var handle = state.directoryHandle;
+        if (!handle) {
+            // 句柄还没恢复完：此时已经不可能保住本次点击的激活状态，
+            // 只查询一次并请用户再点一次，而不是偷偷弹一个注定失败的窗。
+            await ensureReady();
+            handle = state.directoryHandle;
+            if (!handle) {
+                refreshPanel();
+                return { success: false, reason: 'unbound' };
+            }
+            state.permission = await queryPermission(handle, 'readwrite');
+            refreshPanel();
+            return state.permission === 'granted'
+                ? { success: true, reason: 'granted' }
+                : { success: false, reason: 'activation_lost' };
+        }
+        var permission = 'denied';
+        try {
+            if (typeof handle.requestPermission === 'function') {
+                permission = await handle.requestPermission({ mode: 'readwrite' });
+            }
+        } catch (_) {
+            permission = 'denied';
+        }
+        state.permission = permission;
+        refreshPanel();
+        if (permission !== 'granted') return { success: false, reason: 'denied' };
+        // 待恢复状态下绝不能顺手写盘：那会用本机数据覆盖用户还没读回来的备份。
+        if (state.meta.awaitingRestore) return { success: true, reason: 'restore_required' };
+        if (state.dirty && !state.suspended && !state.resetPreparing) scheduleSilentFlush();
+        return { success: true, reason: 'granted' };
+    }
+
+    function resolveBannerMode(status) {
+        if (!status.supported || !status.bound || status.suspended || status.resetPreparing) return null;
+        if (status.awaitingRestore) return status.permissionGranted ? 'restore' : 'reauthorize-restore';
+        return status.permissionGranted ? null : 'reauthorize';
+    }
+
+    var BANNER_COPY = {
+        'reauthorize': {
+            title: '本地备份权限已失效',
+            detail: '浏览器已收回文件夹访问权限，练习数据暂时无法写入磁盘备份。',
+            action: '恢复备份权限'
+        },
+        'reauthorize-restore': {
+            title: '本地备份权限已失效',
+            detail: '该文件夹里已有备份，恢复权限后请先「从备份恢复」，不会自动覆盖。',
+            action: '恢复备份权限'
+        },
+        'restore': {
+            title: '检测到已有备份',
+            detail: '为避免覆盖磁盘上的备份，自动写入已暂停，请先完成一次恢复。',
+            action: '打开备份面板'
+        }
+    };
+
+    // 非阻塞的全局横幅：只提示，不拦截任何操作；恢复授权成功后自行消失。
+    function renderGlobalBanner() {
+        if (!global.document || !global.document.body) return;
+        var status = getStatus();
+        var mode = resolveBannerMode(status);
+        var existing = global.document.getElementById(BANNER_ID);
+        if (!mode) {
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+            return;
+        }
+        var copy = BANNER_COPY[mode];
+        var banner = existing;
+        if (!banner) {
+            banner = global.document.createElement('div');
+            banner.id = BANNER_ID;
+            banner.className = 'app-global-banner app-global-banner--backup';
+            banner.setAttribute('role', 'region');
+            banner.setAttribute('aria-live', 'polite');
+            banner.setAttribute('aria-label', '本地备份状态');
+            global.document.body.appendChild(banner);
+            banner.addEventListener('click', handleBannerClick);
+        }
+        banner.dataset.mode = mode;
+        while (banner.firstChild) banner.removeChild(banner.firstChild);
+        var body = global.document.createElement('div');
+        body.className = 'app-global-banner__body';
+        var title = global.document.createElement('strong');
+        title.className = 'app-global-banner__title';
+        title.textContent = copy.title;
+        var detail = global.document.createElement('span');
+        detail.className = 'app-global-banner__detail';
+        detail.textContent = copy.detail;
+        body.appendChild(title);
+        body.appendChild(detail);
+        banner.appendChild(body);
+        var actions = global.document.createElement('div');
+        actions.className = 'app-global-banner__actions';
+        var button = global.document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn app-global-banner__btn';
+        button.dataset.backupBannerAction = mode === 'restore' ? 'open' : 'reauthorize';
+        button.textContent = copy.action;
+        actions.appendChild(button);
+        banner.appendChild(actions);
+    }
+
+    function handleBannerClick(event) {
+        var target = event.target && event.target.closest ? event.target.closest('[data-backup-banner-action]') : null;
+        if (!target) return;
+        event.preventDefault();
+        if (target.dataset.backupBannerAction === 'open') {
+            openModal();
+            return;
+        }
+        // 用户点击 → 直接进 reauthorize()，中间不插入任何 await。
+        target.disabled = true;
+        reauthorize().then(function (result) {
+            if (result && result.success) {
+                notify(result.reason === 'restore_required'
+                    ? '备份权限已恢复，请先从备份恢复数据'
+                    : '备份权限已恢复', 'success');
+            } else if (result && result.reason === 'activation_lost') {
+                notify('请再点一次「恢复备份权限」', 'warning');
+            } else {
+                notify('未获得文件夹访问权限', 'warning');
+            }
+        }).catch(function (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] reauthorize failed:', error);
+            notify('恢复备份权限失败', 'error');
+        }).finally(function () {
+            target.disabled = false;
+            refreshPanel();
+        });
+    }
+
     function refreshPanel() {
+        notifyStatusChange();
+        renderGlobalBanner();
         if (!global.document) return;
         var status = getStatus();
         var statusElement = global.document.getElementById('external-backup-status');
@@ -6967,7 +7199,12 @@
         var restoreButton = global.document.getElementById('external-backup-restore-btn');
         var unbindButton = global.document.getElementById('external-backup-unbind-btn');
         if (bindButton) bindButton.disabled = !status.supported || status.writing;
-        if (writeButton) writeButton.disabled = !status.bound || status.writing;
+        // awaitingRestore 时禁止"立即写入"：磁盘上已有备份还没恢复回来，
+        // 一次写入就会把它覆盖掉。这里改成明确的恢复引导。
+        if (writeButton) {
+            writeButton.disabled = !status.bound || status.writing || status.awaitingRestore;
+            writeButton.title = status.awaitingRestore ? '检测到已有备份，请先完成恢复' : '';
+        }
         if (restoreButton) restoreButton.disabled = !status.bound || status.writing;
         if (unbindButton) unbindButton.disabled = !status.bound || status.writing;
     }
@@ -7088,6 +7325,8 @@
         restoreFromLatest: restoreFromLatest,
         restorePayload: restorePayload,
         getStatus: getStatus,
+        onStatusChange: onStatusChange,
+        reauthorize: reauthorize,
         markDirty: markDirty,
         flushSilentlyIfPermitted: flushSilentlyIfPermitted,
         refreshPanel: refreshPanel,
