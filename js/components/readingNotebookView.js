@@ -112,15 +112,81 @@
             }
         },
 
-        getEntries() {
-            const entries = global.ReadingVocabStore?.getAll?.() || [];
-            const query = String(this.state.searchQuery || '').trim().toLowerCase();
-            if (!query) return entries;
+        getAssociatedArticleMetadata(item) {
             const articles = Array.isArray(global.ReadingVocabStore?._state?.snapshot?.reading?.articles)
                 ? global.ReadingVocabStore._state.snapshot.reading.articles : [];
             const articlesById = new Map(articles
                 .filter(article => article && typeof article === 'object' && article.id)
                 .map(article => [article.id, article]));
+            const metadata = [];
+            const byId = new Map();
+            const byExamId = new Map();
+
+            const firstText = (...values) => values.find(value => typeof value === 'string' && value.trim())?.trim() || '';
+            const add = (candidate = {}) => {
+                const id = firstText(candidate.id, candidate.articleId);
+                const examId = firstText(candidate.examId);
+                const title = firstText(candidate.title, candidate.examTitle, examId);
+                if (!id && !examId && !title) return;
+                const existing = id ? byId.get(id) : (examId && byExamId.get(examId));
+                if (existing) {
+                    if (!existing.examId && examId) existing.examId = examId;
+                    if ((!existing.title || existing.title === existing.examId) && title) existing.title = title;
+                    existing.searchValues.push(...candidate.searchValues);
+                    return existing;
+                }
+                const row = { id, examId, title, searchValues: [...candidate.searchValues] };
+                metadata.push(row);
+                if (id) byId.set(id, row);
+                if (examId) {
+                    if (!byExamId.has(examId)) byExamId.set(examId, row);
+                    else if (byExamId.get(examId) !== row) byExamId.set(examId, null);
+                }
+                return row;
+            };
+
+            (item.associations || []).forEach(association => {
+                const embedded = association?.article || association?.articleMetadata
+                    || association?.metadata?.article || {};
+                const article = articlesById.get(association?.articleId) || embedded;
+                const articleMetadata = article?.metadata || {};
+                add({
+                    id: article?.id || association?.articleId,
+                    examId: article?.examId || articleMetadata.examId || association?.examId
+                        || association?.metadata?.examId || embedded.examId,
+                    title: article?.title || article?.examTitle || articleMetadata.examTitle
+                        || articleMetadata.title || association?.examTitle || association?.title,
+                    searchValues: [
+                        association?.examId, association?.examTitle, association?.title,
+                        association?.metadata?.examId, association?.metadata?.examTitle,
+                        article?.id, article?.examId, article?.title, article?.sourceId,
+                        articleMetadata.examId, articleMetadata.examTitle, articleMetadata.title,
+                        ...(article?.contentRefs || []), ...(embedded.contentRefs || [])
+                    ].filter(Boolean)
+                });
+            });
+
+            // Keep compatibility with older projections that supplied only the
+            // canonical article or occurrence owner on the entry itself.
+            add({
+                id: item.articleId,
+                examId: item.examId,
+                title: item.examTitle,
+                searchValues: [item.examId, item.examTitle].filter(Boolean)
+            });
+            (item.highlights || []).forEach(row => add({
+                id: row.articleId,
+                examId: row.examId,
+                title: row.examTitle || row.title,
+                searchValues: [row.examId, row.examTitle, row.title, row.text].filter(Boolean)
+            }));
+            return metadata;
+        },
+
+        getEntries() {
+            const entries = global.ReadingVocabStore?.getAll?.() || [];
+            const query = String(this.state.searchQuery || '').trim().toLowerCase();
+            if (!query) return entries;
             return entries.filter(item => {
                 // Associations are the authoritative many-to-many links. A word
                 // can have a secondary/manual article association without an
@@ -128,16 +194,8 @@
                 // for notebook search. The normalized projection keeps only the
                 // article id on each association; resolve that id back to the
                 // article metadata when indexing the search text.
-                const associationText = (item.associations || []).flatMap(association => {
-                    const article = articlesById.get(association.articleId)
-                        || association.article || association.articleMetadata
-                        || association.metadata?.article || null;
-                    return [association.examId, association.examTitle, association.title,
-                        association.metadata?.examId, association.metadata?.examTitle,
-                        article?.id, article?.examId, article?.title, article?.sourceId,
-                        article?.metadata?.examId, article?.metadata?.examTitle,
-                        ...(article?.contentRefs || [])].filter(Boolean);
-                });
+                const associationText = this.getAssociatedArticleMetadata(item)
+                    .flatMap(article => article.searchValues);
                 const sourceText = [item.examTitle, item.examId, item.context,
                     ...associationText,
                     ...(item.highlights || []).map(row => row.text || '')].join(' ').toLowerCase();
@@ -241,13 +299,11 @@
                 `;
             }
             return entries.map(item => {
-                const sources = new Set();
-                if (item.examTitle) sources.add(item.examTitle);
-                (item.highlights || []).forEach(row => {
-                    if (row.examId) sources.add(row.examId);
-                });
-                const sourceList = [...sources].slice(0, 3);
-                const extraSources = Math.max(0, sources.size - sourceList.length);
+                const sources = this.getAssociatedArticleMetadata(item)
+                    .map(article => article.title)
+                    .filter(Boolean);
+                const sourceList = sources.slice(0, 3);
+                const extraSources = Math.max(0, sources.length - sourceList.length);
                 return `
                     <article class="reading-notebook-entry" data-word-id="${escapeHtml(item.id)}">
                         <div class="reading-notebook-entry__main">

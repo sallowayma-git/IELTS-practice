@@ -53,6 +53,34 @@ test('notebook search indexes titles for occurrence-less secondary manual associ
     assert.equal(notebook.getEntries()[0].word, 'adapt');
 });
 
+test('notebook source badges include every associated article, including manual secondary rows', () => {
+    const notebook = harness([
+        {
+            id: 'term:adapt', word: 'adapt', examId: 'primary', examTitle: 'Primary passage',
+            context: '', highlights: [{ examId: 'primary', text: 'adapt' }],
+            associations: [
+                { id: 'primary-association', articleId: 'article:primary', manual: true },
+                { id: 'secondary-association', articleId: 'article:secondary', manual: true },
+                { id: 'third-association', articleId: 'article:third', manual: true },
+                { id: 'fourth-association', articleId: 'article:fourth', manual: true }
+            ]
+        }
+    ], [
+        { id: 'article:primary', examId: 'primary', title: 'Primary passage', sourceId: 'source:a' },
+        { id: 'article:secondary', examId: 'secondary', title: 'Secondary migration article', sourceId: 'source:b' },
+        { id: 'article:third', examId: 'third', title: 'Third climate article', sourceId: 'source:c' },
+        { id: 'article:fourth', examId: 'fourth', title: 'Fourth policy article', sourceId: 'source:d' }
+    ]);
+
+    const markup = notebook.renderEntries(notebook.getEntries(), true);
+    assert.match(markup, /Primary passage/);
+    assert.match(markup, /Secondary migration article/);
+    assert.match(markup, /Third climate article/);
+    assert.match(markup, /\+1 篇/);
+    assert.doesNotMatch(markup, /Fourth policy article/);
+    assert.doesNotMatch(markup, /article:(?:primary|secondary|third|fourth)/);
+});
+
 test('notebook search still indexes occurrence text and the canonical article', () => {
     const notebook = harness([
         {
