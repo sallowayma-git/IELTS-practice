@@ -357,6 +357,10 @@
                     numericEntry.correctInfo = letterEntry.correctInfo;
                     numericEntry.hasCorrectAnswer = true;
                 }
+
+                if (numericEntry.storedCorrect == null && letterEntry.storedCorrect != null) {
+                    numericEntry.storedCorrect = letterEntry.storedCorrect;
+                }
             }
 
             sortedLetterKeys.forEach(letterKey => {
@@ -375,7 +379,13 @@
 
         const userDisplay = entry.hasUserAnswer ? entry.userAnswer : 'No Answer';
         const correctDisplay = entry.hasCorrectAnswer ? entry.correctAnswer : 'N/A';
-        const isCorrect = answersMatch(entry.userInfo, entry.correctInfo);
+        // 提交时已按题型算好权威对错（含分键多选题“正确选项是否在所选集合中”的
+        // overlap 给分）并随记录持久化，详情页须原样回放；仅当历史记录缺少布尔结论时，
+        // 才回退到当场答案比对，避免用严格集合全等把选对一部分的子题误判为错。
+        const recomputedCorrect = answersMatch(entry.userInfo, entry.correctInfo);
+        const isCorrect = typeof entry.storedCorrect === 'boolean'
+            ? entry.storedCorrect
+            : recomputedCorrect;
 
         return {
             canonicalKey: entry.canonicalKey,
@@ -418,6 +428,17 @@
         const comparisonMap = mergeSourceMaps(comparisonSources);
         const userMap = mergeSourceMaps(userSources);
 
+        // 权威对错来源：提交评分（unifiedReadingPage.buildResultsFromAnswers 等）产出的
+        // answerComparison 与 scoreInfo.details，其中的布尔 isCorrect 已正确处理分键/
+        // 单键多选题的部分给分，详情页必须采纳而非用严格集合全等重算。
+        const correctnessSources = [
+            record.answerComparison,
+            record.realData && record.realData.answerComparison,
+            record.scoreInfo && record.scoreInfo.details,
+            record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details
+        ].filter(Boolean);
+        const correctnessMap = mergeSourceMaps(correctnessSources);
+
         const allKeys = new Set([
             ...Object.keys(comparisonMap),
             ...Object.keys(userMap),
@@ -445,6 +466,7 @@
                     correctAnswer: null,
                     hasUserAnswer: false,
                     hasCorrectAnswer: false,
+                    storedCorrect: null,
                     userInfo: { display: null, normalized: null },
                     correctInfo: { display: null, normalized: null }
                 };
@@ -505,6 +527,18 @@
                             entry.hasCorrectAnswer = true;
                         }
                         entry.correctInfo = compCorrectInfo;
+                    }
+                }
+            }
+
+            // 采纳提交时持久化的权威对错（按多种键形态回退查找）。
+            if (entry.storedCorrect == null) {
+                for (const compKey of lookupKeys) {
+                    const storedEntry = correctnessMap[compKey];
+                    if (storedEntry && typeof storedEntry === 'object'
+                        && typeof storedEntry.isCorrect === 'boolean') {
+                        entry.storedCorrect = storedEntry.isCorrect;
+                        break;
                     }
                 }
             }
