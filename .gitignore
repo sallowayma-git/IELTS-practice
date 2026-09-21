@@ -59,3 +59,8 @@ node_modules
 .pnpm-store/
 __pycache__/
 .playwright-mcp/
+
+# Local intensive-reading Computer Use acceptance artifacts
+/developer/doc/Intensive-Reading-Computer-Use-Evidence/
+/developer/doc/Intensive-Reading-Computer-Use-GitHub-Comment.md
+/developer/doc/Intensive-Reading-Computer-Use-Report.md
