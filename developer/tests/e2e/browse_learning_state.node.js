@@ -56,10 +56,19 @@ async function openBrowse(page) {
 async function openMenu(page) {
     if (await page.locator('#browse-learning-panel').isHidden()) await page.locator('#browse-learning-trigger').click();
 }
+async function committedBrowsePreferences(page) {
+    return page.evaluate(async () => {
+        // Playwright 1.56 treats an async waitForFunction predicate's Promise
+        // as truthy, even when it resolves to false. Wait for the actual write
+        // queue before reading, particularly before a reload can abort it.
+        await window.flushBrowsePreferenceWrites();
+        return window.AppData.preferences.getBrowse();
+    });
+}
 async function choose(page, value) {
     await openMenu(page);
     await page.locator(`[name="browse-learning-state"][value="${value}"]`).check();
-    await page.waitForFunction(value => window.AppData.preferences.getBrowse().then(prefs => prefs.learningState === value), value);
+    assert.equal((await committedBrowsePreferences(page)).learningState, value);
 }
 async function visibleIds(page) { return page.locator('#exam-list-container .exam-item').evaluateAll(items => items.map(item => item.dataset.examId)); }
 async function expectIds(page, expected) {
@@ -80,11 +89,7 @@ async function expectIds(page, expected) {
 }
 async function resetFilters(page) {
     await page.locator('#browse-learning-reset').click();
-    const reset = await page.evaluate(async () => {
-        if (typeof window.flushBrowsePreferenceWrites === 'function') await window.flushBrowsePreferenceWrites();
-        const prefs = await window.AppData.preferences.getBrowse();
-        return { learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly, sortMode: prefs.sortMode };
-    });
+    const reset = await committedBrowsePreferences(page);
     assert.equal(reset.learningState, 'all');
     assert.equal(reset.favoritesOnly, false);
     assert.equal(reset.sortMode, 'difficulty-desc');
@@ -238,8 +243,7 @@ try {
         await openMenu(page);
         await page.locator('[name="browse-sort-mode"][value="difficulty-desc"]').check();
         await expectIds(page, [exams[2].id]);
-        await page.waitForFunction(() => window.AppData.preferences.getBrowse()
-            .then(prefs => prefs.sortMode === 'difficulty-desc'));
+        assert.equal((await committedBrowsePreferences(page)).sortMode, 'difficulty-desc');
         console.log(`[${mode}] reload and source isolation`);
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true);
@@ -269,10 +273,7 @@ try {
         assert(panelBox.x >= 0 && panelBox.x + panelBox.width <= 390, 'menu fits the narrow viewport');
         await resetFilters(page);
         await expectIds(page, exams.map(exam => exam.id));
-        const persisted = await page.evaluate(async () => {
-            await window.flushBrowsePreferenceWrites();
-            return window.AppData.preferences.getBrowse();
-        });
+        const persisted = await committedBrowsePreferences(page);
         assert.equal(persisted.learningState, 'all');
         assert.equal(persisted.favoritesOnly, false);
         assert.equal(Object.keys(persisted.readingFavorites).length, 1);
@@ -302,10 +303,10 @@ try {
         await page.locator('#backup-list-btn').click();
         page.once('dialog', dialog => dialog.accept());
         await page.locator('[data-backup-action="restore"][data-backup-id="browse-empty-favorites"]').click();
-        await page.waitForFunction(() => window.AppData.preferences.getBrowse()
-            .then(prefs => Object.keys(prefs?.readingFavorites || {}).length === 0));
         // Wait for Settings' delayed post-restore list refresh before dismissing.
         await page.locator('#backup-list-modal .backup-entry[data-backup-id^="pre_restore_"]').first().waitFor();
+        const restored = await committedBrowsePreferences(page);
+        assert.equal(Object.keys(restored?.readingFavorites || {}).length, 0);
         await page.locator('#backup-list-modal [data-backup-action="close-modal"]').click();
         await openBrowse(page);
         await expectIds(page, exams.map(exam => exam.id));
@@ -314,7 +315,7 @@ try {
         await openMenu(page);
         await page.locator('#browse-favorites-only').check();
         await expectIds(page, []);
-        await page.waitForFunction(() => window.AppData.preferences.getBrowse().then(prefs => prefs.favoritesOnly === true));
+        assert.equal((await committedBrowsePreferences(page)).favoritesOnly, true);
         await page.waitForFunction(() => !window.__isBrowseUserResultsRequestInFlight(window.__getBrowseResultsRequestId()));
         await page.evaluate(async () => {
             // The filter's scroll adjustment persists after a 150ms debounce.
