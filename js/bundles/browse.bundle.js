@@ -20604,9 +20604,16 @@ window.BrowseStateManager = BrowseStateManager;
                 request.partial,
                 request
             );
+            // AppData merges patches against the latest durable preferences.
+            // Sending the whole cached snapshot can overwrite a sort/favorite
+            // change committed while this write waits in AppData's queue.
+            // Keep merged nested values, but only for fields this request owns.
+            const patch = Object.fromEntries(
+                Object.keys(request.partial).map((key) => [key, next[key]])
+            );
             ownBrowsePreferenceOperationIds.add(request.operationId);
             try {
-                await global.AppData.preferences.patchBrowse(next, { operationId: request.operationId });
+                await global.AppData.preferences.patchBrowse(patch, { operationId: request.operationId });
             } catch (error) {
                 ownBrowsePreferenceOperationIds.delete(request.operationId);
                 throw error;

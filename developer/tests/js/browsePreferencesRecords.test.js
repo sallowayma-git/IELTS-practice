@@ -34,6 +34,15 @@ function createHarness({
 } = {}) {
     let persistedBrowse = initialBrowse ? structuredClone(initialBrowse) : null;
     let failNextWrite = false;
+    const commitListeners = new Set();
+    function commitBrowsePatch(value, options = {}) {
+        persistedBrowse = Object.assign({}, persistedBrowse, structuredClone(value));
+        const receipt = { committed: true, operationId: options.operationId || 'external-preference-write' };
+        for (const listener of commitListeners) {
+            listener({ targets: [{ logicalKey: 'preferences.values' }], receipt });
+        }
+        return receipt;
+    }
     const documentStub = {
         addEventListener() {},
         getElementById() { return null; },
@@ -46,7 +55,7 @@ function createHarness({
                 if (browseReadGate) await browseReadGate;
                 return persistedBrowse ? structuredClone(persistedBrowse) : null;
             },
-            async patchBrowse(value) {
+            async patchBrowse(value, options) {
                 if (failNextWrite) {
                     failNextWrite = false;
                     throw new Error('injected preference commit failure');
@@ -54,10 +63,10 @@ function createHarness({
                 if (typeof browseWriteHook === 'function') {
                     await browseWriteHook(structuredClone(value));
                 }
-                persistedBrowse = structuredClone(value);
-                return { committed: true };
+                return commitBrowsePatch(value, options);
             }
-        }
+        },
+        backups: { onDataCommitted(listener) { commitListeners.add(listener); } }
     };
     const windowStub = {
         AppData: deferAppData ? null : appData,
@@ -93,6 +102,7 @@ function createHarness({
         window: windowStub,
         examIndex,
         records,
+        commitBrowsePatch,
         readPersistedBrowse() {
             return persistedBrowse ? structuredClone(persistedBrowse) : null;
         }
@@ -436,6 +446,48 @@ async function testQueuedPartialWriteHydratesLateAppData() {
     recordResult('浏览偏好队列写入前完成延迟 hydration', persisted);
 }
 
+async function testPartialWritePreservesInterveningPreferenceCommit() {
+    const writeStarted = deferred();
+    const releaseWrite = deferred();
+    let writes = 0;
+    const { window, readPersistedBrowse, commitBrowsePatch } = createHarness({
+        initialBrowse: { sortMode: 'default', learningState: 'all', readingFavorites: {} },
+        browseWriteHook: async () => {
+            if (++writes === 1) {
+                writeStarted.resolve();
+                await releaseWrite.promise;
+            }
+        }
+    });
+    await window.whenBrowseViewPreferencesReady();
+    window.saveBrowseViewPreferences({ scrollPositions: { 'P1|reading': 120 } });
+    await writeStarted.promise;
+
+    // An earlier AppData mutation can commit after the scroll writer has
+    // prepared its patch, but before that patch reaches the serialized store.
+    const favoriteKey = JSON.stringify(['browse-a', 'reading', 'p1']);
+    commitBrowsePatch({
+        sortMode: 'difficulty-desc',
+        learningState: 'completed',
+        favoritesOnly: true,
+        readingFavorites: { [favoriteKey]: true }
+    });
+    releaseWrite.resolve();
+    await window.flushBrowsePreferenceWrites();
+    const persisted = readPersistedBrowse();
+    assert.strictEqual(persisted.sortMode, 'difficulty-desc', 'a scroll write must not replay stale sorting');
+    assert.strictEqual(persisted.learningState, 'completed');
+    assert.strictEqual(persisted.favoritesOnly, true);
+    assert.deepStrictEqual(persisted.readingFavorites, { [favoriteKey]: true });
+    assert.strictEqual(persisted.scrollPositions['P1|reading'], 120);
+
+    window.saveBrowseViewPreferences({ learningState: 'all', favoritesOnly: false });
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(readPersistedBrowse().sortMode, 'difficulty-desc', 'resetting filters preserves the committed sort');
+    assert.deepStrictEqual(readPersistedBrowse().readingFavorites, { [favoriteKey]: true });
+    recordResult('Partial preference writes preserve intervening sort and favorite commits', readPersistedBrowse());
+}
+
 async function main() {
     try {
         await testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
@@ -447,6 +499,7 @@ async function main() {
         await testFailedPreferenceWriteDoesNotReplaceCommittedCache();
         await testFirstReadCanAwaitPersistedPreferences();
         await testQueuedPartialWriteHydratesLateAppData();
+        await testPartialWritePreservesInterveningPreferenceCommit();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,
