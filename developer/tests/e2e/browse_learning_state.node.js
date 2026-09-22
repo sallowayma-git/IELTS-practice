@@ -37,6 +37,8 @@ const secureServer = https.createServer({ key: fs.readFileSync(privateKey), cert
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 await new Promise(resolve => secureServer.listen(0, '127.0.0.1', resolve));
 let browser;
+let activePage;
+let activeMode;
 const report = { status: 'running', cases: [], hosting: 'Isolated local HTTPS static host under /IELTS-practice/; not a deployed-site smoke test.' };
 
 async function boot(page, url) {
@@ -145,8 +147,33 @@ try {
         ['https-subpath', `https://127.0.0.1:${secureServer.address().port}/IELTS-practice/index.html`]
     ];
     for (const [mode, url] of modes) {
+        activeMode = mode;
         const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1365, height: 900 } });
+        // Record state transitions without inserting awaits into the flow: an
+        // extra preference read can hide the ordering race being diagnosed.
+        await context.addInitScript(() => {
+            window.__browseSortTrace = [];
+            let sortMode;
+            let lastChange = null;
+            document.addEventListener('change', event => {
+                lastChange = { name: event.target.name, id: event.target.id,
+                    value: event.target.value, checked: event.target.checked };
+            }, true);
+            Object.defineProperty(window, '__browseSortMode', {
+                configurable: true,
+                get() { return sortMode; },
+                set(value) {
+                    const previous = sortMode;
+                    sortMode = value;
+                    if (previous === value) return;
+                    window.__browseSortTrace.push({ previous, value, lastChange,
+                        checked: document.querySelector('[name="browse-sort-mode"]:checked')?.value,
+                        stack: new Error().stack });
+                }
+            });
+        });
         const page = await context.newPage();
+        activePage = page;
         page.setDefaultTimeout(12000);
         page.setDefaultNavigationTimeout(60000);
         const errors = [];
@@ -319,6 +346,16 @@ try {
 } catch (error) {
     report.status = 'fail'; report.error = error.stack; process.exitCode = 1;
     console.error(error);
+    if (activePage && !activePage.isClosed()) {
+        report.failureMode = activeMode;
+        report.browseDiagnostics = await activePage.evaluate(async () => ({
+            sortMode: window.__browseSortMode,
+            checkedSortMode: document.querySelector('[name="browse-sort-mode"]:checked')?.value,
+            preferences: await window.AppData?.preferences.getBrowse(),
+            sortTrace: window.__browseSortTrace
+        })).catch(diagnosticError => ({ error: diagnosticError.message }));
+        console.error('Browse failure diagnostics:', JSON.stringify(report.browseDiagnostics));
+    }
 } finally {
     fs.writeFileSync(path.join(reports, 'browse-learning-state-report.json'), JSON.stringify(report, null, 2));
     await browser?.close();
