@@ -1,0 +1,17 @@
+[Unit]
+Description=IELTS Practice generated question-bank updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ielts-practice
+Environment=QUESTION_BANK_REMOTE=upstream
+Environment=QUESTION_BANK_BRANCH=main
+Environment=QUESTION_BANK_CHECK_INTERVAL_SECONDS=900
+ExecStart=/opt/ielts-practice/backend/scripts/update-question-bank.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

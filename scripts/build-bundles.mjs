@@ -12,6 +12,7 @@ const bundles = {
         'js/presentation/threeBackground.js',
         'js/runtime/bootScreen.js',
         'js/runtime/lazyLoader.js',
+        'js/runtime/questionBankUpdateWatcher.js',
         'js/utils/suitePreference.js',
         'js/presentation/app-actions.js'
     ],
@@ -26,6 +27,7 @@ const bundles = {
         'js/data/v2/readingVocabularyModel.js',
         'js/services/readingTiming.js',
         'js/data/v2/appData.js',
+        'js/core/cloudSync.js',
         'js/core/externalBackupService.js',
         'js/core/siteDataReset.js',
         'js/core/practiceCore.js',

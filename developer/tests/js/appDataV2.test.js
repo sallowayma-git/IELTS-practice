@@ -1803,9 +1803,11 @@ async function run() {
     const summaryRevision = shared.entities.get('practiceSummaries').get('r1').revision;
     const detailRevision = shared.entities.get('practiceDetails').get('r1').revision;
     const annotationRevision = shared.entities.get('practiceAnnotations').get('r1').revision;
+    const summaryUpdatedAt = shared.entities.get('practiceSummaries').get('r1').data.updatedAt;
     await app.practice.updateAnnotations({ recordId: 'r1', examId: 'reading-1', expectedRevision: annotationRevision, patch: { reviewed: true } });
-    assert.deepStrictEqual(shared.mutations.at(-1).map((item) => item.store), ['practiceAnnotations'], 'annotation edits must write only the Annotation layer');
-    assert.strictEqual(shared.entities.get('practiceSummaries').get('r1').revision, summaryRevision);
+    assert.deepStrictEqual(shared.mutations.at(-1).map((item) => item.store), ['practiceSummaries', 'practiceAnnotations'], 'annotation edits must advance the sync-visible Summary timestamp with the Annotation layer');
+    assert.strictEqual(shared.entities.get('practiceSummaries').get('r1').revision, summaryRevision + 1);
+    assert.notStrictEqual(shared.entities.get('practiceSummaries').get('r1').data.updatedAt, summaryUpdatedAt);
     assert.strictEqual(shared.entities.get('practiceDetails').get('r1').revision, detailRevision);
     assert.strictEqual(shared.entities.get('practiceAnnotations').get('r1').revision, annotationRevision + 1);
     const suiteLight = app.practice.projectLight({

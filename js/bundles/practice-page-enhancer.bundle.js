@@ -4139,6 +4139,15 @@
         if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(light, detail, null, mode);
         return joinPracticeRecord(light, detail, find('practiceAnnotations'), mode);
     }
+    function notifyCloudSync(mutation) {
+        const cloudSync = global.CloudSync;
+        if (!cloudSync || typeof cloudSync.notifyPracticeMutation !== 'function') return;
+        Promise.resolve(cloudSync.notifyPracticeMutation(mutation)).catch((error) => {
+            if (global.console && console.warn) {
+                console.warn('[AppData v2] practice sync notification failed:', error);
+            }
+        });
+    }
     const practice = Object.freeze({
         async list(options = {}) {
             await ready;
@@ -4165,7 +4174,9 @@
                 return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
                     { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
             });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            const record = await joinedPractice(recordId, 'full');
+            notifyCloudSync({ type: 'upsert', recordId });
+            return Object.assign({}, receipt, { record });
         },
         async finalizeSuite(command) {
             await ready; assertObject(command, 'finalizeSuite command is required');
@@ -4184,11 +4195,13 @@
                 return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
                     { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
             });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            const record = await joinedPractice(recordId, 'full');
+            notifyCloudSync({ type: 'upsert', recordId, deletedRecordIds: Array.from(children) });
+            return Object.assign({}, receipt, { record });
         },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
-            return retryMergeConflict(command, async () => {
+            const receipt = await retryMergeConflict(command, async () => {
                 const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
                 if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
@@ -4201,28 +4214,50 @@
                     annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
                     Object.assign(annotations, clone(asObject(command.patch)));
                 }
-                return kernel.mutateEntities([{
-                    type: 'upsert',
-                    store: 'practiceAnnotations',
-                    recordId,
-                    data: annotations,
-                    expectedRevision: entityRevision(current.annotations)
-                }], mutationOptions(command, 'practice-annotations', command));
+                const summary = Object.assign({}, clone(asObject(current.summary.data)), {
+                    updatedAt: new Date().toISOString()
+                });
+                return kernel.mutateEntities([
+                    {
+                        type: 'upsert',
+                        store: 'practiceSummaries',
+                        recordId,
+                        data: summary,
+                        expectedRevision: entityRevision(current.summary)
+                    },
+                    {
+                        type: 'upsert',
+                        store: 'practiceAnnotations',
+                        recordId,
+                        data: annotations,
+                        expectedRevision: entityRevision(current.annotations)
+                    }
+                ], mutationOptions(command, 'practice-annotations', command));
             });
+            notifyCloudSync({ type: 'upsert', recordId });
+            return receipt;
         },
         async delete(command) {
             await ready; const recordId = String(command && (command.recordId || command.id) || command || ''); if (!recordId) throw new AppDataError('VALIDATION', 'practice record id is required');
             const found = await kernel.readEntity('practiceSummaries', recordId); if (!found) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete', { recordId })), { deletedCount: 0, noop: true });
             const receipt = await kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId })), mutationOptions(command, 'practice-delete', { recordId }));
+            notifyCloudSync({ type: 'delete', recordIds: [recordId], deletedAt: new Date().toISOString() });
             return Object.assign({}, receipt, { deletedCount: 1 });
         },
         async deleteMany(command) {
             await ready; assertObject(command, 'practice.deleteMany command is required'); const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
             if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds'); const summaries = await kernel.listEntities('practiceSummaries'); const ids = recordIds.filter((id) => summaries.some((item) => practiceRecordMatches(item, [id])));
             if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
-            const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds })); return Object.assign({}, receipt, { deletedCount: ids.length });
+            const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds }));
+            notifyCloudSync({ type: 'delete', recordIds: ids, deletedAt: new Date().toISOString() });
+            return Object.assign({}, receipt, { deletedCount: ids.length });
         },
-        async clear(command = {}) { await ready; return kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true })); },
+        async clear(command = {}) {
+            await ready;
+            const receipt = await kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true }));
+            notifyCloudSync({ type: 'clear', clearedAt: new Date().toISOString() });
+            return receipt;
+        },
         async listInsights(options = {}) {
             await ready;
             const limit = Math.max(1, Math.min(50, Number(options.limit) || 10));

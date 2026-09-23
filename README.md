@@ -11,27 +11,32 @@
 
 代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
 
-## 分支概览
+## 运行模式与分支
 
-本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+项目默认是可直接打开或静态托管的单机练习系统；包含 `backend/` 的版本额外提供可选的多设备同步能力，两种使用方式互不冲突。
+
+| 模式 | 是否需要后端 | 数据位置 | 适用场景 |
+|------|--------------|----------|----------|
+| 默认单机 / 静态模式 | 不需要 | 当前浏览器的 IndexedDB 和少量兼容性 localStorage 数据 | 直接打开 `index.html`、本地静态服务器或静态网页托管 |
+| 可选多设备同步模式 | 需要 `backend/` 中的 Node.js 与 PostgreSQL 服务 | 浏览器本地数据继续保留；登录后与同一账号的服务器记录合并 | 个人 NAS、可信局域网或小范围自托管服务器 |
+
+多设备同步功能随 `backend/` 目录提供，不要求单机用户配置或运行后端。未部署或暂时无法访问同步服务时，单机练习、题库使用和本地记录不会受影响。
 
 | 分支 | 说明 | 状态 | 完成度 | 技术特征 |
 |------|------|------|--------|----------|
-| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版（当前分支），纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
-| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 当前稳定分支；默认可静态单机运行 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-静态前端-blue) |
 | [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
 
-> **main** 适合所有用户直接使用；**feature/multi-device-easy-deploy** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
-
+> **main** 适合所有用户：直接使用即为单机模式。只有使用包含 `backend/` 的版本并需要跨设备同步练习记录时，才需要继续部署后端。**IELTS-WRITING-FEAT** 是独立的 AI native 协作客户端分支。
 | 关联仓库 | 说明 | 状态 | 技术特征 |
 |:--------:|------|------|----------|
 | [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![技术：Docker Compose、PostgreSQL](assets/images/ieltmps-tech.svg) |
 
 ## 项目概述
 
-IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
+IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的练习系统。默认入口为 `index.html`，运行只依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要账号、后端服务或数据库。`backend/` 仅为需要多设备同步的自托管用户提供可选能力，不改变默认的题库、练习流程和本地数据模型。
 
-系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
+系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间；不同协议或域名下的本地数据彼此独立。
 
 ## 快速开始
 
@@ -75,6 +80,175 @@ http://localhost:8000/
 可以将运行时文件部署到静态网页空间，但应仅用于个人或小范围自用场景。部署时必须保留目录层级，避免 bundle、题库、字体、图片、PDF、音频或生成资产出现 404。
 
 公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
+
+### 可选多设备同步部署
+
+这是可选部署，不是运行本项目的前置条件。不开启同步时，无需配置环境变量、容器、账号或数据库；继续按上面的“本地直接运行”“本地静态服务器运行”或“静态网页部署”使用即可。`file://` 页面始终按单机模式运行；HTTP(S) 静态部署仅会静默检测一次同步后端，检测失败后不显示网络同步入口。
+
+同步部署由 Node.js 应用和 PostgreSQL 组成，前端页面也由同一个 Node.js 应用提供。这样浏览器访问页面和 `/api/*` 接口始终是同源请求，登录 Cookie 不会受到跨域限制。Docker Compose 是推荐的运行方式；Portainer 只是管理 Compose Stack 的可选界面，下面的命令可直接在服务器终端执行。
+
+#### 1. 准备服务器和代码目录
+
+需要 Docker Engine、Docker Compose 插件和 Git。若使用域名和 HTTPS，另需一台可运行 Nginx 的反向代理服务器。以下示例假设代码放在 `/opt/ielts-practice`，应用仅对本机开放 `13000` 端口：
+
+```bash
+git clone https://github.com/sallowayma-git/IELTS-practice.git /opt/ielts-practice
+cd /opt/ielts-practice
+git switch main
+git pull --ff-only
+```
+
+首次部署前，复制环境变量模板并为数据库和会话生成独立的强随机值：
+
+```bash
+cp backend/.env.example backend/.env
+openssl rand -base64 36
+openssl rand -base64 48
+```
+
+编辑 `backend/.env`。至少需要如下配置；不要将真实密码或 `SESSION_SECRET` 提交回仓库：
+
+```dotenv
+POSTGRES_PASSWORD=替换为第一个随机值
+SESSION_SECRET=替换为第二个随机值，至少 32 个字符
+REGISTRATION_MODE=first-user
+
+# Node 应用只在服务器本机监听，由 Nginx 转发给外部访问者。
+APP_BIND_ADDRESS=127.0.0.1
+APP_PORT=13000
+
+# 有 HTTPS 反向代理时必须启用；Nginx 直接运行在宿主机时填 127.0.0.1。
+COOKIE_SECURE=true
+TRUST_PROXY=true
+TRUSTED_PROXY_IPS=127.0.0.1
+```
+
+如果只是临时在可信局域网内测试 HTTP，可将 `COOKIE_SECURE=false`，并将 `APP_BIND_ADDRESS=0.0.0.0`；正式使用带账号的同步服务时应恢复为 HTTPS 和本机绑定。若 Nginx 本身运行在另一个 Docker 容器中，`TRUSTED_PROXY_IPS` 应改为该容器的实际 IP 或其专用 Docker 网段。
+
+#### 2. 启动、检查和创建首个账号
+
+在仓库根目录执行：
+
+```bash
+docker compose --env-file backend/.env -f backend/docker-compose.yml up -d --build
+docker compose --env-file backend/.env -f backend/docker-compose.yml ps
+curl http://127.0.0.1:13000/api/health
+```
+
+健康检查应返回 `{"ok":true}`。排查启动问题时可查看：
+
+```bash
+docker compose --env-file backend/.env -f backend/docker-compose.yml logs -f app postgres
+```
+
+浏览器首次访问站点后，通过“登录并同步”注册第一个账号。`REGISTRATION_MODE=first-user` 只允许创建首个账号；确认账号可登录后，改为 `REGISTRATION_MODE=disabled`，再执行一次 `docker compose ... up -d` 使配置生效。练习记录始终先写入本地 IndexedDB，登录后再与该账号的服务器记录合并；同步服务短暂不可用不会阻止继续练习。
+
+#### 3. 有域名时的推荐 Nginx 配置
+
+推荐让 Nginx 终止 TLS，并只把请求转发到本机的 `127.0.0.1:13000`。先将域名的 A/AAAA 记录指向服务器公网地址，并使用 Certbot 或现有证书签发方式取得证书。把下面内容保存为 Nginx 的站点配置，将 `ielts.example.com`、证书路径和端口替换为自己的值：
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ielts.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ielts.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/ielts.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ielts.example.com/privkey.pem;
+
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://127.0.0.1:13000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+检查并重载配置：
+
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+完成后应只从 `https://ielts.example.com/` 访问系统，不要将静态 `index.html` 放到另一个域名、再把 API 指向此域名。前端与 API 同源才能让安全 Cookie、CSRF 校验和登录同步按预期工作。
+
+#### 4. 更新、备份和恢复
+
+更新应用代码或同步逻辑时，在仓库根目录执行：
+
+```bash
+git pull --ff-only
+docker compose --env-file backend/.env -f backend/docker-compose.yml up -d --build
+```
+
+PostgreSQL 数据保存在 Docker volume 中，不会因普通的容器重建丢失。升级前可备份：
+
+```bash
+docker compose --env-file backend/.env -f backend/docker-compose.yml exec -T postgres \
+  pg_dump -U postgres ielts_practice > ielts-practice-$(date +%F).sql
+```
+
+恢复到空数据库时：
+
+```bash
+docker compose --env-file backend/.env -f backend/docker-compose.yml exec -T postgres \
+  psql -U postgres -d ielts_practice < ielts-practice-YYYY-MM-DD.sql
+```
+
+Portainer 用户可用相同的 `backend/docker-compose.yml` 建立 Stack，并在 Stack 环境变量中填写与 `backend/.env` 相同的值；构建上下文仍必须是仓库根目录。它不改变上述网络、HTTPS、备份或更新原则。
+
+### 题库发布与自动刷新
+
+题库更新不向 `assets/generated/` 写入额外的版本文件，也不改变既有题库资源格式。同步部署会将该目录以只读方式挂载到应用容器中；应用通过 `/api/question-bank-revision` 动态计算当前生成资产的修订值，因此可在不重建应用镜像、不重启 PostgreSQL、也不改动同步接口的情况下更新默认题库。
+
+仓库内提供 `backend/scripts/update-question-bank.sh`：应用代码可以来自自己的 fork，但题库更新器建议单独添加上游仓库并检查其 `main`。它仅比较以下题库目录与当前工作区的差异；只有这些目录发生变化时，才恢复对应生成资产：
+
+```text
+assets/generated/reading-exams/
+assets/generated/reading-explanations/
+assets/generated/listening-exams/
+```
+
+它**不会**执行 `git pull`、替换应用代码、重建容器或触碰 PostgreSQL 数据。先在服务器上手动验证一次：
+
+```bash
+cd /opt/ielts-practice
+chmod +x backend/scripts/update-question-bank.sh
+git remote add upstream https://github.com/sallowayma-git/IELTS-practice.git
+QUESTION_BANK_REMOTE=upstream \
+QUESTION_BANK_BRANCH=main \
+backend/scripts/update-question-bank.sh --once
+```
+
+验证无误后，可使用仓库提供的 systemd 模板持续检查。模板默认部署目录为 `/opt/ielts-practice`，如使用其他目录请先调整 [backend/deploy/ielts-question-bank-updater.service](backend/deploy/ielts-question-bank-updater.service)。安装并启用：
+
+```bash
+sudo install -m 644 backend/deploy/ielts-question-bank-updater.service \
+  /etc/systemd/system/ielts-question-bank-updater.service
+systemctl daemon-reload
+systemctl enable --now ielts-question-bank-updater
+systemctl status ielts-question-bank-updater
+```
+
+更新器只适用于保留 `.git` 元数据的专用部署检出目录；如果服务器通过压缩包发布、没有 Git 远端或使用自定义题库，应关闭该服务并按常规部署流程发布资源。它不会覆盖浏览器设置中用户手动导入的题库配置。
+
+已打开的同步部署页面会在可见时及每两分钟检查 `/api/question-bank-revision`。检测到修订值变化后，空闲页面会自动刷新并载入新题库；正在答题或存在活动套题窗口时会延后刷新，避免中断当前练习。生成资产响应不缓存，因此刷新后不会继续使用旧的题目文件。
+
+纯静态托管和 `file://` 单机模式不请求题库修订接口，也不会自动轮询；HTTP(S) 静态部署只会有一次静默的健康检查，检测失败后继续使用本地数据。它们仍可正常使用题库，只需在发布新资源后由用户手动刷新页面。这使自动更新逻辑保持在需要后端的部署模式内，不给题库目录增加额外的控制文件。
 
 ## 功能说明
 
