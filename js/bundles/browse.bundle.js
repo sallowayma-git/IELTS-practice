@@ -21319,6 +21319,7 @@ window.BrowseStateManager = BrowseStateManager;
     global.getBrowseViewPreferences = getBrowseViewPreferences;
     global.whenBrowseViewPreferencesReady = whenBrowseViewPreferencesReady;
     global.saveBrowseViewPreferences = saveBrowseViewPreferences;
+    global.enqueueBrowsePreferenceWrite = enqueueBrowsePreferenceWrite;
     global.flushBrowsePreferenceWrites = flushBrowsePreferenceWrites;
     global.persistBrowseFilter = persistBrowseFilter;
     global.getPersistedBrowseFilter = getPersistedBrowseFilter;
@@ -21454,6 +21455,19 @@ window.BrowseStateManager = BrowseStateManager;
         // preferences. E2E callers use flushBrowsePreferenceWrites() as the
         // durable barrier, so a direct patchBrowse promise would otherwise be
         // invisible to that barrier and a reset could still read stale state.
+        if (typeof global.enqueueBrowsePreferenceWrite === 'function'
+            && typeof global.flushBrowsePreferenceWrites === 'function') {
+            const request = global.enqueueBrowsePreferenceWrite(patch);
+            // The queue converts a failed write into a resolved `false` so one
+            // rejection cannot stall later requests, and the flush barrier
+            // never rejects. Surface this write's own outcome so the caller's
+            // .catch(report) still fires while later writes stay queued.
+            return Promise.all([request.outcome, global.flushBrowsePreferenceWrites()])
+                .then(([committed]) => {
+                    if (committed !== true) throw new Error('Browse preference write failed');
+                    return committed;
+                });
+        }
         if (typeof global.saveBrowseViewPreferences === 'function'
             && typeof global.flushBrowsePreferenceWrites === 'function') {
             global.saveBrowseViewPreferences(patch);

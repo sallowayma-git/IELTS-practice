@@ -1012,6 +1012,7 @@
     global.getBrowseViewPreferences = getBrowseViewPreferences;
     global.whenBrowseViewPreferencesReady = whenBrowseViewPreferencesReady;
     global.saveBrowseViewPreferences = saveBrowseViewPreferences;
+    global.enqueueBrowsePreferenceWrite = enqueueBrowsePreferenceWrite;
     global.flushBrowsePreferenceWrites = flushBrowsePreferenceWrites;
     global.persistBrowseFilter = persistBrowseFilter;
     global.getPersistedBrowseFilter = getPersistedBrowseFilter;
