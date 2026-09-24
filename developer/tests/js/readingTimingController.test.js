@@ -13,6 +13,8 @@ function harness(options = {}) {
     let pauseRestores = 0;
     const acquisitions = [];
     const saves = [];
+    const retryTimers = [];
+    let nextTimerId = 1;
     const context = { sessionId: 'session-a', parentAttemptId: 'suite-a', sequenceIndex: 0,
         examId: 'p1', libraryConfigurationId: null, editable: true, running: true, timerInteractionRevision: 0,
         dataset: { questionOrder: ['q1', 'q2'], questionGroups: [{ questionIds: ['q1', 'q2'] }] },
@@ -21,7 +23,17 @@ function harness(options = {}) {
     const sandbox = { document: { visibilityState: 'visible', hasFocus: () => true,
         getElementById: () => null, addEventListener() {} },
         performance: { now: () => clock, timeOrigin: 10000 },
-        crypto: { randomUUID: () => 'new-writer' }, setInterval() {}, addEventListener() {},
+        crypto: { randomUUID: () => 'new-writer' }, setInterval() {},
+        setTimeout(callback, delay) {
+            const timer = { id: nextTimerId++, callback, delay };
+            retryTimers.push(timer);
+            return timer.id;
+        },
+        clearTimeout(id) {
+            const index = retryTimers.findIndex(timer => timer.id === id);
+            if (index >= 0) retryTimers.splice(index, 1);
+        },
+        addEventListener() {},
         AppData: { recovery: {
             async acquireReadingTiming(snapshot, previous) {
                 acquisitions.push({ snapshot: plain(snapshot), previous: plain(previous) });
@@ -38,9 +50,14 @@ function harness(options = {}) {
     vm.createContext(sandbox);
     sources.forEach(source => vm.runInContext(source, sandbox));
     const controller = new sandbox.ReadingTimingController(() => ({ ...context }));
-    return { controller, context, acquisitions, saves,
+    return { controller, context, acquisitions, saves, retryTimers,
         get pauseRestores() { return pauseRestores; },
         advance(ms) { clock += ms; controller.refresh(); },
+        async runNextRetry() {
+            const timer = retryTimers.shift();
+            assert.ok(timer, 'an acquisition retry should be scheduled');
+            await timer.callback();
+        },
         setRunning(running) { context.running = running; controller.refresh(); },
         interactTimer(running) { context.timerInteractionRevision++; context.running = running; controller.refresh(); },
         async move(examId, sequenceIndex, draft = null) {
@@ -216,6 +233,51 @@ test('retry on a fresh attempt starts partial measurement only after acquisition
     assert.ok(h.controller.snapshot().partialReasons.includes('save-failed'));
     h.advance(1000);
     assert.equal(h.controller.snapshot().totalMs, 1000);
+});
+
+test('recoverable initial acquisition retries automatically with bounded backoff', async () => {
+    const h = harness({ acquire(_snapshot, _previous, count) {
+        if (count < 3) throw new Error('Storage temporarily full');
+    } });
+    await h.controller.activate();
+    assert.equal(h.acquisitions.length, 1);
+    assert.equal(h.retryTimers.length, 1);
+    assert.equal(h.retryTimers[0].delay, 1000);
+
+    await h.runNextRetry();
+    assert.equal(h.acquisitions.length, 2);
+    assert.equal(h.retryTimers.length, 1);
+    assert.equal(h.retryTimers[0].delay, 2000);
+
+    await h.runNextRetry();
+    assert.equal(h.acquisitions.length, 3);
+    assert.ok(h.controller.active);
+    assert.equal(h.controller.failedActivation, null);
+    assert.equal(h.retryTimers.length, 0);
+});
+
+test('automatic acquisition retry is cancelled when its passage becomes stale', async () => {
+    const h = harness({ acquire() { throw new Error('Storage temporarily full'); } });
+    await h.controller.activate();
+    assert.equal(h.retryTimers.length, 1);
+    h.context.examId = 'p2';
+    h.context.sequenceIndex = 1;
+    await h.runNextRetry();
+    assert.equal(h.acquisitions.length, 1);
+    assert.equal(h.controller.active, null);
+    assert.equal(h.retryTimers.length, 0);
+});
+
+test('non-recoverable acquisition errors do not schedule an infinite retry loop', async () => {
+    const h = harness({ acquire() {
+        const error = new Error('Reading timing is already submitted');
+        error.code = 'TIMING_FINALIZED';
+        throw error;
+    } });
+    await h.controller.activate();
+    assert.equal(h.acquisitions.length, 1);
+    assert.equal(h.retryTimers.length, 0);
+    assert.match(h.controller.error, /已经提交/);
 });
 
 test('retry ignores a failed acquisition after the active passage or editability changes', async () => {

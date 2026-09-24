@@ -80,6 +80,10 @@ try {
     assertContains(indexHtml, 'data-practice-heatmap-month="next"', '热力图应提供下个月按钮');
     assertContains(indexHtml, 'id="practice-radar-canvas"', '阅读雷达 canvas 应存在');
     assertContains(indexHtml, 'data-practice-widget="radar"', '背面组件选择入口应包含阅读雷达');
+    assertContains(indexHtml, 'data-widget-type="parts"', '自定义组件应包含 P1/P2/P3 表现面板');
+    assertContains(indexHtml, 'data-practice-widget="parts"', '背面组件选择入口应包含 P1/P2/P3 表现');
+    assertContains(indexHtml, 'practice-parts-p1-accuracy', 'P1 表现应展示加权正确率');
+    assertContains(indexHtml, 'practice-parts-p1-score', 'P1 表现应展示得分/总分');
     assertContains(indexHtml, 'practice-custom-card__flip-btn practice-custom-card__icon-btn', '翻转按钮应复用同尺寸图标按钮');
     record('自定义卡片 DOM 结构守卫');
 
@@ -102,6 +106,9 @@ try {
     assertContains(css, '.practice-heatmap__cell[data-level="4"]', '热力图深色等级样式应存在');
     assertContains(css, '.practice-heatmap__cell::after', '热力图悬浮提示样式应存在');
     assertContains(css, '.practice-radar-summary', '雷达摘要样式应存在');
+    assertContains(css, '/* The rotor already lives inside the hero card\'s padded content box. A', '正确率翻转层不能重复叠加卡片内边距');
+    assertContains(css, '.practice-accuracy-card__front {\n    justify-content: flex-start;\n    align-items: flex-start;\n    text-align: left;', '正确率卡片正面应与其他统计卡片保持左上对齐');
+    assertContains(css, '.practice-parts-widget__row[hidden] {\n    display: none;', '听力视图隐藏的 P1/P2/P3 行必须有显式 [hidden] 规则，否则会被 display: grid 覆盖');
     record('自定义卡片 CSS 守卫');
 
     assertContains(source, "this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap'", '自定义卡片应优先沿用持久化的选中组件，缺失时才回退默认热力图');
@@ -129,6 +136,12 @@ try {
     assertContains(source, "questionTypeAliases[compact] || questionTypeAliases[token] || 'other'", '未知题型必须归入固定 other 枚举，不能生成不可渲染分类');
     assertContains(source, "event.target.closest('.practice-custom-card__flip-btn')", '翻转只应绑定右上角按钮');
     assertContains(source, 'event.stopPropagation();', '整卡其他区域点击应阻止冒泡且不翻转');
+    assertContains(source, "var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'parts']", '组件偏好应支持 P1/P2/P3 表现');
+    assertContains(source, 'PracticePriorityRenderer.prototype._renderParts', '组件渲染器应提供 P1/P2/P3 表现渲染');
+    assertContains(source, "global.ReadingAnalytics.aggregate(this.partsRecords, { recordType: 'all' })", 'P1/P2/P3 表现应基于完整正式阅读记录复用阅读加权统计服务');
+    assertContains(source, 'this.partsRecords = Array.isArray(options.partsRecords)', 'P1/P2/P3 表现应与历史搜索结果解耦');
+    assertContains(source, "'Score', possible > 0", 'P1/P2/P3 即使得分为 0 也应显示得分/总分，而不是误报暂无成绩');
+    assertContains(source, "var listening = this.examType === 'listening'", '听力筛选下应识别 P1/P2/P3 不适用状态');
     record('自定义卡片业务逻辑守卫');
 
     const { calculateReadingRadarData, calculatePracticeHeatmapData, filterByExamType } = loadCustomCardCalculators(source);

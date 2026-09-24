@@ -37,6 +37,8 @@ const secureServer = https.createServer({ key: fs.readFileSync(privateKey), cert
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 await new Promise(resolve => secureServer.listen(0, '127.0.0.1', resolve));
 let browser;
+let activePage;
+let activeMode;
 const report = { status: 'running', cases: [], hosting: 'Isolated local HTTPS static host under /IELTS-practice/; not a deployed-site smoke test.' };
 
 async function boot(page, url) {
@@ -54,10 +56,19 @@ async function openBrowse(page) {
 async function openMenu(page) {
     if (await page.locator('#browse-learning-panel').isHidden()) await page.locator('#browse-learning-trigger').click();
 }
+async function committedBrowsePreferences(page) {
+    return page.evaluate(async () => {
+        // Playwright 1.56 treats an async waitForFunction predicate's Promise
+        // as truthy, even when it resolves to false. Wait for the actual write
+        // queue before reading, particularly before a reload can abort it.
+        await window.flushBrowsePreferenceWrites();
+        return window.AppData.preferences.getBrowse();
+    });
+}
 async function choose(page, value) {
     await openMenu(page);
     await page.locator(`[name="browse-learning-state"][value="${value}"]`).check();
-    await page.waitForFunction(value => window.AppData.preferences.getBrowse().then(prefs => prefs.learningState === value), value);
+    assert.equal((await committedBrowsePreferences(page)).learningState, value);
 }
 async function visibleIds(page) { return page.locator('#exam-list-container .exam-item').evaluateAll(items => items.map(item => item.dataset.examId)); }
 async function expectIds(page, expected) {
@@ -77,24 +88,11 @@ async function expectIds(page, expected) {
     }
 }
 async function resetFilters(page) {
-    await page.evaluate(() => {
-        const reset = window.resetBrowseViewToAll;
-        window.resetBrowseViewToAll = (...args) => {
-            window.resetBrowseViewToAll = reset;
-            window.__browseAcceptanceReset = reset(...args);
-            return window.__browseAcceptanceReset;
-        };
-    });
     await page.locator('#browse-learning-reset').click();
-    // Rendering is optimistic; wait for the reset owner to finish its durable
-    // preference write before a following reload or keyboard interaction.
-    const reset = await page.evaluate(async () => {
-        const result = await window.__browseAcceptanceReset;
-        delete window.__browseAcceptanceReset;
-        const prefs = await window.AppData.preferences.getBrowse();
-        return { succeeded: result !== false, learningState: prefs.learningState, favoritesOnly: prefs.favoritesOnly };
-    });
-    assert.deepEqual(reset, { succeeded: true, learningState: 'all', favoritesOnly: false });
+    const reset = await committedBrowsePreferences(page);
+    assert.equal(reset.learningState, 'all');
+    assert.equal(reset.favoritesOnly, false);
+    assert.equal(reset.sortMode, 'difficulty-desc');
 }
 async function syncRecords(page) {
     await page.evaluate(async () => {
@@ -154,8 +152,33 @@ try {
         ['https-subpath', `https://127.0.0.1:${secureServer.address().port}/IELTS-practice/index.html`]
     ];
     for (const [mode, url] of modes) {
+        activeMode = mode;
         const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1365, height: 900 } });
+        // Record state transitions without inserting awaits into the flow: an
+        // extra preference read can hide the ordering race being diagnosed.
+        await context.addInitScript(() => {
+            window.__browseSortTrace = [];
+            let sortMode;
+            let lastChange = null;
+            document.addEventListener('change', event => {
+                lastChange = { name: event.target.name, id: event.target.id,
+                    value: event.target.value, checked: event.target.checked };
+            }, true);
+            Object.defineProperty(window, '__browseSortMode', {
+                configurable: true,
+                get() { return sortMode; },
+                set(value) {
+                    const previous = sortMode;
+                    sortMode = value;
+                    if (previous === value) return;
+                    window.__browseSortTrace.push({ previous, value, lastChange,
+                        checked: document.querySelector('[name="browse-sort-mode"]:checked')?.value,
+                        stack: new Error().stack });
+                }
+            });
+        });
         const page = await context.newPage();
+        activePage = page;
         page.setDefaultTimeout(12000);
         page.setDefaultNavigationTimeout(60000);
         const errors = [];
@@ -217,8 +240,10 @@ try {
         await page.locator('[data-frequency-filter="low"]').click();
         await expectIds(page, []);
         await page.locator('[data-frequency-filter="low"]').click();
-        await page.locator('#browse-sort-select').selectOption('difficulty-desc');
+        await openMenu(page);
+        await page.locator('[name="browse-sort-mode"][value="difficulty-desc"]').check();
         await expectIds(page, [exams[2].id]);
+        assert.equal((await committedBrowsePreferences(page)).sortMode, 'difficulty-desc');
         console.log(`[${mode}] reload and source isolation`);
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true);
@@ -248,16 +273,18 @@ try {
         assert(panelBox.x >= 0 && panelBox.x + panelBox.width <= 390, 'menu fits the narrow viewport');
         await resetFilters(page);
         await expectIds(page, exams.map(exam => exam.id));
-        const persisted = await page.evaluate(async () => {
-            await window.flushBrowsePreferenceWrites();
-            return window.AppData.preferences.getBrowse();
-        });
+        const persisted = await committedBrowsePreferences(page);
         assert.equal(persisted.learningState, 'all');
         assert.equal(persisted.favoritesOnly, false);
         assert.equal(Object.keys(persisted.readingFavorites).length, 1);
         assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
         await page.locator('#browse-learning-trigger').focus();
         await page.keyboard.press('Enter');
+        // The panel contains independent sort and learning-state radio
+        // groups. Focus the state group's current option before exercising
+        // native ArrowDown navigation so the assertion cannot accidentally
+        // mutate the preserved sort mode.
+        await page.locator('[name="browse-learning-state"][value="all"]').focus();
         await page.keyboard.press('ArrowDown');
         await expectIds(page, [exams[2].id, exams[3].id]);
         await page.keyboard.press('Escape');
@@ -268,7 +295,7 @@ try {
         await page.waitForFunction(() => window.app?.isInitialized === true);
         await page.evaluate(() => window.browseCategory('P1', 'reading'));
         await expectIds(page, exams.map(exam => exam.id));
-        assert.equal(await page.locator('#browse-learning-label').textContent(), '筛选');
+        assert.equal(await page.locator('#browse-learning-label').textContent(), '排序筛选');
         assert.equal(await page.locator('.browse-favorite-button[aria-pressed="true"]').count(), 1);
         console.log(`[${mode}] same-page backup restore`);
         await page.evaluate(() => window.AppData.backups.create({ id: 'browse-saved-favorite' }));
@@ -276,10 +303,10 @@ try {
         await page.locator('#backup-list-btn').click();
         page.once('dialog', dialog => dialog.accept());
         await page.locator('[data-backup-action="restore"][data-backup-id="browse-empty-favorites"]').click();
-        await page.waitForFunction(() => window.AppData.preferences.getBrowse()
-            .then(prefs => Object.keys(prefs?.readingFavorites || {}).length === 0));
         // Wait for Settings' delayed post-restore list refresh before dismissing.
         await page.locator('#backup-list-modal .backup-entry[data-backup-id^="pre_restore_"]').first().waitFor();
+        const restored = await committedBrowsePreferences(page);
+        assert.equal(Object.keys(restored?.readingFavorites || {}).length, 0);
         await page.locator('#backup-list-modal [data-backup-action="close-modal"]').click();
         await openBrowse(page);
         await expectIds(page, exams.map(exam => exam.id));
@@ -288,7 +315,7 @@ try {
         await openMenu(page);
         await page.locator('#browse-favorites-only').check();
         await expectIds(page, []);
-        await page.waitForFunction(() => window.AppData.preferences.getBrowse().then(prefs => prefs.favoritesOnly === true));
+        assert.equal((await committedBrowsePreferences(page)).favoritesOnly, true);
         await page.waitForFunction(() => !window.__isBrowseUserResultsRequestInFlight(window.__getBrowseResultsRequestId()));
         await page.evaluate(async () => {
             // The filter's scroll adjustment persists after a 150ms debounce.
@@ -320,6 +347,16 @@ try {
 } catch (error) {
     report.status = 'fail'; report.error = error.stack; process.exitCode = 1;
     console.error(error);
+    if (activePage && !activePage.isClosed()) {
+        report.failureMode = activeMode;
+        report.browseDiagnostics = await activePage.evaluate(async () => ({
+            sortMode: window.__browseSortMode,
+            checkedSortMode: document.querySelector('[name="browse-sort-mode"]:checked')?.value,
+            preferences: await window.AppData?.preferences.getBrowse(),
+            sortTrace: window.__browseSortTrace
+        })).catch(diagnosticError => ({ error: diagnosticError.message }));
+        console.error('Browse failure diagnostics:', JSON.stringify(report.browseDiagnostics));
+    }
 } finally {
     fs.writeFileSync(path.join(reports, 'browse-learning-state-report.json'), JSON.stringify(report, null, 2));
     await browser?.close();

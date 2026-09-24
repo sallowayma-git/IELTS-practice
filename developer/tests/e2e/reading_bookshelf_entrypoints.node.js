@@ -255,6 +255,15 @@ async function browseAndColdShelf(page, protocol) {
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(row => /browse\.bundle\.js/.test(row.name))), false);
     await showShelf(page);
     await expectCounts(page, { [examId]: 0 }, 0);
+    // The global notebook is a first-class view, not a modal layered over the
+    // bookshelf. Verify the route, shared shell, and return path before opening
+    // an article-specific reader from the shelf.
+    await page.locator('[data-action="open-global-notebook"]').click();
+    await page.locator('#reading-notebook-view').waitFor({ state: 'visible' });
+    await page.getByRole('heading', { name: '我的生词本' }).waitFor();
+    assert.equal(await page.locator('#vocab-modal').count(), 0, 'global notebook must not render the reader modal');
+    await page.getByRole('button', { name: '返回书架' }).click();
+    await page.locator('#bookshelf-view').waitFor({ state: 'visible' });
     const shelfEntry = card(page, examId).locator('button[data-action="open-reading-vocab"]');
     await shelfEntry.click();
     await readerReady(page, examId);
@@ -409,7 +418,8 @@ async function practiceFirstInvocation(protocol) {
         await page.goto(`${url}?examId=p2-low-08`);
         await page.locator('#question-groups input[name="q1"][value="A"]').waitFor();
         await page.locator('#question-groups input[name="q1"][value="A"]').check();
-        await page.locator('#reading-vocab-header-btn').click();
+        assert.equal(await page.locator('#reading-vocab-header-btn').count(), 0, 'practice must not expose a vocabulary entry');
+        await page.evaluate(() => ReadingVocabReader.open('p2-low-08', { fromPractice: true }));
         await readerReady(page, 'p2-low-08');
         assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
         const selected = await page.evaluate(() => {
@@ -436,7 +446,7 @@ async function practiceFirstInvocation(protocol) {
         assert.ok(exported.includes('practicefirstword') && exported.includes(selected));
         await page.locator('#vocab-modal-close').click();
         await page.locator('#vocab-reader-back-btn').click();
-        assert.equal(await page.locator('#reading-vocab-header-btn').evaluate(node => node === document.activeElement), true);
+        assert.equal(await page.locator('#reading-vocab-header-btn').count(), 0);
         assert.equal(await page.locator('#question-groups input[name="q1"][value="A"]').isChecked(), true);
         pass(`${protocol}-first-practice-panel-entry-controls-return`);
     } catch (error) {

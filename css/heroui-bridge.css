@@ -340,6 +340,153 @@ body.hero-body {
     min-height: 150px;
 }
 
+.practice-accuracy-card {
+    perspective: 1200px;
+    cursor: pointer;
+    outline: none;
+}
+
+.practice-accuracy-card:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--shui-accent) 24%, transparent), var(--shui-panel-shadow);
+}
+
+.practice-accuracy-card__rotor {
+    position: relative;
+    min-height: 150px;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.practice-accuracy-card.is-flipped .practice-accuracy-card__rotor {
+    transform: rotateY(180deg);
+}
+
+.practice-accuracy-card__face {
+    position: absolute;
+    inset: 0;
+    /* The rotor already lives inside the hero card's padded content box. A
+       second inset here made the accuracy card look smaller and lower than
+       the neighboring stat cards. */
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Match the other dashboard stat cards: the live accuracy value follows the
+   same top-left label/value/meta rhythm instead of being vertically centered. */
+.practice-accuracy-card__front {
+    justify-content: flex-start;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.practice-accuracy-card__face > * {
+    position: relative;
+    z-index: 1;
+}
+
+.practice-accuracy-card__back {
+    transform: rotateY(180deg);
+    gap: 12px;
+}
+
+.practice-accuracy-card__back-title {
+    color: var(--shui-text-strong);
+    font-size: 0.95rem;
+    font-weight: 750;
+}
+
+.practice-accuracy-options {
+    display: grid;
+    gap: 8px;
+}
+
+.practice-accuracy-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    border-radius: var(--shui-radius-sm);
+    background: rgba(255, 255, 255, 0.22);
+    color: var(--shui-text-strong);
+    text-align: left;
+    cursor: pointer;
+}
+
+.practice-accuracy-option span {
+    color: var(--shui-text-muted);
+    font-size: 0.74rem;
+}
+
+.practice-accuracy-option.active,
+.practice-accuracy-option:hover,
+.practice-accuracy-option:focus-visible {
+    background: rgba(255, 255, 255, 0.46);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.practice-parts-widget {
+    display: grid;
+    gap: 9px;
+    width: 100%;
+}
+
+.practice-parts-widget__unavailable {
+    margin: 0;
+    padding: 18px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: var(--shui-radius-sm);
+    background: rgba(255, 255, 255, 0.16);
+    color: var(--shui-text-muted);
+    font-size: 0.82rem;
+    text-align: center;
+}
+
+.practice-parts-widget__row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    border-radius: var(--shui-radius-sm);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* The grid declaration above beats the UA stylesheet's [hidden] rule, so the
+   rows hidden by the listening view would stay visible without this override. */
+.practice-parts-widget__row[hidden] {
+    display: none;
+}
+
+.practice-parts-widget__row strong {
+    color: var(--shui-text-strong);
+}
+
+.practice-parts-widget__row span {
+    color: var(--shui-text-strong);
+    font-size: 1.18rem;
+    font-weight: 800;
+}
+
+.practice-parts-widget__row small {
+    color: var(--shui-text-muted);
+    font-size: 0.74rem;
+}
+
+.interrupted-history__note,
+.interrupted-history__message {
+    font-size: 0.82rem;
+    color: color-mix(in srgb, var(--shui-text-muted) 88%, transparent);
+}
+
 .hero-card__label {
     font-size: 0.95rem;
     letter-spacing: 0.08em;
@@ -421,6 +568,11 @@ body.hero-body {
         opacity 320ms ease,
         transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
     will-change: max-height, opacity, transform;
+}
+
+.practice-view:not(.practice-dashboard-ready) .practice-summary-region,
+.practice-view:not(.practice-dashboard-ready) .practice-summary-toggle {
+    visibility: hidden;
 }
 
 #practice-view.is-practice-summary-collapsed .practice-summary-toggle__glyph {
@@ -1597,7 +1749,6 @@ body.hero-body {
 }
 
 #browse-view .search-input,
-#browse-view .browse-sort-select,
 #browse-view .browse-frequency-filter {
     min-height: 52px;
     border-radius: 999px;
@@ -1625,14 +1776,12 @@ body.hero-body {
 }
 
 #browse-view .search-input:hover,
-#browse-view .browse-sort-select:hover,
 #browse-view .browse-frequency-filter:hover {
     background: rgba(255, 255, 255, 0.36);
     border-color: rgba(255, 255, 255, 0.76);
 }
 
-#browse-view .search-input:focus,
-#browse-view .browse-sort-select:focus {
+#browse-view .search-input:focus {
     background: rgba(255, 255, 255, 0.44);
     border-color: rgba(255, 255, 255, 0.9);
     box-shadow:
@@ -1706,30 +1855,6 @@ body.hero-body {
         0 8px 18px rgba(15, 23, 42, 0.07),
         inset 0 1px 1px rgba(255, 255, 255, 0.9),
         inset 0 -1px 1px rgba(255, 255, 255, 0.18);
-}
-
-#browse-view .browse-sort-wrapper {
-    flex: 0 0 auto;
-}
-
-#browse-view .browse-sort-select {
-    min-width: 126px;
-    min-height: 38px;
-    height: 38px;
-    padding: 0 32px 0 14px;
-    font-size: 0.9rem;
-    font-weight: 800;
-}
-
-#browse-view .browse-sort-select option {
-    color: #1d1d1f;
-    background: rgba(255, 255, 255, 0.96);
-    font-weight: 700;
-}
-
-#browse-view .browse-sort-icon {
-    right: 17px;
-    color: rgba(51, 65, 85, 0.62);
 }
 
 /* data-mgmt-btn 静止态已并入 main.css .shui-capsule-btn 共享规则；
@@ -1916,8 +2041,6 @@ body.hero-body {
     }
 
     #browse-view .search-input-wrap,
-    #browse-view .browse-sort-wrapper,
-    #browse-view .browse-sort-select,
     #browse-view .browse-frequency-filter {
         width: 100%;
     }
@@ -2733,7 +2856,7 @@ body.blue-dark-mode .external-backup-banner__dismiss {
 }
 
 #browse-view .browse-learning-trigger {
-    min-height: 38px;
+    min-height: 52px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -2761,13 +2884,13 @@ body.blue-dark-mode .external-backup-banner__dismiss {
     width: 292px;
     max-width: calc(100vw - 48px);
     padding: 16px;
-    border: 1px solid var(--shui-surface-border, #cbd5e1);
+    border: 1px solid var(--shui-panel-border, rgba(255, 255, 255, 0.4));
     border-radius: 16px;
-    background: var(--shui-surface-bg, #fff);
+    background: var(--shui-panel-bg, rgba(255, 255, 255, 0.25));
     color: var(--shui-text-strong, #1d1d1f);
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+    box-shadow: var(--shui-panel-shadow, 0 20px 40px rgba(15, 23, 42, 0.12));
 }
 
 #browse-view .browse-learning-panel[hidden] { display: none; }
@@ -2826,6 +2949,5 @@ body.blue-dark-mode .external-backup-banner__dismiss {
     #browse-view .search-input-wrap { flex: 1 1 100%; min-width: 0; }
     #browse-view .browse-frequency-filter { min-height: 38px; padding: 2px; }
     #browse-view .browse-frequency-chip { height: 32px; min-width: 40px; padding: 0 8px; }
-    #browse-view .browse-sort-wrapper { width: auto; flex: 1 1 auto; }
     #browse-view .browse-learning-panel { left: 0; right: auto; }
 }

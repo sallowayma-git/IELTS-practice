@@ -1999,8 +1999,8 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
-    if (window.ReadingAnalyticsPanel) {
-        window.ReadingAnalyticsPanel.update(records, { recordType: examType, query: historyQuery });
+    if (dashboard && typeof dashboard.updateAccuracy === 'function') {
+        dashboard.updateAccuracy(records, examType);
     }
 
     const trendRenderer = ensurePracticeTrendRenderer();
@@ -2010,7 +2010,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
 
     const priorityRenderer = ensurePracticePriorityRenderer();
     if (priorityRenderer && typeof priorityRenderer.update === 'function') {
-        priorityRenderer.update(recordsForInsights, examIndex, { examType });
+        priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records });
     }
 
     // --- 4. Render history list ---
@@ -3055,7 +3055,6 @@ async function initializeBrowseView(options = {}) {
             }
         }
 
-        setupBrowseSortControl();
         setupBrowseFrequencyFilterControl();
         if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
@@ -3237,11 +3236,10 @@ async function setupBrowseControls(options = {}) {
             return setupBrowseControls(options);
         }
         if (!browseControlsSeeded) {
-            // A user frequency/sort intent that happened while storage was being
+            // A user frequency intent that happened while storage was being
             // read owns the controls. The older preference snapshot must not
             // overwrite it when the await settles.
             if (browseControlsSeedReadRevision === browseControlsMutationRevision && browse) {
-                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
                 updateBrowseFrequencyButtons(
                     browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
                 );
@@ -3254,7 +3252,6 @@ async function setupBrowseControls(options = {}) {
     if (!isBrowseControlsSetupCurrent(options)) {
         return false;
     }
-    setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
     if (window.BrowseLearningControls) {
         await window.BrowseLearningControls.ready();
@@ -3272,28 +3269,6 @@ async function persistBrowsePreference(patch) {
     }
     const current = await window.AppData.preferences.getBrowse() || {};
     await window.AppData.preferences.setBrowse(Object.assign({}, current, patch));
-}
-
-function setupBrowseSortControl() {
-    const sortSelect = document.getElementById('browse-sort-select');
-    if (!sortSelect || sortSelect.dataset.bound === 'true') {
-        return;
-    }
-    const normalizeSortMode = (value) => {
-        const mode = String(value || 'default').trim().toLowerCase();
-        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
-    };
-    let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
-    if (!savedMode) savedMode = 'default';
-    sortSelect.value = normalizeSortMode(savedMode);
-    window.__browseSortMode = sortSelect.value;
-    sortSelect.addEventListener('change', () => {
-        browseControlsMutationRevision += 1;
-        window.__browseSortMode = normalizeSortMode(sortSelect.value);
-        persistBrowsePreference({ sortMode: window.__browseSortMode }).catch(console.warn);
-        refreshBrowseResults({ foreground: true });
-    });
-    sortSelect.dataset.bound = 'true';
 }
 
 function updateBrowseFrequencyButtons(filter) {

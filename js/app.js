@@ -650,7 +650,7 @@ class ExamSystemApp {
                 const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
                 if (activeNavBtn) {
                     activeNavBtn.classList.add('active');
-                } else if (viewName === 'bookshelf' || viewName === 'vocab') {
+                } else if (viewName === 'bookshelf' || viewName === 'vocab' || viewName === 'reading-notebook') {
                     const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
                     if (moreNavBtn) {
                         moreNavBtn.classList.add('active');
@@ -864,6 +864,31 @@ class ExamSystemApp {
                         })
                         .catch((error) => {
                             console.warn('[App] 激活书架视图时加载工具模块失败:', error);
+                        });
+                    break;
+                case 'reading-notebook':
+                    Promise.resolve()
+                        .then(() => {
+                            if (window.AppEntry && typeof window.AppEntry.ensureMoreToolsGroup === 'function') {
+                                return window.AppEntry.ensureMoreToolsGroup();
+                            }
+                            if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                                return window.AppLazyLoader.ensureGroup('more-tools');
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            if (this.currentView !== 'reading-notebook'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) return;
+                            if (window.ReadingNotebookView && typeof window.ReadingNotebookView.mount === 'function') {
+                                window.ReadingNotebookView.mount('#reading-notebook-view');
+                            }
+                        })
+                        .catch((error) => {
+                            console.warn('[App] 激活我的生词本视图时加载工具模块失败:', error);
                         });
                     break;
                 default:

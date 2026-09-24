@@ -6,7 +6,11 @@
 
     let browsePreferencesCache = null;
     let browsePreferencesReady = null;
+    let browsePreferencesHydrated = false;
     let browsePreferenceWriteQueue = Promise.resolve();
+    let browsePreferenceWriteSequence = 0;
+    const ownBrowsePreferenceOperationIds = new Set();
+    let browsePreferenceCommitListenerBound = false;
     const pendingBrowsePreferenceWrites = [];
     let browseAnchorProjection = null;
     let browseAnchorProjectionRevision = 0;
@@ -100,6 +104,42 @@
         };
     }
 
+    function normalizeBrowsePreferencesSnapshot(parsed) {
+        const next = Object.assign({}, getDefaultBrowsePreferences(), parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
+        return next;
+    }
+
+    function bindBrowsePreferenceCommitListener() {
+        if (browsePreferenceCommitListenerBound) {
+            return;
+        }
+        const backups = global.AppData && global.AppData.backups;
+        if (!backups || typeof backups.onDataCommitted !== 'function') {
+            return;
+        }
+        browsePreferenceCommitListenerBound = true;
+        backups.onDataCommitted((event) => {
+            const targets = Array.isArray(event && event.targets) ? event.targets : [];
+            if (!targets.some((target) => target && target.logicalKey === 'preferences.values')) {
+                return;
+            }
+            const operationId = event && event.receipt && event.receipt.operationId
+                ? String(event.receipt.operationId)
+                : (event && event.operationId ? String(event.operationId) : '');
+            if (operationId && ownBrowsePreferenceOperationIds.delete(operationId)) {
+                return;
+            }
+            // Backup restores and legacy preference writers may commit outside
+            // this queue. Force the next queued partial write to merge against
+            // the new durable baseline instead of resurrecting stale cache.
+            browsePreferencesHydrated = false;
+        });
+    }
+
     function mergeBrowseAnchors(currentAnchors = {}, updates) {
         const next = Object.assign({}, currentAnchors);
         if (!updates || typeof updates !== 'object') {
@@ -143,25 +183,18 @@
     }
 
     function loadBrowsePreferencesFromStorage() {
+        bindBrowsePreferenceCommitListener();
         if (!browsePreferencesReady) {
             browsePreferencesReady = Promise.resolve().then(async () => {
                 if (!global.AppData || !global.AppData.preferences) return;
                 await global.AppData.ready;
                 const parsed = await global.AppData.preferences.getBrowse();
-                const defaults = getDefaultBrowsePreferences();
-                const next = Object.assign({}, defaults, parsed || {});
-                if (!next.scrollPositions || typeof next.scrollPositions !== 'object') next.scrollPositions = {};
-                next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-                browsePreferencesCache = next;
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(parsed);
+                browsePreferencesHydrated = true;
             }).catch((error) => console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error));
         }
         try {
-            const next = Object.assign({}, getDefaultBrowsePreferences(), browsePreferencesCache || {});
-            if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
-                next.scrollPositions = {};
-            }
-            next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-            return next;
+            return normalizeBrowsePreferencesSnapshot(browsePreferencesCache);
         } catch (error) {
             console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
             return getDefaultBrowsePreferences();
@@ -194,7 +227,7 @@
 
     function mergeBrowsePreferences(current, partial = {}, options = {}) {
         const replaceListAnchors = options.replaceListAnchors === true;
-        return {
+        return Object.assign({}, current, partial, {
             scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
             listAnchors: replaceListAnchors
                 ? mergeBrowseAnchors({}, partial.listAnchors)
@@ -205,7 +238,7 @@
             lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
                 ? (partial.lastFilter || null)
                 : current.lastFilter
-        };
+        });
     }
 
     function removePendingBrowsePreferenceWrite(request) {
@@ -216,12 +249,14 @@
     }
 
     function enqueueBrowsePreferenceWrite(partial = {}, options = {}) {
+        bindBrowsePreferenceCommitListener();
         const request = {
             partial: Object.assign({}, partial),
             replaceListAnchors: options.replaceListAnchors === true,
             anchorRevision: Number.isFinite(Number(options.anchorRevision))
                 ? Number(options.anchorRevision)
-                : null
+                : null,
+            operationId: `browse-preference-${Date.now()}-${++browsePreferenceWriteSequence}`
         };
         pendingBrowsePreferenceWrites.push(request);
         const preview = pendingBrowsePreferenceWrites.reduce(
@@ -247,12 +282,35 @@
         const outcome = browsePreferenceWriteQueue.then(async () => {
             await global.AppData.ready;
             if (browsePreferencesReady) await browsePreferencesReady;
+            // A lazy bundle may be queued before AppData is exposed. Hydrate
+            // that first queued write before merging it with the default
+            // preview; once the accepted baseline is loaded, subsequent
+            // writes must stay on this queue and must not start an unrelated
+            // preference read that can block the caller's flush barrier.
+            if (!browsePreferencesHydrated) {
+                const persisted = await global.AppData.preferences.getBrowse();
+                browsePreferencesCache = normalizeBrowsePreferencesSnapshot(persisted);
+                browsePreferencesHydrated = true;
+            }
             const next = mergeBrowsePreferences(
                 getBrowseViewPreferences(),
                 request.partial,
                 request
             );
-            await global.AppData.preferences.patchBrowse(next);
+            // AppData merges patches against the latest durable preferences.
+            // Sending the whole cached snapshot can overwrite a sort/favorite
+            // change committed while this write waits in AppData's queue.
+            // Keep merged nested values, but only for fields this request owns.
+            const patch = Object.fromEntries(
+                Object.keys(request.partial).map((key) => [key, next[key]])
+            );
+            ownBrowsePreferenceOperationIds.add(request.operationId);
+            try {
+                await global.AppData.preferences.patchBrowse(patch, { operationId: request.operationId });
+            } catch (error) {
+                ownBrowsePreferenceOperationIds.delete(request.operationId);
+                throw error;
+            }
             browsePreferencesCache = next;
             if (request.anchorRevision != null
                 && browseAnchorPersistenceDebt
@@ -954,6 +1012,7 @@
     global.getBrowseViewPreferences = getBrowseViewPreferences;
     global.whenBrowseViewPreferencesReady = whenBrowseViewPreferencesReady;
     global.saveBrowseViewPreferences = saveBrowseViewPreferences;
+    global.enqueueBrowsePreferenceWrite = enqueueBrowsePreferenceWrite;
     global.flushBrowsePreferenceWrites = flushBrowsePreferenceWrites;
     global.persistBrowseFilter = persistBrowseFilter;
     global.getPersistedBrowseFilter = getPersistedBrowseFilter;

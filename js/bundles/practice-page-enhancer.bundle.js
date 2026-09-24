@@ -3215,6 +3215,7 @@
         theme: 'theme', browse: 'browse', timer: 'timer', suite: 'suite', candidateCode: 'candidateCode',
         resourceBasePrefix: 'resourceBasePrefix', onboarding: 'onboarding', readingDisplay: 'readingDisplay',
         threeBackground: 'threeBackground', themePortal: 'themePortal', practiceWidget: 'practiceWidget',
+        practiceDashboard: 'practiceDashboard',
         consent: 'consent', logConfig: 'logConfig'
     });
     const PRACTICE_ENTITY_STORES = Object.freeze(['practiceSummaries', 'practiceDetails', 'practiceAnnotations']);
@@ -6390,6 +6391,24 @@
             return kernel.mutate([{ logicalKey: 'preferences.values', data: next, expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], mutation);
         }));
     }
+    function normalizePracticeDashboard(value) {
+        const source = asObject(value);
+        return {
+            summaryCollapsed: source.summaryCollapsed === true,
+            accuracyMode: source.accuracyMode === 'weighted' ? 'weighted' : 'average'
+        };
+    }
+    function normalizePracticeDashboardPatch(value) {
+        const source = asObject(value);
+        const patch = {};
+        if (Object.prototype.hasOwnProperty.call(source, 'summaryCollapsed')) {
+            patch.summaryCollapsed = source.summaryCollapsed === true;
+        }
+        if (Object.prototype.hasOwnProperty.call(source, 'accuracyMode')) {
+            patch.accuracyMode = source.accuracyMode === 'weighted' ? 'weighted' : 'average';
+        }
+        return patch;
+    }
     async function setReadingFavorite(identity, favorite, options = {}) {
         const parts = JSON.parse(identity);
         if (!Array.isArray(parts) || parts.length !== 3 || parts[1] !== 'reading'
@@ -6429,6 +6448,10 @@
         async getThreeBackground() { return (await readPreferences())[PREFERENCE_FIELDS.threeBackground] ?? null; }, async setThreeBackground(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.threeBackground, value, options); },
         async getThemePortal() { return clone((await readPreferences())[PREFERENCE_FIELDS.themePortal] ?? null); }, async setThemePortal(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.themePortal, value, options); },
         async getPracticeWidget() { return (await readPreferences())[PREFERENCE_FIELDS.practiceWidget] ?? null; }, async setPracticeWidget(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.practiceWidget, value, options); },
+        async getPracticeDashboard() { return normalizePracticeDashboard((await readPreferences())[PREFERENCE_FIELDS.practiceDashboard]); },
+        async patchPracticeDashboard(value, options) {
+            return patchPreference(PREFERENCE_FIELDS.practiceDashboard, normalizePracticeDashboardPatch(value), options);
+        },
         async getConsent() { return clone((await readPreferences())[PREFERENCE_FIELDS.consent] ?? {}); }, async setConsent(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.consent, asObject(value), options); },
         async getLogConfig() { return clone((await readPreferences())[PREFERENCE_FIELDS.logConfig] ?? null); }, async setLogConfig(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.logConfig, asObject(value), options); }
     });

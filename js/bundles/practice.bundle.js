@@ -5302,7 +5302,7 @@ class PracticeRecorder {
      * 检查会话活动状态
      */
     checkSessionActivity(examId) {
-        if (!this.activeSessions.has(examId)) return;
+        if (!this.activeSessions.has(examId)) return Promise.resolve(false);
 
         let session = this.activeSessions.get(examId);
         const now = new Date();
@@ -5312,8 +5312,13 @@ class PracticeRecorder {
         // 如果超过30分钟无活动，标记为超时
         if (inactiveTime > 30 * 60 * 1000) {
             console.warn(`Session timeout detected for exam: ${examId}`);
-            this.endPracticeSession(examId, 'timeout');
+            // Expose the durable end lifecycle to callers that need to wait
+            // for the interruption record and session-ended event. The timer
+            // based callers intentionally ignore this Promise, while recovery
+            // and regression callers can synchronize without polling.
+            return this.endPracticeSession(examId, 'timeout');
         }
+        return Promise.resolve(false);
     }
 
     /**

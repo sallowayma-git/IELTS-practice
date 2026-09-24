@@ -271,16 +271,149 @@
             total: options.totalId || 'total-practiced',
             average: options.averageId || 'avg-score',
             duration: options.durationId || 'study-time',
-            streak: options.streakId || 'streak-days'
+            streak: options.streakId || 'streak-days',
+            accuracyCard: options.accuracyCardId || 'practice-accuracy-card',
+            accuracyLabel: options.accuracyLabelId || 'practice-accuracy-label',
+            accuracyMeta: options.accuracyMetaId || 'practice-accuracy-meta'
         };
+        this.accuracyMode = 'average';
+        this.accuracyRecords = [];
+        this.accuracyExamType = 'all';
+        this.summary = {};
+        this.accuracyBound = false;
+        this._hydratePracticeDashboardPreferences();
     }
 
     PracticeDashboardView.prototype.updateSummary = function updateSummary(summary) {
         summary = summary || {};
+        this.summary = summary;
         this._setText(this.ids.total, typeof summary.totalPracticed === 'number' ? summary.totalPracticed : 0);
-        this._setText(this.ids.average, formatPercentage(summary.averageScore));
+        if (this.accuracyMode === 'average') {
+            this._setText(this.ids.average, formatPercentage(summary.averageScore));
+        }
         this._setText(this.ids.duration, formatMinutes(summary.totalStudyMinutes));
         this._setText(this.ids.streak, typeof summary.streak === 'number' ? summary.streak : 0);
+        this._ensureAccuracyInteractions();
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype.updateAccuracy = function updateAccuracy(records, examType) {
+        this.accuracyRecords = ensureArray(records).slice();
+        this.accuracyExamType = examType || 'all';
+        this._ensureAccuracyInteractions();
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype._hydratePracticeDashboardPreferences = function _hydratePracticeDashboardPreferences() {
+        var self = this;
+        var markReady = function () {
+            if (typeof document !== 'undefined') {
+                var view = document.getElementById('practice-view');
+                if (view) view.classList.add('practice-dashboard-ready');
+            }
+        };
+        if (!window.AppData || !window.AppData.preferences || typeof window.AppData.preferences.getPracticeDashboard !== 'function') {
+            markReady();
+            return;
+        }
+        Promise.resolve(window.AppData.ready)
+            .then(function () { return window.AppData.preferences.getPracticeDashboard(); })
+            .then(function (preference) {
+                var next = preference || {};
+                self.accuracyMode = next.accuracyMode === 'weighted' ? 'weighted' : 'average';
+                var practiceView = document.getElementById('practice-view');
+                if (practiceView) {
+                    practiceView.classList.toggle('is-practice-summary-collapsed', next.summaryCollapsed === true);
+                    var region = document.getElementById('practice-summary-region');
+                    var button = document.getElementById('practice-summary-toggle');
+                    if (region) {
+                        region.setAttribute('aria-hidden', next.summaryCollapsed === true ? 'true' : 'false');
+                        region.inert = next.summaryCollapsed === true;
+                    }
+                    if (button) {
+                        button.setAttribute('aria-expanded', next.summaryCollapsed === true ? 'false' : 'true');
+                        button.setAttribute('aria-label', next.summaryCollapsed === true ? '展开练习统计卡片' : '折叠练习统计卡片');
+                    }
+                }
+                self._renderAccuracy();
+                markReady();
+            })
+            .catch(function () { markReady(); });
+    };
+
+    PracticeDashboardView.prototype.setAccuracyMode = function setAccuracyMode(mode) {
+        this.accuracyMode = mode === 'weighted' ? 'weighted' : 'average';
+        if (window.AppData && window.AppData.preferences && typeof window.AppData.preferences.patchPracticeDashboard === 'function') {
+            window.AppData.preferences.patchPracticeDashboard({ accuracyMode: this.accuracyMode }).catch(function (error) {
+                console.warn('[PracticeDashboard] 正确率偏好保存失败:', error);
+            });
+        }
+        this._renderAccuracy();
+    };
+
+    PracticeDashboardView.prototype._renderAccuracy = function _renderAccuracy() {
+        if (typeof document === 'undefined') return;
+        var label = document.getElementById(this.ids.accuracyLabel);
+        var meta = document.getElementById(this.ids.accuracyMeta);
+        var value = document.getElementById(this.ids.average);
+        var card = document.getElementById(this.ids.accuracyCard);
+        if (!label || !meta || !value) return;
+        if (this.accuracyMode === 'average') {
+            label.textContent = '平均正确率';
+            meta.textContent = '全部正式记录';
+            value.textContent = formatPercentage(this.summary && this.summary.averageScore);
+        } else {
+            label.textContent = '加权平均正确率';
+            if (this.accuracyExamType === 'listening') {
+                value.textContent = '—';
+                meta.textContent = '仅适用于阅读';
+            } else {
+                var result = global.ReadingAnalytics && typeof global.ReadingAnalytics.aggregate === 'function'
+                    ? global.ReadingAnalytics.aggregate(this.accuracyRecords, { recordType: 'all' }) : null;
+                value.textContent = result && result.total && result.total.accuracy != null
+                    ? (Math.round(result.total.accuracy * 1000) / 10) + '%' : '—';
+                meta.textContent = result && result.total && result.total.accuracy != null ? '总得分 ÷ 总分' : '暂无成绩';
+            }
+        }
+        if (card) {
+            card.setAttribute('aria-label', this.accuracyMode === 'weighted' ? '加权平均正确率，点击设置' : '平均正确率，点击设置');
+            card.querySelectorAll('[data-practice-accuracy-mode]').forEach(function (option) {
+                var active = option.dataset.practiceAccuracyMode === this.accuracyMode;
+                option.classList.toggle('active', active);
+                option.setAttribute('aria-pressed', active ? 'true' : 'false');
+            }, this);
+        }
+    };
+
+    PracticeDashboardView.prototype._ensureAccuracyInteractions = function _ensureAccuracyInteractions() {
+        if (this.accuracyBound || typeof document === 'undefined') return;
+        var card = document.getElementById(this.ids.accuracyCard);
+        if (!card) return;
+        this.accuracyBound = true;
+        var self = this;
+        var flip = function () {
+            card.classList.toggle('is-flipped');
+            card.setAttribute('aria-pressed', card.classList.contains('is-flipped') ? 'true' : 'false');
+        };
+        card.addEventListener('click', function (event) {
+            var option = event.target && event.target.closest ? event.target.closest('[data-practice-accuracy-mode]') : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setAccuracyMode(option.dataset.practiceAccuracyMode);
+                card.classList.remove('is-flipped');
+                card.setAttribute('aria-pressed', 'false');
+                return;
+            }
+            flip();
+        });
+        card.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            var option = event.target && event.target.closest ? event.target.closest('[data-practice-accuracy-mode]') : null;
+            if (option) return;
+            event.preventDefault();
+            flip();
+        });
     };
 
     PracticeDashboardView.prototype._setText = function _setText(id, value) {
@@ -1148,9 +1281,17 @@
             highFill: options.highFillId || 'practice-priority-high-fill',
             mediumFill: options.mediumFillId || 'practice-priority-medium-fill',
             highAccuracy: options.highAccuracyId || 'practice-priority-high-accuracy',
-            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy'
+            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy',
+            partsP1Accuracy: options.partsP1AccuracyId || 'practice-parts-p1-accuracy',
+            partsP2Accuracy: options.partsP2AccuracyId || 'practice-parts-p2-accuracy',
+            partsP3Accuracy: options.partsP3AccuracyId || 'practice-parts-p3-accuracy',
+            partsP1Score: options.partsP1ScoreId || 'practice-parts-p1-score',
+            partsP2Score: options.partsP2ScoreId || 'practice-parts-p2-score',
+            partsP3Score: options.partsP3ScoreId || 'practice-parts-p3-score',
+            partsUnavailable: options.partsUnavailableId || 'practice-parts-unavailable'
         };
         this.records = [];
+        this.partsRecords = [];
         this.exams = [];
         this.examType = 'all';
         // 优先沿用用户上次选中的组件；显式传入 defaultWidget 时只作为兜底。
@@ -1163,6 +1304,7 @@
     PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
         options = options || {};
         this.records = Array.isArray(records) ? records.slice() : [];
+        this.partsRecords = Array.isArray(options.partsRecords) ? options.partsRecords.slice() : this.records.slice();
         this.exams = Array.isArray(exams) ? exams.slice() : [];
         this.examType = options.examType || 'all';
         this._ensureInteractions();
@@ -1181,7 +1323,8 @@
         if (titleElem) {
             titleElem.textContent = this.activeWidget === 'radar'
                 ? '阅读错题雷达'
-                : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
+                : (this.activeWidget === 'priority' ? '中高频余量'
+                    : (this.activeWidget === 'parts' ? 'P1 / P2 / P3 表现' : '练习热力图'));
         }
         
         var contents = card.querySelectorAll('.practice-custom-widget-content');
@@ -1201,6 +1344,8 @@
             this._renderGroup('medium', stats.medium);
         } else if (this.activeWidget === 'radar') {
             this._renderRadarChart();
+        } else if (this.activeWidget === 'parts') {
+            this._renderParts();
         }
         
         this._syncOptionState();
@@ -1300,6 +1445,30 @@
         );
         
         drawRadarChart(canvas, dataPoints);
+    };
+
+    PracticePriorityRenderer.prototype._renderParts = function _renderParts() {
+        var unavailable = document.getElementById(this.ids.partsUnavailable);
+        var rows = document.querySelectorAll('.practice-parts-widget__row');
+        var listening = this.examType === 'listening';
+        if (unavailable) unavailable.hidden = !listening;
+        rows.forEach(function (row) { row.hidden = listening; });
+        if (listening) return;
+        var result = global.ReadingAnalytics && typeof global.ReadingAnalytics.aggregate === 'function'
+            ? global.ReadingAnalytics.aggregate(this.partsRecords, { recordType: 'all' })
+            : null;
+        var categories = result && result.categories ? result.categories : {};
+        ['P1', 'P2', 'P3'].forEach(function (category) {
+            var key = category.toLowerCase();
+            var value = categories[category] || {};
+            var possible = Number(value.possible) || 0;
+            var earned = Number(value.earned) || 0;
+            var accuracy = value.accuracy == null ? '—' : Math.round(Number(value.accuracy) * 1000) / 10 + '%';
+            this._setText('parts' + category + 'Accuracy', accuracy);
+            this._setText('parts' + category + 'Score', possible > 0
+                ? (Math.round(earned * 10) / 10) + ' / ' + (Math.round(possible * 10) / 10) + ' 分'
+                : '暂无成绩');
+        }, this);
     };
 
     PracticePriorityRenderer.prototype.flipToBack = function flipToBack() {
@@ -1588,9 +1757,9 @@
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
     }
 
-    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
+    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达 / P1-P3 表现）持久化，
     // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
-    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'parts'];
     var persistedPracticeWidget = null;
     if (window.AppData && window.AppData.preferences) {
         window.AppData.ready.then(function () { return window.AppData.preferences.getPracticeWidget(); }).then(function (value) {

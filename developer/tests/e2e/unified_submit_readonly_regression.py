@@ -378,7 +378,8 @@ async def run_vocab_entry_isolation_scenario(context) -> Dict[str, Any]:
     frame = await open_practice(page, "session-vocab-isolation", "token-vocab-isolation", "p2-low-08")
     await frame.check('#question-groups input[name="q1"][value="A"]')
     before_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
-    await frame.click("#reading-vocab-header-btn")
+    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "practice_vocab_entry_still_visible")
+    await frame.evaluate("() => ReadingVocabReader.open('p2-low-08', { fromPractice: true })")
     await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
     require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_available")
     require(await frame.locator('#question-groups input[name="q1"][value="A"]').is_checked(), "practice_answer_changed")
@@ -400,7 +401,7 @@ async def run_vocab_entry_isolation_scenario(context) -> Dict[str, Any]:
     await frame.wait_for_function(
         "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitted'"
     )
-    await frame.click("#reading-vocab-header-btn")
+    await frame.evaluate("() => ReadingVocabReader.open('p2-low-08', { fromPractice: true })")
     await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
     require(await frame.locator("#vocab-manual-input").is_enabled(), "submitted_readonly_disabled_reader_input")
     require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_after_submit")
@@ -408,7 +409,7 @@ async def run_vocab_entry_isolation_scenario(context) -> Dict[str, Any]:
     require(after_answers == before_answers, "reader_after_submit_changed_answers")
     await frame.click("#vocab-reader-back-btn")
     await page.close()
-    return {"examId": "p2-low-08", "entryAvailable": True, "submittedAnswer": "A", "readerInputSurvivesPracticeLocks": True}
+    return {"examId": "p2-low-08", "entryAvailable": False, "readerAvailableByApi": True, "submittedAnswer": "A", "readerInputSurvivesPracticeLocks": True}
 
 
 async def run() -> Dict[str, Any]:
