@@ -108,6 +108,7 @@ try {
     assertContains(css, '.practice-radar-summary', '雷达摘要样式应存在');
     assertContains(css, '/* The rotor already lives inside the hero card\'s padded content box. A', '正确率翻转层不能重复叠加卡片内边距');
     assertContains(css, '.practice-accuracy-card__front {\n    justify-content: flex-start;\n    align-items: flex-start;\n    text-align: left;', '正确率卡片正面应与其他统计卡片保持左上对齐');
+    assertContains(css, '.practice-parts-widget__row[hidden] {\n    display: none;', '听力视图隐藏的 P1/P2/P3 行必须有显式 [hidden] 规则，否则会被 display: grid 覆盖');
     record('自定义卡片 CSS 守卫');
 
     assertContains(source, "this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap'", '自定义卡片应优先沿用持久化的选中组件，缺失时才回退默认热力图');

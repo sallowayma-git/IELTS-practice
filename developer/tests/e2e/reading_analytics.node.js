@@ -135,6 +135,35 @@ try {
         // switch.
         await page.locator('#practice-custom-card [aria-label="配置自定义组件"]').click();
         await page.locator('#practice-custom-card [data-practice-widget="parts"]').click();
+        // Regression (PR #192 review): the author display:grid rule used to
+        // beat the UA [hidden] rule, so listening kept all three score rows
+        // visible (with stale reading scores) beside the reading-only
+        // message. The rows must actually disappear and must come back with
+        // the reading filter restored.
+        const readPartsRows = () => page.evaluate(() => Array.from(
+            document.querySelectorAll('.practice-parts-widget__row'),
+            row => ({ hidden: row.hidden, display: getComputedStyle(row).display })
+        ));
+        await page.locator('#record-type-filter-buttons [data-filter-type="listening"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === false && rows.length === 3
+                && Array.from(rows).every(row => row.hidden);
+        }, null, { timeout: 15000 });
+        const listeningRows = await readPartsRows();
+        assert.ok(listeningRows.every(row => row.display === 'none'),
+            `listening view must hide the parts rows, got ${JSON.stringify(listeningRows)}`);
+        await page.locator('#record-type-filter-buttons [data-filter-type="reading"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === true && rows.length === 3
+                && Array.from(rows).every(row => !row.hidden);
+        }, null, { timeout: 15000 });
+        const restoredRows = await readPartsRows();
+        assert.ok(restoredRows.every(row => row.display !== 'none'),
+            `reading view must restore the parts rows, got ${JSON.stringify(restoredRows)}`);
         const beforeSwitch = await readReadingAnalyticsMetrics(page);
         await page.evaluate(async () => {
             const source = (await window.resolveActiveLibraryIndex()).filter(exam => exam.type === 'reading').slice(0, 3);

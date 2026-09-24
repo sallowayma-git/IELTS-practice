@@ -460,6 +460,12 @@ body.hero-body {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* The grid declaration above beats the UA stylesheet's [hidden] rule, so the
+   rows hidden by the listening view would stay visible without this override. */
+.practice-parts-widget__row[hidden] {
+    display: none;
+}
+
 .practice-parts-widget__row strong {
     color: var(--shui-text-strong);
 }
