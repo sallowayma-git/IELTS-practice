@@ -17492,9 +17492,35 @@
         return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
+    function resultEntryOrderNumber(entry) {
+        const number = questionNumberFromId(entry && entry.questionId);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    // 结果表格必须按题号（显示题号，已通过 questionDisplayMap 换算）升序展示。
+    // answerComparison 的键顺序在持久化/回放等环节可能被规范化为字符串字典序
+    // （如 q1,q10,q11,…,q2），直接 Object.values 会让 q10–q13（显示 23–26）
+    // 排到 q2（显示 15）之前，因此这里在展示层统一做一次稳定的数字排序兜底。
+    function orderResultEntries(entries) {
+        return entries.slice().sort((left, right) => {
+            const leftNumber = resultEntryOrderNumber(left);
+            const rightNumber = resultEntryOrderNumber(right);
+            if (leftNumber != null && rightNumber != null) {
+                if (leftNumber !== rightNumber) {
+                    return leftNumber - rightNumber;
+                }
+            } else if (leftNumber != null) {
+                return -1;
+            } else if (rightNumber != null) {
+                return 1;
+            }
+            return String(left?.questionId || '').localeCompare(String(right?.questionId || ''), 'en');
+        });
+    }
+
     function renderResults(results) {
         if (!dom.results) return;
-        const rows = Object.values(results.answerComparison).map((entry) => {
+        const rows = orderResultEntries(Object.values(results.answerComparison || {})).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
             const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
