@@ -26,28 +26,45 @@ function loadScript(relativePath, context) {
 }
 
 function createUtilsSandbox() {
-    const sandbox = {};
+    const sandbox = {
+        console: { log() {}, warn() {}, error() {}, info() {}, debug() {} },
+        document: {
+            body: { insertAdjacentHTML() {} },
+            addEventListener() {},
+            removeEventListener() {},
+            getElementById() { return null; }
+        },
+        setTimeout() {}
+    };
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
     const context = vm.createContext(sandbox);
 
     loadScript('js/utils/answerMatchCore.js', context);
-
-    // getNormalizedEntries 依赖 PracticeCore.contracts.resolveRecordCorrectAnswerMap
-    sandbox.PracticeCore = {
-        contracts: {
-            resolveRecordCorrectAnswerMap(record) {
-                return (record && record.correctAnswerMap) || {};
-            }
-        }
-    };
-
+    loadScript('js/utils/answerSanitizer.js', context);
+    loadScript('js/core/practiceCore.js', context);
     loadScript('js/utils/answerComparisonUtils.js', context);
+    loadScript('js/utils/dataConsistencyManager.js', context);
+    loadScript('js/components/practiceRecordModal.js', context);
     return sandbox;
 }
 
 function clone(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+function getModalEntries(sandbox, record) {
+    let entries = null;
+    const before = JSON.stringify(record);
+    const modal = sandbox.practiceRecordModal;
+    modal.createModalHtml = (prepared) => {
+        entries = modal.collectAllEntries(prepared);
+        return '';
+    };
+    modal.show(record);
+    assert.ok(entries, 'the real modal display path should produce answer rows');
+    assert.strictEqual(JSON.stringify(record), before, 'display preparation must not mutate the stored record');
+    return entries;
 }
 
 // 截图场景：Choose TWO，q1 正确 A、q2 正确 D，用户选择集合为 D,E。
@@ -197,11 +214,135 @@ function testStoredFlagFromScoreDetailsIsHonoured() {
     );
 }
 
+function testStaleCorrectAnswerSnapshotFallsBackInModal() {
+    for (const diagnosticsEnabled of [false, true]) {
+        const sandbox = createUtilsSandbox();
+        if (!diagnosticsEnabled) delete sandbox.DataConsistencyManager;
+        const entries = getModalEntries(sandbox, {
+            id: 'stale-correct-answer',
+            startTime: '2026-09-20T00:00:00Z',
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'A' },
+            answerComparison: {
+                q1: { userAnswer: 'A', correctAnswer: 'B', isCorrect: false }
+            }
+        });
+        assert.strictEqual(entries[0].userAnswer, 'A');
+        assert.strictEqual(entries[0].correctAnswer, 'A');
+        assert.strictEqual(entries[0].isCorrect, true, 'a stale comparison must not override the canonical answer');
+    }
+}
+
+function testDisplayGeneratedVerdictDoesNotOverrideMatchingCore() {
+    const sandbox = createUtilsSandbox();
+    const entries = getModalEntries(sandbox, {
+        id: 'legacy-labeled-option',
+        startTime: '2026-09-20T00:00:00Z',
+        answers: { q1: 'D effects' },
+        correctAnswerMap: { q1: 'D' },
+        scoreInfo: { correct: 1, total: 1, accuracy: 1 }
+    });
+    assert.strictEqual(entries[0].isCorrect, true, 'display-generated string equality must not override option matching');
+}
+
+function testDisplayGeneratedVerdictDoesNotMaskStoredCredit() {
+    const sandbox = createUtilsSandbox();
+    const record = buildSplitKeyRecord();
+    delete record.answerComparison;
+    const entries = getModalEntries(sandbox, record);
+    assert.strictEqual(entries[1].isCorrect, true, 'display-generated comparisons must allow submission details to supply partial credit');
+}
+
+function testMissingVerdictsFallThroughEverySource() {
+    const cases = [1, 2, 3].flatMap(index => ['q2', '2', 'question2'].map(key => [index, key]));
+    for (const [storedSourceIndex, key] of cases) {
+        const sandbox = createUtilsSandbox();
+        const placeholder = { userAnswer: ['D', 'E'], correctAnswer: 'D' };
+        const normalized = sandbox.PracticeCore.contracts.normalizeAnswerComparison({ q2: placeholder });
+        assert.strictEqual(normalized.q2.isCorrect, null, 'the production normalizer should supply the missing verdict');
+        const sources = Array.from({ length: 4 }, () => clone(normalized));
+        sources[storedSourceIndex] = {
+            [key]: { userAnswer: ['E', 'D'], correctAnswer: 'D', isCorrect: true }
+        };
+        const record = {
+            answers: { q2: ['D', 'E'] },
+            correctAnswerMap: { q2: 'D' },
+            answerComparison: sources[0],
+            scoreInfo: { details: sources[2] },
+            realData: { answerComparison: sources[1], scoreInfo: { details: sources[3] } }
+        };
+        const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries(record);
+        assert.strictEqual(entries[0].isCorrect, true, `source ${storedSourceIndex} should supply the verdict across key aliases`);
+        if (storedSourceIndex === 1) {
+            assert.strictEqual(getModalEntries(sandbox, record)[0].isCorrect, true, 'display enrichment must preserve the nested comparison fallback');
+        }
+    }
+}
+
+function testStoredFalseKeepsSourcePrecedence() {
+    const sandbox = createUtilsSandbox();
+    const comparison = { userAnswer: 'D', correctAnswer: 'D', isCorrect: false };
+    const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
+        answers: { q2: 'D' },
+        correctAnswerMap: { q2: 'D' },
+        answerComparison: { q2: comparison },
+        scoreInfo: { details: { q2: { ...comparison, isCorrect: true } } }
+    });
+    assert.strictEqual(entries[0].isCorrect, false, 'false is a valid stored verdict and must not fall through');
+}
+
+function testStaleSnapshotsCannotSupplyAVerdict() {
+    const sandbox = createUtilsSandbox();
+    for (const staleDetail of [
+        { userAnswer: ['A', 'B'], correctAnswer: 'D', isCorrect: true },
+        { userAnswer: ['D', 'E'], correctAnswer: ['D', 'A'], isCorrect: true },
+        { userAnswer: ['D', 'E'], isCorrect: true }
+    ]) {
+        const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
+            answers: { q2: ['D', 'E'] },
+            correctAnswerMap: { q2: 'D' },
+            answerComparison: { q2: { userAnswer: ['D', 'E'], correctAnswer: 'D' } },
+            scoreInfo: { details: { q2: staleDetail } }
+        });
+        assert.strictEqual(entries[0].isCorrect, false, 'both stored answer snapshots must match the displayed row');
+    }
+}
+
+function testStaleVerdictFallsThroughToMatchingSnapshot() {
+    const sandbox = createUtilsSandbox();
+    const record = buildSplitKeyRecord();
+    record.answerComparison.q2.correctAnswer = 'A';
+    record.answerComparison.q2.isCorrect = false;
+    const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries(record);
+    assert.strictEqual(entries[1].isCorrect, true, 'a stale boolean must not hide a later valid submission verdict');
+}
+
+function testSnapshotsAreCheckedAfterLetterKeyAlignment() {
+    const sandbox = createUtilsSandbox();
+    for (const [correctAnswer, expectedVerdict] of [['D', true], ['A', false]]) {
+        const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
+            answers: { qa: ['D', 'E'] },
+            correctAnswerMap: { q1: correctAnswer },
+            answerComparison: { qa: { userAnswer: ['D', 'E'], correctAnswer: 'D', isCorrect: true } }
+        });
+        assert.strictEqual(entries.length, 1, 'letter answers should align to the numeric row');
+        assert.strictEqual(entries[0].isCorrect, expectedVerdict, 'the verdict must match the final aligned answer snapshot');
+    }
+}
+
 const tests = [
     testSplitKeyPartialCreditSurvivesHistoryDetail,
     testSingleKeyArrayPartialStaysNonPerfect,
     testFallsBackToRecomputeWhenNoStoredFlag,
-    testStoredFlagFromScoreDetailsIsHonoured
+    testStoredFlagFromScoreDetailsIsHonoured,
+    testStaleCorrectAnswerSnapshotFallsBackInModal,
+    testDisplayGeneratedVerdictDoesNotOverrideMatchingCore,
+    testDisplayGeneratedVerdictDoesNotMaskStoredCredit,
+    testMissingVerdictsFallThroughEverySource,
+    testStoredFalseKeepsSourcePrecedence,
+    testStaleSnapshotsCannotSupplyAVerdict,
+    testStaleVerdictFallsThroughToMatchingSnapshot,
+    testSnapshotsAreCheckedAfterLetterKeyAlignment
 ];
 
 let passed = 0;

@@ -306,6 +306,29 @@
         return null;
     }
 
+    function matchesAnswerSnapshot(value, answerInfo) {
+        const snapshot = normalizeForComparison(value);
+        const tokens = info => info.normalized == null
+            ? []
+            : [].concat(info.normalized).map(token => String(token).toLowerCase()).sort();
+        // Compare complete snapshots, not grading equivalence (which can accept
+        // one token from an array of alternatives). Selection order is irrelevant.
+        return JSON.stringify(tokens(snapshot)) === JSON.stringify(tokens(answerInfo));
+    }
+
+    function resolveStoredCorrect(entry) {
+        if (!entry.hasCorrectAnswer) {
+            return null;
+        }
+        for (const candidate of entry.correctnessCandidates) {
+            if (matchesAnswerSnapshot(candidate.userAnswer ?? candidate.user ?? candidate.answer, entry.userInfo)
+                && matchesAnswerSnapshot(candidate.correctAnswer ?? candidate.correct, entry.correctInfo)) {
+                return candidate.isCorrect;
+            }
+        }
+        return null;
+    }
+
     function alignLetterKeys(entryMap) {
         const letterKeys = Object.keys(entryMap).filter(key => /^q[a-z]+$/.test(key) && entryMap[key]);
         if (letterKeys.length === 0) {
@@ -358,9 +381,7 @@
                     numericEntry.hasCorrectAnswer = true;
                 }
 
-                if (numericEntry.storedCorrect == null && letterEntry.storedCorrect != null) {
-                    numericEntry.storedCorrect = letterEntry.storedCorrect;
-                }
+                numericEntry.correctnessCandidates.push(...letterEntry.correctnessCandidates);
             }
 
             sortedLetterKeys.forEach(letterKey => {
@@ -379,12 +400,12 @@
 
         const userDisplay = entry.hasUserAnswer ? entry.userAnswer : 'No Answer';
         const correctDisplay = entry.hasCorrectAnswer ? entry.correctAnswer : 'N/A';
-        // 提交时已按题型算好权威对错（含分键多选题“正确选项是否在所选集合中”的
-        // overlap 给分）并随记录持久化，详情页须原样回放；仅当历史记录缺少布尔结论时，
-        // 才回退到当场答案比对，避免用严格集合全等把选对一部分的子题误判为错。
+        // Preserve submission grading only for the final displayed answer snapshot,
+        // including any letter-to-number alignment. Legacy rows still recompute.
+        const storedCorrect = resolveStoredCorrect(entry);
         const recomputedCorrect = answersMatch(entry.userInfo, entry.correctInfo);
-        const isCorrect = typeof entry.storedCorrect === 'boolean'
-            ? entry.storedCorrect
+        const isCorrect = typeof storedCorrect === 'boolean'
+            ? storedCorrect
             : recomputedCorrect;
 
         return {
@@ -428,16 +449,31 @@
         const comparisonMap = mergeSourceMaps(comparisonSources);
         const userMap = mergeSourceMaps(userSources);
 
-        // 权威对错来源：提交评分（unifiedReadingPage.buildResultsFromAnswers 等）产出的
-        // answerComparison 与 scoreInfo.details，其中的布尔 isCorrect 已正确处理分键/
-        // 单键多选题的部分给分，详情页必须采纳而非用严格集合全等重算。
+        // Keep candidates in source order so missing or stale verdicts cannot hide
+        // a valid boolean in a later source. Display-generated flags are not grades.
         const correctnessSources = [
             record.answerComparison,
             record.realData && record.realData.answerComparison,
             record.scoreInfo && record.scoreInfo.details,
             record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details
         ].filter(Boolean);
-        const correctnessMap = mergeSourceMaps(correctnessSources);
+        const correctnessMap = new Map();
+        correctnessSources.forEach(source => {
+            if (!isPlainObject(source)) {
+                return;
+            }
+            Object.entries(source).forEach(([rawKey, candidate]) => {
+                if (!isPlainObject(candidate) || typeof candidate.isCorrect !== 'boolean'
+                    || candidate.isCorrectSource === 'display') {
+                    return;
+                }
+                const { canonicalKey } = normalizeKey(rawKey);
+                if (!correctnessMap.has(canonicalKey)) {
+                    correctnessMap.set(canonicalKey, []);
+                }
+                correctnessMap.get(canonicalKey).push(candidate);
+            });
+        });
 
         const allKeys = new Set([
             ...Object.keys(comparisonMap),
@@ -466,7 +502,7 @@
                     correctAnswer: null,
                     hasUserAnswer: false,
                     hasCorrectAnswer: false,
-                    storedCorrect: null,
+                    correctnessCandidates: (correctnessMap.get(keyInfo.canonicalKey) || []).slice(),
                     userInfo: { display: null, normalized: null },
                     correctInfo: { display: null, normalized: null }
                 };
@@ -527,18 +563,6 @@
                             entry.hasCorrectAnswer = true;
                         }
                         entry.correctInfo = compCorrectInfo;
-                    }
-                }
-            }
-
-            // 采纳提交时持久化的权威对错（按多种键形态回退查找）。
-            if (entry.storedCorrect == null) {
-                for (const compKey of lookupKeys) {
-                    const storedEntry = correctnessMap[compKey];
-                    if (storedEntry && typeof storedEntry === 'object'
-                        && typeof storedEntry.isCorrect === 'boolean') {
-                        entry.storedCorrect = storedEntry.isCorrect;
-                        break;
                     }
                 }
             }
