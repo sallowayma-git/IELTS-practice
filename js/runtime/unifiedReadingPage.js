@@ -2194,169 +2194,6 @@
         return button;
     }
 
-    function ensureVocabReaderStyles() {
-        if (!document.getElementById('vocab-reader-stylesheet')) {
-            const link = document.createElement('link');
-            link.id = 'vocab-reader-stylesheet';
-            link.rel = 'stylesheet';
-            link.href = '../../../css/vocab-reader.css';
-            document.head.appendChild(link);
-        }
-        if (!document.getElementById('reading-vocab-button-styles')) {
-            const style = document.createElement('style');
-            style.id = 'reading-vocab-button-styles';
-            style.textContent = `
-                .reading-vocab-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 4px;
-                    padding: 7px 11px;
-                    font-size: 0.88rem;
-                    line-height: 1;
-                    color: var(--text);
-                    background: var(--panel);
-                    border: 1px solid var(--line);
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: all 0.15s ease;
-                    user-select: none;
-                }
-                .reading-vocab-btn:hover {
-                    background: #f1f5f9;
-                    border-color: #94a3b8;
-                }
-                body.dark-mode .reading-vocab-btn {
-                    background: #1e293b;
-                    border-color: #475569;
-                    color: #cbd5e1;
-                }
-                body.dark-mode .reading-vocab-btn:hover {
-                    background: #334155;
-                    border-color: #64748b;
-                    color: #f8fafc;
-                }
-                .reading-vocab-btn .vocab-btn-icon {
-                    font-size: 13px;
-                    line-height: 1;
-                }
-                .reading-vocab-btn .vocab-btn-label {
-                    font-size: 0.88rem;
-                }
-                .results-header-bar {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                    margin-bottom: 8px;
-                    flex-wrap: wrap;
-                }
-                .results-header-bar h4 {
-                    margin: 0;
-                }
-                .results-score-text {
-                    margin: 4px 0 0 0;
-                    color: var(--muted, #64748b);
-                    font-size: 0.95rem;
-                }
-                .results-vocab-btn {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    padding: 7px 14px;
-                    font-size: 0.88rem;
-                    font-weight: 600;
-                    color: #1d4ed8;
-                    background: #eff6ff;
-                    border: 1px solid #bfdbfe;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: all 0.15s ease;
-                }
-                .results-vocab-btn:hover {
-                    background: #dbeafe;
-                    border-color: #93c5fd;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
-                }
-                body.dark-mode .results-vocab-btn {
-                    color: #93c5fd;
-                    background: rgba(30, 58, 138, 0.35);
-                    border-color: rgba(96, 165, 250, 0.4);
-                }
-                body.dark-mode .results-vocab-btn:hover {
-                    background: rgba(30, 58, 138, 0.6);
-                    border-color: #60a5fa;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    }
-
-    let vocabReaderOpenRequest = 0;
-    async function openVocabReaderForCurrentExam() {
-        const examId = state.suite?.activeExamId || state.examId;
-        if (!examId) {
-            console.warn('[UnifiedReadingPage] 无法获取当前试卷 ID');
-            return;
-        }
-        const requestId = ++vocabReaderOpenRequest;
-        const returnFocus = document.activeElement;
-        const options = { fromPractice: true, returnFocus,
-            title: state.dataset?.meta?.title || examId,
-            libraryConfigurationId: state.libraryConfigurationId };
-        ensureVocabReaderStyles();
-        try {
-            if (!global.ReadingVocabReader && global.AppLazyLoader?.ensureGroup) {
-                await global.AppLazyLoader.ensureGroup('exam-data');
-                await global.AppLazyLoader.ensureGroup('browse-runtime');
-            }
-            if (requestId !== vocabReaderOpenRequest) return;
-            if (!global.ReadingVocabReader?.open) throw new Error('Reading vocabulary reader is unavailable');
-            document.getElementById('reading-vocab-load-status')?.remove();
-            await global.ReadingVocabReader.open(examId, options);
-        } catch (error) {
-            if (requestId !== vocabReaderOpenRequest) return;
-            console.warn('[UnifiedReadingPage] 生词本加载失败:', error);
-            let status = document.getElementById('reading-vocab-load-status');
-            if (!status) {
-                status = document.createElement('p');
-                status.id = 'reading-vocab-load-status';
-                status.setAttribute('role', 'status');
-                document.querySelector('.header-right')?.appendChild(status);
-            }
-            status.textContent = '生词本加载失败，请再次点击生词本重试。';
-        }
-    }
-
-    function ensureReadingVocabButton() {
-        let button = document.getElementById('reading-vocab-header-btn');
-        if (button) return button;
-        const headerRight = document.querySelector('.header-right');
-        if (!headerRight) return null;
-        ensureVocabReaderStyles();
-
-        button = document.createElement('button');
-        button.id = 'reading-vocab-header-btn';
-        button.type = 'button';
-        button.className = 'header-btn reading-vocab-btn';
-        button.title = '划词生词本 (段落精读与单词记录)';
-        button.setAttribute('aria-label', '打开划词生词本');
-        button.innerHTML = '<span class="vocab-btn-icon" aria-hidden="true">📖</span><span class="vocab-btn-label">生词本</span>';
-
-        const notesBtn = document.getElementById('notes-drawer-btn');
-        if (notesBtn && notesBtn.parentNode === headerRight) {
-            headerRight.insertBefore(button, notesBtn.nextSibling);
-        } else {
-            headerRight.insertBefore(button, headerRight.firstChild);
-        }
-
-        button.addEventListener('click', (event) => {
-            event.stopPropagation();
-            openVocabReaderForCurrentExam();
-        });
-        return button;
-    }
-
     function ensureReadingNotesUi() {
         ensureReadingNoteStyles();
         ensureReadingNotesButton();
@@ -5919,10 +5756,6 @@
                     <h4>答题结果</h4>
                     <p class="results-score-text">得分 ${results.scoreInfo.correct} / ${results.scoreInfo.totalQuestions} · ${results.scoreInfo.percentage}%</p>
                 </div>
-                <button type="button" class="results-vocab-btn" id="results-vocab-btn" title="进入划词生词本模式（段落精读、查词发音、加入生词本）">
-                    <span class="results-vocab-icon" aria-hidden="true">📖</span>
-                    <span>划词生词本</span>
-                </button>
             </div>
             <table class="results-table">
                 <thead>
@@ -5940,13 +5773,6 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
-        const resultsVocabBtn = dom.results.querySelector('#results-vocab-btn');
-        if (resultsVocabBtn) {
-            resultsVocabBtn.addEventListener('click', () => {
-                openVocabReaderForCurrentExam();
-            });
-        }
-        ensureReadingVocabButton();
         applyResultsToQuestionArea(results);
     }
 
@@ -6699,6 +6525,9 @@
                         loading: [...readingTimingController.loading.keys()],
                         error: readingTimingController.error
                     };
+                },
+                retryReadingTiming() {
+                    return readingTimingController?.retry();
                 },
                 getTestState() {
                     return {
@@ -8001,7 +7830,7 @@
             }) : [];
             await readingTimingController?.freezeAll(passages);
         } catch (_) {
-            global.alert?.('计时保存失败，请展开“阅读前台关联时长”重试保存后再次提交。作答仍然保留。');
+            global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
             return;
         } finally { state.timingSubmitPending = false; }
         const submissionSnapshot = state.suite?.inline
@@ -8616,7 +8445,6 @@
         attachUnifiedTimer();
         attachUnifiedPanels();
         ensureReadingNotesUi();
-        ensureReadingVocabButton();
         ensureReadingDisplayControls();
         await loadReadingDisplayPreferences();
         attachSelectionHighlightToolbar();

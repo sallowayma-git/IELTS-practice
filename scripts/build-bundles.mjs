@@ -58,7 +58,6 @@ const bundles = {
     'js/bundles/browse.bundle.js': [
         'js/services/browseLearningState.js',
         'js/services/readingAnalytics.js',
-        'js/components/readingAnalyticsPanel.js',
         'js/views/legacyViewBundle.js',
         'js/data/practiceRecordSource.js',
         'js/app/examActions.js',
@@ -169,6 +168,7 @@ const bundles = {
         'js/components/vocabDashboardCards.js',
         'js/components/vocabSessionView.js',
         'js/components/bookshelfView.js',
+        'js/components/readingNotebookView.js',
         'js/presentation/moreView.js',
         'js/presentation/miniGames.js',
         'js/services/achievementManager.js'

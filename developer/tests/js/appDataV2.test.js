@@ -2144,6 +2144,25 @@ async function run() {
         app.preferences.setSuite({ autoAdvance: true }),
         app.preferences.setResourceBasePrefix('./')
     ]);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'average'
+    }, 'practice dashboard preferences should expose safe defaults for legacy data');
+    await app.preferences.patchPracticeDashboard({ accuracyMode: 'weighted' });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'weighted'
+    });
+    await app.preferences.patchPracticeDashboard({ summaryCollapsed: true });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: true,
+        accuracyMode: 'weighted'
+    }, 'practice dashboard patches must preserve the other preference');
+    await app.preferences.patchPracticeDashboard({ accuracyMode: 'legacy', summaryCollapsed: 'yes' });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'average'
+    }, 'unknown dashboard values should normalize to defaults');
     const concurrentPreferences = await app.preferences.getAll();
     assert.strictEqual(concurrentPreferences.theme, 'dark');
     assert.strictEqual(concurrentPreferences.consent.accepted, true);

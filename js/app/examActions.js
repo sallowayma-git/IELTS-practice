@@ -1012,6 +1012,10 @@
             global.__browseFilterMode = 'default';
             global.__browsePath = null;
             setBrowseFrequencyFilter('all');
+            // Reset the learning-state/favorites filters without changing the
+            // user's sort choice. The reset control and activation recovery
+            // share this owner, so changing sort here would make a persisted
+            // difficulty/frequency ordering disappear on the next refresh.
             if (global.BrowseLearningControls) global.BrowseLearningControls.resetSelection();
         } catch (error) {
             console.warn('[ExamActions] 重置题库功能状态失败:', error);

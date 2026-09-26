@@ -425,8 +425,9 @@ async function main() {
                     return ending;
                 };
                 session.lastActivity = new Date(now - 31 * 60 * 1000).toISOString();
-                recorder.checkSessionActivity(examId);
+                const timeoutResult = recorder.checkSessionActivity(examId);
                 assert(ending, 'the original timeout path must run');
+                assert.strictEqual(timeoutResult, ending, 'inactivity checks expose the durable timeout lifecycle');
                 assert.strictEqual(await ending, true);
 
                 const saved = state.interruptedRecords[0];

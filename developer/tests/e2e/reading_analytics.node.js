@@ -43,6 +43,22 @@ async function sync(page) {
     await page.evaluate(() => ensurePracticeRecordsSync('reading-analytics-e2e', { forceRender: true, requirePostCommitRead: true }));
 }
 
+async function readReadingAnalyticsMetrics(page) {
+    return page.evaluate(() => {
+        const text = id => document.getElementById(id)?.textContent?.trim() || '';
+        return {
+            weightedAccuracy: text('avg-score'),
+            weightedLabel: text('practice-accuracy-label'),
+            weightedMeta: text('practice-accuracy-meta'),
+            parts: {
+                p1: text('practice-parts-p1-accuracy'),
+                p2: text('practice-parts-p2-accuracy'),
+                p3: text('practice-parts-p3-accuracy')
+            }
+        };
+    });
+}
+
 try {
     browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'],
         ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
@@ -92,28 +108,63 @@ try {
             }
         });
         await sync(page);
-        const panel = page.locator('.reading-analytics');
-        await page.waitForFunction(() => document.querySelector('.reading-analytics__summary dd')?.textContent === '72.5%');
-        assert.match(await panel.innerText(), /14.5 \/ 20 分/);
-        assert.match(await panel.innerText(), /可评分 5 \/ 6 次/);
-        assert.match(await panel.innerText(), /3 篇/);
-        assert.match(await panel.innerText(), /90.0%/);
-        assert.match(await panel.innerText(), /题型完整覆盖 5 \/ 5/);
+        const panel = page.locator('#practice-view');
+        assert.equal(await page.locator('.reading-analytics').count(), 0, '旧阅读专项统计卡片应被移除');
+        assert.equal(await page.locator('#reading-analytics-range').count(), 0, '旧日期筛选控件应被移除');
+        await page.locator('#practice-accuracy-card').click();
+        await page.locator('[data-practice-accuracy-mode="weighted"]').click();
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-label')?.textContent === '加权平均正确率');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
+        assert.equal(await page.locator('#practice-accuracy-meta').innerText(), '总得分 ÷ 总分');
+        assert.equal(await page.locator('[data-widget-type="parts"]').count(), 1, 'P1/P2/P3 组件应存在');
         await panel.screenshot({ path: path.join(reports, `reading-analytics-${mode}-desktop.png`) });
-        await page.locator('#reading-analytics-range').selectOption('7');
-        assert.equal(await page.locator('.reading-analytics__summary dd').first().innerText(), '75.0%');
-        assert.match(await panel.innerText(), /日期未知而排除 1 条/);
-        await page.locator('#reading-analytics-range').selectOption('all');
         await page.locator('#record-type-filter-buttons [data-filter-type="listening"]').click();
-        await page.waitForFunction(() => document.getElementById('reading-analytics-content').textContent.includes('当前选择的是听力记录'));
-        assert.equal(await panel.locator('table').count(), 0);
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-meta')?.textContent === '仅适用于阅读');
+        assert.equal(await page.locator('#avg-score').innerText(), '—');
         await page.locator('#record-type-filter-buttons [data-filter-type="reading"]').click();
-        await page.waitForFunction(() => document.querySelector('.reading-analytics__summary dd')?.textContent === '72.5%');
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-meta')?.textContent === '总得分 ÷ 总分');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
         await page.evaluate(() => searchPracticeHistory('Alpha'));
-        await page.waitForFunction(() => document.querySelector('.reading-analytics__summary dd')?.textContent === '83.3%');
+        await page.waitForFunction(() => document.getElementById('avg-score')?.textContent === '72.5%');
         await page.evaluate(() => searchPracticeHistory(''));
         await sync(page);
-        const beforeSwitch = await panel.innerText();
+        // The trend, heatmap and history list are intentionally asynchronous
+        // projections of the active library and may change while the shared
+        // reading metrics remain stable. Select the parts widget explicitly,
+        // then compare only the product invariants required across a library
+        // switch.
+        await page.locator('#practice-custom-card [aria-label="配置自定义组件"]').click();
+        await page.locator('#practice-custom-card [data-practice-widget="parts"]').click();
+        // Regression (PR #192 review): the author display:grid rule used to
+        // beat the UA [hidden] rule, so listening kept all three score rows
+        // visible (with stale reading scores) beside the reading-only
+        // message. The rows must actually disappear and must come back with
+        // the reading filter restored.
+        const readPartsRows = () => page.evaluate(() => Array.from(
+            document.querySelectorAll('.practice-parts-widget__row'),
+            row => ({ hidden: row.hidden, display: getComputedStyle(row).display })
+        ));
+        await page.locator('#record-type-filter-buttons [data-filter-type="listening"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === false && rows.length === 3
+                && Array.from(rows).every(row => row.hidden);
+        }, null, { timeout: 15000 });
+        const listeningRows = await readPartsRows();
+        assert.ok(listeningRows.every(row => row.display === 'none'),
+            `listening view must hide the parts rows, got ${JSON.stringify(listeningRows)}`);
+        await page.locator('#record-type-filter-buttons [data-filter-type="reading"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === true && rows.length === 3
+                && Array.from(rows).every(row => !row.hidden);
+        }, null, { timeout: 15000 });
+        const restoredRows = await readPartsRows();
+        assert.ok(restoredRows.every(row => row.display !== 'none'),
+            `reading view must restore the parts rows, got ${JSON.stringify(restoredRows)}`);
+        const beforeSwitch = await readReadingAnalyticsMetrics(page);
         await page.evaluate(async () => {
             const source = (await window.resolveActiveLibraryIndex()).filter(exam => exam.type === 'reading').slice(0, 3);
             const index = source.map((exam, i) => ({ ...exam, id: ['a', 'b', 'c'][i], category: 'P2' }));
@@ -122,21 +173,23 @@ try {
         });
         await page.locator('nav button[data-view="practice"]').click();
         await sync(page);
-        assert.equal(await panel.innerText(), beforeSwitch);
+        assert.deepEqual(await readReadingAnalyticsMetrics(page), beforeSwitch,
+            'weighted accuracy and P1/P2/P3 metrics must survive a library switch');
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
         const closeAfterReload = page.locator('[data-library-action="close"]');
         if (await closeAfterReload.isVisible()) await closeAfterReload.click();
         await page.locator('nav button[data-view="practice"]').click();
         await sync(page);
-        assert.equal(await page.locator('.reading-analytics__summary dd').first().innerText(), '72.5%');
+        assert.equal(await page.locator('#practice-accuracy-label').innerText(), '加权平均正确率');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
         await page.setViewportSize({ width: 390, height: 844 });
         await panel.screenshot({ path: path.join(reports, `reading-analytics-${mode}-mobile.png`) });
         assert.equal(await panel.evaluate(element => element.getBoundingClientRect().right <= innerWidth + 1), true);
         await page.evaluate(() => window.AppData.practice.clear());
         await sync(page);
-        assert.match(await panel.innerText(), /当前范围暂无可统计/);
-        assert.doesNotMatch(await panel.innerText(), /0\.0%|NaN|Infinity/);
+        assert.equal(await page.locator('#avg-score').innerText(), '—');
+        assert.doesNotMatch(await panel.innerText(), /NaN|Infinity/);
         assert.deepEqual(errors, []);
         report.cases.push({ mode, status: 'pass', checks: 'weighted/fractional scores, suite dedup/fallback, window and record/search filters, library switch, reload, mobile, empty state' });
         await context.close();

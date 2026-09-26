@@ -66,20 +66,41 @@ def observe_timeout(page: Page, exam_id: str) -> str:
             const session = recorder.activeSessions.get(examId);
             if (!session) throw new Error(`Missing active session: ${examId}`);
             window.__interruptedHistoryObserved = null;
-            const onEnded = async (event) => {
+            const onEnded = (event) => {
                 if (event.detail.examId !== examId) return;
                 document.removeEventListener('practiceSessionEnded', onEnded);
-                window.__interruptedHistoryObserved = {
-                    detail: event.detail,
-                    committedIds: (await window.AppData.recovery.listInterrupted()).map(r => r.id),
-                    activeIds: (await window.AppData.recovery.listActiveSessions()).map(r => r.id)
-                };
+                // The end event is dispatched only after durable interruption
+                // storage and active-session cleanup. Capture it synchronously;
+                // the async storage reads below must not race the event marker.
+                window.__interruptedHistoryObserved = { detail: event.detail };
             };
             document.addEventListener('practiceSessionEnded', onEnded);
+            // Freeze incoming child-session mutations while this synthetic
+            // inactivity probe runs. The popup remains open for the separate
+            // draft-isolation assertion, but a late SESSION_READY/progress
+            // message must not rebind the session being timed out.
+            const originalSessionStarted = recorder.handleSessionStarted;
+            const originalSessionProgress = recorder.handleSessionProgress;
+            recorder.handleSessionStarted = () => {};
+            recorder.handleSessionProgress = () => {};
             session.startTime = new Date(Date.now() - 32 * 60 * 1000).toISOString();
             session.lastActivity = new Date(Date.now() - 31 * 60 * 1000).toISOString();
-            await recorder.saveActiveSessions();
-            recorder.checkSessionActivity(examId);
+            try {
+                // Check the in-memory stale session in the same turn as the
+                // mutation. Saving first yields to child progress messages,
+                // which can legitimately refresh lastActivity before timeout.
+                await recorder.checkSessionActivity(examId);
+            } finally {
+                recorder.handleSessionStarted = originalSessionStarted;
+                recorder.handleSessionProgress = originalSessionProgress;
+            }
+            if (!window.__interruptedHistoryObserved) {
+                throw new Error(`Timeout did not publish session-ended event: ${examId}`);
+            }
+            window.__interruptedHistoryObserved.committedIds =
+                (await window.AppData.recovery.listInterrupted()).map(r => r.id);
+            window.__interruptedHistoryObserved.activeIds =
+                (await window.AppData.recovery.listActiveSessions()).map(r => r.id);
             return session.sessionId;
         }""",
         exam_id,

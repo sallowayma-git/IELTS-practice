@@ -79,7 +79,7 @@ async function practiceReady(page) {
     await page.waitForFunction(() => document.querySelector('#question-groups input[name="q1"]') && window.__IELTS_UNIFIED_READING_PAGE_TEST__, null, { timeout: 30_000 });
 }
 
-async function openReader(page, useEntry = true) {
+async function openReader(page, useEntry = false) {
     if (useEntry) await page.locator('#reading-vocab-header-btn').click();
     else await page.evaluate(id => ReadingVocabReader.open(id, { fromPractice: true }), examId);
     await page.locator('#vocab-reader-tabs [data-para="questions"]').waitFor();
@@ -191,6 +191,7 @@ async function finalRegression(protocol) {
         const practice = await popupPromise;
         practice.on('dialog', dialog => dialog.accept());
         await practiceReady(practice);
+        assert.equal(await practice.locator('#reading-vocab-header-btn').count(), 0, 'practice must not expose a vocabulary entry');
         await practice.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().sessionId && window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().sessionReadySent);
         await practice.locator('#question-groups input[name="q1"][value="A"]').check();
         await practice.locator('#question-groups input[name="q13"]').fill('adhering');
@@ -247,7 +248,7 @@ async function finalRegression(protocol) {
                 await practice.waitForFunction(duration => window.__IELTS_PRACTICE_TIMER__.getSnapshot().durationSeconds > duration, before.timer.durationSeconds);
             }
             await practice.locator('#vocab-reader-back-btn').click();
-            assert.equal(await practice.locator('#reading-vocab-header-btn').evaluate(node => node === document.activeElement), true, 'close must restore practice entry focus');
+            assert.equal(await practice.locator('#reading-vocab-header-btn').count(), 0, 'practice must remain free of vocabulary entries');
             assert.equal(await practice.locator('#reading-vocab-reader-overlay input[name], #reading-vocab-reader-overlay select[name], #reading-vocab-reader-overlay textarea[name]').count(), 0);
             const listenerCounts = await practice.evaluate(() => window.__readerListenerCounts());
             if (!firstListenerCounts) firstListenerCounts = listenerCounts;

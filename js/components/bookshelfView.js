@@ -334,17 +334,17 @@
             root.innerHTML = `
                 <div class="bookshelf-layout">
                     ${ReadingBookshelfStore._loadError ? (needsPageReload(ReadingBookshelfStore._loadError)
-                        ? '<p role="alert">书架加载失败，请刷新页面后重试。<button type="button" class="btn btn-secondary" data-action="reload-page">刷新页面</button></p>'
-                        : '<p role="alert">书架加载失败，已显示的数据保持不变。<button type="button" class="btn btn-secondary" data-action="retry-load">重试加载</button></p>') : ''}
+                        ? '<p role="alert">书架加载失败，请刷新页面后重试。<button type="button" class="btn btn-secondary shui-glass-btn" data-action="reload-page">刷新页面</button></p>'
+                        : '<p role="alert">书架加载失败，已显示的数据保持不变。<button type="button" class="btn btn-secondary shui-glass-btn" data-action="retry-load">重试加载</button></p>') : ''}
                     ${this.state.readerLoading ? '<p role="status">正在打开生词本…</p>' : ''}
                     ${this.state.readerError ? (needsPageReload(this.state.readerError)
-                        ? '<p role="alert">生词本打开失败，请刷新页面后重试。<button type="button" class="btn btn-secondary" data-action="reload-page">刷新页面</button></p>'
-                        : '<p role="alert">生词本打开失败，请重试。<button type="button" class="btn btn-secondary" data-action="retry-reader">重试打开</button></p>') : ''}
+                        ? '<p role="alert">生词本打开失败，请刷新页面后重试。<button type="button" class="btn btn-secondary shui-glass-btn" data-action="reload-page">刷新页面</button></p>'
+                        : '<p role="alert">生词本打开失败，请重试。<button type="button" class="btn btn-secondary shui-glass-btn" data-action="retry-reader">重试打开</button></p>') : ''}
                     ${ReadingBookshelfStore._snapshot && ReadingBookshelfStore._loading ? '<p role="status">正在更新书架…</p>' : ''}
                     <!-- 顶部标题栏与导航 -->
                     <div class="bookshelf-topbar">
                         <div class="bookshelf-topbar__left">
-                            <button type="button" class="btn btn-secondary bookshelf-back-btn" data-action="return-more" title="${backBtnTitle}">
+                            <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-back-btn" data-action="return-more" title="${backBtnTitle}">
                                 <span class="bookshelf-back-arrow">←</span>
                                 <span>${backBtnText}</span>
                             </button>
@@ -354,11 +354,11 @@
                             </div>
                         </div>
                         <div class="bookshelf-topbar__right">
-                            <button type="button" class="btn btn-secondary bookshelf-export-all-btn" data-action="export-all-bookshelf" ${totalWords === 0 ? 'disabled' : ''} title="导出全部精读生词 TXT，包含所有文章，不受当前搜索和筛选影响">
+                            <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-export-all-btn" data-action="export-all-bookshelf" ${totalWords === 0 ? 'disabled' : ''} title="导出全部精读生词 TXT，包含所有文章，不受当前搜索和筛选影响">
                                 📥 导出全部精读生词
                             </button>
-                            <button type="button" class="btn btn-primary bookshelf-notebook-btn" data-action="open-global-notebook" title="打开生词本总览">
-                                📖 打开生词本
+                            <button type="button" class="btn btn-primary shui-glass-btn bookshelf-notebook-btn" data-action="open-global-notebook" title="打开我的生词本">
+                                📖 我的生词本
                             </button>
                         </div>
                     </div>
@@ -492,18 +492,18 @@
 
                     <!-- 卡片操作底栏 -->
                     <div class="bookshelf-card__footer">
-                        <button type="button" class="btn btn-primary bookshelf-action-btn bookshelf-action-btn--main" data-action="open-reading-vocab" data-exam-id="${this.escapeHtml(exam.examId)}" title="进入划词与生词本">
+                        <button type="button" class="btn btn-primary shui-glass-btn bookshelf-action-btn bookshelf-action-btn--main" data-action="open-reading-vocab" data-exam-id="${this.escapeHtml(exam.examId)}" title="进入划词与生词本">
                             📖 划词
                         </button>
-                        <button type="button" class="btn btn-secondary bookshelf-action-btn" data-action="open-exam-practice" data-exam-id="${this.escapeHtml(exam.examId)}">
+                        <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="open-exam-practice" data-exam-id="${this.escapeHtml(exam.examId)}">
                             📝 做题
                         </button>
                         ${exam.hasPdf ? `
-                            <button type="button" class="btn btn-secondary bookshelf-action-btn" data-action="open-exam-pdf" data-exam-id="${this.escapeHtml(exam.examId)}">
+                            <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="open-exam-pdf" data-exam-id="${this.escapeHtml(exam.examId)}">
                                 📄 PDF
                             </button>
                         ` : ''}
-                        <button type="button" class="btn btn-secondary bookshelf-action-btn" data-action="export-exam-txt" data-exam-id="${this.escapeHtml(exam.examId)}" data-exam-title="${this.escapeHtml(exam.title)}" ${exam.wordCount === 0 ? 'disabled' : ''} title="导出本篇生词 TXT">
+                        <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="export-exam-txt" data-exam-id="${this.escapeHtml(exam.examId)}" data-exam-title="${this.escapeHtml(exam.title)}" ${exam.wordCount === 0 ? 'disabled' : ''} title="导出本篇生词 TXT">
                             📥 导出
                         </button>
                     </div>
@@ -521,7 +521,7 @@
                             在「题库浏览」中点击任意阅读题目的「精读」，或在阅读过程中划词收录生词，篇目将自动收录至此，方便您随时集中精读与复习。
                         </p>
                         <div class="bookshelf-empty-actions">
-                            <button type="button" class="btn btn-primary" data-action="go-to-browse">
+                            <button type="button" class="btn btn-primary shui-glass-btn" data-action="go-to-browse">
                                 📚 前往题库浏览
                             </button>
                         </div>
@@ -535,7 +535,7 @@
                     <h3 class="bookshelf-empty-title">未找到匹配的篇目</h3>
                     <p class="bookshelf-empty-desc">请尝试调整搜索关键词或重置筛选条件。</p>
                     <div class="bookshelf-empty-actions">
-                        <button type="button" class="btn btn-secondary" data-action="reset-search">
+                        <button type="button" class="btn btn-secondary shui-glass-btn" data-action="reset-search">
                             重置搜索与筛选
                         </button>
                     </div>
@@ -732,24 +732,27 @@
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.id = 'bookshelf-confirm-dialog';
-                overlay.className = 'bookshelf-confirm-overlay is-hidden';
+                overlay.className = 'theme-modal shui-secondary-modal shui-secondary-modal--sm bookshelf-confirm-overlay is-hidden';
                 overlay.innerHTML = `
-                    <div class="bookshelf-confirm-box" role="dialog" aria-modal="true">
-                        <div class="bookshelf-confirm-header">
+                    <div class="theme-modal-content shui-secondary-modal__content bookshelf-confirm-box" role="dialog" aria-modal="true" aria-labelledby="bookshelf-confirm-title">
+                        <div class="theme-modal-header shui-secondary-modal__header bookshelf-confirm-header">
                             <span class="bookshelf-confirm-icon">🗑️</span>
-                            <h4 class="bookshelf-confirm-title">从书架移除篇目</h4>
+                            <h3 class="bookshelf-confirm-title" id="bookshelf-confirm-title">从书架移除篇目</h3>
+                            <button type="button" class="theme-modal-close bookshelf-confirm-close" aria-label="关闭">&times;</button>
                         </div>
-                        <p class="bookshelf-confirm-msg" id="bookshelf-confirm-text"></p>
-                        <div class="bookshelf-confirm-notice">
-                            <span class="bookshelf-notice-badge">数据安全隔离</span>
-                            <p class="bookshelf-notice-text">
-                                此操作仅从<strong>书架与生词本</strong>中移除该篇收录。<br/>
-                                <strong>您的做题练习记录、答题历史与解析数据完整保留</strong>，不受任何影响。
-                            </p>
-                        </div>
-                        <div class="bookshelf-confirm-actions">
-                            <button type="button" class="btn btn-secondary bookshelf-confirm-btn" id="bookshelf-confirm-cancel">取消</button>
-                            <button type="button" class="btn btn-danger bookshelf-confirm-btn" id="bookshelf-confirm-ok">确认移除</button>
+                        <div class="theme-modal-body shui-secondary-modal__body bookshelf-confirm-body">
+                            <p class="bookshelf-confirm-msg" id="bookshelf-confirm-text"></p>
+                            <div class="bookshelf-confirm-notice">
+                                <span class="bookshelf-notice-badge">数据安全隔离</span>
+                                <p class="bookshelf-notice-text">
+                                    此操作仅从<strong>书架与生词本</strong>中移除该篇收录。<br/>
+                                    <strong>您的做题练习记录、答题历史与解析数据完整保留</strong>，不受任何影响。
+                                </p>
+                            </div>
+                            <div class="bookshelf-confirm-actions">
+                                <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-confirm-btn" id="bookshelf-confirm-cancel">取消</button>
+                                <button type="button" class="btn btn-danger bookshelf-confirm-btn" id="bookshelf-confirm-ok">确认移除</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -763,6 +766,7 @@
 
             const okBtn = overlay.querySelector('#bookshelf-confirm-ok');
             const cancelBtn = overlay.querySelector('#bookshelf-confirm-cancel');
+            const closeBtn = overlay.querySelector('.bookshelf-confirm-close');
             let pending = false;
             let reloadRequired = false;
             okBtn.disabled = false;
@@ -770,7 +774,10 @@
             okBtn.textContent = '确认移除';
 
             const closeDialog = () => {
-                if (!pending) overlay.classList.add('is-hidden');
+                if (!pending) {
+                    overlay.classList.add('is-hidden');
+                    overlay.classList.remove('show');
+                }
             };
 
             okBtn.onclick = async () => {
@@ -807,6 +814,12 @@
                 closeDialog();
             };
 
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    closeDialog();
+                };
+            }
+
             overlay.onclick = (e) => {
                 if (e.target === overlay) {
                     closeDialog();
@@ -814,6 +827,7 @@
             };
 
             overlay.classList.remove('is-hidden');
+            overlay.classList.add('show');
         },
 
         async ensureReader() {
@@ -839,6 +853,9 @@
         },
 
         async launchGlobalNotebook(returnFocus) {
+            if (global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function') {
+                return global.ReadingNotebookView.open({ fromView: 'bookshelf', returnFocus });
+            }
             return this.launchReader({}, returnFocus);
         },
 

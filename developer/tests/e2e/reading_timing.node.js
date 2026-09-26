@@ -60,21 +60,21 @@ async function readingReady(page, { initialFailure = false, restored = false, be
                 && (!state.simulationMode || state.simulationContextReady);
         });
         if (initialFailure) {
-            await page.waitForFunction(() => document.querySelector('[data-timing-save]')?.textContent.includes('计时不可用'));
+            await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.error?.includes('计时不可用'));
             assert.equal(await page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState().active || null), null);
             failedWrites = await page.evaluate(() => window.__timingAcquisitionWrites);
             assert.ok(failedWrites >= 1);
-            await page.locator('#reading-timing-status').evaluate(node => { node.open = true; });
+            assert.equal(await page.locator('#reading-timing-status').count(), 0);
             await beforeRetry?.(page);
             await page.evaluate(() => { window.__timingAcquisitionBlocked = false; });
-            await page.getByRole('button', { name: '重试计时保存', exact: true }).click();
+            await page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.retryReadingTiming());
         }
         await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.active
             && window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming, null, { timeout: 25000 });
     } catch (error) {
         console.log(await page.evaluate(() => {
             const state = window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState();
-            return { url: location.href, timing: document.getElementById('reading-timing-status')?.textContent,
+            return { url: location.href, timingStatusPresent: Boolean(document.getElementById('reading-timing-status')),
                 acquisitionWrites: window.__timingAcquisitionWrites,
                 timingState: window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState(),
                 state: state && { examId: state.examId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
@@ -86,7 +86,8 @@ async function readingReady(page, { initialFailure = false, restored = false, be
     if (initialFailure) {
         assert.ok(await page.evaluate(count => window.__timingAcquisitionWrites > count, failedWrites));
         assert.ok((await snapshot(page)).partialReasons.includes(restored ? 'recovery-tail' : 'save-failed'));
-        assert.match(await page.locator('[data-timing-save]').innerText(), /最近确认保存/);
+        assert.equal(await page.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState().error), '');
+        assert.equal(await page.locator('#reading-timing-status').count(), 0);
     }
 }
 async function resumeBeforeRetry(page, requirePaused = false) {
@@ -313,7 +314,6 @@ try {
         assert.equal((await snapshot(reading)).attemptId, paused.attemptId);
         await assertResumedTimingAdvances(reading);
         await select(reading, first);
-        await reading.locator('#reading-timing-status').evaluate(node => { node.open = true; });
         await reading.evaluate(() => {
             window.__timingOriginalPut = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (value, ...args) {
@@ -324,14 +324,15 @@ try {
             };
         });
         await reading.locator('.q-item[data-question-id="q1"]').click();
-        await reading.waitForFunction(() => document.querySelector('[data-timing-save]')?.textContent.includes('保存失败'));
+        await reading.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.error?.includes('计时保存失败'));
         await reading.screenshot({ path: path.join(reports, `issue153-${mode}-save-failure.png`) });
         await reading.evaluate(() => {
             IDBObjectStore.prototype.put = window.__timingOriginalPut;
             delete window.__timingOriginalPut;
         });
-        await reading.getByRole('button', { name: '重试计时保存', exact: true }).click();
-        await reading.waitForFunction(() => document.querySelector('[data-timing-save]')?.textContent.includes('最近确认保存'));
+        await reading.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.retryReadingTiming());
+        await reading.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.error === '');
+        assert.equal(await reading.locator('#reading-timing-status').count(), 0);
         await reading.screenshot({ path: path.join(reports, `issue153-${mode}-live.png`) });
         await reading.locator('#submit-btn').click();
         const submitted = await waitRecord(page, 'p1-high-01');

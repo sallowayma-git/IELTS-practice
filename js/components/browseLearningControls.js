@@ -1,14 +1,22 @@
 (function (global) {
     'use strict';
 
-    let selection = { learningState: 'all', favoritesOnly: false };
+    let selection = { learningState: 'all', favoritesOnly: false, sortMode: 'default' };
     let favorites = new Set();
     let readyPromise = null;
     let preferencesRevision = 0;
     let commitBound = false;
     let selectionRevision = 0;
+    // State/favorites resets are allowed to happen while the first durable
+    // preference read is still in flight (for example, when navigation enters
+    // Browse immediately after a reload). Keep a separate fence for sort so a
+    // reset cannot accidentally make the persisted ordering look like the
+    // default ordering when that read settles.
+    let sortSelectionRevision = 0;
     let bound = false;
     const labels = { all: '全部状态', unattempted: '未完成', completed: '已完成', wrong: '需复习' };
+    const sortModes = new Set(['default', 'frequency-desc', 'difficulty-desc']);
+    const normalizeSortMode = (value) => sortModes.has(String(value || '').trim()) ? String(value).trim() : 'default';
     const byId = (id) => document.getElementById(id);
 
     function readFavorites(preferences) {
@@ -29,7 +37,8 @@
                 sync();
                 const changed = previous.size !== favorites.size || [...previous].some(key => !favorites.has(key))
                     || previousSelection.learningState !== selection.learningState
-                    || previousSelection.favoritesOnly !== selection.favoritesOnly;
+                    || previousSelection.favoritesOnly !== selection.favoritesOnly
+                    || previousSelection.sortMode !== selection.sortMode;
                 if (changed && byId('browse-view')?.classList.contains('active')) await refresh();
             });
         }
@@ -38,8 +47,18 @@
             readyPromise = global.AppData.preferences.getBrowse().then((preferences) => {
                 if (revision !== preferencesRevision) return ready();
                 favorites = readFavorites(preferences);
+                const hydratedSortMode = normalizeSortMode(preferences && preferences.sortMode);
                 if (selectionRevision === 0) {
-                    selection = global.BrowseLearningState.normalizeSelection(preferences);
+                    selection = Object.assign(global.BrowseLearningState.normalizeSelection(preferences), {
+                        sortMode: hydratedSortMode
+                    });
+                    global.__browseSortMode = selection.sortMode;
+                } else if (sortSelectionRevision === 0) {
+                    // resetSelection intentionally fences only learning state
+                    // and favorites. Adopt the durable sort once hydration
+                    // completes, even if that reset won the state race.
+                    selection = Object.assign({}, selection, { sortMode: hydratedSortMode });
+                    global.__browseSortMode = hydratedSortMode;
                 }
             }).catch((error) => {
                 if (revision !== preferencesRevision) return ready();
@@ -57,13 +76,17 @@
         panel.querySelectorAll('[name="browse-learning-state"]').forEach((input) => {
             input.checked = input.value === selection.learningState;
         });
+        panel.querySelectorAll('[name="browse-sort-mode"]').forEach((input) => {
+            input.checked = input.value === selection.sortMode;
+        });
         byId('browse-favorites-only').checked = selection.favoritesOnly;
-        const active = selection.learningState !== 'all' || selection.favoritesOnly;
-        const text = [selection.learningState !== 'all' ? labels[selection.learningState] : '',
+        const active = selection.learningState !== 'all' || selection.favoritesOnly || selection.sortMode !== 'default';
+        const text = [selection.sortMode !== 'default' ? (selection.sortMode === 'frequency-desc' ? '频率高→低' : '难度高→低') : '',
+            selection.learningState !== 'all' ? labels[selection.learningState] : '',
             selection.favoritesOnly ? '收藏' : ''].filter(Boolean).join(' · ');
         trigger.classList.toggle('active', active);
-        byId('browse-learning-label').textContent = active ? text : '筛选';
-        trigger.setAttribute('aria-label', active ? `阅读筛选：${text}` : '阅读筛选');
+        byId('browse-learning-label').textContent = '排序筛选';
+        trigger.setAttribute('aria-label', active ? `排序筛选：${text}` : '排序筛选');
     }
 
     function close(restoreFocus = false) {
@@ -84,9 +107,38 @@
         if (global.showMessage) global.showMessage('筛选或收藏未能保存，请重试。', 'error');
     }
 
-    function resetSelection() {
+    function persistSelection(patch) {
+        // Keep learning-control writes in the same queue as scroll/filter
+        // preferences. E2E callers use flushBrowsePreferenceWrites() as the
+        // durable barrier, so a direct patchBrowse promise would otherwise be
+        // invisible to that barrier and a reset could still read stale state.
+        if (typeof global.enqueueBrowsePreferenceWrite === 'function'
+            && typeof global.flushBrowsePreferenceWrites === 'function') {
+            const request = global.enqueueBrowsePreferenceWrite(patch);
+            // The queue converts a failed write into a resolved `false` so one
+            // rejection cannot stall later requests, and the flush barrier
+            // never rejects. Surface this write's own outcome so the caller's
+            // .catch(report) still fires while later writes stay queued.
+            return Promise.all([request.outcome, global.flushBrowsePreferenceWrites()])
+                .then(([committed]) => {
+                    if (committed !== true) throw new Error('Browse preference write failed');
+                    return committed;
+                });
+        }
+        if (typeof global.saveBrowseViewPreferences === 'function'
+            && typeof global.flushBrowsePreferenceWrites === 'function') {
+            global.saveBrowseViewPreferences(patch);
+            return global.flushBrowsePreferenceWrites();
+        }
+        return global.AppData.preferences.patchBrowse(patch);
+    }
+
+    function resetSelection(options = {}) {
         selectionRevision += 1;
-        selection = { learningState: 'all', favoritesOnly: false };
+        const sortMode = options.resetSort === true ? 'default' : selection.sortMode;
+        if (options.resetSort === true) sortSelectionRevision += 1;
+        selection = { learningState: 'all', favoritesOnly: false, sortMode };
+        global.__browseSortMode = sortMode;
         sync();
     }
 
@@ -104,17 +156,30 @@
         });
         panel.addEventListener('change', () => {
             selectionRevision += 1;
-            selection = global.BrowseLearningState.normalizeSelection({
+            const nextSortMode = normalizeSortMode(panel.querySelector('[name="browse-sort-mode"]:checked')?.value || selection.sortMode);
+            if (nextSortMode !== selection.sortMode) sortSelectionRevision += 1;
+            selection = Object.assign(global.BrowseLearningState.normalizeSelection({
                 learningState: panel.querySelector('[name="browse-learning-state"]:checked').value,
                 favoritesOnly: byId('browse-favorites-only').checked
+            }), {
+                sortMode: nextSortMode
             });
+            global.__browseSortMode = selection.sortMode;
             sync();
-            global.AppData.preferences.patchBrowse(selection).catch(report);
+            persistSelection({
+                learningState: selection.learningState,
+                favoritesOnly: selection.favoritesOnly,
+                sortMode: selection.sortMode
+            }).catch(report);
             refresh().catch(report);
         });
         byId('browse-learning-reset').addEventListener('click', () => {
             close(true);
-            global.resetBrowseViewToAll().catch(report);
+            resetSelection();
+            persistSelection({
+                learningState: 'all',
+                favoritesOnly: false
+            }).then(() => refresh()).catch(report);
         });
         const wrapper = byId('browse-learning-controls');
         wrapper.addEventListener('keydown', (event) => {
@@ -128,7 +193,7 @@
             if (!wrapper.contains(event.target)) close();
         });
         wrapper.addEventListener('focusout', (event) => {
-            if (event.relatedTarget && !wrapper.contains(event.relatedTarget)) close();
+            if (!event.relatedTarget || !wrapper.contains(event.relatedTarget)) close();
         });
     }
 
