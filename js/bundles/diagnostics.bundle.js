@@ -1554,6 +1554,11 @@ class DataConsistencyManager {
 
         const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
+        // Reuse persisted nested comparisons before generating display-only data.
+        if (!enriched.answerComparison && enriched.realData && enriched.realData.answerComparison) {
+            enriched.answerComparison = enriched.realData.answerComparison;
+        }
+
         // 生成缺失的答案比较数据
         if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
@@ -1648,7 +1653,7 @@ class DataConsistencyManager {
             enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
                 ? correctAnswerMap
                 : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
-            enriched.realData.answerComparison = enriched.answerComparison || enriched.realData.answerComparison || {};
+            enriched.realData.answerComparison = enriched.realData.answerComparison || enriched.answerComparison || {};
         }
 
         console.log('[DataConsistencyManager] 数据补充完成');
@@ -1752,7 +1757,9 @@ class DataConsistencyManager {
             comparison[key] = {
                 userAnswer: userAnswer || null,
                 correctAnswer: correctAnswer || null,
-                isCorrect: this.compareAnswers(userAnswer, correctAnswer)
+                isCorrect: this.compareAnswers(userAnswer, correctAnswer),
+                // This verdict supports display enrichment, not submission replay.
+                isCorrectSource: 'display'
             };
         });
 

@@ -207,7 +207,7 @@ function plain(value) {
 }
 
 function loadProductionExamHooks(examId) {
-    const { hooks, window, context } = loadHooks();
+    const { hooks, window, context, document } = loadHooks();
     let dataset = null;
     window.__READING_EXAM_DATA__ = {
         register(registeredId, payload) {
@@ -216,7 +216,7 @@ function loadProductionExamHooks(examId) {
     };
     loadScript(`assets/generated/reading-exams/${examId}.js`, context);
     assert(dataset, `${examId} production fixture should register`);
-    return { hooks, dataset };
+    return { hooks, dataset, window, context, document };
 }
 
 function testClimateLogbookProductionAnswers() {
@@ -237,6 +237,55 @@ function testClimateLogbookProductionAnswers() {
             assert.strictEqual(results.answerComparison.q9.isCorrect, true, 'C must earn the first point');
             assert.strictEqual(results.answerComparison.q10.isCorrect, expectedCredit === 2, 'only E must earn the second point');
             assert.strictEqual(results.answerComparison.q9.weight + results.answerComparison.q10.weight, 2);
+        }
+    }
+}
+
+function testProductionPartialCreditSurvivesRecordIngestionAndModal() {
+    const { hooks, dataset, window, context, document } = loadProductionExamHooks('p2-medium-245');
+    for (const script of [
+        'js/utils/answerSanitizer.js',
+        'js/core/practiceCore.js',
+        'js/utils/answerComparisonUtils.js',
+        'js/utils/dataConsistencyManager.js',
+        'js/components/practiceRecordModal.js'
+    ]) {
+        loadScript(script, context);
+    }
+    document.body.insertAdjacentHTML = () => {};
+    const modal = window.practiceRecordModal;
+    for (const answers of [
+        { q9: 'C', q10: 'D' },
+        { q9: ['C', 'D'], q10: ['C', 'D'] }
+    ]) {
+        const submitted = hooks.buildResultsFromAnswers(dataset, answers);
+        assert.strictEqual(submitted.scoreInfo.correct, 1);
+        const stored = window.PracticeCore.ingestor.fromCompletion({
+            ...plain(submitted),
+            examId: 'p2-medium-245',
+            startTime: '2026-09-20T00:00:00Z',
+            endTime: '2026-09-20T00:01:00Z'
+        });
+        const detailsOnly = plain(stored);
+        delete detailsOnly.answerComparison;
+        delete detailsOnly.realData.answerComparison;
+        const nestedOnly = plain(stored);
+        delete nestedOnly.answerComparison;
+        delete nestedOnly.scoreInfo;
+        delete nestedOnly.realData.scoreInfo;
+        for (const record of [stored, detailsOnly, nestedOnly]) {
+            let summary = null;
+            const before = JSON.stringify(record);
+            modal.createModalHtml = (prepared) => {
+                const entries = modal.collectAllEntries(prepared);
+                summary = plain(window.AnswerComparisonUtils.summariseEntries(entries));
+                return '';
+            };
+            modal.show(record);
+            assert.deepStrictEqual(summary, {
+                total: 13, correct: 1, incorrect: 1, unanswered: 11, unknown: 0
+            }, 'persisted submission credit must survive the real modal functions with DOM stubs');
+            assert.strictEqual(JSON.stringify(record), before, 'viewing history must not rewrite the submitted record');
         }
     }
 }
@@ -661,6 +710,7 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 
 async function main() {
     testClimateLogbookProductionAnswers();
+    testProductionPartialCreditSurvivesRecordIngestionAndModal();
     testWaterFilterProductionAnswersRemainSlotSpecific();
     if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
         testGroupedCheckboxSingleKeyArrayScoresPartially();
