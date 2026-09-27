@@ -59,6 +59,22 @@ test('diagnostic IndexedDB retention and lifecycle in isolated browser databases
         }
         return { context, pages };
     }
+    async function fillLocalStorage(page) {
+        return page.evaluate(() => {
+            let payload = '';
+            for (let size = 1024 * 1024; size >= 1; size /= 2) {
+                while (true) {
+                    const next = payload + 'x'.repeat(size);
+                    try { localStorage.setItem('quota-fixture', next); payload = next; }
+                    catch (error) {
+                        if (error.name !== 'QuotaExceededError') throw error;
+                        break;
+                    }
+                }
+            }
+            return payload.length;
+        });
+    }
 
     await t.test('passive reads do not create a database; reload and identity upsert retain sanitized evidence', async (t) => {
         const { pages: [page] } = await fixture(t);
@@ -220,6 +236,126 @@ test('diagnostic IndexedDB retention and lifecycle in isolated browser databases
         assert.equal(result.failed.success, false);
         assert.equal(result.status.failure, 'COORDINATION_UNAVAILABLE');
         assert.equal(result.attempts, 0);
+    });
+
+    await t.test('native localStorage quota blocks persistence and retry until writable coordination recovers', async (t) => {
+        const context = await browser.newContext();
+        t.after(() => context.close());
+        const page = await context.newPage();
+        await page.goto(url);
+        assert.ok(await fillLocalStorage(page) > 1024 * 1024);
+        // Web Storage is full, but an independent native IndexedDB write still works.
+        await page.evaluate(async () => {
+            const db = await new Promise((resolve, reject) => {
+                const request = indexedDB.open('quota-independent-idb');
+                request.onupgradeneeded = () => request.result.createObjectStore('probe');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction('probe', 'readwrite');
+                tx.objectStore('probe').put(true, 'writable');
+                tx.oncomplete = resolve;
+                tx.onabort = () => reject(tx.error);
+            });
+            db.close();
+        });
+        await load(page);
+        const blocked = await page.evaluate(async () => {
+            const initial = AppDiagnosticStore.status();
+            const id = AppDiagnostics.report({ code: 'PRACTICE_SAVE_FAILED' });
+            await AppDiagnostics.flush();
+            return { initial, id, retry: await AppDiagnostics.retrySink(), optOut: await AppDiagnosticStore.setEnabled(false),
+                exported: JSON.parse(AppDiagnostics.exportText(id)), names: await databaseNames() };
+        });
+        for (const status of [blocked.initial, blocked.retry.status, blocked.optOut.status]) {
+            assert.equal(status.persistence, 'memory-only');
+            assert.equal(status.coverage, 'partial');
+            assert.equal(status.failure, 'COORDINATION_UNAVAILABLE');
+        }
+        assert.equal(blocked.retry.success, false);
+        assert.equal(blocked.optOut.success, false);
+        assert.equal(blocked.exported.events[0].eventId, blocked.id);
+        assert.deepEqual(blocked.names, ['quota-independent-idb']);
+        const recovered = await page.evaluate(async () => {
+            localStorage.removeItem('quota-fixture');
+            const retry = await AppDiagnostics.retrySink();
+            await AppDiagnostics.flush();
+            return { retry, snapshot: await AppDiagnosticStore.snapshot() };
+        });
+        assert.equal(recovered.retry.success, true);
+        assert.equal(recovered.retry.status.failure, null);
+        assert.deepEqual(recovered.snapshot.events.map((event) => event.eventId), [blocked.id]);
+    });
+
+    for (const fault of ['denied', 'discarded']) {
+        await t.test(`${fault} control writes latch during retry and preserve the lifecycle generation`, async (t) => {
+            const { pages: [page] } = await fixture(t);
+            const result = await page.evaluate(async (fault) => {
+                const original = AppDiagnosticStore.status();
+                const setItem = Storage.prototype.setItem;
+                let writes = 0;
+                Storage.prototype.setItem = function (key, ...args) {
+                    if (key !== AppDiagnosticStorage.CONTROL_KEY) return setItem.call(this, key, ...args);
+                    writes += 1;
+                    if (fault === 'denied') throw new DOMException('private', 'SecurityError');
+                };
+                const failed = await AppDiagnosticStore.retry();
+                const attempts = writes;
+                for (let i = 0; i < 10; i += 1) await persist(makeEvents(1));
+                const latched = { status: AppDiagnosticStore.status(), writes, names: await databaseNames() };
+                Storage.prototype.setItem = setItem;
+                const recovered = await AppDiagnosticStore.retry();
+                return { original, failed, attempts, latched, recovered };
+            }, fault);
+            assert.equal(result.failed.success, false);
+            assert.equal(result.failed.status.failure, 'COORDINATION_UNAVAILABLE');
+            assert.equal(result.latched.status.persistence, 'memory-only');
+            assert.equal(result.latched.writes, result.attempts);
+            assert.deepEqual(result.latched.names, []);
+            assert.equal(result.recovered.success, true);
+            for (const key of ['generation', 'cutoff', 'enabled', 'phase']) {
+                assert.equal(result.recovered.status[key], result.original[key]);
+            }
+        });
+    }
+
+    await t.test('reserved coordination space keeps retry, clear, opt-out and reset writable at native quota', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        await page.evaluate(() => persist(makeEvents(1)));
+        assert.ok(await fillLocalStorage(page) > 1024 * 1024);
+        const result = await page.evaluate(async () => {
+            const retry = await AppDiagnosticStore.retry();
+            const clear = await AppDiagnosticStore.clear();
+            const optOut = await AppDiagnosticStore.setEnabled(false);
+            const optIn = await AppDiagnosticStore.setEnabled(true);
+            const reset = await AppDiagnosticStore.withFullReset(async () => ({ success: true }));
+            return { retry, clear, optOut, optIn, reset, status: AppDiagnosticStore.status(), names: await databaseNames() };
+        });
+        for (const action of ['retry', 'clear', 'optOut', 'optIn', 'reset']) assert.equal(result[action].success, true, action);
+        assert.equal(result.optOut.status.enabled, false);
+        assert.equal(result.status.phase, 'reset-complete');
+        assert.deepEqual(result.names, []);
+    });
+
+    await t.test('startup stays memory-only until the lifecycle lock verifies writable coordination', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            const isolated = await navigator.locks.request('initial-coordination', async () => {
+                const instance = AppDiagnosticStorage.create({ databaseName: 'initial-coordination',
+                    controlKey: 'initial-coordination', lockName: 'initial-coordination' });
+                window.initialCoordinationStatus = instance.status();
+                return instance;
+            });
+            await isolated.ready;
+            const ready = isolated.status();
+            isolated.close();
+            return { initial: initialCoordinationStatus, ready };
+        });
+        assert.equal(result.initial.persistence, 'memory-only');
+        assert.equal(result.initial.coverage, 'partial');
+        assert.equal(result.ready.persistence, 'persisted');
+        assert.equal(result.ready.coverage, 'complete');
     });
 
     await t.test('opt-out propagates, fences pending/relayed events and keeps local export', async (t) => {

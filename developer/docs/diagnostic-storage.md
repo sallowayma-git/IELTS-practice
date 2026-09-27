@@ -52,7 +52,8 @@ timed-out open closes its handle; its upgrade transaction is aborted so it canno
 recreate a database after a clear/reset.
 
 `await AppDiagnosticStore.retry()` (also available through
-`await AppDiagnostics.retrySink()`) explicitly tests a read/write transaction with
+`await AppDiagnostics.retrySink()`) first verifies a control-record write/readback
+under the lifecycle lock, then tests an IndexedDB read/write transaction with
 a temporary put/delete probe. It returns `{ success, status }`. A failed retry
 remains latched. A successful retry requeues retained current-generation memory
 evidence; it never replays evidence invalidated by clear, opt-out or reset.
@@ -61,7 +62,14 @@ The next startup also gets a fresh failure latch. No timers automatically retry.
 
 Web Locks and readable/writable localStorage provide the cross-window lifecycle
 barrier. If either capability is unavailable, persistence fails closed to memory
-with `COORDINATION_UNAVAILABLE`. BroadcastChannel and storage events accelerate
+with `COORDINATION_UNAVAILABLE`, including readable storage whose writes throw or
+are silently discarded. Startup remains memory-only with partial durable coverage
+until the control record is written and read back under the lock, before any
+IndexedDB access. This check preserves the lifecycle generation and preference;
+a fresh write token detects discarded writes. Fixed-size serialization reserves
+room for longer cutoff/phase values so subsequent lifecycle barriers still fit
+if other storage fills the origin. Explicit retry repeats this check and cannot
+report recovery based on IndexedDB alone. BroadcastChannel and storage events accelerate
 status propagation, but correctness does not depend on notification delivery:
 every queued operation re-reads the durable control record under the lock.
 This is a stated coverage limit for browsers/run modes lacking coordination.
@@ -131,7 +139,8 @@ history or diagnostic preference. No diagnostic events are added to AppData.
 
 `developer/tests/js/diagnosticStore.test.js` uses real Chromium IndexedDB, isolated
 browser contexts and a controlled clock for retention, UTF-8 accounting, identity
-upsert, concurrent windows, bounded failures/retry, opt-out/clear races, blocked
+upsert, concurrent windows, native Web Storage quota exhaustion, denied/discarded
+control writes, bounded failures/retry, opt-out/clear races, blocked
 deletion, missing notifications, reset generations, late-open cancellation and
 learning backup isolation. `siteDataReset.test.js` preserves the existing external
 backup failure/rollback assertions and adds diagnostic coordination failures.

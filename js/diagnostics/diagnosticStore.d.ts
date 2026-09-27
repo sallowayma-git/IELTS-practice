@@ -2,13 +2,14 @@ import type { DiagnosticSink, DiagnosticStorageStatus } from './diagnosticContra
 export as namespace AppDiagnosticStorage;
 export interface Store extends DiagnosticSink {
     readonly controlKey: string;
-    /** Asynchronous startup retention sweep; never creates an absent database. */
+    /** Verifies writable lifecycle coordination, then sweeps retention without creating an absent database. */
     readonly ready: Promise<void>;
     status(): DiagnosticStorageStatus;
     /** Retains current-page memory, fences queued/relayed events and removes only diagnostics. */
     clear(): Promise<{ success: boolean; status: DiagnosticStorageStatus }>;
     /** Both disabling and re-enabling start a new generation; old evidence is never replayed. */
     setEnabled(enabled: boolean): Promise<{ success: boolean; status: DiagnosticStorageStatus }>;
+    /** Revalidates writable lifecycle coordination and probes an IndexedDB write transaction. */
     retry(): Promise<{ success: boolean; status: DiagnosticStorageStatus }>;
     /** SiteDataReset only: holds coordination through deletion, web-storage cleanup and backup commit. */
     withFullReset<T extends { success: boolean }>(callback: () => Promise<T>): Promise<T>;

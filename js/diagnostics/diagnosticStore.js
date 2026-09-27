@@ -31,6 +31,7 @@
         let suspended = false;
         let closed = false;
         let failure = null;
+        let coordinationReady = false;
         let pendingEvents = 0;
         let pendingBytes = 0;
         let dropped = 0;
@@ -38,10 +39,10 @@
 
         function view() {
             return Object.freeze({ persistence: !control.enabled ? 'disabled'
-                : failure || suspended || closed ? 'memory-only' : pendingEvents ? 'pending' : 'persisted',
+                : failure || !coordinationReady || suspended || closed ? 'memory-only' : pendingEvents ? 'pending' : 'persisted',
                 enabled: control.enabled, generation: control.generation, cutoff: control.cutoff,
                 suspended: suspended || closed, phase: control.phase, failure,
-                coverage: failure || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped });
+                coverage: failure || !coordinationReady || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped });
         }
         function emit(type) {
             for (const listener of listeners) { try { listener(Object.freeze({ type, status: view() })); } catch (_) { } }
@@ -84,9 +85,23 @@
             } catch (_) { fail('UNAVAILABLE'); }
             return !failure && !closed;
         }
+        function writeControl(next) {
+            try {
+                // A fresh token makes even an unchanged control record a real write.
+                // Reserve room for longer cutoff/phase values before storage fills.
+                const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(256, ' ');
+                global.localStorage.setItem(controlKey, serialized);
+                if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
+                coordinationReady = true;
+            } catch (error) {
+                coordinationReady = false;
+                fail('COORDINATION_UNAVAILABLE');
+                throw error;
+            }
+        }
         function publish(next) {
             // All control mutations and IDB operations share one cross-window lock.
-            global.localStorage.setItem(controlKey, JSON.stringify(next));
+            writeControl(next);
             control = next;
             try { channel?.postMessage({ type: 'control-changed' }); } catch (_) { }
             emit('barrier');
@@ -144,6 +159,8 @@
             });
         }
         async function transaction(mode, action, createDatabase = false) {
+            // Every caller holds the lifecycle lock and has synchronized control.
+            if (!coordinationReady) writeControl(control);
             const db = await open(createDatabase);
             if (!db) return [];
             try {
@@ -269,7 +286,7 @@
             truncated = events.length > limit;
             events = limit ? events.slice(-limit) : [];
             return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: view().persistence,
-                coverage: failure || suspended || closed ? 'partial' : 'complete', truncated, storage: view() });
+                coverage: view().coverage, truncated, storage: view() });
         }
         function deleteHistory() {
             return new Promise((resolve, reject) => {
@@ -296,11 +313,13 @@
         }
         async function retry() {
             if (closed || suspended || !sync().enabled) return Object.freeze({ success: false, status: view() });
+            coordinationReady = false;
             failure = null;
             if (capabilities()) {
                 try {
                     await locked(async () => {
-                        if (!control.enabled || suspended) return;
+                        if (failure || !control.enabled || suspended || closed) return;
+                        writeControl(control);
                         // Probe a real write transaction; explicit retry has an
                         // observable outcome even when the reporter has no queue.
                         await transaction('readwrite', (store) => {
@@ -310,8 +329,9 @@
                     });
                 } catch (error) { fail(failureCode(error)); }
             }
-            if (!failure && !suspended && control.enabled) emit('retry');
-            return Object.freeze({ success: !failure && !suspended && control.enabled, status: view() });
+            const success = !failure && coordinationReady && !suspended && !closed && control.enabled;
+            if (success) emit('retry');
+            return Object.freeze({ success, status: view() });
         }
         async function withFullReset(callback) {
             // A reset must still work after diagnostic storage failed. It requires
