@@ -182,8 +182,6 @@
                     const size = contract.utf8Bytes(JSON.stringify(event));
                     records.set(event.eventId, { event, bytes: size, revision: 0, delivered: memoryOnlyConsole, inFlight: false });
                     bytes += size;
-                    trim();
-                    schedule();
                 } else if (classificationPriority(event) > classificationPriority(existing.event)) {
                     // The normalizer preserves identity, sequence and first-seen time.
                     // Keep a known browser location when the business boundary lacks one.
@@ -193,11 +191,14 @@
                     replaceEvent(existing, event);
                     existing.revision += 1;
                     existing.delivered = false;
-                    trim();
-                    schedule();
                 } else {
                     event = existing.event;
                 }
+                // Pin the canonical startup incident before capacity trimming, including
+                // when enrichment grows an older record or rendering waits for the body.
+                if (event.notification.kind === 'startup') startupId = event.eventId;
+                trim();
+                schedule();
                 if (event.notification.kind === 'startup') showStartup(event.eventId);
                 return event.eventId;
             } catch (_) {

@@ -58,9 +58,11 @@ Enriched records are queued again under the same event ID, including previously
 delivered records. A sink must upsert by identity. An in-flight append confirms only
 the revision it received; a newer classification requires its own confirmation.
 Both **200 events** and **256 KiB of serialized event payload** are enforced. Old
-noncritical entries are evicted before critical entries. The currently displayed
-startup incident remains pinned inside the same limits so its reference can still
-be exported after a storm. Each event has A1's 8 KiB cap; separate semantic context
+noncritical entries are evicted before critical entries. A startup incident is pinned
+before capacity trimming, including when enrichment grows an earlier console record
+or panel rendering must wait for the document body. The displayed incident remains
+pinned inside the same limits so its reference can still be exported after a storm.
+Each event has A1's 8 KiB cap; separate semantic context
 has at most 50 sanitized breadcrumbs. Byte
 accounting excludes JavaScript object/database overhead, as in #194.
 
@@ -177,7 +179,8 @@ node scripts/build-bundles.mjs --check
 
 The browser harness uses shipped bundles in a temporary public-assets fixture and
 fresh browser contexts. It exercises missing/invalid bundles, unhandled and caught
-initialization rejection, AppData's console-first IndexedDB failure, native fetch
+initialization rejection, AppData's console-first IndexedDB failure, startup enrichment
+near the buffer byte limit with retained lookup/export/sink evidence, native fetch
 cancellation, download, native error visibility and healthy startup
 under file, HTTP root and HTTP subpath modes. CI runs it and retains the JSON report
 and panel screenshot. It does not modify a user's learning data.

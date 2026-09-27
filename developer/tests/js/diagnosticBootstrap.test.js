@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { harness, read } from './helpers/diagnosticHarness.js';
+import { prepareStartupEnrichmentAtCapacity } from './helpers/diagnosticCapacity.js';
 
 test('generated inline collector precedes every external dependency and preserves early IDs at handoff', async () => {
     const html = read('index.html');
@@ -131,6 +132,60 @@ test('storms respect event and byte limits, prefer critical evidence, and bound 
     assert.equal(JSON.parse(h.collector.exportText()).events[0].eventId, critical);
     assert.equal(snapshot.truncated, true);
 });
+
+for (const early of [false, true]) {
+    test(`console-first startup enrichment retains evidence at the byte limit with ${early ? 'deferred' : 'immediate'} panel rendering`, async () => {
+        const h = harness({ early });
+        const c = h.collector;
+        const { error, first, before } = prepareStartupEnrichmentAtCapacity(c);
+        const initial = c.snapshot().events;
+        assert.equal(initial[0].eventId, first.eventId, 'the console record is the oldest retained event');
+        assert.equal(first.collection.source, 'console');
+        assert.ok(initial.slice(1).every((event) => event.notification.kind === 'persistent'));
+        assert.equal(before.dropped, 0);
+        assert.ok(before.events < 200);
+        assert.ok(before.bytes >= 256 * 1024 - 4096 && before.bytes <= 256 * 1024);
+
+        const id = c.startupFailed(error);
+        assert.equal(id, first.eventId);
+        const enriched = c.getIncident(id);
+        assert.ok(enriched, 'the panel incident must survive trimming during enrichment');
+        assert.equal(enriched.sequence, first.sequence);
+        assert.equal(enriched.timestamp, first.timestamp);
+        assert.ok(enriched.breadcrumbs.length > first.breadcrumbs.length);
+        assert.equal(c.getIncident(initial[1].eventId), null, 'an unpinned critical event is evicted instead');
+        assert.ok(c.status().dropped > 0, 'the enrichment crosses the byte limit');
+        if (early) {
+            assert.equal(h.document.getElementById('diagnostic-startup-failure'), null);
+            h.document.body = h.element('body');
+            h.emit('document:DOMContentLoaded');
+        }
+        const panel = h.document.getElementById('diagnostic-startup-failure');
+        assert.ok(panel.children.some((node) => node.textContent?.includes(id)));
+        const exported = JSON.parse(c.exportText()).events[0];
+        assert.equal(JSON.parse(c.exportText(id)).events[0].eventId, id);
+        const assertBounds = () => {
+            assert.ok(c.status().events <= 200);
+            assert.ok(c.status().bytes <= 256 * 1024);
+            assert.equal(c.status().bytes, c.snapshot().events.reduce((size, event) => size + Buffer.byteLength(JSON.stringify(event)), 0));
+            assert.ok(Buffer.byteLength(c.exportText()) <= 32 * 1024);
+        };
+        assertBounds();
+        const delivered = [];
+        c.attachSink({ async append(events) { delivered.push(...events); return { persistence: 'persisted' }; } });
+        await c.flush();
+        for (const event of [enriched, exported, c.getIncident(id), delivered.find((item) => item.eventId === id)]) {
+            assert.ok(event);
+            assert.equal(event.eventId, id);
+            assert.equal(event.code, 'APP_BOOT_FAILED');
+            assert.equal(event.causeCode, 'BACKEND_UNAVAILABLE');
+            assert.equal(event.collection.source, 'business');
+            assert.equal(event.notification.kind, 'startup');
+        }
+        assert.equal(c.getIncident(id).persistence.diagnostics, 'persisted');
+        assertBounds();
+    });
+}
 
 for (const code of ['APP_BOOT_FAILED', 'PRACTICE_SAVE_FAILED']) {
     for (const delivery of ['queued', 'persisted', 'in-flight']) {

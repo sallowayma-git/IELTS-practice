@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { prepareStartupEnrichmentAtCapacity } from '../js/helpers/diagnosticCapacity.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -41,7 +42,7 @@ try {
         ['http', origin + '/index.html'],
         ['subpath', origin + '/IELTS-practice/index.html']
     ]) {
-        for (const fault of ['missing', 'parse', 'rejection', 'caught-initialization', 'indexeddb-blocked', 'native-abort', 'healthy']) {
+        for (const fault of ['missing', 'parse', 'rejection', 'caught-initialization', 'indexeddb-blocked', 'startup-capacity', 'native-abort', 'healthy']) {
             fs.writeFileSync(path.join(fixture, foundationPath), foundation);
             fs.writeFileSync(path.join(fixture, legacyPath), legacy);
             if (fault === 'missing') fs.unlinkSync(path.join(fixture, foundationPath));
@@ -49,6 +50,12 @@ try {
             if (fault === 'rejection') fs.writeFileSync(path.join(fixture, foundationPath), 'Promise.reject(new Error("PRIVATE_INITIALIZATION_DETAIL"));');
             if (fault === 'caught-initialization') {
                 fs.appendFileSync(path.join(fixture, legacyPath), '\nwindow.ExamSystemAppMixins.bootstrap = { async initializeComponents() { throw new Error("PRIVATE_INITIALIZATION_DETAIL"); } };\n');
+            }
+            if (fault === 'startup-capacity') {
+                fs.writeFileSync(path.join(fixture, foundationPath), `
+                    window.__diagnosticCapacity = (${prepareStartupEnrichmentAtCapacity.toString()})(AppDiagnosticBootstrap.install());
+                    AppDiagnosticBootstrap.install().startupFailed(window.__diagnosticCapacity.error);
+                ` + foundation);
             }
             if (fault === 'native-abort') {
                 fs.writeFileSync(path.join(fixture, foundationPath), `
@@ -127,22 +134,26 @@ try {
                 const code = fault === 'missing' ? 'RESOURCE_LOAD_FAILED' : 'APP_BOOT_FAILED';
                 assert.ok(evidence.events.some((event) => event.code === code), `${mode}/${fault}: expected ${code}`);
                 assert.ok(evidence.events.every((event) => event.resource.status === 'unknown'));
-                if (fault === 'indexeddb-blocked') {
+                if (fault === 'indexeddb-blocked' || fault === 'startup-capacity') {
                     await page.waitForFunction(() => {
-                        const id = window.__diagnosticConsoleFirst?.eventId;
+                        const id = (window.__diagnosticConsoleFirst || window.__diagnosticCapacity?.first)?.eventId;
                         return id && AppDiagnostics.getIncident(id)?.collection.source === 'business';
                     });
                     const observed = await page.evaluate(async () => {
                         const collector = AppDiagnosticBootstrap.install();
-                        const first = window.__diagnosticConsoleFirst;
+                        const first = window.__diagnosticConsoleFirst || window.__diagnosticCapacity.first;
                         const delivered = [];
                         collector.attachSink({ async append(events) { delivered.push(...events); return { persistence: 'persisted' }; } });
                         await collector.flush();
                         return { first, current: collector.getIncident(first?.eventId),
                             exported: JSON.parse(collector.exportText(first?.eventId)).events[0],
-                            delivered: delivered.find((event) => event.eventId === first?.eventId) };
+                            delivered: delivered.find((event) => event.eventId === first?.eventId),
+                            before: window.__diagnosticCapacity?.before, after: collector.status(),
+                            actualBytes: collector.snapshot().events.reduce((size, event) =>
+                                size + new TextEncoder().encode(JSON.stringify(event)).length, 0) };
                     });
-                    assert.equal(observed.first?.code, 'UNEXPECTED_RUNTIME_ERROR', 'the existing AppData path logs before startup reporting');
+                    assert.equal(observed.first?.code, 'UNEXPECTED_RUNTIME_ERROR', 'the console observation precedes startup reporting');
+                    assert.equal(observed.first.collection.source, 'console');
                     for (const event of [observed.current, observed.exported, observed.delivered]) {
                         assert.equal(event.eventId, observed.first.eventId);
                         assert.equal(event.code, 'APP_BOOT_FAILED');
@@ -151,6 +162,16 @@ try {
                         assert.equal(event.notification.kind, 'startup');
                     }
                     assert.ok((await panel.innerText()).includes(observed.first.eventId));
+                    if (fault === 'startup-capacity') {
+                        assert.equal(observed.before.dropped, 0);
+                        assert.ok(observed.before.events < 200);
+                        assert.ok(observed.before.bytes >= 256 * 1024 - 4096 && observed.before.bytes <= 256 * 1024);
+                        assert.ok(observed.after.dropped > 0, 'enrichment forces eviction at the byte limit');
+                        assert.ok(observed.after.events <= 200);
+                        assert.ok(observed.after.bytes <= 256 * 1024);
+                        assert.equal(observed.after.bytes, observed.actualBytes);
+                        assert.equal(evidence.events[0].eventId, observed.first.eventId, 'default export prioritizes the displayed incident');
+                    }
                 }
                 const serialized = JSON.stringify(evidence);
                 for (const secret of ['PRIVATE_INITIALIZATION_DETAIL', 'private-cache-value', fixture, '127.0.0.1']) assert.equal(serialized.includes(secret), false);
@@ -176,4 +197,4 @@ try {
     fs.rmSync(resolved, { recursive: true, force: true });
     fs.writeFileSync(path.join(reports, 'diagnostic-startup-report.json'), JSON.stringify({ cases: results }, null, 2));
 }
-assert.equal(results.length, 21);
+assert.equal(results.length, 24);
