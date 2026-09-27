@@ -16,6 +16,7 @@ const bundles = {
         'js/presentation/app-actions.js'
     ],
     'js/bundles/core-foundation.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
         'js/utils/environmentDetector.js',
         'js/utils/logger.js',
         'js/data/practiceRecordSource.js',
@@ -95,6 +96,7 @@ const bundles = {
         'js/app/suitePracticeMixin.js'
     ],
     'js/bundles/reading-page.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
@@ -120,6 +122,7 @@ const bundles = {
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
@@ -134,6 +137,7 @@ const bundles = {
         'js/practice-page-enhancer.js'
     ],
     'js/bundles/listening-record-bridge.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
@@ -148,6 +152,7 @@ const bundles = {
          'js/listeningRecordBridge.js'
      ],
     'js/bundles/listening-wrapper.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
