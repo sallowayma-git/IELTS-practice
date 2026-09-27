@@ -107,6 +107,7 @@
                     finally { internal = false; }
                     result = await result;
                     const status = field(result, 'persistence');
+                    const persistedIds = field(result, 'persistedEventIds');
                     if (!['persisted', 'disabled', 'memory-only'].includes(status)) throw new Error('Invalid sink result');
                     persistence = status;
                     batch.forEach((item, index) => {
@@ -114,7 +115,8 @@
                         // Confirmation of the old version cannot acknowledge the new one.
                         if (item.revision === revisions[index]) {
                             item.delivered = true;
-                            updatePersistence(item, status);
+                            updatePersistence(item, status === 'persisted' && Array.isArray(persistedIds)
+                                && !persistedIds.includes(item.event.eventId) ? 'memory-only' : status);
                         }
                     });
                 } catch (_) {
@@ -148,10 +150,36 @@
         }
 
         function persistenceStatus() {
+            const storage = storageStatus();
+            if (storage && storage.persistence !== 'persisted') return storage.persistence;
             if (sinkFailed) return 'failed';
             if (pending) return 'pending';
             if (Array.from(records.values()).some((item) => item.event.persistence.diagnostics === 'memory-only')) return 'memory-only';
             return persistence;
+        }
+
+        function storageStatus() {
+            try { return method(sink, 'status')?.call(sink); } catch (_) { return null; }
+        }
+
+        function storageChanged(change) {
+            const state = field(change, 'status');
+            if (!state) return;
+            persistence = state.persistence;
+            for (const item of records.values()) {
+                const current = item.event.persistence.generation === state.generation
+                    && item.event.timestamp > state.cutoff && !state.suspended && state.enabled;
+                if (change.type === 'retry' && current && item.event.persistence.diagnostics !== 'persisted') {
+                    item.delivered = false;
+                    updatePersistence(item, 'memory-only');
+                } else if (!current || state.failure) {
+                    item.revision += 1; // Fence acknowledgements already in flight.
+                    item.delivered = true;
+                    updatePersistence(item, state.enabled ? 'memory-only' : 'disabled');
+                }
+            }
+            trim();
+            if (change.type === 'retry') { sinkFailed = false; schedule(); }
         }
 
         function report(input) {
@@ -165,7 +193,9 @@
                     'correlationAliases', 'persistence', 'notification', 'retry', 'collection', 'breadcrumbs']
                     .forEach((key) => { safeInput[key] = field(input, key); });
                 // Only sink confirmation can promote diagnostic persistence.
-                safeInput.persistence = { operation: field(safeInput.persistence, 'operation'), diagnostics: 'memory-only' };
+                const storage = storageStatus();
+                safeInput.persistence = { operation: field(safeInput.persistence, 'operation'), diagnostics: 'memory-only',
+                    generation: storage?.generation };
                 if (safeInput.breadcrumbs === undefined) {
                     safeInput.breadcrumbs = crumbs.map((item) => ({ ...item, correlationAliases: item.correlation }));
                 }
@@ -283,16 +313,17 @@
             try { globalFailure(event.reason); } catch (_) { }
         }
 
-        function getIncident(eventId) { return records.get(eventId)?.event || null; }
+        function getIncident(eventId) { storageStatus(); return records.get(eventId)?.event || null; }
 
         function snapshot(query = {}) {
+            const storage = storageStatus();
             const id = field(query, 'eventId');
             const requested = field(query, 'limit');
             const limit = Number.isSafeInteger(requested) ? Math.max(0, Math.min(MAX_EVENTS, requested)) : MAX_EVENTS;
             const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
             const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
             return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
-                truncated: dropped > 0 || matching.length > events.length });
+                truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}) });
         }
 
         function exportText(eventId = startupId) {
@@ -302,7 +333,8 @@
                 const ordered = current.events.filter((event) => event !== chosen).reverse();
                 if (chosen) ordered.unshift(chosen);
                 const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
-                    truncated: current.truncated, notice: 'Local diagnostics; not an answer backup.', events: [] };
+                    truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
+                    notice: 'Local diagnostics; not an answer backup.', events: [] };
                 for (const event of ordered) {
                     output.events.push(event);
                     if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
@@ -434,10 +466,26 @@
                 if (sink || !candidate) return;
                 sink = next;
                 append = candidate;
+                const state = storageStatus();
+                if (state) {
+                    // Only this page's pre-sink bootstrap evidence may adopt the
+                    // initial generation. Relayed records must carry their origin's.
+                    for (const item of records.values()) {
+                        if (item.event.persistence.generation === 'unknown' && item.event.collection.source !== 'relay'
+                            && item.event.timestamp > state.cutoff) {
+                            replaceEvent(item, normalizer.sanitizeEvent({ ...item.event,
+                                persistence: { ...item.event.persistence, generation: state.generation } }));
+                        }
+                    }
+                    storageChanged({ type: 'barrier', status: state });
+                    method(next, 'subscribe')?.call(next, storageChanged);
+                }
                 persistence = 'memory-only';
                 schedule();
             },
             retrySink() {
+                const retry = method(sink, 'retry');
+                if (retry) return retry.call(sink);
                 if (!sinkFailed || pending) return;
                 sinkFailed = false;
                 persistence = 'pending';
@@ -449,7 +497,8 @@
                 return Object.freeze({ persistence: persistenceStatus() });
             },
             status() {
-                return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed });
+                return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed,
+                    ...(storageStatus() ? { storage: storageStatus() } : {}) });
             }
         });
         for (const key of ['requiredResources', 'optionalResources']) {

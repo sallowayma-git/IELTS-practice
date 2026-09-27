@@ -401,6 +401,10 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
                 )
         if relative == "js/core/externalBackupService.js" and label == "raw-storage":
             return True
+        if relative == "js/diagnostics/diagnosticStore.js" and label == "raw-storage":
+            # A3 owns a separate diagnostic database and lifecycle tombstone,
+            # intentionally outside learning-data transactions and backup catalogs.
+            return True
         if relative == "js/core/externalBackupService.js" and label == "old-global" and "ExternalBackupService" in token:
             return True
         if relative == "js/core/siteDataReset.js" and label == "raw-storage":
@@ -460,6 +464,11 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
             return True
         if relative == "developer/tests/js/siteDataReset.test.js" and label == "raw-storage":
             return True
+        if relative == "developer/tests/js/diagnosticStore.test.js":
+            if label == "raw-storage":
+                return True  # Real isolated IndexedDB fault/lifecycle fixtures.
+            if label == "old-global" and "ExternalBackupService" in token:
+                return True  # SiteDataReset's existing backup preparation contract.
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "raw-storage":
             return True
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "old-global" and "ExternalBackupService" in token:

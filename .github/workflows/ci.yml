@@ -54,6 +54,10 @@ jobs:
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
 
+      - name: Verify full reset with a surviving diagnostic writer
+        timeout-minutes: 2
+        run: python developer/tests/e2e/full_reset_flow.py
+
       - name: Check reading data integrity
         run: python developer/tests/ci/check_reading_data_integrity.py
 

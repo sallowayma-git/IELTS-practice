@@ -51,7 +51,8 @@
     },
     "persistence": {
       "operation": "unconfirmed",
-      "diagnostics": "memory-only"
+      "diagnostics": "memory-only",
+      "generation": "unknown"
     },
     "notification": {
       "kind": "dialog",
@@ -125,7 +126,8 @@
     },
     "persistence": {
       "operation": "unconfirmed",
-      "diagnostics": "memory-only"
+      "diagnostics": "memory-only",
+      "generation": "unknown"
     },
     "notification": {
       "kind": "startup",

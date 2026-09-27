@@ -77,6 +77,7 @@ must retain the originating window, sequence, timestamp and event ID.
 | `correlation` | A scope reference and kind-specific opaque aliases, never original business identifiers. |
 | `persistence.operation` | Explicit `committed`, `not-committed` or default `unconfirmed`. An Error's `committed` field is not treated as proof. |
 | `persistence.diagnostics` | `memory-only` by default; `pending`, `persisted`, `disabled` or `failed` as confirmed by the diagnostics runtime/store. Independent of business save state. |
+| `persistence.generation` | Additive A3 lifecycle fence: `dg-` plus 32 lowercase hex digits, or `unknown`. The reporter stamps local events; validated relays retain the originating value. Only the current generation can enter persistent storage. See [storage semantics](diagnostic-storage.md). |
 | `notification` | Presentation kind and explicit-dismissal flag; no free-form UI content or callback. Default is `none`. B2 owns prioritization/queueing. |
 | `retry` | Availability, semantic action and original operation/submission aliases. Availability requires an operation alias and a known retryable action; executable retry/idempotency logic stays in a separate live runtime registry. |
 | `breadcrumbs` | Only known semantic actions such as submit/handshake/storage confirmation, with timestamp, outcome and aliases. No keystrokes or arbitrary DOM interactions. |

@@ -55,6 +55,7 @@
         'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
         'js/diagnostics/diagnosticContract.js',
         'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticStore.js',
         'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
         'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
         'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',
@@ -429,7 +430,9 @@
                 environment: wire ? environment(field(input, 'environment', context), context) : { ...defaults.environment },
                 persistence: {
                     operation: choice(field(persistence, 'operation', context), ['committed', 'not-committed', 'unconfirmed'], 'unconfirmed'),
-                    diagnostics: choice(field(persistence, 'diagnostics', context), ['memory-only', 'pending', 'persisted', 'disabled', 'failed'], 'memory-only')
+                    diagnostics: choice(field(persistence, 'diagnostics', context), ['memory-only', 'pending', 'persisted', 'disabled', 'failed'], 'memory-only'),
+                    generation: matches(field(persistence, 'generation', context), /^dg-[a-f0-9]{32}$/)
+                        ? field(persistence, 'generation', context) : 'unknown'
                 },
                 notification: {
                     kind: choice(field(notification, 'kind', context), ['none', 'transient', 'persistent', 'dialog', 'startup'], 'none'),

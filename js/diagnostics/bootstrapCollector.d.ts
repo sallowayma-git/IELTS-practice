@@ -1,5 +1,5 @@
 import type { DiagnosticInput, DiagnosticPersistence, DiagnosticReporter, DiagnosticSink,
-    Environment } from './diagnosticContract';
+    Environment, DiagnosticStorageStatus } from './diagnosticContract';
 export as namespace AppDiagnosticBootstrap;
 
 export interface BootstrapOptions {
@@ -21,12 +21,12 @@ export interface Collector extends DiagnosticReporter {
     /** One asynchronous sink per page; upsert enriched records by event ID. Prototype append methods are supported. */
     attachSink(sink: Pick<DiagnosticSink, 'append'>): void;
     /** Retry only after a failed append; unchanged successfully delivered records are not replayed. */
-    retrySink(): void;
+    retrySink(): void | Promise<{ success: boolean; status: DiagnosticStorageStatus }>;
     captureConsole(level: string, args: readonly unknown[]): void;
     /** Revalidated passive JSON, at most 32 KiB, with explicit truncation. */
     exportText(eventId?: string): string;
     status(): Readonly<{ events: number; bytes: number; dropped: number; persistence: DiagnosticPersistence;
-        handedOff: boolean; fallbackFailed: boolean }>;
+        handedOff: boolean; fallbackFailed: boolean; storage?: DiagnosticStorageStatus }>;
 }
 export function install(options?: BootstrapOptions): Collector;
 

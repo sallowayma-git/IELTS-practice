@@ -24,14 +24,9 @@ const eventId = diagnostics.report({
     persistence: { operation: 'unconfirmed' }
 }); // synchronous ID; no storage or UI promise enters the business operation
 
-// A3 attaches its independent store only when ready, without AppData.ready.
-diagnostics.attachSink({
-    async append(events) {
-        await store.upsert(events); // identity-keyed, sanitized immutable input
-        return { persistence: 'persisted' }; // confirm only after the write commits
-    }
-});
+// The foundation bundle attaches AppDiagnosticStore without AppData.ready.
 await diagnostics.flush();
+await AppDiagnosticStore.getIncident(eventId); // passive durable lookup
 diagnostics.getIncident(eventId); // passive, retained memory only
 diagnostics.snapshot({ eventId });
 diagnostics.exportText(eventId); // passive, <= 32 KiB including JSON overhead
@@ -75,12 +70,21 @@ Per-event diagnostic persistence is updated when delivery starts or is confirmed
 business persistence is never inferred from diagnostic writes. Snapshot status
 does not claim all evidence is persisted when console evidence remains memory-only.
 
-The sink/store still owns durable retention, reads, opt-out, clearing, reset and
-cross-window lifecycle (#198). It must avoid logging private values or feeding
+The [A3 sink/store](diagnostic-storage.md) owns durable retention, reads, opt-out,
+clearing, reset and cross-window lifecycle (#198), and is attached automatically
+by the foundation bundle. It avoids logging private values or feeding
 reporter calls back into itself. Synchronous internal logging is excluded from
 capture. Console errors during asynchronous sink delivery remain sanitized in
 memory and are not sent back to that sink, preventing asynchronous logging loops.
 Explicit business reports during delivery remain queued normally.
+
+A3 supplies per-event persistence receipts and lifecycle notifications. Clear and
+opt-out invalidate old queued records and in-flight acknowledgements while keeping
+the current-page memory available. `persistence.generation` travels with origin
+identity. `storage` in status/snapshots/early export exposes disabled, pending,
+memory-only and fixed failure/coverage information; explicit `retrySink()` can
+return an asynchronous storage retry result. The standalone A2 sink behavior
+above remains compatible when optional lifecycle methods are absent.
 
 ## Resources, cancellation and logger compatibility
 

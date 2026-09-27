@@ -46,6 +46,25 @@ def main() -> None:
             assert page.evaluate("() => typeof window.clearCache") == "function"
             assert not any("/js/bundles/browse.bundle.js" in item for item in requested_urls)
 
+            diagnostic_id = page.evaluate(
+                """async () => {
+                    const id = AppDiagnostics.report({ code: 'PRACTICE_SAVE_FAILED',
+                        module: 'practice', action: 'submit' });
+                    await AppDiagnostics.flush();
+                    if (!await AppDiagnosticStore.getIncident(id)) throw new Error('Diagnostic fixture was not persisted');
+                    return id;
+                }"""
+            )
+            # A second live writer must survive the first window's reload without
+            # recreating the deleted diagnostic database or replaying its queue.
+            survivor = context.new_page()
+            survivor.route("**/diagnostic-reset-survivor", lambda route: route.fulfill(
+                status=200, content_type="text/html", body="<!doctype html><title>Reset survivor</title>"))
+            survivor.goto(url.rsplit('/', 1)[0] + '/diagnostic-reset-survivor', wait_until="load")
+            for script in ["diagnosticContract.js", "diagnosticStore.js", "bootstrapCollector.js", "diagnosticReporter.js"]:
+                survivor.add_script_tag(content=(REPO_ROOT / "js" / "diagnostics" / script).read_text(encoding="utf-8"))
+            survivor.evaluate("async () => { await AppDiagnosticStore.ready; }")
+
             page.evaluate(
                 """async () => {
                     const payload = 'x'.repeat(600);
@@ -126,6 +145,7 @@ def main() -> None:
                         legacyLocal: localStorage.getItem('full-reset-legacy-local'),
                         legacySession: sessionStorage.getItem('full-reset-legacy-session'),
                         externalBound: window.ExternalBackupService.getStatus().bound,
+                        diagnosticHistory: (await AppDiagnosticStore.snapshot({ limit: 2000 })).events.map(event => event.eventId),
                         databaseNames
                     };
                 }"""
@@ -139,6 +159,17 @@ def main() -> None:
             assert result["legacySession"] is None
             assert result["externalBound"] is False
             assert "ExamSystemDB" not in result["databaseNames"]
+            assert diagnostic_id not in result["diagnosticHistory"]
+            survivor_result = survivor.evaluate(
+                """async () => {
+                    AppDiagnostics.report({ code: 'PRACTICE_SAVE_FAILED' });
+                    await AppDiagnostics.flush();
+                    return { suspended: AppDiagnosticStore.status().suspended,
+                        events: (await AppDiagnosticStore.snapshot()).events.length,
+                        retry: (await AppDiagnosticStore.retry()).success };
+                }"""
+            )
+            assert survivor_result == {"suspended": True, "events": 0, "retry": False}
             assert not any("/js/bundles/browse.bundle.js" in item for item in requested_urls)
 
             print(json.dumps({"status": "pass", "result": result}, ensure_ascii=False))

@@ -19,6 +19,7 @@ const bundles = {
     'js/bundles/core-foundation.bundle.js': [
         'js/diagnostics/diagnosticContract.js',
         'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/diagnosticStore.js',
         'js/diagnostics/diagnosticReporter.js',
         'js/utils/environmentDetector.js',
         'js/utils/logger.js',

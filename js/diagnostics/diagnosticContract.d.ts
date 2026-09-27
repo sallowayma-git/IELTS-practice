@@ -77,7 +77,9 @@ export interface DiagnosticEvent {
     readonly resource: SourceLocation & { readonly status: number | 'unknown'; readonly optional: boolean | 'unknown' };
     readonly correlation: Correlation;
     readonly environment: Environment;
-    readonly persistence: { readonly operation: OperationPersistence; readonly diagnostics: DiagnosticPersistence };
+    readonly persistence: { readonly operation: OperationPersistence; readonly diagnostics: DiagnosticPersistence;
+        /** Relays preserve the originating generation; unknown is not durable input. */
+        readonly generation: string };
     readonly notification: {
         readonly kind: 'none' | 'transient' | 'persistent' | 'dialog' | 'startup';
         readonly requiresDismissal: boolean;
@@ -159,6 +161,21 @@ export interface Snapshot {
     readonly persistence: DiagnosticPersistence;
     readonly coverage: 'complete' | 'partial' | 'unknown';
     readonly truncated: boolean;
+    readonly storage?: DiagnosticStorageStatus;
+}
+export interface DiagnosticStorageStatus {
+    readonly persistence: DiagnosticPersistence;
+    readonly enabled: boolean;
+    readonly generation: string;
+    readonly cutoff: number;
+    readonly suspended: boolean;
+    readonly phase: 'active' | 'resetting' | 'reset-complete';
+    readonly failure: 'COORDINATION_UNAVAILABLE' | 'UNAVAILABLE' | 'QUOTA_EXCEEDED' | 'TRANSACTION_ABORTED'
+        | 'TRANSACTION_FAILED' | 'OPEN_BLOCKED' | 'OPEN_TIMEOUT' | 'TRANSACTION_TIMEOUT' | 'DELETE_BLOCKED' | null;
+    readonly coverage: 'complete' | 'partial';
+    readonly pendingEvents: number;
+    readonly pendingBytes: number;
+    readonly dropped: number;
 }
 export interface SnapshotQuery {
     readonly eventId?: string;
@@ -172,10 +189,14 @@ export interface IncidentReader {
 }
 export interface DiagnosticSink {
     /** Async, identity-keyed upsert of already normalized events; may reject. */
-    append(events: readonly DiagnosticEvent[]): Promise<{ persistence: DiagnosticPersistence }>;
+    append(events: readonly DiagnosticEvent[]): Promise<{ persistence: DiagnosticPersistence;
+        persistedEventIds?: readonly string[]; status?: DiagnosticStorageStatus }>;
     /** Passive durable lookup/snapshot; readers revalidate every returned record. */
     getIncident(eventId: string): Promise<DiagnosticEvent | null>;
     snapshot(query?: SnapshotQuery): Promise<Snapshot>;
+    status?(): DiagnosticStorageStatus;
+    subscribe?(listener: (change: { type: 'barrier' | 'retry' | 'status'; status: DiagnosticStorageStatus }) => void): () => void;
+    retry?(): Promise<{ success: boolean; status: DiagnosticStorageStatus }>;
 }
 export interface DiagnosticReporter extends IncidentReader {
     /** Normalize before any buffer/queue. Always return the event ID synchronously. */

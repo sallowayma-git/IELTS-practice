@@ -142,19 +142,18 @@ try {
                     const observed = await page.evaluate(async () => {
                         const collector = AppDiagnosticBootstrap.install();
                         const first = window.__diagnosticConsoleFirst || window.__diagnosticCapacity.first;
-                        const delivered = [];
-                        collector.attachSink({ async append(events) { delivered.push(...events); return { persistence: 'persisted' }; } });
                         await collector.flush();
                         return { first, current: collector.getIncident(first?.eventId),
                             exported: JSON.parse(collector.exportText(first?.eventId)).events[0],
-                            delivered: delivered.find((event) => event.eventId === first?.eventId),
+                            delivered: await AppDiagnosticStore.getIncident(first?.eventId),
                             before: window.__diagnosticCapacity?.before, after: collector.status(),
                             actualBytes: collector.snapshot().events.reduce((size, event) =>
                                 size + new TextEncoder().encode(JSON.stringify(event)).length, 0) };
                     });
                     assert.equal(observed.first?.code, 'UNEXPECTED_RUNTIME_ERROR', 'the console observation precedes startup reporting');
                     assert.equal(observed.first.collection.source, 'console');
-                    for (const event of [observed.current, observed.exported, observed.delivered]) {
+                    for (const event of [observed.current, observed.exported,
+                        ...(fault === 'indexeddb-blocked' ? [] : [observed.delivered])]) {
                         assert.equal(event.eventId, observed.first.eventId);
                         assert.equal(event.code, 'APP_BOOT_FAILED');
                         assert.equal(event.causeCode, 'BACKEND_UNAVAILABLE');
@@ -162,6 +161,11 @@ try {
                         assert.equal(event.notification.kind, 'startup');
                     }
                     assert.ok((await panel.innerText()).includes(observed.first.eventId));
+                    if (fault === 'indexeddb-blocked') {
+                        assert.equal(observed.delivered, null);
+                        assert.equal(observed.after.persistence, 'memory-only');
+                        assert.equal(observed.after.storage.failure, 'UNAVAILABLE');
+                    }
                     if (fault === 'startup-capacity') {
                         assert.equal(observed.before.dropped, 0);
                         assert.ok(observed.before.events < 200);
