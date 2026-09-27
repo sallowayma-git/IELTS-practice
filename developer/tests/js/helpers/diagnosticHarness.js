@@ -35,7 +35,7 @@ export function harness({ early = false, install = true } = {}) {
         if (!listeners.has(type)) listeners.set(type, []);
         listeners.get(type).push({ fn, options });
     }
-    const sandbox = { document, URL, URLSearchParams, Blob, setTimeout, clearTimeout,
+    const sandbox = { document, URL, URLSearchParams, Blob, DOMException, setTimeout, clearTimeout,
         console: Object.fromEntries(['log', 'info', 'warn', 'error', 'debug', 'trace'].map((method) =>
             [method, (...args) => output.push({ method, args })])),
         location: { protocol: 'https:', pathname: '/app/index.html', origin: 'https://private.internal', search: '?token=secret' },

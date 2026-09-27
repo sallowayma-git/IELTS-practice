@@ -132,6 +132,141 @@ test('storms respect event and byte limits, prefer critical evidence, and bound 
     assert.equal(snapshot.truncated, true);
 });
 
+for (const code of ['APP_BOOT_FAILED', 'PRACTICE_SAVE_FAILED']) {
+    for (const delivery of ['queued', 'persisted', 'in-flight']) {
+        test(`console-first ${code} enriches the same incident when ${delivery}`, async () => {
+            const h = harness();
+            h.run('js/diagnostics/diagnosticReporter.js');
+            h.run('js/utils/logger.js');
+            const error = Object.assign(new Error('PRIVATE_DETAIL'), { name: 'AppDataError', code: 'BACKEND_UNAVAILABLE' });
+            h.sandbox.console.error('[AppData v2] initialization blocked:', error);
+            const first = h.collector.snapshot().events[0];
+            assert.equal(first.collection.source, 'console');
+            const batches = [];
+            let finish;
+            const sink = { append(events) {
+                batches.push(events);
+                return new Promise((resolve) => { finish = resolve; });
+            } };
+            if (delivery !== 'queued') {
+                h.collector.attachSink(sink);
+                await Promise.resolve();
+                if (delivery === 'persisted') {
+                    finish({ persistence: 'persisted' });
+                    await h.collector.flush();
+                }
+            }
+            const id = code === 'APP_BOOT_FAILED' ? h.collector.startupFailed(error)
+                : h.collector.report({ code, module: 'practice', action: 'save', error,
+                    notification: { kind: 'persistent' }, persistence: { operation: 'not-committed' } });
+            assert.equal(id, first.eventId);
+            const enriched = h.collector.getIncident(id);
+            assert.equal(enriched.sequence, first.sequence);
+            assert.equal(enriched.timestamp, first.timestamp);
+            assert.equal(enriched.code, code);
+            assert.equal(enriched.causeCode, 'BACKEND_UNAVAILABLE');
+            assert.equal(enriched.collection.source, 'business');
+            assert.equal(enriched.notification.kind, code === 'APP_BOOT_FAILED' ? 'startup' : 'persistent');
+            assert.equal(enriched.persistence.diagnostics, 'memory-only', 'old delivery never confirms the new classification');
+            assert.notEqual(enriched.fingerprint, first.fingerprint);
+            assert.equal(JSON.parse(h.collector.exportText(id)).events[0].code, code);
+            if (code === 'APP_BOOT_FAILED') {
+                assert.ok(h.document.getElementById('diagnostic-startup-failure').children.some((node) => node.textContent?.includes(id)));
+            }
+            h.sandbox.console.error('[App] propagated failure:', error);
+            h.emit('unhandledrejection', { reason: error });
+            assert.equal(h.collector.getIncident(id), enriched, 'generic propagation cannot downgrade the business record');
+            assert.equal(h.collector.snapshot().events.length, 1);
+            assert.equal(h.collector.status().bytes, Buffer.byteLength(JSON.stringify(enriched)));
+            if (delivery === 'queued') h.collector.attachSink(sink);
+            if (delivery === 'in-flight') {
+                finish({ persistence: 'persisted' });
+                // Let the old append settle and the enriched version enter the next batch.
+                for (let i = 0; i < 10 && batches.length < 2; i += 1) await Promise.resolve();
+            } else await Promise.resolve();
+            assert.equal(batches.length, delivery === 'queued' ? 1 : 2);
+            assert.equal(batches.at(-1)[0].eventId, id);
+            assert.equal(batches.at(-1)[0].code, code);
+            assert.equal(h.collector.getIncident(id).persistence.diagnostics, 'pending');
+            finish({ persistence: 'persisted' });
+            await h.collector.flush();
+            assert.equal(h.collector.getIncident(id).persistence.diagnostics, 'persisted');
+            assert.equal(h.collector.getIncident(id).code, code);
+            assert.equal(h.collector.exportText(id).includes('PRIVATE_DETAIL'), false);
+        });
+    }
+}
+
+test('a business boundary refines automatic startup classification while retaining its location and identity', () => {
+    const h = harness();
+    const error = new Error('private');
+    h.emit('error', { target: h.sandbox, error,
+        filename: 'file:///private/js/bundles/core-foundation.bundle.js', lineno: 17, colno: 9 });
+    const first = h.collector.snapshot().events[0];
+    assert.equal(first.collection.source, 'bootstrap');
+    const id = h.collector.startupFailed(error);
+    const confirmed = h.collector.getIncident(id);
+    assert.equal(id, first.eventId);
+    assert.equal(confirmed.code, 'APP_BOOT_FAILED');
+    assert.equal(confirmed.collection.source, 'business');
+    assert.equal(confirmed.module, 'main');
+    assert.deepEqual(confirmed.resource, first.resource);
+    h.collector.report({ error });
+    h.emit('unhandledrejection', { reason: error });
+    assert.equal(h.collector.getIncident(id), confirmed);
+});
+
+test('a confirmed startup failure promotes console evidence withheld during sink delivery', async () => {
+    const h = harness();
+    const batches = [];
+    let finish;
+    h.collector.attachSink({ append(events) {
+        batches.push(events);
+        return batches.length === 1 ? new Promise((resolve) => { finish = resolve; }) : { persistence: 'persisted' };
+    } });
+    h.collector.report({ error: new Error('unrelated') });
+    await Promise.resolve();
+    const error = new Error('startup');
+    h.collector.captureConsole('error', [error]);
+    const id = h.collector.startupFailed(error);
+    finish({ persistence: 'persisted' });
+    await h.collector.flush();
+    assert.equal(batches.length, 2);
+    assert.equal(batches[1][0].eventId, id);
+    assert.equal(batches[1][0].code, 'APP_BOOT_FAILED');
+    assert.equal(h.collector.getIncident(id).persistence.diagnostics, 'persisted');
+});
+
+test('native AbortError rejections remain noncritical without reading overridden properties', () => {
+    const h = harness();
+    let reads = 0;
+    for (const overridden of [false, true]) {
+        const error = new DOMException('PRIVATE_ABORT', 'AbortError');
+        if (overridden) Object.defineProperty(error, 'name', { get() { reads += 1; throw new Error('private'); } });
+        h.emit('unhandledrejection', { reason: error });
+        const event = h.collector.snapshot().events.at(-1);
+        assert.equal(event.code, 'UNEXPECTED_RUNTIME_ERROR');
+        assert.equal(event.notification.kind, 'none');
+    }
+    assert.equal(reads, 0);
+    assert.equal(h.document.getElementById('diagnostic-startup-failure'), null);
+    assert.equal(h.collector.exportText().includes('PRIVATE_ABORT'), false);
+});
+
+test('forged DOMExceptions and hostile rejection getters cannot hide startup failures', () => {
+    let reads = 0;
+    const hostile = { get name() { reads += 1; return 'AbortError'; },
+        get [Symbol.toStringTag]() { reads += 1; return 'DOMException'; } };
+    const proxy = new Proxy({}, { get() { reads += 1; throw new Error('private'); } });
+    for (const error of [new DOMException('private', 'SecurityError'), Object.create(DOMException.prototype), hostile, proxy]) {
+        const h = harness();
+        h.emit('unhandledrejection', { reason: error });
+        assert.equal(h.collector.snapshot().events[0].code, 'APP_BOOT_FAILED');
+        assert.ok(h.document.getElementById('diagnostic-startup-failure'));
+    }
+    assert.equal(reads, 0);
+});
+
 test('sink rejection is isolated, suspends automatic retries and permits explicit retry', async () => {
     const h = harness();
     let calls = 0;

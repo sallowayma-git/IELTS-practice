@@ -41,7 +41,7 @@ try {
         ['http', origin + '/index.html'],
         ['subpath', origin + '/IELTS-practice/index.html']
     ]) {
-        for (const fault of ['missing', 'parse', 'rejection', 'caught-initialization', 'healthy']) {
+        for (const fault of ['missing', 'parse', 'rejection', 'caught-initialization', 'indexeddb-blocked', 'native-abort', 'healthy']) {
             fs.writeFileSync(path.join(fixture, foundationPath), foundation);
             fs.writeFileSync(path.join(fixture, legacyPath), legacy);
             if (fault === 'missing') fs.unlinkSync(path.join(fixture, foundationPath));
@@ -50,12 +50,59 @@ try {
             if (fault === 'caught-initialization') {
                 fs.appendFileSync(path.join(fixture, legacyPath), '\nwindow.ExamSystemAppMixins.bootstrap = { async initializeComponents() { throw new Error("PRIVATE_INITIALIZATION_DETAIL"); } };\n');
             }
+            if (fault === 'native-abort') {
+                fs.writeFileSync(path.join(fixture, foundationPath), `
+                    window.__diagnosticFaultObserved = new Promise((resolve) => {
+                        addEventListener('unhandledrejection', function observed(event) {
+                            if (!(event.reason instanceof DOMException) || event.reason.name !== 'AbortError') return;
+                            window.__diagnosticAbort = {
+                                native: true, beforeReady: !window.app?.isInitialized,
+                                event: AppDiagnosticBootstrap.install().snapshot().events.at(-1)
+                            };
+                            removeEventListener('unhandledrejection', observed);
+                            resolve();
+                        });
+                    });
+                    (function abortFetch() {
+                        const controller = new AbortController();
+                        controller.abort();
+                        fetch('data:text/plain,PRIVATE_INITIALIZATION_DETAIL', { signal: controller.signal });
+                    })();
+                ` + foundation);
+            }
+            if (fault === 'native-abort' || fault === 'indexeddb-blocked') {
+                // Hold startup until fetch cancellation is observed, or propagate the
+                // real AppData rejection through the application's initialization catch.
+                fs.appendFileSync(path.join(fixture, legacyPath), `
+                    (function waitForFaultObservation() {
+                        const initialize = ExamSystemApp.prototype.initializeComponents;
+                        window.ExamSystemAppMixins.bootstrap = {
+                            ...window.ExamSystemAppMixins.bootstrap,
+                            async initializeComponents(...args) {
+                                await ${fault === 'native-abort' ? 'window.__diagnosticFaultObserved' : 'AppData.ready'};
+                                return initialize.apply(this, args);
+                            }
+                        };
+                    })();
+                `);
+            }
             const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+            if (fault === 'indexeddb-blocked') await context.addInitScript(() => {
+                indexedDB.open = () => { throw new DOMException('PRIVATE_INITIALIZATION_DETAIL', 'SecurityError'); };
+                const nativeError = console.error;
+                console.error = function (...args) {
+                    if (!window.__diagnosticConsoleFirst && args.some((arg) => arg?.name === 'AppDataError' && arg.code === 'BACKEND_UNAVAILABLE')) {
+                        window.__diagnosticConsoleFirst = window.AppDiagnostics?.snapshot().events.find((event) =>
+                            event.causeCode === 'BACKEND_UNAVAILABLE' && event.collection.source === 'console');
+                    }
+                    return nativeError.apply(this, args);
+                };
+            });
             const page = await context.newPage();
             const nativeErrors = [];
             page.on('pageerror', (error) => nativeErrors.push(error.name));
             await page.goto(url + '?v=private-cache-value', { waitUntil: 'load' });
-            if (fault === 'healthy') {
+            if (fault === 'healthy' || fault === 'native-abort') {
                 await page.waitForFunction(() => window.app?.isInitialized === true);
                 assert.equal(await page.locator('#diagnostic-startup-failure').count(), 0, `${mode}: optional listening files must not block startup`);
                 const state = await page.evaluate(() => ({
@@ -65,6 +112,13 @@ try {
                 }));
                 assert.ok(state.same && state.status.handedOff);
                 assert.equal(state.startupErrors, 0);
+                if (fault === 'native-abort') {
+                    const abort = await page.evaluate(() => window.__diagnosticAbort);
+                    assert.ok(abort.native && abort.beforeReady, 'a browser-generated abort rejection occurs during startup');
+                    assert.equal(abort.event.code, 'UNEXPECTED_RUNTIME_ERROR');
+                    assert.equal(abort.event.notification.kind, 'none');
+                    assert.ok(nativeErrors.length > 0, 'the rejection retains native browser output');
+                }
                 results.push({ mode, fault, buildId: state.buildId, passed: true });
             } else {
                 const panel = page.locator('#diagnostic-startup-failure');
@@ -73,6 +127,31 @@ try {
                 const code = fault === 'missing' ? 'RESOURCE_LOAD_FAILED' : 'APP_BOOT_FAILED';
                 assert.ok(evidence.events.some((event) => event.code === code), `${mode}/${fault}: expected ${code}`);
                 assert.ok(evidence.events.every((event) => event.resource.status === 'unknown'));
+                if (fault === 'indexeddb-blocked') {
+                    await page.waitForFunction(() => {
+                        const id = window.__diagnosticConsoleFirst?.eventId;
+                        return id && AppDiagnostics.getIncident(id)?.collection.source === 'business';
+                    });
+                    const observed = await page.evaluate(async () => {
+                        const collector = AppDiagnosticBootstrap.install();
+                        const first = window.__diagnosticConsoleFirst;
+                        const delivered = [];
+                        collector.attachSink({ async append(events) { delivered.push(...events); return { persistence: 'persisted' }; } });
+                        await collector.flush();
+                        return { first, current: collector.getIncident(first?.eventId),
+                            exported: JSON.parse(collector.exportText(first?.eventId)).events[0],
+                            delivered: delivered.find((event) => event.eventId === first?.eventId) };
+                    });
+                    assert.equal(observed.first?.code, 'UNEXPECTED_RUNTIME_ERROR', 'the existing AppData path logs before startup reporting');
+                    for (const event of [observed.current, observed.exported, observed.delivered]) {
+                        assert.equal(event.eventId, observed.first.eventId);
+                        assert.equal(event.code, 'APP_BOOT_FAILED');
+                        assert.equal(event.causeCode, 'BACKEND_UNAVAILABLE');
+                        assert.equal(event.collection.source, 'business');
+                        assert.equal(event.notification.kind, 'startup');
+                    }
+                    assert.ok((await panel.innerText()).includes(observed.first.eventId));
+                }
                 const serialized = JSON.stringify(evidence);
                 for (const secret of ['PRIVATE_INITIALIZATION_DETAIL', 'private-cache-value', fixture, '127.0.0.1']) assert.equal(serialized.includes(secret), false);
                 assert.ok(Buffer.byteLength(serialized) <= 32 * 1024);
@@ -97,4 +176,4 @@ try {
     fs.rmSync(resolved, { recursive: true, force: true });
     fs.writeFileSync(path.join(reports, 'diagnostic-startup-report.json'), JSON.stringify({ cases: results }, null, 2));
 }
-assert.equal(results.length, 15);
+assert.equal(results.length, 21);

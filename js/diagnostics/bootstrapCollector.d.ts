@@ -18,9 +18,9 @@ export interface Collector extends DiagnosticReporter {
     markReady(): void;
     /** Idempotent; the collector itself becomes the full reporter without copying events. */
     handoff(): Collector;
-    /** One asynchronous sink per page. A class/prototype append method is supported. */
+    /** One asynchronous sink per page; upsert enriched records by event ID. Prototype append methods are supported. */
     attachSink(sink: Pick<DiagnosticSink, 'append'>): void;
-    /** Retry only after a failed append; existing successfully delivered IDs are not replayed. */
+    /** Retry only after a failed append; unchanged successfully delivered records are not replayed. */
     retrySink(): void;
     captureConsole(level: string, args: readonly unknown[]): void;
     /** Revalidated passive JSON, at most 32 KiB, with explicit truncation. */

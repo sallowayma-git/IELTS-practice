@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:3336e46e1a28087073058669e09918c11122feb6999f8bd538f33aa8cbf517a0",
+  "buildId": "sha256:8c49b05458fc58b526ea6fe3cb047d0bf51f3163797df9c20ae74a1a6b6c2683",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "identity": "sha256 of sorted path/content-hash pairs; normalized unstamped bundles, bootstrap sources, entry skeleton, styles, vendor, images and build recipes",
   "inputs": [
@@ -51,7 +51,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "5a08a7401a80fa0186a58e99c40e453409da3b6bb9f31cd512cf8229ae5042b8"
+      "sha256": "f099fee63b1b4962c7678b07805aba5d9570d31da71ef1238b36bb615394bf5d"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -103,7 +103,7 @@
     },
     {
       "path": "js/diagnostics/bootstrapCollector.js",
-      "sha256": "08f6b5458b9037f38eb03a079b38a933617250910b7012002d364be9be272876"
+      "sha256": "d155104aed5720bb8a8984eabfa1fbd25f7abc5d70c2a93a62d7739ec0bf378d"
     },
     {
       "path": "js/diagnostics/diagnosticContract.js",
@@ -161,133 +161,133 @@
       {
         "source": "js/diagnostics/bootstrapCollector.js",
         "startLine": 501,
-        "endLine": 923,
+        "endLine": 965,
         "sourceStartLine": 1
       },
       {
         "source": "js/diagnostics/diagnosticReporter.js",
-        "startLine": 927,
-        "endLine": 933,
+        "startLine": 969,
+        "endLine": 975,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/environmentDetector.js",
-        "startLine": 937,
-        "endLine": 977,
+        "startLine": 979,
+        "endLine": 1019,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/logger.js",
-        "startLine": 981,
-        "endLine": 1275,
+        "startLine": 1023,
+        "endLine": 1317,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/practiceRecordSource.js",
-        "startLine": 1279,
-        "endLine": 1477,
+        "startLine": 1321,
+        "endLine": 1519,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataCatalog.js",
-        "startLine": 1481,
-        "endLine": 1738,
+        "startLine": 1523,
+        "endLine": 1780,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 1742,
-        "endLine": 3029,
+        "startLine": 1784,
+        "endLine": 3071,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 3033,
-        "endLine": 3392,
+        "startLine": 3075,
+        "endLine": 3434,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 3396,
-        "endLine": 3563,
+        "startLine": 3438,
+        "endLine": 3605,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 3567,
-        "endLine": 4226,
+        "startLine": 3609,
+        "endLine": 4268,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 4230,
-        "endLine": 4458,
+        "startLine": 4272,
+        "endLine": 4500,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 4462,
-        "endLine": 8184,
+        "startLine": 4504,
+        "endLine": 8226,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/externalBackupService.js",
-        "startLine": 8188,
-        "endLine": 9818,
+        "startLine": 8230,
+        "endLine": 9860,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/siteDataReset.js",
-        "startLine": 9822,
-        "endLine": 10151,
+        "startLine": 9864,
+        "endLine": 10193,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceCore.js",
-        "startLine": 10155,
-        "endLine": 11657,
+        "startLine": 10197,
+        "endLine": 11699,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/resourceCore.js",
-        "startLine": 11661,
-        "endLine": 12313,
+        "startLine": 11703,
+        "endLine": 12355,
         "sourceStartLine": 1
       },
       {
         "source": "assets/generated/reading-exams/manifest.js",
-        "startLine": 12317,
-        "endLine": 15941,
+        "startLine": 12359,
+        "endLine": 15983,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 15945,
-        "endLine": 15982,
+        "startLine": 15987,
+        "endLine": 16024,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 15986,
-        "endLine": 16023,
+        "startLine": 16028,
+        "endLine": 16065,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/state-service.js",
-        "startLine": 16027,
-        "endLine": 16693,
+        "startLine": 16069,
+        "endLine": 16735,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryDiscovery.js",
-        "startLine": 16697,
-        "endLine": 17411,
+        "startLine": 16739,
+        "endLine": 17453,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryManager.js",
-        "startLine": 17415,
-        "endLine": 18343,
+        "startLine": 17457,
+        "endLine": 18385,
         "sourceStartLine": 1
       }
     ],
@@ -1039,7 +1039,7 @@
       {
         "source": "js/diagnostics/bootstrapCollector.js",
         "startLine": 499,
-        "endLine": 921,
+        "endLine": 963,
         "sourceStartLine": 1
       }
     ],
@@ -1053,7 +1053,7 @@
       {
         "source": "js/diagnostics/bootstrapCollector.js",
         "startLine": 507,
-        "endLine": 929,
+        "endLine": 971,
         "sourceStartLine": 1
       }
     ]

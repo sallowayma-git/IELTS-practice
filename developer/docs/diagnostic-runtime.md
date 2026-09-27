@@ -37,9 +37,15 @@ diagnostics.snapshot({ eventId });
 diagnostics.exportText(eventId); // passive, <= 32 KiB including JSON overhead
 ```
 
-The canonical record is the first observation of an identity. Report a caught
-business failure before its console/global propagation. Later generic observations
-cannot overwrite its operation code, resource, cause or notification metadata.
+The canonical record retains the first identity, sequence and timestamp, while a
+more specific observation can enrich its classification. Console observations have
+the lowest priority, followed by generic runtime observations, classified automatic
+failures, and explicitly classified business failures. Equal-priority observations
+keep the first record. A later startup/business boundary can therefore correct an
+earlier console observation; later generic propagation cannot overwrite its
+operation code, resource, cause or notification metadata. Enrichment retains a known
+resource location when the later boundary has none. Reporting a caught business
+failure before console/global propagation still avoids an intermediate generic record.
 Different Error objects remain distinct incidents. Reused Error objects for a new
 attempt require A1's explicit `newOccurrence: true`. Object-linked resource errors
 share identity between the capture-phase listener and the rejected lazy loader.
@@ -48,6 +54,9 @@ Primitive rejections cannot be correlated by object identity.
 There is one sink per page. `append` runs asynchronously in batches of at most 20.
 The memory map is also the delivery queue; pending batches reference its entries.
 At most one batch is in flight, and those entries cannot be evicted until it settles.
+Enriched records are queued again under the same event ID, including previously
+delivered records. A sink must upsert by identity. An in-flight append confirms only
+the revision it received; a newer classification requires its own confirmation.
 Both **200 events** and **256 KiB of serialized event payload** are enforced. Old
 noncritical entries are evicted before critical entries. The currently displayed
 startup incident remains pinned inside the same limits so its reference can still
@@ -93,7 +102,10 @@ errors use filename/line/column evidence, including for optional script declarat
 
 Expected cancellation can be a breadcrumb with `outcome: "cancelled"`, or a report
 with `cancelled: true` to override critical notification. Recognized AbortError
-rejections are noncritical; producers should mark known user cancellation explicitly
+rejections, including native DOMExceptions from aborted fetches, are noncritical.
+The collector captures the platform's name getter and uses its receiver brand check;
+it never invokes a caller-owned name getter to identify native cancellation.
+Producers should mark known user cancellation explicitly
 instead of relying on browser error text or opaque exception details.
 
 AppLogger's existing methods, scopes, configuration and console display behavior
@@ -165,7 +177,8 @@ node scripts/build-bundles.mjs --check
 
 The browser harness uses shipped bundles in a temporary public-assets fixture and
 fresh browser contexts. It exercises missing/invalid bundles, unhandled and caught
-initialization rejection, download, native error visibility and healthy startup
+initialization rejection, AppData's console-first IndexedDB failure, native fetch
+cancellation, download, native error visibility and healthy startup
 under file, HTTP root and HTTP subpath modes. CI runs it and retains the JSON report
 and panel screenshot. It does not modify a user's learning data.
 
