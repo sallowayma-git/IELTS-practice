@@ -15,7 +15,8 @@
         'DATA_EXPORT_FAILED', 'UNEXPECTED_RUNTIME_ERROR'
     ]);
     const CAUSE_CODES = Object.freeze([
-        'BACKEND_UNAVAILABLE', 'QUOTA_EXCEEDED', 'CONFLICT', 'CORRUPT_RECORD', 'VALIDATION'
+        'BACKEND_UNAVAILABLE', 'QUOTA_EXCEEDED', 'CONFLICT', 'CORRUPT_RECORD', 'VALIDATION',
+        'INITIALIZATION_BLOCKED', 'TIMING_FINALIZED', 'TIMING_STALE_WRITER', 'TIMING_STALE_REVISION'
     ]);
     const ERROR_NAMES = [
         'Error', 'AppDataError', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError',
@@ -174,10 +175,11 @@
         return identity;
     }
 
-    function location(value, context) {
+    function location(value, context, browserFrame = false) {
         let text = textInput(value, context).trim().replace(/\)$/, '');
-        // Queries/fragments are never scanned for a project path or source location.
-        text = text.split(/[?#]/, 1)[0].replace(/\\/g, '/');
+        // Browsers append positions after the entire URL, including its query/fragment.
+        // A plain resource URL has no such suffix; never interpret its query as a position.
+        if (!browserFrame) text = text.split(/[?#]/, 1)[0];
         const suffix = /:(\d{1,10})(?::(\d{1,10}))?$/.exec(text);
         let line = null;
         let column = null;
@@ -186,16 +188,19 @@
             column = suffix[2] ? integer(Number(suffix[2]), 1, 2147483647) : null;
             text = text.slice(0, suffix.index);
         }
+        // A query or fragment must never supply an allowlisted project path.
+        text = text.split(/[?#]/, 1)[0].replace(/\\/g, '/');
         const path = PROJECT_PATHS.find((candidate) => text === candidate || text.endsWith(`/${candidate}`));
         return { path: path || 'unknown', line: path ? line : null, column: path ? column : null };
     }
     function frame(value, context) {
         if (typeof value === 'string') {
             let text = textInput(value, context).trim();
-            if (text.includes('(')) text = text.slice(text.lastIndexOf('(') + 1);
-            else if (text.includes('@')) text = text.slice(text.lastIndexOf('@') + 1);
+            const prefix = text.split(/[?#]/, 1)[0];
+            if (prefix.includes('(')) text = text.slice(prefix.lastIndexOf('(') + 1);
+            else if (prefix.includes('@')) text = text.slice(prefix.lastIndexOf('@') + 1);
             else text = text.replace(/^at\s+/, '');
-            return location(text, context);
+            return location(text, context, true);
         }
         const result = location(field(value, 'path', context), context);
         if (result.path !== 'unknown') {
@@ -219,6 +224,10 @@
         }
         return output;
     }
+    function errorCause(value, context) {
+        const cause = field(value, 'cause', context);
+        return cause == null ? field(field(value, 'details', context), 'cause', context) : cause;
+    }
     function errorDetails(value, context, depth = 0, seen = new Set()) {
         const result = { name: 'unknown', message: '[redacted]', code: 'unknown', kind: 'unknown', stack: [], cause: null };
         if (!objectLike(value)) {
@@ -231,7 +240,7 @@
         const name = errorName(value, context);
         const message = field(value, 'message', context);
         result.name = choice(name, ERROR_NAMES);
-        result.code = choice(field(value, 'code', context), CAUSE_CODES);
+        result.code = result.name === 'AppDataError' ? choice(field(value, 'code', context), CAUSE_CODES) : 'unknown';
         result.message = choice(message, Object.values(MESSAGES).concat('[redacted]'), '[redacted]');
         if (typeof message === 'string' && message.length > LIMITS.inputStringUnits) context.issues.add('input-truncated');
         if (integer(field(value, 'nodeType', context), 1, 12)) {
@@ -242,8 +251,7 @@
         if (!context.issues.has('accessor-skipped') && !context.issues.has('unreadable')) {
             result.stack = stack(field(value, 'stack', context), context);
         }
-        let cause = field(value, 'cause', context);
-        if (cause == null) cause = field(field(value, 'details', context), 'cause', context);
+        const cause = errorCause(value, context);
         if (cause != null) {
             if (depth < LIMITS.causeDepth) result.cause = errorDetails(cause, context, depth + 1, seen);
             else context.issues.add('causes-truncated');
@@ -368,7 +376,7 @@
                 if (chain.includes(current)) break;
                 chain.push(current);
                 if (!fresh && identities.has(current)) { existing = identities.get(current); break; }
-                current = field(current, 'cause', context);
+                current = errorCause(current, context);
             }
             const identity = existing || freshIdentity();
             // A new occurrence must not steal the identity of a shared underlying cause.
@@ -378,7 +386,7 @@
         function project(input, identity, context, wire) {
             const error = errorDetails(field(input, 'error', context), context);
             const rawResource = field(input, 'resource', context);
-            const resource = frame(wire ? rawResource : field(rawResource, 'url', context), context);
+            const resource = wire ? frame(rawResource, context) : location(field(rawResource, 'url', context), context);
             resource.status = integer(field(rawResource, 'status', context), 100, 599, 'unknown');
             const optional = field(rawResource, 'optional', context);
             resource.optional = typeof optional === 'boolean' ? optional : 'unknown';

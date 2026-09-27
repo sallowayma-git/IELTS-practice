@@ -4,7 +4,8 @@ export type OperationCode = 'APP_BOOT_FAILED' | 'RESOURCE_LOAD_FAILED' | 'PRACTI
     | 'RECOVERY_SAVE_FAILED' | 'PRACTICE_CHANNEL_TIMEOUT' | 'DATA_IMPORT_FAILED'
     | 'DATA_EXPORT_FAILED' | 'UNEXPECTED_RUNTIME_ERROR';
 export type CauseCode = 'BACKEND_UNAVAILABLE' | 'QUOTA_EXCEEDED' | 'CONFLICT'
-    | 'CORRUPT_RECORD' | 'VALIDATION' | 'unknown';
+    | 'CORRUPT_RECORD' | 'VALIDATION' | 'INITIALIZATION_BLOCKED'
+    | 'TIMING_FINALIZED' | 'TIMING_STALE_WRITER' | 'TIMING_STALE_REVISION' | 'unknown';
 export type OperationPersistence = 'committed' | 'not-committed' | 'unconfirmed';
 export type DiagnosticPersistence = 'memory-only' | 'pending' | 'persisted' | 'disabled' | 'failed';
 export type CorrelationKind = 'session' | 'suite' | 'submission' | 'operation';

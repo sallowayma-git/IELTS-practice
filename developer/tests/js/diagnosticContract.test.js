@@ -13,6 +13,13 @@ const source = fs.readFileSync(path.join(root, 'js/diagnostics/diagnosticContrac
 const secret = 'PRIVATE_学习答案_😀_do_not_collect';
 const fixturePath = path.join(root, 'developer/tests/js/fixtures/diagnostic-events.json');
 
+function loadAppDataError() {
+    const context = vm.createContext({});
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8'), context);
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/data/v2/dataKernel.js'), 'utf8'), context);
+    return context.__AppDataV2Internals.AppDataError;
+}
+
 function error(fields = {}) {
     return { name: 'AppDataError', message: secret, code: 'QUOTA_EXCEEDED',
         stack: 'AppDataError: private text\n    at save (file:///C:/Users/private/project/js/data/v2/dataKernel.js:757:12)',
@@ -52,19 +59,21 @@ test('installs in a DOM-free realm without storage, AppData, console, timers, or
 });
 
 test('preserves actual AppDataError cause codes separately from operation codes', () => {
-    const context = vm.createContext({});
-    vm.runInContext(fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8'), context);
-    vm.runInContext(fs.readFileSync(path.join(root, 'js/data/v2/dataKernel.js'), 'utf8'), context);
-    const AppDataError = context.__AppDataV2Internals.AppDataError;
+    const AppDataError = loadAppDataError();
     const normalizer = contract.createNormalizer();
+    // Enumerated from dataKernel.js and appData.js producers, independently of the contract.
+    const producerCodes = ['BACKEND_UNAVAILABLE', 'QUOTA_EXCEEDED', 'CONFLICT', 'CORRUPT_RECORD',
+        'VALIDATION', 'INITIALIZATION_BLOCKED', 'TIMING_FINALIZED', 'TIMING_STALE_WRITER', 'TIMING_STALE_REVISION'];
     for (const code of contract.CODES) {
-        for (const cause of contract.CAUSE_CODES) {
+        for (const cause of producerCodes) {
             const underlying = new AppDataError(cause, secret, { answers: secret });
             const event = normalizer.normalize({ code, error: underlying });
             assert.equal(event.code, code);
             assert.equal(event.causeCode, cause);
+            assert.equal(event.error.code, cause);
             assert.equal(event.error.name, 'AppDataError');
             assert.equal(event.persistence.operation, 'unconfirmed', 'committed=false on AppDataError is not proof');
+            assert.deepEqual(normalizer.sanitizeEvent(JSON.parse(JSON.stringify(event))), event);
             assertSafe(event);
         }
     }
@@ -73,6 +82,29 @@ test('preserves actual AppDataError cause codes separately from operation codes'
     }) });
     assert.equal(wrapped.causeCode, 'CONFLICT');
     assert.equal(wrapped.error.code, 'unknown');
+});
+
+test('recognized cause codes require AppDataError names at every normalization boundary', () => {
+    const AppDataError = loadAppDataError();
+    const normalizer = contract.createNormalizer();
+    for (const unrelated of [Object.assign(new Error(secret), { code: 'CONFLICT' }),
+        Object.assign(new TypeError(secret), { code: 'CONFLICT' }), { code: 'CONFLICT' },
+        { name: 'LibraryError', code: 'CONFLICT' }]) {
+        const plain = normalizer.normalize({ error: unrelated });
+        assert.equal(plain.error.code, 'unknown');
+        assert.equal(plain.causeCode, 'unknown');
+        unrelated.cause = new AppDataError('TIMING_STALE_WRITER', secret);
+        const wrapped = normalizer.normalize({ error: unrelated });
+        assert.equal(wrapped.error.code, 'unknown');
+        assert.equal(wrapped.causeCode, 'TIMING_STALE_WRITER');
+        assert.equal(wrapped.error.cause.code, 'TIMING_STALE_WRITER');
+        const poisoned = JSON.parse(JSON.stringify(wrapped));
+        poisoned.error.code = 'CONFLICT';
+        poisoned.causeCode = 'CONFLICT';
+        assert.deepEqual(normalizer.sanitizeEvent(poisoned), wrapped);
+        assertSafe(wrapped);
+    }
+    assert.equal(normalizer.normalize({ error: new AppDataError(secret, secret) }).causeCode, 'unknown');
 });
 
 test('excludes learning data and arbitrary fields before memory, persistence, relay, and export', async () => {
@@ -142,6 +174,8 @@ test('retains only known project resource paths and safe line/column information
         ['https://private.internal/subpath/js/app.js:20:2?token=secret#private', 'js/app.js', 20, 2],
         ['//private.internal/project/js/app.js', 'js/app.js', null, null],
         ['js/app.js?token=private#fragment', 'js/app.js', null, null],
+        ['js/app.js?token=private:954:9', 'js/app.js', null, null],
+        ['js/app.js#private:954:9', 'js/app.js', null, null],
         ['https://private.internal/unknown?path=js/app.js', 'unknown', null, null],
         ['file:///home/alice/private.txt', 'unknown', null, null],
         [`js/${secret}.js`, 'unknown', null, null],
@@ -159,6 +193,31 @@ test('retains only known project resource paths and safe line/column information
     assert.equal(event.resource.status, 404, 'only explicit observed status is retained');
     assert.equal(event.resource.optional, true);
     assert.equal(normalizer.normalize({ resource: { status: '404' } }).resource.status, 'unknown');
+});
+
+test('browser stacks retain terminal coordinates after version queries and fragments', () => {
+    const normalizer = contract.createNormalizer();
+    const bundle = 'js/bundles/practice-page-enhancer.bundle.js';
+    const inputs = [
+        [`    at save (https://private.internal/subpath/${bundle}?v=build:954:9)`, bundle, 954, 9],
+        [`    at https://private.internal/${bundle}?v=build:954:9`, bundle, 954, 9],
+        [`save@https://private.internal/subpath/${bundle}?v=build:954:9`, bundle, 954, 9],
+        [`@file:///C:/Users/private/project/${bundle}?v=build#private:954:9`, bundle, 954, 9],
+        ['    at save (file:///home/alice/js/app.js?token=private:20)', 'js/app.js', 20, null],
+        ['save@https://private.internal/js/main.js?token=private#private:8:2', 'js/main.js', 8, 2],
+        ['    at save (https://private.internal/unknown?path=js/app.js:954:9)', 'unknown', null, null],
+        ['save@https://private.internal/unknown#js/app.js:954:9', 'unknown', null, null],
+        ['    at save (https://private.internal/unknown?path=(js/app.js:954:9)', 'unknown', null, null],
+        ['save@https://private.internal/unknown?path=@js/app.js:954:9', 'unknown', null, null],
+        ['    at save (https://private.internal/js/app.js?v=build:0:9999999999)', 'js/app.js', null, null]
+    ];
+    for (const [stack, path, line, column] of inputs) {
+        const event = normalizer.normalize({ error: error({ stack, cause: error({ stack }) }) });
+        assert.deepEqual(event.error.stack, [{ path, line, column }], stack);
+        assert.deepEqual(event.error.cause.stack, [{ path, line, column }], stack);
+        assert.deepEqual(normalizer.sanitizeEvent(JSON.parse(JSON.stringify(event))), event);
+        assertSafe(event);
+    }
 });
 
 test('all causes, stacks, and AppDataError details.cause pass through the same privacy boundary', () => {
@@ -197,6 +256,76 @@ test('same propagated Error reuses its ID; independent occurrences keep IDs desp
     assert.notEqual(normalizer.normalize({ error: secret }).eventId, normalizer.normalize({ error: secret }).eventId);
     assert.equal(new Set([...observations, relayed, second].map((event) => event.eventId)).size, 2,
         'notification repetition counts unique identities, not propagation observations');
+});
+
+test('AppDataError details.cause wrappers retain identity in either observation order and across handoff', () => {
+    const AppDataError = loadAppDataError();
+    for (const wrapperFirst of [false, true]) {
+        const windowIdentity = contract.createWindowIdentity();
+        const bootstrap = contract.createNormalizer({ windowIdentity });
+        const runtime = contract.createNormalizer({ windowIdentity });
+        const failure = new Error(secret);
+        const wrapper = new AppDataError('BACKEND_UNAVAILABLE', secret, { cause: failure });
+        const first = bootstrap.normalize({ error: wrapperFirst ? wrapper : failure });
+        const second = runtime.normalize({ error: wrapperFirst ? failure : wrapper });
+        const mixed = runtime.normalize({ error: { cause: new AppDataError('CONFLICT', secret, { cause: wrapper }) } });
+        for (const event of [second, mixed]) {
+            assert.equal(event.eventId, first.eventId);
+            assert.equal(event.timestamp, first.timestamp);
+            assert.equal(event.sequence, first.sequence);
+            assertSafe(event);
+        }
+        const independent = runtime.normalize({ error: new AppDataError('BACKEND_UNAVAILABLE', secret, { cause: new Error(secret) }) });
+        assert.notEqual(independent.eventId, first.eventId);
+        const retry = runtime.normalize({ error: wrapper, newOccurrence: true });
+        assert.notEqual(retry.eventId, first.eventId);
+        assert.equal(runtime.normalize({ error: wrapper }).eventId, retry.eventId);
+        assert.equal(runtime.normalize({ error: failure }).eventId, first.eventId, 'retry does not rebind a shared cause');
+    }
+});
+
+test('cause identity uses the same precedence, cycle limit, and depth limit as error details', () => {
+    const normalizer = contract.createNormalizer();
+    const direct = error();
+    const fallback = error();
+    const directEvent = normalizer.normalize({ error: direct });
+    const fallbackEvent = normalizer.normalize({ error: fallback });
+    const wrapper = error({ cause: direct, details: { cause: fallback } });
+    const event = normalizer.normalize({ error: wrapper });
+    assert.equal(event.eventId, directEvent.eventId);
+    assert.equal(normalizer.normalize({ error: fallback }).eventId, fallbackEvent.eventId);
+    assert.equal(normalizer.normalize({ error: { cause: null, details: { cause: fallback } } }).eventId, fallbackEvent.eventId);
+    const primitive = normalizer.normalize({ error: { cause: false, details: { cause: fallback } } });
+    assert.notEqual(primitive.eventId, fallbackEvent.eventId);
+    assert.equal(primitive.error.cause.kind, 'boolean');
+    const cyclic = error({ details: {} });
+    cyclic.details.cause = cyclic;
+    const cycle = normalizer.normalize({ error: cyclic });
+    assert.ok(cycle.collection.issues.includes('cause-cycle'));
+    assert.equal(normalizer.normalize({ error: cyclic }).eventId, cycle.eventId);
+    const leaf = error();
+    let nested = leaf;
+    for (let depth = 0; depth < 4; depth += 1) nested = { details: { cause: nested } };
+    const bounded = normalizer.normalize({ error: nested });
+    assert.ok(bounded.collection.issues.includes('causes-truncated'));
+    assert.notEqual(normalizer.normalize({ error: leaf }).eventId, bounded.eventId);
+    [event, primitive, cycle, bounded].forEach(assertSafe);
+});
+
+test('details.cause identity traversal skips accessors and contains throwing descriptors', () => {
+    const normalizer = contract.createNormalizer();
+    let getterCalls = 0;
+    const accessor = { get cause() { getterCalls += 1; throw new Error(secret); } };
+    const detailsAccessor = { get details() { getterCalls += 1; throw new Error(secret); } };
+    const hostile = new Proxy({}, { getOwnPropertyDescriptor() { throw new Error(secret); } });
+    for (const [failure, marker] of [[{ details: accessor }, 'accessor-skipped'],
+        [detailsAccessor, 'accessor-skipped'], [{ details: hostile }, 'unreadable']]) {
+        const event = normalizer.normalize({ error: failure });
+        assert.ok(event.collection.issues.includes(marker));
+        assert.equal(normalizer.normalize({ error: failure }).eventId, event.eventId);
+        assertSafe(event);
+    }
+    assert.equal(getterCalls, 0);
 });
 
 test('aliases stay consistent within a shared scope and survive a validated cross-window handoff', () => {

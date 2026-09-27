@@ -64,7 +64,7 @@ must retain the originating window, sequence, timestamp and event ID.
 | `eventId`, `windowId`, `sequence`, `timestamp` | Generated window nonce plus monotonically increasing sequence; timestamp is milliseconds since the epoch. Identity and timestamp survive observations and relay. |
 | `fingerprint` | Non-cryptographic grouping hash of sanitized operation/cause, module/action, error type, first frame and resource. Never an identity or authorization credential. |
 | `code` | One of the eight operation codes in #194; invalid/missing codes become `UNEXPECTED_RUNTIME_ERROR`. |
-| `causeCode` | Nearest recognized AppDataError code in the root/cause chain: `BACKEND_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CONFLICT`, `CORRUPT_RECORD`, `VALIDATION`, or `unknown`. |
+| `causeCode` | Nearest recognized AppDataError code in the root/cause chain: `BACKEND_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CONFLICT`, `CORRUPT_RECORD`, `VALIDATION`, `INITIALIZATION_BLOCKED`, `TIMING_FINALIZED`, `TIMING_STALE_WRITER`, `TIMING_STALE_REVISION`, or `unknown`. Codes on other error names are ignored, including during stored/relayed record revalidation. |
 | `error` | Allowlisted type/code, fixed catalog message or `[redacted]`, safe source locations and bounded causes. No `details` payload. `details.cause` alone is inspected for existing AppDataError compatibility. |
 | `module`, `action` | Code-owned enums in the declarations. Extend them centrally for a new semantic boundary; never use learner text as a label. |
 | `resource` | Exact known project path or `unknown`; safe positive line/column; explicitly supplied HTTP status or `unknown`; declared optionality or `unknown`. Opaque errors never imply 404. |
@@ -94,6 +94,11 @@ absolute filesystem prefixes, unknown filenames, query strings and fragments
 cannot survive. Both main and nested cause stacks receive the same treatment.
 All hosts are omitted, including public hosts. Extend the code-owned path list
 when needed; do not populate it from a URL, import, console argument or payload.
+Browser stacks retain terminal line/column positions appended after the complete
+script URL, including version queries and fragments. The URL is then stripped of
+its query/fragment before path validation. Plain resource URLs never derive a
+position from query/fragment text, and neither input can derive a project path
+from that text.
 
 Limits apply before buffering:
 
@@ -124,8 +129,10 @@ with `normalization-failed`, without logging or recursively reporting the failur
 The normalizer associates Error-like object references with event identities in a
 WeakMap. The same exception observed at business, console, global and storage
 boundaries retains its event ID. A wrapper linked through an already observed
-`cause` can reuse that ID. Independent Error objects get independent IDs even
-when their fingerprints match. Primitive rejection values have no object
+`cause` or `details.cause` can reuse that ID. Both identity and error normalization
+prefer a non-null `cause`, otherwise inspect `details.cause`, with the same depth
+and cycle bounds and without invoking accessors. Independent Error objects get
+independent IDs even when their fingerprints match. Primitive rejection values have no object
 identity; capture once and pass the normalized event through other boundaries.
 
 Create one `windowIdentity` handle per page lifetime and share it between bootstrap
@@ -206,12 +213,15 @@ node --test developer/tests/js/diagnosticContract.test.js
 node scripts/build-bundles.mjs --check
 ```
 
-The tests exercise actual AppDataError objects, hostile/cyclic/oversized fixtures,
-all exclusion categories, resource uncertainty, UTF-8 accounting, 20-frame and
-3-cause budgets, identity versus repetition, alias scope/capacity/disposal,
-frozen memory values, persistence/relay/export revalidation, and shipped bundles.
+The tests exercise actual AppDataError objects with independently enumerated
+producer codes, exclusion of codes on unrelated errors, Chromium/Firefox stack
+positions with versioned URLs, hostile/cyclic/oversized fixtures, all exclusion
+categories, resource uncertainty, UTF-8 accounting, 20-frame and 3-cause budgets,
+identity through native and AppDataError cause links versus repetition, alias
+scope/capacity/disposal, frozen memory values, persistence/relay/export
+revalidation, and shipped bundles.
 
-Validation on 2026-09-27: 17 focused diagnostic tests passed; the complete
-JavaScript unit/regression command passed 403 tests; Python unit discovery passed
+Validation on 2026-09-27: 22 focused diagnostic tests passed; the complete
+JavaScript unit/regression command passed 408 tests; Python unit discovery passed
 32 tests; `build-bundles.mjs --check` confirmed all 14 shipped outputs are current.
 Integrated collector/store/UI/channel release qualification remains assigned to C4.
