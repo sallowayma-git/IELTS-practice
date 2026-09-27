@@ -132,6 +132,35 @@ def _extract_script_srcs_from_html(source: str) -> List[str]:
         if match.group(1).strip()
     ]
 
+def _strip_verified_diagnostic_bootstrap(source: str) -> str:
+    """Allow only the generated A2 payload plus a data-only installation hook."""
+    payload_path = REPO_ROOT / 'assets/generated/diagnostics/bootstrap-inline.js'
+    if not payload_path.exists():
+        return source
+    payload = payload_path.read_text(encoding='utf-8').strip()
+    block = re.compile(r'<!-- DIAGNOSTIC_BOOTSTRAP_START -->\s*<script>\s*([\s\S]*?)</script>\s*<!-- DIAGNOSTIC_BOOTSTRAP_END -->')
+
+    def replace(match: re.Match) -> str:
+        body = match.group(1).strip()
+        if not body.startswith(payload):
+            return match.group(0)
+        hook = re.fullmatch(r'globalThis\.AppDiagnosticBootstrap\.install\((\{[^\n]*\})\);', body[len(payload):].strip())
+        if not hook:
+            return match.group(0)
+        try:
+            options = json.loads(hook.group(1))
+        except ValueError:
+            return match.group(0)
+        if set(options) != {'context', 'requiredResources', 'optionalResources'} or options['context'] != 'main':
+            return match.group(0)
+        if not all(isinstance(options[key], list) and all(isinstance(item, str) for item in options[key])
+                   for key in ('requiredResources', 'optionalResources')):
+            return match.group(0)
+        return '\n' * match.group(0).count('\n')
+
+    return block.sub(replace, source, count=1)
+
+
 def _extract_css_hrefs_from_html(source: str) -> List[str]:
     return [
         match.group(1).strip()
@@ -527,6 +556,7 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
     html_candidates = sorted(path for path in candidate_paths if path.suffix.lower() == ".html")
     for html_path in html_candidates:
         source = html_path.read_text(encoding="utf-8", errors="replace")
+        source = _strip_verified_diagnostic_bootstrap(source)
         for marker in forbidden_html_scripts:
             if marker in source:
                 html_errors.append(f"{html_path.relative_to(REPO_ROOT)}:{marker}")
@@ -568,7 +598,7 @@ def _check_optional_listening_assets_not_bundled(build_script: Path, core_bundle
         bundle_forbidden = [
             "global.__LISTENING_EXAM_MANIFEST__ = ",
             "global.listeningExamIndex = [",
-            "assets/generated/listening-exams/listening-index.compat.js",
+            "/* ===== assets/generated/listening-exams/listening-index.compat.js ===== */",
         ]
         bundle_hits = sorted([item for item in bundle_forbidden if item in core_source])
 
@@ -652,6 +682,7 @@ def _check_index_no_inline_runtime(index_path: Path) -> Tuple[bool, dict]:
     except Exception as exc:  # pragma: no cover - defensive guard
         return False, {"error": f"读取失败：{exc}"}
 
+    source = _strip_verified_diagnostic_bootstrap(source)
     inline_event_hits = [
         {"line": line_no, "text": line.strip()}
         for line_no, line in enumerate(source.splitlines(), start=1)

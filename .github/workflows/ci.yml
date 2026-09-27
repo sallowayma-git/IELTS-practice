@@ -47,6 +47,10 @@ jobs:
       - name: Run JavaScript unit and regression tests
         run: npm test --prefix developer
 
+      - name: Verify diagnostic startup faults in three hosting modes
+        timeout-minutes: 3
+        run: node developer/tests/e2e/diagnostic_startup.node.js
+
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
 

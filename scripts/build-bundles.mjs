@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDiagnosticArtifacts } from './diagnostic-build.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,8 @@ const bundles = {
     ],
     'js/bundles/core-foundation.bundle.js': [
         'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/diagnosticReporter.js',
         'js/utils/environmentDetector.js',
         'js/utils/logger.js',
         'js/data/practiceRecordSource.js',
@@ -539,9 +542,13 @@ function renderBundle(outputPath, inputs) {
 assertNoNewSymbolConflicts(bundles);
 
 const staleOutputs = [];
-for (const [outputPath, inputs] of Object.entries(bundles)) {
+const artifacts = buildDiagnosticArtifacts({
+    renderedBundles: Object.fromEntries(Object.entries(bundles).map(([output, inputs]) => [output, renderBundle(output, inputs)])),
+    bundleInputs: bundles,
+    readSource
+});
+for (const [outputPath, expected] of Object.entries({ ...artifacts.bundles, ...artifacts.generated })) {
     const absoluteOutput = path.join(root, outputPath);
-    const expected = renderBundle(outputPath, inputs);
     if (checkOnly) {
         const actual = fs.existsSync(absoluteOutput) ? fs.readFileSync(absoluteOutput, 'utf8') : null;
         if (actual !== expected) staleOutputs.push(outputPath);
@@ -549,7 +556,7 @@ for (const [outputPath, inputs] of Object.entries(bundles)) {
     }
     fs.mkdirSync(path.dirname(absoluteOutput), { recursive: true });
     fs.writeFileSync(absoluteOutput, expected, 'utf8');
-    console.log(`${outputPath}: ${inputs.length} files`);
+    console.log(`${outputPath}: generated`);
 }
 
 const expectedOutputs = new Set(Object.keys(bundles).map((outputPath) => outputPath.replace(/\\/g, '/')));

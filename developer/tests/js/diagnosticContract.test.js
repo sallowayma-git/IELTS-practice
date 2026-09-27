@@ -486,12 +486,18 @@ test('published sanitized fixtures are usable unchanged by runtime, store, UI, e
     }
 });
 
-test('every shipped execution context includes the same contract without enabling a collector', () => {
+test('every shipped execution context includes the shared contract and reviewed resource paths', () => {
     for (const name of ['core-foundation', 'reading-page', 'practice-page-enhancer', 'listening-record-bridge', 'listening-wrapper']) {
         const bundle = fs.readFileSync(path.join(root, `js/bundles/${name}.bundle.js`), 'utf8');
         const start = bundle.indexOf('/* ===== js/diagnostics/diagnosticContract.js ===== */');
         assert.ok(start >= 0, name);
         assert.ok(bundle.indexOf('function installDiagnosticContract', start) > start, name);
     }
-    for (const resource of contract.PROJECT_PATHS) assert.ok(fs.existsSync(path.join(root, resource)), resource);
+    const optionalDistributionResources = new Set([
+        'assets/generated/listening-exams/manifest.js',
+        'assets/generated/listening-exams/listening-index.compat.js'
+    ]);
+    for (const resource of contract.PROJECT_PATHS) {
+        assert.ok(optionalDistributionResources.has(resource) || fs.existsSync(path.join(root, resource)), resource);
+    }
 });

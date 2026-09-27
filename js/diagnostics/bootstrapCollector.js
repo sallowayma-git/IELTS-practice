@@ -1,0 +1,423 @@
+(function defineDiagnosticBootstrap(global) {
+    'use strict';
+    if (global.AppDiagnosticBootstrap) return;
+
+    let installed;
+    const MAX_EVENTS = 200;
+    const MAX_BYTES = 256 * 1024;
+    const TEXT_BYTES = 32 * 1024;
+    const BATCH_SIZE = 20;
+
+    // Never invoke accessors on caller-owned inputs (including console arguments).
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; }
+        catch (_) { return undefined; }
+    }
+    function method(value, key) {
+        try {
+            for (let depth = 0; value && depth < 4; depth += 1, value = Object.getPrototypeOf(value)) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (descriptor) return typeof descriptor.value === 'function' ? descriptor.value : null;
+            }
+        } catch (_) { }
+        return null;
+    }
+
+    function install(options = {}) {
+        if (installed) return installed;
+        const contract = global.AppDiagnosticContract;
+        const build = global.AppDiagnosticBuild || {};
+        const context = field(options, 'context');
+        let runMode = 'unknown';
+        try {
+            runMode = global.location.protocol === 'file:' ? 'file'
+                : /^https?:$/.test(global.location.protocol)
+                    ? (global.location.pathname.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
+        } catch (_) { }
+        const correlationScope = contract.createCorrelationScope();
+        const normalizer = contract.createNormalizer({
+            windowIdentity: contract.createWindowIdentity(), correlationScope,
+            appVersion: field(build, 'appVersion'), buildId: field(build, 'buildId'),
+            environment: { context, runMode }
+        });
+        // Utility normalization must not allocate incident sequence numbers.
+        const utility = contract.createNormalizer({ correlationScope });
+        const records = new Map();
+        const resources = new Map();
+        const elements = new WeakMap();
+        const resourceErrors = new WeakMap();
+        const crumbs = [];
+        let bytes = 0;
+        let dropped = 0;
+        let startup = true;
+        let reporting = false;
+        let internal = false;
+        let handedOff = false;
+        let sink = null;
+        let append;
+        let memoryOnlyConsole = false;
+        let sinkFailed = false;
+        let persistence = 'memory-only';
+        let pending = null;
+        let startupId = null;
+        let panel = null;
+        let fallbackFailed = false;
+        let waitingForBody = false;
+
+        function trim() {
+            while (records.size > MAX_EVENTS || bytes > MAX_BYTES) {
+                const available = Array.from(records.values()).filter((item) => !item.inFlight && item.event.eventId !== startupId);
+                const victim = available.find((item) => item.event.notification.kind === 'none') || available[0];
+                if (!victim) break;
+                records.delete(victim.event.eventId);
+                bytes -= victim.bytes;
+                dropped += 1;
+            }
+        }
+
+        function schedule() {
+            if (!sink || sinkFailed || pending) return;
+            if (!Array.from(records.values()).some((item) => !item.delivered)) return;
+            persistence = 'pending';
+            // The only queue is the bounded records map. Batches share its immutable values.
+            pending = Promise.resolve().then(async function drain() {
+                const batch = Array.from(records.values()).filter((item) => !item.delivered).slice(0, BATCH_SIZE);
+                if (!batch.length) return;
+                batch.forEach((item) => { item.inFlight = true; updatePersistence(item, 'pending'); });
+                try {
+                    internal = true;
+                    let result;
+                    try { result = append.call(sink, Object.freeze(batch.map((item) => item.event))); }
+                    finally { internal = false; }
+                    result = await result;
+                    const status = field(result, 'persistence');
+                    if (!['persisted', 'disabled', 'memory-only'].includes(status)) throw new Error('Invalid sink result');
+                    persistence = status;
+                    batch.forEach((item) => { item.delivered = true; updatePersistence(item, status); });
+                } catch (_) {
+                    sinkFailed = true;
+                    persistence = 'failed';
+                    batch.forEach((item) => updatePersistence(item, 'failed'));
+                } finally {
+                    batch.forEach((item) => { item.inFlight = false; });
+                    trim();
+                }
+            }).catch(function isolateDrain() {
+                sinkFailed = true;
+                persistence = 'failed';
+            }).then(function drained() {
+                pending = null;
+                if (!sinkFailed && Array.from(records.values()).some((item) => !item.delivered)) schedule();
+            });
+        }
+
+        function updatePersistence(item, status) {
+            const event = normalizer.sanitizeEvent({ ...item.event,
+                persistence: { ...item.event.persistence, diagnostics: status } });
+            bytes -= item.bytes;
+            item.event = event;
+            item.bytes = contract.utf8Bytes(JSON.stringify(event));
+            bytes += item.bytes;
+        }
+
+        function persistenceStatus() {
+            if (sinkFailed) return 'failed';
+            if (pending) return 'pending';
+            if (Array.from(records.values()).some((item) => item.event.persistence.diagnostics === 'memory-only')) return 'memory-only';
+            return persistence;
+        }
+
+        function report(input) {
+            // Reentrant internal calls get a reference without buffering or scheduling work.
+            if (reporting || internal) return normalizer.normalize(null).eventId;
+            reporting = true;
+            let event;
+            try {
+                const safeInput = {};
+                ['code', 'module', 'action', 'error', 'newOccurrence', 'resource', 'correlation',
+                    'correlationAliases', 'persistence', 'notification', 'retry', 'collection', 'breadcrumbs']
+                    .forEach((key) => { safeInput[key] = field(input, key); });
+                // Only sink confirmation can promote diagnostic persistence.
+                safeInput.persistence = { operation: field(safeInput.persistence, 'operation'), diagnostics: 'memory-only' };
+                if (safeInput.breadcrumbs === undefined) {
+                    safeInput.breadcrumbs = crumbs.map((item) => ({ ...item, correlationAliases: item.correlation }));
+                }
+                if (safeInput.collection === undefined) {
+                    safeInput.collection = { source: 'business', coverage: 'partial', aggregation: 'local' };
+                }
+                event = normalizer.normalize(safeInput);
+                // Explicit cancellation is an observation, never a startup incident.
+                if (field(input, 'cancelled') === true) {
+                    event = normalizer.sanitizeEvent({ ...event, notification: { kind: 'none' } });
+                }
+                if (!records.has(event.eventId)) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, delivered: memoryOnlyConsole, inFlight: false });
+                    bytes += size;
+                    trim();
+                    schedule();
+                }
+                if (event.notification.kind === 'startup') showStartup(event.eventId);
+                return event.eventId;
+            } catch (_) {
+                // The contract's fail-closed normalizer supplies a synchronous identity.
+                return event ? event.eventId : normalizer.normalize(null).eventId;
+            } finally { reporting = false; }
+        }
+
+        function breadcrumb(input) {
+            try {
+                const normalized = utility.normalize({ breadcrumbs: [input] }).breadcrumbs[0];
+                if (normalized) {
+                    crumbs.push(normalized);
+                    if (crumbs.length > contract.LIMITS.breadcrumbs) crumbs.shift();
+                }
+            } catch (_) { }
+        }
+
+        function declareResource(target, declaration = {}) {
+            try {
+                const resource = utility.normalize({ resource: {
+                    url: typeof target === 'string' ? target : field(declaration, 'url'),
+                    optional: field(declaration, 'optional')
+                } }).resource;
+                if (typeof target === 'object' && target) {
+                    elements.set(target, resource);
+                    resourceErrors.delete(target); // A new declared load is a new attempt.
+                }
+                // Unknown or user-owned URLs never become registry keys.
+                if (resource.path !== 'unknown') resources.set(resource.path, resource);
+            } catch (_) { }
+        }
+
+        function resourceFailure(target, error) {
+            try {
+                let identity = resourceErrors.get(target);
+                if (!identity) {
+                    // This registry retains only a code-owned identity token, never a raw
+                    // browser/loader payload, private URL, or local stack from the caller.
+                    identity = new Error(contract.MESSAGES.RESOURCE_LOAD_FAILED);
+                    identity.stack = '';
+                    resourceErrors.set(target, identity);
+                }
+                const url = target.src || target.href;
+                const location = utility.normalize({ resource: { url } }).resource;
+                const declaration = elements.get(target) || resources.get(location.path);
+                const optional = declaration ? declaration.optional : 'unknown';
+                report({ code: 'RESOURCE_LOAD_FAILED', module: 'bootstrap', action: 'load-resource',
+                    error: identity, resource: { url, optional },
+                    notification: { kind: optional === false ? (startup ? 'startup' : 'persistent') : 'none' },
+                    collection: { source: 'resource', coverage: 'partial', aggregation: 'local' } });
+                return identity;
+            } catch (_) { return error; }
+        }
+
+        function globalFailure(error, location) {
+            const checked = utility.normalize({ error, resource: location });
+            const declaration = resources.get(checked.resource.path);
+            const expected = checked.error.name === 'AbortError' || (declaration && declaration.optional === true);
+            return report({ code: startup && !expected ? 'APP_BOOT_FAILED' : 'UNEXPECTED_RUNTIME_ERROR',
+                module: startup ? 'bootstrap' : 'main', action: startup ? 'initialize' : 'report', error,
+                resource: { ...location, optional: declaration ? declaration.optional : undefined },
+                notification: { kind: startup && !expected ? 'startup' : 'none' },
+                collection: { source: handedOff ? 'global' : 'bootstrap', coverage: 'partial', aggregation: 'local' } });
+        }
+
+        function captureError(event) {
+            if (internal) return;
+            try {
+                if (event.target && event.target !== global && (event.target.src || event.target.href)) {
+                    resourceFailure(event.target);
+                } else {
+                    globalFailure(event.error || event, { url: event.filename, line: event.lineno, column: event.colno });
+                }
+            } catch (_) { }
+            // Do not preventDefault, return true, or echo the browser's exception to console.
+        }
+
+        function captureRejection(event) {
+            if (internal) return;
+            try { globalFailure(event.reason); } catch (_) { }
+        }
+
+        function getIncident(eventId) { return records.get(eventId)?.event || null; }
+
+        function snapshot(query = {}) {
+            const id = field(query, 'eventId');
+            const requested = field(query, 'limit');
+            const limit = Number.isSafeInteger(requested) ? Math.max(0, Math.min(MAX_EVENTS, requested)) : MAX_EVENTS;
+            const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
+            const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
+            return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
+                truncated: dropped > 0 || matching.length > events.length });
+        }
+
+        function exportText(eventId = startupId) {
+            try {
+                const current = snapshot();
+                const chosen = current.events.find((event) => event.eventId === eventId);
+                const ordered = current.events.filter((event) => event !== chosen).reverse();
+                if (chosen) ordered.unshift(chosen);
+                const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
+                    truncated: current.truncated, notice: 'Local diagnostics; not an answer backup.', events: [] };
+                for (const event of ordered) {
+                    output.events.push(event);
+                    if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
+                        output.events.pop();
+                        output.truncated = true;
+                        break;
+                    }
+                }
+                return JSON.stringify(output);
+            } catch (_) { return 'Local diagnostic export unavailable. No practice data was changed.'; }
+        }
+
+        function showStartup(eventId) {
+            startupId = eventId;
+            if (fallbackFailed) return;
+            try {
+                const doc = global.document;
+                if (!doc || !doc.body) {
+                    if (doc && !waitingForBody) {
+                        waitingForBody = true;
+                        doc.addEventListener('DOMContentLoaded', function renderWhenReady() {
+                            waitingForBody = false;
+                            showStartup(startupId);
+                        }, { once: true });
+                    }
+                    return;
+                }
+                internal = true;
+                if (!panel) {
+                    const root = doc.createElement('section');
+                    root.id = 'diagnostic-startup-failure';
+                    root.setAttribute('role', 'alert');
+                    root.style.cssText = 'position:fixed;inset:16px 16px auto;z-index:2147483647;max-height:85vh;overflow:auto;padding:20px;background:#fff;color:#17202a;border:2px solid #a11;border-radius:8px;font:16px/1.5 system-ui;white-space:normal;';
+                    const heading = doc.createElement('h2');
+                    heading.textContent = '应用启动失败';
+                    const explanation = doc.createElement('p');
+                    explanation.textContent = '请保留此页面，并导出诊断信息以便排查。诊断信息不包含答案，也不是练习备份。';
+                    const reference = doc.createElement('p');
+                    const button = doc.createElement('button');
+                    button.type = 'button';
+                    button.textContent = '导出诊断';
+                    const details = doc.createElement('details');
+                    const summary = doc.createElement('summary');
+                    summary.textContent = '查看或复制诊断文本';
+                    const text = doc.createElement('textarea');
+                    text.readOnly = true;
+                    text.rows = 8;
+                    text.style.cssText = 'display:block;width:100%;color:#17202a;background:#fff;font:12px monospace;';
+                    text.setAttribute('aria-label', '诊断文本');
+                    details.appendChild(summary);
+                    details.appendChild(text);
+                    details.addEventListener('toggle', function refreshText() {
+                        try { if (details.open) text.value = exportText(); } catch (_) { }
+                    });
+                    button.addEventListener('click', function download() {
+                        let url;
+                        try {
+                            text.value = exportText();
+                            url = global.URL.createObjectURL(new global.Blob([text.value], { type: 'text/plain;charset=utf-8' }));
+                            const link = doc.createElement('a');
+                            link.href = url;
+                            link.download = 'ielts-startup-diagnostics.txt';
+                            root.appendChild(link);
+                            try { link.click(); } finally { root.removeChild(link); }
+                        } catch (_) {
+                            try { details.open = true; text.value = exportText(); text.focus(); text.select(); } catch (_) { }
+                        } finally {
+                            if (url) {
+                                try { global.setTimeout(function release() { try { global.URL.revokeObjectURL(url); } catch (_) { } }, 1000); }
+                                catch (_) { try { global.URL.revokeObjectURL(url); } catch (_) { } }
+                            }
+                        }
+                    });
+                    [heading, explanation, reference, button, details].forEach((node) => root.appendChild(node));
+                    doc.body.appendChild(root);
+                    panel = { root, reference, text, details };
+                }
+                panel.reference.textContent = '事件编号：' + startupId;
+                if (panel.details.open) panel.text.value = exportText();
+            } catch (_) {
+                fallbackFailed = true;
+                // One plain-text attempt, with no logger, reporter call, timers, or retry loop.
+                try {
+                    const pre = global.document.createElement('pre');
+                    pre.textContent = '应用启动失败。事件编号：' + startupId + '\n' + exportText();
+                    global.document.body.appendChild(pre);
+                } catch (_) { }
+            } finally { internal = false; }
+        }
+
+        function startupFailed(error) {
+            if (internal) return normalizer.normalize(null).eventId;
+            const id = report({ code: 'APP_BOOT_FAILED', module: 'main', action: 'initialize', error,
+                notification: { kind: 'startup' } });
+            showStartup(id);
+            return id;
+        }
+
+        function captureConsole(level, args) {
+            if (level !== 'error' || internal) return;
+            try {
+                let error;
+                const length = Math.min(field(args, 'length') || 0, 20);
+                for (let i = 0; i < length; i += 1) {
+                    const value = field(args, String(i));
+                    if (value && typeof value === 'object') {
+                        // Select an Error only; never retain arbitrary argument objects or text.
+                        const checked = utility.normalize({ error: value }).error;
+                        if (checked.name !== 'unknown' && checked.kind === 'object') { error = value; break; }
+                    }
+                }
+                // Keep console evidence during asynchronous delivery in memory, but do not
+                // feed a sink's own asynchronous logging back into that sink indefinitely.
+                memoryOnlyConsole = !!pending;
+                report({ code: 'UNEXPECTED_RUNTIME_ERROR', module: 'logger', action: 'report', error,
+                    collection: { source: 'console', coverage: 'partial', aggregation: 'local' } });
+            } catch (_) { } finally { memoryOnlyConsole = false; }
+        }
+
+        installed = Object.freeze({
+            report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
+            startupFailed, captureConsole,
+            markReady() { startup = false; },
+            handoff() { handedOff = true; return installed; },
+            attachSink(next) {
+                if (sink === next) return;
+                // A single sink owns delivery; replacing it requires an explicit future lifecycle API.
+                const candidate = method(next, 'append');
+                if (sink || !candidate) return;
+                sink = next;
+                append = candidate;
+                persistence = 'memory-only';
+                schedule();
+            },
+            retrySink() {
+                if (!sinkFailed || pending) return;
+                sinkFailed = false;
+                persistence = 'pending';
+                schedule();
+            },
+            async flush() {
+                schedule();
+                while (pending) await pending;
+                return Object.freeze({ persistence: persistenceStatus() });
+            },
+            status() {
+                return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed });
+            }
+        });
+        for (const key of ['requiredResources', 'optionalResources']) {
+            const list = field(options, key);
+            if (Array.isArray(list)) list.slice(0, 100).forEach((url) => declareResource(url, { optional: key === 'optionalResources' }));
+        }
+        if (typeof global.addEventListener === 'function') {
+            global.addEventListener('error', captureError, true);
+            global.addEventListener('unhandledrejection', captureRejection);
+        }
+        return installed;
+    }
+    global.AppDiagnosticBootstrap = Object.freeze({ install });
+})(typeof globalThis !== 'undefined' ? globalThis : this);

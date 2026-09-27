@@ -2877,69 +2877,30 @@ class ExamSystemApp {
                 this.isInitialized = true;
                 this.showLoading(false);
                 this.showUserMessage('系统初始化完成', 'success');
+                try { window.AppDiagnostics?.markReady(); } catch (_) { }
             } catch (error) {
-                this.showLoading(false);
                 this.handleInitializationError(error);
+                try { this.showLoading(false); } catch (_) { }
             }
         },
         handleInitializationError(error) {
-            console.error('[App] 系统初始化失败:', error);
-            let userMessage = '系统初始化失败';
-            let canRecover = false;
-            if (error.message.includes('组件加载超时')) {
-                userMessage = '系统组件加载超时，请刷新页面重试';
-                canRecover = true;
-            } else if (error.message.includes('依赖')) {
-                userMessage = '系统依赖检查失败，请确保所有必需文件已正确加载';
-            } else if (error.message.includes('网络')) {
-                userMessage = '网络连接问题，请检查网络连接后重试';
-                canRecover = true;
-            } else {
-                userMessage = '系统遇到未知错误，请联系技术支持';
-            }
-            this.showUserMessage(userMessage, 'error');
-            if (window.handleError) {
-                window.handleError(error, 'App Initialization');
-            }
-            this.showFallbackUI(canRecover);
+            // Capture before console or optional UI so the operation keeps its identity.
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
+            try { console.error('[App] 系统初始化失败:', error); } catch (_) { }
+            try { this.showUserMessage('系统初始化失败，请导出诊断信息以便排查。', 'error'); } catch (_) { }
+            try { this.showFallbackUI(false); } catch (_) { }
         },
         setupGlobalErrorHandling() {
-            window.addEventListener('unhandledrejection', (event) => {
-                console.error('[App] 未处理的Promise拒绝:', event.reason);
-                this.handleGlobalError(event.reason, 'Promise拒绝');
-                event.preventDefault();
-            });
-            window.addEventListener('error', (event) => {
-                console.error('[App] JavaScript错误:', event.error);
-                this.handleGlobalError(event.error, 'JavaScript错误');
-            });
+            // The inline collector owns listeners for the entire page lifetime.
+            try { window.AppDiagnosticBootstrap?.install({ context: 'main' }); } catch (_) { }
         },
-        handleGlobalError(error, context) {
+        handleGlobalError(error) {
             try {
-                const normalizedError = error && typeof error === 'object'
-                    ? error
-                    : { message: String(error || 'Unknown error'), stack: undefined };
-                if (!this.globalErrors) {
-                    this.globalErrors = [];
-                }
-                this.globalErrors.push({
-                    error: normalizedError.message || String(error),
-                    context,
-                    timestamp: Date.now(),
-                    stack: normalizedError.stack
+                return window.AppDiagnostics?.report({
+                    code: 'UNEXPECTED_RUNTIME_ERROR', module: 'main', action: 'report', error,
+                    collection: { source: 'global', coverage: 'partial', aggregation: 'local' }
                 });
-                if (this.globalErrors.length > 100) {
-                    this.globalErrors = this.globalErrors.slice(-50);
-                }
-                const recentErrors = this.globalErrors.filter((e) => Date.now() - e.timestamp < 60000);
-                if (recentErrors.length > 5) {
-                    this.showUserMessage('系统遇到多个错误，建议刷新页面', 'warning');
-                } else if (!normalizedError.message || !normalizedError.message.includes('Script error')) {
-                    this.showUserMessage('系统遇到错误，但仍可继续使用', 'warning');
-                }
-            } catch (handlingError) {
-                console.error('[App] 错误处理失败:', handlingError);
-            }
+            } catch (_) { }
         },
         updateLoadingMessage(message) {
             const loadingText = document.querySelector('.loading-text');
@@ -3369,17 +3330,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.app = new ExamSystemApp();
                     Promise.resolve(window.app.initialize())
                         .catch((error) => {
+                            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
                             console.error('[App] 初始化失败:', error);
                         })
                         .finally(() => {
                             signalAppCoreReady();
                         });
                 } catch (e) {
+                    try { window.AppDiagnostics?.startupFailed(e); } catch (_) { }
                     console.error('[App] 初始化失败:', e);
                     signalAppCoreReady();
                 }
             })();
         } catch (error) {
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
             console.error('Failed to start application:', error);
             if (window.handleError) {
                 window.handleError(error, 'Application Startup');

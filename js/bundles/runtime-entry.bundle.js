@@ -671,7 +671,8 @@
         setTimeout(hideOverlay, 480);
     }
 
-    function fail(errorMessage) {
+    function fail(errorMessage, error) {
+        try { global.AppDiagnostics?.startupFailed(error || new Error('Application startup failed.')); } catch (_) { }
         setStage(errorMessage || '启动异常，已启用降级模式', 100);
         setTimeout(hideOverlay, 800);
     }
@@ -865,7 +866,7 @@
         return providedScripts.has(normalized) || scriptStatus[url] === 'loaded' || scriptStatus[normalized] === 'loaded';
     }
 
-    function loadScript(url) {
+    function loadScript(url, options) {
         if (!url) {
             return Promise.resolve();
         }
@@ -889,6 +890,11 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
+            var diagnostics = global.AppDiagnostics;
+            // Declare before setting src or inserting the element: capture listeners run first.
+            try {
+                if (diagnostics) diagnostics.declareResource(script, { url: url, optional: !!(options && options.optional) });
+            } catch (_) { }
             script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
@@ -897,12 +903,16 @@
             };
             script.onerror = function handleError(error) {
                 scriptStatus[url] = null;
+                var failure = new Error('加载脚本失败: ' + url);
+                try {
+                    if (diagnostics) failure = diagnostics.resourceFailure(script, failure) || failure;
+                } catch (_) { }
                 try {
                     if (script.parentNode) {
                         script.parentNode.removeChild(script);
                     }
                 } catch (_) { }
-                reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
+                reject(failure);
             };
             document.head.appendChild(script);
         });
@@ -911,7 +921,7 @@
     }
 
     function loadOptionalScript(url, label) {
-        return loadScript(url).then(function onOptionalLoaded() {
+        return loadScript(url, { optional: true }).then(function onOptionalLoaded() {
             return true;
         }).catch(function onOptionalFailed(error) {
             scriptStatus[url] = null;
@@ -963,7 +973,7 @@
         if (batch.length === 1) {
             return loadScript(batch[0]);
         }
-        return Promise.all(batch.map(loadScript)).then(function () {
+        return Promise.all(batch.map(function (url) { return loadScript(url); })).then(function () {
             return undefined;
         });
     }

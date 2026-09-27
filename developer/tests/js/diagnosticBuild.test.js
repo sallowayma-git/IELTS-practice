@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { buildDiagnosticArtifacts } from '../../../scripts/diagnostic-build.mjs';
+import { read } from './helpers/diagnosticHarness.js';
+
+function inputs() {
+    const manifest = JSON.parse(read('assets/generated/diagnostics/build-manifest.json'));
+    const bundleInputs = Object.fromEntries(Object.entries(manifest.mappings)
+        .filter(([path]) => path.startsWith('js/bundles/')).map(([path, entries]) => [path, entries.map((entry) => entry.source)]));
+    const renderedBundles = Object.fromEntries(Object.keys(bundleInputs).map((path) =>
+        [path, read(path).replace(/^globalThis.AppDiagnosticBuild = [^\n]+\n/, '')]));
+    const readSource = (path) => read(path).replace(/\r\n?/g, '\n').split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, '')).join('\n').replace(/\s*$/, '\n');
+    return { renderedBundles, bundleInputs, readSource };
+}
+
+test('identical build inputs reproduce the ID, inline hook, stamped bundles and private-path-free mapping', () => {
+    const options = inputs();
+    const first = buildDiagnosticArtifacts(options);
+    const second = buildDiagnosticArtifacts(options);
+    assert.deepEqual(first, second);
+    for (const [file, content] of Object.entries({ ...first.generated, ...first.bundles })) assert.equal(read(file), content, file);
+    const manifest = JSON.parse(first.generated['assets/generated/diagnostics/build-manifest.json']);
+    for (const input of manifest.inputs) {
+        assert.match(input.sha256, /^[a-f0-9]{64}$/);
+        assert.doesNotMatch(input.path, /^(?:[a-z]:|\/|file:|https?:)/i);
+    }
+    for (const [bundle, entries] of Object.entries(manifest.mappings)) {
+        const lines = (first.bundles[bundle] || first.generated[bundle]).split('\n');
+        for (const entry of entries) {
+            const original = options.readSource(entry.source).trimEnd().split('\n');
+            assert.equal(lines[entry.startLine - 1], original[0], `${bundle} -> ${entry.source}:1`);
+            assert.equal(lines[entry.endLine - 1], original.at(-1), `${bundle} -> ${entry.source}:end`);
+            assert.equal(entry.sourceStartLine, 1);
+            assert.doesNotMatch(entry.source, /^(?:[a-z]:|\/|file:|https?:)/i);
+        }
+    }
+});
+
+test('relevant emitted code, entry, style and build recipe changes alter the build ID', () => {
+    const options = inputs();
+    const first = buildDiagnosticArtifacts(options).metadata.buildId;
+    const bundlePath = 'js/bundles/core-foundation.bundle.js';
+    const changed = { ...options.renderedBundles, [bundlePath]: options.renderedBundles[bundlePath] + '\n// changed artifact\n' };
+    assert.notEqual(buildDiagnosticArtifacts({ ...options, renderedBundles: changed }).metadata.buildId, first);
+    for (const source of ['index.html', 'css/main.css', 'scripts/diagnostic-build.mjs']) {
+        assert.notEqual(buildDiagnosticArtifacts({ ...options, readSource(file) {
+            return options.readSource(file) + (file === source ? '\n/* relevant change */\n' : '');
+        } }).metadata.buildId, first, source);
+    }
+    const regenerated = buildDiagnosticArtifacts(options);
+    assert.equal(buildDiagnosticArtifacts({ ...options, readSource(file) {
+        return file === 'index.html' ? regenerated.generated[file] : options.readSource(file);
+    } }).metadata.buildId, first, 'embedding the generated block cannot feed identity back into itself');
+});
+
+test('generated hook supports each practice context before its external dependencies', () => {
+    const generated = buildDiagnosticArtifacts(inputs());
+    const payload = generated.generated['assets/generated/diagnostics/bootstrap-inline.js'];
+    assert.ok(payload.includes('function defineDiagnosticBootstrap'));
+    assert.equal(/<\/script/i.test(payload), false);
+    assert.equal(payload.includes('AppDiagnosticBootstrap.install('), false, 'entry generator chooses context and resources');
+});

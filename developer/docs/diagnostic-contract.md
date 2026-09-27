@@ -1,5 +1,10 @@
 # Diagnostic event contract (A1 / #196)
 
+A2 runtime installation, resource declarations, asynchronous sink behavior and
+generated build hooks are documented in [diagnostic-runtime.md](diagnostic-runtime.md).
+The additive A2 fields are explicit resource `line`/`column`, the `cancelled`
+breadcrumb outcome, and reporter-only `cancelled: true` notification suppression.
+
 This is schema version **1**, implementing the shared contract from #194 and #195.
 `js/diagnostics/diagnosticContract.js` installs `globalThis.AppDiagnosticContract`
 and exports the same API in CommonJS. It has no DOM, AppData, storage, timer,

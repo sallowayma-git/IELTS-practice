@@ -54,6 +54,14 @@
         'index.html', 'js/app.js', 'js/main.js', 'js/utils/logger.js',
         'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
         'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js',
+        'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
+        'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
+        'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',
+        'assets/images/favicon.svg', 'assets/images/logo.svg',
+        'assets/generated/listening-exams/manifest.js',
+        'assets/generated/listening-exams/listening-index.compat.js',
+        'assets/generated/reading-exams/manifest.js',
         'assets/generated/reading-exams/reading-practice-unified.html',
         'assets/generated/listening-exams/listening-practice-unified.html',
         ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
@@ -308,7 +316,7 @@
             output.push({
                 action, module: choice(field(item, 'module', context), MODULES),
                 timestamp: integer(field(item, 'timestamp', context), 0, 8640000000000000),
-                outcome: choice(field(item, 'outcome', context), ['started', 'succeeded', 'failed', 'unconfirmed']),
+                outcome: choice(field(item, 'outcome', context), ['started', 'succeeded', 'failed', 'unconfirmed', 'cancelled']),
                 correlation: correlations(!wire && field(item, 'correlationAliases', context) !== undefined
                     ? field(item, 'correlationAliases', context) : field(item, 'correlation', context),
                     scope, context, wire || field(item, 'correlationAliases', context) !== undefined)
@@ -390,6 +398,10 @@
             const error = errorDetails(field(input, 'error', context), context);
             const rawResource = field(input, 'resource', context);
             const resource = wire ? frame(rawResource, context) : location(field(rawResource, 'url', context), context);
+            if (!wire && resource.path !== 'unknown') {
+                resource.line = integer(field(rawResource, 'line', context), 1, 2147483647, resource.line);
+                resource.column = integer(field(rawResource, 'column', context), 1, 2147483647, resource.column);
+            }
             resource.status = integer(field(rawResource, 'status', context), 100, 599, 'unknown');
             const optional = field(rawResource, 'optional', context);
             resource.optional = typeof optional === 'boolean' ? optional : 'unknown';

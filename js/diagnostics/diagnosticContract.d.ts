@@ -47,7 +47,7 @@ export interface Breadcrumb {
     readonly action: Action;
     readonly module: ModuleName;
     readonly timestamp: number | null;
-    readonly outcome: 'started' | 'succeeded' | 'failed' | 'unconfirmed' | 'unknown';
+    readonly outcome: 'started' | 'succeeded' | 'failed' | 'unconfirmed' | 'cancelled' | 'unknown';
     readonly correlation: Correlation;
 }
 export interface CollectionStatus {
@@ -98,7 +98,9 @@ export interface DiagnosticInput {
     readonly error?: unknown;
     /** Use when a reused Error object represents another operation attempt. */
     readonly newOccurrence?: boolean;
-    readonly resource?: { readonly url?: unknown; readonly status?: number; readonly optional?: boolean };
+    readonly resource?: { readonly url?: unknown; readonly line?: number; readonly column?: number; readonly status?: number; readonly optional?: boolean };
+    /** Explicit user cancellation suppresses critical notification in the reporter. */
+    readonly cancelled?: boolean;
     readonly correlation?: Partial<Record<CorrelationKind, string>>;
     /** Aliases received through the validated session/channel handshake. */
     readonly correlationAliases?: Correlation;
