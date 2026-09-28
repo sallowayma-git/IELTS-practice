@@ -18,7 +18,7 @@ export function harness({ early = false, install = true } = {}) {
             setAttribute(key, value) { this.attributes[key] = value; },
             getAttribute(key) { return this.attributes[key] || this[key] || null; },
             addEventListener(type, fn) { events.set(type, fn); },
-            emit(type) { events.get(type)?.({ target: this }); },
+            emit(type) { return events.get(type)?.({ target: this }); },
             focus() { this.focused = true; }, select() { this.selected = true; },
             click() { this.emit('click'); }
         };

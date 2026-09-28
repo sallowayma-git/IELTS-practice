@@ -387,9 +387,23 @@
                     details.appendChild(summary);
                     details.appendChild(text);
                     details.addEventListener('toggle', function refreshText() {
-                        try { if (details.open) text.value = exportText(); } catch (_) { }
+                        try { if (details.open) text.value = panel?.exportedText || exportText(); } catch (_) { }
                     });
-                    button.addEventListener('click', function download() {
+                    button.addEventListener('click', async function download() {
+                        // The full exporter is optional. Missing/broken bundles retain
+                        // the bootstrap's independent synchronous text path below.
+                        const exporter = global.AppDiagnosticExport;
+                        const richDownload = method(exporter, 'download');
+                        if (richDownload) {
+                            try {
+                                const result = await richDownload.call(exporter, { eventId: startupId }, { textTarget: text });
+                                if (result?.status === 'download-started') return;
+                                if (result?.status === 'text-fallback') {
+                                    panel.exportedText = result.text;
+                                    details.open = true; text.focus(); text.select(); return;
+                                }
+                            } catch (_) { }
+                        }
                         let url;
                         try {
                             text.value = exportText();
@@ -413,6 +427,7 @@
                     panel = { root, reference, text, details };
                 }
                 panel.reference.textContent = '事件编号：' + startupId;
+                panel.exportedText = null;
                 if (panel.details.open) panel.text.value = exportText();
             } catch (_) {
                 fallbackFailed = true;
@@ -511,5 +526,5 @@
         }
         return installed;
     }
-    global.AppDiagnosticBootstrap = Object.freeze({ install });
+    global.AppDiagnosticBootstrap = Object.freeze({ install, current: () => installed || null });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

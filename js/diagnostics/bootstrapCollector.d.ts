@@ -29,6 +29,8 @@ export interface Collector extends DiagnosticReporter {
         handedOff: boolean; fallbackFailed: boolean; storage?: DiagnosticStorageStatus }>;
 }
 export function install(options?: BootstrapOptions): Collector;
+/** Observe an existing collector without installing listeners or starting collection. */
+export function current(): Collector | null;
 
 declare global {
     const AppDiagnostics: Collector;

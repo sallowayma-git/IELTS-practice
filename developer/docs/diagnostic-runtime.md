@@ -129,7 +129,10 @@ the text fallback. Early head failures wait for DOMContentLoaded once. Rendering
 failures get one plain-text attempt, then stop; `exportText()` remains available
 without a DOM. The panel never reloads, repairs, clears storage or replays a write.
 Large exports keep the selected incident first and set `truncated` when bounded.
-This is a minimal early-evidence export, not B1's complete report/settings workflow.
+This remains the independent minimal early-evidence export. When the
+[B1 exporter](diagnostic-export.md) is loaded, the button requests a richer JSON
+snapshot for the selected incident, including retained history and status. An
+absent/broken exporter leaves this minimal path intact. General settings UI is B3.
 
 The reusable generated payload is
 `assets/generated/diagnostics/bootstrap-inline.js`. C2/C3 entry generators should

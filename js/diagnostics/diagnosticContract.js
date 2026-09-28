@@ -52,7 +52,7 @@
         'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
         'js/diagnostics/diagnosticContract.js',
         'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js',
-        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js',
         'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
         'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
         'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',

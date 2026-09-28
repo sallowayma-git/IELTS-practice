@@ -51,6 +51,10 @@ jobs:
         timeout-minutes: 3
         run: node developer/tests/e2e/diagnostic_startup.node.js
 
+      - name: Verify passive diagnostic export in three hosting modes
+        timeout-minutes: 2
+        run: node developer/tests/e2e/diagnostic_export.node.js
+
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
 

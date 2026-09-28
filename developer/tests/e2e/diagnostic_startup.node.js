@@ -183,7 +183,17 @@ try {
                 if (fault === 'parse' || fault === 'rejection') assert.ok(nativeErrors.length > 0, 'native browser output is preserved');
                 const download = page.waitForEvent('download');
                 await panel.getByRole('button', { name: '导出诊断' }).click();
-                assert.equal((await download).suggestedFilename(), 'ielts-startup-diagnostics.txt');
+                const richerExport = await page.evaluate(() => typeof window.AppDiagnosticExport?.download === 'function');
+                const downloaded = await download;
+                assert.equal(downloaded.suggestedFilename(), richerExport ? 'ielts-diagnostics.json' : 'ielts-startup-diagnostics.txt');
+                if (richerExport) {
+                    const chunks = [];
+                    for await (const chunk of await downloaded.createReadStream()) chunks.push(chunk);
+                    const report = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                    assert.equal(report.selection.found, true);
+                    assert.ok(report.events.some((event) => event.eventId === report.selection.eventId));
+                    assert.equal(report.collection.aggregation, 'incomplete');
+                }
                 if (mode === 'http' && fault === 'missing') await page.screenshot({ path: path.join(reports, 'diagnostic-startup-panel.png') });
                 results.push({ mode, fault, events: evidence.events.length, code, nativeErrors: nativeErrors.length, passed: true });
             }
