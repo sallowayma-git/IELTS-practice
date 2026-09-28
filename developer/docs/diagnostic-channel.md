@@ -99,6 +99,8 @@ failures terminate that connection's attempts. They do not discard reporter
 memory, invoke a business error handler, reload a page, replay a save or close a
 window. Queues retain sanitized events only. All status output consists of fixed
 enums and bounded counts, never raw origins, sessions, credentials or exceptions.
+Capacity eviction leaves the immutable in-flight batch eligible for bounded
+retries and its ACK; remaining queued events continue on the same connection.
 
 ## Identity, lifecycle, and receipts
 
@@ -110,6 +112,10 @@ stores and unavailable lifecycle coordination. The store's synchronous status
 read rechecks its durable barrier even when broadcast/storage notifications were
 missed. Store append independently rechecks the generation under the lifecycle
 lock, fencing clears between receipt and asynchronous persistence.
+After a successful full reset, fresh unsuspended stores can relay evidence in the
+current generation while retaining the `reset-complete` tombstone. Pre-reset
+instances and instances opened during reset remain suspended; old generations
+and events at or before the cutoff remain ineligible.
 
 Accepted events use `collection.source = 'relay'`, with notifications and retry
 actions disabled. They do not notify reporter subscribers, so another child hook
@@ -155,6 +161,8 @@ native postMessage and IndexedDB in isolated contexts under file, HTTP root and
 HTTP subpath hosting. It exercises trusted delivery/shared-store deduplication,
 wrong windows/tokens/sessions/origins, parent closure/reload, replacement and
 delayed-message rejection after clear/opt-out/full reset. CI runs this harness.
+It also covers fresh connections after a full reset and host reload, and queue
+overflow while an immutable batch awaits its ACK.
 All affected shipped bundles and diagnostic bootstrap/build mappings are rebuilt.
 Full reading/listening runtime installation remains with C2/C3; integrated release
 qualification remains with C4 (#206).

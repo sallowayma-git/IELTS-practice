@@ -267,7 +267,7 @@
                 let event = normalizer.sanitizeEvent(input);
                 const state = storageStatus();
                 if (!event || event.windowId === normalizer.windowId || !state || !state.enabled || state.suspended
-                    || state.phase !== 'active' || state.failure === 'COORDINATION_UNAVAILABLE'
+                    || !['active', 'reset-complete'].includes(state.phase) || state.failure === 'COORDINATION_UNAVAILABLE'
                     || event.persistence.generation === 'unknown' || event.persistence.generation !== state.generation
                     || event.timestamp <= state.cutoff) return false;
                 const originPriority = classificationPriority(event);

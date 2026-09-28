@@ -471,8 +471,15 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
                 return True  # SiteDataReset's existing backup preparation contract.
         if relative == "developer/tests/e2e/diagnostic_channel.node.js" and label == "raw-storage":
             # Isolated channel fixtures delete the dedicated diagnostic database
-            # during reset and inspect database names to detect stale recreation.
-            return "indexedDB" in token
+            # and clear storage during full reset, then check for stale recreation.
+            return "indexedDB" in token or (
+                token == "localStorage." and line_text.strip() == "localStorage.clear();"
+                and in_region(
+                    source, offset,
+                    "} else if (scenario === 'reset-fresh-connection') {",
+                    "} else if (scenario === 'queue-overflow-pending-ack') {",
+                )
+            )
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "raw-storage":
             return True
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "old-global" and "ExternalBackupService" in token:

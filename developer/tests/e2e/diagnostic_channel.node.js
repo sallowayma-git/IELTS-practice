@@ -57,6 +57,22 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const foreignServer = http.createServer(server.listeners('request')[0]);
 await new Promise(resolve => foreignServer.listen(0, '127.0.0.1', resolve));
 const foreignOrigin = `http://127.0.0.1:${foreignServer.address().port}`;
+async function openPractice(host, url) {
+    const popupPromise = host.waitForEvent('popup');
+    await host.evaluate(url => { window.practiceWindow = window.open(url + '?child', ''); }, url);
+    const child = await popupPromise;
+    await child.waitForLoadState('load'); await child.evaluate(() => AppDiagnosticStore.ready);
+    return child;
+}
+async function connectPractice(host, child) {
+    const auth = await host.evaluate(() => registerPractice());
+    await child.evaluate(auth => {
+        window.transport = AppDiagnosticChannel.createChild();
+        transport.connect({ ...auth, window: opener });
+    }, auth);
+    await child.waitForFunction(() => transport.status().connection === 'connected', null, { timeout: 5000 });
+    return auth;
+}
 const results = [];
 let browser;
 try {
@@ -65,21 +81,13 @@ try {
         ['http', origin + '/developer/tests/e2e/reports/diagnostic-channel-fixture.html'],
         ['subpath', origin + '/app/developer/tests/e2e/reports/diagnostic-channel-fixture.html']]) {
         for (const scenario of ['relay-and-shared-store', 'untrusted-input', 'parent-closed', 'parent-reloaded',
-            'clear-delayed', 'opt-out-delayed', 'reset-delayed', 'replacement']) {
+            'clear-delayed', 'opt-out-delayed', 'reset-delayed', 'reset-fresh-connection', 'queue-overflow-pending-ack', 'replacement']) {
             const context = await browser.newContext();
             const host = await context.newPage();
             try {
                 await host.goto(url); await host.evaluate(() => AppDiagnosticStore.ready);
-                const popupPromise = host.waitForEvent('popup');
-                await host.evaluate(url => { window.practiceWindow = window.open(url + '?child', ''); }, url);
-                const child = await popupPromise;
-                await child.waitForLoadState('load'); await child.evaluate(() => AppDiagnosticStore.ready);
-                const auth = await host.evaluate(() => registerPractice());
-                await child.evaluate(auth => {
-                    window.transport = AppDiagnosticChannel.createChild();
-                    transport.connect({ ...auth, window: opener });
-                }, auth);
-                await child.waitForFunction(() => transport.status().connection === 'connected', null, { timeout: 5000 }).catch(async error => {
+                const child = await openPractice(host, url);
+                const auth = await connectPractice(host, child).catch(async error => {
                     console.error(JSON.stringify({ mode, scenario,
                         host: await host.evaluate(() => ({ storage: AppDiagnosticStore.status(), channels: app._diagnosticChannels?.size,
                             calls: businessCalls, events: AppDiagnostics.snapshot().events })),
@@ -107,6 +115,70 @@ try {
                     assert.ok(output.report.events.some(event => event.eventId === id));
                     assert.equal(output.report.collection.aggregation, 'incomplete');
                     assert.ok(['disconnected', 'unavailable'].includes(output.report.transport.connection));
+                } else if (scenario === 'reset-fresh-connection') {
+                    await host.evaluate(() => { window.holdEvents = true; });
+                    const oldId = await child.evaluate(() => captureFailure());
+                    await host.waitForFunction(() => !!window.held);
+                    const oldEnvelope = await host.evaluate(() => window.held);
+                    await host.evaluate(() => AppDiagnosticStore.withFullReset(async () => {
+                        await new Promise((resolve, reject) => {
+                            const request = indexedDB.deleteDatabase(AppDiagnosticStorage.DATABASE_NAME);
+                            request.onsuccess = resolve; request.onerror = () => reject(request.error);
+                        });
+                        localStorage.clear();
+                        return { success: true };
+                    }));
+                    const completed = await host.evaluate(() => AppDiagnosticStore.status());
+                    assert.equal(completed.phase, 'reset-complete'); assert.equal(completed.suspended, true);
+                    await child.waitForFunction(() => AppDiagnosticStore.status().suspended);
+                    assert.equal(await child.evaluate(() => transport.status().connection), 'incomplete');
+                    await host.reload(); await host.evaluate(() => AppDiagnosticStore.ready);
+                    const fresh = await openPractice(host, url);
+                    await connectPractice(host, fresh);
+                    for (const page of [host, fresh]) {
+                        const state = await page.evaluate(() => AppDiagnosticStore.status());
+                        assert.equal(state.phase, 'reset-complete'); assert.equal(state.generation, completed.generation);
+                        assert.equal(state.enabled, true); assert.equal(state.suspended, false); assert.equal(state.failure, null);
+                    }
+                    await child.evaluate(data => opener.postMessage(data, '*'), oldEnvelope);
+                    const id = await fresh.evaluate(() => captureFailure());
+                    await host.waitForFunction(id => !!AppDiagnostics.getIncident(id), id);
+                    await fresh.waitForFunction(() => transport.status().pendingEvents === 0);
+                    await fresh.evaluate(() => AppDiagnostics.flush()); await host.evaluate(() => AppDiagnostics.flush());
+                    const result = await host.evaluate(async ({ id, oldId }) => ({
+                        event: AppDiagnostics.getIncident(id), oldEvent: AppDiagnostics.getIncident(oldId),
+                        persisted: (await AppDiagnosticStore.snapshot()).events, calls: businessCalls,
+                        state: app.examWindows.get('fixture-exam').pendingSubmission
+                    }), { id, oldId });
+                    assert.equal(result.event.persistence.generation, completed.generation);
+                    assert.equal(result.oldEvent, null); assert.equal(result.calls, 0); assert.equal(result.state, 'unchanged');
+                    assert.ok(result.persisted.some(event => event.eventId === id));
+                    assert.ok(!result.persisted.some(event => event.eventId === oldId));
+                    assert.equal(await child.evaluate(() => AppDiagnosticStore.status().suspended), true);
+                } else if (scenario === 'queue-overflow-pending-ack') {
+                    await host.evaluate(() => { window.holdEvents = true; });
+                    const first = await child.evaluate(() => captureFailure());
+                    await host.waitForFunction(() => !!window.held);
+                    const envelope = await host.evaluate(() => window.held);
+                    const burst = await child.evaluate(() => {
+                        let last;
+                        for (let i = 0; i < 210; i++) last = captureFailure();
+                        return { last, status: transport.status() };
+                    });
+                    assert.ok(burst.status.dropped > 0); assert.ok(burst.status.pendingEvents < 200);
+                    assert.ok(burst.status.pendingBytes <= 256 * 1024);
+                    await host.evaluate(() => { window.holdEvents = false; });
+                    await child.evaluate(data => opener.postMessage(data, '*'), envelope);
+                    await host.waitForFunction(id => !!AppDiagnostics.getIncident(id), first);
+                    await child.waitForFunction(() => transport.status().pendingEvents === 0, null, { timeout: 25000 });
+                    assert.equal(await child.evaluate(() => transport.status().connection), 'connected');
+                    assert.ok(await host.evaluate(id => !!AppDiagnostics.getIncident(id), burst.last));
+                    const later = await child.evaluate(() => captureFailure());
+                    await host.waitForFunction(id => !!AppDiagnostics.getIncident(id), later);
+                    await child.waitForFunction(() => transport.status().pendingEvents === 0);
+                    const result = await host.evaluate(() => ({ calls: businessCalls,
+                        state: app.examWindows.get('fixture-exam').pendingSubmission }));
+                    assert.equal(result.calls, 0); assert.equal(result.state, 'unchanged');
                 } else {
                     await host.evaluate(() => { window.holdEvents = true; });
                     const id = await child.evaluate(() => captureFailure());

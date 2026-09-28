@@ -85,7 +85,8 @@
     function lifecycle(store) {
         try {
             const state = store.status(); // Re-reads the durable barrier even if notifications were missed.
-            return state && state.enabled && !state.suspended && state.phase === 'active'
+            // Fresh stores retain the completed-reset tombstone; older instances remain suspended.
+            return state && state.enabled && !state.suspended && ['active', 'reset-complete'].includes(state.phase)
                 && state.failure !== 'COORDINATION_UNAVAILABLE' && GENERATION.test(state.generation) ? state : null;
         } catch (_) { return null; }
     }
@@ -178,7 +179,8 @@
             for (const [id, item] of queue) {
                 if (!eligible(item.event, current)) { remove(id); dropped += 1; }
             }
-            if (pending && pending.items.some(item => !queue.has(item.event.eventId))) {
+            // Capacity eviction does not invalidate the immutable in-flight batch.
+            if (pending && pending.items.some(item => !eligible(item.event, current))) {
                 stop('incomplete'); // Old acknowledgements cannot settle a later generation.
             }
             return current;
@@ -196,7 +198,7 @@
             later(hello);
         }
         function send() {
-            if (disposed || connection !== 'connected' || !fence()) return;
+            if (disposed || !fence() || connection !== 'connected') return;
             if (!pending) {
                 const items = [];
                 let payload = '[]';

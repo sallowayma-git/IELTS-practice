@@ -5,10 +5,10 @@ import { harness } from './helpers/diagnosticHarness.js';
 
 const generation = 'dg-' + '0'.repeat(32);
 const clone = value => JSON.parse(JSON.stringify(value));
-function makeStore(rows = new Map()) {
+function makeStore(rows = new Map(), initialState = {}) {
     const listeners = new Set();
     const state = { generation, cutoff: -1, enabled: true, suspended: false, phase: 'active', failure: null,
-        persistence: 'persisted', coverage: 'complete' };
+        persistence: 'persisted', coverage: 'complete', ...initialState };
     return { state, rows, status: () => ({ ...state }),
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         barrier(changes) { Object.assign(state, changes); rows.clear(); for (const fn of listeners) fn({ type: 'barrier', status: { ...state } }); },
@@ -36,9 +36,9 @@ function endpoint(store) {
     return { ...h, timers, tick() { const first = timers.entries().next().value; if (!first) return false;
         timers.delete(first[0]); first[1](); return true; } };
 }
-function pair(origin = 'null', shared = false) {
+function pair(origin = 'null', shared = false, initialState = {}) {
     const rows = new Map();
-    const hs = makeStore(rows), cs = makeStore(shared ? rows : new Map());
+    const hs = makeStore(rows, initialState), cs = makeStore(shared ? rows : new Map(), initialState);
     const h = endpoint(hs), c = endpoint(cs), bus = [], sent = [];
     const hostWindow = { closed: false, postMessage(data, targetOrigin) { bus.push({ to: 'host', data: clone(data), targetOrigin }); sent.push(bus.at(-1)); } };
     const childWindow = { closed: false, postMessage(data, targetOrigin) { bus.push({ to: 'child', data: clone(data), targetOrigin }); sent.push(bus.at(-1)); } };
@@ -175,12 +175,80 @@ test('queue event and UTF-8 byte bounds survive unavailable parents and event st
     assert.ok(p.c.collector.snapshot().events.length > 0);
 });
 
+for (const origin of ['null', 'http://localhost:8080', 'https://example.test']) {
+    test(`fresh stores relay current-generation evidence after a completed reset (${origin})`, () => {
+        const currentGeneration = 'dg-' + '3'.repeat(32);
+        const p = pair(origin, false, { phase: 'reset-complete', generation: currentGeneration, cutoff: Date.now() - 1 });
+        const id = p.report();
+        const event = clone(p.c.collector.getIncident(id));
+        assert.equal(p.h.collector.acceptRelayed({ ...event, persistence: { ...event.persistence, generation } }), false);
+        assert.equal(p.h.collector.acceptRelayed({ ...event, timestamp: p.hs.state.cutoff }), false);
+        p.connect(); p.step();
+        assert.equal(p.child.status().connection, 'connected');
+        assert.equal(p.child.status().pendingEvents, 0);
+        assert.equal(p.h.collector.getIncident(id)?.persistence.generation, currentGeneration);
+        assert.equal(p.h.collector.getIncident(id)?.timestamp, event.timestamp);
+        assert.equal(p.hs.state.phase, 'reset-complete', 'recovery preserves the reset tombstone');
+    });
+}
+
+const overflowInputs = [
+    ['ordinary events', { error: null, notification: { kind: 'none' } }],
+    ['large events', { breadcrumbs: Array.from({ length: 50 }, () => ({ module: 'reading', action: 'save', outcome: 'failed' })) }]
+];
+for (const [bound, input] of overflowInputs) {
+    for (const trigger of ['ack', 'retry']) {
+        test(`queue ${bound} eviction preserves an in-flight batch through ${trigger}`, () => {
+            const p = pair(); p.connect();
+            const id = p.report(input); p.c.tick();
+            let last;
+            for (let i = 0; i < 210; i++) last = p.report(input);
+            const queued = p.child.status();
+            assert.ok(queued.dropped > 0, 'the oldest queued event, already in flight, was evicted');
+            assert.ok(queued.pendingBytes <= 256 * 1024);
+            assert.ok(queued.pendingEvents < 200, 'the byte bound caused eviction before the event count limit');
+            if (trigger === 'retry') p.c.tick();
+            p.pump();
+            assert.equal(p.child.status().connection, 'connected');
+            assert.ok(p.h.collector.getIncident(id), 'the immutable in-flight batch still reaches the host');
+            for (let i = 0; i < 30 && p.child.status().pendingEvents; i++) p.step();
+            assert.equal(p.child.status().pendingEvents, 0);
+            assert.equal(p.child.status().pendingBytes, 0);
+            assert.ok(p.h.collector.getIncident(last));
+            const fresh = p.report(); p.step();
+            assert.ok(p.h.collector.getIncident(fresh), 'later events use the same healthy connection');
+        });
+    }
+}
+
+for (const changes of [{ generation: 'dg-' + '1'.repeat(32) }, { enabled: false }, { suspended: true, phase: 'reset-complete' },
+    { phase: 'resetting' }, { cutoff: 8640000000000000 }, { failure: 'COORDINATION_UNAVAILABLE' }]) {
+    for (const trigger of ['ack', 'retry']) {
+        test(`evicted in-flight events remain fenced on ${trigger} at ${JSON.stringify(changes)}`, () => {
+            const p = pair(); p.connect(); p.report(); p.c.tick();
+            for (let i = 0; i < 210; i++) p.report();
+            assert.ok(p.child.status().dropped > 0);
+            // Miss the notification and retain newer evidence: the pending payload
+            // must be checked against lifecycle state independently of the queue.
+            Object.assign(p.cs.state, changes);
+            p.report();
+            if (trigger === 'retry') p.c.tick();
+            p.pump();
+            for (let i = 0; i < 5; i++) p.c.tick();
+            assert.equal(p.child.status().connection, 'incomplete');
+            assert.equal(p.sent.filter(x => x.data.kind === 'events').length, 1);
+        });
+    }
+}
+
 for (const changes of [{ generation: 'dg-' + '1'.repeat(32) }, { enabled: false }, { suspended: true, phase: 'resetting' },
+    { suspended: true, phase: 'reset-complete' }, { phase: 'resetting' },
     { cutoff: 8640000000000000 }, { failure: 'COORDINATION_UNAVAILABLE' }]) {
     test(`receiver fences delayed events at lifecycle boundary ${JSON.stringify(changes)}`, () => {
         const p = pair(); p.connect(); const old = clone(eventMessage(p)); p.bus.length = 0;
         // Deliberately miss the notification: status() must still read current state.
         Object.assign(p.hs.state, changes);
+        assert.equal(p.h.collector.acceptRelayed(JSON.parse(old.payload)[0]), false);
         p.deliver(old);
         assert.equal(p.h.collector.snapshot().events.length, 0);
         assert.equal(p.bus.length, 0);
