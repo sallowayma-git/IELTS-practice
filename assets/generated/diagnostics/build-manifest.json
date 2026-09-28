@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:b4cacecc3280711cada84d665cfbfd6d1b281baaaec045b2da75cbe65b62ec2f",
+  "buildId": "sha256:25b42aa993886431c9d090eaf89a6cc8c7bf8bcccc24b946a71b1af04204fbe8",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "identity": "sha256 of sorted path/content-hash pairs; normalized unstamped bundles, bootstrap sources, entry skeleton, styles, vendor, images and build recipes",
   "inputs": [
@@ -99,7 +99,7 @@
     },
     {
       "path": "js/bundles/ui-shell.bundle.js",
-      "sha256": "d453a1f91ad41ef8d90f9c52b104aa26340828464687688d6377a23c3a066a68"
+      "sha256": "3c53ebdd16abf022d69dc22677cc046bad19fbe829bafdd71bf14c2d7acb951b"
     },
     {
       "path": "js/diagnostics/bootstrapCollector.js",
@@ -331,55 +331,55 @@
       {
         "source": "js/presentation/incident-center.js",
         "startLine": 964,
-        "endLine": 1535,
+        "endLine": 1536,
         "sourceStartLine": 1
       },
       {
         "source": "js/presentation/message-center.js",
-        "startLine": 1539,
-        "endLine": 1684,
+        "startLine": 1540,
+        "endLine": 1685,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/diagnosticSettingsPanel.js",
-        "startLine": 1688,
-        "endLine": 1940,
+        "startLine": 1689,
+        "endLine": 1972,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/practiceTimerPreferences.js",
-        "startLine": 1944,
-        "endLine": 2032,
+        "startLine": 1976,
+        "endLine": 2064,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/practiceSettingsPanel.js",
-        "startLine": 2036,
-        "endLine": 2178,
+        "startLine": 2068,
+        "endLine": 2210,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/libraryManagerPanel.js",
-        "startLine": 2182,
-        "endLine": 2346,
+        "startLine": 2214,
+        "endLine": 2378,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/main-entry.js",
-        "startLine": 2350,
-        "endLine": 4314,
+        "startLine": 2382,
+        "endLine": 4346,
         "sourceStartLine": 1
       },
       {
         "source": "js/presentation/indexInteractions.js",
-        "startLine": 4318,
-        "endLine": 5108,
+        "startLine": 4350,
+        "endLine": 5140,
         "sourceStartLine": 1
       },
       {
         "source": "js/presentation/emojiIconizer.js",
-        "startLine": 5112,
-        "endLine": 5410,
+        "startLine": 5144,
+        "endLine": 5442,
         "sourceStartLine": 1
       }
     ],

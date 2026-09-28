@@ -1435,8 +1435,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 let snapshot;
                 try { snapshot = await global.AppDiagnosticExport.snapshot(); } catch (_) { snapshot = this.reporter?.snapshot(); }
                 if (this.dialog !== dialog) return;
-                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean).reverse();
-                info.textContent = '保留 ' + events.length + ' 条记录。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean)
+                    .sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+                info.textContent = '保留 ' + events.length + ' 条记录，按记录时间排序，跨窗口时钟可能不同。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
                 // Paginate the bounded export snapshot; DOM size stays small even with 2,000 events.
                 let offset = 0;
                 const previous = button('上一页', () => { offset = Math.max(0, offset - 20); renderPage(); });
@@ -1731,6 +1732,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         ui.persistence.setAttribute('aria-busy', String(busy));
         ui.persistence.disabled = busy || !status || status.suspended;
         ui.clear.disabled = busy || !status || status.suspended;
+        ui.retry.disabled = busy || !status?.enabled || status.suspended || typeof global.AppDiagnosticStore?.retry !== 'function';
         ui.detailed.disabled = busy || !mode || mode.coordination === 'unavailable';
         ui.detailed.textContent = mode?.active ? '关闭详细诊断' : '开启详细诊断（15 分钟）';
         const remaining = Math.ceil((mode?.remainingMs || 0) / 1000);
@@ -1779,7 +1781,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     async function read(query) {
         try {
             const report = await global.AppDiagnosticExport.snapshot(query);
-            return { events: clean(report.events), partial: report.issues?.length > 0
+            return { events: clean(report.events), partial: report.issues?.some((issue) => issue !== 'incident-not-retained')
                 || Object.values(report.sources || {}).some((source) => ['failed', 'timed-out', 'unavailable'].includes(source.state))
                 || ['memory-only', 'failed', 'disabled'].includes(report.storage?.persistence), truncated: report.truncated };
         } catch (_) {
@@ -1791,16 +1793,31 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     async function refresh() {
         if (!built) return;
         const version = ++readVersion;
+        const selected = selection;
+        const selectedVersion = lookupVersion;
         ui.historyStatus.textContent = '正在读取诊断历史…';
         const result = await read({ limit: 2000 });
         if (version !== readVersion) return;
-        events = result.events.reverse();
+        events = result.events.sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
         offset = Math.min(offset, Math.max(0, Math.floor((events.length - 1) / 20) * 20));
-        ui.historyStatus.textContent = (result.partial ? '诊断历史未能完整加载；以下是当前可用的记录，可刷新重试或直接导出。' : '最近事件与当前页面上下文。')
+        ui.historyStatus.textContent = (result.partial ? '诊断历史未能完整加载；以下是当前可用的记录，可重试诊断存储或直接导出。' : '最近事件与当前页面上下文。')
+            + ' 按记录时间排序，跨窗口时钟可能不同。'
             + ' 历史受保留期限和容量限制，跨窗口汇总可能不完整。' + (result.truncated ? ' 结果已截断。' : '');
         renderPage();
-        if (selection) selectEvent(events.find((event) => event.eventId === selection.eventId));
         renderStatus();
+        const stillSelected = () => version === readVersion && selectedVersion === lookupVersion && selection === selected;
+        if (!selected || !stillSelected()) return;
+        let event = events.find((entry) => entry.eventId === selected.eventId);
+        let selectedResult = result;
+        if (!event) {
+            // The history report budgets metadata and context as well as events.
+            // A missing row is not proof that its reference is no longer retained.
+            selectedResult = await read({ eventId: selected.eventId, limit: 1 });
+            if (!stillSelected()) return;
+            event = selectedResult.events.find((entry) => entry.eventId === selected.eventId);
+        }
+        if (event || (!selectedResult.partial && !selectedResult.truncated)) selectEvent(event);
+        else notify('暂时无法重新确认所选事件；保留上次读取的上下文，可重试诊断存储或导出。');
     }
     async function lookup() {
         const version = ++lookupVersion;
@@ -1846,6 +1863,20 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             : '操作未完成；无法确认诊断历史已移除或设置已生效。请查看存储状态并重试，当前上下文仍可导出。');
         await refresh();
     }
+    async function retryStorage() {
+        const status = state();
+        if (busy || !status?.enabled || status.suspended) return;
+        busy = true;
+        renderStatus();
+        notify('正在重试诊断存储…');
+        let result;
+        try { result = await global.AppDiagnosticStore.retry(); } catch (_) { }
+        busy = false;
+        renderStatus();
+        notify(result?.success ? '诊断存储重试成功，正在重新读取历史。'
+            : '诊断存储仍不可用；请稍后重试或导出当前页面上下文。');
+        await refresh();
+    }
     function build() {
         content.replaceChildren();
         ui.feedback = node('p', '', content);
@@ -1882,6 +1913,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         ui.historyStatus = node('p', '', content);
         ui.historyStatus.setAttribute('role', 'status');
         button('刷新诊断历史', content, refresh);
+        ui.retry = button('重试诊断存储', content, retryStorage);
         ui.list = node('div', undefined, content, 'diagnostic-event-list');
         const pages = node('div', undefined, content, 'diagnostic-settings-actions');
         ui.previous = button('上一页', pages, () => { offset = Math.max(0, offset - 20); renderPage(); });

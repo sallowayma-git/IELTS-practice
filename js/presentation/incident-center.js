@@ -472,8 +472,9 @@
                 let snapshot;
                 try { snapshot = await global.AppDiagnosticExport.snapshot(); } catch (_) { snapshot = this.reporter?.snapshot(); }
                 if (this.dialog !== dialog) return;
-                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean).reverse();
-                info.textContent = '保留 ' + events.length + ' 条记录。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean)
+                    .sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+                info.textContent = '保留 ' + events.length + ' 条记录，按记录时间排序，跨窗口时钟可能不同。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
                 // Paginate the bounded export snapshot; DOM size stays small even with 2,000 events.
                 let offset = 0;
                 const previous = button('上一页', () => { offset = Math.max(0, offset - 20); renderPage(); });

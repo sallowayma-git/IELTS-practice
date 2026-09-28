@@ -52,6 +52,18 @@ try {
             await page.getByRole('button', { name: '刷新诊断历史', exact: true }).waitFor();
             return page;
         };
+        const refreshHistory = async (page) => {
+            await page.getByRole('button', { name: '刷新诊断历史', exact: true }).click();
+            await page.waitForFunction(() => !Array.from(document.querySelectorAll('#diagnostic-settings-content p'))
+                .some((node) => node.textContent === '正在读取诊断历史…'));
+        };
+        const selectReference = async (page, id) => {
+            await page.getByLabel('事件编号', { exact: true }).fill(id);
+            await page.getByRole('button', { name: '查找事件', exact: true }).click();
+            await page.waitForFunction((id) => document.querySelector('.diagnostic-selected h4')?.textContent.includes(id), id);
+        };
+        const listedIds = (page, selector) => page.locator(selector).evaluateAll((nodes) =>
+            nodes.map((node) => node.textContent.match(/evt_[a-f0-9]{32}_[1-9][0-9]*/)[0]));
         let page = await fresh();
         await page.waitForFunction(() => document.querySelector('.diagnostic-settings-actions').textContent.includes('暂无可用事件'));
         assert.match(await page.locator('#diagnostic-settings').innerText(), /不是学习数据备份/);
@@ -122,6 +134,7 @@ try {
         await page.getByLabel('在此浏览器保留诊断历史').uncheck();
         await page.waitForFunction(() => document.getElementById('diagnostic-settings-content').textContent.includes('诊断设置已更新'));
         assert.equal(await other.evaluate(() => AppDiagnosticStore.status().enabled), false);
+        assert.equal(await page.getByRole('button', { name: '重试诊断存储', exact: true }).isDisabled(), true);
         assert.equal(await page.evaluate(() => localStorage.getItem('learning-data-sentinel')), 'preserve');
         assert.equal((await page.evaluate(() => AppDiagnosticStore.snapshot())).events.length, 0);
         assert.ok((await page.evaluate(() => AppDiagnosticExport.snapshot())).events.length > 0);
@@ -156,6 +169,7 @@ try {
         await page.getByRole('button', { name: '仅清理诊断历史', exact: true }).click();
         await page.waitForFunction(() => document.getElementById('diagnostic-settings-content').textContent.includes('DELETE_BLOCKED'));
         assert.equal(await page.getByRole('button', { name: '仅清理诊断历史', exact: true }).isDisabled(), true);
+        assert.equal(await page.getByRole('button', { name: '重试诊断存储', exact: true }).isDisabled(), true);
         assert.equal(await page.getByRole('button', { name: '导出保留的诊断历史', exact: true }).isEnabled(), true);
         await other.evaluate(() => blocker.close());
         await page.waitForFunction(() => !document.querySelector('.diagnostic-settings-controls button').disabled);
@@ -167,6 +181,194 @@ try {
         await page.waitForFunction(() => document.getElementById('diagnostic-settings-content').textContent.includes('操作未完成；无法确认'));
         assert.equal(await page.getByRole('button', { name: '导出保留的诊断历史', exact: true }).isEnabled(), true);
         record('failed-clearing-keeps-honest-status-and-export-access');
+
+        page = await fresh();
+        await page.evaluate(async () => {
+            const normalizer = AppDiagnosticContract.createNormalizer();
+            const generation = AppDiagnosticStore.status().generation;
+            const make = (nonce, sequence, timestamp) => normalizer.sanitizeEvent({
+                ...normalizer.normalize({ code: 'PRACTICE_SAVE_FAILED', notification: { kind: 'none' }, persistence: { generation } }),
+                windowId: 'win_' + nonce.repeat(32), eventId: 'evt_' + nonce.repeat(32) + '_' + sequence, sequence, timestamp
+            });
+            const rows = Array.from({ length: 25 }, (_, i) => make('b', i + 1, clock - 100000 + i));
+            rows.push(make('a', 1, clock - 10), make('a', 2, clock - 10), make('a', 3, clock - 10),
+                make('b', 26, clock - 10), make('c', 2, clock - 10), make('a', 4, clock));
+            for (let i = 0; i < rows.length; i += 20) await AppDiagnosticStore.append(rows.slice(i, i + 20));
+            window.exportBefore = await AppDiagnosticExport.snapshot();
+            window.exportBeforeText = JSON.stringify(exportBefore);
+            window.baseExporter = AppDiagnosticExport;
+            window.AppDiagnosticExport = { ...baseExporter, snapshot: async () => exportBefore };
+        });
+        const idFor = (nonce, sequence) => 'evt_' + nonce.repeat(32) + '_' + sequence;
+        const expected = [idFor('a', 4), idFor('b', 26), idFor('a', 3), idFor('a', 2), idFor('c', 2), idFor('a', 1),
+            ...Array.from({ length: 25 }, (_, i) => idFor('b', 25 - i))];
+        await refreshHistory(page);
+        assert.deepEqual(await listedIds(page, '.diagnostic-event-list button'), expected.slice(0, 20));
+        await page.getByRole('button', { name: '下一页', exact: true }).click();
+        assert.deepEqual(await listedIds(page, '.diagnostic-event-list button'), expected.slice(20));
+        await page.getByRole('button', { name: '上一页', exact: true }).click();
+        assert.deepEqual(await listedIds(page, '.diagnostic-event-list button'), expected.slice(0, 20));
+        record('cross-window-settings-history-sorts-recency-and-deterministic-ties-before-pagination');
+
+        await page.evaluate(() => getMessageCenter().showIncidentHistory());
+        const historyDialog = page.getByRole('dialog', { name: '诊断历史', exact: true });
+        await historyDialog.getByRole('button', { name: '下一页', exact: true }).waitFor();
+        assert.deepEqual(await listedIds(page, '.incident-history button'), expected.slice(0, 20));
+        await historyDialog.getByRole('button', { name: '下一页', exact: true }).click();
+        assert.deepEqual(await listedIds(page, '.incident-history button'), expected.slice(20));
+        await historyDialog.getByRole('button', { name: '关闭历史', exact: true }).click();
+        assert.equal(await page.evaluate(() => JSON.stringify(exportBefore) === exportBeforeText), true);
+        assert.deepEqual(await page.evaluate(() => exportBefore.events.slice(0, 4).map((event) => event.eventId)),
+            [idFor('a', 1), idFor('a', 2), idFor('a', 3), idFor('a', 4)]);
+        record('notification-history-matches-recency-without-mutating-export-window-sequences');
+
+        page = await fresh();
+        const retainedId = (await page.evaluate(() => seed()))[0];
+        const originalControl = await page.evaluate(async () => {
+            localStorage.setItem('learning-data-sentinel', 'preserve');
+            await AppDiagnosticStore.setDetailedMode(true);
+            const { enabled, generation, cutoff, phase, detailedMode } = AppDiagnosticStore.status();
+            return { enabled, generation, cutoff, phase, expiresAt: detailedMode.expiresAt };
+        });
+        await page.addInitScript(() => {
+            const open = indexedDB.open.bind(indexedDB);
+            const remove = indexedDB.deleteDatabase.bind(indexedDB);
+            window.rejectDiagnosticOpen = true;
+            window.diagnosticOpens = 0;
+            window.diagnosticDeletes = 0;
+            indexedDB.open = (...args) => {
+                if (args[0] === 'IELTSAtlasDiagnosticsV1') {
+                    diagnosticOpens++;
+                    if (rejectDiagnosticOpen) throw new DOMException('Transient failure', 'InvalidStateError');
+                }
+                return open(...args);
+            };
+            indexedDB.deleteDatabase = (...args) => {
+                if (args[0] === 'IELTSAtlasDiagnosticsV1') diagnosticDeletes++;
+                return remove(...args);
+            };
+        });
+        await page.reload();
+        await page.evaluate(() => AppDiagnosticStore.ready);
+        await page.locator('#diagnostic-settings > summary').click();
+        const failedOpens = await page.evaluate(() => diagnosticOpens);
+        assert.ok(failedOpens > 0);
+        await refreshHistory(page);
+        await page.evaluate(() => AppDiagnosticExport.snapshot());
+        assert.equal(await page.evaluate(() => diagnosticOpens), failedOpens);
+        assert.equal(await page.locator('.diagnostic-event-list button').count(), 0);
+        record('automatic-refresh-and-export-do-not-retry-latched-storage-failures');
+
+        await page.getByRole('button', { name: '重试诊断存储', exact: true }).click();
+        await page.waitForFunction(() => document.getElementById('diagnostic-settings-content').textContent.includes('诊断存储仍不可用'));
+        assert.ok(await page.evaluate(() => diagnosticOpens > 1));
+        assert.equal(await page.getByRole('button', { name: '重试诊断存储', exact: true }).isEnabled(), true);
+        assert.equal(await page.getByRole('button', { name: '导出保留的诊断历史', exact: true }).isEnabled(), true);
+        await page.evaluate(() => { rejectDiagnosticOpen = false; });
+        await page.getByRole('button', { name: '重试诊断存储', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await page.waitForFunction((id) => document.querySelector('.diagnostic-event-list')?.textContent.includes(id), retainedId);
+        assert.equal(await page.evaluate(async (id) => (await AppDiagnosticStore.getIncident(id)).eventId, retainedId), retainedId);
+        assert.deepEqual(await page.evaluate(() => {
+            const { enabled, generation, cutoff, phase, detailedMode } = AppDiagnosticStore.status();
+            return { failure: AppDiagnosticStore.status().failure, deletes: diagnosticDeletes,
+                control: { enabled, generation, cutoff, phase, expiresAt: detailedMode.expiresAt },
+                learning: localStorage.getItem('learning-data-sentinel') };
+        }),
+        { failure: null, deletes: 0, control: originalControl, learning: 'preserve' });
+        record('keyboard-storage-retry-recovers-retained-history-after-failure-without-clearing-or-changing-preferences');
+
+        page = await fresh();
+        const omittedId = await page.evaluate(async () => {
+            const normalizer = AppDiagnosticContract.createNormalizer();
+            const persistence = { generation: AppDiagnosticStore.status().generation };
+            for (let batch = 0; batch < 14; batch++) {
+                const rows = Array.from({ length: 20 }, () => normalizer.normalize({ code: 'PRACTICE_SAVE_FAILED',
+                    notification: { kind: 'none' }, persistence,
+                    breadcrumbs: Array.from({ length: 50 }, () => ({ action: 'submit', module: 'practice' })) }));
+                await AppDiagnosticStore.append(rows);
+            }
+            const retained = await AppDiagnosticStore.snapshot({ limit: 2000 });
+            const history = await AppDiagnosticExport.snapshot();
+            const omitted = retained.events.find((event) => !history.events.some((row) => row.eventId === event.eventId));
+            if (!history.truncated || !omitted || retained.events.length <= history.events.length) throw new Error('Fixture must exceed the history report byte budget');
+            window.baseExporter = AppDiagnosticExport;
+            window.referenceReads = 0;
+            window.AppDiagnosticExport = { ...baseExporter, async snapshot(query) {
+                const result = await baseExporter.snapshot(query);
+                if (query?.eventId === omitted.eventId) referenceReads++;
+                return result;
+            } };
+            return omitted.eventId;
+        });
+        await selectReference(page, omittedId);
+        const referenceReads = await page.evaluate(() => referenceReads);
+        await refreshHistory(page);
+        await page.waitForFunction((count) => referenceReads > count, referenceReads);
+        assert.ok((await page.locator('.diagnostic-selected h4').textContent()).includes(omittedId));
+        assert.equal(await page.getByRole('button', { name: '复制此事件摘要', exact: true }).isEnabled(), true);
+        download = page.waitForEvent('download');
+        await page.getByRole('button', { name: '导出此事件诊断', exact: true }).click();
+        const retainedReport = JSON.parse(fs.readFileSync(await (await download).path(), 'utf8'));
+        assert.equal(retainedReport.selection.eventId, omittedId);
+        assert.equal(retainedReport.selection.found, true);
+        record('truncated-history-refresh-revalidates-and-keeps-retained-selection-and-export');
+
+        const holdSelectedRead = () => page.evaluate((id) => {
+            window.releaseSelectedRead = null;
+            window.selectedReadHeld = false;
+            window.AppDiagnosticExport = { ...baseExporter, async snapshot(query) {
+                const result = await baseExporter.snapshot(query);
+                if (query?.eventId !== id || selectedReadHeld) return result;
+                selectedReadHeld = true;
+                return new Promise((resolve) => { window.releaseSelectedRead = () => resolve(result); });
+            } };
+        }, omittedId);
+        await holdSelectedRead();
+        await refreshHistory(page);
+        await page.waitForFunction(() => typeof releaseSelectedRead === 'function');
+        const newerId = (await listedIds(page, '.diagnostic-event-list button'))[0];
+        await selectReference(page, newerId);
+        await page.evaluate(() => releaseSelectedRead());
+        assert.ok((await page.locator('.diagnostic-selected h4').textContent()).includes(newerId));
+        record('delayed-reference-revalidation-cannot-overwrite-a-newer-lookup');
+
+        await selectReference(page, omittedId);
+        await holdSelectedRead();
+        await refreshHistory(page);
+        await page.waitForFunction(() => typeof releaseSelectedRead === 'function');
+        await page.evaluate((id) => {
+            window.AppDiagnosticExport = { ...baseExporter, async snapshot(query) {
+                const report = await baseExporter.snapshot(query);
+                return query?.eventId === id ? { ...report, events: report.events.map((event) => event.eventId === id
+                    ? { ...event, persistence: { ...event.persistence, operation: 'committed' } } : event) } : report;
+            } };
+        }, omittedId);
+        await refreshHistory(page);
+        await page.waitForFunction(() => document.querySelector('.diagnostic-selected').textContent.includes('操作保存状态：已确认保存'));
+        await page.evaluate(() => releaseSelectedRead());
+        assert.match(await page.locator('.diagnostic-selected').innerText(), /操作保存状态：已确认保存/);
+        record('superseded-refresh-cannot-overwrite-newer-selected-event-state');
+
+        await page.evaluate(() => {
+            window.AppDiagnosticExport = { ...baseExporter, async snapshot(query) {
+                if (query?.eventId) throw new Error('Temporary read failure');
+                return { events: [], truncated: true };
+            } };
+        });
+        await refreshHistory(page);
+        await page.waitForFunction(() => document.getElementById('diagnostic-settings-content').textContent.includes('保留上次读取的上下文'));
+        assert.ok((await page.locator('.diagnostic-selected h4').textContent()).includes(omittedId));
+        assert.equal(await page.getByRole('button', { name: '导出此事件诊断', exact: true }).isEnabled(), true);
+        await page.evaluate(() => {
+            window.AppDiagnosticExport = { ...baseExporter, snapshot: async () => ({ events: [],
+                issues: ['incident-not-retained'], sources: { persisted: { state: 'available' } },
+                storage: { persistence: 'persisted' }, truncated: false }) };
+        });
+        await refreshHistory(page);
+        await page.waitForFunction(() => document.querySelector('.diagnostic-selected h4').textContent === '事件不可用');
+        assert.equal(await page.getByRole('button', { name: '导出此事件诊断', exact: true }).isDisabled(), true);
+        record('incomplete-revalidation-keeps-last-context-until-a-complete-read-confirms-absence');
 
         page = await fresh(() => Object.defineProperty(window, 'indexedDB', { value: undefined }));
         assert.match(await page.locator('#diagnostic-settings').innerText(), /仅内存模式/);

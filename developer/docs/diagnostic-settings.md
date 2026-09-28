@@ -14,8 +14,14 @@ fallback (`action` is `download` or `copySummary`). Failed history reads retain
 available current-page events. Unknown references, missing storage, failed
 clearing, file-download failures and denied clipboard access retain usable text
 and export controls. Technical details are revalidated and rendered as text.
-The bounded snapshot is paginated in groups of 20; asynchronous refreshes and
-lookups ignore superseded results. Current-page context can remain visible after
+The UI sorts a copy of the bounded snapshot by descending timestamp, then
+descending sequence and ascending event ID, before paginating in groups of 20.
+The notification history uses the same display order; export timelines retain
+their per-window sequence order and do not imply synchronized window clocks.
+Refreshes revalidate a selected reference separately when it is absent from the
+bounded history report. Incomplete revalidation preserves the last available
+context with an explicit notice; superseded refreshes and lookups cannot replace
+a newer selection. Current-page context can remain visible after
 durable history is cleared or disabled, and the UI explains that distinction.
 
 `AppActions.openDiagnosticsSettings(eventId?)` opens the settings view and can
@@ -23,6 +29,13 @@ preselect a reference. `DiagnosticSettingsPanel.open(eventId?)` opens the
 disclosure directly. These are navigation helpers, not incident notifications.
 
 ## Persistence and coordination
+
+**Retry diagnostic storage** explicitly calls `AppDiagnosticStore.retry()` before
+refreshing history. It can recover latched transient failures without clearing
+history, changing the persistence preference/generation, or retrying business
+operations. The action reports success or continued failure and is disabled
+during other lifecycle actions, while persistence is off, or after suspension.
+Opening the panel, ordinary refreshes, lookups and exports remain passive reads.
 
 The checkbox calls `AppDiagnosticStore.setEnabled`; diagnostic-only clearing
 calls `AppDiagnosticStore.clear`. Both use the existing lifecycle lock,
@@ -84,7 +97,10 @@ or focus trap. Export fallbacks focus/select their read-only text field.
 - `developer/tests/e2e/diagnostic_settings.node.js`: extracts the diagnostic
   modules from shipped bundles using the generated source mapping and exercises
   file, root HTTP and subpath HTTP settings workflows, downloads, clipboard/text
-  fallback, memory-only/disabled/failure states and mobile layout.
+  fallback, memory-only/disabled/failure states and mobile layout. Review
+  regressions cover cross-window recency pagination in both history views,
+  non-destructive retry after transient storage failures, references omitted by
+  the report byte budget, and superseded asynchronous selection reads.
 - Existing startup, passive export, notification, full-reset and suite-practice
   regressions cover the integration boundaries. CI runs the focused settings flow.
 
