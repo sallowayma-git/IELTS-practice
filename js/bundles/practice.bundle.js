@@ -5400,6 +5400,7 @@ class PracticeRecorder {
                 if (!receipt || receipt.committed !== true) {
                     throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
                 }
+                failureOutcome = 'committed';
                 try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
                     session: record.sessionId, submission: record.submissionId, operation: saveOperationId
                 }); } catch (_) { }
@@ -5446,9 +5447,16 @@ class PracticeRecorder {
     combineSaveFailureOutcome(error, previous) {
         let current = 'unconfirmed';
         try { current = window.AppData.getOperationFailureState?.(error) || current; } catch (_) { }
-        if (previous === 'committed' || current === 'committed') return 'committed';
-        if (previous === 'unconfirmed' || current === 'unconfirmed') return 'unconfirmed';
-        return 'not-committed';
+        // Preserve evidence across distinct retry errors even when the host defers reporting.
+        // Weak keys retain the original exception identity without retaining failed records.
+        if (!this._saveFailureOutcomes) this._saveFailureOutcomes = new WeakMap();
+        const outcomes = [previous, current, this._saveFailureOutcomes.get(error)];
+        const operation = outcomes.includes('committed') ? 'committed'
+            : outcomes.includes('unconfirmed') ? 'unconfirmed' : 'not-committed';
+        if (error && (typeof error === 'object' || typeof error === 'function')) {
+            this._saveFailureOutcomes.set(error, operation);
+        }
+        return operation;
     }
 
     async retrySaveWithStandardizedRecord(record, operationId = null, options = {}) {
@@ -5470,9 +5478,10 @@ class PracticeRecorder {
             }); } catch (_) { }
             return receipt.record;
         } catch (error) {
+            const operation = this.combineSaveFailureOutcome(error, options.failureOutcome);
             if (options.deferDiagnostics !== true) {
                 try { window.AppOperationDiagnostics?.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'practice',
-                    action: 'submit', error, operation: this.combineSaveFailureOutcome(error, options.failureOutcome),
+                    action: 'submit', error, operation,
                     correlation: { session: record.sessionId,
                         submission: record.submissionId, operation: originalOperationId }
                 }, typeof window.AppData.practice.getCommitState === 'function'

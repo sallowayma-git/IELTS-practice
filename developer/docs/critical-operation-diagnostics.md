@@ -34,13 +34,24 @@ Arbitrary `Error.committed` fields are not evidence. Business results and thrown
 exception identities are unchanged by this bookkeeping.
 
 The recorder retains committed or unconfirmed evidence across its existing
-attempts. A later failed attempt cannot retroactively prove that an earlier one
-did not commit. The host conservatively keeps a failed completion unconfirmed
-after trying different existing persistence paths. A post-commit UI error is
-reported as committed and cannot send a negative submission acknowledgement.
+attempts, including when the host defers reporting. Weak Error associations carry
+that evidence into the host fallback without changing the thrown Error. The host
+combines it with the fallback's facade outcome: a confirmed commit wins, an
+uncertain attempt remains uncertain, and only definite failures throughout the
+chain are not-committed. A later failed attempt cannot disprove an earlier commit.
+Known committed failures cannot offer reconciliation or send a negative submission
+acknowledgement. Existing completion gates and session cleanup remain unchanged.
+
+Multi-suite failures are retrieved and cleared using the base exam ID, matching
+the session map. The suite and host report the same original Error and event.
+Import wrappers defer to facade evidence until they obtain a commit receipt;
+post-commit failures retain the explicit committed state. File read and JSON
+parse failures remain explicitly not-committed.
 
 An ACK dispatched by `postMessage` does not prove that the child received it.
-Failed dispatch produces an unconfirmed channel incident; the existing receipt
+Failed dispatch, a closed target and dispatch exceptions all use the
+`acknowledgement` action and produce a persistent channel incident, without a
+blocking save dialog. The channel outcome remains unconfirmed; the existing receipt
 cache and replay retain the original session/submission IDs. B4 does not change
 child acknowledgement logic, receipt expiry, window closure, navigation or
 session cleanup. Child-local reporting and the validated diagnostic channel
@@ -87,7 +98,15 @@ timeouts; exercises recovery/import/export failures, post-commit read failures,
 lost receipts, read-only reconciliation and a broken reporter; and verifies
 incident references and privacy. Full release qualification remains #206.
 
-Validation on 2026-09-28 against prerequisite B2 `f7a3421d`:
+The review regressions additionally exercise the real host-to-recorder fallback,
+host-to-multi-suite completion, all ACK failure branches, and the public
+`restorePayload`, `restoreFromLatest` and file-picker import boundaries. Quota
+rejections, uncertain timeouts and post-commit failures are separate cases. HTTP
+fixtures use an isolated OPFS directory; file-mode fixtures stand in for the
+directory handle because file URLs cannot access OPFS. Business and binding
+metadata transactions still use real IndexedDB in all three modes.
+
+Original B4 validation on 2026-09-28 against prerequisite B2 `f7a3421d`:
 
 - 539/539 JavaScript tests, including 17 focused operation-boundary tests.
 - 35/35 Python unit tests.
@@ -99,3 +118,9 @@ Validation on 2026-09-28 against prerequisite B2 `f7a3421d`:
   `css/vocab-reader.css` allowlist mismatch and existing v2 storage-boundary
   allowlist violations) match B2 `f7a3421d`, ignoring shifted source line numbers.
   No new guard violations were introduced.
+
+PR #215 review corrections additionally passed 545 JavaScript tests (23 focused
+operation tests), 35 Python unit tests, 69 operation browser scenarios and 63
+notification scenarios. All 14 bundle outputs and generated diagnostic artifacts
+match the corrected sources; whitespace checks and the suite-practice browser
+flow pass.

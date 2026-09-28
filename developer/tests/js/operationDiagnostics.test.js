@@ -201,11 +201,84 @@ test('committed but undelivered acknowledgement remains unconfirmed; replay neve
     assert.equal(app._announcePracticeSubmitOutcome('exam-original', record(), source, true), false);
     assert.equal(h.events()[0].code, 'PRACTICE_CHANNEL_TIMEOUT');
     assert.equal(h.events()[0].persistence.operation, 'unconfirmed');
+    assert.equal(h.events()[0].action, 'acknowledgement');
+    assert.equal(h.events()[0].notification.kind, 'persistent');
     assert.equal(app._replayPracticeSubmitReceipt('exam-original', record(), source), true);
     assert.equal(replies.length, 2);
     assert.equal(replies[0].submissionId, replies[1].submissionId);
     assert.equal(replies[0].sessionId, replies[1].sessionId);
     assert.equal(app.cleanups, 0);
+});
+
+for (const branch of ['closed', 'exception']) {
+    test(`ACK ${branch} is a channel incident without a blocking save dialog`, () => {
+        const h = setup();
+        const app = host(h);
+        app._postExamMessage = () => { throw appError('BACKEND_UNAVAILABLE'); };
+        assert.equal(app._announcePracticeSubmitOutcome('exam-original', record(), { closed: branch === 'closed' }, true), false);
+        assert.equal(h.events().length, 1);
+        assert.equal(h.events()[0].action, 'acknowledgement');
+        assert.equal(h.events()[0].notification.kind, 'persistent');
+        assert.equal(h.events()[0].persistence.operation, 'unconfirmed');
+        assert.equal(app.cleanups, 0);
+    });
+}
+
+for (const initial of ['committed', 'unconfirmed', 'not-committed']) {
+    test(`host retains ${initial} recorder evidence after later definite rejections`, async () => {
+        const h = setup();
+        const app = host(h);
+        const r = recorder(h);
+        const states = new WeakMap();
+        let attempts = 0;
+        h.sandbox.AppData.getOperationFailureState = error => states.get(error) || 'unconfirmed';
+        h.sandbox.AppData.practice.completeAttempt = async () => {
+            const error = appError('BACKEND_UNAVAILABLE');
+            states.set(error, ++attempts === 1 ? initial : 'not-committed');
+            throw error;
+        };
+        h.sandbox.AppData.practice.getCommitState = async () => ({ verified: true, operation: initial });
+        h.sandbox.resolveActiveLibraryIndex = async () => [{ id: 'exam-original', title: 'Practice' }];
+        app.components.practiceRecorder = r;
+        r.handleSessionCompleted = (data, options) => r.savePracticeRecord(data, options);
+        const outcomes = [];
+        app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved) => outcomes.push(saved);
+        assert.equal(await app.handlePracticeComplete('exam-original', record()), false);
+        assert.ok(attempts >= 3, 'recorder retry and host fallback both execute');
+        assert.equal(h.events().length, 1);
+        assert.equal(h.events()[0].persistence.operation, initial);
+        assert.equal(h.events()[0].causeCode, 'BACKEND_UNAVAILABLE');
+        assert.equal(h.events()[0].retry.available, initial === 'unconfirmed');
+        assert.equal(h.events()[0].notification.kind, initial === 'unconfirmed' ? 'dialog' : 'persistent');
+        assert.deepEqual(outcomes, initial === 'committed' ? [] : [false]);
+        assert.equal(app.cleanups, 0);
+    });
+}
+
+test('host and multi-suite boundary reuse the original Error and clear stale session failures', async () => {
+    const h = setup();
+    const app = host(h);
+    h.run('js/app/suitePracticeMixin.js');
+    Object.assign(app, h.sandbox.ExamSystemAppMixins.suitePractice);
+    const error = appError('QUOTA_EXCEEDED');
+    h.sandbox.AppData.getOperationFailureState = value => value === error ? 'not-committed' : 'unconfirmed';
+    h.sandbox.AppData.practice.finalizeSuite = async () => { throw error; };
+    app._announcePracticeSubmitOutcome = () => {};
+    const data = { ...record(), examId: 'listening-100-p1_set1', suiteId: 'set1', totalSuites: 1 };
+    let outcome;
+    const complete = app.handleSuitePracticeComplete;
+    app.handleSuitePracticeComplete = async (...args) => (outcome = await complete.apply(app, args));
+    assert.equal(await app.handlePracticeComplete(data.examId, data), false);
+    assert.equal(outcome.error, error);
+    assert.ok(app.multiSuiteSessionsMap.has('listening-100-p1'));
+    assert.equal(h.events().length, 1);
+    assert.equal(h.events()[0].causeCode, 'QUOTA_EXCEEDED');
+    assert.equal(h.events()[0].persistence.operation, 'not-committed');
+    assert.equal(h.events()[0].notification.kind, 'persistent');
+    assert.equal(new Set(h.presentations.map(item => item.id)).size, 1);
+    app.handleMultiSuitePracticeComplete = async () => false;
+    const next = await complete.call(app, data.examId, data);
+    assert.equal(next.error, undefined, 'a later attempt cannot inherit the previous failure');
 });
 
 test('post-commit UI failure cannot send a negative acknowledgement or undo cleanup', async () => {

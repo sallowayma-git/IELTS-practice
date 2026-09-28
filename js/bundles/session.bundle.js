@@ -350,8 +350,10 @@
             }
         },
         async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
-            suiteFailures.delete(this.currentSuiteSession);
-            suiteFailures.delete(this.multiSuiteSessionsMap?.get(data?.suiteId));
+            const multiSuiteBaseExamId = data?.suiteId ? this._extractBaseExamId(examId) : null;
+            const failureSession = () => multiSuiteBaseExamId
+                ? this.multiSuiteSessionsMap?.get(multiSuiteBaseExamId) : this.currentSuiteSession;
+            suiteFailures.delete(failureSession());
             const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => {
                 // teardownSession 只在套题已落库并交由子窗口自行收尾时出现，
                 // 此处解除关闭防护可保证早于 PRACTICE_SUBMIT_ACK 回执发出。
@@ -362,8 +364,7 @@
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
-                        error: committed ? undefined : suiteFailures.get(this.currentSuiteSession)
-                            || suiteFailures.get(this.multiSuiteSessionsMap?.get(data?.suiteId)),
+                        error: committed ? undefined : suiteFailures.get(failureSession()),
                         errorCode: errorCode || null
                     }, extra || {})
                     : Boolean(handled);
@@ -768,8 +769,7 @@
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
-                        error: committed ? undefined : suiteFailures.get(this.currentSuiteSession)
-                            || suiteFailures.get(this.multiSuiteSessionsMap?.get(data?.suiteId)),
+                        error: committed ? undefined : suiteFailures.get(this.currentSuiteSession),
                         errorCode: errorCode || null
                     }, extra || {})
                     : Boolean(handled);

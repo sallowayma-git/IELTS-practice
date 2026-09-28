@@ -580,7 +580,7 @@
             }
     }
 
-    function reportTransfer(action, error, operation = 'unconfirmed', cancelled = false) {
+    function reportTransfer(action, error, operation, cancelled = false) {
         try { global.AppOperationDiagnostics?.failure({ code: action === 'import' ? 'DATA_IMPORT_FAILED' : 'DATA_EXPORT_FAILED',
             module: action, action, error, operation, cancelled }); } catch (_) { }
     }
@@ -1183,7 +1183,7 @@
             });
 
         } catch (error) {
-            reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+            reportTransfer('import', error, restored ? 'committed' : undefined);
             throw error;
         }
     }
@@ -1251,7 +1251,7 @@
             });
 
         } catch (error) {
-            reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+            reportTransfer('import', error, restored ? 'committed' : undefined);
             throw error;
         }
     }

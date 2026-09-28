@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { reviewScenarios, exerciseReviewScenario, assertReviewScenario } from './operationReviewCases.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -39,12 +40,21 @@ try {
         ['http', origin + '/developer/tests/e2e/reports/operation-diagnostics-fixture.html'],
         ['subpath', origin + '/app/developer/tests/e2e/reports/operation-diagnostics-fixture.html']]) {
         for (const scenario of ['quota', 'aborted-transaction', 'timeout', 'backend-unavailable', 'readback-after-commit',
-            'receipt-reconciliation', 'recovery-failure', 'import-export-failure', 'reporter-failure']) {
+            'receipt-reconciliation', 'recovery-failure', 'import-export-failure', 'reporter-failure', ...reviewScenarios]) {
             const context = await browser.newContext();
             const page = await context.newPage();
             try {
                 await page.goto(url);
                 await page.evaluate(() => AppData.ready);
+                if (reviewScenarios.includes(scenario)) {
+                    if (scenario.includes('import')) {
+                        await page.addScriptTag({ path: path.join(root, 'js/core/externalBackupService.js') });
+                        await page.addScriptTag({ path: path.join(root, 'js/boot-fallbacks.js') });
+                    }
+                    assertReviewScenario(scenario, await page.evaluate(exerciseReviewScenario, scenario));
+                    results.push({ mode, scenario, passed: true });
+                    continue;
+                }
                 const result = await page.evaluate(async scenario => {
                     const record = { id: 'original-record', examId: 'reading-original', sessionId: 'original-session',
                         submissionId: 'original-submission', operationId: 'original-operation', type: 'reading',
@@ -162,6 +172,9 @@ try {
                     assert.equal(result.replayed, true);
                     assert.equal(result.originalIds.submissionId, 'original-submission');
                     assert.ok(result.events.every(event => event.persistence.operation === 'unconfirmed'));
+                    assert.ok(result.events.every(event => event.action === 'acknowledgement'
+                        && event.notification.kind === 'persistent'));
+                    assert.doesNotMatch(result.text, /练习提交尚未确认保存/);
                 } else if (scenario === 'recovery-failure') {
                     assert.equal(result.events[0].code, 'RECOVERY_SAVE_FAILED');
                     assert.equal(result.events[0].causeCode, 'QUOTA_EXCEEDED');

@@ -8226,6 +8226,13 @@
     function observeStep(module, action, outcome, correlation) {
         try { global.AppOperationDiagnostics?.breadcrumb(module, action, outcome, correlation); } catch (_) { }
     }
+    function operationFailureState(error, previous) {
+        let current = 'unconfirmed';
+        try { current = global.AppData?.getOperationFailureState?.(error) || current; } catch (_) { }
+        if (previous === 'committed' || current === 'committed') return 'committed';
+        if (previous === 'unconfirmed' || current === 'unconfirmed') return 'unconfirmed';
+        return 'not-committed';
+    }
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
@@ -12892,7 +12899,7 @@
             const targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : null;
             if (!submissionId || !sessionId || !targetWindow) {
                 if (submissionId && sessionId && sourceWindow?.closed && succeeded) {
-                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit',
+                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement',
                         new Error('Practice acknowledgement target closed'), operationContext(examId, completionData));
                 }
                 return false;
@@ -12923,11 +12930,11 @@
                     this.examWindows && this.examWindows.set(resolvedSession.examId, windowInfo);
                 }
                 observeStep('channel', 'acknowledgement', 'unconfirmed', operationContext(examId, completionData));
-                if (!delivered && succeeded) observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit',
+                if (!delivered && succeeded) observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement',
                     new Error('Practice acknowledgement was not delivered'), operationContext(examId, completionData));
                 return delivered;
             } catch (error) {
-                observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit', error, operationContext(examId, completionData));
+                observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement', error, operationContext(examId, completionData));
                 console.warn('[DataCollection] 提交结果回执发送失败:', error);
                 return false;
             }
@@ -14297,12 +14304,17 @@
 
             let completionCommitted = false;
             let completedViaFallback = false;
+            let failureOutcome;
             try {
                 let persistedRecord = null;
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
                         persistedRecord = await recorder.handleSessionCompleted(completionData, { deferDiagnostics: true });
                     } catch (recErr) {
+                        failureOutcome = operationFailureState(recErr);
+                        try {
+                            failureOutcome = recorder.combineSaveFailureOutcome?.(recErr) || failureOutcome;
+                        } catch (_) { }
                         console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
                         persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
                         completedViaFallback = true;
@@ -14401,15 +14413,17 @@
                 }
 
             } catch (error) {
+                const operation = completionCommitted ? 'committed' : operationFailureState(error, failureOutcome);
                 observeFailure('PRACTICE_SAVE_FAILED', 'practice', 'submit', error, diagnosticContext,
-                    completionCommitted ? 'committed' : 'unconfirmed', !completionCommitted && diagnosticContext.operation
+                    operation, operation === 'unconfirmed' && diagnosticContext.operation
                         && typeof window.AppData.practice.getCommitState === 'function'
                         ? () => window.AppData.practice.getCommitState(diagnosticContext.operation) : undefined);
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
-                window.showMessage && window.showMessage(completionCommitted
+                window.showMessage && window.showMessage(operation === 'committed'
                     ? '练习记录已保存，但后续操作失败，请查看诊断详情。'
-                    : '练习提交尚未确认保存，请保留练习页面。', 'error');
-                if (!completionCommitted) this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
+                    : operation === 'not-committed' ? '练习提交已确认未保存，请保留练习页面。'
+                        : '练习提交尚未确认保存，请保留练习页面。', 'error');
+                if (operation !== 'committed') this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
                     errorCode: 'save_failed'
                 });
             } finally {

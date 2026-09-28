@@ -808,13 +808,13 @@
     }
     const operationId = `file-import:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     let importCommitted = false;
-    const reportFailure = (error, operation = 'not-committed') => {
+    const reportFailure = (error, operation) => {
       try { window.AppOperationDiagnostics?.failure({ code: 'DATA_IMPORT_FAILED', module: 'import',
         action: 'import', error, operation, correlation: { operation: operationId } }); } catch (_) { }
     };
     const reader = new FileReader();
     reader.onerror = () => {
-      reportFailure(reader.error);
+      reportFailure(reader.error, 'not-committed');
       window.showMessage && window.showMessage('文件读取失败', 'error');
     };
     reader.onabort = () => { try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled', { operation: operationId }); } catch (_) { } };
@@ -823,7 +823,7 @@
       try {
         data = JSON.parse(reader.result);
       } catch (error) {
-        reportFailure(error);
+        reportFailure(error, 'not-committed');
         window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
         return;
       }
@@ -858,12 +858,12 @@
         try { await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup.id, practice: preview.practice }); } catch (historyError) { console.warn('[Fallback] 导入历史记录失败:', historyError); }
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
-        reportFailure(error, importCommitted ? 'committed' : 'unconfirmed');
+        reportFailure(error, importCommitted ? 'committed' : undefined);
         console.error('[importData] failed', error);
         window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
       }
     };
-    try { reader.readAsText(inputFile, 'utf-8'); } catch (error) { reportFailure(error); }
+    try { reader.readAsText(inputFile, 'utf-8'); } catch (error) { reportFailure(error, 'not-committed'); }
   }
 
   if (typeof window.exportAllData !== 'function') {
