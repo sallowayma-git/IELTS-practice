@@ -336,6 +336,76 @@ test('startup uses the richer incident export while missing/broken exporters ret
     }
 });
 
+for (const failure of ['null-report', 'generation-issue']) {
+    for (const delivery of ['download', 'text']) {
+        test(`startup retains minimal evidence after a handled ${failure} with ${delivery} delivery`, async () => {
+            const h = fixture({ install: true });
+            const id = h.collector.startupFailed(new Error('PRIVATE'));
+            const panel = h.document.getElementById('diagnostic-startup-failure');
+            const details = panel.children.find((node) => node.tagName === 'details');
+            const button = panel.children.find((node) => node.tagName === 'button');
+            const text = details.children.find((node) => node.tagName === 'textarea');
+            // First cache a valid rich summary from a delivery-only fallback.
+            h.sandbox.URL = { createObjectURL() { throw new Error('download unavailable'); } };
+            await button.emit('click');
+            assert.match(text.value, /aggregation: incomplete/);
+            assert.ok(text.value.includes(id));
+
+            // Exercise both handled failure shapes from the real exporter. A
+            // snapshot-only failure returns an issue; persistent failure returns null.
+            h.sandbox.failOnce = failure === 'generation-issue';
+            h.evaluate(`
+                const stringify = JSON.stringify;
+                let failed = false;
+                JSON.stringify = function (value, ...args) {
+                    if (value?.reportType === 'passive-diagnostics' && (!failOnce || !failed)) {
+                        failed = true;
+                        throw new Error('PRIVATE_GENERATION');
+                    }
+                    return stringify.call(this, value, ...args);
+                };
+            `);
+            let result;
+            const exporter = h.sandbox.AppDiagnosticExport;
+            h.sandbox.AppDiagnosticExport = { async download(...args) {
+                result = await exporter.download(...args);
+                return result;
+            } };
+            let blob;
+            let revoked;
+            h.sandbox.URL = {
+                createObjectURL(value) {
+                    if (delivery === 'text') throw new Error('download unavailable');
+                    blob = value;
+                    return 'blob:minimal';
+                },
+                revokeObjectURL(value) { revoked = value; }
+            };
+            h.sandbox.setTimeout = (fn, delay) => delay === 1000 ? fn() : setTimeout(fn, delay);
+            await button.emit('click');
+            assert.equal(result.status, 'text-fallback');
+            if (failure === 'null-report') assert.equal(result.report, null);
+            else assert.ok(result.report.issues.includes('export-generation-failed'));
+            if (delivery === 'download') {
+                assert.equal(h.nodes.find((node) => node.download)?.download, 'ielts-startup-diagnostics.txt');
+                assert.equal(blob.type, 'text/plain;charset=utf-8');
+                assert.equal(JSON.parse(await blob.text()).events[0].eventId, id);
+                assert.equal(revoked, 'blob:minimal');
+            } else {
+                assert.ok(details.open && text.focused && text.selected);
+            }
+            details.open = false;
+            details.emit('toggle');
+            details.open = true;
+            details.emit('toggle');
+            assert.equal(JSON.parse(text.value).events[0].eventId, id, 'reopening must not restore failed or stale rich text');
+            assert.ok(size(text.value) <= 32 * 1024 && !text.value.includes('PRIVATE'));
+            assert.equal(h.collector.snapshot().events.length, 1);
+            assert.equal(h.output.length, 0, 'fallback does not recursively report');
+        });
+    }
+}
+
 test('all supported practice bundles and foundation ship the passive exporter without the active workflow dependency', () => {
     for (const bundle of ['core-foundation', 'reading-page', 'practice-page-enhancer', 'listening-record-bridge', 'listening-wrapper']) {
         const source = read('js/bundles/' + bundle + '.bundle.js');

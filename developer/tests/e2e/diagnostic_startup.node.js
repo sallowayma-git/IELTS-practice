@@ -36,20 +36,34 @@ const foundationPath = 'js/bundles/core-foundation.bundle.js';
 const legacyPath = 'js/bundles/legacy-app.bundle.js';
 const foundation = fs.readFileSync(path.join(root, foundationPath), 'utf8');
 const legacy = fs.readFileSync(path.join(root, legacyPath), 'utf8');
+const initializationFailures = {
+    'caught-initialization': 'PRIVATE_INITIALIZATION_DETAIL',
+    'component-timeout': '组件加载超时: PRIVATE_INITIALIZATION_DETAIL',
+    network: '网络连接失败: PRIVATE_INITIALIZATION_DETAIL',
+    dependency: '依赖检查失败: 网络不可用 PRIVATE_INITIALIZATION_DETAIL',
+    'rich-generation': 'PRIVATE_INITIALIZATION_DETAIL',
+    'rich-generation-no-download': 'PRIVATE_INITIALIZATION_DETAIL'
+};
+const faults = ['missing', 'parse', 'rejection', ...Object.keys(initializationFailures),
+    'indexeddb-blocked', 'startup-capacity', 'native-abort', 'healthy'];
 try {
     for (const [mode, url] of [
         ['file', pathToFileURL(path.join(fixture, 'index.html')).href],
         ['http', origin + '/index.html'],
         ['subpath', origin + '/IELTS-practice/index.html']
     ]) {
-        for (const fault of ['missing', 'parse', 'rejection', 'caught-initialization', 'indexeddb-blocked', 'startup-capacity', 'native-abort', 'healthy']) {
+        for (const fault of faults) {
             fs.writeFileSync(path.join(fixture, foundationPath), foundation);
             fs.writeFileSync(path.join(fixture, legacyPath), legacy);
             if (fault === 'missing') fs.unlinkSync(path.join(fixture, foundationPath));
             if (fault === 'parse') fs.writeFileSync(path.join(fixture, foundationPath), 'function invalid( {');
             if (fault === 'rejection') fs.writeFileSync(path.join(fixture, foundationPath), 'Promise.reject(new Error("PRIVATE_INITIALIZATION_DETAIL"));');
-            if (fault === 'caught-initialization') {
-                fs.appendFileSync(path.join(fixture, legacyPath), '\nwindow.ExamSystemAppMixins.bootstrap = { async initializeComponents() { throw new Error("PRIVATE_INITIALIZATION_DETAIL"); } };\n');
+            if (initializationFailures[fault]) {
+                fs.appendFileSync(path.join(fixture, legacyPath), `
+                    window.ExamSystemAppMixins.bootstrap = {
+                        async initializeComponents() { throw new Error(${JSON.stringify(initializationFailures[fault])}); }
+                    };
+                `);
             }
             if (fault === 'startup-capacity') {
                 fs.writeFileSync(path.join(fixture, foundationPath), `
@@ -130,6 +144,13 @@ try {
             } else {
                 const panel = page.locator('#diagnostic-startup-failure');
                 await panel.waitFor({ state: 'visible' });
+                const canRecover = fault === 'component-timeout' || fault === 'network';
+                if (initializationFailures[fault]) {
+                    await page.locator('.fallback-ui').waitFor({ state: 'visible' });
+                    for (const action of ['attempt-recovery', 'safe-mode']) {
+                        assert.equal(await page.locator(`[data-fallback-action="${action}"]`).count(), canRecover ? 1 : 0);
+                    }
+                }
                 const evidence = await page.evaluate(() => JSON.parse(AppDiagnosticBootstrap.install().exportText()));
                 const code = fault === 'missing' ? 'RESOURCE_LOAD_FAILED' : 'APP_BOOT_FAILED';
                 assert.ok(evidence.events.some((event) => event.code === code), `${mode}/${fault}: expected ${code}`);
@@ -181,18 +202,53 @@ try {
                 for (const secret of ['PRIVATE_INITIALIZATION_DETAIL', 'private-cache-value', fixture, '127.0.0.1']) assert.equal(serialized.includes(secret), false);
                 assert.ok(Buffer.byteLength(serialized) <= 32 * 1024);
                 if (fault === 'parse' || fault === 'rejection') assert.ok(nativeErrors.length > 0, 'native browser output is preserved');
-                const download = page.waitForEvent('download');
+                const generationFailed = fault.startsWith('rich-generation');
+                if (generationFailed) await page.evaluate((blockDownload) => {
+                    const stringify = JSON.stringify;
+                    JSON.stringify = function (value, ...args) {
+                        if (value?.reportType === 'passive-diagnostics') throw new Error('PRIVATE_GENERATION_DETAIL');
+                        return stringify.call(this, value, ...args);
+                    };
+                    if (blockDownload) URL.createObjectURL = () => { throw new Error('download unavailable'); };
+                }, fault === 'rich-generation-no-download');
+                const download = fault === 'rich-generation-no-download' ? null : page.waitForEvent('download');
                 await panel.getByRole('button', { name: '导出诊断' }).click();
-                const richerExport = await page.evaluate(() => typeof window.AppDiagnosticExport?.download === 'function');
-                const downloaded = await download;
-                assert.equal(downloaded.suggestedFilename(), richerExport ? 'ielts-diagnostics.json' : 'ielts-startup-diagnostics.txt');
-                if (richerExport) {
+                const richerExport = !generationFailed && await page.evaluate(() => typeof window.AppDiagnosticExport?.download === 'function');
+                if (download) {
+                    const downloaded = await download;
+                    assert.equal(downloaded.suggestedFilename(), richerExport ? 'ielts-diagnostics.json' : 'ielts-startup-diagnostics.txt');
                     const chunks = [];
                     for await (const chunk of await downloaded.createReadStream()) chunks.push(chunk);
                     const report = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-                    assert.equal(report.selection.found, true);
-                    assert.ok(report.events.some((event) => event.eventId === report.selection.eventId));
-                    assert.equal(report.collection.aggregation, 'incomplete');
+                    if (richerExport) {
+                        assert.equal(report.selection.found, true);
+                        assert.ok(report.events.some((event) => event.eventId === report.selection.eventId));
+                        assert.equal(report.collection.aggregation, 'incomplete');
+                    } else assert.equal(report.events[0].eventId, evidence.events[0].eventId);
+                }
+                if (generationFailed) {
+                    const text = panel.locator('textarea');
+                    await page.waitForFunction((id) => {
+                        const value = document.querySelector('#diagnostic-startup-failure textarea').value;
+                        try { return JSON.parse(value).events[0].eventId === id; } catch (_) { return false; }
+                    }, evidence.events[0].eventId);
+                    await panel.locator('details').evaluate((details) => { details.open = false; });
+                    await panel.locator('summary').click();
+                    assert.equal(JSON.parse(await text.inputValue()).events[0].eventId, evidence.events[0].eventId);
+                    assert.equal((await text.inputValue()).includes('PRIVATE'), false);
+                }
+                if (canRecover) {
+                    assert.ok(await page.evaluate(() => LicenseModal.accept()));
+                    await page.waitForFunction(() => !document.getElementById('license-modal').classList.contains('show'));
+                    await page.evaluate(() => {
+                        window.__recoveryAttempts = 0;
+                        app.initialize = async () => { window.__recoveryAttempts += 1; };
+                    });
+                    await page.locator('[data-fallback-action="attempt-recovery"]').click();
+                    await page.waitForFunction(() => window.__recoveryAttempts === 1);
+                    await page.locator('[data-fallback-action="safe-mode"]').click();
+                    await page.locator('.safe-mode-ui').waitFor({ state: 'visible' });
+                    assert.ok((await panel.innerText()).includes(evidence.events[0].eventId));
                 }
                 if (mode === 'http' && fault === 'missing') await page.screenshot({ path: path.join(reports, 'diagnostic-startup-panel.png') });
                 results.push({ mode, fault, events: evidence.events.length, code, nativeErrors: nativeErrors.length, passed: true });
@@ -211,4 +267,4 @@ try {
     fs.rmSync(resolved, { recursive: true, force: true });
     fs.writeFileSync(path.join(reports, 'diagnostic-startup-report.json'), JSON.stringify({ cases: results }, null, 2));
 }
-assert.equal(results.length, 24);
+assert.equal(results.length, 3 * faults.length);

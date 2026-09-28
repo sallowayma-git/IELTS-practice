@@ -60,6 +60,50 @@ test('required resources, bundle parsing and rejected initialization leave expor
     }
 });
 
+test('initialization keeps recovery available for component timeouts and network failures alongside diagnostics', () => {
+    for (const [message, expected] of [
+        ['组件加载超时: PRIVATE_DETAIL', true],
+        ['网络连接失败: PRIVATE_DETAIL', true],
+        ['依赖缺失: PRIVATE_DETAIL', false],
+        ['依赖检查失败: 网络不可用 PRIVATE_DETAIL', false],
+        ['未知错误: PRIVATE_DETAIL', false]
+    ]) {
+        const h = harness();
+        h.sandbox.AppDiagnostics = h.collector;
+        h.run('js/app.js');
+        let canRecover;
+        const messages = [];
+        h.evaluate('ExamSystemApp.prototype.handleInitializationError').call({
+            showUserMessage(text) { messages.push(text); },
+            showFallbackUI(value) { canRecover = value; }
+        }, new Error(message));
+        assert.equal(canRecover, expected, message);
+        const exported = JSON.parse(h.collector.exportText());
+        assert.equal(exported.events.length, 1);
+        assert.equal(exported.events[0].code, 'APP_BOOT_FAILED');
+        assert.ok(h.document.getElementById('diagnostic-startup-failure'));
+        assert.equal(JSON.stringify({ messages, exported }).includes('PRIVATE_DETAIL'), false);
+    }
+});
+
+test('initialization recovery classification tolerates missing, non-string and hostile error messages', () => {
+    let reads = 0;
+    for (const error of [null, undefined, '网络', { message: 42 },
+        { get message() { reads += 1; throw new Error('PRIVATE'); } }]) {
+        const h = harness();
+        h.sandbox.AppDiagnostics = h.collector;
+        h.run('js/app.js');
+        let canRecover;
+        assert.doesNotThrow(() => h.evaluate('ExamSystemApp.prototype.handleInitializationError').call({
+            showUserMessage() { throw new Error('optional UI unavailable'); },
+            showFallbackUI(value) { canRecover = value; }
+        }, error));
+        assert.equal(canRecover, false);
+        assert.equal(h.collector.snapshot().events[0].code, 'APP_BOOT_FAILED');
+    }
+    assert.equal(reads, 0);
+});
+
 test('optional loads are declared before insertion and share identity with capture-phase failure', async () => {
     const h = harness();
     h.run('js/diagnostics/diagnosticReporter.js');

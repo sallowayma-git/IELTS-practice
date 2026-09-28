@@ -398,12 +398,17 @@
                             try {
                                 const result = await richDownload.call(exporter, { eventId: startupId }, { textTarget: text });
                                 if (result?.status === 'download-started') return;
-                                if (result?.status === 'text-fallback') {
+                                // Only a generated report can replace bootstrap evidence.
+                                // Delivery failures keep its summary; generation failures
+                                // must continue through the independent minimal export.
+                                if (result?.status === 'text-fallback' && result.report
+                                    && !result.report.issues?.includes('export-generation-failed')) {
                                     panel.exportedText = result.text;
                                     details.open = true; text.focus(); text.select(); return;
                                 }
                             } catch (_) { }
                         }
+                        panel.exportedText = null;
                         let url;
                         try {
                             text.value = exportText();

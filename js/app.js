@@ -991,7 +991,13 @@ class ExamSystemApp {
             try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
             try { console.error('[App] 系统初始化失败:', error); } catch (_) { }
             try { this.showUserMessage('系统初始化失败，请导出诊断信息以便排查。', 'error'); } catch (_) { }
-            try { this.showFallbackUI(false); } catch (_) { }
+            let canRecover = false;
+            try {
+                const message = Object.getOwnPropertyDescriptor(error, 'message')?.value;
+                canRecover = typeof message === 'string' && (message.includes('组件加载超时')
+                    || (!message.includes('依赖') && message.includes('网络')));
+            } catch (_) { }
+            try { this.showFallbackUI(canRecover); } catch (_) { }
         },
         setupGlobalErrorHandling() {
             // The inline collector owns listeners for the entire page lifetime.
