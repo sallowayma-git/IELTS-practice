@@ -954,6 +954,20 @@
         if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(light, detail, null, mode);
         return joinPracticeRecord(light, detail, find('practiceAnnotations'), mode);
     }
+    const operationFailures = new WeakMap();
+    function rememberOperationFailure(error, attempted, receipt) {
+        if (!error || (typeof error !== 'object' && typeof error !== 'function')) return;
+        try {
+            const operation = receipt?.committed === true ? 'committed' : !attempted ? 'not-committed'
+                : error instanceof AppDataError && error.details?.reason !== 'timeout' ? 'not-committed' : 'unconfirmed';
+            operationFailures.set(error, operation);
+        } catch (_) { /* Unknown is safer than changing the business failure. */ }
+    }
+    function getOperationFailureState(error) {
+        return error && (typeof error === 'object' || typeof error === 'function')
+            ? operationFailures.get(error) || 'unconfirmed' : 'unconfirmed';
+    }
+
     const practice = Object.freeze({
         async list(options = {}) {
             await ready;
@@ -968,38 +982,70 @@
                 .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
         },
         async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
-        async completeAttempt(command) {
+        // Positive journal evidence only: retention can remove old receipts, so
+        // absence is never proof that an operation did not commit. This read-only
+        // reconciliation does not resubmit, clear recovery, or alter sessions.
+        async getCommitState(operationId) {
             await ready;
-            const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
-            const mutation = mutationOptions(command, 'practice-complete', source);
-            const recordInput = await practiceRecordWithLibraryProvenance(source, command);
-            if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
-            const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
-            const receipt = await retryMergeConflict(command || {}, async () => {
-                const existing = await practiceLayersForUpsert(recordId);
-                return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
-                    { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
-            });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            if (typeof operationId !== 'string' || !operationId.trim()) {
+                throw new AppDataError('VALIDATION', 'A stable operation id is required');
+            }
+            const journal = await kernel.read('system.operationJournal');
+            const entry = journal && Object.prototype.hasOwnProperty.call(journal, operationId)
+                ? journal[operationId] : null;
+            return { verified: true, operation: entry?.receipt?.committed === true
+                && entry.receipt.operationId === operationId ? 'committed' : 'unconfirmed', operationId };
+        },
+        async completeAttempt(command) {
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready;
+                const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
+                const mutation = mutationOptions(command, 'practice-complete', source);
+                const recordInput = await practiceRecordWithLibraryProvenance(source, command);
+                if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
+                const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
+                attempted = true;
+                receipt = await retryMergeConflict(command || {}, async () => {
+                    const existing = await practiceLayersForUpsert(recordId);
+                    return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
+                        { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+                });
+                return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
+            }
         },
         async finalizeSuite(command) {
-            await ready; assertObject(command, 'finalizeSuite command is required');
-            const mutation = mutationOptions(command, 'practice-suite', command);
-            const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
-            if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
-            const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
-            const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
-            const children = new Set((await kernel.listEntities('practiceSummaries'))
-                .filter((summary) => practiceRecordMatches(summary, childIdentities))
-                .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
-            children.delete(recordId);
-            const receipt = await retryMergeConflict(command, async () => {
-                const existing = await practiceLayersForUpsert(recordId);
-                const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
-                    { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
-            });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready; assertObject(command, 'finalizeSuite command is required');
+                const mutation = mutationOptions(command, 'practice-suite', command);
+                const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
+                if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
+                const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
+                const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
+                const children = new Set((await kernel.listEntities('practiceSummaries'))
+                    .filter((summary) => practiceRecordMatches(summary, childIdentities))
+                    .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
+                children.delete(recordId);
+                attempted = true;
+                receipt = await retryMergeConflict(command, async () => {
+                    const existing = await practiceLayersForUpsert(recordId);
+                    const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
+                    return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
+                        { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
+                });
+                return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
+            }
         },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
@@ -1206,20 +1252,29 @@
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
     }
     async function saveRecovery(kind, value, options = {}) {
-        await ready; assertObject(value, `recovery ${kind} value must be an object`);
-        const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
-        const key = recoveryKey(kind);
-        const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
-        const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
-        const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
-            const current = await readCollectionMeta(key);
-            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
-            if (index >= 0) current.items[index] = item; else current.items.push(item);
-            return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
-        }));
-        const committedItem = (await kernel.read(key))
-            .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
-        return Object.assign({}, receipt, { item: clone(committedItem || item) });
+        let attempted = false;
+        let receipt = null;
+        try {
+            await ready; assertObject(value, `recovery ${kind} value must be an object`);
+            const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
+            const key = recoveryKey(kind);
+            const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
+            const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
+            attempted = true;
+            receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+                const current = await readCollectionMeta(key);
+                const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+                if (index >= 0) current.items[index] = item; else current.items.push(item);
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+            }));
+            const committedItem = (await kernel.read(key))
+                .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+            return Object.assign({}, receipt, { item: clone(committedItem || item) });
+
+        } catch (error) {
+            rememberOperationFailure(error, attempted, receipt);
+            throw error;
+        }
     }
     async function discardRecovery(kind, id, options = {}) {
         await ready;
@@ -2340,25 +2395,34 @@
             importPlans.set(planId, plan); return { id: planId, format: plan.format, scope: plan.scope, keys: plan.keys, clearedKeys: clone(plan.clearedKeys), warnings: clone(plan.warnings), createdAt: plan.createdAt, practice: clone(plan.practiceSummary), diagnostics: clone(plan.diagnostics), destructive: plan.destructive };
         },
         async commitImport(planId, options = {}) {
-            await ready; const plan = importPlans.get(String(planId)); if (!plan) throw new AppDataError('VALIDATION', `Unknown import plan: ${planId}`);
-            if (plan.destructive && options.confirmDestructive !== true) {
-                throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready; const plan = importPlans.get(String(planId)); if (!plan) throw new AppDataError('VALIDATION', `Unknown import plan: ${planId}`);
+                if (plan.destructive && options.confirmDestructive !== true) {
+                    throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
+                }
+                // Mirrors may arrive after preview, including callers without a
+                // safety backup. Keep the reviewed token: a late successful migration
+                // changes its revision and requires a new preview instead of data loss.
+                await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
+                const mutation = optionsMutationOptions(options, 'import-commit', {
+                    planId: plan.id,
+                    signature: plan.signature
+                }, { warnings: plan.warnings });
+                attempted = true;
+                receipt = await kernel.installSnapshot(plan.snapshot, Object.assign({}, mutation, {
+                    resetJournal: plan.resetJournal === true,
+                    expectedRevisionToken: plan.revisionToken
+                }));
+                importPlans.delete(String(planId));
+                await refreshReadingMirrors(Object.keys(plan.snapshot.envelopes));
+                return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
             }
-            // Mirrors may arrive after preview, including callers without a
-            // safety backup. Keep the reviewed token: a late successful migration
-            // changes its revision and requires a new preview instead of data loss.
-            await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
-            const mutation = optionsMutationOptions(options, 'import-commit', {
-                planId: plan.id,
-                signature: plan.signature
-            }, { warnings: plan.warnings });
-            const receipt = await kernel.installSnapshot(plan.snapshot, Object.assign({}, mutation, {
-                resetJournal: plan.resetJournal === true,
-                expectedRevisionToken: plan.revisionToken
-            }));
-            importPlans.delete(String(planId));
-            await refreshReadingMirrors(Object.keys(plan.snapshot.envelopes));
-            return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
         },
         async restore(id, options = {}) {
             await ready; const backup = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(id));
@@ -3710,6 +3774,7 @@
     const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
+        getOperationFailureState: { value: getOperationFailureState, enumerable: false },
         status: { value: () => kernel.status(), enumerable: false }
     });
     Object.freeze(AppData);

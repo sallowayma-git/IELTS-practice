@@ -36,7 +36,7 @@
     const MODULES = ['bootstrap', 'main', 'practice', 'reading', 'listening', 'suite',
         'logger', 'data-kernel', 'storage', 'import', 'export', 'diagnostics', 'channel'];
     const ACTIONS = ['initialize', 'load-resource', 'open-practice', 'handshake', 'submit',
-        'host-receipt', 'save', 'save-draft', 'save-recovery', 'storage-confirmed',
+        'host-receipt', 'acknowledgement', 'save', 'save-draft', 'save-recovery', 'storage-confirmed',
         'suite-navigation', 'import', 'export', 'retry', 'reset', 'report'];
     const RETRY_ACTIONS = ['submit', 'save', 'save-draft', 'save-recovery', 'import', 'export', 'load-resource'];
     const SOURCES = ['bootstrap', 'business', 'console', 'global', 'resource', 'storage', 'relay'];
@@ -52,7 +52,7 @@
         'js/presentation/incident-center.js', 'js/presentation/message-center.js',
         'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
         'js/diagnostics/diagnosticContract.js',
-        'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/operationDiagnostics.js',
         'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js',
         'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
         'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',

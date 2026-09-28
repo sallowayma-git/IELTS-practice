@@ -6794,6 +6794,8 @@
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
         } catch (e) {
             try { global.showMessage && global.showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+                action: 'export', error: e }); } catch (_) { }
             console.error('[Export] failed', e);
         }
     }
@@ -6811,6 +6813,8 @@
             try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
             return snapshot;
         } catch (error) {
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+                action: 'export', error }); } catch (_) { }
             console.error('[ExamActions] 数据导出失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('数据导出失败: ' + (error && error.message || error), 'error');
@@ -8211,6 +8215,17 @@
 
 /* ===== js/app/examSessionMixin.js ===== */
 (function (global) {
+    function operationContext(examId, data = {}) {
+        return { session: data?.sessionId, suite: data?.suiteSessionId, submission: data?.submissionId,
+            operation: data?.operationId || data?.messageId || (data?.submissionId
+                ? `practice-complete:${examId}:${data.sessionId || 'session'}:${data.submissionId}` : undefined) };
+    }
+    function observeFailure(code, module, action, error, correlation, operation, retry) {
+        try { global.AppOperationDiagnostics?.failure({ code, module, action, error, correlation, operation }, retry); } catch (_) { }
+    }
+    function observeStep(module, action, outcome, correlation) {
+        try { global.AppOperationDiagnostics?.breadcrumb(module, action, outcome, correlation); } catch (_) { }
+    }
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
@@ -8687,6 +8702,7 @@
           * 打开指定题目进行练习
           */
         async openExam(examId, options = {}) {
+            observeStep('practice', 'open-practice', 'started', { suite: options.suiteSessionId });
             const openGeneration = this._beginExamOpenGeneration(examId, options);
             const reviewMode = Boolean(options && options.reviewMode);
             let examWindow = null;
@@ -8870,6 +8886,7 @@
                     : examWindow;
 
             } catch (error) {
+                observeFailure('RESOURCE_LOAD_FAILED', 'practice', 'open-practice', error, {}, 'not-committed');
                 console.error('Failed to open exam:', error);
                 window.showMessage('打开题目失败，请重试', 'error');
                 if (launchRegistration) await this._abortExamOpen(examId, launchRegistration);
@@ -11331,6 +11348,7 @@
 
             let attempts = 0;
             const maxAttempts = 30; // ~9s
+            let lastHandshakeError = null;
             const tick = async () => {
                 if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
                     clearInterval(timer);
@@ -11346,12 +11364,16 @@
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
                         await this._sendExamInitEnvelope(examId, examWindow, {}, expectedRegistration);
-                    } catch (_) { /* 忽略 */ }
+                    } catch (error) { lastHandshakeError = error; }
                 }
                 attempts++;
                 if (attempts >= maxAttempts) {
                     clearInterval(timer);
                     this._handshakeTimers.delete(examId);
+                    const info = this.examWindows && this.examWindows.get(examId);
+                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'handshake',
+                        lastHandshakeError || new Error('Practice handshake timed out'),
+                        { session: info?.sessionId, suite: info?.suiteSessionId }, 'not-committed');
                     console.warn('[App] 握手超时，练习页可能未加载增强器');
                 }
             };
@@ -12515,9 +12537,13 @@
         },
 
         async _writeReadingDraftStore(store, changedDraft = null) {
+            let draftCommitted = false;
             try {
                 if (changedDraft) {
-                    await window.AppData.recovery.saveDraft(changedDraft);
+                    const receipt = await window.AppData.recovery.saveDraft(changedDraft);
+                    if (!receipt || receipt.committed !== true) throw new Error('Draft commit was not confirmed', { cause: receipt?.error });
+                    draftCommitted = true;
+                    observeStep('reading', 'save-draft', 'succeeded', { session: changedDraft.sessionId, operation: receipt.operationId });
                 }
                 const drafts = await window.AppData.recovery.listDrafts();
                 const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -12537,6 +12563,8 @@
                 }
                 return true;
             } catch (error) {
+                observeFailure('RECOVERY_SAVE_FAILED', 'reading', 'save-draft', error,
+                    { session: changedDraft?.sessionId }, draftCommitted ? 'committed' : undefined);
                 console.warn('[ReadingDraftGateway] 写入草稿失败:', error);
                 return false;
             }
@@ -12863,6 +12891,10 @@
                 : '';
             const targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : null;
             if (!submissionId || !sessionId || !targetWindow) {
+                if (submissionId && sessionId && sourceWindow?.closed && succeeded) {
+                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit',
+                        new Error('Practice acknowledgement target closed'), operationContext(examId, completionData));
+                }
                 return false;
             }
             try {
@@ -12890,8 +12922,12 @@
                     windowInfo.practiceSubmitReceipts = receipts;
                     this.examWindows && this.examWindows.set(resolvedSession.examId, windowInfo);
                 }
+                observeStep('channel', 'acknowledgement', 'unconfirmed', operationContext(examId, completionData));
+                if (!delivered && succeeded) observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit',
+                    new Error('Practice acknowledgement was not delivered'), operationContext(examId, completionData));
                 return delivered;
             } catch (error) {
+                observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'submit', error, operationContext(examId, completionData));
                 console.warn('[DataCollection] 提交结果回执发送失败:', error);
                 return false;
             }
@@ -13855,6 +13891,7 @@
                     windowInfo.listeningBridgeInitialized = !isPreInitReady;
                 }
                 if (!isPreInitReady) {
+                    observeStep('channel', 'handshake', 'succeeded', operationContext(examId, payload));
                     windowInfo.dataCollectorReady = true;
                 }
                 if (payload.pageType) {
@@ -14128,6 +14165,8 @@
                 console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
                 return;
             }
+            const diagnosticContext = operationContext(examId, data);
+            observeStep('channel', 'host-receipt', 'succeeded', diagnosticContext);
             if (this._replayPracticeSubmitReceipt(examId, data, sourceWindow)) {
                 return true;
             }
@@ -14219,7 +14258,11 @@
                     if (!ownsRegistration()) return false;
                     const handled = suiteOutcome === true || Boolean(suiteOutcome && suiteOutcome.handled);
                     if (handled) {
-                        const committed = !suiteOutcome || typeof suiteOutcome !== 'object' || suiteOutcome.committed !== false;
+                        const committed = suiteOutcome === true || suiteOutcome?.committed === true;
+                        if (!committed) observeFailure(suiteOutcome?.errorCode === 'suite_recovery_save_failed'
+                            ? 'RECOVERY_SAVE_FAILED' : 'PRACTICE_SAVE_FAILED', 'suite', 'submit',
+                            suiteOutcome?.error, diagnosticContext);
+                        else observeStep('suite', 'storage-confirmed', 'succeeded', diagnosticContext);
                         this._announcePracticeSubmitOutcome(examId, data, sourceWindow, committed, {
                             errorCode: suiteOutcome && suiteOutcome.errorCode
                         });
@@ -14234,8 +14277,9 @@
                     }
                     suiteHandlerDeclined = true;
                 } catch (suiteError) {
+                    observeFailure('PRACTICE_SAVE_FAILED', 'suite', 'submit', suiteError, diagnosticContext);
                     console.error('[SuitePractice] 处理套题结果失败，保留 v2 恢复快照:', suiteError);
-                    window.showMessage && window.showMessage('套题模式出现异常，恢复快照已保留，请稍后重试。', 'error');
+                    window.showMessage && window.showMessage('套题提交尚未确认保存，请保留练习页面并查看诊断详情。', 'error');
                     suiteHandlerDeclined = true;
                 }
             }
@@ -14257,7 +14301,7 @@
                 let persistedRecord = null;
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        persistedRecord = await recorder.handleSessionCompleted(completionData);
+                        persistedRecord = await recorder.handleSessionCompleted(completionData, { deferDiagnostics: true });
                     } catch (recErr) {
                         console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
                         persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
@@ -14286,6 +14330,7 @@
                 }
                 if (!ownsRegistration()) return false;
                 completionCommitted = true;
+                observeStep('practice', 'storage-confirmed', 'succeeded', diagnosticContext);
 
                 if (completedViaFallback && recorder && typeof recorder.endPracticeSession === 'function') {
                     recorder.endPracticeSession(examId);
@@ -14356,9 +14401,15 @@
                 }
 
             } catch (error) {
+                observeFailure('PRACTICE_SAVE_FAILED', 'practice', 'submit', error, diagnosticContext,
+                    completionCommitted ? 'committed' : 'unconfirmed', !completionCommitted && diagnosticContext.operation
+                        && typeof window.AppData.practice.getCommitState === 'function'
+                        ? () => window.AppData.practice.getCommitState(diagnosticContext.operation) : undefined);
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
-                window.showMessage && window.showMessage('练习记录保存失败，请稍后重试', 'error');
-                this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
+                window.showMessage && window.showMessage(completionCommitted
+                    ? '练习记录已保存，但后续操作失败，请查看诊断详情。'
+                    : '练习提交尚未确认保存，请保留练习页面。', 'error');
+                if (!completionCommitted) this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
                     errorCode: 'save_failed'
                 });
             } finally {
@@ -14505,6 +14556,7 @@
                             : undefined)
                 });
 
+                if (!receipt || receipt.committed !== true) throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
                 console.log('[DataCollection] 练习完成数据已保存到 canonical store');
                 return receipt.record;
             } catch (error) {

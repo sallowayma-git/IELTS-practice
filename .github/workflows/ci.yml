@@ -67,6 +67,11 @@ jobs:
         timeout-minutes: 2
         run: python developer/tests/e2e/full_reset_flow.py
 
+      - name: Verify critical operation outcomes in three hosting modes
+        # B4 boundary regressions; integrated release qualification remains in C4.
+        timeout-minutes: 3
+        run: node developer/tests/e2e/operation_diagnostics.node.js
+
       - name: Check reading data integrity
         run: python developer/tests/ci/check_reading_data_integrity.py
 

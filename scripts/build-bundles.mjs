@@ -10,6 +10,7 @@ const checkOnly = process.argv.includes('--check');
 
 const bundles = {
     'js/bundles/runtime-entry.bundle.js': [
+        'js/diagnostics/operationDiagnostics.js',
         'js/presentation/threeBackground.js',
         'js/runtime/bootScreen.js',
         'js/runtime/lazyLoader.js',

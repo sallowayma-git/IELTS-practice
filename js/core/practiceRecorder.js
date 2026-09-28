@@ -112,7 +112,16 @@ class PracticeRecorder {
 
     async persistActiveSession(session, previousEntityId = null) {
         const entity = Object.assign({}, session, { id: this.activeSessionEntityId(session) });
-        const receipt = await window.AppData.recovery.saveActiveSession(entity);
+        let receipt;
+        try {
+            receipt = await window.AppData.recovery.saveActiveSession(entity);
+            if (!receipt || receipt.committed !== true) throw new Error('Recovery commit was not confirmed', { cause: receipt?.error });
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'save-recovery', 'succeeded', { session: session.sessionId }); } catch (_) { }
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'RECOVERY_SAVE_FAILED', module: 'practice',
+                action: 'save-recovery', error, correlation: { session: session.sessionId } }); } catch (_) { }
+            throw error;
+        }
         if (previousEntityId && previousEntityId !== entity.id) {
             await window.AppData.recovery.discardActiveSession(previousEntityId);
         }
@@ -597,6 +606,8 @@ class PracticeRecorder {
         return {
             examId,
             sessionId: payload.sessionId || null,
+            submissionId: payload.submissionId || null,
+            operationId: payload.operationId || payload.messageId || null,
             originalExamId: payload.originalExamId || payload.metadata?.originalExamId || null,
             derivedExamId: payload.derivedExamId || payload.metadata?.derivedExamId || null,
             rawExamId: payload.examId || null,
@@ -916,7 +927,7 @@ class PracticeRecorder {
     /**
      * 处理会话完成
      */
-    async handleSessionCompleted(rawData) {
+    async handleSessionCompleted(rawData, options = {}) {
         const payload = this.ensureCompletionPayloadShape(rawData);
         if (!payload) {
             console.warn('[PracticeRecorder] 无法处理会话完成事件：缺少必要数据');
@@ -1089,6 +1100,10 @@ class PracticeRecorder {
             id: `record_${session.sessionId || this.generateSessionId(resolvedExamId)}`,
             examId: resolvedExamId,
             sessionId: session.sessionId || payload.sessionId || this.generateSessionId(resolvedExamId),
+            submissionId: payload.submissionId || results?.submissionId || null,
+            operationId: payload.operationId || results?.operationId || (payload.submissionId
+                ? `practice-complete:${resolvedExamId}:${session.sessionId || payload.sessionId}:${payload.submissionId}`
+                : undefined),
             startTime: resolvedStartTime,
             endTime: resolvedEndTime,
             duration: Math.floor(durationMs / 1000),
@@ -1148,7 +1163,7 @@ class PracticeRecorder {
         }
 
         try {
-            const savedRecord = await this.savePracticeRecord(practiceRecord);
+            const savedRecord = await this.savePracticeRecord(practiceRecord, options);
 
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId);
@@ -1452,8 +1467,12 @@ class PracticeRecorder {
      */
     async savePracticeRecord(record, options = {}) {
         const maxRetries = 3;
+        let failureOutcome;
         const storageReadyRecord = this.prepareRecordForStorage(record);
         const saveOperationId = storageReadyRecord.operationId || this.generateOperationId('practice-complete');
+        try { window.AppOperationDiagnostics?.breadcrumb('practice', 'submit', 'started', {
+            session: record.sessionId, submission: record.submissionId, operation: saveOperationId
+        }); } catch (_) { }
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -1463,6 +1482,12 @@ class PracticeRecorder {
                     record: storageReadyRecord,
                     operationId: saveOperationId
                 });
+                if (!receipt || receipt.committed !== true) {
+                    throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+                }
+                try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
+                    session: record.sessionId, submission: record.submissionId, operation: saveOperationId
+                }); } catch (_) { }
                 const savedRawRecord = receipt.record;
                 const savedRecord = this.restoreRecordAnswerState(savedRawRecord, record);
                 console.log(`[PracticeRecorder] AppData.practice 保存成功: ${savedRecord.id}`);
@@ -1485,8 +1510,10 @@ class PracticeRecorder {
                     error
                 );
 
+                failureOutcome = this.combineSaveFailureOutcome(error, failureOutcome);
                 if (attempt === maxRetries || this.isCriticalError(error)) {
-                    return await this.retrySaveWithStandardizedRecord(record, saveOperationId);
+                    return await this.retrySaveWithStandardizedRecord(record, saveOperationId,
+                        Object.assign({}, options, { failureOutcome }));
                 }
 
                 const delay = attempt * 100;
@@ -1495,13 +1522,22 @@ class PracticeRecorder {
             }
         }
 
-        return await this.retrySaveWithStandardizedRecord(record, saveOperationId);
+        return await this.retrySaveWithStandardizedRecord(record, saveOperationId, options);
     }
 
     /**
      * 用标准化后的 payload 再走统一 API 保存。
      */
-    async retrySaveWithStandardizedRecord(record, operationId = null) {
+    combineSaveFailureOutcome(error, previous) {
+        let current = 'unconfirmed';
+        try { current = window.AppData.getOperationFailureState?.(error) || current; } catch (_) { }
+        if (previous === 'committed' || current === 'committed') return 'committed';
+        if (previous === 'unconfirmed' || current === 'unconfirmed') return 'unconfirmed';
+        return 'not-committed';
+    }
+
+    async retrySaveWithStandardizedRecord(record, operationId = null, options = {}) {
+        const originalOperationId = operationId || record.operationId || this.generateOperationId('practice-complete');
         try {
             console.log('[PracticeRecorder] 使用标准化记录重试保存');
 
@@ -1509,10 +1545,24 @@ class PracticeRecorder {
             const standardizedRecord = this.normalizeRecordForAppData(record, examIndex);
             const receipt = await window.AppData.practice.completeAttempt({
                 record: standardizedRecord,
-                operationId: operationId || standardizedRecord.operationId || this.generateOperationId('practice-complete')
+                operationId: originalOperationId
             });
+            if (!receipt || receipt.committed !== true) {
+                throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+            }
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
+                session: record.sessionId, submission: record.submissionId, operation: originalOperationId
+            }); } catch (_) { }
             return receipt.record;
         } catch (error) {
+            if (options.deferDiagnostics !== true) {
+                try { window.AppOperationDiagnostics?.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'practice',
+                    action: 'submit', error, operation: this.combineSaveFailureOutcome(error, options.failureOutcome),
+                    correlation: { session: record.sessionId,
+                        submission: record.submissionId, operation: originalOperationId }
+                }, typeof window.AppData.practice.getCommitState === 'function'
+                    ? () => window.AppData.practice.getCommitState(originalOperationId) : undefined); } catch (_) { }
+            }
             console.error('[PracticeRecorder] 标准化重试保存失败:', {
                 error: error?.message,
                 validationErrors: error?.validationErrors || null,
@@ -1825,14 +1875,26 @@ class PracticeRecorder {
      */
     async saveToTemporaryStorage(record) {
         const recordId = String(record && (record.id || record.sessionId) || `record-${Date.now()}`);
-        const receipt = await window.AppData.recovery.saveDraft({
-            id: `practice-record:${recordId}`,
-            recordId,
-            kind: 'practice_record_recovery',
-            record: this.clonePlainObject(record),
-            tempSavedAt: new Date().toISOString(),
-            needsRecovery: true
-        });
+        let receipt;
+        try {
+            receipt = await window.AppData.recovery.saveDraft({
+                id: `practice-record:${recordId}`,
+                recordId,
+                kind: 'practice_record_recovery',
+                record: this.clonePlainObject(record),
+                tempSavedAt: new Date().toISOString(),
+                needsRecovery: true
+            });
+            if (!receipt || receipt.committed !== true) throw new Error('Recovery commit was not confirmed', { cause: receipt?.error });
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'save-recovery', 'succeeded', {
+                session: record.sessionId, submission: record.submissionId, operation: receipt.operationId
+            }); } catch (_) { }
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'RECOVERY_SAVE_FAILED', module: 'practice',
+                action: 'save-recovery', error, correlation: { session: record.sessionId,
+                    submission: record.submissionId, operation: record.operationId } }); } catch (_) { }
+            throw error;
+        }
 
         try {
             const drafts = await window.AppData.recovery.listDrafts();
@@ -1975,40 +2037,51 @@ class PracticeRecorder {
      * 导出练习数据
      */
     async exportData(format = 'json') {
-        const normalizedFormat = String(format || 'json').toLowerCase();
-        if (normalizedFormat === 'csv') {
-            const records = await this.listPracticeRecordsForStats();
-            return this.convertRecordsToCSV(records);
+        try {
+            const normalizedFormat = String(format || 'json').toLowerCase();
+            if (normalizedFormat === 'csv') {
+                const records = await this.listPracticeRecordsForStats();
+                return this.convertRecordsToCSV(records);
+            }
+            if (normalizedFormat !== 'json') {
+                throw new Error(`Unsupported export format: ${format}`);
+            }
+            const snapshot = await window.AppData.backups.export({ domains: ['practice'] });
+            return JSON.stringify(snapshot, null, 2);
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export', action: 'export', error }); } catch (_) { }
+            throw error;
         }
-        if (normalizedFormat !== 'json') {
-            throw new Error(`Unsupported export format: ${format}`);
-        }
-        const snapshot = await window.AppData.backups.export({ domains: ['practice'] });
-        return JSON.stringify(snapshot, null, 2);
     }
 
     /**
      * 导入练习数据
      */
     async importData(data, options = {}) {
-        const mergeMode = options.merge === false || options.mergeMode === 'replace'
-            ? 'replace'
-            : (options.mergeMode || 'merge');
-        const payload = Array.isArray(data) ? { records: data } : data;
-        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
-        const backup = options.createBackup === false
-            ? null
-            : await window.AppData.backups.create({ type: 'pre-import' });
-        const receipt = await window.AppData.backups.commitImport(preview.id, {
-            operationId: options.operationId,
-            confirmDestructive: mergeMode === 'replace'
-        });
         try {
-            await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup && backup.id, practice: preview.practice });
-        } catch (historyError) {
-            console.warn('[PracticeRecorder] 导入已提交，但历史记录写入失败:', historyError);
+            const mergeMode = options.merge === false || options.mergeMode === 'replace'
+                ? 'replace'
+                : (options.mergeMode || 'merge');
+            const payload = Array.isArray(data) ? { records: data } : data;
+            const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
+            const backup = options.createBackup === false
+                ? null
+                : await window.AppData.backups.create({ type: 'pre-import' });
+            const receipt = await window.AppData.backups.commitImport(preview.id, {
+                operationId: options.operationId,
+                confirmDestructive: mergeMode === 'replace'
+            });
+            if (!receipt || receipt.committed !== true) throw new Error('Import commit was not confirmed', { cause: receipt?.error });
+            try {
+                await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup && backup.id, practice: preview.practice });
+            } catch (historyError) {
+                console.warn('[PracticeRecorder] 导入已提交，但历史记录写入失败:', historyError);
+            }
+            return Object.assign({}, receipt, { backupId: backup && backup.id });
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'DATA_IMPORT_FAILED', module: 'import', action: 'import', error, correlation: { operation: options.operationId } }); } catch (_) { }
+            throw error;
         }
-        return Object.assign({}, receipt, { backupId: backup && backup.id });
     }
 
     /**

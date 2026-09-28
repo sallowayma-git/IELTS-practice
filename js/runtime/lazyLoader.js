@@ -176,6 +176,8 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
+            var settled = false;
+            var timer = null;
             var diagnostics = global.AppDiagnostics;
             // Declare before setting src or inserting the element: capture listeners run first.
             try {
@@ -184,10 +186,16 @@
             script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = 'loaded';
                 resolve();
             };
             script.onerror = function handleError(error) {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = null;
                 var failure = new Error('加载脚本失败: ' + url);
                 try {
@@ -198,9 +206,15 @@
                         script.parentNode.removeChild(script);
                     }
                 } catch (_) { }
+                try {
+                    global.AppOperationDiagnostics?.failure({ code: 'RESOURCE_LOAD_FAILED', module: 'main',
+                        action: 'load-resource', error: failure, operation: 'not-committed',
+                        resource: { url: url, optional: !!(options && options.optional) } });
+                } catch (_) { }
                 reject(failure);
             };
-            document.head.appendChild(script);
+            try { timer = global.setTimeout?.(function () { script.onerror(); }, 15000); } catch (_) { }
+            try { document.head.appendChild(script); } catch (error) { script.onerror(error); }
         });
 
         return scriptStatus[url];

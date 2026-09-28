@@ -14,7 +14,7 @@
     }
 
     function exportPracticeMarkdown() {
-        ensurePracticeSuite().then(function handleExportReady() {
+        return ensurePracticeSuite().then(function handleExportReady() {
             if (!global.markdownExporter || typeof global.markdownExporter.exportToMarkdown !== 'function') {
                 if (typeof global.MarkdownExporter === 'function') {
                     try {
@@ -26,14 +26,14 @@
             }
 
             if (global.markdownExporter && typeof global.markdownExporter.exportToMarkdown === 'function') {
-                global.markdownExporter.exportToMarkdown();
-                return;
+                return global.markdownExporter.exportToMarkdown();
             }
 
             if (typeof global.showMessage === 'function') {
                 global.showMessage('Markdown 导出模块未就绪', 'warning');
             }
         }).catch(function handleExportError(error) {
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export', action: 'export', error }); } catch (_) { }
             console.error('[AppActions] 导出失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('导出失败，请稍后重试', 'error');

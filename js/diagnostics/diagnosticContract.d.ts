@@ -12,7 +12,7 @@ export type CorrelationKind = 'session' | 'suite' | 'submission' | 'operation';
 export type ModuleName = 'bootstrap' | 'main' | 'practice' | 'reading' | 'listening' | 'suite'
     | 'logger' | 'data-kernel' | 'storage' | 'import' | 'export' | 'diagnostics' | 'channel' | 'unknown';
 export type Action = 'initialize' | 'load-resource' | 'open-practice' | 'handshake' | 'submit'
-    | 'host-receipt' | 'save' | 'save-draft' | 'save-recovery' | 'storage-confirmed'
+    | 'host-receipt' | 'acknowledgement' | 'save' | 'save-draft' | 'save-recovery' | 'storage-confirmed'
     | 'suite-navigation' | 'import' | 'export' | 'retry' | 'reset' | 'report' | 'unknown';
 export interface Correlation {
     readonly scopeId: string;

@@ -580,15 +580,30 @@
             }
     }
 
+    function reportTransfer(action, error, operation = 'unconfirmed', cancelled = false) {
+        try { global.AppOperationDiagnostics?.failure({ code: action === 'import' ? 'DATA_IMPORT_FAILED' : 'DATA_EXPORT_FAILED',
+            module: action, action, error, operation, cancelled }); } catch (_) { }
+    }
+
     async function writeToBoundDirectory(options) {
         var opts = options || {};
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
-        await ensureReady();
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        return withDiskWriteLock(function () {
-            return writeToBoundDirectoryUnlocked(opts);
-        });
+        try {
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
+            await ensureReady();
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            var result = await withDiskWriteLock(function () {
+                return writeToBoundDirectoryUnlocked(opts);
+            });
+            if (opts.interactive === true && result?.success !== true
+                && !['busy', 'unbound', 'restore_required', 'suspended', 'reset_pending'].includes(result?.reason)) {
+                reportTransfer('export', result?.error);
+            }
+            return result;
+        } catch (error) {
+            if (opts.interactive === true) reportTransfer('export', error);
+            throw error;
+        }
     }
 
     async function bindDirectory(options) {
@@ -1139,6 +1154,7 @@
             operationId: opts.operationId || createOperationId('external-restore'),
             confirmDestructive: preview.destructive === true
         });
+        if (!result || result.committed !== true) throw new Error('Import commit was not confirmed', { cause: result?.error });
         try {
             if (typeof backups.recordImport === 'function') {
                 await backups.recordImport({
@@ -1156,69 +1172,88 @@
     }
 
     async function restorePayload(payload, options) {
-        return withDiskWriteLock(function () {
-            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            return restorePayloadUnlocked(payload, options);
-        });
+        var restored = false;
+        try {
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result?.success !== true) reportTransfer('import', result?.error, 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+            throw error;
+        }
     }
 
     async function restoreFromLatest(options) {
-        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-        await ensureReady();
-        return withDiskWriteLock(async function () {
+        var restored = false;
+        try {
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            await refreshStoredBindingForWrite();
-            var payload = await readLatestPayload(true);
-            var result = await restorePayloadUnlocked(payload, options);
-            if (result && result.success) {
-                // The import itself may notify onDataCommitted. Start the
-                // freshness window after that commit so only a later
-                // concurrent change keeps the restored state dirty.
-                var restoreGeneration = state.dirtyGeneration;
-                var backups = requireBackupApi();
-                var currentSnapshot = null;
-                try {
-                    currentSnapshot = await backups.export();
-                } catch (_) {
-                    state.freshnessUnknown = true;
-                }
-                var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
-                var currentMatchesRestore = currentSnapshotValid
-                    && currentSnapshot.checksum === payload.checksum;
-                var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
-                if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
-                    if (!state.dirty) state.dirtyGeneration += 1;
-                    state.dirty = true;
-                    state.freshnessUnknown = !currentSnapshotValid;
-                } else {
-                    state.dirty = false;
-                    state.freshnessUnknown = false;
-                }
-                var metadataPersisted = await persistMeta({
-                    lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
-                    lastWriteError: null,
-                    awaitingRestore: false
-                }, { requireDurable: true });
-                result.metadataPersisted = metadataPersisted;
-                if (!metadataPersisted) {
-                    result.success = false;
-                    result.restored = true;
-                    result.reason = 'metadata_persistence_failed';
-                }
+            await ensureReady();
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                await refreshStoredBindingForWrite();
+                var payload = await readLatestPayload(true);
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result && result.success) {
+                    // The import itself may notify onDataCommitted. Start the
+                    // freshness window after that commit so only a later
+                    // concurrent change keeps the restored state dirty.
+                    var restoreGeneration = state.dirtyGeneration;
+                    var backups = requireBackupApi();
+                    var currentSnapshot = null;
+                    try {
+                        currentSnapshot = await backups.export();
+                    } catch (_) {
+                        state.freshnessUnknown = true;
+                    }
+                    var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
+                    var currentMatchesRestore = currentSnapshotValid
+                        && currentSnapshot.checksum === payload.checksum;
+                    var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
+                    if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
+                        if (!state.dirty) state.dirtyGeneration += 1;
+                        state.dirty = true;
+                        state.freshnessUnknown = !currentSnapshotValid;
+                    } else {
+                        state.dirty = false;
+                        state.freshnessUnknown = false;
+                    }
+                    var metadataPersisted = await persistMeta({
+                        lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                        lastWriteError: null,
+                        awaitingRestore: false
+                    }, { requireDurable: true });
+                    result.metadataPersisted = metadataPersisted;
+                    if (!metadataPersisted) {
+                        result.success = false;
+                        result.restored = true;
+                        result.reason = 'metadata_persistence_failed';
+                    }
 
-                // `scheduleSilentFlush` deliberately refuses to schedule
-                // while awaitingRestore is true. Clear that durable guard
-                // first, then schedule based on the final state. Also retain
-                // a commit that lands while metadata persistence yields.
-                if (state.dirtyGeneration !== restoreGeneration
-                    && !state.dirty) {
-                    state.dirty = true;
-                    state.dirtyGeneration += 1;
+                    // `scheduleSilentFlush` deliberately refuses to schedule
+                    // while awaitingRestore is true. Clear that durable guard
+                    // first, then schedule based on the final state. Also retain
+                    // a commit that lands while metadata persistence yields.
+                    if (state.dirtyGeneration !== restoreGeneration
+                        && !state.dirty) {
+                        state.dirty = true;
+                        state.dirtyGeneration += 1;
+                    }
+                    if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
                 }
-                if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
-            }
-            return result;
-        });
+                if (result?.success !== true) reportTransfer('import', result?.error, restored ? 'committed' : 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+            throw error;
+        }
     }
 
     function scheduleSilentFlush() {
@@ -1415,6 +1450,7 @@
                     notify('已绑定并写入：' + bound.directoryName, 'success');
                 }
             } catch (error) {
+                reportTransfer('export', error, 'not-committed', error?.name === 'AbortError');
                 notify(error && error.name === 'AbortError' ? '已取消选择文件夹' : (error.message || '绑定失败'), error && error.name === 'AbortError' ? 'info' : 'error');
             }
             refreshPanel();

@@ -200,7 +200,7 @@ async function testSaveFailureShowsErrorOnly() {
     assert.strictEqual(harness.syncCalls.length, 0, '保存失败不能继续同步成功链路');
     assert.strictEqual(harness.messages.length, 1, '保存失败应给用户一个明确错误');
     assert.strictEqual(harness.messages[0].type, 'error');
-    assert.match(harness.messages[0].message, /记录保存失败/);
+    assert.match(harness.messages[0].message, /尚未确认保存/);
 }
 
 async function testDurationDoesNotRenderNaN() {

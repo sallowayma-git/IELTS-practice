@@ -951,6 +951,7 @@ class ExamSystemApp {
 
     const integratedLifecycleMixin = {
         async initialize() {
+            try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'started'); } catch (_) { }
             try {
                 this.showLoading(true);
                 this.restoreApplicationUI();
@@ -982,6 +983,7 @@ class ExamSystemApp {
                 this.isInitialized = true;
                 this.showLoading(false);
                 this.showUserMessage('系统初始化完成', 'success');
+                try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'succeeded'); } catch (_) { }
                 try { window.AppDiagnostics?.markReady(); } catch (_) { }
             } catch (error) {
                 this.handleInitializationError(error);
