@@ -88,7 +88,7 @@ git push origin contrib/fix-deployment
 
 ## 按改动类型验证
 
-以下命令均从仓库根目录执行。当前 [CI 配置](.github/workflows/ci.yml) 仅监听 `opensource` 的 push 和 PR，且未运行后端测试，因此本部署分支不能依赖该工作流自动完成验证。
+以下命令均从仓库根目录执行。[Multi-device CI](.github/workflows/ci-multi-device.yml) 仅监听目标为 `feature/multi-device-easy-deploy` 的 PR，执行前端回归、后端测试、浏览器 E2E 与真实 PostgreSQL 部署冒烟检查。四项检查全部成功后，汇总检查 `md-ci` 才会通过。触发规则、诊断产物和本地复现方式见 [Multi-device CI 说明](developer/tests/ci/MULTI_DEVICE_CI.md)。
 
 ### 后端与记录 API
 
@@ -138,7 +138,7 @@ python -X utf8 -m unittest discover -s developer/tests/py -p "test_*.py"
 python -X utf8 developer/tests/ci/check_reading_data_integrity.py
 ```
 
-涉及练习提交、套题、回顾或本地持久化流程时，按 [CI 配置](.github/workflows/ci.yml) 安装 Python Playwright 与 Chromium，再运行对应浏览器测试或完整套件：
+涉及练习提交、套题、回顾或本地持久化流程时，按 [CI 配置](.github/workflows/ci-multi-device.yml) 安装 Python Playwright 与 Chromium，再运行对应浏览器测试或完整套件：
 
 ```bash
 python -X utf8 developer/tests/e2e/e2e_runner.py

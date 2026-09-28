@@ -1,0 +1,145 @@
+name: Multi-device CI
+
+on:
+  pull_request:
+    branches: [feature/multi-device-easy-deploy]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+
+concurrency:
+  group: multi-device-ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  md-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: developer/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frontend test dependencies
+        run: npm ci --prefix developer
+      - name: Install Chromium for IndexedDB regression tests
+        run: node developer/node_modules/playwright/cli.js install --with-deps chromium --only-shell
+      - name: Check JS bundle drift
+        run: node scripts/build-bundles.mjs --check
+      - name: Run JavaScript unit and regression tests
+        run: npm test --prefix developer
+      - name: Run Python unit tests
+        run: python -m unittest discover -s developer/tests/py -p 'test_*.py'
+      - name: Check reading data integrity
+        run: python developer/tests/ci/check_reading_data_integrity.py
+
+  md-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Run backend tests
+        run: npm test --prefix backend
+
+  md-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: developer/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright and Chromium
+        run: |
+          npm ci --prefix developer
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          node developer/node_modules/playwright/cli.js install chromium --only-shell
+      - name: Run unified E2E suite
+        timeout-minutes: 24
+        run: python developer/tests/e2e/e2e_runner.py
+      - name: Upload E2E diagnostics
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-device-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            developer/tests/e2e/reports/**/*.json
+            developer/tests/e2e/reports/**/*.log
+            developer/tests/e2e/reports/**/*.png
+            developer/tests/e2e/reports/**/*.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  md-deploy-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify container deployment and PostgreSQL persistence
+        timeout-minutes: 16
+        env:
+          MD_SMOKE_STATE_DIR: ${{ runner.temp }}/multi-device-smoke
+        run: node backend/scripts/ci-smoke.mjs
+      - name: Clean up interrupted smoke deployment
+        if: always()
+        timeout-minutes: 2
+        env:
+          MD_SMOKE_STATE_DIR: ${{ runner.temp }}/multi-device-smoke
+        run: node backend/scripts/ci-smoke.mjs --cleanup
+      - name: Upload deployment diagnostics
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-device-deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: developer/tests/e2e/reports/multi-device-deploy/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  md-ci:
+    if: always()
+    needs: [md-quality, md-backend, md-e2e, md-deploy-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$JOB_RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"' >> "$GITHUB_STEP_SUMMARY"
+          echo "$JOB_RESULTS" | jq -e 'length == 4 and all(.[]; .result == "success")'
