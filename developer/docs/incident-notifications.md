@@ -95,6 +95,11 @@ alias and an allowlisted action. Callbacks stay in bounded page UI state, outsid
 diagnostic buffers, storage and exports. A click invokes one callback at a time;
 there is no automatic retry, reload, storage clearing or practice-window closure.
 Committed and multi-occurrence notification groups cannot replay a callback.
+Bindings retain their action and correlation aliases and are revalidated against
+the current event before presentation and execution. Enrichment that disables
+retry or changes those aliases clears the callback. A result arriving after its
+binding was invalidated or its notification became an aggregate cannot confirm
+the displayed outcome.
 
 An ordinary fulfilled Promise or `{ success: true }` does not confirm persistence.
 Only `{ verified: true, operation: 'committed' | 'not-committed' | 'unconfirmed' }`
@@ -120,6 +125,13 @@ events aggregate only when their fingerprint, window, action, correlation aliase
 outcome and presentation match within the fixed window. Different known operations
 never merge. A dismissed group stays dismissed for the remaining window. A later
 independent occurrence can create a new notification.
+Identity-preserving enrichment rechecks the grouping key: a member whose
+classification, action, correlation, outcome or presentation changes leaves its
+old aggregate. If it was the representative, another retained member supplies the
+old group's reference. Open details refresh their heading, role and technical
+text with the current representative. Transient completion is separate from user
+dismissal, so a later unconfirmed-save classification still opens a critical
+dialog unless the user explicitly acknowledged the incident.
 
 Overflow does not schedule more modals or discard diagnostic events. The notification
 region points to passive history, where retained events can be paged, opened by

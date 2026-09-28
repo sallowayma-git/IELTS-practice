@@ -1061,40 +1061,53 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 if (eventKind === 'startup') { this.deferToStartup(); return event.eventId; }
                 const time = this.now();
                 const previous = this.seen.get(event.eventId);
-                let item = previous && this.groups.get(previous);
+                const key = groupingKey(event);
+                let item = previous && this.groups.get(previous.id);
+                let regrouped = false;
+                let dismissed = false;
+                if (item && item.key !== key && item.count > 1) {
+                    dismissed = item.dismissed;
+                    this.detachMember(item, event.eventId);
+                    item = null;
+                    regrouped = true;
+                }
                 if (item) {
                     if (item.event.eventId === event.eventId) {
-                        if (item.event.persistence.operation !== event.persistence.operation) item.operation = undefined;
+                        if (item.key !== key) { item.operation = undefined; item.actionStatus = ''; }
                         item.event = event;
-                        item.key = groupingKey(event);
+                        item.key = key;
                     }
                     item.kind = eventKind;
-                } else if (!previous) {
-                    const key = groupingKey(event);
+                } else if (!previous || regrouped) {
                     item = Array.from(this.groups.values()).find((candidate) => candidate.key === key
+                        && (!dismissed || candidate.dismissed)
                         && time >= candidate.started && time - candidate.started < LIMITS.aggregationMs);
                     if (item) item.count = Math.min(Number.MAX_SAFE_INTEGER, item.count + 1);
                     else {
                         if (this.groups.size >= LIMITS.groups) {
-                            const expired = Array.from(this.groups.values()).find((candidate) => candidate.dismissed && candidate.id !== this.dialog?.item?.id);
+                            const expired = Array.from(this.groups.values()).find((candidate) =>
+                                (candidate.dismissed || candidate.kind === 'transient') && candidate.id !== this.dialog?.item?.id);
                             if (expired) this.groups.delete(expired.id);
                         }
                         if (this.groups.size < LIMITS.groups) {
                             item = { id: event.eventId, event, key, started: time, kind: eventKind, count: 1,
-                                dismissed: false, retry: null, busy: false, actionStatus: '' };
+                                dismissed, transientShown: false, retry: null, busy: false, actionStatus: '' };
                             this.groups.set(item.id, item);
                         } else this.overflow = Math.min(Number.MAX_SAFE_INTEGER, this.overflow + 1);
                     }
-                    this.seen.set(event.eventId, item?.id || event.eventId);
+                }
+                if (item || !previous || regrouped) {
+                    this.seen.set(event.eventId, { id: item?.id || event.eventId, event });
                     if (this.seen.size > LIMITS.identities) this.seen.delete(this.seen.keys().next().value);
                 }
                 if (item) {
                     // Functions stay only in bounded page UI state, never diagnostic records.
                     const retry = field(presentation, 'retry');
                     if (retry && event.eventId === item.id) item.retry = this.safeRetry(event, retry);
-                    if (!item.dismissed && eventKind === 'transient') {
-                        if (!previous && item.count === 1) this.transient(TITLES[event.code] + '。' + outcome(event), 'info');
-                        item.dismissed = true;
+                    this.validatedRetry(item);
+                    if (!item.dismissed && eventKind === 'transient' && !item.transientShown) {
+                        if (item.count === 1) this.transient(TITLES[event.code] + '。' + outcome(event), 'info');
+                        item.transientShown = true;
                     }
                     if (!item.dismissed && eventKind === 'dialog' && item.id !== this.dialog?.item?.id && !this.queue.includes(item.id)) {
                         if (this.queue.length < LIMITS.dialogs) this.queue.push(item.id);
@@ -1110,36 +1123,79 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             }
         }
 
+        detachMember(item, eventId) {
+            item.count--;
+            if (item.id !== eventId) return;
+            // Keep the old group's reference attached to a remaining observation.
+            // Identity snapshots share the existing bounded 200-entry bookkeeping.
+            const survivor = Array.from(this.seen.values()).find((entry) => entry.id === item.id && entry.event.eventId !== eventId);
+            this.groups.delete(item.id);
+            if (survivor) {
+                item.id = survivor.event.eventId;
+                item.event = survivor.event;
+                item.retry = null;
+                item.operation = undefined;
+                item.actionStatus = '';
+                this.groups.set(item.id, item);
+                for (const entry of this.seen.values()) if (entry.id === eventId) entry.id = item.id;
+                this.queue = this.queue.map((id) => id === eventId ? item.id : id);
+            } else {
+                // Old members may have aged out of UI bookkeeping; passive history
+                // retains them without displaying the enriched ID under an old code.
+                this.queue = this.queue.filter((id) => id !== eventId);
+                if (this.dialog?.item === item) this.removeDialog();
+            }
+        }
+
         safeRetry(event, action) {
             const run = field(action, 'run');
             if (!event.retry.available || typeof run !== 'function' || event.persistence.operation === 'committed'
                 || field(action, 'action') !== event.retry.action
                 || field(action, 'operationAlias') !== event.retry.operationAlias
                 || field(action, 'submissionAlias') !== event.retry.submissionAlias) return null;
-            return { run };
+            return { run, action: event.retry.action, operationAlias: event.retry.operationAlias,
+                submissionAlias: event.retry.submissionAlias };
+        }
+
+        validatedRetry(item) {
+            if (!item.retry) return null;
+            try {
+                item.retry = this.safeRetry(item.event, item.retry);
+                const current = this.reporter?.getIncident(item.id);
+                if (current) item.retry = this.safeRetry(current, item.retry);
+            } catch (_) { item.retry = null; }
+            if (!item.retry) item.actionStatus = '';
+            return item.retry;
         }
 
         async retry(item) {
-            if (!item.retry || item.busy || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed') return;
+            const retry = this.validatedRetry(item);
+            if (!retry || item.busy || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed') return;
+            const id = item.id;
+            const key = item.key;
+            const stillBound = () => item.id === id && item.key === key && item.count === 1
+                && this.validatedRetry(item)?.run === retry.run;
             item.busy = true;
             item.actionStatus = '正在检查并重试原操作，请保留此页面。';
             this.refreshDialog();
             try {
-                const result = await item.retry.run();
+                const result = await retry.run();
+                if (!stillBound()) return;
                 const operation = field(result, 'operation');
                 if (field(result, 'verified') === true && ['committed', 'not-committed', 'unconfirmed'].includes(operation)) {
                     item.operation = operation;
                     item.actionStatus = outcome(item.event, operation);
                 } else item.actionStatus = '重试尚未提供已验证的结果，请保留此页面。';
-            } catch (_) { item.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。'; }
+            } catch (_) { if (stillBound()) item.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。'; }
             finally {
                 item.busy = false;
+                if (!stillBound()) item.actionStatus = '';
                 try { this.render(); } catch (_) { this.fallback(item.event); }
             }
         }
 
         render() {
-            const active = Array.from(this.groups.values()).filter((item) => !item.dismissed);
+            const active = Array.from(this.groups.values()).filter((item) => !item.dismissed && item.kind !== 'transient');
             if (!active.length && !this.overflow && !this.root) return;
             if (!this.root || !this.root.isConnected) {
                 this.announcement = null;
@@ -1184,7 +1240,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             if (this.dialog || this.startupActive()) return;
             while (this.queue.length) {
                 const item = this.groups.get(this.queue.shift());
-                if (item && !item.dismissed) { this.open(item); return; }
+                if (item && !item.dismissed && item.kind === 'dialog') { this.open(item); return; }
             }
         }
 
@@ -1272,7 +1328,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 dialog.panel.appendChild(dialog.status);
                 const technical = node('details');
                 technical.appendChild(node('summary', '技术详情（仅文本）'));
-                technical.appendChild(node('pre', JSON.stringify(item.event, null, 2)));
+                dialog.technical = node('pre');
+                technical.appendChild(dialog.technical);
                 dialog.panel.appendChild(technical);
                 dialog.text = this.exportTarget(dialog.panel);
                 const actions = node('div', undefined, 'incident-actions');
@@ -1291,11 +1348,14 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             const dialog = this.dialog;
             const item = dialog?.item;
             if (!item || !dialog.outcome) return;
+            dialog.heading.textContent = TITLES[item.event.code];
+            dialog.panel.setAttribute('role', item.kind === 'dialog' ? 'alertdialog' : 'dialog');
+            dialog.technical.textContent = JSON.stringify(item.event, null, 2);
             dialog.outcome.textContent = outcome(item.event, item.operation);
             dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
-            dialog.status.textContent = item.actionStatus;
-            dialog.retryButton.hidden = !item.retry || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            dialog.retryButton.hidden = !this.validatedRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
             dialog.retryButton.disabled = item.busy;
+            dialog.status.textContent = item.actionStatus;
         }
 
         exportTarget(parent) {

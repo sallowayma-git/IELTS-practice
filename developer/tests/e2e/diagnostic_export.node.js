@@ -15,7 +15,17 @@ const html = '<!doctype html><meta charset="utf-8"><title>Passive diagnostic exp
     + sources.map((source, index) => '<script>' + fs.readFileSync(path.join(root, source), 'utf8')
         + (index === 0 ? '\nAppDiagnosticBootstrap.install({context:"reading"});' : '') + '</script>').join('\n');
 fs.writeFileSync(fixture, html);
-const server = http.createServer((_request, response) => { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end(html); });
+const standaloneBundles = ['reading-page', 'practice-page-enhancer', 'listening-record-bridge', 'listening-wrapper'];
+const standaloneHtml = (name, prefix) => '<!doctype html><meta charset="utf-8"><title>Standalone practice bundle</title><body>'
+    + `<script src="${prefix}js/bundles/${name}.bundle.js"></script></body>`;
+for (const name of standaloneBundles) fs.writeFileSync(path.join(reports, `standalone-${name}.html`), standaloneHtml(name, '../../../../'));
+const server = http.createServer((request, response) => {
+    const pathname = new URL(request.url, 'http://localhost').pathname;
+    const name = standaloneBundles.find((entry) => pathname.endsWith(`/standalone-${entry}.html`));
+    const bundle = standaloneBundles.find((entry) => pathname.endsWith(`/js/bundles/${entry}.bundle.js`));
+    response.writeHead(200, { 'content-type': bundle ? 'application/javascript; charset=utf-8' : 'text/html; charset=utf-8' });
+    response.end(bundle ? fs.readFileSync(path.join(root, `js/bundles/${bundle}.bundle.js`)) : name ? standaloneHtml(name, './') : html);
+});
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const results = [];
@@ -27,6 +37,14 @@ try {
         const context = await browser.newContext({ acceptDownloads: true });
         const page = await context.newPage();
         try {
+            const metadata = JSON.parse(fs.readFileSync(path.join(root, 'assets/generated/diagnostics/build-manifest.json'), 'utf8'));
+            for (const name of standaloneBundles) {
+                await page.goto(new URL(`standalone-${name}.html`, url).href);
+                const standalone = await page.evaluate(() => AppDiagnosticExport.snapshot());
+                assert.equal(standalone.appVersion, metadata.appVersion, `${mode}: ${name}`);
+                assert.equal(standalone.buildId, metadata.buildId, `${mode}: ${name}`);
+                results.push({ mode, scenario: `${name}-standalone-build-provenance`, passed: true });
+            }
             await page.goto(url);
             await page.evaluate(() => AppDiagnosticStore.ready);
             const id = await page.evaluate(async () => {

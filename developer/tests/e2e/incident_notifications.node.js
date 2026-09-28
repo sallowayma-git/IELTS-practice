@@ -130,6 +130,67 @@ try {
             record('safe-operation-retry-single-flight-and-verified-outcomes');
 
             await fresh();
+            const invalidated = await page.evaluate(() => {
+                window.retryCalls = 0;
+                const error = new Error('generic failure');
+                const correlation = { operation: 'original', submission: 'original-submission' };
+                const id = reportFailure({ code: 'UNEXPECTED_RUNTIME_ERROR', error, correlation,
+                    retry: { available: true, action: 'submit' } });
+                showIncident(id, { retry: { ...AppDiagnostics.getIncident(id).retry, run: () => retryCalls++ } });
+                const staleButton = center.dialog.retryButton;
+                const initiallyVisible = !staleButton.hidden;
+                reportFailure({ error, correlation, retry: { available: false } });
+                staleButton.click();
+                return { id, initiallyVisible };
+            });
+            assert.equal(invalidated.initiallyVisible, true);
+            assert.equal(await page.getByRole('button', { name: '安全重试原操作' }).count(), 0);
+            assert.equal(await page.evaluate(() => retryCalls), 0);
+            assert.match(await page.locator('#incident-dialog-title').textContent(), /练习保存异常/);
+            const refined = JSON.parse(await page.locator('.incident-dialog pre').textContent());
+            assert.equal(refined.eventId, invalidated.id);
+            assert.equal(refined.code, 'PRACTICE_SAVE_FAILED');
+            assert.equal(refined.retry.available, false);
+            record('enrichment-refreshes-open-details-and-revokes-stale-retry-controls');
+
+            for (const enrichedIndex of [0, 1]) {
+                await fresh();
+                const references = await page.evaluate((index) => {
+                    const errors = [new Error('generic failure'), new Error('generic failure')];
+                    const ids = errors.map((error) => reportFailure({ code: 'UNEXPECTED_RUNTIME_ERROR', action: 'unknown', error }));
+                    reportFailure({ error: errors[index], correlation: { operation: 'known-operation' } });
+                    return { enriched: ids[index], other: ids[1 - index] };
+                }, enrichedIndex);
+                assert.equal(await page.locator('[role="alertdialog"]').count(), 1);
+                assert.match(await page.locator('.incident-dialog').innerText(), /尚未确认保存。请保留此页面/);
+                const event = JSON.parse(await page.locator('.incident-dialog pre').textContent());
+                assert.equal(event.eventId, references.enriched);
+                assert.equal(event.code, 'PRACTICE_SAVE_FAILED');
+                assert.equal(event.action, 'submit');
+                assert.equal(await page.locator('.incident-notice').count(), 2);
+                const generic = page.locator('.incident-notice').filter({ hasText: references.other });
+                assert.match(await generic.innerText(), /操作遇到异常/);
+                assert.doesNotMatch(await generic.innerText(), /同类事件/);
+                record(`enriched-aggregate-member-${enrichedIndex + 1}-gets-its-own-reference-and-save-warning`);
+            }
+
+            await fresh();
+            const escalated = await page.evaluate(() => {
+                window.transientFailure = new Error('generic failure');
+                return AppDiagnostics.report({ error: transientFailure, notification: { kind: 'transient' } });
+            });
+            assert.equal(await page.locator('.incident-notice, .incident-dialog').count(), 0);
+            await page.evaluate(() => reportFailure({ error: transientFailure }));
+            assert.equal(await page.locator('[role="alertdialog"]').count(), 1);
+            assert.equal(await page.locator('.incident-notice').count(), 1);
+            assert.ok((await page.locator('.incident-dialog').innerText()).includes(escalated));
+            assert.match(await page.locator('.incident-dialog').innerText(), /尚未确认保存。请保留此页面/);
+            await page.keyboard.press('Escape');
+            await page.evaluate(() => reportFailure({ error: transientFailure }));
+            assert.equal(await page.locator('.incident-notice, .incident-dialog').count(), 0);
+            record('transient-escalation-requires-explicit-dismissal-and-preserves-that-acknowledgement');
+
+            await fresh();
             await page.evaluate(() => reportFailure({ action: 'save-recovery', code: 'RECOVERY_SAVE_FAILED', persistence: { operation: 'not-committed' } }));
             assert.equal(await page.locator('[aria-modal="true"]').count(), 0);
             assert.match(await page.locator('.incident-notifications').innerText(), /本次恢复快照已确认未保存/);

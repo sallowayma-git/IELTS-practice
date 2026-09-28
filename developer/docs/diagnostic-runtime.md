@@ -161,7 +161,11 @@ coverage. Re-running the payload or installation in the same realm is harmless.
 ## Reproducible build identity and source locations
 
 `node scripts/build-bundles.mjs` produces the inline payload, homepage block,
-foundation metadata and `assets/generated/diagnostics/build-manifest.json` together.
+bundle metadata and `assets/generated/diagnostics/build-manifest.json` together.
+Every bundle containing the diagnostic contract receives the same build stamp
+before its sources, including the standalone reading, practice enhancer and
+listening entry points. Their exports therefore retain build provenance even
+without loading the homepage bootstrap or foundation bundle.
 `--check` checks all of them without writing. Application version comes from
 `developer/package.json`; build identity is content-derived, independent of runtime
 URL cache values, wall clock, Git checkout location and developer machine paths.

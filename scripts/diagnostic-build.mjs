@@ -52,7 +52,8 @@ export function buildDiagnosticArtifacts({ renderedBundles, bundleInputs, readSo
     const mainHook = `globalThis.AppDiagnosticBootstrap.install(${JSON.stringify({ context: 'main', requiredResources, optionalResources })});`;
     const inline = `${START}\n<script>\n${payload}\n${mainHook}\n</script>\n        ${END}`;
     const generatedIndex = index.replace(BLOCK, () => inline);
-    const stampedBundles = { ...renderedBundles, [FOUNDATION]: stamp + renderedBundles[FOUNDATION] };
+    const stampedBundles = Object.fromEntries(Object.entries(renderedBundles).map(([output, content]) =>
+        [output, bundleInputs[output].includes(CONTRACT) ? stamp + content : content]));
     const mappings = Object.fromEntries(Object.entries(stampedBundles).map(([output, content]) =>
         [output, mapSections(content, bundleInputs[output], readSource)]));
     mappings[PAYLOAD] = mapSections(payload, [CONTRACT, COLLECTOR], readSource);

@@ -10,6 +10,7 @@ function fixture() {
     // Model/contract tests; real DOM, keyboard and layout are covered in Chromium.
     h.sandbox.IncidentCenter.prototype.render = function () {};
     h.sandbox.IncidentCenter.prototype.open = function (item) { this.dialog = { item }; };
+    h.sandbox.IncidentCenter.prototype.removeDialog = function () { this.dialog = null; };
     let time = 1000;
     const center = new h.sandbox.IncidentCenter({ now: () => time });
     const report = (input = {}, presentation) => center.report({ code: 'PRACTICE_SAVE_FAILED', module: 'practice',
@@ -104,6 +105,98 @@ function withRetry(h, run) {
     return { id, event, item: h.center.groups.get(id), retry };
 }
 
+for (const change of ['unavailable', 'action', 'operation', 'submission', 'committed']) {
+    test(`enrichment invalidates a retry when its ${change} metadata changes`, async () => {
+        const h = fixture();
+        const error = new Error('generic failure');
+        const correlation = { operation: 'original-operation', submission: 'original-submission' };
+        let calls = 0;
+        const id = h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', error, correlation,
+            retry: { available: true, action: 'submit' } });
+        h.center.show(id, { retry: { ...h.collector.getIncident(id).retry, run: () => calls++ } });
+        const item = h.center.groups.get(id);
+        assert.ok(item.retry);
+        h.report({ error,
+            correlation: { ...correlation, ...(change === 'operation' || change === 'submission' ? { [change]: 'other' } : {}) },
+            retry: { available: change !== 'unavailable', action: change === 'action' ? 'save-draft' : 'submit' },
+            persistence: { operation: change === 'committed' ? 'committed' : 'unconfirmed' } });
+        assert.equal(h.collector.getIncident(id).code, 'PRACTICE_SAVE_FAILED');
+        assert.equal(item.retry, null);
+        await h.center.retry(item);
+        assert.equal(calls, 0);
+    });
+}
+
+test('retry execution rechecks the current report even when observation delivery was missed', async () => {
+    const h = fixture();
+    const error = new Error('generic failure');
+    const correlation = { operation: 'original-operation', submission: 'original-submission' };
+    let calls = 0;
+    const id = h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', error, correlation,
+        retry: { available: true, action: 'submit' } });
+    h.center.show(id, { retry: { ...h.collector.getIncident(id).retry, run: () => calls++ } });
+    h.center.unsubscribe();
+    h.collector.report({ code: 'PRACTICE_SAVE_FAILED', module: 'practice', action: 'submit', error, correlation,
+        retry: { available: false }, notification: { kind: 'dialog' } });
+    await h.center.retry(h.center.groups.get(id));
+    assert.equal(calls, 0);
+});
+
+for (const enrichedIndex of [0, 1]) {
+    test(`enriching aggregate member ${enrichedIndex + 1} preserves each incident's reference and classification`, () => {
+        const h = fixture();
+        const errors = [new Error('generic failure'), new Error('generic failure')];
+        const ids = errors.map((error) => h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', action: 'unknown', error }));
+        assert.equal(h.center.groups.size, 1);
+        assert.equal(h.center.groups.get(ids[0]).count, 2);
+        h.report({ error: errors[enrichedIndex], correlation: { operation: 'enriched-operation' } });
+        const enriched = ids[enrichedIndex];
+        const other = ids[1 - enrichedIndex];
+        assert.equal(h.center.groups.size, 2);
+        assert.equal(h.center.dialog.item.id, enriched);
+        assert.equal(h.center.dialog.item.event.code, 'PRACTICE_SAVE_FAILED');
+        assert.equal(h.center.dialog.item.event.action, 'submit');
+        assert.equal(h.center.groups.get(other).event.code, 'UNEXPECTED_RUNTIME_ERROR');
+        assert.equal(h.center.groups.get(other).count, 1);
+        assert.equal(h.center.groups.get(enriched).count, 1);
+        assert.equal(h.center.show(other), other);
+        assert.equal(h.center.show(enriched), enriched);
+        h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', action: 'unknown' });
+        assert.equal(h.center.groups.get(other).count, 2);
+        assert.equal(h.collector.snapshot().events.length, 3);
+    });
+}
+
+test('a transient observation can escalate without being treated as a user dismissal', () => {
+    const h = fixture();
+    const error = new Error('generic failure');
+    let notices = 0;
+    h.center.transient = () => notices++;
+    const id = h.collector.report({ error, notification: { kind: 'transient' } });
+    h.center.show(id);
+    assert.equal(notices, 1);
+    assert.equal(h.center.dialog, null);
+    h.report({ error });
+    assert.equal(h.center.dialog?.item.id, id);
+    assert.equal(h.center.dialog.item.dismissed, false);
+    h.center.close();
+    h.center.show(id);
+    assert.equal(h.center.dialog, null, 'explicit dismissal still suppresses repeated presentation');
+    assert.equal(h.center.groups.get(id).dismissed, true);
+    assert.equal(h.collector.getIncident(id).persistence.operation, 'unconfirmed');
+});
+
+test('an explicitly dismissed notification remains dismissed after identity-preserving enrichment', () => {
+    const h = fixture();
+    const error = new Error('generic failure');
+    const id = h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', action: 'unknown', error });
+    h.center.open(h.center.groups.get(id));
+    h.center.close();
+    h.report({ error });
+    assert.equal(h.center.dialog, null);
+    assert.equal(h.center.groups.get(id).dismissed, true);
+});
+
 test('retry requires an operation-provided callback matching original operation, submission and action', async () => {
     const h = fixture();
     let calls = 0;
@@ -141,6 +234,28 @@ test('retry is single flight, only verified results change displayed outcome, an
     await h.center.retry(item);
     assert.equal(calls, 1, 'committed operations cannot be replayed');
 });
+
+for (const transition of ['revoked', 'aggregated']) {
+    test(`an in-flight retry cannot confirm an incident after its binding is ${transition}`, async () => {
+        const h = fixture();
+        const error = new Error('generic failure');
+        const correlation = { operation: 'original-operation', submission: 'original-submission' };
+        const id = h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', error, correlation,
+            retry: { available: true, action: 'submit' } });
+        let complete;
+        h.center.show(id, { retry: { ...h.collector.getIncident(id).retry,
+            run: () => new Promise((resolve) => { complete = resolve; }) } });
+        const item = h.center.groups.get(id);
+        const attempt = h.center.retry(item);
+        if (transition === 'revoked') h.report({ error, correlation, retry: { available: false } });
+        else h.report({ code: 'UNEXPECTED_RUNTIME_ERROR', correlation, retry: { available: true, action: 'submit' } });
+        complete({ verified: true, operation: 'committed' });
+        await attempt;
+        assert.equal(item.operation, undefined);
+        assert.equal(item.busy, false);
+        assert.equal(item.actionStatus, '');
+    });
+}
 
 test('rejected/hostile retry results stay unconfirmed, without exposing exception text', async () => {
     const h = fixture();

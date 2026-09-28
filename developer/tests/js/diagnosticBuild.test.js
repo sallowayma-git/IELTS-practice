@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildDiagnosticArtifacts } from '../../../scripts/diagnostic-build.mjs';
-import { read } from './helpers/diagnosticHarness.js';
+import { harness, read } from './helpers/diagnosticHarness.js';
 
 function inputs() {
     const manifest = JSON.parse(read('assets/generated/diagnostics/build-manifest.json'));
@@ -60,4 +60,23 @@ test('generated hook supports each practice context before its external dependen
     assert.ok(payload.includes('function defineDiagnosticBootstrap'));
     assert.equal(/<\/script/i.test(payload), false);
     assert.equal(payload.includes('AppDiagnosticBootstrap.install('), false, 'entry generator chooses context and resources');
+});
+
+test('every diagnostic-bearing bundle independently supplies build provenance to exports', async () => {
+    const options = inputs();
+    const generated = buildDiagnosticArtifacts(options);
+    const manifest = JSON.parse(generated.generated['assets/generated/diagnostics/build-manifest.json']);
+    for (const [bundle, sources] of Object.entries(options.bundleInputs)) {
+        if (!sources.includes('js/diagnostics/diagnosticExport.js')) continue;
+        const h = harness({ install: false });
+        delete h.sandbox.AppDiagnosticBuild;
+        const lines = generated.bundles[bundle].split('\n');
+        const contract = manifest.mappings[bundle].find((entry) => entry.source === 'js/diagnostics/diagnosticContract.js');
+        h.evaluate(lines.slice(0, contract.endLine).join('\n'));
+        h.run('js/diagnostics/diagnosticExport.js');
+        const report = await h.sandbox.AppDiagnosticExport.snapshot();
+        assert.equal(report.appVersion, generated.metadata.appVersion, bundle);
+        assert.equal(report.buildId, generated.metadata.buildId, bundle);
+        assert.equal(h.sandbox.AppDiagnosticBuild.mappingPath, 'assets/generated/diagnostics/build-manifest.json', bundle);
+    }
 });
