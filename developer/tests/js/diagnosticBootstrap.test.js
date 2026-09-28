@@ -104,6 +104,34 @@ test('initialization recovery classification tolerates missing, non-string and h
     assert.equal(reads, 0);
 });
 
+test('successful startup keeps incident exports available without a blocking alert and restores the alert on another failure', () => {
+    const h = harness();
+    const first = h.collector.startupFailed(new Error('PRIVATE_FIRST'));
+    const panel = h.document.getElementById('diagnostic-startup-failure');
+    assert.equal(panel.style.position, 'fixed');
+    assert.equal(panel.getAttribute('role'), 'alert');
+    h.collector.markReady();
+    assert.equal(panel.style.position, 'static');
+    assert.equal(panel.getAttribute('role'), 'region');
+    assert.equal(panel.children[0].textContent, '启动故障记录');
+    assert.ok(panel.children.some((node) => node.textContent?.includes(first)));
+    assert.equal(JSON.parse(h.collector.exportText(first)).events[0].eventId, first);
+    const details = panel.children.find((node) => node.tagName === 'details');
+    details.open = true;
+    details.emit('toggle');
+    assert.equal(JSON.parse(details.children[1].value).events[0].eventId, first);
+
+    const second = h.collector.startupFailed(new Error('PRIVATE_SECOND'));
+    assert.equal(h.document.getElementById('diagnostic-startup-failure'), panel);
+    assert.equal(panel.style.position, 'fixed');
+    assert.equal(panel.getAttribute('role'), 'alert');
+    assert.equal(panel.children[0].textContent, '应用启动失败');
+    assert.ok(panel.children.some((node) => node.textContent?.includes(second)));
+    assert.equal(JSON.parse(details.children[1].value).events[0].eventId, second);
+    assert.equal(h.collector.getIncident(first).eventId, first);
+    assert.equal(h.collector.exportText().includes('PRIVATE'), false);
+});
+
 test('optional loads are declared before insertion and share identity with capture-phase failure', async () => {
     const h = harness();
     h.run('js/diagnostics/diagnosticReporter.js');

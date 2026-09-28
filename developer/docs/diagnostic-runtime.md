@@ -134,6 +134,13 @@ This remains the independent minimal early-evidence export. When the
 snapshot for the selected incident, including retained history and status. An
 absent/broken exporter leaves this minimal path intact. General settings UI is B3.
 
+Application recovery controls render beside the original page shell, temporarily
+hiding it without replacing its views or listeners. Both retry and Safe Mode's
+Full Startup restore that shell before running the real initializer. When startup
+succeeds, `markReady()` moves the diagnostic panel into normal document flow and
+labels it as a retained startup record, preserving exports without covering the
+application. A later startup failure reuses the panel as a fixed alert.
+
 The reusable generated payload is
 `assets/generated/diagnostics/bootstrap-inline.js`. C2/C3 entry generators should
 embed its text in an inline script before external dependencies, followed by:
@@ -189,7 +196,10 @@ fresh browser contexts. It exercises missing/invalid bundles, unhandled and caug
 initialization rejection, AppData's console-first IndexedDB failure, startup enrichment
 near the buffer byte limit with retained lookup/export/sink evidence, native fetch
 cancellation, download, native error visibility and healthy startup
-under file, HTTP root and HTTP subpath modes. CI runs it and retains the JSON report
+under file, HTTP root and HTTP subpath modes. Transient component/network failures
+exercise both recovery routes with the real initializer, original DOM identity,
+working navigation and retained diagnostics; another case fails a retry before
+recovering on the next attempt. CI runs it and retains the JSON report
 and panel screenshot. It does not modify a user's learning data.
 
 Full persistence, export/settings, critical business UI, practice-window channel

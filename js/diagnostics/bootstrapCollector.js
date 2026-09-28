@@ -369,9 +369,7 @@
                     root.setAttribute('role', 'alert');
                     root.style.cssText = 'position:fixed;inset:16px 16px auto;z-index:2147483647;max-height:85vh;overflow:auto;padding:20px;background:#fff;color:#17202a;border:2px solid #a11;border-radius:8px;font:16px/1.5 system-ui;white-space:normal;';
                     const heading = doc.createElement('h2');
-                    heading.textContent = '应用启动失败';
                     const explanation = doc.createElement('p');
-                    explanation.textContent = '请保留此页面，并导出诊断信息以便排查。诊断信息不包含答案，也不是练习备份。';
                     const reference = doc.createElement('p');
                     const button = doc.createElement('button');
                     button.type = 'button';
@@ -429,8 +427,12 @@
                     });
                     [heading, explanation, reference, button, details].forEach((node) => root.appendChild(node));
                     doc.body.appendChild(root);
-                    panel = { root, reference, text, details };
+                    panel = { root, heading, explanation, reference, text, details };
                 }
+                panel.root.style.position = 'fixed';
+                panel.root.setAttribute('role', 'alert');
+                panel.heading.textContent = '应用启动失败';
+                panel.explanation.textContent = '请保留此页面，并导出诊断信息以便排查。诊断信息不包含答案，也不是练习备份。';
                 panel.reference.textContent = '事件编号：' + startupId;
                 panel.exportedText = null;
                 if (panel.details.open) panel.text.value = exportText();
@@ -477,7 +479,19 @@
         installed = Object.freeze({
             report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
             startupFailed, captureConsole,
-            markReady() { startup = false; },
+            markReady() {
+                startup = false;
+                // Retain the incident and export controls without covering the recovered app.
+                try {
+                    if (panel) {
+                        panel.root.style.position = 'static';
+                        panel.root.setAttribute('role', 'region');
+                        panel.root.setAttribute('aria-label', '启动故障诊断');
+                        panel.heading.textContent = '启动故障记录';
+                        panel.explanation.textContent = '应用已完成启动，诊断信息保留供排查。诊断信息不包含答案，也不是练习备份。';
+                    }
+                } catch (_) { }
+            },
             handoff() { handedOff = true; return installed; },
             attachSink(next) {
                 if (sink === next) return;

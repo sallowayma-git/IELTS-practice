@@ -40,9 +40,19 @@ const initializationFailures = {
     'caught-initialization': 'PRIVATE_INITIALIZATION_DETAIL',
     'component-timeout': '组件加载超时: PRIVATE_INITIALIZATION_DETAIL',
     network: '网络连接失败: PRIVATE_INITIALIZATION_DETAIL',
+    'component-timeout-safe-mode': '组件加载超时: PRIVATE_INITIALIZATION_DETAIL',
+    'network-safe-mode': '网络连接失败: PRIVATE_INITIALIZATION_DETAIL',
+    'network-repeated': '网络连接失败: PRIVATE_INITIALIZATION_DETAIL',
     dependency: '依赖检查失败: 网络不可用 PRIVATE_INITIALIZATION_DETAIL',
     'rich-generation': 'PRIVATE_INITIALIZATION_DETAIL',
     'rich-generation-no-download': 'PRIVATE_INITIALIZATION_DETAIL'
+};
+const recoveryRoutes = {
+    'component-timeout': 'attempt-recovery',
+    network: 'attempt-recovery',
+    'component-timeout-safe-mode': 'safe-mode',
+    'network-safe-mode': 'safe-mode',
+    'network-repeated': 'attempt-recovery'
 };
 const faults = ['missing', 'parse', 'rejection', ...Object.keys(initializationFailures),
     'indexeddb-blocked', 'startup-capacity', 'native-abort', 'healthy'];
@@ -60,9 +70,20 @@ try {
             if (fault === 'rejection') fs.writeFileSync(path.join(fixture, foundationPath), 'Promise.reject(new Error("PRIVATE_INITIALIZATION_DETAIL"));');
             if (initializationFailures[fault]) {
                 fs.appendFileSync(path.join(fixture, legacyPath), `
-                    window.ExamSystemAppMixins.bootstrap = {
-                        async initializeComponents() { throw new Error(${JSON.stringify(initializationFailures[fault])}); }
-                    };
+                    (function injectInitializationFailure() {
+                        const initialize = ExamSystemApp.prototype.initializeComponents;
+                        window.ExamSystemAppMixins.bootstrap = {
+                            ...window.ExamSystemAppMixins.bootstrap,
+                            async initializeComponents(...args) {
+                                window.__startupAttempts = (window.__startupAttempts || 0) + 1;
+                                window.__startupShellNodes ||= Array.from(document.querySelectorAll('#app .view, #app .nav-btn'));
+                                if (${!!recoveryRoutes[fault]} && window.__startupAttempts > ${fault === 'network-repeated' ? 2 : 1}) {
+                                    return initialize.apply(this, args);
+                                }
+                                throw new Error(${JSON.stringify(initializationFailures[fault])});
+                            }
+                        };
+                    })();
                 `);
             }
             if (fault === 'startup-capacity') {
@@ -144,7 +165,7 @@ try {
             } else {
                 const panel = page.locator('#diagnostic-startup-failure');
                 await panel.waitFor({ state: 'visible' });
-                const canRecover = fault === 'component-timeout' || fault === 'network';
+                const canRecover = !!recoveryRoutes[fault];
                 if (initializationFailures[fault]) {
                     await page.locator('.fallback-ui').waitFor({ state: 'visible' });
                     for (const action of ['attempt-recovery', 'safe-mode']) {
@@ -202,6 +223,13 @@ try {
                 for (const secret of ['PRIVATE_INITIALIZATION_DETAIL', 'private-cache-value', fixture, '127.0.0.1']) assert.equal(serialized.includes(secret), false);
                 assert.ok(Buffer.byteLength(serialized) <= 32 * 1024);
                 if (fault === 'parse' || fault === 'rejection') assert.ok(nativeErrors.length > 0, 'native browser output is preserved');
+                if (canRecover || fault === 'startup-capacity') {
+                    assert.ok(await page.evaluate(async () => {
+                        await LicenseModal.init();
+                        return LicenseModal.accept();
+                    }));
+                    await page.waitForFunction(() => !document.getElementById('license-modal').classList.contains('show'));
+                }
                 const generationFailed = fault.startsWith('rich-generation');
                 if (generationFailed) await page.evaluate((blockDownload) => {
                     const stringify = JSON.stringify;
@@ -211,11 +239,12 @@ try {
                     };
                     if (blockDownload) URL.createObjectURL = () => { throw new Error('download unavailable'); };
                 }, fault === 'rich-generation-no-download');
-                const download = fault === 'rich-generation-no-download' ? null : page.waitForEvent('download');
-                await panel.getByRole('button', { name: '导出诊断' }).click();
+                const [downloaded] = await Promise.all([
+                    fault === 'rich-generation-no-download' ? Promise.resolve(null) : page.waitForEvent('download'),
+                    panel.getByRole('button', { name: '导出诊断' }).click()
+                ]);
                 const richerExport = !generationFailed && await page.evaluate(() => typeof window.AppDiagnosticExport?.download === 'function');
-                if (download) {
-                    const downloaded = await download;
+                if (downloaded) {
                     assert.equal(downloaded.suggestedFilename(), richerExport ? 'ielts-diagnostics.json' : 'ielts-startup-diagnostics.txt');
                     const chunks = [];
                     for await (const chunk of await downloaded.createReadStream()) chunks.push(chunk);
@@ -238,17 +267,41 @@ try {
                     assert.equal((await text.inputValue()).includes('PRIVATE'), false);
                 }
                 if (canRecover) {
-                    assert.ok(await page.evaluate(() => LicenseModal.accept()));
-                    await page.waitForFunction(() => !document.getElementById('license-modal').classList.contains('show'));
-                    await page.evaluate(() => {
-                        window.__recoveryAttempts = 0;
-                        app.initialize = async () => { window.__recoveryAttempts += 1; };
-                    });
-                    await page.locator('[data-fallback-action="attempt-recovery"]').click();
-                    await page.waitForFunction(() => window.__recoveryAttempts === 1);
-                    await page.locator('[data-fallback-action="safe-mode"]').click();
-                    await page.locator('.safe-mode-ui').waitFor({ state: 'visible' });
-                    assert.ok((await panel.innerText()).includes(evidence.events[0].eventId));
+                    let recoveryIncident = evidence.events[0].eventId;
+                    const route = recoveryRoutes[fault];
+                    await page.locator(`[data-fallback-action="${route}"]`).click();
+                    if (route === 'safe-mode') {
+                        await page.locator('.safe-mode-ui').waitFor({ state: 'visible' });
+                        await page.locator('[data-safe-mode-action="initialize"]').click();
+                    }
+                    if (fault === 'network-repeated') {
+                        await page.waitForFunction(() => window.__startupAttempts === 2 && !app.isInitialized);
+                        await page.locator('.fallback-ui').waitFor({ state: 'visible' });
+                        assert.equal(await page.locator('#app-recovery').count(), 1);
+                        assert.equal(await page.locator('#app').isVisible(), false);
+                        recoveryIncident = await page.evaluate(() => JSON.parse(AppDiagnostics.exportText()).events[0].eventId);
+                        await page.locator('[data-fallback-action="attempt-recovery"]').click();
+                    }
+                    await page.waitForFunction(() => window.app?.isInitialized === true);
+                    const recovered = await page.evaluate(() => ({
+                        attempts: window.__startupAttempts,
+                        originalNodes: window.__startupShellNodes.length,
+                        preserved: window.__startupShellNodes.every((node) => node.isConnected && document.getElementById('app').contains(node)),
+                        views: document.querySelectorAll('#app .view').length,
+                        navigation: document.querySelectorAll('#app .nav-btn').length
+                    }));
+                    assert.equal(recovered.attempts, fault === 'network-repeated' ? 3 : 2);
+                    assert.ok(recovered.originalNodes > 0 && recovered.preserved, `${mode}/${fault}: recovery preserves the original shell nodes`);
+                    assert.ok(recovered.views >= 2 && recovered.navigation >= 2);
+                    assert.equal(await page.locator('.fallback-ui, .safe-mode-ui, #app-recovery').count(), 0);
+                    await page.locator('#overview-view').waitFor({ state: 'visible' });
+                    await page.locator('.nav-btn[data-view="browse"]').click();
+                    await page.locator('#browse-view').waitFor({ state: 'visible' });
+                    await page.locator('.nav-btn[data-view="overview"]').click();
+                    await page.locator('#overview-view').waitFor({ state: 'visible' });
+                    assert.ok((await panel.innerText()).includes(recoveryIncident));
+                    assert.equal(await panel.evaluate((node) => getComputedStyle(node).position), 'static');
+                    assert.equal(await page.evaluate((id) => AppDiagnostics.getIncident(id)?.code, evidence.events[0].eventId), 'APP_BOOT_FAILED');
                 }
                 if (mode === 'http' && fault === 'missing') await page.screenshot({ path: path.join(reports, 'diagnostic-startup-panel.png') });
                 results.push({ mode, fault, events: evidence.events.length, code, nativeErrors: nativeErrors.length, passed: true });

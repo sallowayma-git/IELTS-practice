@@ -2288,6 +2288,31 @@ class ExamSystemApp {
     };
 
     const integratedFallbackMixin = {
+        showRecoveryUI(content) {
+            const appContainer = document.getElementById('app');
+            if (!appContainer) {
+                return;
+            }
+            if (!this._recoveryUI) {
+                const container = document.createElement('div');
+                container.id = 'app-recovery';
+                container.className = appContainer.className;
+                appContainer.parentNode.insertBefore(container, appContainer);
+                this._recoveryUI = { container, appContainer, display: appContainer.style.display };
+            }
+            // Keep the live shell and its listeners available to the next initialization.
+            this._recoveryUI.container.replaceChildren(content);
+            appContainer.style.display = 'none';
+        },
+        restoreApplicationUI() {
+            if (!this._recoveryUI) {
+                return;
+            }
+            const { container, appContainer, display } = this._recoveryUI;
+            appContainer.style.display = display;
+            container.remove();
+            this._recoveryUI = null;
+        },
         showLoading(show) {
             const loading = document.getElementById('loading');
             if (!loading) {
@@ -2350,18 +2375,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const solutionList = createNode('ul', { className: 'solution-list' }, [
                 createNode('li', null, '🔄 刷新页面重新加载系统'),
                 createNode('li', null, '🧹 清除浏览器缓存和Cookie'),
@@ -2391,9 +2404,9 @@ class ExamSystemApp {
                     createNode('div', { className: 'fallback-footer' }, [createNode('p', null, '如果问题持续存在，请联系技术支持并提供系统信息。')])
                 ])
             ]);
-            replaceContent(appContainer, fallbackRoot);
+            this.showRecoveryUI(fallbackRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = fallbackRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -2466,18 +2479,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const featuresList = createNode('ul', null, [
                 createNode('li', null, '基本题库浏览'),
                 createNode('li', null, '简单练习记录'),
@@ -2494,9 +2495,9 @@ class ExamSystemApp {
                     ])
                 ])
             ]);
-            replaceContent(appContainer, safeModeRoot);
+            this.showRecoveryUI(safeModeRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = safeModeRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -2849,6 +2850,7 @@ class ExamSystemApp {
         async initialize() {
             try {
                 this.showLoading(true);
+                this.restoreApplicationUI();
                 this.updateLoadingMessage('正在检查系统依赖...');
                 this.checkDependencies();
                 this.updateLoadingMessage('正在初始化状态管理...');
