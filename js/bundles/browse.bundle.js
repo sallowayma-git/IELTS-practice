@@ -10518,6 +10518,19 @@
                 );
             }
             const ownsRegistration = () => this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
+            let diagnosticChannel = null;
+            try {
+                if (!this._diagnosticChannels) this._diagnosticChannels = new Map();
+                this._diagnosticChannels.get(examId)?.dispose();
+                diagnosticChannel = global.AppDiagnosticChannel?.createHost({ getBinding: () => {
+                    if (!ownsRegistration()) return null;
+                    const info = expectedRegistration.windowInfo;
+                    return { window: expectedRegistration.window, sessionId: info.expectedSessionId,
+                        windowSessionToken: info.windowSessionToken, origin: info.allowOpaqueOrigin ? 'null' : info.expectedOrigin,
+                        allowOpaqueOrigin: info.allowOpaqueOrigin };
+                } });
+                if (diagnosticChannel) this._diagnosticChannels.set(examId, diagnosticChannel);
+            } catch (_) { /* Diagnostic capability failures cannot interrupt practice setup. */ }
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
                 try {
@@ -10683,6 +10696,12 @@
             };
 
             const messageHandler = async (event) => {
+                // Reserve this channel even when diagnostics are unavailable. Never
+                // normalize it as a business error, emit rejection logs, or touch session state.
+                if (Object.getOwnPropertyDescriptor(event?.data || {}, 'type')?.value === 'IELTS_DIAGNOSTIC_V1') {
+                    try { diagnosticChannel?.receive(event); } catch (_) { }
+                    return;
+                }
                 if (!ownsRegistration()) {
                     this._reportExamMessageRejected(examId, '', 'stale-registration', event);
                     return;
@@ -14849,6 +14868,8 @@
             if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
                 return false;
             }
+            try { this._diagnosticChannels?.get(examId)?.dispose(); this._diagnosticChannels?.delete(examId); }
+            catch (_) { }
             const expectedSessionId = expectedRegistration && expectedRegistration.windowInfo.expectedSessionId
                 ? String(expectedRegistration.windowInfo.expectedSessionId)
                 : '';

@@ -79,6 +79,12 @@
         let panel = null;
         let fallbackFailed = false;
         let waitingForBody = false;
+        let transport = null;
+
+        function transportStatus() {
+            try { return contract.sanitizeTransportStatus(method(transport, 'status')?.call(transport)); }
+            catch (_) { return contract.sanitizeTransportStatus({ connection: 'unavailable' }); }
+        }
 
         function trim() {
             while (records.size > MAX_EVENTS || bytes > MAX_BYTES) {
@@ -253,6 +259,37 @@
             } catch (_) { }
         }
 
+        // Only the validated channel calls this ingress. Preserve origin identity and
+        // lifecycle instead of allocating a local occurrence through report(). No UI,
+        // observer callbacks, business acknowledgements, or retry actions run here.
+        function acceptRelayed(input) {
+            try {
+                let event = normalizer.sanitizeEvent(input);
+                const state = storageStatus();
+                if (!event || event.windowId === normalizer.windowId || !state || !state.enabled || state.suspended
+                    || state.phase !== 'active' || state.failure === 'COORDINATION_UNAVAILABLE'
+                    || event.persistence.generation === 'unknown' || event.persistence.generation !== state.generation
+                    || event.timestamp <= state.cutoff) return false;
+                const originPriority = classificationPriority(event);
+                event = normalizer.sanitizeEvent({ ...event,
+                    persistence: { ...event.persistence, diagnostics: 'memory-only' },
+                    collection: { ...event.collection, source: 'relay', aggregation: 'incomplete' },
+                    notification: { kind: 'none', requiresDismissal: false }, retry: { available: false } });
+                const existing = records.get(event.eventId);
+                if (existing && existing.event.timestamp !== event.timestamp) return false;
+                if (!existing) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, revision: 0, delivered: false, inFlight: false, originPriority });
+                    bytes += size;
+                } else if (originPriority > (existing.originPriority ?? classificationPriority(existing.event))) {
+                    replaceEvent(existing, event); existing.revision += 1; existing.delivered = false;
+                    existing.originPriority = originPriority;
+                }
+                trim(); schedule();
+                return records.has(event.eventId);
+            } catch (_) { return false; }
+        }
+
         function declareResource(target, declaration = {}) {
             try {
                 const resource = utility.normalize({ resource: {
@@ -329,7 +366,8 @@
             const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
             const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
             return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
-                truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}) });
+                truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}),
+                ...(transport ? { transport: transportStatus() } : {}) });
         }
 
         function exportText(eventId = startupId) {
@@ -340,6 +378,7 @@
                 if (chosen) ordered.unshift(chosen);
                 const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
                     truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
+                    ...(current.transport ? { transport: current.transport } : {}),
                     notice: 'Local diagnostics; not an answer backup.', events: [] };
                 for (const event of ordered) {
                     output.events.push(event);
@@ -484,7 +523,8 @@
 
         installed = Object.freeze({
             report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
-            startupFailed, captureConsole,
+            startupFailed, captureConsole, acceptRelayed, windowId: normalizer.windowId,
+            attachTransport(next) { if (method(next, 'status')) transport = next; },
             subscribe(observer) {
                 if (typeof observer !== 'function' || observers.size >= 16) return () => {};
                 observers.add(observer);
@@ -543,7 +583,8 @@
             },
             status() {
                 return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed,
-                    ...(storageStatus() ? { storage: storageStatus() } : {}) });
+                    ...(storageStatus() ? { storage: storageStatus() } : {}),
+                    ...(transport ? { transport: transportStatus() } : {}) });
             }
         });
         for (const key of ['requiredResources', 'optionalResources']) {

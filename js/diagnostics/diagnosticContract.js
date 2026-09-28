@@ -53,7 +53,7 @@
         'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
         'js/diagnostics/diagnosticContract.js',
         'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/operationDiagnostics.js',
-        'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js', 'js/diagnostics/diagnosticChannel.js',
         'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
         'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
         'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',
@@ -490,7 +490,19 @@
         return Object.freeze({ windowId, normalize, sanitizeEvent });
     }
 
-    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES,
+    function sanitizeTransportStatus(input) {
+        if (!input) return null;
+        const context = state();
+        return Object.freeze({
+            connection: choice(field(input, 'connection', context), ['waiting', 'connected', 'disconnected', 'unavailable', 'incomplete']),
+            aggregation: 'incomplete',
+            pendingEvents: integer(field(input, 'pendingEvents', context), 0, 200, 0),
+            pendingBytes: integer(field(input, 'pendingBytes', context), 0, 256 * 1024, 0),
+            dropped: integer(field(input, 'dropped', context), 0, Number.MAX_SAFE_INTEGER, 0)
+        });
+    }
+
+    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus,
         PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

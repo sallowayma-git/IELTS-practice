@@ -162,7 +162,16 @@ export interface Snapshot {
     readonly coverage: 'complete' | 'partial' | 'unknown';
     readonly truncated: boolean;
     readonly storage?: DiagnosticStorageStatus;
+    readonly transport?: DiagnosticTransportStatus;
 }
+export interface DiagnosticTransportStatus {
+    readonly connection: 'waiting' | 'connected' | 'disconnected' | 'unavailable' | 'incomplete' | 'unknown';
+    readonly aggregation: 'incomplete';
+    readonly pendingEvents: number;
+    readonly pendingBytes: number;
+    readonly dropped: number;
+}
+export function sanitizeTransportStatus(input: unknown): DiagnosticTransportStatus | null;
 export interface DiagnosticStorageStatus {
     readonly persistence: DiagnosticPersistence;
     readonly enabled: boolean;

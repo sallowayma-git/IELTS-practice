@@ -109,6 +109,7 @@
                 events.push(event);
             }
             return { events, storage: storageStatus(field(raw, 'storage')),
+                transport: contract.sanitizeTransportStatus(field(raw, 'transport')),
                 status: { state: result.state === 'available' && !array ? 'failed' : result.state,
                     persistence: choice(field(raw, 'persistence'), PERSISTENCE),
                     coverage: choice(field(raw, 'coverage'), ['complete', 'partial']),
@@ -184,6 +185,7 @@
                     if (status.rejected) issues.push(name + '-records-rejected');
                 }
                 const storage = persisted.storage || memory.storage || bootstrap.storage;
+                const transport = memory.transport || bootstrap.transport;
                 const merged = new Map();
                 // Prefer the latest memory classification on equal priority. An older
                 // persisted revision must not acknowledge a pending enrichment.
@@ -218,8 +220,8 @@
                             : statuses.includes('disabled') ? 'disabled' : statuses.length ? 'persisted' : storage?.persistence || 'memory-only';
                 const report = { schemaVersion: 1, reportType: 'passive-diagnostics', notice: NOTICE, ...meta,
                     selection: { kind: incident ? 'incident' : 'history', eventId, found: incident ? !!chosen : null },
-                    persistence, storage, sources,
-                    collection: { coverage: 'partial', aggregation: 'incomplete', connection: connection(meta.environment.context),
+                    persistence, storage, sources, ...(transport ? { transport } : {}),
+                    collection: { coverage: 'partial', aggregation: 'incomplete', connection: transport?.connection || connection(meta.environment.context),
                         limitations: [...contract.COVERAGE_LIMITATIONS, 'cross-window-completeness-unverified',
                             'retained-context-only', 'independent-source-snapshots'] },
                     truncated: Object.values(sources).some((source) => source.truncated) || !!storage?.dropped || candidates.length > limit,

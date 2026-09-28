@@ -58,6 +58,11 @@ jobs:
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
 
+      - name: Verify diagnostic channels in three hosting modes
+        # C1 protocol and lifecycle regressions; runtime installation belongs to C2/C3.
+        timeout-minutes: 3
+        run: node developer/tests/e2e/diagnostic_channel.node.js
+
       - name: Verify incident notifications in three hosting modes
         # Full release qualification remains in C4; these are B2 interaction regressions.
         timeout-minutes: 2

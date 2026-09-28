@@ -4399,7 +4399,7 @@ class PracticeRecorder {
         }
 
         const rawType = typeof rawMessage.type === 'string' ? rawMessage.type.trim() : '';
-        if (!rawType) {
+        if (!rawType || rawType === 'IELTS_DIAGNOSTIC_V1') {
             return null;
         }
 

@@ -1,5 +1,5 @@
 import type { DiagnosticInput, DiagnosticPersistence, DiagnosticReporter, DiagnosticSink,
-    Environment, DiagnosticStorageStatus } from './diagnosticContract';
+    Environment, DiagnosticStorageStatus, DiagnosticTransportStatus } from './diagnosticContract';
 export as namespace AppDiagnosticBootstrap;
 
 export interface BootstrapOptions {
@@ -8,6 +8,11 @@ export interface BootstrapOptions {
     optionalResources?: readonly string[];
 }
 export interface Collector extends DiagnosticReporter {
+    readonly windowId: string;
+    /** Validated channel ingress only; preserves origin and generation, without UI or observers. */
+    acceptRelayed(input: unknown): boolean;
+    /** Passive status only: never a probe or delivery during export. */
+    attachTransport(transport: { status(): DiagnosticTransportStatus }): void;
     /** Only recognized semantic input is retained, after normalization. */
     breadcrumb(input: NonNullable<DiagnosticInput['breadcrumbs']>[number]): void;
     /** Call before assigning src/href or inserting a dynamic resource. */
@@ -26,7 +31,7 @@ export interface Collector extends DiagnosticReporter {
     /** Revalidated passive JSON, at most 32 KiB, with explicit truncation. */
     exportText(eventId?: string): string;
     status(): Readonly<{ events: number; bytes: number; dropped: number; persistence: DiagnosticPersistence;
-        handedOff: boolean; fallbackFailed: boolean; storage?: DiagnosticStorageStatus }>;
+        handedOff: boolean; fallbackFailed: boolean; storage?: DiagnosticStorageStatus; transport?: DiagnosticTransportStatus }>;
 }
 export function install(options?: BootstrapOptions): Collector;
 /** Observe an existing collector without installing listeners or starting collection. */

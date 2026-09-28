@@ -1217,6 +1217,8 @@
         if (!isPlainObject(envelope)) {
             return null;
         }
+        // The dedicated diagnostic receiver owns this envelope and its bounded payload.
+        if (envelope.type === 'IELTS_DIAGNOSTIC_V1') return null;
 
         const rawType = envelope.type || envelope.messageType || envelope.action || envelope.event || '';
         const type = normalizeMessageType(rawType);
