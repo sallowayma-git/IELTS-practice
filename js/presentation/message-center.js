@@ -57,6 +57,11 @@
             return this.incidents?.openHistory();
         }
 
+        /** Share the notification workflow's bounded export and minimal text fallback. */
+        deliverDiagnostics(eventId, textTarget, action = 'download') {
+            return this.incidents?.deliver(eventId, textTarget, action === 'copySummary' ? action : 'download');
+        }
+
         show(message, type = 'info', duration = 4000) {
             if (typeof document === 'undefined') {
                 if (typeof console !== 'undefined') {

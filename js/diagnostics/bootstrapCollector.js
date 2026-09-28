@@ -243,8 +243,9 @@
             } finally { reporting = false; }
         }
 
-        function breadcrumb(input) {
+        function breadcrumb(input, options) {
             try {
+                if (field(options, 'detailed') === true && !storageStatus()?.detailedMode?.active) return;
                 const normalized = utility.normalize({ breadcrumbs: [input] }).breadcrumbs[0];
                 if (normalized) {
                     crumbs.push(normalized);
@@ -265,6 +266,7 @@
                 }
                 // Unknown or user-owned URLs never become registry keys.
                 if (resource.path !== 'unknown') resources.set(resource.path, resource);
+                breadcrumb({ module: 'bootstrap', action: 'load-resource', outcome: 'started' }, { detailed: true });
             } catch (_) { }
         }
 

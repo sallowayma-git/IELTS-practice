@@ -7,6 +7,7 @@
     const LOCK_NAME = 'ielts-atlas-diagnostics-lifecycle-v1';
     const ZERO = 'dg-' + '0'.repeat(32);
     const GENERATION = /^dg-[a-f0-9]{32}$/;
+    const DETAILED_MODE_MS = 15 * 60 * 1000;
     const LIMITS = Object.freeze({ ageMs: 7 * 86400000, events: 2000, bytes: 2 * 1024 * 1024,
         batchEvents: 20, pendingEvents: 200, pendingBytes: 256 * 1024 });
 
@@ -26,28 +27,47 @@
             Number.isSafeInteger(options.limits?.[key]) && options.limits[key] > 0
                 ? Math.min(options.limits[key], LIMITS[key]) : LIMITS[key]]));
         const listeners = new Set();
-        let control = { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active' };
+        const defaults = { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active',
+            detailedStartedAt: 0, detailedUntil: 0 };
+        let control = { ...defaults };
         let initialReset;
         let suspended = false;
         let closed = false;
         let failure = null;
         let coordinationReady = false;
+        let coordinationFailed = false;
         let pendingEvents = 0;
         let pendingBytes = 0;
         let dropped = 0;
         let channel;
+        let expiredDetailedUntil = 0;
+
+        function detailedMode() {
+            const timestamp = now();
+            if (timestamp >= control.detailedUntil) expiredDetailedUntil = Math.max(expiredDetailedUntil, control.detailedUntil);
+            const coordinated = !coordinationFailed && !closed && !suspended;
+            const active = coordinated && control.detailedUntil > expiredDetailedUntil
+                && timestamp >= control.detailedStartedAt && timestamp < control.detailedUntil;
+            return Object.freeze({ active, expiresAt: control.detailedUntil,
+                remainingMs: active ? Math.min(DETAILED_MODE_MS, control.detailedUntil - timestamp) : 0,
+                coordination: coordinated ? 'supported-windows' : 'unavailable' });
+        }
 
         function view() {
             return Object.freeze({ persistence: !control.enabled ? 'disabled'
                 : failure || !coordinationReady || suspended || closed ? 'memory-only' : pendingEvents ? 'pending' : 'persisted',
                 enabled: control.enabled, generation: control.generation, cutoff: control.cutoff,
                 suspended: suspended || closed, phase: control.phase, failure,
-                coverage: failure || !coordinationReady || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped });
+                coverage: failure || !coordinationReady || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped,
+                detailedMode: detailedMode() });
         }
         function emit(type) {
             for (const listener of listeners) { try { listener(Object.freeze({ type, status: view() })); } catch (_) { } }
         }
         function fail(code) {
+            // Coordination can fail after an unrelated IDB failure has latched.
+            // Do not let that earlier failure hide an unsafe/stale mode lease.
+            if (code === 'COORDINATION_UNAVAILABLE') { coordinationFailed = true; coordinationReady = false; }
             if (!failure) { failure = code; emit('status'); }
         }
         function failureCode(error) {
@@ -58,13 +78,19 @@
         }
         function readControl() {
             const raw = global.localStorage.getItem(controlKey);
-            if (raw === null) return { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active' };
+            if (raw === null) return { ...defaults };
             const value = JSON.parse(raw);
             if (!value || !GENERATION.test(value.generation) || !GENERATION.test(value.resetGeneration)
                 || !Number.isSafeInteger(value.cutoff) || value.cutoff < -1 || typeof value.enabled !== 'boolean'
                 || !['active', 'resetting', 'reset-complete'].includes(value.phase)) throw new Error('Invalid diagnostic control');
+            // Old control records have no mode fields. Reject invalid/overlong leases
+            // without invalidating the existing persistence/reset fence.
+            const validMode = Number.isSafeInteger(value.detailedStartedAt) && value.detailedStartedAt > 0
+                && Number.isSafeInteger(value.detailedUntil) && value.detailedUntil > value.detailedStartedAt
+                && value.detailedUntil - value.detailedStartedAt <= DETAILED_MODE_MS;
             return { generation: value.generation, resetGeneration: value.resetGeneration,
-                cutoff: value.cutoff, enabled: value.enabled, phase: value.phase };
+                cutoff: value.cutoff, enabled: value.enabled, phase: value.phase,
+                detailedStartedAt: validMode ? value.detailedStartedAt : 0, detailedUntil: validMode ? value.detailedUntil : 0 };
         }
         function sync() {
             try {
@@ -72,8 +98,10 @@
                 if (initialReset === undefined) initialReset = next.resetGeneration;
                 if (next.phase === 'resetting' || initialReset !== next.resetGeneration) suspended = true;
                 const changed = next.generation !== control.generation || next.phase !== control.phase;
+                const modeChanged = next.detailedUntil !== control.detailedUntil || next.detailedStartedAt !== control.detailedStartedAt;
                 control = next;
                 if (changed) emit('barrier');
+                else if (modeChanged) emit('status');
             } catch (_) { fail('COORDINATION_UNAVAILABLE'); }
             return control;
         }
@@ -89,7 +117,7 @@
             try {
                 // A fresh token makes even an unchanged control record a real write.
                 // Reserve room for longer cutoff/phase values before storage fills.
-                const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(256, ' ');
+                const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(384, ' ');
                 global.localStorage.setItem(controlKey, serialized);
                 if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
                 coordinationReady = true;
@@ -297,7 +325,7 @@
             });
         }
         async function clearHistory(enabled) {
-            if (!capabilities() && failure === 'COORDINATION_UNAVAILABLE') return { success: false, status: view() };
+            if (!capabilities() && coordinationFailed) return { success: false, status: view() };
             try {
                 return await locked(async () => {
                     if (suspended || closed) return { success: false, status: view() };
@@ -314,6 +342,7 @@
         async function retry() {
             if (closed || suspended || !sync().enabled) return Object.freeze({ success: false, status: view() });
             coordinationReady = false;
+            coordinationFailed = false;
             failure = null;
             if (capabilities()) {
                 try {
@@ -333,12 +362,29 @@
             if (success) emit('retry');
             return Object.freeze({ success, status: view() });
         }
+        async function setDetailedMode(enabled) {
+            capabilities();
+            if (closed || suspended || coordinationFailed) {
+                return Object.freeze({ success: false, status: view() });
+            }
+            try {
+                await locked(() => {
+                    if (closed || suspended || coordinationFailed) throw new Error('Mode coordination unavailable');
+                    const timestamp = now();
+                    // Repeated enable requests do not silently extend a running lease.
+                    if (enabled === true && detailedMode().active) return;
+                    publish({ ...control, detailedStartedAt: enabled === true ? timestamp : 0,
+                        detailedUntil: enabled === true ? timestamp + DETAILED_MODE_MS : 0 });
+                });
+                return Object.freeze({ success: true, status: view() });
+            } catch (_) { return Object.freeze({ success: false, status: view() }); }
+        }
         async function withFullReset(callback) {
             // A reset must still work after diagnostic storage failed. It requires
             // working coordination, but never opens this database to establish it.
             if (closed || !global.navigator?.locks?.request) throw new Error('Diagnostic coordination unavailable');
             return locked(async () => {
-                const next = nextControl({ enabled: true, phase: 'resetting' });
+                const next = nextControl({ enabled: true, phase: 'resetting', detailedStartedAt: 0, detailedUntil: 0 });
                 next.resetGeneration = next.generation;
                 suspended = true;
                 publish(next);
@@ -357,7 +403,7 @@
         } catch (_) { }
         global.addEventListener?.('storage', onStorage);
         const ready = Promise.resolve().then(prune);
-        const api = Object.freeze({ append, snapshot, retry, withFullReset, controlKey, ready,
+        const api = Object.freeze({ append, snapshot, retry, setDetailedMode, withFullReset, controlKey, ready,
             getIncident: async (eventId) => (await snapshot({ eventId, limit: 1 })).events[0] || null,
             clear: () => clearHistory(), setEnabled: (enabled) => clearHistory(enabled === true),
             status() { sync(); return view(); },
@@ -366,6 +412,6 @@
         });
         return api;
     }
-    global.AppDiagnosticStorage = Object.freeze({ create, DATABASE_NAME, CONTROL_KEY, LOCK_NAME, LIMITS });
+    global.AppDiagnosticStorage = Object.freeze({ create, DATABASE_NAME, CONTROL_KEY, LOCK_NAME, LIMITS, DETAILED_MODE_MS });
     global.AppDiagnosticStore = create();
 })(typeof globalThis !== 'undefined' ? globalThis : this);

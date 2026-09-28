@@ -534,6 +534,129 @@ test('diagnostic IndexedDB retention and lifecycle in isolated browser databases
         assert.equal(resumed.events.length, 1);
     });
 
+    await t.test('detailed mode shares one lease across windows and reloads without changing event generations', async (t) => {
+        const { pages: [a, b] } = await fixture(t, 2);
+        const before = await a.evaluate(() => AppDiagnosticStore.status());
+        const enabled = await a.evaluate(() => AppDiagnosticStore.setDetailedMode(true));
+        assert.equal(enabled.success, true);
+        assert.equal(enabled.status.generation, before.generation);
+        assert.equal(enabled.status.detailedMode.remainingMs, 900000);
+        assert.deepEqual(await b.evaluate(() => AppDiagnosticStore.status().detailedMode), enabled.status.detailedMode);
+        await b.evaluate(() => { clock += 300000; });
+        const repeated = await b.evaluate(() => AppDiagnosticStore.setDetailedMode(true));
+        assert.equal(repeated.status.detailedMode.expiresAt, enabled.status.detailedMode.expiresAt);
+        assert.equal(repeated.status.detailedMode.remainingMs, 600000);
+        await b.reload();
+        await load(b, {}, 1800000300000);
+        assert.equal(await b.evaluate(() => AppDiagnosticStore.status().detailedMode.remainingMs), 600000);
+        await b.evaluate(() => { clock += 600000; });
+        assert.equal(await b.evaluate(() => AppDiagnosticStore.status().detailedMode.active), false);
+        await b.evaluate(() => { clock -= 1000; });
+        assert.equal(await b.evaluate(() => AppDiagnosticStore.status().detailedMode.active), false, 'observed expiry cannot be revived by clock rollback');
+        await a.evaluate(() => AppDiagnosticStore.setDetailedMode(false));
+        assert.equal(await b.evaluate(() => AppDiagnosticStore.status().detailedMode.active), false);
+    });
+
+    await t.test('detailed semantic breadcrumbs obey expiry, redaction and the unchanged capacity bounds', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            const input = { action: 'load-resource', module: 'bootstrap', outcome: 'started', answer: 'PRIVATE_ANSWER' };
+            AppDiagnostics.breadcrumb(input, { detailed: true });
+            const disabled = AppDiagnostics.getIncident(AppDiagnostics.report({}));
+            await AppDiagnosticStore.setDetailedMode(true);
+            for (let i = 0; i < 80; i++) AppDiagnostics.breadcrumb(input, { detailed: true });
+            const detailed = AppDiagnostics.getIncident(AppDiagnostics.report({}));
+            clock += 900000;
+            AppDiagnostics.breadcrumb({ action: 'export', module: 'diagnostics' }, { detailed: true });
+            const expired = AppDiagnostics.getIncident(AppDiagnostics.report({}));
+            for (let i = 0; i < 300; i++) AppDiagnostics.report({ error: new Error('PRIVATE_ANSWER') });
+            return { disabled, detailed, expired, status: AppDiagnostics.status() };
+        });
+        assert.equal(result.disabled.breadcrumbs.length, 0);
+        assert.ok(result.detailed.breadcrumbs.length > 0 && result.detailed.breadcrumbs.length <= 50, 'the event byte ceiling can trim before the breadcrumb count ceiling');
+        assert.equal(result.expired.breadcrumbs.at(-1).action, 'load-resource');
+        assert.ok(!JSON.stringify(result).includes('PRIVATE_ANSWER'));
+        assert.ok(result.status.events <= 200 && result.status.bytes <= 256 * 1024);
+        assert.ok(Buffer.byteLength(JSON.stringify(result.detailed)) <= 8192);
+    });
+
+    await t.test('detailed mode and persistence changes preserve each other under concurrent lifecycle locks', async (t) => {
+        const { pages: [a, b] } = await fixture(t, 2);
+        const results = await Promise.all([a.evaluate(() => AppDiagnosticStore.setDetailedMode(true)), b.evaluate(() => AppDiagnosticStore.setEnabled(false))]);
+        assert.ok(results.every((result) => result.success));
+        await a.reload();
+        await load(a);
+        const status = await a.evaluate(() => AppDiagnosticStore.status());
+        assert.equal(status.enabled, false);
+        assert.equal(status.detailedMode.active, true, 'disabled history still allows bounded current-page detail');
+        await a.evaluate(() => AppDiagnosticStore.withFullReset(async () => ({ success: true })));
+        assert.equal(await b.evaluate(() => AppDiagnosticStore.status().detailedMode.active), false);
+    });
+
+    await t.test('missed change notifications reconcile mode before a semantic breadcrumb is captured', async (t) => {
+        const { pages: [a], context } = await fixture(t);
+        const b = await context.newPage();
+        await b.goto(url);
+        await b.evaluate(() => {
+            window.BroadcastChannel = undefined;
+            const add = window.addEventListener;
+            window.addEventListener = function (type, ...args) { if (type !== 'storage') return add.call(this, type, ...args); };
+        });
+        await load(b);
+        await a.evaluate(() => AppDiagnosticStore.setDetailedMode(true));
+        assert.equal(await b.evaluate(() => {
+            AppDiagnostics.declareResource('js/bundles/practice.bundle.js');
+            return AppDiagnostics.getIncident(AppDiagnostics.report({})).breadcrumbs.length;
+        }), 1);
+        await a.evaluate(() => AppDiagnosticStore.setDetailedMode(false));
+        assert.equal(await b.evaluate(() => {
+            AppDiagnostics.declareResource('js/bundles/session.bundle.js');
+            return AppDiagnostics.getIncident(AppDiagnostics.report({})).breadcrumbs.length;
+        }), 1);
+    });
+
+    await t.test('invalid or overlong mode leases do not enable detail or corrupt the persistence fence', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            const before = AppDiagnosticStore.status();
+            const control = JSON.parse(localStorage.getItem(AppDiagnosticStorage.CONTROL_KEY));
+            localStorage.setItem(AppDiagnosticStorage.CONTROL_KEY, JSON.stringify({ ...control, detailedStartedAt: clock, detailedUntil: clock + 900001 }));
+            const after = AppDiagnosticStore.status();
+            return { before, after };
+        });
+        assert.equal(result.after.detailedMode.active, false);
+        assert.equal(result.after.generation, result.before.generation);
+        assert.equal(result.after.failure, null);
+    });
+
+    await t.test('denied mode coordination fails truthfully without changing the current lease', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            Storage.prototype.setItem = () => { throw new DOMException('Denied', 'SecurityError'); };
+            return AppDiagnosticStore.setDetailedMode(true);
+        });
+        assert.equal(result.success, false);
+        assert.equal(result.status.failure, 'COORDINATION_UNAVAILABLE');
+        assert.equal(result.status.detailedMode.active, false);
+        assert.equal(result.status.detailedMode.coordination, 'unavailable');
+    });
+
+    await t.test('an earlier IndexedDB failure cannot hide subsequent coordination failure or leave detail active', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            await AppDiagnosticStore.setDetailedMode(true);
+            indexedDB.open = () => { throw new DOMException('Unavailable', 'InvalidStateError'); };
+            await AppDiagnosticStore.snapshot();
+            Storage.prototype.getItem = () => { throw new DOMException('Denied', 'SecurityError'); };
+            return { status: AppDiagnosticStore.status(), mode: await AppDiagnosticStore.setDetailedMode(true), clear: await AppDiagnosticStore.clear() };
+        });
+        assert.equal(result.status.failure, 'UNAVAILABLE');
+        assert.equal(result.status.detailedMode.active, false);
+        assert.equal(result.status.detailedMode.coordination, 'unavailable');
+        assert.equal(result.mode.success, false);
+        assert.equal(result.clear.success, false);
+    });
+
     await t.test('late open after timeout cannot recreate diagnostics after reset', async (t) => {
         const { pages: [page] } = await fixture(t, 1, { timeoutMs: 25 });
         const result = await page.evaluate(async () => {

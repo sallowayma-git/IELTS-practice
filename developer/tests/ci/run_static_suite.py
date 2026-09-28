@@ -471,6 +471,12 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
                 return True  # SiteDataReset's existing backup preparation contract.
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "raw-storage":
             return True
+        if relative == "developer/tests/e2e/diagnostic_settings.node.js" and label == "raw-storage":
+            # B3's isolated browser fixture verifies diagnostic deletion and
+            # preservation of one unrelated key; business storage stays guarded.
+            return ("learning-data-sentinel" in line_text
+                    or "indexedDB.open('IELTSAtlasDiagnosticsV1'" in line_text
+                    or "indexedDB.deleteDatabase = " in line_text)
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "old-global" and "ExternalBackupService" in token:
             return True
         if relative == "developer/tests/js/appDataV2.test.js" and label == "legacy-key":
