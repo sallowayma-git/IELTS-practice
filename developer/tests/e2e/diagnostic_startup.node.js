@@ -231,6 +231,14 @@ try {
                     await page.waitForFunction(() => !document.getElementById('license-modal').classList.contains('show'));
                 }
                 const generationFailed = fault.startsWith('rich-generation');
+                if (fault === 'startup-capacity') {
+                    // The filler contains real unconfirmed-save notifications. Once
+                    // startup recovers, B2 correctly asks the user to acknowledge them.
+                    for (let i = 0; i < 6 && await page.locator('.incident-dialog').count(); i += 1) {
+                        await page.keyboard.press('Escape');
+                    }
+                    assert.equal(await page.locator('.incident-dialog').count(), 0);
+                }
                 if (generationFailed) await page.evaluate((blockDownload) => {
                     const stringify = JSON.stringify;
                     JSON.stringify = function (value, ...args) {

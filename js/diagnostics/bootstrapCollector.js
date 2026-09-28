@@ -62,6 +62,7 @@
         const elements = new WeakMap();
         const resourceErrors = new WeakMap();
         const crumbs = [];
+        const observers = new Set();
         let bytes = 0;
         let dropped = 0;
         let startup = true;
@@ -230,6 +231,11 @@
                 trim();
                 schedule();
                 if (event.notification.kind === 'startup') showStartup(event.eventId);
+                // Observers receive only normalized evidence, after capture. UI failures
+                // cannot throw into reporting or recursively allocate more incidents.
+                for (const observer of Array.from(observers)) {
+                    try { Promise.resolve(observer(event)).catch(() => {}); } catch (_) { }
+                }
                 return event.eventId;
             } catch (_) {
                 // The contract's fail-closed normalizer supplies a synchronous identity.
@@ -479,6 +485,11 @@
         installed = Object.freeze({
             report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
             startupFailed, captureConsole,
+            subscribe(observer) {
+                if (typeof observer !== 'function' || observers.size >= 16) return () => {};
+                observers.add(observer);
+                return () => observers.delete(observer);
+            },
             markReady() {
                 startup = false;
                 // Retain the incident and export controls without covering the recovered app.

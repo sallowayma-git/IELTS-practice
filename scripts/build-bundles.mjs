@@ -48,6 +48,7 @@ const bundles = {
         'js/services/overviewStats.js',
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
+        'js/presentation/incident-center.js',
         'js/presentation/message-center.js',
         'js/utils/practiceTimerPreferences.js',
         'js/components/practiceSettingsPanel.js',

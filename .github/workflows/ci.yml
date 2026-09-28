@@ -58,6 +58,11 @@ jobs:
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
 
+      - name: Verify incident notifications in three hosting modes
+        # Full release qualification remains in C4; these are B2 interaction regressions.
+        timeout-minutes: 2
+        run: node developer/tests/e2e/incident_notifications.node.js
+
       - name: Verify full reset with a surviving diagnostic writer
         timeout-minutes: 2
         run: python developer/tests/e2e/full_reset_flow.py

@@ -201,6 +201,8 @@ export interface DiagnosticSink {
 export interface DiagnosticReporter extends IncidentReader {
     /** Normalize before any buffer/queue. Always return the event ID synchronously. */
     report(input: DiagnosticInput): string;
+    /** Bounded, isolated observers of normalized reports, not persistence acknowledgements. */
+    subscribe(listener: (event: DiagnosticEvent) => void): () => void;
     /** Await pending writes; isolate sink failures without recursively reporting them. */
     flush(): Promise<{ persistence: DiagnosticPersistence }>;
 }
