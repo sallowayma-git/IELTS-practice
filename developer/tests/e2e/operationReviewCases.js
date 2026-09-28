@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 export const reviewScenarios = ['host-readback', 'host-readback-then-rejection', 'host-timeout-then-rejection',
+    'host-final-readback-recorder', 'host-final-readback-fallback',
     'host-multi-suite-quota', 'ack-closed', 'ack-exception',
     ...['payload-import', 'latest-import', 'file-import'].flatMap(boundary =>
         ['quota', 'timeout'].map(fault => `${boundary}-${fault}`)),
@@ -34,6 +35,7 @@ export async function exerciseReviewScenario(scenario) {
     let injected, caught;
 
     if (scenario.startsWith('host-') && scenario !== 'host-multi-suite-quota') {
+        const finalReadback = scenario.startsWith('host-final-readback-');
         const recorder = Object.create(PracticeRecorder.prototype);
         recorder.activeSessions = new Map([[record.examId, { examId: record.examId,
             sessionId: record.sessionId, startTime: record.startTime, status: 'active', interactions: [] }]]);
@@ -42,7 +44,11 @@ export async function exerciseReviewScenario(scenario) {
         recorder.wait = async () => {};
         const complete = recorder.handleSessionCompleted;
         recorder.handleSessionCompleted = async function (...args) {
-            try { return await complete.apply(this, args); }
+            try {
+                const saved = await complete.apply(this, args);
+                result.saveReturned = Boolean(saved?.id);
+                return saved;
+            }
             catch (error) { result.recorderRejected = true; throw error; }
         };
         const retry = recorder.retrySaveWithStandardizedRecord;
@@ -51,11 +57,20 @@ export async function exerciseReviewScenario(scenario) {
             return retry.apply(this, args);
         };
         const fallback = app.saveRealPracticeData;
-        app.saveRealPracticeData = function (...args) {
+        app.saveRealPracticeData = async function (...args) {
             result.hostFallback = true;
-            return fallback.apply(this, args);
+            const saved = await fallback.apply(this, args);
+            result.saveReturned = Boolean(saved?.id);
+            return saved;
         };
-        app.components.practiceRecorder = recorder;
+        if (scenario !== 'host-final-readback-fallback') app.components.practiceRecorder = recorder;
+        const verify = app._isPracticeCompletionPersisted;
+        app._isPracticeCompletionPersisted = function (...args) {
+            result.finalVerification = true;
+            return verify.apply(this, args);
+        };
+        result.draftClears = 0;
+        app.clearReadingDraftForExam = async () => { result.draftClears++; };
         const mutate = TestKernel.prototype.mutateEntities;
         const read = TestKernel.prototype.readPracticeSnapshot;
         const operationIds = [];
@@ -68,10 +83,13 @@ export async function exerciseReviewScenario(scenario) {
             }
             const receipt = await mutate.apply(this, args);
             committed = true;
+            result.receiptCommitted = receipt.committed;
             return receipt;
         };
         TestKernel.prototype.readPracticeSnapshot = async function (...args) {
-            if (committed && (scenario === 'host-readback' || !readbackFailed)) {
+            if (committed && (finalReadback ? result.finalVerification
+                : (scenario === 'host-readback' || !readbackFailed))) {
+                if (finalReadback && !result.saveReturned) throw new Error('Persistence has not returned');
                 readbackFailed = true;
                 injected = new TestDataError('BACKEND_UNAVAILABLE', 'PRIVATE_NOTES');
                 throw injected;
@@ -218,15 +236,29 @@ export function assertReviewScenario(scenario, result) {
     }
     if (scenario.startsWith('host-')) {
         assert.equal(event.code, 'PRACTICE_SAVE_FAILED');
-        assert.equal(event.causeCode, scenario === 'host-readback' ? 'BACKEND_UNAVAILABLE' : 'QUOTA_EXCEEDED');
+        assert.equal(event.causeCode, scenario === 'host-readback' || scenario.startsWith('host-final-readback-')
+            ? 'BACKEND_UNAVAILABLE' : 'QUOTA_EXCEEDED');
         assert.equal(result.completed, false);
         assert.deepEqual(result.replies, committed ? [] : [false]);
         assert.equal(event.retry.available, uncertain);
         if (scenario === 'host-multi-suite-quota') assert.equal(result.baseSession, true);
         else {
-            assert.equal(result.recorderRejected, true);
-            assert.equal(result.standardizedRetry, true);
-            assert.equal(result.hostFallback, true);
+            if (scenario.startsWith('host-final-readback-')) {
+                assert.equal(result.saveReturned, true);
+                assert.equal(result.finalVerification, true);
+                assert.equal(result.receiptCommitted, true);
+                assert.equal(Boolean(result.recorderRejected), false);
+                assert.equal(Boolean(result.standardizedRetry), false);
+                assert.equal(Boolean(result.hostFallback), scenario.endsWith('fallback'));
+                assert.equal(result.operationIds.length, 1);
+                assert.equal(result.draftClears, 0);
+                assert.doesNotMatch(result.text, /练习提交尚未确认保存/);
+                assert.match(result.text, /已保存/);
+            } else {
+                assert.equal(result.recorderRejected, true);
+                assert.equal(result.standardizedRetry, true);
+                assert.equal(result.hostFallback, true);
+            }
             assert.ok(result.operationIds.length >= 1);
             assert.deepEqual([...new Set(result.operationIds)], ['original-operation']);
             assert.equal(result.journal.operation, committed ? 'committed' : 'unconfirmed');

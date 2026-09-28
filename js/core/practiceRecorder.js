@@ -1486,6 +1486,7 @@ class PracticeRecorder {
                     throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
                 }
                 failureOutcome = 'committed';
+                try { options.onCommitReceipt?.(receipt); } catch (_) { }
                 try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
                     session: record.sessionId, submission: record.submissionId, operation: saveOperationId
                 }); } catch (_) { }
@@ -1558,6 +1559,7 @@ class PracticeRecorder {
             if (!receipt || receipt.committed !== true) {
                 throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
             }
+            try { options.onCommitReceipt?.(receipt); } catch (_) { }
             try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
                 session: record.sessionId, submission: record.submissionId, operation: originalOperationId
             }); } catch (_) { }

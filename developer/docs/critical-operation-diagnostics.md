@@ -42,6 +42,15 @@ chain are not-committed. A later failed attempt cannot disprove an earlier commi
 Known committed failures cannot offer reconciliation or send a negative submission
 acknowledgement. Existing completion gates and session cleanup remain unchanged.
 
+Successful receipts also reach the host through the optional `onCommitReceipt`
+observer in the recorder, its standardized retry and the host fallback. Only a
+validated `committed: true` receipt supplies this evidence; a returned record by
+itself does not. The observer is failure-isolated and does not change record
+return values. Final host readback errors retain their original Error identity
+and cause. If readback throws or cannot verify the record after a known commit,
+the incident remains committed without reconciliation or a negative ACK, while
+completion still returns false and retains the host session and reading draft.
+
 Multi-suite failures are retrieved and cleared using the base exam ID, matching
 the session map. The suite and host report the same original Error and event.
 Import wrappers defer to facade evidence until they obtain a commit receipt;
@@ -106,6 +115,13 @@ fixtures use an isolated OPFS directory; file-mode fixtures stand in for the
 directory handle because file URLs cannot access OPFS. Business and binding
 metadata transactions still use real IndexedDB in all three modes.
 
+Final-readback regressions let the real recorder or recorder-absent fallback
+return normally before injecting a backend read failure. They assert the original
+Error and cause, committed receipt and journal, persistent non-blocking incident,
+no reconciliation or negative ACK, one write, and unchanged completion/cleanup
+gates. Unit cases also cover successful standardized retries and host fallbacks
+after recorder rejection, missing readback records, and records with no receipt.
+
 Original B4 validation on 2026-09-28 against prerequisite B2 `f7a3421d`:
 
 - 539/539 JavaScript tests, including 17 focused operation-boundary tests.
@@ -119,8 +135,13 @@ Original B4 validation on 2026-09-28 against prerequisite B2 `f7a3421d`:
   allowlist violations) match B2 `f7a3421d`, ignoring shifted source line numbers.
   No new guard violations were introduced.
 
-PR #215 review corrections additionally passed 545 JavaScript tests (23 focused
+The initial PR #215 review corrections additionally passed 545 JavaScript tests (23 focused
 operation tests), 35 Python unit tests, 69 operation browser scenarios and 63
 notification scenarios. All 14 bundle outputs and generated diagnostic artifacts
 match the corrected sources; whitespace checks and the suite-practice browser
 flow pass.
+
+The final host-readback correction passed 551/551 JavaScript tests (29 focused
+operation tests), 75/75 operation browser scenarios, the suite-practice browser
+flow, all 14 bundle drift checks and whitespace validation. Its six new unit
+regressions and real-AppData final-readback reproduction failed before the fix.

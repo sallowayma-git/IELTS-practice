@@ -255,6 +255,89 @@ for (const initial of ['committed', 'unconfirmed', 'not-committed']) {
     });
 }
 
+for (const route of ['recorder', 'standardized', 'recorder-fallback', 'fallback']) {
+    test(`host retains the ${route} receipt and original final-readback Error`, async () => {
+        const h = setup();
+        const app = host(h);
+        const error = appError('BACKEND_UNAVAILABLE');
+        const rejected = appError('QUOTA_EXCEEDED');
+        const failedAttempts = route === 'standardized' ? 3 : route === 'recorder-fallback' ? 4 : 0;
+        let attempts = 0, returnedRecord, reportedError, draftClears = 0;
+        h.sandbox.AppData.getOperationFailureState = value => value === rejected ? 'not-committed' : 'unconfirmed';
+        h.sandbox.AppData.practice.completeAttempt = async command => {
+            if (++attempts <= failedAttempts) throw rejected;
+            return { committed: true, operationId: command.operationId, record: command.record };
+        };
+        h.sandbox.AppData.practice.get = async () => { throw error; };
+        h.sandbox.AppData.practice.getCommitState = async () => ({ verified: true, operation: 'committed' });
+        h.sandbox.resolveActiveLibraryIndex = async () => [{ id: 'exam-original', title: 'Practice' }];
+        const diagnostics = h.sandbox.AppOperationDiagnostics;
+        h.sandbox.AppOperationDiagnostics = { ...diagnostics, failure(input, retry) {
+            reportedError = input.error;
+            return diagnostics.failure(input, retry);
+        } };
+        if (route !== 'fallback') {
+            const r = recorder(h);
+            h.sandbox.resolveActiveLibraryIndex = async () => [{ id: 'exam-original', title: 'Practice' }];
+            r.handleSessionCompleted = async (data, options) => (returnedRecord = await r.savePracticeRecord(data, options));
+            app.components.practiceRecorder = r;
+        }
+        const fallback = app.saveRealPracticeData;
+        app.saveRealPracticeData = async (...args) => (returnedRecord = await fallback.apply(app, args));
+        app._isPracticeCompletionPersisted = h.sandbox.ExamSystemAppMixins.examSession._isPracticeCompletionPersisted;
+        app.clearReadingDraftForExam = async () => { draftClears++; };
+        const outcomes = [];
+        app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved) => outcomes.push(saved);
+
+        assert.equal(await app.handlePracticeComplete('exam-original', record()), false);
+        assert.equal(attempts, failedAttempts + 1);
+        assert.equal(returnedRecord.id, record().id, 'persistence must return normally before host verification');
+        assert.equal(reportedError, error);
+        assert.equal(h.events().length, 1);
+        assert.equal(h.events()[0].causeCode, 'BACKEND_UNAVAILABLE');
+        assert.equal(h.events()[0].persistence.operation, 'committed');
+        assert.equal(h.events()[0].notification.kind, 'persistent');
+        assert.equal(h.events()[0].retry.available, false);
+        assert.deepEqual(outcomes, []);
+        assert.equal(draftClears, 0);
+        assert.equal(app.cleanups, 0);
+    });
+}
+
+test('a final readback miss cannot erase a receipt or authorize completion cleanup', async () => {
+    const h = setup();
+    const app = host(h);
+    h.sandbox.resolveActiveLibraryIndex = async () => [{ id: 'exam-original', title: 'Practice' }];
+    h.sandbox.AppData.practice.completeAttempt = async command => ({ committed: true, record: command.record });
+    h.sandbox.AppData.practice.get = async () => null;
+    app._isPracticeCompletionPersisted = h.sandbox.ExamSystemAppMixins.examSession._isPracticeCompletionPersisted;
+    const outcomes = [];
+    app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved) => outcomes.push(saved);
+    assert.equal(await app.handlePracticeComplete('exam-original', record()), false);
+    assert.equal(h.events()[0].persistence.operation, 'committed');
+    assert.equal(h.events()[0].retry.available, false);
+    assert.deepEqual(outcomes, []);
+    assert.equal(app.cleanups, 0);
+});
+
+test('a returned record without receipt evidence keeps a final readback failure unconfirmed', async () => {
+    const h = setup();
+    const app = host(h);
+    const error = appError('BACKEND_UNAVAILABLE');
+    app.components.practiceRecorder = { handleSessionCompleted: async () => ({ ...record(), committed: true }) };
+    h.sandbox.AppData.practice.get = async () => { throw error; };
+    h.sandbox.AppData.practice.getCommitState = async () => ({ verified: true, operation: 'unconfirmed' });
+    app._isPracticeCompletionPersisted = h.sandbox.ExamSystemAppMixins.examSession._isPracticeCompletionPersisted;
+    const outcomes = [];
+    app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved) => outcomes.push(saved);
+    assert.equal(await app.handlePracticeComplete('exam-original', record()), false);
+    assert.equal(h.events()[0].causeCode, 'BACKEND_UNAVAILABLE');
+    assert.equal(h.events()[0].persistence.operation, 'unconfirmed');
+    assert.equal(h.events()[0].retry.available, true);
+    assert.deepEqual(outcomes, [false]);
+    assert.equal(app.cleanups, 0);
+});
+
 test('host and multi-suite boundary reuse the original Error and clear stale session failures', async () => {
     const h = setup();
     const app = host(h);

@@ -4546,17 +4546,13 @@
                 || !completionTime(record)) {
                 return false;
             }
-            try {
-                const persisted = await window.AppData.practice.get(String(record.id), { projection: 'light' });
-                if (!persisted || typeof persisted !== 'object') {
-                    return false;
-                }
-                return identityFields.every((key) => String(persisted[key] ?? '') === String(record[key]))
-                    && String(completionTime(persisted) || '') === String(completionTime(record));
-            } catch (error) {
-                console.warn('[ReadingDraftGateway] 无法确认完成记录已落库，保留草稿:', error);
+            // Let the completion boundary retain the original readback Error and its cause.
+            const persisted = await window.AppData.practice.get(String(record.id), { projection: 'light' });
+            if (!persisted || typeof persisted !== 'object') {
                 return false;
             }
+            return identityFields.every((key) => String(persisted[key] ?? '') === String(record[key]))
+                && String(completionTime(persisted) || '') === String(completionTime(record));
         },
 
         async handleReadingAnnotationSync(examId, data = {}, windowInfo = null) {
@@ -6087,24 +6083,30 @@
             // The generic completion rebind above already covers listening payloads.
 
             let completionCommitted = false;
+            // A successful write receipt remains authoritative even if final readback fails.
+            // Keep this evidence separate from the completion/draft/session cleanup gate.
+            let saveCommitted = false;
+            const onCommitReceipt = receipt => {
+                if (receipt?.committed === true) saveCommitted = true;
+            };
             let completedViaFallback = false;
             let failureOutcome;
             try {
                 let persistedRecord = null;
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        persistedRecord = await recorder.handleSessionCompleted(completionData, { deferDiagnostics: true });
+                        persistedRecord = await recorder.handleSessionCompleted(completionData, { deferDiagnostics: true, onCommitReceipt });
                     } catch (recErr) {
                         failureOutcome = operationFailureState(recErr);
                         try {
                             failureOutcome = recorder.combineSaveFailureOutcome?.(recErr) || failureOutcome;
                         } catch (_) { }
                         console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
-                        persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                        persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true, onCommitReceipt });
                         completedViaFallback = true;
                     }
                 } else {
-                    persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                    persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true, onCommitReceipt });
                     completedViaFallback = true;
                 }
 
@@ -6115,11 +6117,7 @@
 
                 let completionReadable = false;
                 if (typeof this._isPracticeCompletionPersisted === 'function') {
-                    try {
-                        completionReadable = await this._isPracticeCompletionPersisted(persistedRecord);
-                    } catch (verificationError) {
-                        console.warn('[DataCollection] 练习记录提交后回读失败，不影响已提交结果:', verificationError);
-                    }
+                    completionReadable = await this._isPracticeCompletionPersisted(persistedRecord);
                 }
                 if (!completionReadable) {
                     throw new Error('Practice completion could not be verified in canonical storage');
@@ -6197,7 +6195,7 @@
                 }
 
             } catch (error) {
-                const operation = completionCommitted ? 'committed' : operationFailureState(error, failureOutcome);
+                const operation = saveCommitted || completionCommitted ? 'committed' : operationFailureState(error, failureOutcome);
                 observeFailure('PRACTICE_SAVE_FAILED', 'practice', 'submit', error, diagnosticContext,
                     operation, operation === 'unconfirmed' && diagnosticContext.operation
                         && typeof window.AppData.practice.getCommitState === 'function'
@@ -6355,6 +6353,7 @@
                 });
 
                 if (!receipt || receipt.committed !== true) throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+                try { options.onCommitReceipt?.(receipt); } catch (_) { }
                 console.log('[DataCollection] 练习完成数据已保存到 canonical store');
                 return receipt.record;
             } catch (error) {
