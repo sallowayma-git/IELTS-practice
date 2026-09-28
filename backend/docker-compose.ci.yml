@@ -1,0 +1,11 @@
+# Compose 2.24.4+; isolate the smoke test from any existing local deployment.
+services:
+  postgres:
+    container_name: !reset null
+    ports: !reset []
+  app:
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1::3000"
+  tor:
+    container_name: !reset null

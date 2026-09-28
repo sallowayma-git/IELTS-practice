@@ -1,0 +1,23 @@
+# The build context is the repository root, so backend/.dockerignore is not used.
+.git
+docs
+developer
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/.npm-cache
+**/npm-debug.log*
+backend/logs
+backend/tor/hidden_service
+backend/tor/bridges.local.txt
+backend/tor/webtunnel.local.txt
+backend/tor/*.identity
+backend/tor/*.pub
+backend/tor/*.agekey
+**/*.dump
+**/*.sql
+!backend/migrations/*.sql
+**/*.sql.gz
+**/*.tar
+**/*.tar.gz
