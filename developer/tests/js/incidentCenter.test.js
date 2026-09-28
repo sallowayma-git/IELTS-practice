@@ -257,6 +257,80 @@ for (const transition of ['revoked', 'aggregated']) {
     });
 }
 
+for (const enrichedIndex of [0, 1]) {
+    for (const settlement of ['fulfilled', 'rejected']) {
+        test(`pending retry stays single flight when aggregate member ${enrichedIndex + 1} splits before it is ${settlement}`, async () => {
+            const h = fixture();
+            const errors = [new Error('generic failure'), new Error('generic failure')];
+            const correlation = { operation: 'original-operation', submission: 'original-submission' };
+            const input = { code: 'UNEXPECTED_RUNTIME_ERROR', correlation, retry: { available: true, action: 'submit' } };
+            const first = h.report({ ...input, error: errors[0] });
+            let calls = 0;
+            let settle;
+            const run = () => {
+                calls++;
+                return calls === 1 ? new Promise((resolve, reject) => {
+                    settle = () => settlement === 'fulfilled' ? resolve({ verified: true, operation: 'committed' })
+                        : reject(new Error('PRIVATE_RETRY'));
+                }) : { verified: true, operation: 'committed' };
+            };
+            h.center.show(first, { retry: { ...h.collector.getIncident(first).retry, run } });
+            const attempt = h.center.retry(h.center.groups.get(first));
+            const second = h.report({ ...input, error: errors[1] });
+            assert.equal(h.center.groups.get(first).count, 2);
+            h.report({ ...input, code: 'PRACTICE_SAVE_FAILED', error: errors[enrichedIndex] });
+            const original = h.center.groups.get(first);
+            const other = h.center.groups.get(second);
+            // A new callback wrapper must not bypass the original operation's lock.
+            for (const id of [first, second]) {
+                h.center.show(id, { retry: { ...h.collector.getIncident(id).retry, run: () => run() } });
+                await h.center.retry(h.center.groups.get(id));
+            }
+            assert.equal(calls, 1, 'splitting and rebinding cannot invoke a second concurrent attempt');
+            assert.equal(original.busy, true);
+            assert.equal(other.busy, true, 'the same operation remains busy under another incident reference');
+            settle();
+            await attempt;
+            assert.equal(original.busy, false);
+            assert.equal(other.busy, false);
+            assert.equal(original.operation, undefined, 'a replaced binding cannot adopt the old result');
+            assert.equal(other.operation, undefined, 'settlement cannot confirm the surviving observation');
+            assert.equal(original.actionStatus, '');
+            assert.equal(other.actionStatus, '');
+            await h.center.retry(original);
+            assert.equal(calls, 2, 'the lock is released after either settlement path');
+            assert.equal(original.operation, 'committed');
+        });
+    }
+}
+
+test('pending retry capacity remains bounded when dismissed notification groups are evicted', async () => {
+    const h = fixture();
+    let calls = 0;
+    const completions = [];
+    const attempts = [];
+    let last;
+    for (let i = 0; i < 25; i++) {
+        const id = h.report({ correlation: { operation: 'operation-' + i }, retry: { available: true, action: 'submit' } });
+        h.center.show(id, { retry: { ...h.collector.getIncident(id).retry, run: () => {
+            calls++;
+            return new Promise((resolve) => completions.push(resolve));
+        } } });
+        last = h.center.groups.get(id);
+        attempts.push(h.center.retry(last));
+        h.center.close();
+    }
+    assert.equal(calls, 20, 'UI eviction cannot create unbounded pending callbacks');
+    completions.forEach((resolve) => resolve({ verified: true, operation: 'unconfirmed' }));
+    await Promise.all(attempts);
+    assert.equal(last.busy, false);
+    const next = h.center.retry(last);
+    assert.equal(calls, 21, 'settlement frees capacity for the next user action');
+    completions.at(-1)({ verified: true, operation: 'committed' });
+    await next;
+    assert.equal(last.operation, 'committed');
+});
+
 test('rejected/hostile retry results stay unconfirmed, without exposing exception text', async () => {
     const h = fixture();
     const { id, item, retry } = withRetry(h, () => { throw new Error('PRIVATE_RETRY'); });

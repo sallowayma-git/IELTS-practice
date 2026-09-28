@@ -100,6 +100,13 @@ the current event before presentation and execution. Enrichment that disables
 retry or changes those aliases clears the callback. A result arriving after its
 binding was invalidated or its notification became an aggregate cannot confirm
 the displayed outcome.
+Active attempts are tracked separately from notification groups, by incident
+identity and operation/submission aliases. Splitting a group, replacing its
+representative, or supplying a new callback wrapper cannot start a second attempt
+for that incident or operation while the first is pending. Replacement controls
+stay disabled until fulfillment or rejection; closing or evicting a notification
+does not release the attempt. Settlement clears the lock and only updates an
+incident whose original grouping key and callback binding still match.
 
 An ordinary fulfilled Promise or `{ success: true }` does not confirm persistence.
 Only `{ verified: true, operation: 'committed' | 'not-committed' | 'unconfirmed' }`
@@ -116,9 +123,14 @@ ongoing retry neither cancels nor replays that operation.
 | Active modal | 1 |
 | Waiting critical dialogs | 5 |
 | Retained UI groups / callback slots | 20 |
+| Pending retry attempts, including evicted notifications | 20 |
 | Recently observed identities | 200 |
 | Aggregation window | 60,000 ms from the first observation |
 | History page | 20 events from the exporter's bounded snapshot |
+
+When all retry slots are occupied, additional retry controls remain disabled until
+an attempt settles. Group eviction cannot bypass this bound or replay a pending
+operation under a new incident reference.
 
 Repeating the same event ID does not increase the occurrence count. Independent
 events aggregate only when their fingerprint, window, action, correlation aliases,
@@ -173,6 +185,7 @@ node scripts/build-bundles.mjs --check
 Unit tests cover policy, identity, aggregation, capacity, privacy, callback binding,
 verified outcomes and observer failure isolation. The browser fixture exercises
 real keyboard/focus behavior, dismissals, history overflow, malicious markup,
-single-flight retry, actual downloads, clipboard/file/renderer failures and mobile
+single-flight retry across aggregation/enrichment and both settlement paths,
+actual downloads, clipboard/file/renderer failures and mobile
 layout in file, root HTTP and subpath HTTP modes. These are focused B2 checks;
 final integrated release qualification remains C4 (#206).

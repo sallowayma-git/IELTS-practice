@@ -37,6 +37,10 @@
         return JSON.stringify([event.fingerprint, event.module, event.action, event.windowId,
             event.correlation, event.persistence.operation, kind(event)]);
     }
+    function sameOperation(left, right) {
+        return left && right && left.operationAlias === right.operationAlias
+            && left.submissionAlias === right.submissionAlias;
+    }
     function node(tag, text, className) {
         const result = global.document.createElement(tag);
         if (text !== undefined) result.textContent = text;
@@ -56,6 +60,7 @@
             this.now = options.now || (() => Date.now());
             this.groups = new Map();
             this.seen = new Map();
+            this.attempts = new Map();
             this.queue = [];
             this.overflow = 0;
             this.root = null;
@@ -141,7 +146,7 @@
                     // Functions stay only in bounded page UI state, never diagnostic records.
                     const retry = field(presentation, 'retry');
                     if (retry && event.eventId === item.id) item.retry = this.safeRetry(event, retry);
-                    this.validatedRetry(item);
+                    this.refreshRetry(item);
                     if (!item.dismissed && eventKind === 'transient' && !item.transientShown) {
                         if (item.count === 1) this.transient(TITLES[event.code] + '。' + outcome(event), 'info');
                         item.transientShown = true;
@@ -176,6 +181,7 @@
                 this.groups.set(item.id, item);
                 for (const entry of this.seen.values()) if (entry.id === eventId) entry.id = item.id;
                 this.queue = this.queue.map((id) => id === eventId ? item.id : id);
+                this.refreshRetry(item);
             } else {
                 // Old members may have aged out of UI bookkeeping; passive history
                 // retains them without displaying the enriched ID under an old code.
@@ -205,28 +211,48 @@
             return item.retry;
         }
 
-        async retry(item) {
+        refreshRetry(item) {
             const retry = this.validatedRetry(item);
-            if (!retry || item.busy || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed') return;
+            // Attempts belong to incidents/operations, not mutable presentation groups.
+            const busy = this.attempts.has(item.id) || Array.from(this.attempts.values())
+                .some((attempt) => sameOperation(attempt.retry, retry));
+            if (busy) item.actionStatus = '正在检查并重试原操作，请保留此页面。';
+            else if (item.busy) item.actionStatus = '';
+            item.busy = busy;
+            return retry;
+        }
+
+        async retry(item) {
+            const retry = this.refreshRetry(item);
+            if (!retry || item.busy || item.count !== 1 || this.attempts.size >= LIMITS.groups
+                || (item.operation || item.event.persistence.operation) === 'committed') return;
             const id = item.id;
             const key = item.key;
-            const stillBound = () => item.id === id && item.key === key && item.count === 1
-                && this.validatedRetry(item)?.run === retry.run;
-            item.busy = true;
-            item.actionStatus = '正在检查并重试原操作，请保留此页面。';
-            this.refreshDialog();
+            this.attempts.set(id, { retry });
+            this.refreshRetry(item);
+            let result;
+            let failed = false;
             try {
-                const result = await retry.run();
-                if (!stillBound()) return;
-                const operation = field(result, 'operation');
-                if (field(result, 'verified') === true && ['committed', 'not-committed', 'unconfirmed'].includes(operation)) {
-                    item.operation = operation;
-                    item.actionStatus = outcome(item.event, operation);
-                } else item.actionStatus = '重试尚未提供已验证的结果，请保留此页面。';
-            } catch (_) { if (stillBound()) item.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。'; }
+                this.refreshDialog();
+                result = await retry.run();
+            } catch (_) { failed = true; }
             finally {
-                item.busy = false;
-                if (!stillBound()) item.actionStatus = '';
+                this.attempts.delete(id);
+                // Clear every replacement control, including a detached/evicted item.
+                for (const current of new Set([item, ...this.groups.values(), this.dialog?.item])) {
+                    if (current) this.refreshRetry(current);
+                }
+                const current = this.groups.get(id);
+                const bound = current && this.validatedRetry(current);
+                if (current?.key === key && current.count === 1 && bound?.run === retry.run
+                    && bound.action === retry.action && sameOperation(bound, retry)) {
+                    const operation = field(result, 'operation');
+                    if (failed) current.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。';
+                    else if (field(result, 'verified') === true && ['committed', 'not-committed', 'unconfirmed'].includes(operation)) {
+                        current.operation = operation;
+                        current.actionStatus = outcome(current.event, operation);
+                    } else current.actionStatus = '重试尚未提供已验证的结果，请保留此页面。';
+                }
                 try { this.render(); } catch (_) { this.fallback(item.event); }
             }
         }
@@ -390,8 +416,8 @@
             dialog.technical.textContent = JSON.stringify(item.event, null, 2);
             dialog.outcome.textContent = outcome(item.event, item.operation);
             dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
-            dialog.retryButton.hidden = !this.validatedRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
-            dialog.retryButton.disabled = item.busy;
+            dialog.retryButton.hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            dialog.retryButton.disabled = item.busy || this.attempts.size >= LIMITS.groups;
             dialog.status.textContent = item.actionStatus;
         }
 

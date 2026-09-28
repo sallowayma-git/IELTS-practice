@@ -129,6 +129,61 @@ try {
             assert.equal(await page.locator('[aria-modal="true"]').count(), 1, 'verified success does not silently dismiss the incident');
             record('safe-operation-retry-single-flight-and-verified-outcomes');
 
+            for (const enrichedIndex of [0, 1]) {
+                for (const settlement of ['fulfilled', 'rejected']) {
+                    await fresh();
+                    await page.evaluate(() => {
+                        window.retryCalls = 0;
+                        window.retryCompletions = [];
+                        window.failurePair = [new Error('generic failure'), new Error('generic failure')];
+                        window.retryInput = { code: 'UNEXPECTED_RUNTIME_ERROR',
+                            correlation: { operation: 'original', submission: 'original-submission' },
+                            retry: { available: true, action: 'submit' } };
+                        window.retryCallback = () => {
+                            retryCalls++;
+                            return new Promise((resolve, reject) => retryCompletions.push({ resolve, reject }));
+                        };
+                        window.originalRetryId = reportFailure({ ...retryInput, error: failurePair[0] });
+                        showIncident(originalRetryId, { retry: { ...AppDiagnostics.getIncident(originalRetryId).retry, run: retryCallback } });
+                    });
+                    await retry.click();
+                    assert.equal(await retry.isDisabled(), true);
+                    const references = await page.evaluate((index) => {
+                        const other = reportFailure({ ...retryInput, error: failurePair[1] });
+                        const aggregated = center.groups.get(originalRetryId).count;
+                        reportFailure({ ...retryInput, code: 'PRACTICE_SAVE_FAILED', error: failurePair[index] });
+                        for (const id of [originalRetryId, other]) {
+                            showIncident(id, { retry: { ...AppDiagnostics.getIncident(id).retry, run: retryCallback } });
+                        }
+                        return { aggregated, enriched: [originalRetryId, other][index] };
+                    }, enrichedIndex);
+                    assert.equal(references.aggregated, 2);
+                    await retry.evaluate((control) => control.click());
+                    assert.equal(await page.evaluate(() => retryCalls), 1, 'the surviving group cannot replay the same pending operation');
+                    assert.equal(await retry.isDisabled(), true);
+                    await page.keyboard.press('Escape');
+                    assert.equal(JSON.parse(await page.locator('.incident-dialog pre').textContent()).eventId, references.enriched);
+                    await retry.evaluate((control) => control.click());
+                    assert.equal(await page.evaluate(() => retryCalls), 1, 'the replacement control cannot start a concurrent retry');
+                    assert.equal(await retry.isDisabled(), true);
+                    assert.match(await page.locator('.incident-dialog [role="status"]').innerText(), /正在检查并重试原操作/);
+                    await page.evaluate((result) => {
+                        if (result === 'fulfilled') retryCompletions[0].resolve({ verified: true, operation: 'committed' });
+                        else retryCompletions[0].reject(new Error('PRIVATE_RETRY'));
+                    }, settlement);
+                    await page.waitForFunction(() => !center.dialog.retryButton.disabled);
+                    assert.match(await page.locator('#incident-dialog-outcome').innerText(), /尚未确认保存/);
+                    assert.equal(await page.locator('.incident-dialog [role="status"]').innerText(), '');
+                    await retry.click();
+                    assert.equal(await page.evaluate(() => retryCalls), 2, 'a new user action is allowed after settlement');
+                    await page.evaluate(() => retryCompletions[1].resolve({ verified: true, operation: 'committed' }));
+                    await page.waitForFunction(() => center.dialog.retryButton.hidden);
+                    assert.match(await page.locator('#incident-dialog-outcome').innerText(), /已确认保存/);
+                    assert.equal(await page.evaluate((id) => AppDiagnostics.getIncident(id).persistence.operation, references.enriched), 'unconfirmed');
+                    record(`pending-retry-survives-member-${enrichedIndex + 1}-split-and-${settlement}-settlement`);
+                }
+            }
+
             await fresh();
             const invalidated = await page.evaluate(() => {
                 window.retryCalls = 0;
