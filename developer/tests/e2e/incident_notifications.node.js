@@ -14,6 +14,7 @@ const sources = ['js/diagnostics/diagnosticContract.js', 'js/diagnostics/bootstr
     'js/presentation/incident-center.js', 'js/presentation/message-center.js'];
 const html = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<title>Incident notifications fixture</title><style>' + fs.readFileSync(path.join(root, 'css/main.css'), 'utf8')
+        .replace('@import url("./incident-center.css");', () => fs.readFileSync(path.join(root, 'css/incident-center.css'), 'utf8'))
     + '</style><body><label>练习输入<input id="origin"></label><button id="outside">外部按钮</button><div id="already-inert" inert>不可交互</div>'
     + sources.map((source) => '<script>' + fs.readFileSync(path.join(root, source), 'utf8') + '</script>').join('\n')
     + '<script>AppDiagnostics.markReady(); window.center = getMessageCenter().incidents; window.reportFailure = (extra = {}, presentation) => '

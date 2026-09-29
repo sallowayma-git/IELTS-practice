@@ -8215,10 +8215,24 @@
 
 /* ===== js/app/examSessionMixin.js ===== */
 (function (global) {
-    function operationContext(examId, data = {}) {
+    function rawOperationContext(examId, data = {}) {
         return { session: data?.sessionId, suite: data?.suiteSessionId, submission: data?.submissionId,
             operation: data?.operationId || data?.messageId || (data?.submissionId
                 ? `practice-complete:${examId}:${data.sessionId || 'session'}:${data.submissionId}` : undefined) };
+    }
+    function operationContext(examId, data = {}) {
+        const raw = rawOperationContext(examId, data);
+        try {
+            if (data.diagnosticCorrelation && global.AppDiagnostics?.correlate) {
+                const local = global.AppDiagnostics.correlate(raw);
+                const incoming = global.AppDiagnostics.correlate(undefined, data.diagnosticCorrelation);
+                if (incoming.scopeId === local.scopeId && incoming.session === local.session && incoming.suite === local.suite) {
+                    return { ...local, submission: incoming.submission === 'unknown' ? local.submission : incoming.submission,
+                        operation: incoming.operation === 'unknown' ? local.operation : incoming.operation };
+                }
+            }
+        } catch (_) { }
+        return raw;
     }
     function observeFailure(code, module, action, error, correlation, operation, retry) {
         try { global.AppOperationDiagnostics?.failure({ code, module, action, error, correlation, operation }, retry); } catch (_) { }
@@ -9180,6 +9194,11 @@
                 examId: data && data.examId != null ? data.examId : examId,
                 windowSessionToken: windowInfo.windowSessionToken
             });
+            if (String(type).toUpperCase() === 'INIT_SESSION' || String(type).toUpperCase() === 'INIT_EXAM_SESSION') {
+                try { payload.diagnosticCorrelation = global.AppDiagnostics?.correlate({
+                    session: payload.sessionId, suite: payload.suiteSessionId
+                }); } catch (_) { }
+            }
             targetWindow.postMessage({
                 type,
                 data: payload,
@@ -14432,9 +14451,9 @@
             } catch (error) {
                 const operation = saveCommitted || completionCommitted ? 'committed' : operationFailureState(error, failureOutcome);
                 observeFailure('PRACTICE_SAVE_FAILED', 'practice', 'submit', error, diagnosticContext,
-                    operation, operation === 'unconfirmed' && diagnosticContext.operation
+                    operation, operation === 'unconfirmed' && rawOperationContext(examId, data).operation
                         && typeof window.AppData.practice.getCommitState === 'function'
-                        ? () => window.AppData.practice.getCommitState(diagnosticContext.operation) : undefined);
+                        ? () => window.AppData.practice.getCommitState(rawOperationContext(examId, data).operation) : undefined);
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
                 window.showMessage && window.showMessage(operation === 'committed'
                     ? '练习记录已保存，但后续操作失败，请查看诊断详情。'

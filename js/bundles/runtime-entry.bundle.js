@@ -14,7 +14,10 @@
         return global.AppDiagnostics || global.AppDiagnosticBootstrap?.current();
     }
     function breadcrumb(module, action, outcome, correlation) {
-        try { reporter()?.breadcrumb({ module, action, outcome, correlation }); } catch (_) { }
+        try { reporter()?.breadcrumb({ module, action, outcome, ...correlationInput(correlation) }); } catch (_) { }
+    }
+    function correlationInput(correlation) {
+        return field(correlation, 'scopeId') ? { correlationAliases: correlation } : { correlation };
     }
     function businessOutcome(input) {
         const explicit = field(input, 'operation');
@@ -40,7 +43,7 @@
             const capture = reporter();
             breadcrumb(module, action, field(input, 'cancelled') === true ? 'cancelled' : 'failed', field(input, 'correlation'));
             id = capture?.report({ code, module, action, error: field(input, 'error'),
-                correlation: field(input, 'correlation'), resource: field(input, 'resource'),
+                ...correlationInput(field(input, 'correlation')), resource: field(input, 'resource'),
                 cancelled: field(input, 'cancelled'),
                 persistence: { operation }, notification: { kind },
                 retry: { available: !expected && operation === 'unconfirmed' && typeof retry === 'function',

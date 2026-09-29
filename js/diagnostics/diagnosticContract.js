@@ -55,12 +55,14 @@
         'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/operationDiagnostics.js',
         'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js', 'js/diagnostics/diagnosticChannel.js',
         'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
-        'css/main.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
+        'css/main.css', 'css/incident-center.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
         'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',
         'assets/images/favicon.svg', 'assets/images/logo.svg',
         'assets/generated/listening-exams/manifest.js',
         'assets/generated/listening-exams/listening-index.compat.js',
         'assets/generated/reading-exams/manifest.js',
+        'assets/generated/reading-explanations/manifest.js',
+        'js/runtime/unifiedReadingPage.js',
         'assets/generated/reading-exams/reading-practice-unified.html',
         'assets/generated/listening-exams/listening-practice-unified.html',
         ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
@@ -74,6 +76,22 @@
     const ALIAS_ID = /^alias_(session|suite|submission|operation)_[a-f0-9]{32}$/;
     const scopeInternals = new WeakMap();
     const identityInternals = new WeakMap();
+    const readingResourcePaths = new Set();
+    try {
+        const resources = Object.getOwnPropertyDescriptor(global.AppDiagnosticBuild, 'readingResources')?.value;
+        if (Array.isArray(resources)) {
+            for (let i = 0; i < Math.min(resources.length, 1024); i += 1) {
+                const value = Object.getOwnPropertyDescriptor(resources, String(i))?.value;
+                if (typeof value === 'string' && /^assets\/generated\/reading-(?:exams|explanations)\/p[123]-(?:high|medium|low)-[0-9]{2,3}\.js$/.test(value)) readingResourcePaths.add(value);
+            }
+        }
+    } catch (_) { }
+    let nativeDOMExceptionName;
+    try { nativeDOMExceptionName = Object.getOwnPropertyDescriptor(global.DOMException.prototype, 'name')?.get; } catch (_) { }
+
+    function platformErrorName(value) {
+        try { return nativeDOMExceptionName?.call(value); } catch (_) { return undefined; }
+    }
 
     function objectLike(value) { return value !== null && (typeof value === 'object' || typeof value === 'function'); }
     function state() { return { issues: new Set(), stackFrames: 0 }; }
@@ -200,7 +218,9 @@
         }
         // A query or fragment must never supply an allowlisted project path.
         text = text.split(/[?#]/, 1)[0].replace(/\\/g, '/');
-        const path = PROJECT_PATHS.find((candidate) => text === candidate || text.endsWith(`/${candidate}`));
+        const readingPath = text.match(/(?:^|\/)(assets\/generated\/reading-(?:exams|explanations)\/[^/]+)$/)?.[1];
+        const path = PROJECT_PATHS.find((candidate) => text === candidate || text.endsWith(`/${candidate}`))
+            || (readingResourcePaths.has(readingPath) ? readingPath : null);
         return { path: path || 'unknown', line: path ? line : null, column: path ? column : null };
     }
     function frame(value, context) {
@@ -247,10 +267,12 @@
         if (seen.has(value)) { result.kind = 'cycle'; context.issues.add('cause-cycle'); return result; }
         seen.add(value);
         result.kind = 'object';
-        const name = errorName(value, context);
+        const nativeName = platformErrorName(value);
+        const name = nativeName || errorName(value, context);
         const message = field(value, 'message', context);
         result.name = choice(name, ERROR_NAMES);
-        result.code = result.name === 'AppDataError' ? choice(field(value, 'code', context), CAUSE_CODES) : 'unknown';
+        result.code = result.name === 'AppDataError' ? choice(field(value, 'code', context), CAUSE_CODES)
+            : result.name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED' : 'unknown';
         result.message = choice(message, Object.values(MESSAGES).concat('[redacted]'), '[redacted]');
         if (typeof message === 'string' && message.length > LIMITS.inputStringUnits) context.issues.add('input-truncated');
         if (integer(field(value, 'nodeType', context), 1, 12)) {

@@ -31,10 +31,10 @@ isolated from practice operations.
 ## Child installation contract for C2/C3
 
 The factory is shipped in the reading, listening wrapper, listening bridge and
-legacy enhancer bundles, without automatically installing a collector or a
-transport there. **#204 and #205 own their runtime installation** (including the
-early bootstrap, reporter/store, coverage declarations and validated INIT flow).
-They can use the same hook in a controlled page:
+legacy enhancer bundles. C2 (#204) installs the early collector, shared reporter,
+store, exporter and transport in the maintained unified reading entry; see
+[reading and suite diagnostics](reading-suite-diagnostics.md). Listening runtime
+installation remains with C3 (#205). Controlled pages use this hook:
 
 ```js
 const reporter = AppDiagnosticBootstrap.install({ context: 'reading' }).handoff();
@@ -164,5 +164,6 @@ delayed-message rejection after clear/opt-out/full reset. CI runs this harness.
 It also covers fresh connections after a full reset and host reload, and queue
 overflow while an immutable batch awaits its ACK.
 All affected shipped bundles and diagnostic bootstrap/build mappings are rebuilt.
-Full reading/listening runtime installation remains with C2/C3; integrated release
-qualification remains with C4 (#206).
+The reading runtime installation is covered by C2's additional browser harness.
+Listening runtime installation remains with C3; integrated release qualification
+remains with C4 (#206).

@@ -151,7 +151,7 @@ def _strip_verified_diagnostic_bootstrap(source: str) -> str:
             options = json.loads(hook.group(1))
         except ValueError:
             return match.group(0)
-        if set(options) != {'context', 'requiredResources', 'optionalResources'} or options['context'] != 'main':
+        if set(options) != {'context', 'requiredResources', 'optionalResources'} or options['context'] not in ('main', 'reading'):
             return match.group(0)
         if not all(isinstance(options[key], list) and all(isinstance(item, str) for item in options[key])
                    for key in ('requiredResources', 'optionalResources')):

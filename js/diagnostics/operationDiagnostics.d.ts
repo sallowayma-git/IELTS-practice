@@ -1,4 +1,4 @@
-import type { Action, DiagnosticInput, ModuleName, OperationCode, OperationPersistence } from './diagnosticContract';
+import type { Action, Correlation, DiagnosticInput, ModuleName, OperationCode, OperationPersistence } from './diagnosticContract';
 import type { VerifiedRetryResult } from '../presentation/message-center';
 
 export interface OperationFailure {
@@ -6,7 +6,7 @@ export interface OperationFailure {
     module: ModuleName;
     action: Action;
     error?: unknown;
-    correlation?: DiagnosticInput['correlation'];
+    correlation?: DiagnosticInput['correlation'] | Correlation;
     resource?: DiagnosticInput['resource'];
     /** Explicit business evidence; otherwise the facade's known failure state or unconfirmed. */
     operation?: OperationPersistence;
@@ -20,6 +20,6 @@ declare global {
         failure(input: OperationFailure, retry?: () => Promise<VerifiedRetryResult>): string | null;
         breadcrumb(module: ModuleName, action: Action,
             outcome: 'started' | 'succeeded' | 'failed' | 'unconfirmed' | 'cancelled',
-            correlation?: DiagnosticInput['correlation']): void;
+            correlation?: DiagnosticInput['correlation'] | Correlation): void;
     }>;
 }

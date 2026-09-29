@@ -3262,7 +3262,7 @@ class ExamSystemApp {
                 console.error('Failed to refresh data:', error);
             }
         },
-        destroy() {
+        destroy(options = {}) {
             window.removeEventListener('resize', this.handleResize);
             if (this.sessionMonitorInterval) {
                 clearInterval(this.sessionMonitorInterval);
@@ -3273,6 +3273,20 @@ class ExamSystemApp {
             }
             if (this.examWindows) {
                 this.examWindows.forEach((windowData, examId) => {
+                    // A departing host must leave controlled reading pages available
+                    // for unconfirmed work and local diagnostic export. Explicit
+                    // session closure still uses the normal cleanup path below.
+                    let preserveReading = false;
+                    if (options.preserveReadingWindows === true) {
+                        try { preserveReading = new URL(windowData.expectedUrl, window.location.href).pathname
+                            .endsWith('/assets/generated/reading-exams/reading-practice-unified.html'); } catch (_) { }
+                    }
+                    if (preserveReading) {
+                        try { this._diagnosticChannels?.get(examId)?.dispose(); } catch (_) { }
+                        const handler = this.messageHandlers?.get(examId);
+                        if (handler) window.removeEventListener('message', handler);
+                        return; // Keep the existing interrupted-session/recovery data.
+                    }
                     if (windowData.window && !windowData.window.closed) {
                         windowData.window.close();
                     }
@@ -3400,7 +3414,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 页面卸载时清理
 window.addEventListener('beforeunload', () => {
     if (window.app) {
-        window.app.destroy();
+        window.app.destroy({ preserveReadingWindows: true });
     }
 });
 

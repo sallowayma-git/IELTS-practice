@@ -170,6 +170,7 @@ reject_entry_pattern() {
 
 require_entry "index.html"
 require_entry "css/main.css"
+require_entry "css/incident-center.css"
 require_entry "css/heroui-bridge.css"
 require_entry "css/theme-switcher-scroll.css"
 require_entry "css/onboarding.css"

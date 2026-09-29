@@ -1085,6 +1085,7 @@
             if (!this._persistSuiteDraftSnapshot(session, normalizedExamId, data)) {
                 return false;
             }
+            suiteStep('host-receipt', 'succeeded', session);
             if (Number.isFinite(Number(data.elapsed))) {
                 session.elapsedByExam[normalizedExamId] = typeof this._deriveSuiteExamElapsedSeconds === 'function'
                     ? this._deriveSuiteExamElapsedSeconds(session, normalizedExamId, Number(data.elapsed))
@@ -1098,7 +1099,10 @@
             if (indexedEntry && String(indexedEntry.examId) === normalizedExamId) {
                 session.activeExamId = normalizedExamId;
             }
-            return this._mirrorSessionToStorage(session);
+            const mirrored = this._mirrorSessionToStorage(session);
+            // A window mirror does not confirm the asynchronous durable recovery write.
+            suiteStep('save-draft', mirrored ? 'unconfirmed' : 'failed', session);
+            return mirrored;
         },
 
         _buildSuiteSequencePayload(session) {

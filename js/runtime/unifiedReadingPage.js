@@ -171,6 +171,49 @@
         windowSessionGeneration: 0
     };
 
+    let diagnosticTransport = null;
+    let diagnosticBinding = null;
+    let handshakeDeadline = null;
+    let pendingSubmission = null; // Business-owned snapshot; never given to diagnostics.
+    try { diagnosticTransport = global.AppDiagnosticChannel?.createChild({
+        reporter: global.AppDiagnostics, store: global.AppDiagnosticStore
+    }); } catch (_) { }
+
+    function readingCorrelation(submission = pendingSubmission) {
+        const raw = { session: state.sessionId, suite: state.suiteSessionId,
+            submission: submission?.id || state.submissionId,
+            operation: submission?.operationId };
+        try {
+            const local = global.AppDiagnostics?.correlate(raw);
+            if (local && diagnosticBinding?.sessionId === state.sessionId
+                && diagnosticBinding?.suiteSessionId === state.suiteSessionId) {
+                return { ...local, scopeId: diagnosticBinding.aliases.scopeId,
+                    session: diagnosticBinding.aliases.session, suite: diagnosticBinding.aliases.suite };
+            }
+            return local || raw;
+        } catch (_) { return raw; }
+    }
+
+    function readingStep(action, outcome, correlation = readingCorrelation()) {
+        try { global.AppOperationDiagnostics?.breadcrumb(state.suiteSessionId ? 'suite' : 'reading', action, outcome, correlation); } catch (_) { }
+    }
+
+    function readingFailure(code, action, error, operation = 'unconfirmed', retry, resource, correlation = readingCorrelation()) {
+        try { return global.AppOperationDiagnostics?.failure({ code, module: state.suiteSessionId ? 'suite' : 'reading',
+            action, error, operation, correlation, resource }, retry); } catch (_) { return null; }
+    }
+
+    function connectReadingDiagnostics(data) {
+        try {
+            const aliases = global.AppDiagnostics?.correlate(undefined, data.diagnosticCorrelation);
+            diagnosticBinding = aliases && aliases.scopeId !== 'unknown' && aliases.session !== 'unknown'
+                ? { sessionId: state.sessionId, suiteSessionId: state.suiteSessionId, aliases } : null;
+            diagnosticTransport?.connect({ window: state.parentWindow, origin: state.parentOrigin,
+                allowOpaqueOrigin: state.parentOriginIsOpaque, sessionId: state.sessionId,
+                windowSessionToken: state.windowSessionToken });
+        } catch (_) { }
+    }
+
     const dom = {
         title: null,
         subtitle: null,
@@ -1276,11 +1319,25 @@
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
+            try { global.AppDiagnostics?.declareResource(script, { url: new URL(requestUrl, document.baseURI).href, optional: false }); } catch (_) { }
             script.src = requestUrl;
             script.defer = true;
-            script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${requestUrl}`));
-            document.head.appendChild(script);
+            let settled = false;
+            const finish = (failed) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(deadline);
+                if (!failed) { readingStep('load-resource', 'succeeded'); resolve(true); return; }
+                let error = new Error('Reading resource unavailable');
+                try { error = global.AppDiagnostics?.resourceFailure(script, error) || error; } catch (_) { }
+                readingFailure('RESOURCE_LOAD_FAILED', 'load-resource', error, 'not-committed', undefined,
+                    { url: script.src, optional: false });
+                reject(error);
+            };
+            const deadline = setTimeout(() => finish(true), 15000);
+            script.onload = () => finish(false);
+            script.onerror = () => finish(true);
+            try { document.head.appendChild(script); } catch (_) { finish(true); }
         });
         scriptCache.set(requestUrl, promise);
         return promise;
@@ -1975,6 +2032,7 @@
                 currentIndex: state.suite.currentIndex,
                 suiteSequence: state.suite.sequence.map((entry) => ({ ...entry }))
             });
+            readingStep('suite-navigation', 'succeeded');
         }
         return true;
     }
@@ -6344,7 +6402,62 @@
         if (state.submissionStatus !== 'submitting') {
             return false;
         }
-        return restoreDraftSubmissionState(submissionId || state.submissionId);
+        if (!restoreDraftSubmissionState(submissionId || state.submissionId)) return false;
+        settleSubmissionRetry('unconfirmed');
+        reportSubmissionFailure(new Error('Submission acknowledgement timed out'));
+        return true;
+    }
+
+    function ownsPendingSubmission(submission) {
+        return Boolean(submission && submission.id === state.submissionId
+            && submission.sessionId === state.sessionId && submission.suiteSessionId === state.suiteSessionId
+            && submission.parentWindow === state.parentWindow && submission.token === state.windowSessionToken
+            && submission.generation === state.windowSessionGeneration);
+    }
+
+    function settleSubmissionRetry(operation) {
+        const settle = pendingSubmission?.settle;
+        if (pendingSubmission) pendingSubmission.settle = null;
+        settle?.({ verified: operation === 'committed', operation });
+    }
+
+    function reportSubmissionFailure(error, code = 'PRACTICE_CHANNEL_TIMEOUT') {
+        const submission = pendingSubmission;
+        readingFailure(code, 'submit', error, 'unconfirmed', ownsPendingSubmission(submission)
+            ? () => retryPendingSubmission(submission) : undefined, undefined, readingCorrelation(submission));
+    }
+
+    function dispatchPendingSubmission(submission) {
+        if (!ownsPendingSubmission(submission) || state.submissionStatus === 'submitted') return false;
+        state.submissionStatus = 'submitting';
+        state.pendingSubmissionPresentation = submission.presentation;
+        syncPrimaryActionButtons();
+        readingStep('submit', 'started', readingCorrelation(submission));
+        const delivered = postMessage(submission.type, Object.assign({}, submission.payload, {
+            examId: submission.examId, sessionId: submission.sessionId, suiteSessionId: submission.suiteSessionId,
+            submissionId: submission.id
+        }));
+        if (!delivered) {
+            restoreDraftSubmissionState(submission.id);
+            settleSubmissionRetry('unconfirmed');
+            reportSubmissionFailure(new Error('Submission target unavailable'));
+            return false;
+        }
+        clearSubmissionAckTimer();
+        state.submissionAckTimer = setTimeout(() => expirePendingSubmission(submission.id), SUBMIT_ACK_TIMEOUT_MS);
+        return true;
+    }
+
+    function retryPendingSubmission(submission) {
+        if (!ownsPendingSubmission(submission)) return Promise.resolve({ verified: false, operation: 'unconfirmed' });
+        if (state.submissionStatus === 'submitted') return Promise.resolve({ verified: true, operation: 'committed' });
+        if (state.submissionStatus === 'submitting' || submission.settle) return Promise.resolve({ verified: false, operation: 'unconfirmed' });
+        // Only a user action resends this immutable business snapshot. The host's
+        // existing receipt/idempotency path reconciles it under the original ID.
+        return new Promise((resolve) => {
+            submission.settle = resolve;
+            if (!dispatchPendingSubmission(submission)) settleSubmissionRetry('unconfirmed');
+        });
     }
 
     function beginSubmission(messageType, payload, presentation = null) {
@@ -6354,21 +6467,15 @@
         if (!state.submissionId) {
             state.submissionId = createSubmissionId();
         }
-        state.submissionStatus = 'submitting';
-        state.pendingSubmissionPresentation = presentation;
-        syncPrimaryActionButtons();
-        const delivered = postMessage(messageType, Object.assign({}, payload || {}, {
-            submissionId: state.submissionId
-        }));
-        if (!delivered) {
-            restoreDraftSubmissionState(state.submissionId);
-            return false;
+        if (!ownsPendingSubmission(pendingSubmission)) {
+            settleSubmissionRetry('unconfirmed');
+            pendingSubmission = { id: state.submissionId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
+                examId: state.examId, parentWindow: state.parentWindow, token: state.windowSessionToken,
+                generation: state.windowSessionGeneration, type: messageType,
+                operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
+                payload: JSON.parse(JSON.stringify(payload || {})), presentation };
         }
-        clearSubmissionAckTimer();
-        state.submissionAckTimer = setTimeout(() => {
-            expirePendingSubmission(state.submissionId);
-        }, SUBMIT_ACK_TIMEOUT_MS);
-        return true;
+        return dispatchPendingSubmission(pendingSubmission);
     }
 
     function matchesPendingSubmission(data = {}) {
@@ -6379,7 +6486,7 @@
         const suiteSessionId = data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
         if (!submissionId || submissionId !== state.submissionId) return false;
         if (!sessionId || !state.sessionId || sessionId !== String(state.sessionId)) return false;
-        if (!examId || !state.examId || examId !== String(state.examId)) return false;
+        if (!examId || examId !== String(pendingSubmission?.examId || state.examId || '')) return false;
         if (state.suiteSessionId && suiteSessionId !== String(state.suiteSessionId)) return false;
         if (!state.suiteSessionId && suiteSessionId) return false;
         return true;
@@ -6428,6 +6535,9 @@
         const presentation = state.pendingSubmissionPresentation;
         clearSubmissionAckTimer();
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
+        readingStep('acknowledgement', 'succeeded');
+        readingStep('storage-confirmed', 'succeeded');
+        settleSubmissionRetry('committed');
         if (presentation && presentation.results) {
             state.lastResults = presentation.results;
             renderResults(presentation.results);
@@ -6512,6 +6622,11 @@
                 beginSubmission,
                 acceptSubmissionAcknowledgement,
                 expirePendingSubmission,
+                retryPendingSubmission() { return retryPendingSubmission(pendingSubmission); },
+                persistSimulationDraftMirror,
+                loadScript,
+                startInitLoop,
+                stopInitLoop,
                 restoreDraftSubmissionState,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
@@ -6819,6 +6934,8 @@
     }
 
     function resetToAnsweringPresentation() {
+        settleSubmissionRetry('unconfirmed');
+        pendingSubmission = null;
         clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
@@ -7141,8 +7258,9 @@
 
     function postMessage(type, payload) {
         const envelope = buildEnvelope(type, payload);
+        try { envelope.data.diagnosticCorrelation = readingCorrelation(); } catch (_) { }
         const target = state.parentWindow;
-        if (!target || target === global || typeof target.postMessage !== 'function') return false;
+        if (!target || target === global || target.closed || typeof target.postMessage !== 'function') return false;
         const targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
             ? state.parentOrigin
             : (state.expectedParentOrigin || (global.location.protocol === 'file:' ? '*' : ''));
@@ -7155,6 +7273,7 @@
     }
 
     function stopInitLoop() {
+        if (handshakeDeadline) { clearTimeout(handshakeDeadline); handshakeDeadline = null; }
         if (state.initTimer) {
             clearInterval(state.initTimer);
             state.initTimer = null;
@@ -7162,7 +7281,7 @@
     }
 
     function sendSessionReady() {
-        postMessage('SESSION_READY', {
+        const delivered = postMessage('SESSION_READY', {
             url: global.location.href,
             pageType: 'unified-reading',
             title: state.dataset?.meta?.title || document.title,
@@ -7176,7 +7295,9 @@
             suiteTimerMode: state.suiteTimerMode,
             suiteTimerLimitSeconds: state.suiteTimerLimitSeconds
         });
-        state.sessionReadySent = true;
+        state.sessionReadySent = delivered;
+        if (delivered) readingStep('handshake', 'succeeded');
+        else readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', new Error('Reading readiness target unavailable'));
     }
 
     function buildInitSignature(data = {}) {
@@ -7220,6 +7341,8 @@
     }
 
     function restartInitHandshake() {
+        settleSubmissionRetry('unconfirmed');
+        pendingSubmission = null;
         clearSubmissionAckTimer();
         state.submissionStatus = 'draft';
         state.submissionId = '';
@@ -7266,9 +7389,15 @@
 
     function startInitLoop() {
         stopInitLoop();
+        readingStep('handshake', 'started');
+        handshakeDeadline = setTimeout(() => {
+            handshakeDeadline = null;
+            if (!state.sessionReadySent) readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', new Error('Reading host handshake timed out'));
+        }, SUBMIT_ACK_TIMEOUT_MS);
         state.initTimer = setInterval(() => {
             if (state.sessionId) {
-                stopInitLoop();
+                clearInterval(state.initTimer);
+                state.initTimer = null; // Keep the readiness deadline until INIT finishes.
                 return;
             }
             dispatchReady();
@@ -7321,16 +7450,20 @@
 
     function persistSimulationDraftMirror(draft) {
         const name = getSimulationDraftSessionName();
-        if (!name || !global.AppData?.recovery?.windowSession || !draft) {
-            return;
-        }
+        if (!name || !draft) return false;
+        readingStep('save-recovery', 'started');
         try {
-            global.AppData.recovery.windowSession.save(name, {
+            if (!global.AppData?.recovery?.windowSession) throw Object.assign(new Error('Recovery backend unavailable'), { name: 'AppDataError', code: 'BACKEND_UNAVAILABLE' });
+            const saved = global.AppData.recovery.windowSession.save(name, {
                 draft,
                 updatedAt: Date.now()
             });
-        } catch (_) {
-            // AppData v2 recovery is best-effort during page teardown.
+            if (saved !== true) throw new Error('Recovery mirror was not confirmed');
+            readingStep('save-recovery', 'succeeded');
+            return true;
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-recovery', error, 'not-committed');
+            return false;
         }
     }
 
@@ -7347,7 +7480,8 @@
             return parsed.draft && typeof parsed.draft === 'object'
                 ? parsed.draft
                 : null;
-        } catch (_) {
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-recovery', error);
             return null;
         }
     }
@@ -7410,12 +7544,11 @@
         if (reason === 'periodic' && fingerprint && fingerprint === state.readingDraftFingerprint) {
             return;
         }
-        state.readingDraftFingerprint = fingerprint;
         const mirroredDraft = cloneDraftSafely(draft);
         if (!mirroredDraft) {
             return;
         }
-        postMessage('READING_DRAFT_SYNC', {
+        const delivered = postMessage('READING_DRAFT_SYNC', {
             examId: state.examId,
             sessionId: state.sessionId || null,
             windowSessionToken: state.windowSessionToken || null,
@@ -7425,6 +7558,8 @@
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
         });
+        if (delivered) { state.readingDraftFingerprint = fingerprint; readingStep('save-draft', 'unconfirmed'); }
+        else readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', new Error('Draft host unavailable'));
     }
 
     function stopReadingDraftSync() {
@@ -7481,15 +7616,12 @@
         if (reason === 'periodic' && fingerprint && fingerprint === state.simulationDraftFingerprint) {
             return;
         }
-        state.simulationDraftFingerprint = fingerprint;
         const mirroredDraft = cloneDraftSafely(draft);
         if (!mirroredDraft) {
             return;
         }
-        if (!state.suite?.inline) {
-            persistSimulationDraftMirror(mirroredDraft);
-        }
-        postMessage('SIMULATION_DRAFT_SYNC', {
+        const mirrored = state.suite?.inline || persistSimulationDraftMirror(mirroredDraft);
+        const delivered = postMessage('SIMULATION_DRAFT_SYNC', {
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
@@ -7497,6 +7629,9 @@
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
         });
+        if (delivered && mirrored) state.simulationDraftFingerprint = fingerprint;
+        if (delivered) readingStep('save-draft', 'unconfirmed');
+        else readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', new Error('Suite draft host unavailable'));
     }
 
     function refreshSimulationDraftSyncLifecycle() {
@@ -7775,6 +7910,7 @@
             const targetEntry = state.suite.sequence[targetIndex];
             if (targetEntry && targetEntry.examId) {
                 activateSuiteSlot(targetEntry.examId, { skipSave: true }).catch((error) => {
+                    readingFailure('UNEXPECTED_RUNTIME_ERROR', 'suite-navigation', error);
                     console.warn('[UnifiedReadingPage] inline simulation navigation failed:', error);
                 });
             }
@@ -7811,7 +7947,8 @@
         if (typeof options.targetPartKey === 'string' && options.targetPartKey) {
             payload.targetPartKey = options.targetPartKey;
         }
-        postMessage('SIMULATION_NAVIGATE', payload);
+        if (postMessage('SIMULATION_NAVIGATE', payload)) readingStep('suite-navigation', 'started');
+        else readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'suite-navigation', new Error('Suite navigation host unavailable'));
     }
     async function handleSubmit() {
         if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
@@ -7821,6 +7958,7 @@
         if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
             return;
         }
+        if (ownsPendingSubmission(pendingSubmission)) { dispatchPendingSubmission(pendingSubmission); return; }
         state.timingSubmitPending = true;
         try {
             const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
@@ -7829,7 +7967,8 @@
                     dataset: slot?.dataset }, draft: slot?.draft };
             }) : [];
             await readingTimingController?.freezeAll(passages);
-        } catch (_) {
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error);
             global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
             return;
         } finally { state.timingSubmitPending = false; }
@@ -8022,6 +8161,7 @@
         if (!payload || typeof payload !== 'object') {
             return;
         }
+        if (payload.type === 'IELTS_DIAGNOSTIC_V1') return;
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
         const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
@@ -8048,14 +8188,23 @@
             if (shouldIgnoreInlineSuiteEnvelope(data || {})) {
                 return;
             }
-            if (isDuplicateInit && state.sessionReadySent) {
+            if (isDuplicateInit && state.sessionReadySent
+                && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) {
                 return;
+            }
+            if (pendingSubmission && normalizeWindowSessionToken(data.windowSessionToken) !== state.windowSessionToken) {
+                settleSubmissionRetry('unconfirmed');
+                pendingSubmission = { ...pendingSubmission, token: normalizeWindowSessionToken(data.windowSessionToken),
+                    generation: Number(data.windowSessionGeneration) || 0, settle: null };
+                restoreDraftSubmissionState();
             }
             adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
             }
             if (data.sessionId && state.sessionId && String(data.sessionId) !== String(state.sessionId)) {
+                settleSubmissionRetry('unconfirmed');
+                pendingSubmission = null;
                 clearSubmissionAckTimer();
                 state.submissionStatus = 'draft';
                 state.submissionId = '';
@@ -8070,6 +8219,7 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            connectReadingDiagnostics(data);
             applyPracticeMode(data.practiceMode || data.mode || '');
             const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
             if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
@@ -8196,6 +8346,8 @@
         if (type === 'PRACTICE_SUBMIT_FAILED') {
             if (matchesPendingSubmission(data || {})) {
                 restoreDraftSubmissionState(String(data.submissionId || ''));
+                settleSubmissionRetry('unconfirmed');
+                reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }), 'PRACTICE_SAVE_FAILED');
             }
             return;
         }
@@ -8221,6 +8373,7 @@
             }
             const recordId = data && data.recordId != null ? String(data.recordId).trim() : '';
             state.submittedRecordId = recordId;
+            if (recordId) readingStep('storage-confirmed', 'succeeded');
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
@@ -8229,6 +8382,7 @@
             if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
                 return;
             }
+            readingStep('suite-navigation', 'started');
             global.location.href = data.url;
             return;
         }
@@ -8377,7 +8531,11 @@
     }
 
     function attachMessageBridge() {
-        global.addEventListener('message', handleIncoming);
+        global.addEventListener('message', (event) => {
+            handleIncoming(event).catch((error) => {
+                readingFailure('UNEXPECTED_RUNTIME_ERROR', 'handshake', error);
+            });
+        });
     }
 
     function attachReadingDraftLifecycleHooks() {
@@ -8426,6 +8584,16 @@
     }
 
     async function bootstrap() {
+        try {
+            global.AppDiagnostics?.subscribe((event) => {
+                if (event.notification.kind === 'dialog' || event.notification.kind === 'startup') closeFloatingPanels();
+            });
+            global.getMessageCenter?.();
+            const showHistory = () => { closeFloatingPanels(); global.getMessageCenter?.()?.showIncidentHistory(); };
+            document.getElementById('reading-diagnostics-btn')?.addEventListener('click', showHistory);
+            document.getElementById('messages-indicator')?.addEventListener('click', showHistory);
+        } catch (_) { }
+        readingStep('initialize', 'started');
         await loadReadingCandidateCodePreferences();
         if (global.PracticeTimerPreferences?.ready) await global.PracticeTimerPreferences.ready;
         parseQuery();
@@ -8462,13 +8630,16 @@
         refreshSimulationDraftSyncLifecycle();
         refreshReadingDraftSyncLifecycle();
         startInitLoop();
+        readingStep('initialize', 'succeeded');
+        try { global.AppDiagnostics?.markReady(); } catch (_) { }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         bootstrap().catch((error) => {
+            readingFailure('APP_BOOT_FAILED', 'initialize', error, 'not-committed');
             console.error('[UnifiedReadingPage] 初始化失败:', error);
             if (dom.groups) {
-                dom.groups.innerHTML = `<div class="group"><h4>加载失败</h4><p>${error.message}</p></div>`;
+                dom.groups.textContent = '加载失败。请保留页面并导出诊断信息。';
             }
         });
     });

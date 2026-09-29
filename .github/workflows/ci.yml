@@ -63,6 +63,10 @@ jobs:
         timeout-minutes: 3
         run: node developer/tests/e2e/diagnostic_channel.node.js
 
+      - name: Verify reading diagnostics and submission recovery in three hosting modes
+        timeout-minutes: 4
+        run: node developer/tests/e2e/reading_diagnostics.node.js
+
       - name: Verify incident notifications in three hosting modes
         # Full release qualification remains in C4; these are B2 interaction regressions.
         timeout-minutes: 2

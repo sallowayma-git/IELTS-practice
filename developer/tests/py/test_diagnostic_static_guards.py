@@ -38,3 +38,9 @@ class DiagnosticStaticGuardsTest(unittest.TestCase):
         self.assertNotIn('js/data/v2/dataKernel.js', checked)
         bad = index + '<script src="js/data/v2/dataKernel.js"></script>'
         self.assertIn('js/data/v2/dataKernel.js', guards._strip_verified_diagnostic_bootstrap(bad))
+
+    def test_reading_entry_uses_the_verified_generated_payload(self):
+        entry = (ROOT / 'assets/generated/reading-exams/reading-practice-unified.html').read_text(encoding='utf-8')
+        self.assertNotIn('function defineDiagnosticBootstrap', guards._strip_verified_diagnostic_bootstrap(entry))
+        bad = entry.replace('function defineDiagnosticBootstrap', 'function tamperedBootstrap', 1)
+        self.assertIn('function tamperedBootstrap', guards._strip_verified_diagnostic_bootstrap(bad))

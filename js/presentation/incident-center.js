@@ -474,6 +474,9 @@
                 if (this.dialog !== dialog) return;
                 const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean).reverse();
                 info.textContent = '保留 ' + events.length + ' 条记录。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                if (snapshot?.transport?.aggregation === 'incomplete') {
+                    info.textContent += ' 跨窗口诊断汇总不完整，可导出本页已保留的记录。';
+                }
                 // Paginate the bounded export snapshot; DOM size stays small even with 2,000 events.
                 let offset = 0;
                 const previous = button('上一页', () => { offset = Math.max(0, offset - 20); renderPage(); });

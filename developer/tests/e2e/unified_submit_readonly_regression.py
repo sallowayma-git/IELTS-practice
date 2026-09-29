@@ -290,6 +290,16 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(not after_nack.get("inputDisabled"), f"nack_disabled_input:{after_nack}")
     require(not after_nack.get("submitDisabled"), f"nack_not_retryable:{after_nack}")
     require(not after_nack.get("resultsVisible"), f"nack_showed_results:{after_nack}")
+    incident = frame.get_by_role("alertdialog")
+    await incident.wait_for(state="visible")
+    require("尚未确认保存" in await incident.inner_text(), "nack_missing_unconfirmed_outcome")
+    await incident.get_by_role("button", name="关闭提示（不代表已保存）", exact=True).click()
+    require(await frame.evaluate("""() => {
+        const notice = document.querySelector('.incident-notifications').getBoundingClientRect();
+        const submit = document.getElementById('submit-btn').getBoundingClientRect();
+        return notice.bottom <= submit.top || notice.top >= submit.bottom
+            || notice.right <= submit.left || notice.left >= submit.right;
+    }"""), "dismissed_incident_covers_submit_control")
 
     await send_host(page, "PRACTICE_SUBMIT_ACK", corr)
     await frame.wait_for_timeout(120)
@@ -304,6 +314,7 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
         retry.get("data", {}).get("submissionId") == corr.get("submissionId"),
         f"retry_changed_idempotency_key:{retry.get('data')}",
     )
+    require(retry.get("data", {}).get("answers") == first.get("data", {}).get("answers"), "nack_retry_changed_original_answers")
     await assert_pending(frame, "retry_delivery")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(retry))
     await frame.wait_for_function(
@@ -355,13 +366,15 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     require(late_after_timeout.get("submissionStatus") == "draft", f"late_ack_after_timeout_accepted:{late_after_timeout}")
     require(not late_after_timeout.get("readOnly"), f"late_ack_after_timeout_locked:{late_after_timeout}")
 
-    await frame.click("#submit-btn")
+    # The explicit incident action owns the safe replay of the original snapshot.
+    await frame.get_by_role("button", name="安全重试原操作", exact=True).click()
     await wait_for_submission_count(page, 2)
     retry = (await submissions(page))[1]
     require(
         retry.get("data", {}).get("submissionId") == corr.get("submissionId"),
         f"timeout_retry_changed_idempotency_key:{retry.get('data')}",
     )
+    require(retry.get("data", {}).get("answers") == first.get("data", {}).get("answers"), "timeout_retry_changed_original_answers")
     await assert_pending(frame, "timeout_retry_delivery")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(retry))
     await frame.wait_for_function(

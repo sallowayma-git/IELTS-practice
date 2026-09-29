@@ -45,9 +45,10 @@
         const context = field(options, 'context');
         let runMode = 'unknown';
         try {
+            const entryRoot = global.location.pathname.replace(/assets\/generated\/reading-exams\/reading-practice-unified\.html$/, '');
             runMode = global.location.protocol === 'file:' ? 'file'
                 : /^https?:$/.test(global.location.protocol)
-                    ? (global.location.pathname.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
+                    ? (entryRoot.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
         } catch (_) { }
         const correlationScope = contract.createCorrelationScope();
         const normalizer = contract.createNormalizer({
@@ -523,6 +524,11 @@
 
         installed = Object.freeze({
             report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
+            // Allocate local aliases or revalidate aliases from an authenticated handshake.
+            // This never records the raw identifiers or changes already captured evidence.
+            correlate(correlation, aliases) {
+                return utility.normalize(aliases === undefined ? { correlation } : { correlationAliases: aliases }).correlation;
+            },
             startupFailed, captureConsole, acceptRelayed, windowId: normalizer.windowId,
             attachTransport(next) { if (method(next, 'status')) transport = next; },
             subscribe(observer) {

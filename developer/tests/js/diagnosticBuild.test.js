@@ -43,7 +43,8 @@ test('relevant emitted code, entry, style and build recipe changes alter the bui
     const bundlePath = 'js/bundles/core-foundation.bundle.js';
     const changed = { ...options.renderedBundles, [bundlePath]: options.renderedBundles[bundlePath] + '\n// changed artifact\n' };
     assert.notEqual(buildDiagnosticArtifacts({ ...options, renderedBundles: changed }).metadata.buildId, first);
-    for (const source of ['index.html', 'css/main.css', 'scripts/diagnostic-build.mjs']) {
+    for (const source of ['index.html', 'assets/generated/reading-exams/reading-practice-unified.html',
+        'css/main.css', 'css/incident-center.css', 'scripts/diagnostic-build.mjs']) {
         assert.notEqual(buildDiagnosticArtifacts({ ...options, readSource(file) {
             return options.readSource(file) + (file === source ? '\n/* relevant change */\n' : '');
         } }).metadata.buildId, first, source);

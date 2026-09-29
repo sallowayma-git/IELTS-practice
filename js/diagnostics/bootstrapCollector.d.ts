@@ -1,4 +1,4 @@
-import type { DiagnosticInput, DiagnosticPersistence, DiagnosticReporter, DiagnosticSink,
+import type { Correlation, DiagnosticInput, DiagnosticPersistence, DiagnosticReporter, DiagnosticSink,
     Environment, DiagnosticStorageStatus, DiagnosticTransportStatus } from './diagnosticContract';
 export as namespace AppDiagnosticBootstrap;
 
@@ -9,6 +9,7 @@ export interface BootstrapOptions {
 }
 export interface Collector extends DiagnosticReporter {
     readonly windowId: string;
+    correlate(correlation?: DiagnosticInput['correlation'], aliases?: unknown): Correlation;
     /** Validated channel ingress only; preserves origin and generation, without UI or observers. */
     acceptRelayed(input: unknown): boolean;
     /** Passive status only: never a probe or delivery during export. */
@@ -40,5 +41,6 @@ export function current(): Collector | null;
 declare global {
     const AppDiagnostics: Collector;
     const AppDiagnosticBuild: Readonly<{ appVersion: string; buildId: string;
+        readingResources?: readonly string[];
         mappingPath: 'assets/generated/diagnostics/build-manifest.json' }>;
 }

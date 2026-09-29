@@ -178,11 +178,12 @@ function createContext() {
     };
 }
 
-function loadHooks() {
+export function loadHooks(configure = () => {}) {
     const { context, window, document, windowSession, getCloseCount } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
+    configure({ context, window, document, windowSession });
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
@@ -979,7 +980,7 @@ async function main() {
     process.exit(0);
 }
 
-main().catch((error) => {
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) main().catch((error) => {
     const detail = error && error.stack ? error.stack : String(error);
     process.stdout.write(JSON.stringify({ status: 'fail', detail }));
     process.exit(1);
