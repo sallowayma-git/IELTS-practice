@@ -390,6 +390,12 @@
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
             }
+            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+                && String(data.submissionId) !== session._finalizeSubmissionId) {
+                // Only the original snapshot owns this finalization/receipt. A
+                // different ID cannot certify new answers without a new attempt.
+                return withSubmitOutcome(true, false, 'suite_submission_conflict');
+            }
             if (session.status === 'finalizing') {
                 session._finalizeSubmissionId = data && data.submissionId
                     ? String(data.submissionId)
@@ -783,6 +789,10 @@
                 : '';
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
+            }
+            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+                && String(data.submissionId) !== session._finalizeSubmissionId) {
+                return withSubmitOutcome(true, false, 'suite_submission_conflict');
             }
             if (session.status === 'finalizing') {
                 session._finalizeSubmissionId = data && data.submissionId

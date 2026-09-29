@@ -210,6 +210,40 @@ test('committed but undelivered acknowledgement remains unconfirmed; replay neve
     assert.equal(app.cleanups, 0);
 });
 
+test('host NACK distinguishes a proven rejection from an unknown save outcome', () => {
+    const h = setup();
+    const app = host(h);
+    const replies = [];
+    app._postExamMessage = (_exam, _window, type, data) => { replies.push({ type, ...data }); return true; };
+    for (const operation of [undefined, 'unconfirmed', 'committed', 'not-committed']) {
+        app._announcePracticeSubmitOutcome('exam-original', record(), { closed: false }, false, { operation });
+        assert.equal(replies.at(-1).type, 'PRACTICE_SUBMIT_FAILED');
+        assert.equal(replies.at(-1).operation, operation === 'not-committed' ? operation : 'unconfirmed');
+    }
+});
+
+for (const method of ['handleSuitePracticeComplete', '_handleInlineSimulationSuiteSubmit']) {
+    for (const status of ['finalizing', 'completed']) test(`${method} only confirms the original ${status} submission`, async () => {
+        const h = setup();
+        h.run('js/app/suitePracticeMixin.js');
+        const session = { id: 'suite', flowMode: 'simulation', status, _finalizeSubmissionId: 'original' };
+        let finalizations = 0;
+        const app = Object.assign({}, h.sandbox.ExamSystemAppMixins.suitePractice, {
+            currentSuiteSession: session, _ensureSuiteRecoveryReady: async () => {},
+            _finalizeSuiteRecordWithGate: async () => { finalizations++; return true; },
+            _releaseSuiteCloseGuardAfterCommit() {}
+        });
+        const rejected = await app[method]('p3', { suiteSessionId: 'suite', submissionId: 'new', answers: { q1: 'B' } });
+        assert.equal(rejected.committed, false);
+        assert.equal(rejected.errorCode, 'suite_submission_conflict');
+        assert.equal(session._finalizeSubmissionId, 'original');
+        assert.equal(finalizations, 0);
+        const reconciled = await app[method]('p3', { suiteSessionId: 'suite', submissionId: 'original' });
+        assert.equal(reconciled.committed, true);
+        assert.equal(finalizations, status === 'finalizing' ? 1 : 0);
+    });
+}
+
 for (const branch of ['closed', 'exception']) {
     test(`ACK ${branch} is a channel incident without a blocking save dialog`, () => {
         const h = setup();
@@ -242,7 +276,7 @@ for (const initial of ['committed', 'unconfirmed', 'not-committed']) {
         app.components.practiceRecorder = r;
         r.handleSessionCompleted = (data, options) => r.savePracticeRecord(data, options);
         const outcomes = [];
-        app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved) => outcomes.push(saved);
+        app._announcePracticeSubmitOutcome = (_exam, _data, _source, saved, details) => outcomes.push({ saved, operation: details.operation });
         assert.equal(await app.handlePracticeComplete('exam-original', record()), false);
         assert.ok(attempts >= 3, 'recorder retry and host fallback both execute');
         assert.equal(h.events().length, 1);
@@ -250,7 +284,7 @@ for (const initial of ['committed', 'unconfirmed', 'not-committed']) {
         assert.equal(h.events()[0].causeCode, 'BACKEND_UNAVAILABLE');
         assert.equal(h.events()[0].retry.available, initial === 'unconfirmed');
         assert.equal(h.events()[0].notification.kind, initial === 'unconfirmed' ? 'dialog' : 'persistent');
-        assert.deepEqual(outcomes, initial === 'committed' ? [] : [false]);
+        assert.deepEqual(outcomes, initial === 'committed' ? [] : [{ saved: false, operation: initial }]);
         assert.equal(app.cleanups, 0);
     });
 }

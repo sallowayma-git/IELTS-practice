@@ -239,7 +239,7 @@ async def assert_pending(frame, detail: str) -> Dict[str, Any]:
     require(not state.get("readOnly"), f"{detail}:readonly_before_ack:{state}")
     require(not state.get("readOnlyClass"), f"{detail}:readonly_class_before_ack:{state}")
     require(not state.get("resetVisible"), f"{detail}:pending_reset_visible:{state}")
-    require(not state.get("inputDisabled"), f"{detail}:input_disabled_before_ack:{state}")
+    require(state.get("inputDisabled"), f"{detail}:pending_answers_editable:{state}")
     require(bool(state.get("submitDisabled")), f"{detail}:submit_not_guarded:{state}")
     require(not state.get("resultsVisible"), f"{detail}:results_visible_before_ack:{state}")
     return state
@@ -258,15 +258,7 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(corr.get("suiteSessionId") is None, f"unexpected_suite_session:{corr}")
     pending = await assert_pending(frame, "initial_delivery")
 
-    await frame.evaluate(
-        """() => {
-            const input = document.querySelector('input[type="text"], textarea');
-            input.value = 'edited_while_submitting';
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }"""
-    )
-    pending_after_edit = await assert_pending(frame, "editable_while_submitting")
-    require(pending_after_edit.get("inputValue") == "edited_while_submitting", "input_not_editable_while_submitting")
+    require(await frame.locator('#question-groups').evaluate("root => root.inert"), "pending_answer_root_not_locked")
 
     await send_host(page, "PRACTICE_SUBMIT_ACK", corr, token="forged-token")
     await assert_pending(frame, "forged_token_ack")
@@ -281,7 +273,7 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
         await send_host(page, "PRACTICE_SUBMIT_ACK", mismatch)
         await assert_pending(frame, f"mismatched_{field}_ack")
 
-    await send_host(page, "PRACTICE_SUBMIT_FAILED", corr)
+    await send_host(page, "PRACTICE_SUBMIT_FAILED", {**corr, "operation": "not-committed"})
     await frame.wait_for_function(
         "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'draft'"
     )
@@ -290,10 +282,8 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(not after_nack.get("inputDisabled"), f"nack_disabled_input:{after_nack}")
     require(not after_nack.get("submitDisabled"), f"nack_not_retryable:{after_nack}")
     require(not after_nack.get("resultsVisible"), f"nack_showed_results:{after_nack}")
-    incident = frame.get_by_role("alertdialog")
-    await incident.wait_for(state="visible")
-    require("尚未确认保存" in await incident.inner_text(), "nack_missing_unconfirmed_outcome")
-    await incident.get_by_role("button", name="关闭提示（不代表已保存）", exact=True).click()
+    await frame.locator('.incident-notice').first.wait_for(state="visible")
+    require(not await frame.locator('#question-groups').evaluate("root => root.inert"), "proven_rejection_kept_answers_locked")
     require(await frame.evaluate("""() => {
         const notice = document.querySelector('.incident-notifications').getBoundingClientRect();
         const submit = document.getElementById('submit-btn').getBoundingClientRect();
@@ -357,7 +347,7 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     )
     after_timeout = await get_state(frame)
     require(not after_timeout.get("readOnly"), f"timeout_locked_page:{after_timeout}")
-    require(not after_timeout.get("inputDisabled"), f"timeout_disabled_input:{after_timeout}")
+    require(after_timeout.get("inputDisabled"), f"timeout_answers_editable:{after_timeout}")
     require(not after_timeout.get("submitDisabled"), f"timeout_not_retryable:{after_timeout}")
     require(not after_timeout.get("resultsVisible"), f"timeout_showed_results:{after_timeout}")
 

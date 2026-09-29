@@ -43,14 +43,20 @@ This extends business envelopes without changing diagnostic schema version 1.
 ## Submission and recovery outcomes
 
 A submission captures its payload and original submission ID once in runtime
-business state. An acknowledgement timeout or negative reply means
-`unconfirmed`; it does not prove that the host failed to save. The incident's
-explicit retry resends that same snapshot through the existing host receipt and
-duplicate-protection path. A normal Submit from the editable page captures the
-current answers and freezes the current timing again under a new submission ID.
-This supersedes the previous retry callback; an ACK for the old ID cannot confirm
-the new operation. Diagnostic code never persists a practice record or
-reconstructs a payload from an exported event.
+business state. Answer editing is locked while that submission is unresolved,
+including after an acknowledgement timeout or an unconfirmed negative reply.
+These outcomes do not prove that the host failed to save. Both the incident's
+explicit retry and the page's confirmation button resend the original snapshot
+and submission ID through the existing host receipt and duplicate-protection
+path, without freezing timing again. The original retry callback remains valid.
+
+Only a validated first-attempt negative reply with business evidence of
+`not-committed` releases the snapshot and unlocks editing. The next Submit then
+captures current answers and freezes timing under a new submission ID. A rejected
+retry cannot disprove an earlier unconfirmed write, so it cannot release that
+operation's receipt key. Finalizing or completed suites reject a different
+submission ID instead of certifying an unwritten snapshot. Diagnostic code never
+persists a practice record or reconstructs a payload from an exported event.
 
 Retry ownership includes parent, session, suite, window token and generation.
 Session replacement invalidates old callbacks. Token replacement preserves the
@@ -117,19 +123,26 @@ node scripts/build-bundles.mjs --check
 `developer/tests/js/readingDiagnostics.test.js` covers immutable submit retry,
 receipt outcomes, stale ownership, quota/false/missing recovery backends, trusted
 INIT installation, the full readiness deadline, resource privacy and generator
-preservation, editable resubmission and delayed suite ACK ownership. Existing
+preservation, submission edit locks, editable resubmission after a proven
+rejection and delayed suite ACK ownership. Host regressions distinguish proven
+rejection from an unknown outcome and guard final-suite receipt ownership. Existing
 reading/suite regressions cover read-only ACK behavior, inline navigation, draft
 restoration and idempotent host receipt handling.
 
 `developer/tests/e2e/reading_diagnostics.node.js` uses shipped bundles, actual host
 popups, Chromium and native `postMessage` under `file://`, HTTP root and HTTP
-subpath hosting. Its 39 scenarios exercise missing/invalid bundles, missing
+subpath hosting. Its 48 scenarios exercise missing/invalid bundles, missing
 datasets, rejected initialization, lost ACK with an explicit safe retry and one
 saved record, correlated host evidence, parent close/reload with child export,
-recovery quota and opaque browser errors. Review regressions also edit answers
-after NACK/timeout and verify the real host saves the new answer and timing,
-then delay a committed suite ACK across navigation and verify correct results,
-immediate self-close and read-only navigation when close is unavailable.
+recovery quota and opaque browser errors. Review regressions verify that a proven
+rejection permits edits with fresh timing, while an unconfirmed NACK or timeout
+keeps answers locked and replays the original snapshot. Single-passage and suite
+cases let the real write commit before suppressing its ACK, attempt a native
+answer edit after timeout, and reconcile through the normal confirmation button;
+the original record remains unchanged and is never duplicated. Delayed suite
+ACK cases verify correct active-passage results and immediate self-close. The
+keep-open case holds the actual explanation script until results are visible,
+then waits for the captured close callback before testing read-only navigation.
 It checks export redaction, incomplete coverage and a real JSON download, and
 writes screenshots for the retry UI.
 CI runs this harness. Shared channel, notification, startup/export, suite and

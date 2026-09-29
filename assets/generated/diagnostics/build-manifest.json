@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:c592f539559963b56fefc809c932e44843c87922537aebd569da1cd334648d47",
+  "buildId": "sha256:8d803d3d4855f01183e2ee200c84e20ba9f61418e6ad394a9f7623cd9ea858eb",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -540,7 +540,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "3cd063be0ccda25e8f6d9d47e62f535dbbb11b65f61eff89d30ced71d817ea06"
+      "sha256": "28d5a2b41ed86ccf8b12180572becca496f586c9824d3bd6697afd9372fb3fae"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -576,7 +576,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "92b02565ed03f6690c197e545e88470aec572b2c2fd882cbbb683d85714e8e10"
+      "sha256": "caeba6e61b5cdbd5256a7e12b2cb07345676e7ad12492e62ceaa8bfd0337c332"
     },
     {
       "path": "js/bundles/runtime-entry.bundle.js",
@@ -584,7 +584,7 @@
     },
     {
       "path": "js/bundles/session.bundle.js",
-      "sha256": "fbedcc7899ed4a2776b8be13c10ce7d0095a0079aea8b43a0eba3a9f869d481a"
+      "sha256": "d04570aa179a434b55eea4db55b2d5334ad36ddbeb157aa4e0677a1599728fdc"
     },
     {
       "path": "js/bundles/theme.bundle.js",
@@ -942,85 +942,85 @@
       {
         "source": "js/app/examSessionMixin.js",
         "startLine": 8217,
-        "endLine": 15238,
+        "endLine": 15239,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 15242,
-        "endLine": 15912,
+        "startLine": 15243,
+        "endLine": 15913,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 15916,
-        "endLine": 16310,
+        "startLine": 15917,
+        "endLine": 16311,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabContent.js",
-        "startLine": 16314,
-        "endLine": 16506,
+        "startLine": 16315,
+        "endLine": 16507,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabAnchors.js",
-        "startLine": 16510,
-        "endLine": 16771,
+        "startLine": 16511,
+        "endLine": 16772,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabReader.js",
-        "startLine": 16775,
-        "endLine": 18747,
+        "startLine": 16776,
+        "endLine": 18748,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 18751,
-        "endLine": 19313,
+        "startLine": 18752,
+        "endLine": 19314,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 19317,
-        "endLine": 19486,
+        "startLine": 19318,
+        "endLine": 19487,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 19490,
-        "endLine": 19704,
+        "startLine": 19491,
+        "endLine": 19705,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 19708,
-        "endLine": 20409,
+        "startLine": 19709,
+        "endLine": 20410,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 20413,
-        "endLine": 21445,
+        "startLine": 20414,
+        "endLine": 21446,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 21449,
-        "endLine": 21698,
+        "startLine": 21450,
+        "endLine": 21699,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 21702,
-        "endLine": 21907,
+        "startLine": 21703,
+        "endLine": 21908,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 21911,
-        "endLine": 27081,
+        "startLine": 21912,
+        "endLine": 27082,
         "sourceStartLine": 1
       }
     ],
@@ -1092,7 +1092,7 @@
       {
         "source": "js/app/suitePracticeMixin.js",
         "startLine": 4,
-        "endLine": 4658,
+        "endLine": 4668,
         "sourceStartLine": 1
       }
     ],
@@ -1286,7 +1286,7 @@
       {
         "source": "js/runtime/unifiedReadingPage.js",
         "startLine": 14682,
-        "endLine": 23326,
+        "endLine": 23374,
         "sourceStartLine": 1
       }
     ],

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { runEditedResubmission, runDelayedSuiteAcknowledgement } from './readingSubmissionReviewCases.js';
+import { runRejectedResubmission, runCommittedAcknowledgementLoss, runDelayedSuiteAcknowledgement } from './readingSubmissionReviewCases.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -65,7 +65,8 @@ async function openPractice(host, context, base, { examId = 'p1-high-01', suite 
 try {
     for (const [mode, base] of [['file', pathToFileURL(fixture + path.sep).href], ['http', origin + '/'], ['subpath', origin + '/app/']]) {
         for (const scenario of ['missing-bundle', 'parse-bundle', 'missing-dataset', 'rejected-initialization',
-            'lost-ack-retry', 'edited-after-nack', 'edited-after-timeout', 'delayed-suite-ack', 'delayed-suite-ack-open',
+            'lost-ack-retry', 'rejected-not-committed', 'rejected-nack', 'rejected-timeout',
+            'committed-lost-ack-single', 'committed-lost-ack-suite', 'delayed-suite-ack', 'delayed-suite-ack-open',
             'parent-closed', 'parent-reloaded', 'recovery-quota', 'opaque-error']) {
             fs.writeFileSync(path.join(fixture, bundle), originalBundle);
             fs.writeFileSync(path.join(fixture, dataset), originalDataset);
@@ -103,11 +104,13 @@ try {
                     assert.ok((await download).suggestedFilename().includes('diagnostic'));
                 } else {
                     child = await openPractice(host, context, base, {
-                        examId: scenario.startsWith('edited-after-') ? 'p1-low-67' : 'p1-high-01',
-                        suite: scenario.startsWith('delayed-suite-ack')
+                        examId: /^(rejected-|committed-lost-ack)/.test(scenario) ? 'p1-low-67' : 'p1-high-01',
+                        suite: scenario.startsWith('delayed-suite-ack') || scenario === 'committed-lost-ack-suite'
                     });
-                    if (scenario.startsWith('edited-after-')) {
-                        await runEditedResubmission(host, child, scenario.endsWith('nack') ? 'nack' : 'timeout');
+                    if (scenario.startsWith('rejected-')) {
+                        await runRejectedResubmission(host, child, scenario.slice('rejected-'.length));
+                    } else if (scenario.startsWith('committed-lost-ack-')) {
+                        await runCommittedAcknowledgementLoss(host, child, scenario.endsWith('suite'));
                     } else if (scenario.startsWith('delayed-suite-ack')) {
                         await runDelayedSuiteAcknowledgement(host, child, scenario.endsWith('-open'));
                     } else if (scenario === 'lost-ack-retry') {

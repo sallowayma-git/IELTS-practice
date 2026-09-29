@@ -50,7 +50,7 @@ test('reading timeout offers business retry with the original immutable snapshot
     assert.equal(h.hooks.beginSubmission('PRACTICE_COMPLETE', {}), false);
 });
 
-for (const outcome of ['timeout', 'nack']) test(`ordinary submit after ${outcome} captures edited answers under a new receipt key`, async () => {
+for (const outcome of ['timeout', 'nack']) test(`ordinary submit after ${outcome} reconciles the original receipt with editing locked`, async () => {
     const h = setup();
     h.hooks.setTestState({ dataset: { meta: {}, questionOrder: ['q1'], answerKey: { q1: 'A' }, questionGroups: [] } });
     await h.hooks.handleSubmit();
@@ -61,17 +61,57 @@ for (const outcome of ['timeout', 'nack']) test(`ordinary submit after ${outcome
         source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { ...original, windowSessionToken: 'PRIVATE_TOKEN' }
     } });
     const oldRetry = h.presentations.at(-1).presentation.retry.run;
+    assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
+    assert.equal(h.hooks.getReadingTimingState()?.context.editable ?? false, false);
+    await h.hooks.handleSubmit();
+    assert.equal(h.calls.at(-1).data.answers.q1, 'A');
+    assert.equal(h.calls.at(-1).data.submissionId, original.submissionId);
+    const count = h.calls.length;
+    assert.equal((await oldRetry()).verified, false); assert.equal(h.calls.length, count);
+    await h.ack();
+    assert.equal(h.hooks.getTestState().submissionStatus, 'submitted');
+    assert.equal((await oldRetry()).verified, true, 'the original receipt callback remains valid');
+});
+
+test('a proven first-attempt rejection unlocks edits and a fresh answer/timing snapshot', async () => {
+    const h = setup();
+    h.hooks.setTestState({ dataset: { meta: {}, questionOrder: ['q1'], answerKey: { q1: 'A' }, questionGroups: [] } });
+    await h.hooks.handleSubmit();
+    const original = h.calls.at(-1).data;
+    await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+        source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { ...original,
+            operation: 'not-committed', windowSessionToken: 'PRIVATE_TOKEN' }
+    } });
+    assert.equal(h.hooks.getTestState().submissionEditingLocked, false);
+    assert.equal(h.events().at(-1).persistence.operation, 'not-committed');
+    assert.equal(h.events().at(-1).retry.available, false);
     h.document.querySelectorAll('input[type="radio"][name="q1"]')[0].value = 'B';
     await h.hooks.handleSubmit();
     assert.equal(h.calls.at(-1).data.answers.q1, 'B');
     assert.notEqual(h.calls.at(-1).data.submissionId, original.submissionId);
-    const count = h.calls.length;
-    assert.equal((await oldRetry()).verified, false); assert.equal(h.calls.length, count);
     await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
         source: 'exam_host', type: 'PRACTICE_SUBMIT_ACK', data: { ...original, windowSessionToken: 'PRIVATE_TOKEN' }
     } });
-    assert.equal(h.hooks.getTestState().submissionStatus, 'submitting', 'a superseded ACK cannot confirm the new snapshot');
+    assert.equal(h.hooks.getTestState().submissionStatus, 'submitting');
+    await h.ack();
+});
+
+test('a rejected retry cannot disprove an earlier unconfirmed commit or discard its receipt', async () => {
+    const h = setup();
+    h.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } });
+    const original = h.calls.at(-1).data;
     h.hooks.expirePendingSubmission();
+    await h.hooks.handleSubmit();
+    await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+        source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { ...original,
+            operation: 'not-committed', windowSessionToken: 'PRIVATE_TOKEN' }
+    } });
+    assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
+    assert.equal(h.hooks.getTestState().submissionId, original.submissionId);
+    assert.equal(h.events().at(-1).persistence.operation, 'unconfirmed');
+    const retry = h.presentations.at(-1).presentation.retry.run();
+    await h.ack();
+    assert.equal((await retry).verified, true);
 });
 
 test('stale retry cannot target a replacement session', async () => {

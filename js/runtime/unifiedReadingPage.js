@@ -251,7 +251,7 @@
             examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
             dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
             timerInteractionRevision: interaction.timerInteractionRevision,
-            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionUnconfirmed()
                 && state.submissionStatus === 'draft' && !state.suite.activating,
             restorePause: () => setTimerRunning(false)
         };
@@ -460,10 +460,10 @@
         document.body.classList.toggle('timer-locked-mode', locked);
         getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = locked || state.readOnly;
+                control.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
             }
         });
-        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly;
+        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
         syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
@@ -1962,9 +1962,7 @@
             enhanceReviewHighlights();
         }
         updateNavStatuses(shouldShowResults ? slot.lastResults : null);
-        if (state.readOnly) {
-            setReadOnlyMode(true, state.readOnlyReason);
-        }
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
         if (state.timerLocked) {
             setTimerLockMode(true);
         } else {
@@ -2580,6 +2578,7 @@
 
     function canEditReadingNotes() {
         if (state.timerLocked) return false;
+        if (isSubmissionUnconfirmed()) return false;
         const activePracticeCanEdit = Boolean(
             !state.readOnly
             && !state.memorizeMode
@@ -4707,6 +4706,10 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
+            if (isSubmissionUnconfirmed()) {
+                event.preventDefault();
+                return;
+            }
             // 已被使用的选项不可拖拽
             if (item.classList.contains('option-consumed') || item.dataset.consumed === '1') {
                 event.preventDefault();
@@ -4747,6 +4750,7 @@
             item.dataset.answerLabel = normalizedLabel;
             item.setAttribute('draggable', 'true');
             item.addEventListener('click', () => {
+                if (isSubmissionUnconfirmed()) return;
                 clearDropzone(dropzone);
                 updateNavStatuses();
             });
@@ -4889,7 +4893,7 @@
                 item.classList.remove('option-consumed');
                 // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
                 // 不允许重新启用选项，否则可绕过锁定继续作答
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
                 item.classList.toggle('drag-item-locked', interactionLocked);
             }
@@ -4983,6 +4987,10 @@
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
+            if (isSubmissionUnconfirmed()) {
+                event.preventDefault();
+                return;
+            }
             const target = event.target instanceof HTMLElement
                 ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
@@ -6292,6 +6300,9 @@
             ? (reason || state.readOnlyReason || 'readonly')
             : '';
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
+        // Pending confirmation locks answer editing without presenting saved results.
+        const answerRoot = getPracticeAnswerRoot();
+        if (answerRoot) answerRoot.inert = isSubmissionUnconfirmed();
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
                 dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
@@ -6326,7 +6337,7 @@
                     control.disabled = false;
                     return;
                 }
-                control.disabled = state.readOnly || state.timerLocked;
+                control.disabled = state.readOnly || state.timerLocked || isSubmissionUnconfirmed();
             }
         });
         renderNotesDrawer();
@@ -6336,7 +6347,7 @@
     }
 
     function disableDragInteractions() {
-        const locked = Boolean(state.readOnly || state.timerLocked);
+        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
             // 如果选项已被使用（option-consumed），始终保持不可拖拽
@@ -6409,10 +6420,14 @@
     }
 
     function ownsPendingSubmission(submission) {
-        return Boolean(submission && submission.id === state.submissionId
+        return Boolean(submission && submission === pendingSubmission && submission.id === state.submissionId
             && submission.sessionId === state.sessionId && submission.suiteSessionId === state.suiteSessionId
             && submission.parentWindow === state.parentWindow && submission.token === state.windowSessionToken
             && submission.generation === state.windowSessionGeneration);
+    }
+
+    function isSubmissionUnconfirmed() {
+        return ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted';
     }
 
     function settleSubmissionRetry(operation) {
@@ -6421,9 +6436,9 @@
         settle?.({ verified: operation === 'committed', operation });
     }
 
-    function reportSubmissionFailure(error, code = 'PRACTICE_CHANNEL_TIMEOUT') {
-        const submission = pendingSubmission;
-        readingFailure(code, 'submit', error, 'unconfirmed', ownsPendingSubmission(submission)
+    function reportSubmissionFailure(error, code = 'PRACTICE_CHANNEL_TIMEOUT', operation = 'unconfirmed', submission = pendingSubmission) {
+        if (operation === 'unconfirmed' && ownsPendingSubmission(submission)) submission.hasUnconfirmedOutcome = true;
+        readingFailure(code, 'submit', error, operation, ownsPendingSubmission(submission)
             ? () => retryPendingSubmission(submission) : undefined, undefined, readingCorrelation(submission));
     }
 
@@ -6431,7 +6446,8 @@
         if (!ownsPendingSubmission(submission) || state.submissionStatus === 'submitted') return false;
         state.submissionStatus = 'submitting';
         state.pendingSubmissionPresentation = submission.presentation;
-        syncPrimaryActionButtons();
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
+        disableDragInteractions();
         readingStep('submit', 'started', readingCorrelation(submission));
         const delivered = postMessage(submission.type, Object.assign({}, submission.payload, {
             examId: submission.examId, sessionId: submission.sessionId, suiteSessionId: submission.suiteSessionId,
@@ -6464,8 +6480,9 @@
         if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
             return false;
         }
-        // Ordinary submission captures the editable page as a new operation.
-        // Only the incident's explicit retry may replay the original receipt key.
+        // A timeout/NACK is not evidence of a failed write. Preserve the receipt
+        // key until the host confirms either the original commit or no commit.
+        if (ownsPendingSubmission(pendingSubmission)) return dispatchPendingSubmission(pendingSubmission);
         settleSubmissionRetry('unconfirmed');
         state.submissionId = createSubmissionId();
         pendingSubmission = { id: state.submissionId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
@@ -6672,6 +6689,7 @@
                         reviewMode: state.reviewMode,
                         timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
+                        submissionEditingLocked: isSubmissionUnconfirmed(),
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
                         parentOriginIsOpaque: state.parentOriginIsOpaque,
@@ -6751,6 +6769,7 @@
     function canClearDraftAnswers() {
         return Boolean(
             state.submissionStatus === 'draft'
+            && !isSubmissionUnconfirmed()
             && !state.readOnly
             && !state.submitted
             && !state.reviewMode
@@ -6805,6 +6824,17 @@
                 dom.submitBtn.textContent = label;
             }
         };
+
+        if (isSubmissionUnconfirmed()) {
+            if (dom.submitBtn) {
+                dom.submitBtn.style.display = '';
+                dom.submitBtn.setAttribute('type', 'button');
+                setSubmitLabel(state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交');
+                dom.submitBtn.disabled = state.submissionStatus === 'submitting';
+            }
+            if (dom.resetBtn) dom.resetBtn.style.display = 'none';
+            return;
+        }
 
         if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
             if (dom.submitBtn) {
@@ -7864,7 +7894,7 @@
             if (item.dataset.consumed || item.classList.contains('option-consumed')) {
                 delete item.dataset.consumed;
                 item.classList.remove('option-consumed');
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
             }
         });
@@ -7956,6 +7986,12 @@
             return;
         }
         if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
+            return;
+        }
+        if (ownsPendingSubmission(pendingSubmission)) {
+            // Reconciliation must precede timing writes: a committed attempt's
+            // timing has already been sealed and cannot be frozen as a new save.
+            dispatchPendingSubmission(pendingSubmission);
             return;
         }
         state.timingSubmitPending = true;
@@ -8344,9 +8380,21 @@
         }
         if (type === 'PRACTICE_SUBMIT_FAILED') {
             if (matchesPendingSubmission(data || {})) {
+                const submission = pendingSubmission;
+                // A retry's rejected write cannot disprove an earlier, lost ACK.
+                const operation = data.operation === 'not-committed' && !submission.hasUnconfirmedOutcome
+                    ? 'not-committed' : 'unconfirmed';
                 restoreDraftSubmissionState(String(data.submissionId || ''));
-                settleSubmissionRetry('unconfirmed');
-                reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }), 'PRACTICE_SAVE_FAILED');
+                settleSubmissionRetry(operation);
+                if (operation === 'not-committed') {
+                    pendingSubmission = null;
+                    state.submissionId = '';
+                    state.pendingSubmissionPresentation = null;
+                    setReadOnlyMode(false);
+                    disableDragInteractions();
+                }
+                reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }),
+                    'PRACTICE_SAVE_FAILED', operation, submission);
             }
             return;
         }

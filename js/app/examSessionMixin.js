@@ -4731,7 +4731,8 @@
                     suiteSessionId: completionData && completionData.suiteSessionId
                         ? String(completionData.suiteSessionId)
                         : null,
-                    errorCode: succeeded ? null : String(details.errorCode || 'save_failed')
+                    errorCode: succeeded ? null : String(details.errorCode || 'save_failed'),
+                    operation: succeeded ? 'committed' : details.operation === 'not-committed' ? 'not-committed' : 'unconfirmed'
                 };
                 const delivered = this._postExamMessage(examId, targetWindow, type, payload);
                 if (succeeded) {
@@ -6244,7 +6245,7 @@
                     : operation === 'not-committed' ? '练习提交已确认未保存，请保留练习页面。'
                         : '练习提交尚未确认保存，请保留练习页面。', 'error');
                 if (operation !== 'committed') this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
-                    errorCode: 'save_failed'
+                    errorCode: 'save_failed', operation
                 });
             } finally {
                 if (completionCommitted) {
