@@ -63,6 +63,8 @@
         'assets/generated/reading-exams/manifest.js',
         'assets/generated/reading-explanations/manifest.js',
         'js/runtime/unifiedReadingPage.js',
+        'js/listeningRecordBridge.js', 'js/listeningUnifiedWrapper.js', 'js/practice-page-enhancer.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js', 'js/diagnostics/practiceDiagnostics.js',
         'assets/generated/reading-exams/reading-practice-unified.html',
         'assets/generated/listening-exams/listening-practice-unified.html',
         ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
@@ -428,6 +430,7 @@
             resource.optional = typeof optional === 'boolean' ? optional : 'unknown';
             const persistence = field(input, 'persistence', context);
             const collection = field(input, 'collection', context);
+            const entryCoverage = sanitizeEntryCoverage(field(collection, 'entryCoverage', context));
             const notification = field(input, 'notification', context);
             const retry = field(input, 'retry', context);
             const aliases = wire ? undefined : field(input, 'correlationAliases', context);
@@ -467,6 +470,7 @@
                 },
                 breadcrumbs: breadcrumbs(field(input, 'breadcrumbs', context), scope, context, wire),
                 collection: {
+                    ...(entryCoverage.entry !== 'unknown' ? { entryCoverage } : {}),
                     source: choice(field(collection, 'source', context), SOURCES),
                     coverage: choice(field(collection, 'coverage', context), ['complete', 'partial']),
                     aggregation: choice(field(collection, 'aggregation', context), ['local', 'complete', 'incomplete']),
@@ -524,7 +528,18 @@
         });
     }
 
-    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus,
+    function sanitizeEntryCoverage(input) {
+        const context = state();
+        const entry = choice(field(input, 'entry', context), ['listening-wrapper', 'listening-bridge', 'legacy-enhancer']);
+        const capture = choice(field(input, 'capture', context), ['before-dependencies', 'late-injection']);
+        return Object.freeze({ entry, capture, limitations: Object.freeze([
+            ...(capture === 'late-injection' ? ['earlier-failures-unavailable'] : []),
+            ...(entry === 'listening-wrapper' ? ['embedded-content-separate-context'] : []),
+            ...(['listening-bridge', 'legacy-enhancer'].includes(entry) ? ['legacy-draft-recovery-unavailable'] : [])
+        ]) });
+    }
+
+    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
         PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

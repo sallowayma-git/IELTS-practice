@@ -51,6 +51,7 @@ export interface Breadcrumb {
     readonly correlation: Correlation;
 }
 export interface CollectionStatus {
+    readonly entryCoverage?: EntryCoverage;
     readonly source: 'bootstrap' | 'business' | 'console' | 'global' | 'resource' | 'storage' | 'relay' | 'unknown';
     readonly coverage: 'complete' | 'partial' | 'unknown';
     readonly aggregation: 'local' | 'complete' | 'incomplete' | 'unknown';
@@ -156,6 +157,7 @@ export const COVERAGE_LIMITATIONS: readonly string[];
 
 // Interfaces for A2/A3/B1/B2/C1. Implementations belong to their work packages.
 export interface Snapshot {
+    readonly entryCoverage?: EntryCoverage;
     readonly schemaVersion: 1;
     readonly events: readonly DiagnosticEvent[];
     readonly persistence: DiagnosticPersistence;
@@ -164,6 +166,12 @@ export interface Snapshot {
     readonly storage?: DiagnosticStorageStatus;
     readonly transport?: DiagnosticTransportStatus;
 }
+export interface EntryCoverage {
+    readonly entry: 'listening-wrapper' | 'listening-bridge' | 'legacy-enhancer' | 'unknown';
+    readonly capture: 'before-dependencies' | 'late-injection' | 'unknown';
+    readonly limitations: readonly string[];
+}
+export function sanitizeEntryCoverage(input: unknown): EntryCoverage;
 export interface DiagnosticTransportStatus {
     readonly connection: 'waiting' | 'connected' | 'disconnected' | 'unavailable' | 'incomplete' | 'unknown';
     readonly aggregation: 'incomplete';

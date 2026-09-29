@@ -44,3 +44,10 @@ class DiagnosticStaticGuardsTest(unittest.TestCase):
         self.assertNotIn('function defineDiagnosticBootstrap', guards._strip_verified_diagnostic_bootstrap(entry))
         bad = entry.replace('function defineDiagnosticBootstrap', 'function tamperedBootstrap', 1)
         self.assertIn('function tamperedBootstrap', guards._strip_verified_diagnostic_bootstrap(bad))
+
+    def test_listening_and_legacy_entries_require_exact_early_coverage_declarations(self):
+        for file in ('assets/generated/listening-exams/listening-practice-unified.html', 'templates/template_base.html'):
+            entry = (ROOT / file).read_text(encoding='utf-8')
+            self.assertNotIn('function defineDiagnosticBootstrap', guards._strip_verified_diagnostic_bootstrap(entry))
+            bad = entry.replace('"capture":"before-dependencies"', '"capture":"late-injection"')
+            self.assertIn('function defineDiagnosticBootstrap', guards._strip_verified_diagnostic_bootstrap(bad))

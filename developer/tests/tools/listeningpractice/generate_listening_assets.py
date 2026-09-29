@@ -297,6 +297,11 @@ def main() -> int:
     parser.add_argument("--report", default="developer/tests/reports/listening-assets-report.json")
     args = parser.parse_args()
 
+    # This generator owns only indexes. The maintained wrapper and its generated
+    # diagnostic block belong to scripts/build-bundles.mjs, even on empty imports.
+    wrapper = Path(args.index_output).parent / "listening-practice-unified.html"
+    wrapper_before = wrapper.read_bytes() if wrapper.exists() else None
+
     root = Path(args.root)
     html_files: list[Path] = []
     pdf_files: list[Path] = []
@@ -344,6 +349,7 @@ def main() -> int:
         "skippedHtmlNoQuestionContent": skipped_html_no_question_content,
         "indexedPdfCount": sum(1 for entry in entries if entry["hasPdf"]),
         "duplicateIds": [],
+        "wrapperOwner": "scripts/build-bundles.mjs",
         "outputs": {
             "index": str(index_output),
             "manifest": str(manifest_output),
@@ -359,6 +365,8 @@ def main() -> int:
     report_path = Path(args.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    if wrapper_before is not None and wrapper.read_bytes() != wrapper_before:
+        raise RuntimeError("Listening index generation changed the maintained wrapper")
     print(f"Generated {len(entries)} listening entries: {index_output}, {manifest_output}")
     return 0
 

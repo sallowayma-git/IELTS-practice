@@ -1,8 +1,10 @@
 import type { Correlation, DiagnosticInput, DiagnosticPersistence, DiagnosticReporter, DiagnosticSink,
-    Environment, DiagnosticStorageStatus, DiagnosticTransportStatus } from './diagnosticContract';
+    Environment, DiagnosticStorageStatus, DiagnosticTransportStatus, EntryCoverage } from './diagnosticContract';
 export as namespace AppDiagnosticBootstrap;
 
 export interface BootstrapOptions {
+    entryCoverage?: Pick<EntryCoverage, 'entry' | 'capture'>;
+    optionalMedia?: boolean;
     context?: Environment['context'];
     requiredResources?: readonly string[];
     optionalResources?: readonly string[];

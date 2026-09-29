@@ -9,6 +9,7 @@ const PAYLOAD = 'assets/generated/diagnostics/bootstrap-inline.js';
 const MANIFEST = 'assets/generated/diagnostics/build-manifest.json';
 const FOUNDATION = 'js/bundles/core-foundation.bundle.js';
 const READING = 'assets/generated/reading-exams/reading-practice-unified.html';
+const LISTENING = 'assets/generated/listening-exams/listening-practice-unified.html';
 const requiredResources = [
     'css/main.css', 'js/bundles/runtime-entry.bundle.js', FOUNDATION,
     'js/bundles/ui-shell.bundle.js', 'js/bundles/legacy-app.bundle.js'
@@ -23,7 +24,12 @@ const entryOptions = {
     'index.html': { context: 'main', requiredResources, optionalResources },
     [READING]: { context: 'reading', requiredResources: [
         'js/bundles/reading-page.bundle.js', 'assets/generated/reading-exams/manifest.js', 'css/incident-center.css'
-    ], optionalResources: [] }
+    ], optionalResources: [] },
+    [LISTENING]: { context: 'listening', entryCoverage: { entry: 'listening-wrapper', capture: 'before-dependencies' },
+        optionalMedia: true, requiredResources: ['js/bundles/listening-wrapper.bundle.js', 'css/incident-center.css'],
+        optionalResources: ['assets/generated/listening-exams/manifest.js', 'assets/generated/listening-exams/listening-index.compat.js'] },
+    'templates/template_base.html': { context: 'legacy', entryCoverage: { entry: 'legacy-enhancer', capture: 'before-dependencies' },
+        optionalMedia: true, requiredResources: ['js/bundles/practice-page-enhancer.bundle.js', 'css/incident-center.css'], optionalResources: [] }
 };
 
 function mapSections(content, paths, readSource) {

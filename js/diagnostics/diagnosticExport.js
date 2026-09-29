@@ -109,6 +109,7 @@
                 events.push(event);
             }
             return { events, storage: storageStatus(field(raw, 'storage')),
+                entryCoverage: contract.sanitizeEntryCoverage(field(raw, 'entryCoverage')),
                 transport: contract.sanitizeTransportStatus(field(raw, 'transport')),
                 status: { state: result.state === 'available' && !array ? 'failed' : result.state,
                     persistence: choice(field(raw, 'persistence'), PERSISTENCE),
@@ -222,6 +223,7 @@
                     selection: { kind: incident ? 'incident' : 'history', eventId, found: incident ? !!chosen : null },
                     persistence, storage, sources, ...(transport ? { transport } : {}),
                     collection: { coverage: 'partial', aggregation: 'incomplete', connection: transport?.connection || connection(meta.environment.context),
+                        entryCoverage: memory.entryCoverage.entry !== 'unknown' ? memory.entryCoverage : bootstrap.entryCoverage,
                         limitations: [...contract.COVERAGE_LIMITATIONS, 'cross-window-completeness-unverified',
                             'retained-context-only', 'independent-source-snapshots'] },
                     truncated: Object.values(sources).some((source) => source.truncated) || !!storage?.dropped || candidates.length > limit,
@@ -256,6 +258,8 @@
                 'Storage: ' + (report.storage ? report.storage.persistence + '; failure: ' + report.storage.failure : 'unavailable'), ORDERING];
             for (const [name, status] of Object.entries(report.sources)) lines.push(name + ': ' + status.state + '; ' + status.persistence);
             lines.push('Limitations: ' + report.collection.limitations.join(', '));
+            if (report.collection.entryCoverage) lines.push('Entry: ' + report.collection.entryCoverage.entry
+                + '; capture: ' + report.collection.entryCoverage.capture + '; limitations: ' + report.collection.entryCoverage.limitations.join(', '));
             if (report.issues.length) lines.push('Issues: ' + report.issues.join(', '));
             const chosen = report.events.find((event) => event.eventId === report.selection.eventId);
             const events = chosen ? [chosen, ...report.events.filter((event) => event !== chosen)] : report.events;

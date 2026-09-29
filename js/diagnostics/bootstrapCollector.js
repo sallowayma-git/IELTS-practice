@@ -43,9 +43,10 @@
         const contract = global.AppDiagnosticContract;
         const build = global.AppDiagnosticBuild || {};
         const context = field(options, 'context');
+        const entryCoverage = contract.sanitizeEntryCoverage(field(options, 'entryCoverage'));
         let runMode = 'unknown';
         try {
-            const entryRoot = global.location.pathname.replace(/assets\/generated\/reading-exams\/reading-practice-unified\.html$/, '');
+            const entryRoot = global.location.pathname.replace(/assets\/generated\/(?:reading|listening)-exams\/(?:reading|listening)-practice-unified\.html$/, '');
             runMode = global.location.protocol === 'file:' ? 'file'
                 : /^https?:$/.test(global.location.protocol)
                     ? (entryRoot.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
@@ -210,6 +211,8 @@
                 if (safeInput.collection === undefined) {
                     safeInput.collection = { source: 'business', coverage: 'partial', aggregation: 'local' };
                 }
+                safeInput.collection = { source: field(safeInput.collection, 'source'),
+                    coverage: field(safeInput.collection, 'coverage'), aggregation: field(safeInput.collection, 'aggregation'), entryCoverage };
                 event = normalizer.normalize(safeInput);
                 // Explicit cancellation is an observation, never a startup incident.
                 if (field(input, 'cancelled') === true) {
@@ -319,7 +322,10 @@
                 const url = target.src || target.href;
                 const location = utility.normalize({ resource: { url } }).resource;
                 const declaration = elements.get(target) || resources.get(location.path);
-                const optional = declaration ? declaration.optional : 'unknown';
+                // Declared by the entry before its media sources are parsed/loaded.
+                const optionalMedia = field(options, 'optionalMedia') === true
+                    && ['AUDIO', 'VIDEO', 'SOURCE'].includes(String(target.tagName || '').toUpperCase());
+                const optional = declaration ? declaration.optional : optionalMedia ? true : 'unknown';
                 report({ code: 'RESOURCE_LOAD_FAILED', module: 'bootstrap', action: 'load-resource',
                     error: identity, resource: { url, optional },
                     notification: { kind: optional === false ? (startup ? 'startup' : 'persistent') : 'none' },
@@ -367,6 +373,7 @@
             const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
             const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
             return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
+                entryCoverage,
                 truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}),
                 ...(transport ? { transport: transportStatus() } : {}) });
         }
@@ -378,6 +385,7 @@
                 const ordered = current.events.filter((event) => event !== chosen).reverse();
                 if (chosen) ordered.unshift(chosen);
                 const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
+                    entryCoverage: current.entryCoverage,
                     truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
                     ...(current.transport ? { transport: current.transport } : {}),
                     notice: 'Local diagnostics; not an answer backup.', events: [] };

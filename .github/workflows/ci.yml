@@ -67,6 +67,10 @@ jobs:
         timeout-minutes: 4
         run: node developer/tests/e2e/reading_diagnostics.node.js
 
+      - name: Verify listening and legacy diagnostics with synthetic content
+        timeout-minutes: 4
+        run: node developer/tests/e2e/listening_diagnostics.node.js
+
       - name: Verify incident notifications in three hosting modes
         # Full release qualification remains in C4; these are B2 interaction regressions.
         timeout-minutes: 2

@@ -1,4 +1,4 @@
-import type { DiagnosticEvent, DiagnosticPersistence, DiagnosticStorageStatus, DiagnosticTransportStatus, Environment,
+import type { DiagnosticEvent, DiagnosticPersistence, DiagnosticStorageStatus, DiagnosticTransportStatus, Environment, EntryCoverage,
     Snapshot, SnapshotQuery } from './diagnosticContract';
 export as namespace AppDiagnosticExport;
 
@@ -27,6 +27,7 @@ export interface Report {
     readonly sources: Readonly<Partial<Record<'memory' | 'bootstrap' | 'persisted', SourceStatus>>>;
     readonly transport?: DiagnosticTransportStatus;
     readonly collection: { readonly coverage: 'partial'; readonly aggregation: 'incomplete';
+        readonly entryCoverage?: EntryCoverage;
         readonly connection: DiagnosticTransportStatus['connection'] | 'unverified' | 'not-applicable'; readonly limitations: readonly string[] };
     readonly truncated: boolean;
     readonly issues: readonly string[];

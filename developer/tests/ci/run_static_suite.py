@@ -151,7 +151,17 @@ def _strip_verified_diagnostic_bootstrap(source: str) -> str:
             options = json.loads(hook.group(1))
         except ValueError:
             return match.group(0)
-        if set(options) != {'context', 'requiredResources', 'optionalResources'} or options['context'] not in ('main', 'reading'):
+        keys = {'context', 'requiredResources', 'optionalResources'}
+        context = options.get('context')
+        if context in ('listening', 'legacy'):
+            keys |= {'entryCoverage', 'optionalMedia'}
+            coverage = options.get('entryCoverage')
+            entries = ('listening-wrapper', 'listening-bridge') if context == 'listening' else ('legacy-enhancer',)
+            if (not isinstance(coverage, dict) or set(coverage) != {'entry', 'capture'}
+                    or coverage.get('entry') not in entries or coverage.get('capture') != 'before-dependencies'
+                    or options.get('optionalMedia') is not True):
+                return match.group(0)
+        if set(options) != keys or context not in ('main', 'reading', 'listening', 'legacy'):
             return match.group(0)
         if not all(isinstance(options[key], list) and all(isinstance(item, str) for item in options[key])
                    for key in ('requiredResources', 'optionalResources')):

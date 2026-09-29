@@ -2939,7 +2939,8 @@
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
                         await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow, {
-                            expectedRegistration
+                            expectedRegistration,
+                            retainSubmitReceipt: isListeningBridgeSource || src === 'practice_page'
                         });
                         break;
                     case 'ERROR_OCCURRED':
@@ -6250,7 +6251,16 @@
             } finally {
                 if (completionCommitted) {
                     try {
-                        if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
+                        const info = this.examWindows && this.examWindows.get(examId);
+                        const receiptKey = `${completionData?.sessionId || ''}:${completionData?.submissionId || ''}`;
+                        // Bridge/enhancer sends can commit before their ACK is lost.
+                        // Keep the existing authenticated receipt route until the
+                        // registered window closes or is replaced, just as reading
+                        // does. Retrying this ID then replays a receipt, not a write.
+                        const canReconcile = options.retainSubmitReceipt === true
+                            && sourceWindow && !sourceWindow.closed && info?.window === sourceWindow
+                            && info.practiceSubmitReceipts?.[receiptKey]?.succeeded === true;
+                        if (canReconcile || this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
                             await this.retainExamWindowAfterCompletion(
                                 examId,
                                 sourceWindow,

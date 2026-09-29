@@ -1357,7 +1357,7 @@ class ExamSystemApp {
             }
             if (this.examWindows) {
                 this.examWindows.forEach((windowData, examId) => {
-                    // A departing host must leave controlled reading pages available
+                    // A departing host leaves supported practice pages available
                     // for unconfirmed work and local diagnostic export. Explicit
                     // session closure still uses the normal cleanup path below.
                     let preserveReading = false;
@@ -1365,6 +1365,7 @@ class ExamSystemApp {
                         try { preserveReading = new URL(windowData.expectedUrl, window.location.href).pathname
                             .endsWith('/assets/generated/reading-exams/reading-practice-unified.html'); } catch (_) { }
                     }
+                    if (options.preservePracticeWindows === true) preserveReading = true;
                     if (preserveReading) {
                         try { this._diagnosticChannels?.get(examId)?.dispose(); } catch (_) { }
                         const handler = this.messageHandlers?.get(examId);
@@ -1498,6 +1499,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 页面卸载时清理
 window.addEventListener('beforeunload', () => {
     if (window.app) {
-        window.app.destroy({ preserveReadingWindows: true });
+        window.app.destroy({ preserveReadingWindows: true, preservePracticeWindows: true });
     }
 });

@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:8d803d3d4855f01183e2ee200c84e20ba9f61418e6ad394a9f7623cd9ea858eb","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:c5fef55dd05e1c8ad103f91133c4276ba16a4f325cbfdf629e605c1b9026a603","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -67,6 +67,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         'assets/generated/reading-exams/manifest.js',
         'assets/generated/reading-explanations/manifest.js',
         'js/runtime/unifiedReadingPage.js',
+        'js/listeningRecordBridge.js', 'js/listeningUnifiedWrapper.js', 'js/practice-page-enhancer.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js', 'js/diagnostics/practiceDiagnostics.js',
         'assets/generated/reading-exams/reading-practice-unified.html',
         'assets/generated/listening-exams/listening-practice-unified.html',
         ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
@@ -432,6 +434,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             resource.optional = typeof optional === 'boolean' ? optional : 'unknown';
             const persistence = field(input, 'persistence', context);
             const collection = field(input, 'collection', context);
+            const entryCoverage = sanitizeEntryCoverage(field(collection, 'entryCoverage', context));
             const notification = field(input, 'notification', context);
             const retry = field(input, 'retry', context);
             const aliases = wire ? undefined : field(input, 'correlationAliases', context);
@@ -471,6 +474,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 },
                 breadcrumbs: breadcrumbs(field(input, 'breadcrumbs', context), scope, context, wire),
                 collection: {
+                    ...(entryCoverage.entry !== 'unknown' ? { entryCoverage } : {}),
                     source: choice(field(collection, 'source', context), SOURCES),
                     coverage: choice(field(collection, 'coverage', context), ['complete', 'partial']),
                     aggregation: choice(field(collection, 'aggregation', context), ['local', 'complete', 'incomplete']),
@@ -528,10 +532,1039 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         });
     }
 
-    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus,
+    function sanitizeEntryCoverage(input) {
+        const context = state();
+        const entry = choice(field(input, 'entry', context), ['listening-wrapper', 'listening-bridge', 'legacy-enhancer']);
+        const capture = choice(field(input, 'capture', context), ['before-dependencies', 'late-injection']);
+        return Object.freeze({ entry, capture, limitations: Object.freeze([
+            ...(capture === 'late-injection' ? ['earlier-failures-unavailable'] : []),
+            ...(entry === 'listening-wrapper' ? ['embedded-content-separate-context'] : []),
+            ...(['listening-bridge', 'legacy-enhancer'].includes(entry) ? ['legacy-draft-recovery-unavailable'] : [])
+        ]) });
+    }
+
+    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
         PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/bootstrapCollector.js ===== */
+(function defineDiagnosticBootstrap(global) {
+    'use strict';
+    if (global.AppDiagnosticBootstrap) return;
+
+    let installed;
+    const MAX_EVENTS = 200;
+    const MAX_BYTES = 256 * 1024;
+    const TEXT_BYTES = 32 * 1024;
+    const BATCH_SIZE = 20;
+    // Capture the platform getter once. Its receiver brand check reads native
+    // DOMException state without consulting caller-owned name getters or prototypes.
+    let nativeDOMExceptionName;
+    try { nativeDOMExceptionName = Object.getOwnPropertyDescriptor(global.DOMException.prototype, 'name')?.get; }
+    catch (_) { }
+
+    function isNativeAbort(error) {
+        try { return typeof nativeDOMExceptionName === 'function' && nativeDOMExceptionName.call(error) === 'AbortError'; }
+        catch (_) { return false; }
+    }
+
+    function classificationPriority(event) {
+        if (event.code !== 'UNEXPECTED_RUNTIME_ERROR') return event.collection.source === 'business' ? 3 : 2;
+        return event.collection.source === 'console' ? 0 : 1;
+    }
+
+    // Never invoke accessors on caller-owned inputs (including console arguments).
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; }
+        catch (_) { return undefined; }
+    }
+    function method(value, key) {
+        try {
+            for (let depth = 0; value && depth < 4; depth += 1, value = Object.getPrototypeOf(value)) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (descriptor) return typeof descriptor.value === 'function' ? descriptor.value : null;
+            }
+        } catch (_) { }
+        return null;
+    }
+
+    function install(options = {}) {
+        if (installed) return installed;
+        const contract = global.AppDiagnosticContract;
+        const build = global.AppDiagnosticBuild || {};
+        const context = field(options, 'context');
+        const entryCoverage = contract.sanitizeEntryCoverage(field(options, 'entryCoverage'));
+        let runMode = 'unknown';
+        try {
+            const entryRoot = global.location.pathname.replace(/assets\/generated\/(?:reading|listening)-exams\/(?:reading|listening)-practice-unified\.html$/, '');
+            runMode = global.location.protocol === 'file:' ? 'file'
+                : /^https?:$/.test(global.location.protocol)
+                    ? (entryRoot.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
+        } catch (_) { }
+        const correlationScope = contract.createCorrelationScope();
+        const normalizer = contract.createNormalizer({
+            windowIdentity: contract.createWindowIdentity(), correlationScope,
+            appVersion: field(build, 'appVersion'), buildId: field(build, 'buildId'),
+            environment: { context, runMode }
+        });
+        // Utility normalization must not allocate incident sequence numbers.
+        const utility = contract.createNormalizer({ correlationScope });
+        const records = new Map();
+        const resources = new Map();
+        const elements = new WeakMap();
+        const resourceErrors = new WeakMap();
+        const crumbs = [];
+        const observers = new Set();
+        let bytes = 0;
+        let dropped = 0;
+        let startup = true;
+        let reporting = false;
+        let internal = false;
+        let handedOff = false;
+        let sink = null;
+        let append;
+        let memoryOnlyConsole = false;
+        let sinkFailed = false;
+        let persistence = 'memory-only';
+        let pending = null;
+        let startupId = null;
+        let panel = null;
+        let fallbackFailed = false;
+        let waitingForBody = false;
+        let transport = null;
+
+        function transportStatus() {
+            try { return contract.sanitizeTransportStatus(method(transport, 'status')?.call(transport)); }
+            catch (_) { return contract.sanitizeTransportStatus({ connection: 'unavailable' }); }
+        }
+
+        function trim() {
+            while (records.size > MAX_EVENTS || bytes > MAX_BYTES) {
+                const available = Array.from(records.values()).filter((item) => !item.inFlight && item.event.eventId !== startupId);
+                const victim = available.find((item) => item.event.notification.kind === 'none') || available[0];
+                if (!victim) break;
+                records.delete(victim.event.eventId);
+                bytes -= victim.bytes;
+                dropped += 1;
+            }
+        }
+
+        function schedule() {
+            if (!sink || sinkFailed || pending) return;
+            if (!Array.from(records.values()).some((item) => !item.delivered)) return;
+            persistence = 'pending';
+            // The only queue is the bounded records map. Batches share its immutable values.
+            pending = Promise.resolve().then(async function drain() {
+                const batch = Array.from(records.values()).filter((item) => !item.delivered).slice(0, BATCH_SIZE);
+                if (!batch.length) return;
+                batch.forEach((item) => { item.inFlight = true; updatePersistence(item, 'pending'); });
+                const revisions = batch.map((item) => item.revision);
+                try {
+                    internal = true;
+                    let result;
+                    try { result = append.call(sink, Object.freeze(batch.map((item) => item.event))); }
+                    finally { internal = false; }
+                    result = await result;
+                    const status = field(result, 'persistence');
+                    const persistedIds = field(result, 'persistedEventIds');
+                    if (!['persisted', 'disabled', 'memory-only'].includes(status)) throw new Error('Invalid sink result');
+                    persistence = status;
+                    batch.forEach((item, index) => {
+                        // An enrichment during append needs its own identity-keyed upsert.
+                        // Confirmation of the old version cannot acknowledge the new one.
+                        if (item.revision === revisions[index]) {
+                            item.delivered = true;
+                            updatePersistence(item, status === 'persisted' && Array.isArray(persistedIds)
+                                && !persistedIds.includes(item.event.eventId) ? 'memory-only' : status);
+                        }
+                    });
+                } catch (_) {
+                    sinkFailed = true;
+                    persistence = 'failed';
+                    batch.forEach((item) => updatePersistence(item, 'failed'));
+                } finally {
+                    batch.forEach((item) => { item.inFlight = false; });
+                    trim();
+                }
+            }).catch(function isolateDrain() {
+                sinkFailed = true;
+                persistence = 'failed';
+            }).then(function drained() {
+                pending = null;
+                if (!sinkFailed && Array.from(records.values()).some((item) => !item.delivered)) schedule();
+            });
+        }
+
+        function updatePersistence(item, status) {
+            const event = normalizer.sanitizeEvent({ ...item.event,
+                persistence: { ...item.event.persistence, diagnostics: status } });
+            replaceEvent(item, event);
+        }
+
+        function replaceEvent(item, event) {
+            bytes -= item.bytes;
+            item.event = event;
+            item.bytes = contract.utf8Bytes(JSON.stringify(event));
+            bytes += item.bytes;
+        }
+
+        function persistenceStatus() {
+            const storage = storageStatus();
+            if (storage && storage.persistence !== 'persisted') return storage.persistence;
+            if (sinkFailed) return 'failed';
+            if (pending) return 'pending';
+            if (Array.from(records.values()).some((item) => item.event.persistence.diagnostics === 'memory-only')) return 'memory-only';
+            return persistence;
+        }
+
+        function storageStatus() {
+            try { return method(sink, 'status')?.call(sink); } catch (_) { return null; }
+        }
+
+        function storageChanged(change) {
+            const state = field(change, 'status');
+            if (!state) return;
+            persistence = state.persistence;
+            for (const item of records.values()) {
+                const current = item.event.persistence.generation === state.generation
+                    && item.event.timestamp > state.cutoff && !state.suspended && state.enabled;
+                if (change.type === 'retry' && current && item.event.persistence.diagnostics !== 'persisted') {
+                    item.delivered = false;
+                    updatePersistence(item, 'memory-only');
+                } else if (!current || state.failure) {
+                    item.revision += 1; // Fence acknowledgements already in flight.
+                    item.delivered = true;
+                    updatePersistence(item, state.enabled ? 'memory-only' : 'disabled');
+                }
+            }
+            trim();
+            if (change.type === 'retry') { sinkFailed = false; schedule(); }
+        }
+
+        function report(input) {
+            // Reentrant internal calls get a reference without buffering or scheduling work.
+            if (reporting || internal) return normalizer.normalize(null).eventId;
+            reporting = true;
+            let event;
+            try {
+                const safeInput = {};
+                ['code', 'module', 'action', 'error', 'newOccurrence', 'resource', 'correlation',
+                    'correlationAliases', 'persistence', 'notification', 'retry', 'collection', 'breadcrumbs']
+                    .forEach((key) => { safeInput[key] = field(input, key); });
+                // Only sink confirmation can promote diagnostic persistence.
+                const storage = storageStatus();
+                safeInput.persistence = { operation: field(safeInput.persistence, 'operation'), diagnostics: 'memory-only',
+                    generation: storage?.generation };
+                if (safeInput.breadcrumbs === undefined) {
+                    safeInput.breadcrumbs = crumbs.map((item) => ({ ...item, correlationAliases: item.correlation }));
+                }
+                if (safeInput.collection === undefined) {
+                    safeInput.collection = { source: 'business', coverage: 'partial', aggregation: 'local' };
+                }
+                safeInput.collection = { source: field(safeInput.collection, 'source'),
+                    coverage: field(safeInput.collection, 'coverage'), aggregation: field(safeInput.collection, 'aggregation'), entryCoverage };
+                event = normalizer.normalize(safeInput);
+                // Explicit cancellation is an observation, never a startup incident.
+                if (field(input, 'cancelled') === true) {
+                    event = normalizer.sanitizeEvent({ ...event, notification: { kind: 'none' } });
+                }
+                const existing = records.get(event.eventId);
+                if (!existing) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, revision: 0, delivered: memoryOnlyConsole, inFlight: false });
+                    bytes += size;
+                } else if (classificationPriority(event) > classificationPriority(existing.event)) {
+                    // The normalizer preserves identity, sequence and first-seen time.
+                    // Keep a known browser location when the business boundary lacks one.
+                    if (event.resource.path === 'unknown' && existing.event.resource.path !== 'unknown') {
+                        event = normalizer.sanitizeEvent({ ...event, resource: existing.event.resource });
+                    }
+                    replaceEvent(existing, event);
+                    existing.revision += 1;
+                    existing.delivered = false;
+                } else {
+                    event = existing.event;
+                }
+                // Pin the canonical startup incident before capacity trimming, including
+                // when enrichment grows an older record or rendering waits for the body.
+                if (event.notification.kind === 'startup') startupId = event.eventId;
+                trim();
+                schedule();
+                if (event.notification.kind === 'startup') showStartup(event.eventId);
+                // Observers receive only normalized evidence, after capture. UI failures
+                // cannot throw into reporting or recursively allocate more incidents.
+                for (const observer of Array.from(observers)) {
+                    try { Promise.resolve(observer(event)).catch(() => {}); } catch (_) { }
+                }
+                return event.eventId;
+            } catch (_) {
+                // The contract's fail-closed normalizer supplies a synchronous identity.
+                return event ? event.eventId : normalizer.normalize(null).eventId;
+            } finally { reporting = false; }
+        }
+
+        function breadcrumb(input) {
+            try {
+                const normalized = utility.normalize({ breadcrumbs: [input] }).breadcrumbs[0];
+                if (normalized) {
+                    crumbs.push(normalized);
+                    if (crumbs.length > contract.LIMITS.breadcrumbs) crumbs.shift();
+                }
+            } catch (_) { }
+        }
+
+        // Only the validated channel calls this ingress. Preserve origin identity and
+        // lifecycle instead of allocating a local occurrence through report(). No UI,
+        // observer callbacks, business acknowledgements, or retry actions run here.
+        function acceptRelayed(input) {
+            try {
+                let event = normalizer.sanitizeEvent(input);
+                const state = storageStatus();
+                if (!event || event.windowId === normalizer.windowId || !state || !state.enabled || state.suspended
+                    || !['active', 'reset-complete'].includes(state.phase) || state.failure === 'COORDINATION_UNAVAILABLE'
+                    || event.persistence.generation === 'unknown' || event.persistence.generation !== state.generation
+                    || event.timestamp <= state.cutoff) return false;
+                const originPriority = classificationPriority(event);
+                event = normalizer.sanitizeEvent({ ...event,
+                    persistence: { ...event.persistence, diagnostics: 'memory-only' },
+                    collection: { ...event.collection, source: 'relay', aggregation: 'incomplete' },
+                    notification: { kind: 'none', requiresDismissal: false }, retry: { available: false } });
+                const existing = records.get(event.eventId);
+                if (existing && existing.event.timestamp !== event.timestamp) return false;
+                if (!existing) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, revision: 0, delivered: false, inFlight: false, originPriority });
+                    bytes += size;
+                } else if (originPriority > (existing.originPriority ?? classificationPriority(existing.event))) {
+                    replaceEvent(existing, event); existing.revision += 1; existing.delivered = false;
+                    existing.originPriority = originPriority;
+                }
+                trim(); schedule();
+                return records.has(event.eventId);
+            } catch (_) { return false; }
+        }
+
+        function declareResource(target, declaration = {}) {
+            try {
+                const resource = utility.normalize({ resource: {
+                    url: typeof target === 'string' ? target : field(declaration, 'url'),
+                    optional: field(declaration, 'optional')
+                } }).resource;
+                if (typeof target === 'object' && target) {
+                    elements.set(target, resource);
+                    resourceErrors.delete(target); // A new declared load is a new attempt.
+                }
+                // Unknown or user-owned URLs never become registry keys.
+                if (resource.path !== 'unknown') resources.set(resource.path, resource);
+            } catch (_) { }
+        }
+
+        function resourceFailure(target, error) {
+            try {
+                let identity = resourceErrors.get(target);
+                if (!identity) {
+                    // This registry retains only a code-owned identity token, never a raw
+                    // browser/loader payload, private URL, or local stack from the caller.
+                    identity = new Error(contract.MESSAGES.RESOURCE_LOAD_FAILED);
+                    identity.stack = '';
+                    resourceErrors.set(target, identity);
+                }
+                const url = target.src || target.href;
+                const location = utility.normalize({ resource: { url } }).resource;
+                const declaration = elements.get(target) || resources.get(location.path);
+                // Declared by the entry before its media sources are parsed/loaded.
+                const optionalMedia = field(options, 'optionalMedia') === true
+                    && ['AUDIO', 'VIDEO', 'SOURCE'].includes(String(target.tagName || '').toUpperCase());
+                const optional = declaration ? declaration.optional : optionalMedia ? true : 'unknown';
+                report({ code: 'RESOURCE_LOAD_FAILED', module: 'bootstrap', action: 'load-resource',
+                    error: identity, resource: { url, optional },
+                    notification: { kind: optional === false ? (startup ? 'startup' : 'persistent') : 'none' },
+                    collection: { source: 'resource', coverage: 'partial', aggregation: 'local' } });
+                return identity;
+            } catch (_) { return error; }
+        }
+
+        function globalFailure(error, location) {
+            const checked = utility.normalize({ error, resource: location });
+            const declaration = resources.get(checked.resource.path);
+            const expected = checked.error.name === 'AbortError' || isNativeAbort(error)
+                || (declaration && declaration.optional === true);
+            return report({ code: startup && !expected ? 'APP_BOOT_FAILED' : 'UNEXPECTED_RUNTIME_ERROR',
+                module: startup ? 'bootstrap' : 'main', action: startup ? 'initialize' : 'report', error,
+                resource: { ...location, optional: declaration ? declaration.optional : undefined },
+                notification: { kind: startup && !expected ? 'startup' : 'none' },
+                collection: { source: handedOff ? 'global' : 'bootstrap', coverage: 'partial', aggregation: 'local' } });
+        }
+
+        function captureError(event) {
+            if (internal) return;
+            try {
+                if (event.target && event.target !== global && (event.target.src || event.target.href)) {
+                    resourceFailure(event.target);
+                } else {
+                    globalFailure(event.error || event, { url: event.filename, line: event.lineno, column: event.colno });
+                }
+            } catch (_) { }
+            // Do not preventDefault, return true, or echo the browser's exception to console.
+        }
+
+        function captureRejection(event) {
+            if (internal) return;
+            try { globalFailure(event.reason); } catch (_) { }
+        }
+
+        function getIncident(eventId) { storageStatus(); return records.get(eventId)?.event || null; }
+
+        function snapshot(query = {}) {
+            const storage = storageStatus();
+            const id = field(query, 'eventId');
+            const requested = field(query, 'limit');
+            const limit = Number.isSafeInteger(requested) ? Math.max(0, Math.min(MAX_EVENTS, requested)) : MAX_EVENTS;
+            const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
+            const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
+            return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
+                entryCoverage,
+                truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}),
+                ...(transport ? { transport: transportStatus() } : {}) });
+        }
+
+        function exportText(eventId = startupId) {
+            try {
+                const current = snapshot();
+                const chosen = current.events.find((event) => event.eventId === eventId);
+                const ordered = current.events.filter((event) => event !== chosen).reverse();
+                if (chosen) ordered.unshift(chosen);
+                const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
+                    entryCoverage: current.entryCoverage,
+                    truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
+                    ...(current.transport ? { transport: current.transport } : {}),
+                    notice: 'Local diagnostics; not an answer backup.', events: [] };
+                for (const event of ordered) {
+                    output.events.push(event);
+                    if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
+                        output.events.pop();
+                        output.truncated = true;
+                        break;
+                    }
+                }
+                return JSON.stringify(output);
+            } catch (_) { return 'Local diagnostic export unavailable. No practice data was changed.'; }
+        }
+
+        function showStartup(eventId) {
+            startupId = eventId;
+            if (fallbackFailed) return;
+            try {
+                const doc = global.document;
+                if (!doc || !doc.body) {
+                    if (doc && !waitingForBody) {
+                        waitingForBody = true;
+                        doc.addEventListener('DOMContentLoaded', function renderWhenReady() {
+                            waitingForBody = false;
+                            showStartup(startupId);
+                        }, { once: true });
+                    }
+                    return;
+                }
+                internal = true;
+                if (!panel) {
+                    const root = doc.createElement('section');
+                    root.id = 'diagnostic-startup-failure';
+                    root.setAttribute('role', 'alert');
+                    root.style.cssText = 'position:fixed;inset:16px 16px auto;z-index:2147483647;max-height:85vh;overflow:auto;padding:20px;background:#fff;color:#17202a;border:2px solid #a11;border-radius:8px;font:16px/1.5 system-ui;white-space:normal;';
+                    const heading = doc.createElement('h2');
+                    const explanation = doc.createElement('p');
+                    const reference = doc.createElement('p');
+                    const button = doc.createElement('button');
+                    button.type = 'button';
+                    button.textContent = '导出诊断';
+                    const details = doc.createElement('details');
+                    const summary = doc.createElement('summary');
+                    summary.textContent = '查看或复制诊断文本';
+                    const text = doc.createElement('textarea');
+                    text.readOnly = true;
+                    text.rows = 8;
+                    text.style.cssText = 'display:block;width:100%;color:#17202a;background:#fff;font:12px monospace;';
+                    text.setAttribute('aria-label', '诊断文本');
+                    details.appendChild(summary);
+                    details.appendChild(text);
+                    details.addEventListener('toggle', function refreshText() {
+                        try { if (details.open) text.value = panel?.exportedText || exportText(); } catch (_) { }
+                    });
+                    button.addEventListener('click', async function download() {
+                        // The full exporter is optional. Missing/broken bundles retain
+                        // the bootstrap's independent synchronous text path below.
+                        const exporter = global.AppDiagnosticExport;
+                        const richDownload = method(exporter, 'download');
+                        if (richDownload) {
+                            try {
+                                const result = await richDownload.call(exporter, { eventId: startupId }, { textTarget: text });
+                                if (result?.status === 'download-started') return;
+                                // Only a generated report can replace bootstrap evidence.
+                                // Delivery failures keep its summary; generation failures
+                                // must continue through the independent minimal export.
+                                if (result?.status === 'text-fallback' && result.report
+                                    && !result.report.issues?.includes('export-generation-failed')) {
+                                    panel.exportedText = result.text;
+                                    details.open = true; text.focus(); text.select(); return;
+                                }
+                            } catch (_) { }
+                        }
+                        panel.exportedText = null;
+                        let url;
+                        try {
+                            text.value = exportText();
+                            url = global.URL.createObjectURL(new global.Blob([text.value], { type: 'text/plain;charset=utf-8' }));
+                            const link = doc.createElement('a');
+                            link.href = url;
+                            link.download = 'ielts-startup-diagnostics.txt';
+                            root.appendChild(link);
+                            try { link.click(); } finally { root.removeChild(link); }
+                        } catch (_) {
+                            try { details.open = true; text.value = exportText(); text.focus(); text.select(); } catch (_) { }
+                        } finally {
+                            if (url) {
+                                try { global.setTimeout(function release() { try { global.URL.revokeObjectURL(url); } catch (_) { } }, 1000); }
+                                catch (_) { try { global.URL.revokeObjectURL(url); } catch (_) { } }
+                            }
+                        }
+                    });
+                    [heading, explanation, reference, button, details].forEach((node) => root.appendChild(node));
+                    doc.body.appendChild(root);
+                    panel = { root, heading, explanation, reference, text, details };
+                }
+                panel.root.style.position = 'fixed';
+                panel.root.setAttribute('role', 'alert');
+                panel.heading.textContent = '应用启动失败';
+                panel.explanation.textContent = '请保留此页面，并导出诊断信息以便排查。诊断信息不包含答案，也不是练习备份。';
+                panel.reference.textContent = '事件编号：' + startupId;
+                panel.exportedText = null;
+                if (panel.details.open) panel.text.value = exportText();
+            } catch (_) {
+                fallbackFailed = true;
+                // One plain-text attempt, with no logger, reporter call, timers, or retry loop.
+                try {
+                    const pre = global.document.createElement('pre');
+                    pre.textContent = '应用启动失败。事件编号：' + startupId + '\n' + exportText();
+                    global.document.body.appendChild(pre);
+                } catch (_) { }
+            } finally { internal = false; }
+        }
+
+        function startupFailed(error) {
+            if (internal) return normalizer.normalize(null).eventId;
+            const id = report({ code: 'APP_BOOT_FAILED', module: 'main', action: 'initialize', error,
+                notification: { kind: 'startup' } });
+            showStartup(id);
+            return id;
+        }
+
+        function captureConsole(level, args) {
+            if (level !== 'error' || internal) return;
+            try {
+                let error;
+                const length = Math.min(field(args, 'length') || 0, 20);
+                for (let i = 0; i < length; i += 1) {
+                    const value = field(args, String(i));
+                    if (value && typeof value === 'object') {
+                        // Select an Error only; never retain arbitrary argument objects or text.
+                        const checked = utility.normalize({ error: value }).error;
+                        if (checked.name !== 'unknown' && checked.kind === 'object') { error = value; break; }
+                    }
+                }
+                // Keep console evidence during asynchronous delivery in memory, but do not
+                // feed a sink's own asynchronous logging back into that sink indefinitely.
+                memoryOnlyConsole = !!pending;
+                report({ code: 'UNEXPECTED_RUNTIME_ERROR', module: 'logger', action: 'report', error,
+                    collection: { source: 'console', coverage: 'partial', aggregation: 'local' } });
+            } catch (_) { } finally { memoryOnlyConsole = false; }
+        }
+
+        installed = Object.freeze({
+            report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
+            // Allocate local aliases or revalidate aliases from an authenticated handshake.
+            // This never records the raw identifiers or changes already captured evidence.
+            correlate(correlation, aliases) {
+                return utility.normalize(aliases === undefined ? { correlation } : { correlationAliases: aliases }).correlation;
+            },
+            startupFailed, captureConsole, acceptRelayed, windowId: normalizer.windowId,
+            attachTransport(next) { if (method(next, 'status')) transport = next; },
+            subscribe(observer) {
+                if (typeof observer !== 'function' || observers.size >= 16) return () => {};
+                observers.add(observer);
+                return () => observers.delete(observer);
+            },
+            markReady() {
+                startup = false;
+                // Retain the incident and export controls without covering the recovered app.
+                try {
+                    if (panel) {
+                        panel.root.style.position = 'static';
+                        panel.root.setAttribute('role', 'region');
+                        panel.root.setAttribute('aria-label', '启动故障诊断');
+                        panel.heading.textContent = '启动故障记录';
+                        panel.explanation.textContent = '应用已完成启动，诊断信息保留供排查。诊断信息不包含答案，也不是练习备份。';
+                    }
+                } catch (_) { }
+            },
+            handoff() { handedOff = true; return installed; },
+            attachSink(next) {
+                if (sink === next) return;
+                // A single sink owns delivery; replacing it requires an explicit future lifecycle API.
+                const candidate = method(next, 'append');
+                if (sink || !candidate) return;
+                sink = next;
+                append = candidate;
+                const state = storageStatus();
+                if (state) {
+                    // Only this page's pre-sink bootstrap evidence may adopt the
+                    // initial generation. Relayed records must carry their origin's.
+                    for (const item of records.values()) {
+                        if (item.event.persistence.generation === 'unknown' && item.event.collection.source !== 'relay'
+                            && item.event.timestamp > state.cutoff) {
+                            replaceEvent(item, normalizer.sanitizeEvent({ ...item.event,
+                                persistence: { ...item.event.persistence, generation: state.generation } }));
+                        }
+                    }
+                    storageChanged({ type: 'barrier', status: state });
+                    method(next, 'subscribe')?.call(next, storageChanged);
+                }
+                persistence = 'memory-only';
+                schedule();
+            },
+            retrySink() {
+                const retry = method(sink, 'retry');
+                if (retry) return retry.call(sink);
+                if (!sinkFailed || pending) return;
+                sinkFailed = false;
+                persistence = 'pending';
+                schedule();
+            },
+            async flush() {
+                schedule();
+                while (pending) await pending;
+                return Object.freeze({ persistence: persistenceStatus() });
+            },
+            status() {
+                return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed,
+                    ...(storageStatus() ? { storage: storageStatus() } : {}),
+                    ...(transport ? { transport: transportStatus() } : {}) });
+            }
+        });
+        for (const key of ['requiredResources', 'optionalResources']) {
+            const list = field(options, key);
+            if (Array.isArray(list)) list.slice(0, 100).forEach((url) => declareResource(url, { optional: key === 'optionalResources' }));
+        }
+        if (typeof global.addEventListener === 'function') {
+            global.addEventListener('error', captureError, true);
+            global.addEventListener('unhandledrejection', captureRejection);
+        }
+        return installed;
+    }
+    global.AppDiagnosticBootstrap = Object.freeze({ install, current: () => installed || null });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/practiceDiagnosticBootstrap.js ===== */
+(function installPracticeDiagnosticBootstrap(global) {
+    'use strict';
+    // Controlled entries already installed their inline collector. A dynamically
+    // injected bundle can only observe failures from this point onwards.
+    if (global.AppDiagnosticBootstrap.current()) return;
+    const src = global.document?.currentScript?.src || '';
+    const entry = /listening-wrapper/.test(src) ? 'listening-wrapper'
+        : /listening-record-bridge/.test(src) ? 'listening-bridge' : 'legacy-enhancer';
+    global.AppDiagnosticBootstrap.install({ context: entry === 'legacy-enhancer' ? 'legacy' : 'listening',
+        entryCoverage: { entry, capture: 'late-injection' }, optionalMedia: true });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticStore.js ===== */
+(function defineDiagnosticStorage(global) {
+    'use strict';
+    if (global.AppDiagnosticStorage) return;
+
+    const DATABASE_NAME = 'IELTSAtlasDiagnosticsV1';
+    const CONTROL_KEY = 'ielts-atlas-diagnostics-control-v1';
+    const LOCK_NAME = 'ielts-atlas-diagnostics-lifecycle-v1';
+    const ZERO = 'dg-' + '0'.repeat(32);
+    const GENERATION = /^dg-[a-f0-9]{32}$/;
+    const LIMITS = Object.freeze({ ageMs: 7 * 86400000, events: 2000, bytes: 2 * 1024 * 1024,
+        batchEvents: 20, pendingEvents: 200, pendingBytes: 256 * 1024 });
+
+    function priority(event) {
+        return ['startup', 'dialog', 'persistent'].includes(event.notification.kind) ? 2
+            : event.code !== 'UNEXPECTED_RUNTIME_ERROR' ? 1 : 0;
+    }
+    function create(options = {}) {
+        const contract = global.AppDiagnosticContract;
+        const normalizer = contract.createNormalizer();
+        const databaseName = options.databaseName || DATABASE_NAME;
+        const controlKey = options.controlKey || CONTROL_KEY;
+        const lockName = options.lockName || LOCK_NAME;
+        const now = options.now || Date.now;
+        const timeoutMs = options.timeoutMs || 2000;
+        const limits = Object.fromEntries(['ageMs', 'events', 'bytes'].map((key) => [key,
+            Number.isSafeInteger(options.limits?.[key]) && options.limits[key] > 0
+                ? Math.min(options.limits[key], LIMITS[key]) : LIMITS[key]]));
+        const listeners = new Set();
+        let control = { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active' };
+        let initialReset;
+        let suspended = false;
+        let closed = false;
+        let failure = null;
+        let coordinationReady = false;
+        let pendingEvents = 0;
+        let pendingBytes = 0;
+        let dropped = 0;
+        let channel;
+
+        function view() {
+            return Object.freeze({ persistence: !control.enabled ? 'disabled'
+                : failure || !coordinationReady || suspended || closed ? 'memory-only' : pendingEvents ? 'pending' : 'persisted',
+                enabled: control.enabled, generation: control.generation, cutoff: control.cutoff,
+                suspended: suspended || closed, phase: control.phase, failure,
+                coverage: failure || !coordinationReady || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped });
+        }
+        function emit(type) {
+            for (const listener of listeners) { try { listener(Object.freeze({ type, status: view() })); } catch (_) { } }
+        }
+        function fail(code) {
+            if (!failure) { failure = code; emit('status'); }
+        }
+        function failureCode(error) {
+            const name = error && error.name;
+            return name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED'
+                : name === 'SecurityError' || name === 'InvalidStateError' ? 'UNAVAILABLE'
+                    : name === 'AbortError' ? 'TRANSACTION_ABORTED' : 'TRANSACTION_FAILED';
+        }
+        function readControl() {
+            const raw = global.localStorage.getItem(controlKey);
+            if (raw === null) return { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active' };
+            const value = JSON.parse(raw);
+            if (!value || !GENERATION.test(value.generation) || !GENERATION.test(value.resetGeneration)
+                || !Number.isSafeInteger(value.cutoff) || value.cutoff < -1 || typeof value.enabled !== 'boolean'
+                || !['active', 'resetting', 'reset-complete'].includes(value.phase)) throw new Error('Invalid diagnostic control');
+            return { generation: value.generation, resetGeneration: value.resetGeneration,
+                cutoff: value.cutoff, enabled: value.enabled, phase: value.phase };
+        }
+        function sync() {
+            try {
+                const next = readControl();
+                if (initialReset === undefined) initialReset = next.resetGeneration;
+                if (next.phase === 'resetting' || initialReset !== next.resetGeneration) suspended = true;
+                const changed = next.generation !== control.generation || next.phase !== control.phase;
+                control = next;
+                if (changed) emit('barrier');
+            } catch (_) { fail('COORDINATION_UNAVAILABLE'); }
+            return control;
+        }
+        function capabilities() {
+            sync();
+            try {
+                if (!global.navigator?.locks?.request || !global.localStorage) fail('COORDINATION_UNAVAILABLE');
+                if (!global.indexedDB?.open) fail('UNAVAILABLE');
+            } catch (_) { fail('UNAVAILABLE'); }
+            return !failure && !closed;
+        }
+        function writeControl(next) {
+            try {
+                // A fresh token makes even an unchanged control record a real write.
+                // Reserve room for longer cutoff/phase values before storage fills.
+                const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(256, ' ');
+                global.localStorage.setItem(controlKey, serialized);
+                if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
+                coordinationReady = true;
+            } catch (error) {
+                coordinationReady = false;
+                fail('COORDINATION_UNAVAILABLE');
+                throw error;
+            }
+        }
+        function publish(next) {
+            // All control mutations and IDB operations share one cross-window lock.
+            writeControl(next);
+            control = next;
+            try { channel?.postMessage({ type: 'control-changed' }); } catch (_) { }
+            emit('barrier');
+        }
+        function generation() {
+            const values = new Uint8Array(16);
+            global.crypto.getRandomValues(values);
+            return 'dg-' + Array.from(values, (value) => value.toString(16).padStart(2, '0')).join('');
+        }
+        function nextControl(changes = {}) {
+            return { ...control, generation: generation(), cutoff: Math.max(now(), control.cutoff), ...changes };
+        }
+        async function locked(callback) {
+            const abort = new global.AbortController();
+            const timer = global.setTimeout(() => abort.abort(), timeoutMs);
+            try {
+                return await global.navigator.locks.request(lockName, { mode: 'exclusive', signal: abort.signal }, async () => {
+                    global.clearTimeout(timer);
+                    sync();
+                    return callback();
+                });
+            } finally { global.clearTimeout(timer); }
+        }
+        function open(createDatabase) {
+            return new Promise((resolve, reject) => {
+                let request;
+                let finished = false;
+                const finish = (error, db) => {
+                    if (finished) { db?.close(); return; }
+                    finished = true;
+                    global.clearTimeout(timer);
+                    if (error) reject(error); else resolve(db);
+                };
+                const timer = global.setTimeout(() => {
+                    fail('OPEN_TIMEOUT');
+                    finish(new Error('Diagnostic open timed out'));
+                }, timeoutMs);
+                try { request = global.indexedDB.open(databaseName, 1); }
+                catch (error) { finish(error); return; }
+                request.onblocked = () => { fail('OPEN_BLOCKED'); finish(new Error('Diagnostic open blocked')); };
+                request.onupgradeneeded = () => {
+                    // A timed-out/blocked open may resume after a reset. Never let it
+                    // create a database after its lifecycle lock has been released.
+                    if (finished || !createDatabase) { request.transaction.abort(); return; }
+                    request.result.createObjectStore('events', { keyPath: 'eventId' });
+                };
+                request.onerror = () => {
+                    if (!createDatabase && request.error?.name === 'AbortError') finish(null, null);
+                    else finish(request.error || new Error('Diagnostic open failed'));
+                };
+                request.onsuccess = () => {
+                    request.result.onversionchange = () => request.result.close();
+                    finish(null, request.result);
+                };
+            });
+        }
+        async function transaction(mode, action, createDatabase = false) {
+            // Every caller holds the lifecycle lock and has synchronized control.
+            if (!coordinationReady) writeControl(control);
+            const db = await open(createDatabase);
+            if (!db) return [];
+            try {
+                return await new Promise((resolve, reject) => {
+                    let tx;
+                    let result;
+                    let thrown;
+                    const timer = global.setTimeout(() => {
+                        fail('TRANSACTION_TIMEOUT');
+                        try { tx.abort(); } catch (_) { }
+                    }, timeoutMs);
+                    try {
+                        tx = db.transaction('events', mode);
+                        tx.oncomplete = () => { global.clearTimeout(timer); resolve(result); };
+                        tx.onabort = tx.onerror = () => { global.clearTimeout(timer); reject(thrown || tx.error || new Error('Diagnostic transaction failed')); };
+                        const store = tx.objectStore('events');
+                        const request = store.getAll();
+                        request.onsuccess = () => {
+                            try { result = action(store, request.result); }
+                            catch (error) { thrown = error; tx.abort(); }
+                        };
+                    } catch (error) { global.clearTimeout(timer); reject(error); }
+                });
+            } finally { db.close(); }
+        }
+        function eligible(event) {
+            return event && event.persistence.generation === control.generation
+                && event.timestamp > control.cutoff && event.timestamp >= now() - limits.ageMs;
+        }
+        function retained(rows) {
+            return rows.map((row) => normalizer.sanitizeEvent(row.event)).filter(eligible);
+        }
+        function select(events) {
+            const ordered = events.sort((a, b) => priority(b) - priority(a)
+                || b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+            const keep = new Map();
+            let total = 0;
+            for (const event of ordered) {
+                const size = contract.utf8Bytes(JSON.stringify(event));
+                if (keep.size < limits.events && total + size <= limits.bytes) {
+                    keep.set(event.eventId, { eventId: event.eventId, event, bytes: size });
+                    total += size;
+                }
+            }
+            return keep;
+        }
+        async function prune() {
+            if (!capabilities() || suspended || !control.enabled) return;
+            try {
+                await locked(async () => {
+                    if (failure || suspended || closed || !control.enabled) return;
+                    await transaction('readwrite', (store, rows) => {
+                        const keep = select(retained(rows));
+                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
+                        dropped += rows.length - keep.size;
+                    });
+                });
+            } catch (error) { fail(failureCode(error)); }
+        }
+        function receipt(ids = []) {
+            const status = view();
+            return Object.freeze({ persistence: status.persistence === 'pending' ? 'persisted' : status.persistence,
+                persistedEventIds: Object.freeze(ids), status });
+        }
+        async function append(input) {
+            capabilities();
+            if (failure || suspended || closed || !control.enabled) return receipt();
+            const events = [];
+            // Normalize before retaining a queue reference; never buffer caller objects.
+            for (let index = 0; index < Math.min(input?.length || 0, LIMITS.batchEvents); index += 1) {
+                const event = normalizer.sanitizeEvent(input[index]);
+                if (eligible(event)) events.push(event);
+            }
+            const bytes = events.reduce((sum, event) => sum + contract.utf8Bytes(JSON.stringify(event)), 0);
+            if (pendingEvents + events.length > LIMITS.pendingEvents || pendingBytes + bytes > LIMITS.pendingBytes) {
+                dropped += events.length;
+                return Object.freeze({ persistence: 'memory-only', persistedEventIds: Object.freeze([]), status: view() });
+            }
+            if (!events.length) return receipt();
+            pendingEvents += events.length;
+            pendingBytes += bytes;
+            let ids = [];
+            try {
+                ids = await locked(async () => {
+                    if (failure || suspended || closed || !control.enabled) return [];
+                    const batch = events.filter(eligible);
+                    if (!batch.length) return [];
+                    return transaction('readwrite', (store, rows) => {
+                        const merged = new Map(retained(rows).map((event) => [event.eventId, event]));
+                        for (const event of batch) {
+                            const previous = merged.get(event.eventId);
+                            if (!previous || priority(event) >= priority(previous)) {
+                                merged.set(event.eventId, normalizer.sanitizeEvent({ ...event,
+                                    persistence: { ...event.persistence, diagnostics: 'persisted' } }));
+                            }
+                        }
+                        const keep = select(Array.from(merged.values()));
+                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
+                        for (const event of batch) if (keep.has(event.eventId)) store.put(keep.get(event.eventId));
+                        dropped += merged.size - keep.size;
+                        return batch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
+                    }, true);
+                });
+            } catch (error) { fail(failureCode(error)); }
+            finally { pendingEvents -= events.length; pendingBytes -= bytes; }
+            return receipt(ids);
+        }
+        async function snapshot(query = {}) {
+            capabilities();
+            let events = [];
+            let truncated = false;
+            if (!failure && !suspended && !closed && control.enabled) {
+                try {
+                    events = await locked(async () => {
+                        if (failure || suspended || closed || !control.enabled) return [];
+                        return transaction('readonly', (_store, rows) => retained(rows));
+                    });
+                } catch (error) { fail(failureCode(error)); }
+            }
+            events = events.filter((event) => !query.eventId || event.eventId === query.eventId)
+                .sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence || a.eventId.localeCompare(b.eventId));
+            const limit = Number.isSafeInteger(query.limit) ? Math.max(0, Math.min(LIMITS.events, query.limit)) : contract.LIMITS.snapshotEvents;
+            truncated = events.length > limit;
+            events = limit ? events.slice(-limit) : [];
+            return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: view().persistence,
+                coverage: view().coverage, truncated, storage: view() });
+        }
+        function deleteHistory() {
+            return new Promise((resolve, reject) => {
+                const request = global.indexedDB.deleteDatabase(databaseName);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error || new Error('Diagnostic deletion failed'));
+                request.onblocked = () => { failure = 'DELETE_BLOCKED'; emit('status'); };
+            });
+        }
+        async function clearHistory(enabled) {
+            if (!capabilities() && failure === 'COORDINATION_UNAVAILABLE') return { success: false, status: view() };
+            try {
+                return await locked(async () => {
+                    if (suspended || closed) return { success: false, status: view() };
+                    publish(nextControl({ enabled: typeof enabled === 'boolean' ? enabled : control.enabled }));
+                    // Removal is an explicit action even after a failed write. The
+                    // generation/preference remains in force if deletion is blocked.
+                    await deleteHistory();
+                    failure = null;
+                    emit('status');
+                    return Object.freeze({ success: true, status: view() });
+                });
+            } catch (error) { fail(failureCode(error)); return Object.freeze({ success: false, status: view() }); }
+        }
+        async function retry() {
+            if (closed || suspended || !sync().enabled) return Object.freeze({ success: false, status: view() });
+            coordinationReady = false;
+            failure = null;
+            if (capabilities()) {
+                try {
+                    await locked(async () => {
+                        if (failure || !control.enabled || suspended || closed) return;
+                        writeControl(control);
+                        // Probe a real write transaction; explicit retry has an
+                        // observable outcome even when the reporter has no queue.
+                        await transaction('readwrite', (store) => {
+                            store.put({ eventId: '__retry_probe__' });
+                            store.delete('__retry_probe__');
+                        }, true);
+                    });
+                } catch (error) { fail(failureCode(error)); }
+            }
+            const success = !failure && coordinationReady && !suspended && !closed && control.enabled;
+            if (success) emit('retry');
+            return Object.freeze({ success, status: view() });
+        }
+        async function withFullReset(callback) {
+            // A reset must still work after diagnostic storage failed. It requires
+            // working coordination, but never opens this database to establish it.
+            if (closed || !global.navigator?.locks?.request) throw new Error('Diagnostic coordination unavailable');
+            return locked(async () => {
+                const next = nextControl({ enabled: true, phase: 'resetting' });
+                next.resetGeneration = next.generation;
+                suspended = true;
+                publish(next);
+                const result = await callback();
+                // Keep the tombstone after localStorage.clear(), on success and on
+                // partial failure. Existing/reconnecting windows stay suspended.
+                publish({ ...next, phase: result?.success === true ? 'reset-complete' : 'resetting' });
+                return result;
+            });
+        }
+        const onStorage = (event) => { if (event.key === controlKey || event.key === null) sync(); };
+        capabilities();
+        try {
+            channel = new global.BroadcastChannel(controlKey);
+            channel.onmessage = () => sync(); // Notifications are hints; storage is authoritative.
+        } catch (_) { }
+        global.addEventListener?.('storage', onStorage);
+        const ready = Promise.resolve().then(prune);
+        const api = Object.freeze({ append, snapshot, retry, withFullReset, controlKey, ready,
+            getIncident: async (eventId) => (await snapshot({ eventId, limit: 1 })).events[0] || null,
+            clear: () => clearHistory(), setEnabled: (enabled) => clearHistory(enabled === true),
+            status() { sync(); return view(); },
+            subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+            close() { closed = true; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
+        });
+        return api;
+    }
+    global.AppDiagnosticStorage = Object.freeze({ create, DATABASE_NAME, CONTROL_KEY, LOCK_NAME, LIMITS });
+    global.AppDiagnosticStore = create();
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticReporter.js ===== */
+(function attachDiagnosticReporter(global) {
+    'use strict';
+    if (global.AppDiagnostics) return;
+    // Handoff keeps the normalizer, identities, buffer and listeners in the same owner.
+    global.AppDiagnostics = global.AppDiagnosticBootstrap.install({
+        context: global.document?.documentElement?.dataset?.diagnosticContext || 'main'
+    }).handoff();
+    if (global.AppDiagnosticStore) global.AppDiagnostics.attachSink(global.AppDiagnosticStore);
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 
@@ -647,6 +1680,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 events.push(event);
             }
             return { events, storage: storageStatus(field(raw, 'storage')),
+                entryCoverage: contract.sanitizeEntryCoverage(field(raw, 'entryCoverage')),
                 transport: contract.sanitizeTransportStatus(field(raw, 'transport')),
                 status: { state: result.state === 'available' && !array ? 'failed' : result.state,
                     persistence: choice(field(raw, 'persistence'), PERSISTENCE),
@@ -760,6 +1794,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     selection: { kind: incident ? 'incident' : 'history', eventId, found: incident ? !!chosen : null },
                     persistence, storage, sources, ...(transport ? { transport } : {}),
                     collection: { coverage: 'partial', aggregation: 'incomplete', connection: transport?.connection || connection(meta.environment.context),
+                        entryCoverage: memory.entryCoverage.entry !== 'unknown' ? memory.entryCoverage : bootstrap.entryCoverage,
                         limitations: [...contract.COVERAGE_LIMITATIONS, 'cross-window-completeness-unverified',
                             'retained-context-only', 'independent-source-snapshots'] },
                     truncated: Object.values(sources).some((source) => source.truncated) || !!storage?.dropped || candidates.length > limit,
@@ -794,6 +1829,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 'Storage: ' + (report.storage ? report.storage.persistence + '; failure: ' + report.storage.failure : 'unavailable'), ORDERING];
             for (const [name, status] of Object.entries(report.sources)) lines.push(name + ': ' + status.state + '; ' + status.persistence);
             lines.push('Limitations: ' + report.collection.limitations.join(', '));
+            if (report.collection.entryCoverage) lines.push('Entry: ' + report.collection.entryCoverage.entry
+                + '; capture: ' + report.collection.entryCoverage.capture + '; limitations: ' + report.collection.entryCoverage.limitations.join(', '));
             if (report.issues.length) lines.push('Issues: ' + report.issues.join(', '));
             const chosen = report.events.find((event) => event.eventId === report.selection.eventId);
             const events = chosen ? [chosen, ...report.events.filter((event) => event !== chosen)] : report.events;
@@ -1170,6 +2207,954 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
     global.AppDiagnosticChannel = Object.freeze({ TYPE, LIMITS, isMessage, createHost, createChild });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/operationDiagnostics.js ===== */
+(function installOperationDiagnostics(global) {
+    'use strict';
+    if (global.AppOperationDiagnostics) return;
+
+    // These adapters observe business decisions. They never execute a business
+    // operation, interpret an Error as a commit receipt, or retain its payload.
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; } catch (_) { return undefined; }
+    }
+    function reporter() {
+        return global.AppDiagnostics || global.AppDiagnosticBootstrap?.current();
+    }
+    function breadcrumb(module, action, outcome, correlation) {
+        try { reporter()?.breadcrumb({ module, action, outcome, ...correlationInput(correlation) }); } catch (_) { }
+    }
+    function correlationInput(correlation) {
+        return field(correlation, 'scopeId') ? { correlationAliases: correlation } : { correlation };
+    }
+    function businessOutcome(input) {
+        const explicit = field(input, 'operation');
+        if (explicit) return explicit;
+        try { return global.AppData?.getOperationFailureState?.(field(input, 'error')) || 'unconfirmed'; }
+        catch (_) { return 'unconfirmed'; }
+    }
+    function failure(input, retry) {
+        let id = null;
+        try {
+            const code = field(input, 'code');
+            const module = field(input, 'module');
+            // Diagnostic export has its own bounded fallback, never this path.
+            if (module === 'diagnostics') return null;
+            const operation = businessOutcome(input);
+            const action = field(input, 'action');
+            const expected = field(input, 'expected') === true || field(input, 'cancelled') === true
+                || field(field(input, 'resource'), 'optional') === true;
+            const save = ['PRACTICE_SAVE_FAILED', 'RECOVERY_SAVE_FAILED'].includes(code)
+                || ['submit', 'save', 'save-draft', 'save-recovery'].includes(action);
+            const kind = expected ? 'none' : code === 'APP_BOOT_FAILED' ? 'startup'
+                : save && operation === 'unconfirmed' ? 'dialog' : 'persistent';
+            const capture = reporter();
+            breadcrumb(module, action, field(input, 'cancelled') === true ? 'cancelled' : 'failed', field(input, 'correlation'));
+            id = capture?.report({ code, module, action, error: field(input, 'error'),
+                ...correlationInput(field(input, 'correlation')), resource: field(input, 'resource'),
+                cancelled: field(input, 'cancelled'),
+                persistence: { operation }, notification: { kind },
+                retry: { available: !expected && operation === 'unconfirmed' && typeof retry === 'function',
+                    action: field(input, 'retryAction') || action },
+                collection: { source: 'business', coverage: 'partial', aggregation: 'local' } }) || null;
+            if (!id || expected) return id;
+            const event = capture.getIncident(id);
+            const presentation = event?.retry.available && typeof retry === 'function' ? { retry: {
+                action: event.retry.action, operationAlias: event.retry.operationAlias,
+                submissionAlias: event.retry.submissionAlias, run: retry
+            } } : undefined;
+            // Capture precedes presentation; failure in either surface is isolated.
+            global.getMessageCenter?.()?.showIncident(id, presentation);
+        } catch (_) { }
+        return id;
+    }
+    global.AppOperationDiagnostics = Object.freeze({ failure, breadcrumb });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/practiceDiagnostics.js ===== */
+(function definePracticeDiagnostics(global) {
+    'use strict';
+    if (global.AppPracticeDiagnostics) return;
+    let stylesheet;
+    try { stylesheet = new URL('../../css/incident-center.css', global.document.currentScript.src).href; } catch (_) { }
+
+    // Only semantic state and aliases enter this adapter. Business payloads and
+    // retry snapshots remain owned by the listening bridge / legacy enhancer.
+    function create(module) {
+        const reporter = global.AppDiagnostics;
+        let transport, binding, aliases, handshake;
+        const pending = new Map();
+        try { transport = global.AppDiagnosticChannel?.createChild({ reporter, store: global.AppDiagnosticStore }); } catch (_) { }
+        function correlation(submission) {
+            try {
+                const local = reporter?.correlate({ session: binding?.sessionId, suite: binding?.suiteSessionId,
+                    submission, operation: submission });
+                return aliases ? { ...local, scopeId: aliases.scopeId, session: aliases.session, suite: aliases.suite } : local;
+            } catch (_) { return undefined; }
+        }
+        function step(action, outcome, submission) {
+            try { global.AppOperationDiagnostics?.breadcrumb(module, action, outcome, correlation(submission)); } catch (_) { }
+        }
+        function failure(code, action, operation = 'unconfirmed', submission, retry, error, resource) {
+            try { return global.AppOperationDiagnostics?.failure({ code, module, action, operation,
+                correlation: correlation(submission), error, resource }, retry); } catch (_) { return null; }
+        }
+        function clear(id) {
+            const item = pending.get(id);
+            if (item) {
+                global.clearTimeout(item.timer);
+                item.finish?.({ verified: item.committed === true, operation: item.committed ? 'committed' : 'unconfirmed' });
+            }
+            pending.delete(id);
+            return item;
+        }
+        function connect(state, data) {
+            try {
+                const next = { window: state.parentWindow, origin: state.parentOrigin,
+                    allowOpaqueOrigin: state.parentOriginIsOpaque, sessionId: state.sessionId,
+                    suiteSessionId: state.suiteSessionId, windowSessionToken: state.windowSessionToken };
+                if (!binding || Object.keys(next).some(key => next[key] !== binding[key])) {
+                    pending.forEach((_, id) => clear(id));
+                    binding = next;
+                }
+                const candidate = reporter?.correlate(undefined, data?.diagnosticCorrelation);
+                aliases = candidate?.scopeId !== 'unknown' && candidate?.session !== 'unknown' ? candidate : null;
+                global.clearTimeout(handshake);
+                transport?.connect(binding);
+                step('handshake', 'succeeded');
+            } catch (_) { }
+        }
+        function watch(id, retry) {
+            try {
+                if (!id || pending.has(id)) return;
+                if (pending.size >= 200) clear(pending.keys().next().value);
+                const owner = binding;
+                const item = { retry: typeof retry === 'function' ? () => {
+                    if (binding !== owner) return { verified: false, operation: 'unconfirmed' };
+                    if (item.committed) return { verified: true, operation: 'committed' };
+                    if (pending.get(id) !== item) return { verified: false, operation: 'unconfirmed' };
+                    if (item.waiting) return item.waiting;
+                    step('retry', 'started', id);
+                    item.waiting = new Promise(resolve => {
+                        const timer = global.setTimeout(() => item.finish({ verified: false, operation: 'unconfirmed' }), 10000);
+                        item.finish = result => { global.clearTimeout(timer); item.waiting = null; resolve(result); };
+                    });
+                    const waiting = item.waiting;
+                    try { retry(); } catch (_) { item.finish({ verified: false, operation: 'unconfirmed' }); }
+                    return waiting;
+                } : undefined };
+                item.timer = global.setTimeout(() => {
+                    if (pending.get(id) !== item) return;
+                    failure('PRACTICE_CHANNEL_TIMEOUT', 'submit', 'unconfirmed', id, item.retry);
+                }, 10000);
+                pending.set(id, item);
+                step('submit', 'unconfirmed', id);
+            } catch (_) { }
+        }
+        function outcome(id, committed, operation, causeCode) {
+            try {
+                const item = pending.get(id);
+                if (!item) return;
+                if (committed) { item.committed = true; clear(id); step('acknowledgement', 'succeeded', id); step('storage-confirmed', 'succeeded', id); }
+                else {
+                    global.clearTimeout(item.timer);
+                    item.finish?.({ verified: false, operation: 'unconfirmed' });
+                    // A negative reply after replay cannot disprove an earlier write.
+                    const error = new Error('Practice persistence was not confirmed');
+                    if (global.AppDiagnosticContract?.CAUSE_CODES.includes(causeCode)) {
+                        error.name = 'AppDataError'; error.code = causeCode;
+                    }
+                    failure('PRACTICE_SAVE_FAILED', 'submit', operation === 'not-committed' ? 'not-committed' : 'unconfirmed', id, item.retry, error);
+                }
+            } catch (_) { }
+        }
+        function ready(parent) {
+            try {
+                reporter?.markReady();
+                step('initialize', 'succeeded');
+                if (parent && parent !== global && !binding && !handshake) handshake = global.setTimeout(() => {
+                    if (!binding) failure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', 'not-committed');
+                }, 10000);
+                installAccess();
+            } catch (_) { }
+        }
+        return Object.freeze({ connect, correlation, step, failure, watch, outcome, ready,
+            access() { try { installAccess(); } catch (_) { } },
+            dispose() {
+                pending.forEach((_, id) => clear(id)); global.clearTimeout(handshake);
+                try { transport?.dispose(); } catch (_) { }
+            } });
+    }
+
+    function installAccess() {
+        const doc = global.document;
+        if (!doc?.body || doc.getElementById('practice-diagnostics-access')) return;
+        if (stylesheet && !doc.querySelector('link[href$="css/incident-center.css"]')) {
+            const link = doc.createElement('link');
+            link.rel = 'stylesheet';
+            global.AppDiagnostics?.declareResource(link, { url: stylesheet, optional: false });
+            link.href = stylesheet;
+            (doc.head || doc.body).appendChild(link);
+        }
+        // The frame still needs styles for its own actionable incident dialogs.
+        // Its wrapper owns the visible history entry and retains one-hop evidence.
+        try {
+            if (global.parent !== global && global.parent?.document?.documentElement?.dataset.listeningWrapper === 'true'
+                && global.parent.AppDiagnosticExport) return;
+        } catch (_) { }
+        const button = doc.createElement('button');
+        button.id = 'practice-diagnostics-access';
+        button.type = 'button';
+        button.textContent = 'Errors and diagnostics';
+        button.style.cssText = 'position:fixed;top:8px;right:8px;z-index:10001;padding:6px 10px;background:#fff;color:#172033;border:1px solid #667085;border-radius:6px;font:13px system-ui';
+        button.addEventListener('click', async () => {
+            try {
+                const center = global.getMessageCenter?.();
+                if (center?.showIncidentHistory) { center.showIncidentHistory(); return; }
+            } catch (_) { }
+            // Passive, selectable fallback remains usable without the shared UI.
+            try {
+                const result = await global.AppDiagnosticExport?.exportJSON();
+                let area = doc.getElementById('practice-diagnostic-text');
+                if (!area) {
+                    area = doc.createElement('textarea');
+                    area.id = 'practice-diagnostic-text';
+                    area.setAttribute('aria-label', 'Local diagnostic report');
+                    area.style.cssText = 'position:fixed;inset:50px 5% 5%;width:90%;z-index:10002;background:white;color:black';
+                    doc.body.appendChild(area);
+                }
+                area.value = result?.json || result?.text || global.AppDiagnostics.exportText();
+                area.focus(); area.select();
+            } catch (_) { }
+        });
+        doc.body.appendChild(button);
+    }
+    global.AppPracticeDiagnostics = Object.freeze({ create });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/presentation/incident-center.js ===== */
+(function attachIncidentCenter(global) {
+    'use strict';
+
+    const LIMITS = Object.freeze({ notices: 5, dialogs: 5, groups: 20, identities: 200, aggregationMs: 60000 });
+    const NOTICE = '诊断信息不包含答案，也不是练习备份。关闭提示仅表示已知悉，不代表操作成功。';
+    const ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;
+    const TITLES = { APP_BOOT_FAILED: '应用启动失败', RESOURCE_LOAD_FAILED: '所需资源加载失败',
+        PRACTICE_SAVE_FAILED: '练习保存异常', RECOVERY_SAVE_FAILED: '恢复快照保存异常',
+        PRACTICE_CHANNEL_TIMEOUT: '练习通信超时', DATA_IMPORT_FAILED: '数据导入失败',
+        DATA_EXPORT_FAILED: '数据导出失败', UNEXPECTED_RUNTIME_ERROR: '操作遇到异常' };
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; } catch (_) { return undefined; }
+    }
+    function isSave(event) {
+        return ['PRACTICE_SAVE_FAILED', 'RECOVERY_SAVE_FAILED'].includes(event.code)
+            || ['submit', 'save', 'save-draft', 'save-recovery'].includes(event.action);
+    }
+    function outcome(event, operation = event.persistence.operation) {
+        const subject = event.action === 'save-draft' ? '本次草稿'
+            : event.code === 'RECOVERY_SAVE_FAILED' || event.action === 'save-recovery' ? '本次恢复快照'
+                : event.action === 'submit' || event.code === 'PRACTICE_SAVE_FAILED' ? '本次练习提交' : '本次保存';
+        if (isSave(event)) {
+            if (operation === 'committed') return subject + '已确认保存；相关操作仍有异常，请查看详情。';
+            if (operation === 'not-committed') return subject + '已确认未保存。请保留此页面。';
+            return subject + '尚未确认保存。请保留此页面。';
+        }
+        return operation === 'committed' ? '本次操作已确认提交，但仍有异常需要查看。'
+            : operation === 'not-committed' ? '本次操作已确认未提交。' : '本次操作结果尚未确认。';
+    }
+    function kind(event) {
+        const requested = event.notification.kind;
+        if (requested === 'none' || requested === 'startup') return requested;
+        if (event.notification.requiresDismissal || (isSave(event) && event.persistence.operation === 'unconfirmed')) return 'dialog';
+        return requested;
+    }
+    function groupingKey(event) {
+        return JSON.stringify([event.fingerprint, event.module, event.action, event.windowId,
+            event.correlation, event.persistence.operation, kind(event)]);
+    }
+    function sameOperation(left, right) {
+        return left && right && left.operationAlias === right.operationAlias
+            && left.submissionAlias === right.submissionAlias;
+    }
+    function node(tag, text, className) {
+        const result = global.document.createElement(tag);
+        if (text !== undefined) result.textContent = text;
+        if (className) result.className = className;
+        return result;
+    }
+    function button(label, handler) {
+        const result = node('button', label);
+        result.type = 'button';
+        result.addEventListener('click', () => { try { Promise.resolve(handler()).catch(() => {}); } catch (_) { } });
+        return result;
+    }
+
+    class IncidentCenter {
+        constructor(options = {}) {
+            this.transient = options.transient || (() => {});
+            this.now = options.now || (() => Date.now());
+            this.groups = new Map();
+            this.seen = new Map();
+            this.attempts = new Map();
+            this.queue = [];
+            this.overflow = 0;
+            this.root = null;
+            this.dialog = null;
+            this.returnFocus = null;
+            this.inertNodes = [];
+            this.fallbackText = '';
+            this.normalizer = global.AppDiagnosticContract?.createNormalizer();
+            this.reporter = global.AppDiagnostics || global.AppDiagnosticBootstrap?.current();
+            this.unsubscribe = this.reporter?.subscribe?.((event) => this.show(event));
+            try { this.reporter?.snapshot().events.forEach((event) => this.show(event)); } catch (_) { }
+        }
+
+        report(input, presentation = {}) {
+            try {
+                const data = {};
+                ['code', 'module', 'action', 'error', 'newOccurrence', 'resource', 'correlation', 'correlationAliases',
+                    'persistence', 'retry', 'collection', 'breadcrumbs', 'cancelled'].forEach((key) => { data[key] = field(input, key); });
+                const impact = field(presentation, 'impact');
+                data.notification = { kind: impact === 'expected' || impact === 'recovered' || data.cancelled === true
+                    || (data.code === 'RESOURCE_LOAD_FAILED' && field(data.resource, 'optional') === true) ? 'none'
+                    : data.code === 'APP_BOOT_FAILED' ? 'startup'
+                        : isSave(data) && field(data.persistence, 'operation') !== 'committed'
+                            && field(data.persistence, 'operation') !== 'not-committed' ? 'dialog' : 'persistent' };
+                // The reporter owns identity, privacy and capture before any presentation.
+                const id = this.reporter?.report(data);
+                if (id) this.show(id, presentation);
+                return id || null;
+            } catch (_) { return null; }
+        }
+
+        show(reference, presentation = {}) {
+            let event;
+            try {
+                event = this.normalizer?.sanitizeEvent(typeof reference === 'string' ? this.reporter?.getIncident(reference) : reference);
+                if (!event) return null;
+                const eventKind = kind(event);
+                // Startup has an independent early panel, including export without this UI.
+                if (eventKind === 'none') return event.eventId;
+                if (eventKind === 'startup') { this.deferToStartup(); return event.eventId; }
+                const time = this.now();
+                const previous = this.seen.get(event.eventId);
+                const key = groupingKey(event);
+                let item = previous && this.groups.get(previous.id);
+                let regrouped = false;
+                let dismissed = false;
+                if (item && item.key !== key && item.count > 1) {
+                    dismissed = item.dismissed;
+                    this.detachMember(item, event.eventId);
+                    item = null;
+                    regrouped = true;
+                }
+                if (item) {
+                    if (item.event.eventId === event.eventId) {
+                        if (item.key !== key) { item.operation = undefined; item.actionStatus = ''; }
+                        item.event = event;
+                        item.key = key;
+                    }
+                    item.kind = eventKind;
+                } else if (!previous || regrouped) {
+                    item = Array.from(this.groups.values()).find((candidate) => candidate.key === key
+                        && (!dismissed || candidate.dismissed)
+                        && time >= candidate.started && time - candidate.started < LIMITS.aggregationMs);
+                    if (item) item.count = Math.min(Number.MAX_SAFE_INTEGER, item.count + 1);
+                    else {
+                        if (this.groups.size >= LIMITS.groups) {
+                            const expired = Array.from(this.groups.values()).find((candidate) =>
+                                (candidate.dismissed || candidate.kind === 'transient') && candidate.id !== this.dialog?.item?.id);
+                            if (expired) this.groups.delete(expired.id);
+                        }
+                        if (this.groups.size < LIMITS.groups) {
+                            item = { id: event.eventId, event, key, started: time, kind: eventKind, count: 1,
+                                dismissed, transientShown: false, retry: null, busy: false, actionStatus: '' };
+                            this.groups.set(item.id, item);
+                        } else this.overflow = Math.min(Number.MAX_SAFE_INTEGER, this.overflow + 1);
+                    }
+                }
+                if (item || !previous || regrouped) {
+                    this.seen.set(event.eventId, { id: item?.id || event.eventId, event });
+                    if (this.seen.size > LIMITS.identities) this.seen.delete(this.seen.keys().next().value);
+                }
+                if (item) {
+                    // Functions stay only in bounded page UI state, never diagnostic records.
+                    const retry = field(presentation, 'retry');
+                    if (retry && event.eventId === item.id) item.retry = this.safeRetry(event, retry);
+                    this.refreshRetry(item);
+                    if (!item.dismissed && eventKind === 'transient' && !item.transientShown) {
+                        if (item.count === 1) this.transient(TITLES[event.code] + '。' + outcome(event), 'info');
+                        item.transientShown = true;
+                    }
+                    if (!item.dismissed && eventKind === 'dialog' && item.id !== this.dialog?.item?.id && !this.queue.includes(item.id)) {
+                        if (this.queue.length < LIMITS.dialogs) this.queue.push(item.id);
+                        // All other incidents remain reachable through history, without replay.
+                    }
+                }
+                this.render();
+                this.advance();
+                return item?.id || event.eventId;
+            } catch (_) {
+                this.fallback(event);
+                return event?.eventId || null;
+            }
+        }
+
+        detachMember(item, eventId) {
+            item.count--;
+            if (item.id !== eventId) return;
+            // Keep the old group's reference attached to a remaining observation.
+            // Identity snapshots share the existing bounded 200-entry bookkeeping.
+            const survivor = Array.from(this.seen.values()).find((entry) => entry.id === item.id && entry.event.eventId !== eventId);
+            this.groups.delete(item.id);
+            if (survivor) {
+                item.id = survivor.event.eventId;
+                item.event = survivor.event;
+                item.retry = null;
+                item.operation = undefined;
+                item.actionStatus = '';
+                this.groups.set(item.id, item);
+                for (const entry of this.seen.values()) if (entry.id === eventId) entry.id = item.id;
+                this.queue = this.queue.map((id) => id === eventId ? item.id : id);
+                this.refreshRetry(item);
+            } else {
+                // Old members may have aged out of UI bookkeeping; passive history
+                // retains them without displaying the enriched ID under an old code.
+                this.queue = this.queue.filter((id) => id !== eventId);
+                if (this.dialog?.item === item) this.removeDialog();
+            }
+        }
+
+        safeRetry(event, action) {
+            const run = field(action, 'run');
+            if (!event.retry.available || typeof run !== 'function' || event.persistence.operation === 'committed'
+                || field(action, 'action') !== event.retry.action
+                || field(action, 'operationAlias') !== event.retry.operationAlias
+                || field(action, 'submissionAlias') !== event.retry.submissionAlias) return null;
+            return { run, action: event.retry.action, operationAlias: event.retry.operationAlias,
+                submissionAlias: event.retry.submissionAlias };
+        }
+
+        validatedRetry(item) {
+            if (!item.retry) return null;
+            try {
+                item.retry = this.safeRetry(item.event, item.retry);
+                const current = this.reporter?.getIncident(item.id);
+                if (current) item.retry = this.safeRetry(current, item.retry);
+            } catch (_) { item.retry = null; }
+            if (!item.retry) item.actionStatus = '';
+            return item.retry;
+        }
+
+        refreshRetry(item) {
+            const retry = this.validatedRetry(item);
+            // Attempts belong to incidents/operations, not mutable presentation groups.
+            const busy = this.attempts.has(item.id) || Array.from(this.attempts.values())
+                .some((attempt) => sameOperation(attempt.retry, retry));
+            if (busy) item.actionStatus = '正在检查并重试原操作，请保留此页面。';
+            else if (item.busy) item.actionStatus = '';
+            item.busy = busy;
+            return retry;
+        }
+
+        async retry(item) {
+            const retry = this.refreshRetry(item);
+            if (!retry || item.busy || item.count !== 1 || this.attempts.size >= LIMITS.groups
+                || (item.operation || item.event.persistence.operation) === 'committed') return;
+            const id = item.id;
+            const key = item.key;
+            this.attempts.set(id, { retry });
+            this.refreshRetry(item);
+            let result;
+            let failed = false;
+            try {
+                this.refreshDialog();
+                result = await retry.run();
+            } catch (_) { failed = true; }
+            finally {
+                this.attempts.delete(id);
+                // Clear every replacement control, including a detached/evicted item.
+                for (const current of new Set([item, ...this.groups.values(), this.dialog?.item])) {
+                    if (current) this.refreshRetry(current);
+                }
+                const current = this.groups.get(id);
+                const bound = current && this.validatedRetry(current);
+                if (current?.key === key && current.count === 1 && bound?.run === retry.run
+                    && bound.action === retry.action && sameOperation(bound, retry)) {
+                    const operation = field(result, 'operation');
+                    if (failed) current.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。';
+                    else if (field(result, 'verified') === true && ['committed', 'not-committed', 'unconfirmed'].includes(operation)) {
+                        current.operation = operation;
+                        current.actionStatus = outcome(current.event, operation);
+                    } else current.actionStatus = '重试尚未提供已验证的结果，请保留此页面。';
+                }
+                try { this.render(); } catch (_) { this.fallback(item.event); }
+            }
+        }
+
+        render() {
+            const active = Array.from(this.groups.values()).filter((item) => !item.dismissed && item.kind !== 'transient');
+            if (!active.length && !this.overflow && !this.root) return;
+            if (!this.root || !this.root.isConnected) {
+                this.announcement = null;
+                this.root = node('section', undefined, 'incident-notifications');
+                this.root.id = 'incident-notifications';
+                this.root.setAttribute('aria-label', '操作异常通知');
+                global.document.body.appendChild(this.root);
+                if (this.dialog) this.makeInert(this.root);
+            }
+            // Keep one stable live region; announce text, never a subtree of controls.
+            if (!this.announcement) {
+                this.announcement = node('p', '', 'incident-announcement');
+                this.announcement.setAttribute('role', 'status');
+                this.announcement.setAttribute('aria-live', 'polite');
+                this.root.appendChild(this.announcement);
+                this.cards = node('div');
+                this.root.appendChild(this.cards);
+                this.historyButton = button('查看诊断历史', () => this.openHistory());
+                this.root.appendChild(this.historyButton);
+            }
+            const focused = global.document.activeElement;
+            const focusId = this.cards.contains(focused) ? focused?.getAttribute('data-incident') : null;
+            this.cards.replaceChildren();
+            for (const item of active.slice(0, LIMITS.notices)) {
+                const card = node('article', undefined, 'incident-notice');
+                card.appendChild(node('strong', TITLES[item.event.code]));
+                card.appendChild(node('p', outcome(item.event, item.operation)));
+                card.appendChild(node('p', '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : ''), 'incident-reference'));
+                const details = button('查看详情', () => this.open(item));
+                details.setAttribute('data-incident', item.id);
+                card.appendChild(details);
+                this.cards.appendChild(card);
+                if (focusId === item.id) details.focus();
+            }
+            const hidden = Math.max(0, active.length - LIMITS.notices) + this.overflow;
+            const text = active.length || this.overflow ? '有操作异常需要查看。' + (hidden ? '另有 ' + hidden + ' 项，请查看诊断历史。' : '') : '提示已关闭，诊断历史仍可查看。';
+            if (this.announcement.textContent !== text) this.announcement.textContent = text;
+            this.refreshDialog();
+        }
+
+        advance() {
+            if (this.dialog || this.startupActive()) return;
+            while (this.queue.length) {
+                const item = this.groups.get(this.queue.shift());
+                if (item && !item.dismissed && item.kind === 'dialog') { this.open(item); return; }
+            }
+        }
+
+        startupActive() {
+            return global.document?.getElementById('diagnostic-startup-failure')?.getAttribute('role') === 'alert';
+        }
+
+        deferToStartup() {
+            if (!this.startupActive()) return;
+            const item = this.dialog?.item;
+            if (item && !item.dismissed) {
+                this.queue = [item.id, ...this.queue.filter((id) => id !== item.id)].slice(0, LIMITS.dialogs);
+            }
+            this.removeDialog();
+            // The standalone startup panel must remain keyboard-accessible. Resume
+            // queued dialogs only after the collector explicitly marks startup ready.
+            const panel = global.document.getElementById('diagnostic-startup-failure');
+            if (!this.startupObserver && global.MutationObserver) {
+                this.startupObserver = new global.MutationObserver(() => {
+                    if (this.startupActive()) return;
+                    this.startupObserver.disconnect();
+                    this.startupObserver = null;
+                    try { this.advance(); } catch (_) { this.fallback(item?.event); }
+                });
+                this.startupObserver.observe(panel, { attributes: true, attributeFilter: ['role'] });
+            }
+        }
+
+        makeInert(element) {
+            this.inertNodes.push({ element, inert: element.inert });
+            element.inert = true;
+        }
+
+        shell(title, item) {
+            if (this.dialog) return null;
+            const doc = global.document;
+            if (!this.returnFocus) this.returnFocus = doc.activeElement;
+            const overlay = node('div', undefined, 'incident-backdrop');
+            const panel = node('section', undefined, 'incident-dialog');
+            panel.setAttribute('role', item?.kind === 'dialog' ? 'alertdialog' : 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-labelledby', 'incident-dialog-title');
+            panel.setAttribute('aria-describedby', 'incident-dialog-description');
+            const heading = node('h2', title);
+            heading.id = 'incident-dialog-title';
+            heading.tabIndex = -1;
+            const description = node('p', NOTICE);
+            description.id = 'incident-dialog-description';
+            panel.appendChild(heading);
+            panel.appendChild(description);
+            overlay.appendChild(panel);
+            doc.body.appendChild(overlay);
+            this.dialog = { overlay, panel, heading, item };
+            for (const element of Array.from(doc.body.children)) if (element !== overlay) this.makeInert(element);
+            this.keyHandler = (event) => {
+                if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); return; }
+                if (event.key !== 'Tab') return;
+                const targets = Array.from(panel.querySelectorAll('button:not([disabled]):not([hidden]), textarea:not([hidden]), summary, [tabindex="0"]'));
+                const first = targets[0] || heading;
+                const last = targets[targets.length - 1] || heading;
+                if (event.shiftKey && (doc.activeElement === first || doc.activeElement === heading || !panel.contains(doc.activeElement))) {
+                    event.preventDefault(); last.focus();
+                } else if (!event.shiftKey && (doc.activeElement === last || doc.activeElement === heading || !panel.contains(doc.activeElement))) {
+                    event.preventDefault(); first.focus();
+                }
+            };
+            this.focusHandler = (event) => { if (!panel.contains(event.target)) heading.focus(); };
+            doc.addEventListener('keydown', this.keyHandler, true);
+            doc.addEventListener('focusin', this.focusHandler, true);
+            return this.dialog;
+        }
+
+        open(item) {
+            if (this.dialog || this.startupActive()) return;
+            try {
+                const dialog = this.shell(TITLES[item.event.code], item);
+                dialog.outcome = node('p');
+                dialog.outcome.id = 'incident-dialog-outcome';
+                dialog.panel.setAttribute('aria-describedby', 'incident-dialog-outcome incident-dialog-description');
+                dialog.reference = node('p', undefined, 'incident-reference');
+                dialog.panel.appendChild(dialog.outcome);
+                dialog.panel.appendChild(dialog.reference);
+                dialog.status = node('p');
+                dialog.status.setAttribute('role', 'status');
+                dialog.panel.appendChild(dialog.status);
+                const technical = node('details');
+                technical.appendChild(node('summary', '技术详情（仅文本）'));
+                dialog.technical = node('pre');
+                technical.appendChild(dialog.technical);
+                dialog.panel.appendChild(technical);
+                dialog.text = this.exportTarget(dialog.panel);
+                const actions = node('div', undefined, 'incident-actions');
+                actions.appendChild(button('导出诊断', () => this.deliver(item.id, dialog.text, 'download')));
+                actions.appendChild(button('复制摘要', () => this.deliver(item.id, dialog.text, 'copySummary')));
+                dialog.retryButton = button('安全重试原操作', () => this.retry(item));
+                actions.appendChild(dialog.retryButton);
+                actions.appendChild(button('关闭提示（不代表已保存）', () => this.close()));
+                dialog.panel.appendChild(actions);
+                this.refreshDialog();
+                dialog.heading.focus();
+            } catch (_) { this.removeDialog(); this.fallback(item.event); }
+        }
+
+        refreshDialog() {
+            const dialog = this.dialog;
+            const item = dialog?.item;
+            if (!item || !dialog.outcome) return;
+            dialog.heading.textContent = TITLES[item.event.code];
+            dialog.panel.setAttribute('role', item.kind === 'dialog' ? 'alertdialog' : 'dialog');
+            dialog.technical.textContent = JSON.stringify(item.event, null, 2);
+            dialog.outcome.textContent = outcome(item.event, item.operation);
+            dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
+            dialog.retryButton.hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            dialog.retryButton.disabled = item.busy || this.attempts.size >= LIMITS.groups;
+            dialog.status.textContent = item.actionStatus;
+        }
+
+        exportTarget(parent) {
+            const text = node('textarea');
+            text.readOnly = true;
+            text.rows = 6;
+            text.hidden = true;
+            text.setAttribute('aria-label', '可复制的诊断文本');
+            parent.appendChild(text);
+            return text;
+        }
+
+        async deliver(eventId, text, action) {
+            try {
+                const exporter = global.AppDiagnosticExport;
+                if (typeof exporter?.[action] === 'function') {
+                    // Expose the provided target before the exporter attempts focus/select.
+                    text.hidden = false;
+                    const result = await exporter[action](eventId ? { eventId } : {}, { textTarget: text });
+                    if (result?.report && !result.report.issues?.includes('export-generation-failed')) {
+                        if (result.text) text.value = result.text;
+                        if (result.status === 'text-fallback') { text.focus(); text.select(); }
+                        return result;
+                    }
+                }
+            } catch (_) { }
+            const value = this.minimalText(eventId);
+            this.fallbackText = value;
+            try { text.hidden = false; text.value = value; text.focus(); text.select(); } catch (_) { }
+            return { status: 'text-fallback', text: value };
+        }
+
+        minimalText(eventId) {
+            try { if (this.reporter?.exportText) return this.reporter.exportText(eventId); } catch (_) { }
+            const event = this.groups.get(eventId)?.event;
+            return NOTICE + '\n事件编号：' + (ID.test(eventId) ? eventId : '不可用') + (event ? '\n' + JSON.stringify(event) : '');
+        }
+
+        async openHistory() {
+            if (this.dialog || this.startupActive()) return;
+            try {
+                const dialog = this.shell('诊断历史', null);
+                const info = node('p', '正在读取保留的诊断记录…');
+                dialog.panel.appendChild(info);
+                const list = node('div', undefined, 'incident-history');
+                dialog.panel.appendChild(list);
+                const text = this.exportTarget(dialog.panel);
+                dialog.panel.appendChild(button('导出保留的诊断历史', () => this.deliver(null, text, 'download')));
+                dialog.panel.appendChild(button('关闭历史', () => this.close()));
+                dialog.heading.focus();
+                let snapshot;
+                try { snapshot = await global.AppDiagnosticExport.snapshot(); } catch (_) { snapshot = this.reporter?.snapshot(); }
+                if (this.dialog !== dialog) return;
+                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean).reverse();
+                info.textContent = '保留 ' + events.length + ' 条记录。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                if (snapshot?.transport?.aggregation === 'incomplete') {
+                    info.textContent += ' 跨窗口诊断汇总不完整，可导出本页已保留的记录。';
+                }
+                // Paginate the bounded export snapshot; DOM size stays small even with 2,000 events.
+                let offset = 0;
+                const previous = button('上一页', () => { offset = Math.max(0, offset - 20); renderPage(); });
+                const more = button('下一页', () => { offset += 20; renderPage(); });
+                const renderPage = () => {
+                    list.replaceChildren();
+                    for (const event of events.slice(offset, offset + 20)) {
+                        const entry = button(TITLES[event.code] + ' · ' + event.eventId + ' · ' + outcome(event), () => {
+                            this.removeDialog();
+                            this.open({ id: event.eventId, event, count: 1, kind: kind(event), retry: null, busy: false, actionStatus: '' });
+                        });
+                        list.appendChild(entry);
+                    }
+                    previous.disabled = offset === 0;
+                    more.disabled = offset + 20 >= events.length;
+                };
+                renderPage();
+                dialog.panel.appendChild(previous);
+                dialog.panel.appendChild(more);
+            } catch (_) { this.removeDialog(); this.fallback(); }
+        }
+
+        removeDialog() {
+            if (!this.dialog) return;
+            global.document.removeEventListener('keydown', this.keyHandler, true);
+            global.document.removeEventListener('focusin', this.focusHandler, true);
+            this.dialog.overlay.remove();
+            this.dialog = null;
+            for (const { element, inert } of this.inertNodes) element.inert = inert;
+            this.inertNodes = [];
+        }
+
+        close() {
+            const item = this.dialog?.item;
+            if (item) {
+                item.dismissed = true;
+                const original = this.groups.get(item.id);
+                if (original) original.dismissed = true;
+                this.queue = this.queue.filter((id) => id !== item.id);
+            }
+            this.removeDialog();
+            try { this.render(); this.advance(); } catch (_) { this.fallback(item?.event); }
+            if (!this.dialog) {
+                const target = this.returnFocus;
+                this.returnFocus = null;
+                if (target?.isConnected && !target.inert && typeof target.focus === 'function') target.focus();
+                if (global.document.activeElement === global.document.body) this.historyButton?.focus();
+            }
+        }
+
+        fallback(event) {
+            // Independent DOM/text path: no template, stylesheet, app readiness or logger.
+            const id = event?.eventId;
+            this.fallbackText = (event ? TITLES[event.code] + '\n' + outcome(event) + '\n' : '') + this.minimalText(id);
+            try {
+                this.removeDialog();
+                let root = global.document.getElementById('incident-minimal-fallback');
+                if (!root) { root = node('section'); root.id = 'incident-minimal-fallback'; global.document.body.appendChild(root); }
+                root.setAttribute('role', 'alert');
+                root.style.cssText = 'position:fixed;inset:12px 12px auto;z-index:2147483646;max-height:85vh;overflow:auto;background:white;color:#17202a;padding:16px;border:2px solid #a11;font:16px/1.5 system-ui';
+                root.replaceChildren(node('p', (event ? TITLES[event.code] + '。' + outcome(event) : '诊断界面暂时不可用。') + NOTICE));
+                root.appendChild(node('p', '事件编号：' + (id || '请查看诊断历史')));
+                const text = this.exportTarget(root);
+                text.hidden = false;
+                text.value = this.fallbackText;
+                text.style.cssText = 'display:block;width:100%;color:#17202a;background:white';
+                root.appendChild(button('导出诊断或显示文本', () => this.deliver(id, text, 'download')));
+                root.appendChild(button('导出保留的诊断历史', () => this.deliver(null, text, 'download')));
+                root.appendChild(button('关闭提示（不代表已保存）', () => {
+                    const item = this.groups.get(id);
+                    if (item) item.dismissed = true;
+                    this.queue = this.queue.filter((entry) => entry !== id);
+                    root.remove();
+                    this.returnFocus?.focus?.();
+                    this.returnFocus = null;
+                    try { this.advance(); } catch (_) { }
+                }));
+            } catch (_) {
+                try {
+                    let text = global.document.getElementById('incident-minimal-text');
+                    if (!text) {
+                        text = node('pre');
+                        text.id = 'incident-minimal-text';
+                        text.tabIndex = 0;
+                        text.setAttribute('role', 'alert');
+                        text.style.cssText = 'position:fixed;inset:12px;z-index:2147483646;overflow:auto;white-space:pre-wrap;background:white;color:#17202a;padding:16px';
+                        global.document.body.appendChild(text);
+                    }
+                    text.textContent = this.fallbackText;
+                } catch (_) { }
+            }
+        }
+    }
+    IncidentCenter.LIMITS = LIMITS;
+    global.IncidentCenter = IncidentCenter;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/presentation/message-center.js ===== */
+(function (global) {
+    'use strict';
+
+    function ensureContainer(containerId) {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        let node = document.getElementById(containerId);
+        if (!node) {
+            node = document.createElement('div');
+            node.id = containerId;
+            node.className = 'message-container';
+            document.body.appendChild(node);
+        }
+        return node;
+    }
+
+    function createMessageNode(message, type) {
+        const note = document.createElement('div');
+        note.className = 'message ' + (type || 'info') + ' message-entering';
+        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+        const indicator = document.createElement('span');
+        indicator.className = 'message-indicator';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        const text = document.createElement('span');
+        text.className = 'message-text';
+        text.textContent = String(message || '');
+        note.title = text.textContent;
+
+        note.appendChild(indicator);
+        note.appendChild(text);
+        return note;
+    }
+
+    class MessageCenter {
+        constructor(options = {}) {
+            this.options = Object.assign({
+                containerId: 'message-container'
+            }, options || {});
+            this.activeMessage = null;
+            this.activeTimer = null;
+            this.incidents = global.IncidentCenter ? new global.IncidentCenter({ transient: (...args) => this.show(...args) }) : null;
+        }
+
+        showIncident(eventOrId, presentation) {
+            return this.incidents?.show(eventOrId, presentation) || null;
+        }
+
+        reportIncident(input, presentation) {
+            return this.incidents?.report(input, presentation) || null;
+        }
+
+        showIncidentHistory() {
+            return this.incidents?.openHistory();
+        }
+
+        show(message, type = 'info', duration = 4000) {
+            if (typeof document === 'undefined') {
+                if (typeof console !== 'undefined') {
+                    const logMethod = type === 'error' ? 'error' : 'log';
+                    console[logMethod]('[Message:' + type + ']', message);
+                }
+                return null;
+            }
+
+            const container = ensureContainer(this.options.containerId);
+            if (!container) {
+                return null;
+            }
+
+            const note = createMessageNode(message, type);
+            this.dismiss(180);
+            container.appendChild(note);
+            this.activeMessage = note;
+            window.setTimeout(() => {
+                if (note.parentNode && !note.classList.contains('message-leaving')) {
+                    note.classList.remove('message-entering');
+                    note.classList.add('message-visible');
+                }
+            }, 760);
+
+            const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
+            this.activeTimer = window.setTimeout(() => {
+                this.dismiss(480, note);
+            }, timeout);
+
+            return note;
+        }
+
+        dismiss(delay = 480, target) {
+            const note = target || this.activeMessage;
+            if (!note) {
+                return;
+            }
+
+            if (!target && this.activeTimer) {
+                window.clearTimeout(this.activeTimer);
+                this.activeTimer = null;
+            }
+
+            note.classList.add('message-leaving');
+            note.classList.remove('message-entering', 'message-visible');
+            window.setTimeout(() => {
+                if (note.parentNode) {
+                    note.parentNode.removeChild(note);
+                }
+                if (this.activeMessage === note) {
+                    this.activeMessage = null;
+                    this.activeTimer = null;
+                }
+            }, delay);
+        }
+    }
+
+    MessageCenter.getInstance = function getInstance(options = {}) {
+        if (!global.__messageCenterInstance) {
+            global.__messageCenterInstance = new MessageCenter(options);
+        }
+        return global.__messageCenterInstance;
+    };
+
+    if (!global.MessageCenter) {
+        global.MessageCenter = MessageCenter;
+    }
+
+    const sharedInstance = MessageCenter.getInstance();
+
+    if (typeof global.getMessageCenter !== 'function') {
+        global.getMessageCenter = function getMessageCenter() {
+            return sharedInstance;
+        };
+    }
+
+    global.showMessage = function showMessage(message, type, duration) {
+        return sharedInstance.show(message, type, duration);
+    };
+    global.showIncident = (eventOrId, presentation) => sharedInstance.showIncident(eventOrId, presentation);
+})(typeof window !== 'undefined' ? window : this);
 
 
 /* ===== js/data/practiceRecordSource.js ===== */
@@ -9984,9 +11969,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
 /* ===== js/listeningRecordBridge.js ===== */
 (function () {
   'use strict';
+  if (window.__listeningBridgeGetState) return;
 
   var TAG = '[ListeningBridge]';
   var HOST_MESSAGE_SOURCE = 'exam_host';
+  var diagnostics;
+  try { diagnostics = window.AppPracticeDiagnostics?.create('listening'); } catch (_) { }
 
   function deriveParentOriginFromReferrer() {
     try {
@@ -10085,6 +12073,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       var secureData = Object.assign({}, data || {}, {
         windowSessionToken: state.windowSessionToken || null
       });
+      try { secureData.diagnosticCorrelation = diagnostics?.correlation(data && data.submissionId); } catch (_) { }
       pw.postMessage({ type: type, data: secureData, source: 'listening_record_bridge', timestamp: Date.now() }, targetOrigin);
       return true;
     } catch (e) {
@@ -10896,11 +12885,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       pending.payload = buildBridgePayload(pending.details, pending);
       pending.payload.submissionId = pending.submissionId;
     }
+    diagnostics?.watch(pending.submissionId, function retryOriginalCompletion() {
+      if (state.pendingCompletions[key] !== pending) return false;
+      return sendPendingCompletion('manual_retry', key);
+    });
     log(
       'sending PRACTICE_COMPLETE, submissionId=' + pending.submissionId
       + ' correct=' + pending.payload.scoreInfo.correct + '/' + pending.payload.scoreInfo.total
     );
-    return sendMessage('PRACTICE_COMPLETE', pending.payload);
+    var delivered = sendMessage('PRACTICE_COMPLETE', pending.payload);
+    if (!delivered) diagnostics?.failure('PRACTICE_CHANNEL_TIMEOUT', 'submit', 'unconfirmed', pending.submissionId);
+    return delivered;
   }
 
   function onComplete(options) {
@@ -10908,6 +12903,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     var suiteId = resolveCompletionSuiteId(options);
     if (suiteId) options.suiteId = suiteId;
     var completionKey = completionKeyForSuite(suiteId);
+    if (suiteId) diagnostics?.step('suite-navigation', 'started');
     if (isCompletionSettled(completionKey)) {
       log('already completed, skipping key=' + completionKey);
       return true;
@@ -10930,6 +12926,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       }
     }
     if (!details.length) {
+      diagnostics?.step('submit', 'cancelled');
       warn('no details extracted, cannot complete');
       return false;
     }
@@ -10944,6 +12941,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       payload: null
     };
     syncLegacyCompletionState();
+    diagnostics?.watch(state.pendingCompletions[completionKey].submissionId, function retryPendingCompletion() {
+      return sendPendingCompletion('manual_retry', completionKey);
+    });
     sendPendingCompletion(state.initialized ? 'completion_created' : 'complete_before_init', completionKey);
     scheduleCompletionRetries(options);
     return true;
@@ -11223,6 +13223,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     window.addEventListener('message', function (event) {
       if (!event || !event.data) return;
       var data = event.data;
+      if (data.type === 'IELTS_DIAGNOSTIC_V1') return;
       var type = data.type;
 
       if (type === 'INIT_SESSION' || type === 'init_exam_session') {
@@ -11263,6 +13264,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
+        diagnostics?.connect(state, payload);
         stopInitRequestLoop();
         if (String(previousSessionId || '') !== String(state.sessionId || '')) {
           Object.keys(state.pendingCompletions).forEach(function (completionKey) {
@@ -11288,6 +13290,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         if (!pending
           || String(outcome.sessionId || '') !== String(state.sessionId || '')) return;
         if (type === 'PRACTICE_SUBMIT_ACK') {
+          diagnostics?.outcome(pending.submissionId, true);
           state.completedCompletions[pendingKey] = {
             submissionId: pending.submissionId,
             suiteId: pending.suiteId || null,
@@ -11298,6 +13301,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
           syncLegacyCompletionState();
           log('PRACTICE_COMPLETE persisted, submissionId=' + outcome.submissionId);
         } else {
+          // Existing retries may already have committed; a rejection cannot
+          // establish that every attempt failed to persist.
+          diagnostics?.outcome(pending.submissionId, false, 'unconfirmed', outcome.errorCode);
           warn('PRACTICE_COMPLETE persistence failed, retrying submissionId=' + outcome.submissionId);
           scheduleCompletionRetries(pending.options || {});
         }
@@ -11353,15 +13359,20 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
 
     sendSessionReady('bootstrapped');
     startInitRequestLoop();
+    diagnostics?.ready(state.parentWindow);
   }
 
   window.__listeningBridgeComplete = onComplete;
   window.__listeningBridgeGetState = function () { return state; };
 
+  function startBridge() {
+    try { bootstrap(); }
+    catch (error) { diagnostics?.failure('APP_BOOT_FAILED', 'initialize', 'not-committed', null, null, error); }
+  }
   if (window.document.readyState === 'complete' || window.document.readyState === 'interactive') {
-    bootstrap();
+    startBridge();
   } else {
-    window.document.addEventListener('DOMContentLoaded', bootstrap);
+    window.document.addEventListener('DOMContentLoaded', startBridge);
   }
 })();
 
@@ -11371,8 +13382,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
         global.AppLazyLoader.markProvided([
     "js/diagnostics/diagnosticContract.js",
+    "js/diagnostics/bootstrapCollector.js",
+    "js/diagnostics/practiceDiagnosticBootstrap.js",
+    "js/diagnostics/diagnosticStore.js",
+    "js/diagnostics/diagnosticReporter.js",
     "js/diagnostics/diagnosticExport.js",
     "js/diagnostics/diagnosticChannel.js",
+    "js/diagnostics/operationDiagnostics.js",
+    "js/diagnostics/practiceDiagnostics.js",
+    "js/presentation/incident-center.js",
+    "js/presentation/message-center.js",
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
     "js/data/v2/dataKernel.js",
