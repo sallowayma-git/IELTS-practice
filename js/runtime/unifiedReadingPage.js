@@ -1935,9 +1935,9 @@
         );
     }
 
-    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration) {
+    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration, ownsPresentation = () => true) {
         const targetExamId = String(slot?.examId || '').trim();
-        const isCurrentActivation = () => isCurrentSuiteActivation(targetExamId, activationGeneration);
+        const isCurrentActivation = () => ownsPresentation() && isCurrentSuiteActivation(targetExamId, activationGeneration);
         if (!isCurrentActivation()) {
             return false;
         }
@@ -6464,17 +6464,16 @@
         if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
             return false;
         }
-        if (!state.submissionId) {
-            state.submissionId = createSubmissionId();
-        }
-        if (!ownsPendingSubmission(pendingSubmission)) {
-            settleSubmissionRetry('unconfirmed');
-            pendingSubmission = { id: state.submissionId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
-                examId: state.examId, parentWindow: state.parentWindow, token: state.windowSessionToken,
-                generation: state.windowSessionGeneration, type: messageType,
-                operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
-                payload: JSON.parse(JSON.stringify(payload || {})), presentation };
-        }
+        // Ordinary submission captures the editable page as a new operation.
+        // Only the incident's explicit retry may replay the original receipt key.
+        settleSubmissionRetry('unconfirmed');
+        state.submissionId = createSubmissionId();
+        pendingSubmission = { id: state.submissionId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
+            examId: state.examId, parentWindow: state.parentWindow, token: state.windowSessionToken,
+            generation: state.windowSessionGeneration, type: messageType,
+            finalSuiteSubmission: Boolean(state.simulationMode && state.simulationCtx?.isLast && state.suiteSessionId),
+            operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
+            payload: JSON.parse(JSON.stringify(payload || {})), presentation };
         return dispatchPendingSubmission(pendingSubmission);
     }
 
@@ -6497,18 +6496,13 @@
         const generation = Number(state.windowSessionGeneration);
         return {
             parentWindow: state.parentWindow || null,
-            examId: String(state.examId || ''),
+            examId: String(pendingSubmission.examId || ''),
             sessionId: String(state.sessionId || ''),
             suiteSessionId: String(state.suiteSessionId || ''),
             windowSessionToken: normalizeWindowSessionToken(state.windowSessionToken),
             windowSessionGeneration: Number.isInteger(generation) && generation > 0 ? generation : 0,
             submissionId: String(state.submissionId || ''),
-            finalSuiteSubmission: Boolean(
-                state.simulationMode
-                && state.simulationCtx
-                && state.simulationCtx.isLast
-                && state.suiteSessionId
-            )
+            finalSuiteSubmission: pendingSubmission.finalSuiteSubmission
         };
     }
 
@@ -6518,7 +6512,7 @@
         const currentGeneration = Number.isInteger(generation) && generation > 0 ? generation : 0;
         return Boolean(
             state.parentWindow === ownership.parentWindow
-            && String(state.examId || '') === ownership.examId
+            && String(pendingSubmission?.examId || '') === ownership.examId
             && String(state.sessionId || '') === ownership.sessionId
             && String(state.suiteSessionId || '') === ownership.suiteSessionId
             && normalizeWindowSessionToken(state.windowSessionToken) === ownership.windowSessionToken
@@ -6538,10 +6532,16 @@
         readingStep('acknowledgement', 'succeeded');
         readingStep('storage-confirmed', 'succeeded');
         settleSubmissionRetry('committed');
-        if (presentation && presentation.results) {
+        if (state.suite?.inline) {
+            // Navigation can finish before or during ACK presentation. Each slot
+            // owns its results; activation guards protect asynchronous explanations.
+            const slot = getActiveSuiteSlot();
+            if (slot) await restoreActiveSuiteSlotPresentation(slot, state.suite.activationGeneration,
+                () => retainsSubmissionOwnership(ownership));
+        } else if (presentation && presentation.results) {
             state.lastResults = presentation.results;
             renderResults(presentation.results);
-            await renderExplanations();
+            await renderExplanations({ isCurrent: () => retainsSubmissionOwnership(ownership) });
             if (!retainsSubmissionOwnership(ownership)) {
                 return false;
             }
@@ -7958,7 +7958,6 @@
         if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
             return;
         }
-        if (ownsPendingSubmission(pendingSubmission)) { dispatchPendingSubmission(pendingSubmission); return; }
         state.timingSubmitPending = true;
         try {
             const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { runEditedResubmission, runDelayedSuiteAcknowledgement } from './readingSubmissionReviewCases.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -38,21 +39,34 @@ const browser = await chromium.launch({ headless: true });
 const results = [];
 const errors = [];
 
-async function openPractice(host, context, base) {
+async function openPractice(host, context, base, { examId = 'p1-high-01', suite = false } = {}) {
     await host.goto(base + 'index.html?view=practice', { waitUntil: 'domcontentloaded' });
     await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
     await host.waitForFunction(() => window.app?.components.practiceRecorder?.constructor.name === 'PracticeRecorder' && typeof window.app.openExam === 'function');
     const [child] = await Promise.all([context.waitForEvent('page'),
-        host.evaluate(() => window.app.openExam('p1-high-01', { practiceMode: 'single' }))]);
+        host.evaluate(async ({ examId, suite }) => {
+            if (!suite) return window.app.openExam(examId, { practiceMode: 'single' });
+            await window.AppEntry.ensureSessionSuiteReady();
+            const index = await window.app._fetchSuiteExamIndex();
+            window.app._fetchSuiteExamIndex = async () => ['p1-low-67', 'p2-low-148', 'p3-high-32']
+                .map(id => index.find(exam => exam.id === id));
+            await window.SuitePreferenceUtils.resolveSuitePreference({ flowMode: 'simulation', frequencyScope: 'all' });
+            return window.app.startSuitePractice({ flowMode: 'simulation', frequencyScope: 'all' });
+        }, { examId, suite })]);
     await child.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState().sessionReadySent, null, { timeout: 20000 });
     await child.waitForFunction(() => AppDiagnostics.status().transport?.connection === 'connected');
+    if (suite) await child.waitForFunction(() => {
+        const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
+        return state.suiteInline && !state.suiteActivating && state.suiteSequence.length === 3;
+    });
     return child;
 }
 
 try {
     for (const [mode, base] of [['file', pathToFileURL(fixture + path.sep).href], ['http', origin + '/'], ['subpath', origin + '/app/']]) {
         for (const scenario of ['missing-bundle', 'parse-bundle', 'missing-dataset', 'rejected-initialization',
-            'lost-ack-retry', 'parent-closed', 'parent-reloaded', 'recovery-quota', 'opaque-error']) {
+            'lost-ack-retry', 'edited-after-nack', 'edited-after-timeout', 'delayed-suite-ack', 'delayed-suite-ack-open',
+            'parent-closed', 'parent-reloaded', 'recovery-quota', 'opaque-error']) {
             fs.writeFileSync(path.join(fixture, bundle), originalBundle);
             fs.writeFileSync(path.join(fixture, dataset), originalDataset);
             if (scenario === 'missing-bundle') fs.unlinkSync(path.join(fixture, bundle));
@@ -88,8 +102,15 @@ try {
                     await child.locator('#diagnostic-startup-failure button').click();
                     assert.ok((await download).suggestedFilename().includes('diagnostic'));
                 } else {
-                    child = await openPractice(host, context, base);
-                    if (scenario === 'lost-ack-retry') {
+                    child = await openPractice(host, context, base, {
+                        examId: scenario.startsWith('edited-after-') ? 'p1-low-67' : 'p1-high-01',
+                        suite: scenario.startsWith('delayed-suite-ack')
+                    });
+                    if (scenario.startsWith('edited-after-')) {
+                        await runEditedResubmission(host, child, scenario.endsWith('nack') ? 'nack' : 'timeout');
+                    } else if (scenario.startsWith('delayed-suite-ack')) {
+                        await runDelayedSuiteAcknowledgement(host, child, scenario.endsWith('-open'));
+                    } else if (scenario === 'lost-ack-retry') {
                         await host.evaluate(() => {
                             window.originalPost = window.app._postExamMessage;
                             window.app._postExamMessage = function (examId, target, type, data) {

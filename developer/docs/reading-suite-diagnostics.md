@@ -45,9 +45,12 @@ This extends business envelopes without changing diagnostic schema version 1.
 A submission captures its payload and original submission ID once in runtime
 business state. An acknowledgement timeout or negative reply means
 `unconfirmed`; it does not prove that the host failed to save. The incident's
-explicit retry and the normal submit control resend that same snapshot through
-the existing host receipt and duplicate-protection path. Diagnostic code never
-persists a practice record or reconstructs a payload from an exported event.
+explicit retry resends that same snapshot through the existing host receipt and
+duplicate-protection path. A normal Submit from the editable page captures the
+current answers and freezes the current timing again under a new submission ID.
+This supersedes the previous retry callback; an ACK for the old ID cannot confirm
+the new operation. Diagnostic code never persists a practice record or
+reconstructs a payload from an exported event.
 
 Retry ownership includes parent, session, suite, window token and generation.
 Session replacement invalidates old callbacks. Token replacement preserves the
@@ -57,6 +60,13 @@ An exact validated ACK during an active submission is the confirmation of
 a user retry can reconcile the original submission with the host's saved receipt.
 UI dismissal, diagnostic relay ACKs and diagnostic-store receipts never confirm
 learning-data persistence.
+
+Suite submissions capture final-submission ownership with the business snapshot.
+A delayed ACK can confirm that submission after inline navigation; results and
+explanations belong to the currently active slot, guarded by its activation and
+session ownership. Final draft cleanup and self-close still follow the submitted
+snapshot, even when the active passage has changed. If the browser keeps the
+window open, read-only navigation continues to show each passage's own results.
 
 Draft `postMessage` delivery is recorded as `unconfirmed`. Host receipt and durable
 recovery retain the existing B4 adapters and failure semantics. A child window
@@ -107,16 +117,21 @@ node scripts/build-bundles.mjs --check
 `developer/tests/js/readingDiagnostics.test.js` covers immutable submit retry,
 receipt outcomes, stale ownership, quota/false/missing recovery backends, trusted
 INIT installation, the full readiness deadline, resource privacy and generator
-preservation. Existing reading/suite regressions cover read-only ACK behavior,
-inline navigation, draft restoration and idempotent host receipt handling.
+preservation, editable resubmission and delayed suite ACK ownership. Existing
+reading/suite regressions cover read-only ACK behavior, inline navigation, draft
+restoration and idempotent host receipt handling.
 
 `developer/tests/e2e/reading_diagnostics.node.js` uses shipped bundles, actual host
 popups, Chromium and native `postMessage` under `file://`, HTTP root and HTTP
-subpath hosting. Its 27 scenarios exercise missing/invalid bundles, missing
+subpath hosting. Its 39 scenarios exercise missing/invalid bundles, missing
 datasets, rejected initialization, lost ACK with an explicit safe retry and one
 saved record, correlated host evidence, parent close/reload with child export,
-recovery quota and opaque browser errors. It checks export redaction, incomplete
-coverage and a real JSON download, and writes screenshots for the retry UI.
+recovery quota and opaque browser errors. Review regressions also edit answers
+after NACK/timeout and verify the real host saves the new answer and timing,
+then delay a committed suite ACK across navigation and verify correct results,
+immediate self-close and read-only navigation when close is unavailable.
+It checks export redaction, incomplete coverage and a real JSON download, and
+writes screenshots for the retry UI.
 CI runs this harness. Shared channel, notification, startup/export, suite and
 reset regressions remain relevant to the final integration.
 

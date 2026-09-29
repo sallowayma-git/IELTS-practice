@@ -50,17 +50,71 @@ test('reading timeout offers business retry with the original immutable snapshot
     assert.equal(h.hooks.beginSubmission('PRACTICE_COMPLETE', {}), false);
 });
 
-test('ordinary submit after timeout also reuses the original payload, and stale retry cannot target a replacement session', async () => {
+for (const outcome of ['timeout', 'nack']) test(`ordinary submit after ${outcome} captures edited answers under a new receipt key`, async () => {
+    const h = setup();
+    h.hooks.setTestState({ dataset: { meta: {}, questionOrder: ['q1'], answerKey: { q1: 'A' }, questionGroups: [] } });
+    await h.hooks.handleSubmit();
+    const original = h.calls.at(-1).data;
+    assert.equal(original.answers.q1, 'A');
+    if (outcome === 'timeout') h.hooks.expirePendingSubmission();
+    else await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+        source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { ...original, windowSessionToken: 'PRIVATE_TOKEN' }
+    } });
+    const oldRetry = h.presentations.at(-1).presentation.retry.run;
+    h.document.querySelectorAll('input[type="radio"][name="q1"]')[0].value = 'B';
+    await h.hooks.handleSubmit();
+    assert.equal(h.calls.at(-1).data.answers.q1, 'B');
+    assert.notEqual(h.calls.at(-1).data.submissionId, original.submissionId);
+    const count = h.calls.length;
+    assert.equal((await oldRetry()).verified, false); assert.equal(h.calls.length, count);
+    await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+        source: 'exam_host', type: 'PRACTICE_SUBMIT_ACK', data: { ...original, windowSessionToken: 'PRIVATE_TOKEN' }
+    } });
+    assert.equal(h.hooks.getTestState().submissionStatus, 'submitting', 'a superseded ACK cannot confirm the new snapshot');
+    h.hooks.expirePendingSubmission();
+});
+
+test('stale retry cannot target a replacement session', async () => {
     const h = setup();
     h.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'original' } });
     h.hooks.expirePendingSubmission();
     const oldRetry = h.presentations.at(-1).presentation.retry.run;
-    h.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'changed' } });
-    assert.equal(h.calls.at(-1).data.answers.q1, 'original');
-    h.hooks.expirePendingSubmission();
     h.hooks.setTestState({ sessionId: 'replacement', windowSessionToken: 'replacement-token', windowSessionGeneration: 2 });
     const count = h.calls.length;
     assert.equal((await oldRetry()).verified, false); assert.equal(h.calls.length, count);
+});
+
+for (const finalSubmission of [true, false]) test(`suite ACK renders the active passage and retains final=${finalSubmission} from submission`, async () => {
+    const h = setup();
+    const resultPanel = { innerHTML: '', style: {} };
+    const getElement = h.document.getElementById.bind(h.document);
+    h.document.getElementById = id => id === 'results' ? resultPanel : getElement(id);
+    h.hooks.captureDom();
+    const makeSlot = (examId, answer, order) => {
+        const dataset = { meta: {}, questionOrder: order, answerKey: {}, questionGroups: [] };
+        return { examId, dataKey: examId, dataset, draft: { answers: { q1: answer }, highlights: [] },
+            lastResults: h.hooks.buildResultsFromAnswers(dataset, { q1: answer }) };
+    };
+    const p1 = makeSlot('reading-p1', 'PASSAGE_ONE', ['q1']);
+    const p3 = makeSlot('reading-p3', 'PASSAGE_THREE', ['q1', 'q2']);
+    const submitted = finalSubmission ? p3 : p1;
+    const active = finalSubmission ? p1 : p3;
+    h.hooks.setTestState({ examId: submitted.examId, dataset: submitted.dataset, suiteSessionId: 'suite',
+        simulationMode: true, simulationCtx: { isLast: finalSubmission },
+        suite: { inline: true, activeExamId: submitted.examId, activationGeneration: 1,
+            slotsByExamId: new Map([[p1.examId, p1], [p3.examId, p3]]) } });
+    h.hooks.beginSubmission('SIMULATION_SUBMIT', {}, { results: submitted.lastResults, highlights: [] });
+    h.hooks.setTestState({ examId: active.examId, dataset: active.dataset, lastResults: active.lastResults,
+        simulationCtx: { isLast: !finalSubmission }, suite: { activeExamId: active.examId, activationGeneration: 2 } });
+    let explanationExam;
+    h.hooks.setTestOverride('renderExplanations', options => { explanationExam = options.examId; });
+    await h.hooks.acceptSubmissionAcknowledgement({ examId: submitted.examId, sessionId: 'PRIVATE_SESSION',
+        suiteSessionId: 'suite', submissionId: h.hooks.getTestState().submissionId });
+    assert.equal(explanationExam, active.examId);
+    assert.ok(resultPanel.innerHTML.includes(active.draft.answers.q1));
+    assert.ok(!resultPanel.innerHTML.includes(submitted.draft.answers.q1));
+    assert.equal(h.hooks.getTestState().readOnly, true);
+    assert.equal(h.getCloseCount(), finalSubmission ? 1 : 0);
 });
 
 test('negative host result remains unconfirmed and a late ACK stays ignored until explicit retry', async () => {

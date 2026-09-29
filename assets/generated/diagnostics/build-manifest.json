@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:8ef5780a9c1de229391a0f01dce12184bbacc088902c941af7a35fb8404b42b1",
+  "buildId": "sha256:c592f539559963b56fefc809c932e44843c87922537aebd569da1cd334648d47",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -576,7 +576,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "8cf0f2820fc99d5b942248b252e0f5516b60e2a270b8a2b54b6b038a33b21c8c"
+      "sha256": "92b02565ed03f6690c197e545e88470aec572b2c2fd882cbbb683d85714e8e10"
     },
     {
       "path": "js/bundles/runtime-entry.bundle.js",
@@ -1286,7 +1286,7 @@
       {
         "source": "js/runtime/unifiedReadingPage.js",
         "startLine": 14682,
-        "endLine": 23327,
+        "endLine": 23326,
         "sourceStartLine": 1
       }
     ],

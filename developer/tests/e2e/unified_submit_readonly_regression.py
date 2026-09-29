@@ -307,14 +307,15 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(late_after_nack.get("submissionStatus") == "draft", f"late_ack_after_nack_accepted:{late_after_nack}")
     require(not late_after_nack.get("readOnly"), f"late_ack_after_nack_locked:{late_after_nack}")
 
+    await frame.locator('#question-groups input[name="q1"][value="B"]').check()
     await frame.click("#submit-btn")
     await wait_for_submission_count(page, 2)
     retry = (await submissions(page))[1]
     require(
-        retry.get("data", {}).get("submissionId") == corr.get("submissionId"),
-        f"retry_changed_idempotency_key:{retry.get('data')}",
+        retry.get("data", {}).get("submissionId") != corr.get("submissionId"),
+        f"ordinary_submit_reused_idempotency_key:{retry.get('data')}",
     )
-    require(retry.get("data", {}).get("answers") == first.get("data", {}).get("answers"), "nack_retry_changed_original_answers")
+    require(retry.get("data", {}).get("answers", {}).get("q1") == "B", "nack_resubmit_lost_edited_answer")
     await assert_pending(frame, "retry_delivery")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(retry))
     await frame.wait_for_function(
