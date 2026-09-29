@@ -80,7 +80,11 @@ session data while disposing host listeners. Explicit closure and ordinary
 `destroy()` retain normal cleanup. Each runtime provides an **Errors and
 diagnostics** button with shared history, JSON export and selectable text
 fallback. Export performs no probes, reconnects or business writes and remains
-available after host closure or reload.
+available after host closure or reload. The embedded listening page keeps its
+own **Errors and diagnostics (this frame)** entry below the wrapper control.
+It reads the frame's local evidence even when persistence is disabled or
+coordination is unavailable, so errors with no active notification remain
+reachable without relying on the wrapper's exporter or the relay.
 
 ## Focused validation
 
@@ -95,8 +99,11 @@ available after host closure or reload.
 - `listening_diagnostics.node.js`: shipped bundles and native Chromium popups
   under file, root HTTP and subpath hosting; missing/invalid required bundles,
   optional audio, lost ACK after an actual host commit, explicit idempotent
-  reconciliation, late injection and disconnected export. It uses synthetic
-  input only and is included in CI.
+  reconciliation, late injection and disconnected export. Disabled persistence
+  and unavailable coordination cases exercise local history, downloaded JSON
+  and selectable-text fallback for post-readiness errors that do not reach the
+  wrapper, while preserving business data and storage preferences. It uses
+  synthetic input only and is included in CI.
 
 This slice consumes the current B4/C1 diagnostic interfaces and C2 review fixes.
 Review and integration are completion gates. C4 (#206) retains the final

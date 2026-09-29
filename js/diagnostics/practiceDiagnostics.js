@@ -122,17 +122,18 @@
             link.href = stylesheet;
             (doc.head || doc.body).appendChild(link);
         }
-        // The frame still needs styles for its own actionable incident dialogs.
-        // Its wrapper owns the visible history entry and retains one-hop evidence.
+        // The wrapper may not receive this frame's memory-only evidence. Keep
+        // local access independent of persistence and relay availability.
+        let wrapped = false;
         try {
-            if (global.parent !== global && global.parent?.document?.documentElement?.dataset.listeningWrapper === 'true'
-                && global.parent.AppDiagnosticExport) return;
+            wrapped = global.parent !== global && global.parent?.document?.documentElement?.dataset.listeningWrapper === 'true';
         } catch (_) { }
         const button = doc.createElement('button');
         button.id = 'practice-diagnostics-access';
         button.type = 'button';
-        button.textContent = 'Errors and diagnostics';
-        button.style.cssText = 'position:fixed;top:8px;right:8px;z-index:10001;padding:6px 10px;background:#fff;color:#172033;border:1px solid #667085;border-radius:6px;font:13px system-ui';
+        button.textContent = wrapped ? 'Errors and diagnostics (this frame)' : 'Errors and diagnostics';
+        // Place frame access below the wrapper's fixed control so both are usable.
+        button.style.cssText = `position:fixed;top:${wrapped ? 48 : 8}px;right:8px;z-index:10001;padding:6px 10px;background:#fff;color:#172033;border:1px solid #667085;border-radius:6px;font:13px system-ui`;
         button.addEventListener('click', async () => {
             try {
                 const center = global.getMessageCenter?.();

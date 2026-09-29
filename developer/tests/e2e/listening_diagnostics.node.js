@@ -102,10 +102,63 @@ async function exported(practice) {
     return report.report;
 }
 
+async function verifyLocalExport(host, child, practice, scenario) {
+    const storage = await practice.evaluate(async scenario => {
+        if (scenario === 'disabled-persistence') {
+            const result = await AppDiagnosticStore.setEnabled(false);
+            if (!result.success) throw new Error('Could not disable diagnostic persistence');
+        }
+        return AppDiagnosticStore.status();
+    }, scenario);
+    if (scenario === 'disabled-persistence') assert.equal(storage.enabled, false);
+    else assert.equal(storage.failure, 'COORDINATION_UNAVAILABLE');
+
+    // Capture a real post-readiness error that has no active notification.
+    await practice.evaluate(() => { setTimeout(() => { throw new Error('PRIVATE_FRAME_RUNTIME'); }, 0); });
+    await practice.waitForFunction(() => AppDiagnostics.snapshot().events.some(event => event.code === 'UNEXPECTED_RUNTIME_ERROR'));
+    const report = await exported(practice);
+    const event = report.events.find(event => event.code === 'UNEXPECTED_RUNTIME_ERROR');
+    assert.equal(event.notification.kind, 'none');
+    await practice.waitForFunction(() => AppDiagnostics.status().transport?.pendingEvents === 0);
+    if (practice !== child) {
+        assert.equal((await exported(child)).events.some(candidate => candidate.eventId === event.eventId), false);
+        assert.equal(await child.getByRole('button', { name: 'Errors and diagnostics', exact: true }).count(), 1);
+    }
+
+    const records = await host.evaluate(() => AppData.practice.list());
+    const access = practice.getByRole('button', { name: /^Errors and diagnostics/ });
+    assert.equal(await access.count(), 1, 'Locally retained errors need a frame-local history/export entry');
+    await access.click();
+    await practice.locator('.incident-history button').filter({ hasText: event.eventId }).waitFor();
+    const [download] = await Promise.all([child.waitForEvent('download'),
+        practice.getByRole('button', { name: '导出保留的诊断历史', exact: true }).click()]);
+    assert.match(download.suggestedFilename(), /\.json$/);
+    const chunks = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+    const json = Buffer.concat(chunks).toString('utf8');
+    assert.doesNotMatch(json, /PRIVATE_|windowSessionToken|sourceUrl=/);
+    assert.ok(JSON.parse(json).events.some(candidate => candidate.eventId === event.eventId));
+
+    // The same local entry must still expose selectable evidence without the UI.
+    await practice.getByRole('button', { name: '关闭历史', exact: true }).click();
+    await practice.evaluate(() => { window.getMessageCenter = () => null; });
+    await access.click();
+    const text = await practice.getByRole('textbox', { name: 'Local diagnostic report' }).inputValue();
+    assert.ok(JSON.parse(text).events.some(candidate => candidate.eventId === event.eventId));
+    assert.doesNotMatch(text, /PRIVATE_|windowSessionToken|sourceUrl=/);
+    assert.deepEqual(await host.evaluate(() => AppData.practice.list()), records);
+    assert.equal(await practice.locator('[name="q1"]').inputValue(), 'PRIVATE_ANSWER');
+    const after = await practice.evaluate(() => AppDiagnosticStore.status());
+    assert.equal(after.enabled, storage.enabled);
+    assert.equal(after.generation, storage.generation);
+    assert.equal(after.failure, storage.failure);
+}
+
 try {
     for (const [mode, base] of [['file', pathToFileURL(fixture + path.sep).href], ['http', origin + '/'], ['subpath', origin + '/app/']]) {
         for (const scenario of ['missing-wrapper', 'invalid-wrapper', 'rejected-wrapper-init', 'missing-bridge', 'optional-media', 'lost-ack',
-            'parent-closed', 'parent-reloaded', 'late-injection', 'legacy-lost-ack', 'legacy-disconnected']) {
+            'parent-closed', 'parent-reloaded', 'late-injection', 'legacy-lost-ack', 'legacy-disconnected',
+            'disabled-persistence', 'coordination-unavailable']) {
             const selected = process.argv.find(value => value.startsWith('--case='))?.slice(7);
             if (selected && selected !== `${mode}/${scenario}`) continue;
             fs.writeFileSync(path.join(fixture, wrapperBundle), originalWrapper);
@@ -113,6 +166,11 @@ try {
             const kind = scenario.startsWith('legacy') ? 'legacy' : 'listening';
             writePractice(kind, scenario !== 'late-injection');
             const context = await browser.newContext();
+            if (scenario === 'coordination-unavailable') await context.addInitScript(() => {
+                if (location.pathname.endsWith('/fixtures/listening.html')) {
+                    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+                }
+            });
             const runtimeErrors = [];
             context.on('page', page => page.on('pageerror', error => runtimeErrors.push(error.stack)));
             const host = await context.newPage();
@@ -135,7 +193,9 @@ try {
                     assert.ok(events.some(event => event.resource.path === 'js/bundles/listening-record-bridge.bundle.js'));
                 } else {
                     ({ child, practice } = await openPractice(context, host, base, kind, scenario.includes('lost-ack')));
-                    if (scenario.includes('lost-ack')) {
+                    if (['disabled-persistence', 'coordination-unavailable'].includes(scenario)) {
+                        await verifyLocalExport(host, child, practice, scenario);
+                    } else if (scenario.includes('lost-ack')) {
                         assert.equal(await submit(practice, kind), true);
                         // Wait for the real commit receipt, then read canonical data
                         // once instead of opening transactions in every polling frame.
