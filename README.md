@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
 ## Important Usage Notice
 
@@ -36,6 +36,8 @@ The system provides question-bank browsing, reading practice, optional listening
 
 ## Quick Start
 
+![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
+
 **Requirements:** a recent stable version of Chrome or Edge. Allow pop-ups when prompted — practice pages open in a new window.
 
 **Run locally:**
@@ -54,8 +56,6 @@ python -m http.server 8000   # then open http://localhost:8000/
 **Static hosting:** the runtime files can be deployed to static web hosting for personal or small-scale use. Keep the full directory hierarchy to avoid 404s for bundles, question banks, fonts, images, PDFs, audio, and generated assets. Re-read the usage notice above before any public deployment — a page that can be deployed is not a license to distribute it.
 
 ## Features
-
-![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
 
 ### Learning Overview
 
@@ -82,8 +82,6 @@ assets/generated/reading-explanations/
 - Open a practice from a library card; answer, submit, and view results in the unified page.
 - Explanations, passage highlighting, and answer comparison are built in; completed results sync automatically into practice records.
 - The same page also powers **reading review (背题)** mode for studying answers and explanations.
-
-![Reading practice demo: drag answers into place, submit, and study the analysis view](.github/assets/reading-practice.gif)
 
 If a practice opens but the score is not saved, check pop-up permissions, console errors, and cross-window messaging (see FAQ).
 
@@ -117,8 +115,6 @@ The records page views, filters, exports, and manages history from reading, list
 - Stat cards (items practiced, average accuracy, study time), trend analysis with time ranges, a practice heatmap, priority-bank progress, and a reading mistake radar.
 - A history list filterable by All / Reading / Listening, with batch selection and deletion, Markdown export, and per-record details (score, duration, answer comparison, raw results).
 
-![Practice records demo: stat cards, trends, heatmap, and history list](.github/assets/practice-records.gif)
-
 Practice records are the core user data of this system. Clearing cache, switching browsers, private mode, or automatic site-data cleanup can all affect persistence — export or back up your data regularly from Settings.
 
 ### Settings & Data Management
@@ -139,13 +135,13 @@ Core data persists in IndexedDB; if it is unavailable the app reports an error e
 
 ## Usage Guide
 
-The animated demos above show the app running with real data; the steps below walk through the same flows.
+The demos below were captured from a live session with real data.
 
 ### Run a practice
 
-1. Open `index.html` and go to **Library (题库浏览)**.
-2. Locate an item with filters or search, then click its practice button.
-3. Complete and submit in the new window; the result appears in **Practice Records (练习记录)**.
+![Reading practice demo: drag answers into place, submit, and study the analysis view](.github/assets/reading-practice.gif)
+
+As shown: locate an item in **Library (题库浏览)** and click its practice button, complete and submit in the new window — explanations, passage highlighting, and answer comparison appear immediately, and the result lands in **Practice Records (练习记录)**.
 
 If nothing opens, allow pop-ups; if nothing saves, check the console for resource or messaging errors (see FAQ).
 
@@ -158,8 +154,11 @@ Avoid running the same set in parallel windows — it complicates window trackin
 
 ### View and export records
 
-1. Open **Practice Records (练习记录)**; filter by All / Reading / Listening and open a record for details.
-2. Export a Markdown report, or select records for batch deletion. Export or back up before deleting — recovery depends on available backups.
+![Practice records demo: stat cards, trends, heatmap, and history list](.github/assets/practice-records.gif)
+
+Stat cards, trends, the heatmap, and the history list are shown above; filter by All / Reading / Listening, open a record for details, export a Markdown report, or batch-delete records.
+
+Export or back up before deleting — recovery depends on available backups.
 
 ### Import a custom question bank
 
