@@ -1,4 +1,7 @@
 # IELTS Atlas / IELTS Practice
+
+**English** | [简体中文](README.zh-CN.md)
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
 ## Important Usage Notice
@@ -52,6 +55,8 @@ python -m http.server 8000   # then open http://localhost:8000/
 
 ## Features
 
+![Quick start demo: first-run notice, learning overview, and library browsing](assets/images/demo/quick-start.gif)
+
 ### Learning Overview
 
 The overview page summarizes your practice state from local records: items practiced, average performance, study time, streaks, and per-category progress. Use it as your daily entry point to decide what comes next — more practice, mistake review, or vocabulary.
@@ -78,7 +83,7 @@ assets/generated/reading-explanations/
 - Explanations, passage highlighting, and answer comparison are built in; completed results sync automatically into practice records.
 - The same page also powers **reading review (背题)** mode for studying answers and explanations.
 
-<!-- TODO: embed a short demo GIF of starting and completing a reading practice, e.g. docs/assets/gif/reading-practice.gif -->
+![Reading practice demo: drag answers into place, submit, and study the analysis view](assets/images/demo/reading-practice.gif)
 
 If a practice opens but the score is not saved, check pop-up permissions, console errors, and cross-window messaging (see FAQ).
 
@@ -112,6 +117,8 @@ The records page views, filters, exports, and manages history from reading, list
 - Stat cards (items practiced, average accuracy, study time), trend analysis with time ranges, a practice heatmap, priority-bank progress, and a reading mistake radar.
 - A history list filterable by All / Reading / Listening, with batch selection and deletion, Markdown export, and per-record details (score, duration, answer comparison, raw results).
 
+![Practice records demo: stat cards, trends, heatmap, and history list](assets/images/demo/practice-records.gif)
+
 Practice records are the core user data of this system. Clearing cache, switching browsers, private mode, or automatic site-data cleanup can all affect persistence — export or back up your data regularly from Settings.
 
 ### Settings & Data Management
@@ -132,8 +139,7 @@ Core data persists in IndexedDB; if it is unavailable the app reports an error e
 
 ## Usage Guide
 
-<!-- This section is the home for animated demos. Record short GIFs of the flows below,
-     drop them into docs/assets/gif/, and embed them next to the matching steps. -->
+The animated demos above show the app running with real data; the steps below walk through the same flows.
 
 ### Run a practice
 
@@ -142,8 +148,6 @@ Core data persists in IndexedDB; if it is unavailable the app reports an error e
 3. Complete and submit in the new window; the result appears in **Practice Records (练习记录)**.
 
 If nothing opens, allow pop-ups; if nothing saves, check the console for resource or messaging errors (see FAQ).
-
-<!-- TODO: demo GIF — click-to-practice flow, e.g. docs/assets/gif/run-practice.gif -->
 
 ### Use test-set mode
 
