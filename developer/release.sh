@@ -189,7 +189,6 @@ require_entry "assets/generated/reading-explanations/manifest.js"
 require_entry "assets/generated/diagnostics/bootstrap-inline.js"
 require_entry "assets/generated/diagnostics/build-manifest.json"
 require_entry "assets/generated/listening-exams/listening-practice-unified.html"
-require_entry "css/incident-center.css"
 require_entry "js/bundles/runtime-entry.bundle.js"
 require_entry "js/bundles/core-foundation.bundle.js"
 require_entry "js/bundles/ui-shell.bundle.js"
@@ -209,7 +208,7 @@ if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening
     require_entry "assets/generated/listening-exams/manifest.js"
     require_entry "assets/generated/listening-exams/listening-index.compat.js"
 else
-    if grep '^assets/generated/listening-exams/' "${ZIP_LIST}" | grep -Fvx 'assets/generated/listening-exams/listening-practice-unified.html' | grep -q .; then
+    if grep '^assets/generated/listening-exams/' "${ZIP_LIST}" | grep -Fvx 'assets/generated/listening-exams/listening-practice-unified.html' > /dev/null; then
         echo 'ERROR: default release contains optional listening content'
         exit 1
     fi

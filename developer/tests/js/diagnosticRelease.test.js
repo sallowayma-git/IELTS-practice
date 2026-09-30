@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { requiredDiagnosticAssets, verifyDiagnosticRuntime } from '../../../scripts/verify-diagnostic-release.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-test('release gate validates emitted runtime and rejects missing wrapper, stale build and shifted mappings', t => {
+test('release gate rejects missing runtime, stale builds and incomplete or shifted mappings', t => {
     assert.ok(verifyDiagnosticRuntime(root).mappedSections > 100);
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'ielts-release-contract-'));
     t.after(() => {
@@ -28,4 +28,19 @@ test('release gate validates emitted runtime and rejects missing wrapper, stale 
     assert.throws(() => verifyDiagnosticRuntime(fixture), /wrong build/);
     fs.writeFileSync(bundle, '\n' + original);
     assert.throws(() => verifyDiagnosticRuntime(fixture), /shifted mapping/);
+    fs.writeFileSync(bundle, original);
+    const manifestFile = path.join(fixture, 'assets/generated/diagnostics/build-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    for (const file of requiredDiagnosticAssets.filter(file => /\.(js|html)$/.test(file))) {
+        const changed = structuredClone(manifest);
+        delete changed.mappings[file];
+        fs.writeFileSync(manifestFile, JSON.stringify(changed));
+        assert.throws(() => verifyDiagnosticRuntime(fixture), /missing source mappings/, file);
+    }
+    const changed = structuredClone(manifest);
+    changed.mappings['js/bundles/listening-wrapper.bundle.js'].pop();
+    fs.writeFileSync(manifestFile, JSON.stringify(changed));
+    assert.throws(() => verifyDiagnosticRuntime(fixture), /incomplete source mappings/);
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+    assert.ok(verifyDiagnosticRuntime(fixture).mappedSections > 100);
 });
