@@ -55,7 +55,7 @@ python -m http.server 8000   # then open http://localhost:8000/
 
 ## Features
 
-![Quick start demo: first-run notice, learning overview, and library browsing](assets/images/demo/quick-start.gif)
+![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
 
 ### Learning Overview
 
@@ -83,7 +83,7 @@ assets/generated/reading-explanations/
 - Explanations, passage highlighting, and answer comparison are built in; completed results sync automatically into practice records.
 - The same page also powers **reading review (背题)** mode for studying answers and explanations.
 
-![Reading practice demo: drag answers into place, submit, and study the analysis view](assets/images/demo/reading-practice.gif)
+![Reading practice demo: drag answers into place, submit, and study the analysis view](.github/assets/reading-practice.gif)
 
 If a practice opens but the score is not saved, check pop-up permissions, console errors, and cross-window messaging (see FAQ).
 
@@ -117,7 +117,7 @@ The records page views, filters, exports, and manages history from reading, list
 - Stat cards (items practiced, average accuracy, study time), trend analysis with time ranges, a practice heatmap, priority-bank progress, and a reading mistake radar.
 - A history list filterable by All / Reading / Listening, with batch selection and deletion, Markdown export, and per-record details (score, duration, answer comparison, raw results).
 
-![Practice records demo: stat cards, trends, heatmap, and history list](assets/images/demo/practice-records.gif)
+![Practice records demo: stat cards, trends, heatmap, and history list](.github/assets/practice-records.gif)
 
 Practice records are the core user data of this system. Clearing cache, switching browsers, private mode, or automatic site-data cleanup can all affect persistence — export or back up your data regularly from Settings.
 
