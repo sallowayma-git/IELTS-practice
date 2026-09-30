@@ -2834,10 +2834,25 @@
         });
     }
 
+    let readingViewCache;
+    function readingViews() {
+        if (!readingViewCache) {
+            if (typeof global.createReadingViewCache !== 'function') throw new Error('Reading view cache unavailable');
+            readingViewCache = global.createReadingViewCache({
+                readToken: async () => (await kernel.read('system.readingViewToken')).token || 'initial',
+                readSnapshot: async () => readingResult(await readReadingDocuments({ includeMirrors: false }))
+            });
+        }
+        return readingViewCache;
+    }
+
     const vocab = Object.freeze({
         // Pure schema/relationship operations. Persistence commands consume this
         // contract; a returned snapshot is not a durable commit acknowledgement.
         get readingModel() { return global.ReadingVocabularyModel; },
+        async getReadingBookshelf() { await ready; await ensureReadingMigration(); return readingViews().index(); },
+        async getReadingArticleWords(articleId, page = 0) { await ready; await ensureReadingMigration(); return readingViews().words(articleId, page); },
+        async searchReadingArticles(query) { await ready; await ensureReadingMigration(); return readingViews().search(query); },
         async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments({ includeMirrors: false })); },
         async shouldInitializeDefaultWords() {
             await ready; await ensureReadingMigration();

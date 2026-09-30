@@ -52,6 +52,52 @@ export async function readingScenario(page, result, measure, baseline) {
         await AppActions.openBookshelf({ fromView: 'more' });
         await ReadingBookshelfStore.init();
     }));
+    if (!baseline && await page.evaluate(() => typeof AppData.vocab.getReadingBookshelf === 'function')) {
+        await page.waitForFunction(() => document.querySelectorAll('.bookshelf-card').length === 20
+            && [...document.querySelectorAll('.bookshelf-card')].every(card => card.querySelectorAll('.bookshelf-vocab-chip').length > 0));
+        result.cachePaging = await page.evaluate(async () => {
+            const before = __readingFullReads;
+            const index = await AppData.vocab.getReadingBookshelf();
+            const article = index.articles[0];
+            const first = await AppData.vocab.getReadingArticleWords(article.articleId, 0);
+            const second = await AppData.vocab.getReadingArticleWords(article.articleId, 1);
+            if (first.words.length !== Math.min(10, article.wordCount)) throw new Error('first word page is not bounded');
+            if (second.words.length !== Math.min(10, Math.max(0, article.wordCount - 10))) throw new Error('second page mismatch');
+            return { fullReads: __readingFullReads - before, initialCards: document.querySelectorAll('.bookshelf-card').length,
+                initialPreviewWords: document.querySelectorAll('.bookshelf-card .bookshelf-vocab-chip').length };
+        });
+        assert.equal(result.cachePaging.fullReads, 0);
+        if (words >= 5000) {
+            const card = page.locator('.bookshelf-card').first();
+            const before = await card.locator('.bookshelf-vocab-chip').first().getAttribute('data-word');
+            await card.locator('[data-action="word-page"][data-page="1"]').click();
+            await page.waitForFunction(before => document.querySelector('.bookshelf-card .bookshelf-vocab-chip')?.dataset.word !== before, before);
+            assert.equal(await card.locator('.bookshelf-vocab-chip').count(), 10);
+            await card.locator('[data-action="word-page"][data-page="0"]').click();
+            await page.waitForFunction(before => document.querySelector('.bookshelf-card .bookshelf-vocab-chip')?.dataset.word === before, before);
+        }
+        await measure('bookshelfWarmMs', () => page.evaluate(async () => { await ReadingBookshelfStore.init(); }));
+        const cachedPage = await page.context().newPage();
+        await cachedPage.goto(page.url());
+        await cachedPage.waitForFunction(() => window.AppData);
+        result.persistentCache = await cachedPage.evaluate(async () => {
+            await AppData.ready;
+            let fullReads = 0;
+            const get = IDBObjectStore.prototype.get;
+            IDBObjectStore.prototype.get = function(key) {
+                if (this.name === 'documents' && ['vocab.words', 'vocab.lists', 'vocab.readingState'].includes(key)) fullReads++;
+                return get.apply(this, arguments);
+            };
+            const index = await AppData.vocab.getReadingBookshelf();
+            const words = await AppData.vocab.getReadingArticleWords(index.articles[0].articleId, 0);
+            IDBObjectStore.prototype.get = get;
+            return { fullReads, count: words.words.length, cards: index.articles.length };
+        });
+        assert.equal(result.persistentCache.fullReads, 0, 'another tab must reuse the persistent lightweight cache');
+        await cachedPage.close();
+        await page.locator('[data-action="load-more-cards"]').click();
+        assert.equal(await page.locator('.bookshelf-card').count(), 40);
+    }
     for (const suffix of ['Cold', 'Warm']) {
         await page.evaluate(() => BookshelfView.ensureReader());
         const start = performance.now();

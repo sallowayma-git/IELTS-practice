@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 const source = (name) => fs.readFileSync(new URL(`../../../js/${name}`, import.meta.url), 'utf8');
 const scripts = [
     'data/v2/dataCatalog.js', 'data/v2/dataKernel.js',
-    'data/practiceRecordSource.js', 'data/v2/readingVocabularyModel.js'
+    'data/practiceRecordSource.js', 'data/v2/readingVocabularyModel.js', 'data/v2/readingViewCache.js'
 ].map(source);
 const appDataSource = source('data/v2/appData.js');
 const AT = '2026-09-08T01:00:00.000Z';

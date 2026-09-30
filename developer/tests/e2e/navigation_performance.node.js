@@ -39,9 +39,11 @@ await page.addInitScript(() => {
     window.__perfTasks = [];
     new PerformanceObserver(list => window.__perfTasks.push(...list.getEntries().map(e => e.duration))).observe({ type: 'longtask', buffered: true });
     window.__detailReads = 0;
+    window.__readingFullReads = 0;
     const get = IDBObjectStore.prototype.get;
     IDBObjectStore.prototype.get = function (...args) {
         if (this.name === 'practiceDetails') window.__detailReads++;
+        if (this.name === 'documents' && ['vocab.words', 'vocab.lists', 'vocab.readingState'].includes(args[0])) window.__readingFullReads++;
         return get.apply(this, args);
     };
 });
