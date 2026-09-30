@@ -214,6 +214,8 @@ async function run() {
         externalBackup: lateExternalPayload
     });
     await restoredTombstone.app.ready;
+    assert.strictEqual(tombstonedExternal.externalReads, 0, 'completed V2 startup must not probe legacy JSON');
+    await restoredTombstone.app.backups.recoverLegacy();
     const restoredSummary = (await restoredTombstone.app.practice.list({ projection: 'light' }))
         .find((record) => record.id === 'late-external');
     assert.strictEqual(restoredSummary.title, 'Recovered after tombstone');

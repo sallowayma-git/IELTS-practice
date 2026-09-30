@@ -783,6 +783,9 @@
         ];
 
         manifest['settings-tools'] = [];
+        manifest['reading-tools'] = ['js/bundles/reading-tools.bundle.js'];
+        manifest['reading-library'] = ['js/bundles/reading-library.bundle.js'];
+        manifest['vocabulary-tools'] = ['js/bundles/vocabulary.bundle.js'];
 
         manifest['diagnostics-tools'] = [
             'js/bundles/diagnostics.bundle.js'
@@ -798,6 +801,9 @@
         dependencies['browse-view'] = ['state-core', 'practice-suite'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['settings-tools'] = ['state-core'];
+        dependencies['reading-tools'] = ['state-core'];
+        dependencies['reading-library'] = ['state-core'];
+        dependencies['vocabulary-tools'] = ['state-core'];
         dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
         dependencies['diagnostics-tools'] = ['state-core'];
@@ -2404,11 +2410,8 @@
                 || navigation === global.__getAppNavigationIntentGeneration());
         };
         return Promise.resolve().then(function () {
-            if (global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function') {
-                return global.AppEntry.ensureMoreToolsGroup();
-            }
             if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-                return global.AppLazyLoader.ensureGroup('more-tools');
+                return global.AppLazyLoader.ensureGroup('reading-library');
             }
             return null;
         }).then(function () {

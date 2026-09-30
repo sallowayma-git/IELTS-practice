@@ -156,7 +156,8 @@ async function showShelf(page) {
 async function readerReady(page, examId) {
     await page.locator('#vocab-reader-tabs [data-para="questions"]').waitFor();
     await page.waitForFunction(id => ReadingVocabReader.currentExamId === id && !!ReadingVocabReader.currentPayload
-        && !!document.querySelector('.vocab-paragraph-text') && window.BookshelfView?.state.readerLoading !== true, examId);
+        && !!document.querySelector('.vocab-paragraph-text') && !document.getElementById('vocab-manual-add-btn')?.disabled
+        && window.BookshelfView?.state.readerLoading !== true, examId);
     assert.equal(await page.locator('.vocab-error-state').count(), 0);
 }
 

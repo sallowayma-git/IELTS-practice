@@ -37,6 +37,7 @@
         state: {
             fromView: 'bookshelf',
             searchQuery: '',
+            visibleLimit: 100,
             loading: false,
             loaded: false,
             error: null,
@@ -94,7 +95,7 @@
             try {
                 if (global.AppData?.ready) await global.AppData.ready;
                 if (!global.ReadingVocabStore && global.AppLazyLoader?.ensureGroup) {
-                    await global.AppLazyLoader.ensureGroup('browse-runtime');
+                    await global.AppLazyLoader.ensureGroup('reading-tools');
                 }
                 if (!global.ReadingVocabStore || typeof global.ReadingVocabStore.init !== 'function') {
                     throw new Error('生词本模块尚未就绪');
@@ -115,9 +116,13 @@
         getAssociatedArticleMetadata(item) {
             const articles = Array.isArray(global.ReadingVocabStore?._state?.snapshot?.reading?.articles)
                 ? global.ReadingVocabStore._state.snapshot.reading.articles : [];
-            const articlesById = new Map(articles
-                .filter(article => article && typeof article === 'object' && article.id)
-                .map(article => [article.id, article]));
+            if (this._articleRows !== articles) {
+                this._articleRows = articles;
+                this._articlesById = new Map(articles
+                    .filter(article => article && typeof article === 'object' && article.id)
+                    .map(article => [article.id, article]));
+            }
+            const articlesById = this._articlesById;
             const metadata = [];
             const byId = new Map();
             const byExamId = new Map();
@@ -298,7 +303,8 @@
                     </div>
                 `;
             }
-            return entries.map(item => {
+            const limit = this.state.visibleLimit || 100;
+            return entries.slice(0, limit).map(item => {
                 const sources = this.getAssociatedArticleMetadata(item)
                     .map(article => article.title)
                     .filter(Boolean);
@@ -320,7 +326,8 @@
                         <button type="button" class="shui-glass-btn reading-notebook-delete-btn" data-action="notebook-delete" data-word-id="${escapeHtml(item.id)}" title="从我的生词本移除">移除</button>
                     </article>
                 `;
-            }).join('');
+            }).join('') + (entries.length > limit
+                ? `<button type="button" class="shui-glass-btn" data-action="notebook-load-more">继续显示（已显示 ${limit} / ${entries.length}）</button>` : '');
         },
 
         bindEvents(root) {
@@ -328,6 +335,7 @@
             if (search) {
                 search.addEventListener('input', event => {
                     this.state.searchQuery = event.target.value;
+                    this.state.visibleLimit = 100;
                     this.render();
                     const next = global.document.querySelector('[data-action="notebook-search"]');
                     if (next) {
@@ -339,6 +347,11 @@
             root.onclick = async event => {
                 const action = event.target.closest?.('[data-action]')?.dataset.action;
                 if (!action) return;
+                if (action === 'notebook-load-more') {
+                    this.state.visibleLimit = (this.state.visibleLimit || 100) + 100;
+                    this.render();
+                    return;
+                }
                 if (action === 'notebook-back') {
                     this.goBack();
                     return;

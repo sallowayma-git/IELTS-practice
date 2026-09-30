@@ -840,11 +840,8 @@ class ExamSystemApp {
                 case 'bookshelf':
                     Promise.resolve()
                         .then(() => {
-                            if (window.AppEntry && typeof window.AppEntry.ensureMoreToolsGroup === 'function') {
-                                return window.AppEntry.ensureMoreToolsGroup();
-                            }
                             if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-                                return window.AppLazyLoader.ensureGroup('more-tools');
+                                return window.AppLazyLoader.ensureGroup('reading-library');
                             }
                             return null;
                         })
@@ -869,11 +866,8 @@ class ExamSystemApp {
                 case 'reading-notebook':
                     Promise.resolve()
                         .then(() => {
-                            if (window.AppEntry && typeof window.AppEntry.ensureMoreToolsGroup === 'function') {
-                                return window.AppEntry.ensureMoreToolsGroup();
-                            }
                             if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-                                return window.AppLazyLoader.ensureGroup('more-tools');
+                                return window.AppLazyLoader.ensureGroup('reading-library');
                             }
                             return null;
                         })

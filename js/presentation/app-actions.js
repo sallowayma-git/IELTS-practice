@@ -1056,11 +1056,8 @@
                 || navigation === global.__getAppNavigationIntentGeneration());
         };
         return Promise.resolve().then(function () {
-            if (global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function') {
-                return global.AppEntry.ensureMoreToolsGroup();
-            }
             if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-                return global.AppLazyLoader.ensureGroup('more-tools');
+                return global.AppLazyLoader.ensureGroup('reading-library');
             }
             return null;
         }).then(function () {

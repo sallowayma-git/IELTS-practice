@@ -2741,11 +2741,22 @@
         return listId === 'default' ? snapshot.words : collectionWords(snapshot.lists[listId]);
     }
 
-    function ownerWord(snapshot, ref) {
+    function ownerWord(snapshot, ref, lookup = null) {
         object(ref, 'wordRef');
         exactString(ref.listId, 'wordRef.listId');
         exactString(ref.wordId, 'wordRef.wordId');
-        const matches = listWords(snapshot, ref.listId).filter((word) => word && word.id === ref.wordId);
+        if (lookup && !lookup.has(ref.listId)) {
+            const byId = new Map();
+            for (const word of listWords(snapshot, ref.listId)) {
+                if (!word) continue;
+                const rows = byId.get(word.id) || [];
+                rows.push(word);
+                byId.set(word.id, rows);
+            }
+            lookup.set(ref.listId, byId);
+        }
+        const matches = lookup ? lookup.get(ref.listId).get(ref.wordId) || []
+            : listWords(snapshot, ref.listId).filter((word) => word && word.id === ref.wordId);
         if (matches.length !== 1) fail('Canonical wordRef must resolve to exactly one existing vocabulary record');
         return matches[0];
     }
@@ -2773,6 +2784,7 @@
         const reading = object(snapshot.reading, 'snapshot.reading');
         if (reading.schemaVersion !== SCHEMA_VERSION) fail('Unsupported reading vocabulary schemaVersion');
         const idx = indexes(reading);
+        const wordLookup = new Map();
         for (const source of reading.sources) {
             exactString(source.libraryId, 'source.libraryId');
             if (source.id !== sourceId({ kind: source.kind, id: source.libraryId })) fail('Invalid source identity');
@@ -2808,7 +2820,7 @@
         }
         for (const term of reading.terms) {
             if (term.normalizedTerm !== normalizeTerm(term.normalizedTerm) || term.id !== termId(term.normalizedTerm)) fail('Invalid normalized term identity');
-            const word = ownerWord(snapshot, term.wordRef);
+            const word = ownerWord(snapshot, term.wordRef, wordLookup);
             if (normalizeTerm(word.word) !== term.normalizedTerm) fail('Canonical wordRef has a different normalized term');
             timestamp(term.createdAt, 'term.createdAt');
         }
@@ -3233,13 +3245,25 @@
         object(options, 'query options');
         if (own(options, 'articleId')) exactString(options.articleId, 'articleId');
         const associations = snapshot.reading.associations.filter((row) => !own(options, 'articleId') || row.articleId === options.articleId);
-        const activeTerms = new Set(associations.map((row) => row.termId));
-        const rows = snapshot.reading.terms.filter((term) => activeTerms.has(term.id)).map((term) => {
-            const related = associations.filter((row) => row.termId === term.id);
-            const ids = new Set(related.map((row) => row.id));
+        const byTerm = new Map();
+        const associationTerms = new Map();
+        const occurrencesByTerm = new Map();
+        for (const row of associations) {
+            if (!byTerm.has(row.termId)) byTerm.set(row.termId, []);
+            byTerm.get(row.termId).push(row);
+            associationTerms.set(row.id, row.termId);
+        }
+        for (const row of snapshot.reading.occurrences) {
+            const term = associationTerms.get(row.associationId);
+            if (!term) continue;
+            if (!occurrencesByTerm.has(term)) occurrencesByTerm.set(term, []);
+            occurrencesByTerm.get(term).push(row);
+        }
+        const wordLookup = new Map();
+        const rows = snapshot.reading.terms.filter((term) => byTerm.has(term.id)).map((term) => {
             return {
-                term, word: ownerWord(snapshot, term.wordRef), wordRef: term.wordRef,
-                associations: related, occurrences: snapshot.reading.occurrences.filter((row) => ids.has(row.associationId))
+                term, word: ownerWord(snapshot, term.wordRef, wordLookup), wordRef: term.wordRef,
+                associations: byTerm.get(term.id), occurrences: occurrencesByTerm.get(term.id) || []
             };
         });
         return copy({ terms: rows, distinctTermCount: rows.length, occurrenceCount: rows.reduce((sum, row) => sum + row.occurrences.length, 0) });
@@ -4020,20 +4044,51 @@
         });
     }
 
+    // Derived only: authoritative summaries are still read on every request.
+    // Durable epochs also invalidate this cache after cross-tab writes even if
+    // a BroadcastChannel notification was delayed or unavailable.
+    let browseUpgradeCache = new Map();
+    let browseUpgradeEpoch = null;
     async function resolveBrowseSummaries(summaries) {
         const legacyIds = summaries.filter(needsBrowseScoreUpgrade).map(practiceLayerId);
         if (!legacyIds.length) return summaries;
+        const epochs = typeof kernel.getEntityRevisionEpochs === 'function'
+            ? await kernel.getEntityRevisionEpochs() : null;
+        const epoch = epochs ? JSON.stringify([epochs.practiceSummaries, epochs.practiceDetails]) : null;
+        if (epoch === null || epoch !== browseUpgradeEpoch) {
+            browseUpgradeCache = new Map();
+            browseUpgradeEpoch = epoch;
+        }
+        const cache = browseUpgradeCache;
+        const signatures = new Map(summaries.filter(needsBrowseScoreUpgrade).map(row => [practiceLayerId(row), checksum(row)]));
+        const missingIds = legacyIds.filter(id => !cache.has(id) || cache.get(id).signature !== signatures.get(id));
         // Read matching summaries and details together so an intervening restore
         // or replacement cannot mix grading evidence from different revisions.
         // Modern light reads remain summary-only; annotations are never loaded.
-        const snapshot = await kernel.readPracticeSnapshot(legacyIds, { stores: ['practiceSummaries', 'practiceDetails'] });
+        const snapshot = missingIds.length
+            ? await kernel.readPracticeSnapshot(missingIds, { stores: ['practiceSummaries', 'practiceDetails'] }) : {};
         const current = new Map(asArray(snapshot.practiceSummaries).map(row => [practiceLayerId(row), row]));
         const details = new Map(asArray(snapshot.practiceDetails).map(row => [practiceLayerId(row), row]));
-        return summaries.map(summary => {
+        const result = summaries.map(summary => {
             if (!needsBrowseScoreUpgrade(summary)) return summary;
             const id = practiceLayerId(summary);
+            // Include the summary bytes so a request whose initial read crossed
+            // a commit cannot associate an old summary with a newer epoch.
+            const signature = signatures.get(id);
+            const cached = cache.get(id);
+            if (cached && cached.signature === signature) return clone(cached.value);
             return current.has(id) ? upgradeBrowseSummary(current.get(id), details.get(id)) : null;
         }).filter(Boolean);
+        if (epoch !== null && missingIds.length) {
+            const after = await kernel.getEntityRevisionEpochs();
+            if (JSON.stringify([after.practiceSummaries, after.practiceDetails]) === epoch) {
+                for (const row of result) {
+                    const id = practiceLayerId(row);
+                    if (current.has(id)) cache.set(id, { signature: checksum(current.get(id)), value: clone(row) });
+                }
+            }
+        }
+        return result;
     }
 
     function firstNonEmpty(...values) {
@@ -4475,14 +4530,18 @@
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
-            const summaries = await kernel.listEntities('practiceSummaries');
-            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(summaries);
+            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'));
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;
             const snapshot = await kernel.readPracticeSnapshot(null, { stores });
-            return (await Promise.all(asArray(snapshot.practiceSummaries)
-                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
+            const details = new Map(asArray(snapshot.practiceDetails).map(row => [practiceLayerId(row), row]));
+            const annotations = new Map(asArray(snapshot.practiceAnnotations).map(row => [practiceLayerId(row), row]));
+            return asArray(snapshot.practiceSummaries).map(summary => {
+                const id = practiceLayerId(summary);
+                const detail = details.get(id);
+                return joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection);
+            }).filter(Boolean);
         },
         async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
         async completeAttempt(command) {
@@ -5780,6 +5839,26 @@
 
     const backups = Object.freeze({
         onDataCommitted(listener) { return kernel.onCommitted(listener); },
+        async getStorageIdentity() {
+            await ready;
+            // Installation-local, excluded from portable snapshots. A restored
+            // snapshot must not make a rebuilt database impersonate the old one.
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const meta = await kernel.read('system.migrations', { withMeta: true });
+                if (typeof meta.data.storageIdentity === 'string' && meta.data.storageIdentity) return meta.data.storageIdentity;
+                const identity = randomId('data-installation');
+                try {
+                    await kernel.mutate([{ logicalKey: 'system.migrations', data: Object.assign({}, meta.data, { storageIdentity: identity }),
+                        expectedRevision: metaRevision(meta) }], { operationId: randomId('data-identity') });
+                    return identity;
+                } catch (error) {
+                    if (error.code !== 'CONFLICT' || attempt === 2) throw error;
+                }
+            }
+        },
+        // Explicit recovery for a V1 folder discovered after migration. Never
+        // poll old JSON files on an already migrated user's startup.
+        async recoverLegacy() { await ready; await migrateLegacyData({ includeExternal: true }); },
         async getSettings() { await ready; return kernel.read('backups.settings'); },
         async setSettings(values, options = {}) { await ready; const current = await kernel.read('backups.settings', { withMeta: true }); return kernel.mutate([{ logicalKey: 'backups.settings', data: asObject(values), expectedRevision: current.envelope ? current.envelope.revision : 0 }], optionsMutationOptions(options, 'backup-settings', values)); },
         async getExportHistory() { await ready; return kernel.read('backups.exportHistory'); },
@@ -5949,12 +6028,13 @@
         return result;
     }
     const metaRevision = (meta) => Number(meta && meta.envelope && meta.envelope.revision) || 0;
-    async function readReadingDocuments() {
+    async function readReadingDocuments({ includeMirrors = true } = {}) {
         // Every canonical vocabulary mutation also checks/increments readingState.
         // Read that fence twice so a split readonly read never exposes mixed owners.
         for (let attempt = 0; attempt < 12; attempt += 1) {
             const before = await kernel.read(READING_STATE_KEY, { withMeta: true });
-            const values = await Promise.all(READING_DOCUMENT_KEYS.filter((key) => key !== READING_STATE_KEY)
+            const keys = includeMirrors ? READING_DOCUMENT_KEYS : ['vocab.words', 'vocab.lists', READING_STATE_KEY];
+            const values = await Promise.all(keys.filter((key) => key !== READING_STATE_KEY)
                 .map(async (key) => [key, await kernel.read(key, { withMeta: true })]));
             const after = await kernel.read(READING_STATE_KEY, { withMeta: true });
             if (metaRevision(before) !== metaRevision(after)) continue;
@@ -6090,9 +6170,9 @@
             if (clearIndex >= 0) clearedKeys.splice(clearIndex, 1);
         }
     }
-    function readingProjection(snapshot) {
+    function readingProjection(snapshot, { includeWords = true } = {}) {
         const model = readingModel();
-        const query = model.query(snapshot);
+        const query = includeWords ? model.query(snapshot) : { terms: [] };
         const articles = new Map(snapshot.reading.articles.map((row) => [row.id, row]));
         const sources = new Map(snapshot.reading.sources.map((row) => [row.id, row]));
         const words = query.terms.map((row) => {
@@ -6115,13 +6195,20 @@
         });
         return { words, bookshelf };
     }
-    function readingChanges(current, snapshot, state) {
+    function readingChanges(current, snapshot, state, { visitOnly = false } = {}) {
         state.reading = snapshot.reading;
-        const projection = readingProjection(snapshot);
+        // All owner mutations check/increment readingState. Its CAS fence is
+        // sufficient for a visit which changes neither canonical words nor
+        // relationships; rewriting those large documents adds no protection.
+        const oldTitles = new Map(current.snapshot.reading.articles.map(row => [row.id, row.title]));
+        const includeWords = !visitOnly || snapshot.reading.articles.some(row => oldTitles.has(row.id) && oldTitles.get(row.id) !== row.title);
+        const projection = readingProjection(snapshot, { includeWords });
         const values = { 'vocab.words': snapshot.words, 'vocab.lists': snapshot.lists,
             [READING_STATE_KEY]: state, 'vocab.readingVocabWords': projection.words,
             'vocab.readingBookshelfExams': projection.bookshelf };
-        return READING_DOCUMENT_KEYS.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
+        const keys = visitOnly ? [READING_STATE_KEY, 'vocab.readingBookshelfExams']
+            .concat(includeWords ? ['vocab.readingVocabWords'] : []) : READING_DOCUMENT_KEYS;
+        return keys.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
             expectedRevision: metaRevision(current.metas[logicalKey]) }));
     }
     function tombstoneRevision(value) { return Number(value && value.revision) || 0; }
@@ -6148,12 +6235,14 @@
         await ready; await ensureReadingMigration();
         assertObject(input, 'Reading command must be an object');
         const command = Object.assign({ at: nowIso() }, clone(input));
-        const initial = await readReadingDocuments();
+        let initial = options.observedRevision !== undefined && options.observedGeneration !== undefined
+            ? null : await readReadingDocuments();
         const observed = { revision: options.observedRevision ?? initial.revision,
             generation: options.observedGeneration ?? initial.generation };
         const mutation = optionsMutationOptions(options, `reading-${type}`, { type, command: input });
         return retryVocabMutation(options, async () => {
-            const current = await readReadingDocuments();
+            const current = initial || await readReadingDocuments();
+            initial = null;
             assertFreshReadingIntent(current, type, command, observed);
             const model = readingModel(); let next = current.snapshot;
             const state = clone(current.state); const tombstones = state.tombstones;
@@ -6190,17 +6279,19 @@
                 mark('visits', command.articleId);
             } else throw new AppDataError('VALIDATION', `Unknown reading operation: ${type}`);
             // Remember concrete removals as well as broad fences for portable merges.
+            const retainedAssociations = new Set(next.reading.associations.map(row => row.id));
+            const retainedOccurrences = new Set(next.reading.occurrences.map(row => row.id));
             for (const row of current.snapshot.reading.associations) {
-                if (!next.reading.associations.some((item) => item.id === row.id)) mark('associations', row.id);
+                if (!retainedAssociations.has(row.id)) mark('associations', row.id);
             }
             for (const row of current.snapshot.reading.occurrences) {
-                if (!next.reading.occurrences.some((item) => item.id === row.id)) mark('occurrences', row.id);
+                if (!retainedOccurrences.has(row.id)) mark('occurrences', row.id);
             }
             model.validate(next);
-            const receipt = await kernel.mutate(readingChanges(current, next, state), mutation);
+            const receipt = await kernel.mutate(readingChanges(current, next, state, { visitOnly: type === 'recordVisit' }), mutation);
             if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Reading save was not acknowledged');
             // A replay may acknowledge an earlier operation; return current durable data.
-            const committed = await readReadingDocuments();
+            const committed = await readReadingDocuments({ includeMirrors: false });
             if (type === 'collect') {
                 const articleId = model.articleId(command.source, command.article.examId);
                 const termId = model.termId(command.word.word);
@@ -6288,7 +6379,7 @@
         // Pure schema/relationship operations. Persistence commands consume this
         // contract; a returned snapshot is not a durable commit acknowledgement.
         get readingModel() { return global.ReadingVocabularyModel; },
-        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments()); },
+        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments({ includeMirrors: false })); },
         async shouldInitializeDefaultWords() {
             await ready; await ensureReadingMigration();
             if (!global.ReadingVocabularyModel) return !(await kernel.read('vocab.words', { withMeta: true })).envelope;
@@ -7098,12 +7189,13 @@
         };
     }
 
-    async function migrateLegacyData() {
+    async function migrateLegacyData({ includeExternal = false } = {}) {
         // Unit embedders may provide a deliberately minimal kernel bootstrap.
         if (typeof internals.readLegacyValues !== 'function') return;
         const migrationMeta = await kernel.read('system.migrations', { withMeta: true });
         const migrationState = asObject(migrationMeta.data);
         const v1Complete = asObject(migrationState.v1ToV2).status === 'complete';
+        if (v1Complete && !includeExternal) return;
         const externalConsumed = asObject(migrationState.externalBackupV1).status === 'consumed';
         let externalBackup = null;
         if (!externalConsumed && typeof internals.readLegacyExternalBackup === 'function') {
@@ -7208,11 +7300,6 @@
                 if (global.console && console.error) console.error('[AppData v2] legacy migration skipped:', error);
             }
             try {
-                await cleanupExpiredRecovery();
-            } catch (error) {
-                if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
-            }
-            try {
                 await migrateLegacyReadingData();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
@@ -7223,6 +7310,16 @@
             if (global.console && console.error) console.error('[AppData v2] initialization blocked:', error);
             throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
         });
+
+    // Each recovery read prunes its own key. The startup sweep is maintenance,
+    // and must not delay basic data availability or the first painted screen.
+    ready.then(() => {
+        const run = () => cleanupExpiredRecovery().catch(error => {
+            if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
+        });
+        if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 15000 });
+        else if (typeof global.setTimeout === 'function') global.setTimeout(run, 5000);
+    }).catch(() => {});
 
     const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
     Object.defineProperties(AppData, {
@@ -7264,6 +7361,7 @@
     var LATEST_FILENAME = 'ielts-atlas-backup-latest.json';
     var DATED_GENERATION_PATTERN = /^ielts-atlas-backup-(\d{4}-\d{2}-\d{2})(?:-(\d{9}))?\.json$/;
     var WRITE_DELAY_MS = 8000;
+    var REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
 
@@ -7314,6 +7412,8 @@
             lastWriteAt: source.lastWriteAt ? String(source.lastWriteAt) : null,
             lastChecksum: source.lastChecksum ? String(source.lastChecksum) : null,
             lastWriteError: source.lastWriteError ? String(source.lastWriteError) : null,
+            lastRemindedAt: source.lastRemindedAt ? String(source.lastRemindedAt) : null,
+            storageIdentity: source.storageIdentity ? String(source.storageIdentity) : null,
             awaitingRestore: source.awaitingRestore === true
         };
     }
@@ -7753,6 +7853,13 @@
                 }
 
                 var backups = requireBackupApi();
+                var storageIdentity = typeof backups.getStorageIdentity === 'function' ? await backups.getStorageIdentity() : null;
+                if (state.meta.storageIdentity && storageIdentity && state.meta.storageIdentity !== storageIdentity
+                    && opts.allowOverwriteExisting !== true) {
+                    state.meta.awaitingRestore = true;
+                    await persistMeta({ awaitingRestore: true, lastWriteError: 'browser_database_recreated' }, opts);
+                    return { success: false, reason: 'restore_required' };
+                }
                 var snapshot = await backups.export();
                 if (!isValidV2Snapshot(snapshot, V2_SCHEMA_VERSION)) {
                     throw new Error('AppData returned an invalid v2 backup snapshot');
@@ -7764,6 +7871,9 @@
                         snapshot.schemaVersion
                     );
                     if (latest && latest.checksum === snapshot.checksum) {
+                        if (storageIdentity && state.meta.storageIdentity !== storageIdentity) {
+                            await persistMeta({ storageIdentity: storageIdentity }, opts);
+                        }
                         state.dirty = state.dirtyGeneration !== startedGeneration;
                         state.freshnessUnknown = false;
                         followupNeeded = state.dirty;
@@ -7795,6 +7905,7 @@
                     directoryName: state.directoryHandle.name || state.meta.directoryName || 'backup',
                     lastWriteAt: nowIso(),
                     lastChecksum: snapshot.checksum,
+                    storageIdentity: storageIdentity,
                     lastWriteError: null
                 }, opts);
                 return {
@@ -8437,8 +8548,22 @@
                     state.dirty = false;
                     state.freshnessUnknown = false;
                 }
+                // Adopt this installation only after the restore has committed.
+                // Failure keeps the disk overwrite guard active.
+                var restoredIdentity;
+                try {
+                    restoredIdentity = typeof backups.getStorageIdentity === 'function'
+                        ? await backups.getStorageIdentity() : state.meta.storageIdentity;
+                } catch (_) {
+                    state.meta.awaitingRestore = true;
+                    result.success = false;
+                    result.restored = true;
+                    result.reason = 'storage_identity_unavailable';
+                    return result;
+                }
                 var metadataPersisted = await persistMeta({
                     lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                    storageIdentity: restoredIdentity,
                     lastWriteError: null,
                     awaitingRestore: false
                 }, { requireDurable: true });
@@ -8465,7 +8590,7 @@
     }
 
     function scheduleSilentFlush() {
-        if (state.suspended || state.resetPreparing || state.meta.awaitingRestore) return;
+        if (state.suspended || state.resetPreparing || state.meta.awaitingRestore || !state.directoryHandle) return;
         if (state.silentFlushTimer) global.clearTimeout(state.silentFlushTimer);
         state.silentFlushTimer = global.setTimeout(function () {
             state.silentFlushTimer = null;
@@ -8596,7 +8721,7 @@
         panel.className = 'external-backup-panel external-backup-panel--modal';
         var description = global.document.createElement('p');
         description.className = 'external-backup-panel__desc';
-        description.textContent = '绑定本地文件夹后，IELTS Atlas 会写入完整的 v2 数据快照。磁盘文件不会因清理浏览器站点数据而删除；后台写入不会主动请求权限。';
+        description.textContent = '本地文件夹 JSON 副本独立保存在磁盘上，清理浏览器数据后仍可恢复。应用内备份保存在当前浏览器中，可能随站点数据一起丢失。绑定后会自动保存；需要重新授权时，请点击“立即保存到文件夹”。';
         var statusCard = global.document.createElement('div');
         statusCard.className = 'external-backup-status-card';
         var statusLabel = global.document.createElement('div');
@@ -8614,6 +8739,7 @@
         [
             '支持 Chrome / Edge 的安全上下文；其他环境继续使用手动导出',
             '备份文件包含练习、设置、词汇、题库配置等可迁移数据',
+            '距上次保存或提醒满三天后，会在首页或更多页面提醒；关闭提醒不代表已保存',
             '磁盘 JSON 为明文文件，请妥善保管'
         ].forEach(function (text) {
             var item = global.document.createElement('li');
@@ -8624,7 +8750,7 @@
         var actions = global.document.createElement('div');
         actions.className = 'external-backup-panel__actions';
         var bindButton = makeButton('external-backup-bind-btn', '📁 绑定备份文件夹');
-        var writeButton = makeButton('external-backup-write-btn', '💾 立即写入备份');
+        var writeButton = makeButton('external-backup-write-btn', '💾 立即保存到文件夹');
         var restoreButton = makeButton('external-backup-restore-btn', '♻️ 从文件夹恢复');
         var unbindButton = makeButton('external-backup-unbind-btn', '🔓 解除绑定');
         unbindButton.classList.add('external-backup-btn--ghost');
@@ -8787,19 +8913,19 @@
             if (backups && typeof backups.onDataCommitted === 'function' && !state.unsubscribeCommitted) {
                 state.unsubscribeCommitted = backups.onDataCommitted(markDirty);
             }
-            if (state.directoryHandle && backups && typeof backups.export === 'function') {
-                try {
-                    var currentSnapshot = await backups.export();
-                    state.freshnessUnknown = false;
-                    if (!currentSnapshot || currentSnapshot.checksum !== state.meta.lastChecksum) {
-                        state.dirty = true;
-                        state.dirtyGeneration += 1;
+            if (state.directoryHandle) {
+                // Binding readiness must not serialize the entire database.
+                // Reconcile once through the verified write path after the
+                // debounce, and only when permission actually permits writing.
+                state.freshnessUnknown = true;
+                state.dirty = true;
+                state.dirtyGeneration += 1;
+                if (state.meta.storageIdentity && backups && typeof backups.getStorageIdentity === 'function') {
+                    var currentIdentity = await backups.getStorageIdentity();
+                    if (currentIdentity !== state.meta.storageIdentity) {
+                        state.meta.awaitingRestore = true;
+                        await persistMeta({ awaitingRestore: true, lastWriteError: 'browser_database_recreated' });
                     }
-                } catch (error) {
-                    state.freshnessUnknown = true;
-                    state.dirty = true;
-                    state.dirtyGeneration += 1;
-                    if (global.console && console.warn) console.warn('[ExternalBackup v2] freshness check failed:', error);
                 }
             }
             state.ready = true;
@@ -8834,6 +8960,34 @@
         return true;
     }
 
+    async function checkReminder() {
+        function canShow() {
+            if (!global.document || global.document.visibilityState === 'hidden'
+                || state.suspended || state.resetPreparing || state.writing || !supportsFileSystemAccess()) return false;
+            var active = global.document.querySelector('.view.active');
+            return (!active || active.id === 'overview-view' || active.id === 'more-view')
+                && !global.document.querySelector('[role="dialog"].show, .theme-modal.show');
+        }
+        if (!canShow()) return false;
+        await ensureReady();
+        var shown = false;
+        await withDiskWriteLock(async function () {
+            if (!canShow()) return;
+            var stored = await readStoredValue(META_KEY);
+            var meta = cloneMeta(stored || state.meta);
+            var last = Math.max(Date.parse(meta.lastWriteAt) || 0, Date.parse(meta.lastRemindedAt) || 0,
+                Date.parse(state.meta.lastRemindedAt) || 0);
+            if (last && Date.now() - last < REMINDER_INTERVAL_MS) return;
+            state.meta = meta;
+            // Persist the reminder, not a successful save. Dismissal never
+            // marks data clean and another tab observes the same cooldown.
+            if (!await persistMeta({ lastRemindedAt: nowIso() })) return;
+            shown = true;
+        });
+        if (shown && canShow()) openModal();
+        return shown;
+    }
+
     global.ExternalBackupService = Object.freeze({
         __v2: true,
         LATEST_FILENAME: LATEST_FILENAME,
@@ -8857,13 +9011,26 @@
         markDirty: markDirty,
         flushSilentlyIfPermitted: flushSilentlyIfPermitted,
         refreshPanel: refreshPanel,
-        requestPersistentStorage: requestPersistentStorage
+        requestPersistentStorage: requestPersistentStorage,
+        checkReminder: checkReminder
     });
 
     function boot() {
-        init().catch(function (error) {
-            if (global.console && console.warn) console.warn('[ExternalBackup v2] boot failed:', error);
-        });
+        function start() {
+            init().then(function (initialized) {
+                if (!initialized || !global.document) return;
+                function poll() {
+                    checkReminder().catch(function (error) {
+                        if (global.console && console.warn) console.warn('[ExternalBackup v2] reminder failed:', error);
+                    }).finally(function () { global.setTimeout(poll, 60000); });
+                }
+                poll();
+            }).catch(function (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] boot failed:', error);
+            });
+        }
+        if (global.document) global.setTimeout(start, 10000);
+        else start();
     }
 
     if (global.document && global.document.readyState === 'loading') {

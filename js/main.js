@@ -817,7 +817,7 @@ async function saveReadingHighlightVocab(payload) {
     }
     try {
         if (!window.VocabStore && window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-            await window.AppLazyLoader.ensureGroup('more-tools');
+            await window.AppLazyLoader.ensureGroup('vocabulary-tools');
         }
         if (!window.VocabStore || typeof window.VocabStore.upsertReadingHighlightWord !== 'function') {
             throw new Error('VocabStore 未就绪');

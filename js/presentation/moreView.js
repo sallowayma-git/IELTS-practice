@@ -213,10 +213,14 @@
         }
     }
 
-    function handleVocabEntry(event) {
+    async function handleVocabEntry(event) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        const navigation = global.__getAppNavigationIntentGeneration?.();
+        try { await global.AppLazyLoader?.ensureGroup('vocabulary-tools'); }
+        catch (error) { global.showMessage?.('词汇模块加载失败，请重试', 'warning'); return; }
+        if (navigation != null && navigation !== global.__getAppNavigationIntentGeneration?.()) return;
         var mountView = function () {
             if (global.VocabSessionView && typeof global.VocabSessionView.mount === 'function') {
                 global.VocabSessionView.mount('#vocab-view');
