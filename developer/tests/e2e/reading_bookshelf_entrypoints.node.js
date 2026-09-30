@@ -13,7 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const reports = path.join(root, 'developer/tests/e2e/reports');
 const startedAt = Date.now();
 const builtin = { kind: 'builtin', id: 'default' };
-const vocabulary = ['coral', 'ocean', 'island', 'harbour', 'lagoon', 'turtle', 'beyondpreview'];
+const vocabulary = ['coral', 'ocean', 'island', 'harbour', 'lagoon', 'turtle', 'seagrass', 'reef', 'shell', 'shore', 'beyondpreview'];
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 fs.mkdirSync(reports, { recursive: true });
 for (const label of ['A', 'B']) {
@@ -283,14 +283,14 @@ async function countsAndControls(page, examA, protocol) {
     const examB = examA === 'p2-low-08' ? 'p1-high-216' : 'p2-low-08';
     await collect(page, examA, vocabulary);
     await collect(page, examB, ['coral', 'bword']);
-    await expectCounts(page, { [examA]: 7, [examB]: 2 }, 8);
-    assert.equal(await card(page, examA).locator('.bookshelf-vocab-chip').count(), 6);
+    await expectCounts(page, { [examA]: vocabulary.length, [examB]: 2 }, vocabulary.length + 1);
+    await poll(() => card(page, examA).locator('.bookshelf-vocab-chip').count(), 10, 'ten-word preview must finish loading');
     await search(page, 'beyondpreview', [examA]);
     await openCard(page, examA);
     await page.locator('#vocab-fab').click();
     await page.locator('#vocab-manual-input').fill('manualaddition');
     await page.locator('#vocab-manual-add-btn').click();
-    await poll(() => page.locator('#vocab-fab-count').textContent(), '8', 'manual collection must show acknowledged count');
+    await poll(() => page.locator('#vocab-fab-count').textContent(), String(vocabulary.length + 1), 'manual collection must show acknowledged count');
     const exported = await exportText(page, page.locator('#vocab-export-btn'));
     assert.ok(exported.includes('manualaddition') && exported.includes('beyondpreview'));
     await page.locator('#vocab-clear-btn').click();
@@ -322,18 +322,18 @@ async function importAndCrossWindow(page, context, examA, examB, protocol) {
             AppData.backups.commitImport(planId, { confirmDestructive: replace }), { planId, replace }));
         assert.equal(receipt.committed, true);
         await checkpoint(`${protocol}-import-${mode}-original-counts`, () =>
-            expectCounts(page, replace ? { 'issue159-restored': 7 } : { [examA]: 0, [examB]: 2, 'issue159-restored': 7 }, replace ? 7 : 9));
+            expectCounts(page, replace ? { 'issue159-restored': vocabulary.length } : { [examA]: 0, [examB]: 2, 'issue159-restored': vocabulary.length }, replace ? vocabulary.length : vocabulary.length + 2));
         await checkpoint(`${protocol}-import-${mode}-original-search`, () => search(page, 'restoredbeyondpreview', ['issue159-restored']));
     }
     const other = await checkpoint(`${protocol}-cross-window-page`, () => context.newPage());
     try {
         await checkpoint(`${protocol}-cross-window-ready`, () => ready(other, protocol));
         await checkpoint(`${protocol}-cross-window-collect`, () => collect(other, 'issue159-restored', ['otherwindowword']));
-        await checkpoint(`${protocol}-cross-window-original-counts`, () => expectCounts(page, { 'issue159-restored': 8 }, 8));
+        await checkpoint(`${protocol}-cross-window-original-counts`, () => expectCounts(page, { 'issue159-restored': vocabulary.length + 1 }, vocabulary.length + 1));
         await checkpoint(`${protocol}-cross-window-original-search`, () => search(page, 'otherwindowword', ['issue159-restored']));
     } finally { await checkpoint(`${protocol}-cross-window-close`, () => other.close()); }
     await checkpoint(`${protocol}-import-bookshelf-screenshot`, () => page.screenshot({ path: path.join(reports, `issue159-${protocol}-bookshelf.png`) }));
-    pass(`${protocol}-merge-replace-cross-window-refresh`, { distinctGlobalCount: 8 });
+    pass(`${protocol}-merge-replace-cross-window-refresh`, { distinctGlobalCount: vocabulary.length + 1 });
 }
 
 async function sourceIdentity(page, protocol) {
@@ -367,8 +367,8 @@ async function sourceIdentity(page, protocol) {
     await checkpoint(`${protocol}-source-fixture-projection`, () => poll(() => page.evaluate(({ ids, fixtureRevision }) => {
         const store = ReadingBookshelfStore;
         return !store._loading && store._revision === fixtureRevision && Object.values(ids).every(id => {
-            const article = store._snapshot?.reading.articles.find(row => row.id === id);
-            return article && store._sourceMetadata.get(article.sourceId)?.index?.some(row =>
+            const article = store.getBookshelfExams().find(row => row.articleId === id);
+            return article && store._sourceMetadata.get(AppData.vocab.readingModel.sourceId(article.source))?.index?.some(row =>
                 String(row.id || row.examId) === article.examId);
         });
     }, { ids, fixtureRevision }), true, 'source fixture projection must finish before search input'));

@@ -1397,6 +1397,10 @@ function reminderDocument() {
             : state.shown || state.anotherDialog ? modal : null; } };
 }
 async function testReminderCooldownAndNonInterruption() {
+    const unbound = createHarness(); await unbound.ready();
+    const unboundDocument = reminderDocument(); unbound.setDocument(unboundDocument);
+    assert.equal(await unbound.service.checkReminder(), false, 'an unbound installation must not receive save reminders');
+    assert.equal(unboundDocument.state.shown, false);
     const harness = createHarness(); await harness.ready();
     await harness.service.bindDirectory({ writeNow: true });
     const document = reminderDocument(); harness.setDocument(document);

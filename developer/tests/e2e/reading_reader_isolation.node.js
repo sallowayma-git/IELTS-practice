@@ -117,7 +117,7 @@ async function hostReady(page, protocol) {
         document.querySelector('nav button[data-view="browse"]')?.click();
     });
     await page.waitForFunction(async id => typeof window.app?.openExam === 'function' && (await window.resolveActiveLibraryIndex()).some(exam => exam.id === id), examId, { timeout: 60_000 });
-    await page.evaluate(() => window.AppLazyLoader.ensureGroup('browse-runtime'));
+    await page.evaluate(() => window.AppLazyLoader.ensureGroup('reading-tools'));
     await page.waitForFunction(() => !!window.ReadingVocabReader);
 }
 

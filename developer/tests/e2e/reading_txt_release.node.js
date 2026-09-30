@@ -138,7 +138,8 @@ async function shelfSettled(page) {
 }
 async function readerReady(page, examId) {
     await page.waitForFunction(id => window.ReadingVocabReader?.currentExamId === id && !!ReadingVocabReader.currentPayload
-        && !!document.querySelector('.vocab-paragraph-text') && window.BookshelfView?.state.readerLoading !== true, examId);
+        && !!document.querySelector('.vocab-paragraph-text') && window.BookshelfView?.state.readerLoading !== true
+        && document.querySelector('#vocab-manual-add-btn')?.disabled === false, examId);
     assert.equal(await page.locator('.vocab-error-state').count(), 0);
 }
 async function manual(page, word, count) {

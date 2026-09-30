@@ -194,6 +194,12 @@
             logicalKey: 'system.entityRevisions', classification: 'system',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: false, import: 'ignore'
+        },
+        {
+            // Small atomic invalidation fence for the disposable reading view cache.
+            logicalKey: 'system.readingViewToken', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
         }
     ].map(freezeEntry);
 

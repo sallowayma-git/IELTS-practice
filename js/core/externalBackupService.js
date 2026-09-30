@@ -1630,6 +1630,9 @@
         }
         if (!canShow()) return false;
         await ensureReady();
+        // This is a save/reauthorization reminder for an existing binding.
+        // A new unbound installation must not acquire a blocking modal.
+        if (!state.directoryHandle) return false;
         var shown = false;
         await withDiskWriteLock(async function () {
             if (!canShow()) return;
