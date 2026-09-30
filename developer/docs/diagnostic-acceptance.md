@@ -80,6 +80,11 @@ the new integrated acceptance suite. Missing files fail immediately; an absent
 notification fixtures are explicitly qualified in the full source matrix, not
 represented as reruns from the release archive.
 
+The TXT qualification runs its HTTP, HTTPS and file protocols sequentially on
+Windows to bound the hosted runner's browser workload. Every protocol retains
+its simultaneous-window and concurrent IndexedDB mutation assertions; the report
+records the protocol concurrency. Linux runs the three protocols concurrently.
+
 CI artifacts `e2e-diagnostics-*` and `diagnostic-release-{os}-*` include the
 sanitized matrix and release provenance. Download artifacts from the relevant
 PR's CI run; the issue/tracker handoff links that run and records the tested SHA.
