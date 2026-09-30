@@ -29,6 +29,8 @@ declare global {
         /** Shows normalized evidence or an existing page reference; returns the notification group reference. */
         showIncident(eventOrId: DiagnosticEvent | string, presentation?: IncidentPresentation): string | null;
         showIncidentHistory(): Promise<void> | undefined;
+        deliverDiagnostics(eventId: string | null, textTarget: HTMLTextAreaElement,
+            action?: 'download' | 'copySummary'): Promise<{ status: string; text: string }> | undefined;
     }
     function getMessageCenter(): MessageCenter;
     function showMessage(message: string, type?: string, duration?: number): HTMLElement | null;

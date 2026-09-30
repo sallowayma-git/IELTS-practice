@@ -35,6 +35,7 @@
     function storageStatus(raw) {
         if (!raw) return null;
         const generation = field(raw, 'generation');
+        const mode = field(raw, 'detailedMode');
         return { persistence: choice(field(raw, 'persistence'), PERSISTENCE),
             enabled: choice(field(raw, 'enabled'), [true, false]),
             generation: typeof generation === 'string' && /^dg-[a-f0-9]{32}$/.test(generation) ? generation : 'unknown',
@@ -44,7 +45,10 @@
             failure: choice(field(raw, 'failure'), FAILURES, field(raw, 'failure') === null ? null : 'unknown'),
             coverage: choice(field(raw, 'coverage'), ['complete', 'partial']),
             pendingEvents: count(field(raw, 'pendingEvents')), pendingBytes: count(field(raw, 'pendingBytes')),
-            dropped: count(field(raw, 'dropped')) };
+            dropped: count(field(raw, 'dropped')),
+            ...(mode ? { detailedMode: { active: field(mode, 'active') === true,
+                expiresAt: count(field(mode, 'expiresAt')), remainingMs: Math.min(900000, count(field(mode, 'remainingMs'))),
+                coordination: choice(field(mode, 'coordination'), ['supported-windows', 'unavailable'], 'unavailable') } } : {}) };
     }
     function priority(event) {
         if (event.code !== 'UNEXPECTED_RUNTIME_ERROR') return event.collection.source === 'business' ? 3 : 2;

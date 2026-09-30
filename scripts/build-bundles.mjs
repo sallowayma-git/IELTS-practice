@@ -52,6 +52,7 @@ const bundles = {
         'js/presentation/navigation-controller.js',
         'js/presentation/incident-center.js',
         'js/presentation/message-center.js',
+        'js/components/diagnosticSettingsPanel.js',
         'js/utils/practiceTimerPreferences.js',
         'js/components/practiceSettingsPanel.js',
         'js/components/libraryManagerPanel.js',

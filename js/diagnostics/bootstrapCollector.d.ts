@@ -17,7 +17,7 @@ export interface Collector extends DiagnosticReporter {
     /** Passive status only: never a probe or delivery during export. */
     attachTransport(transport: { status(): DiagnosticTransportStatus }): void;
     /** Only recognized semantic input is retained, after normalization. */
-    breadcrumb(input: NonNullable<DiagnosticInput['breadcrumbs']>[number]): void;
+    breadcrumb(input: NonNullable<DiagnosticInput['breadcrumbs']>[number], options?: { detailed?: boolean }): void;
     /** Call before assigning src/href or inserting a dynamic resource. */
     declareResource(target: string | object, declaration?: { url?: string; optional?: boolean }): void;
     /** Returns the capture-phase Error so a rejected loader can propagate the same identity. */

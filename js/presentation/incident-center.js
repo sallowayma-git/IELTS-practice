@@ -472,8 +472,9 @@
                 let snapshot;
                 try { snapshot = await global.AppDiagnosticExport.snapshot(); } catch (_) { snapshot = this.reporter?.snapshot(); }
                 if (this.dialog !== dialog) return;
-                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean).reverse();
-                info.textContent = '保留 ' + events.length + ' 条记录。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean)
+                    .sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+                info.textContent = '保留 ' + events.length + ' 条记录，按记录时间排序，跨窗口时钟可能不同。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
                 if (snapshot?.transport?.aggregation === 'incomplete') {
                     info.textContent += ' 跨窗口诊断汇总不完整，可导出本页已保留的记录。';
                 }

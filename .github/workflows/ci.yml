@@ -76,6 +76,11 @@ jobs:
         timeout-minutes: 2
         run: node developer/tests/e2e/incident_notifications.node.js
 
+      - name: Verify diagnostic settings in three hosting modes
+        # B3 settings regression coverage; integrated release qualification remains in C4.
+        timeout-minutes: 2
+        run: node developer/tests/e2e/diagnostic_settings.node.js
+
       - name: Verify full reset with a surviving diagnostic writer
         timeout-minutes: 2
         run: python developer/tests/e2e/full_reset_flow.py

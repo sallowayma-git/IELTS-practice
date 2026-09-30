@@ -1442,6 +1442,15 @@
     var browsePrefetchPromise = null;
     var morePrefetchTriggered = false;
 
+    function openDiagnosticsSettings(eventId) {
+        if (typeof global.showView === 'function') global.showView('settings', false);
+        if (global.DiagnosticSettingsPanel) global.DiagnosticSettingsPanel.open(eventId);
+        else {
+            var diagnostics = global.document?.getElementById('diagnostic-settings');
+            if (diagnostics) diagnostics.open = true;
+        }
+    }
+
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
@@ -2461,6 +2470,7 @@
     }
 
     global.AppActions = Object.assign({}, global.AppActions, {
+        openDiagnosticsSettings: openDiagnosticsSettings,
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
         preloadPracticeSuite: triggerPrefetch,

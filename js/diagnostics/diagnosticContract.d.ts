@@ -193,6 +193,8 @@ export interface DiagnosticStorageStatus {
     readonly pendingEvents: number;
     readonly pendingBytes: number;
     readonly dropped: number;
+    readonly detailedMode?: Readonly<{ active: boolean; expiresAt: number; remainingMs: number;
+        coordination: 'supported-windows' | 'unavailable' }>;
 }
 export interface SnapshotQuery {
     readonly eventId?: string;
