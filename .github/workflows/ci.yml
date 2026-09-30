@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,63 +47,16 @@ jobs:
       - name: Run JavaScript unit and regression tests
         run: npm test --prefix developer
 
-      - name: Verify diagnostic startup faults in three hosting modes
-        timeout-minutes: 3
-        run: node developer/tests/e2e/diagnostic_startup.node.js
-
-      - name: Verify passive diagnostic export in three hosting modes
-        timeout-minutes: 2
-        run: node developer/tests/e2e/diagnostic_export.node.js
-
       - name: Run Python unit tests
         run: python -m unittest discover -s developer/tests/py -p "test_*.py"
-
-      - name: Verify diagnostic channels in three hosting modes
-        # C1 protocol and lifecycle regressions; runtime installation belongs to C2/C3.
-        timeout-minutes: 3
-        run: node developer/tests/e2e/diagnostic_channel.node.js
-
-      - name: Verify reading diagnostics and submission recovery in three hosting modes
-        timeout-minutes: 4
-        run: node developer/tests/e2e/reading_diagnostics.node.js
-
-      - name: Verify listening and legacy diagnostics with synthetic content
-        timeout-minutes: 4
-        run: node developer/tests/e2e/listening_diagnostics.node.js
-
-      - name: Verify incident notifications in three hosting modes
-        # Full release qualification remains in C4; these are B2 interaction regressions.
-        timeout-minutes: 2
-        run: node developer/tests/e2e/incident_notifications.node.js
-
-      - name: Verify diagnostic settings in three hosting modes
-        # B3 settings regression coverage; integrated release qualification remains in C4.
-        timeout-minutes: 2
-        run: node developer/tests/e2e/diagnostic_settings.node.js
-
-      - name: Verify full reset with a surviving diagnostic writer
-        timeout-minutes: 2
-        run: python developer/tests/e2e/full_reset_flow.py
-
-      - name: Verify critical operation outcomes in three hosting modes
-        # B4 boundary regressions; integrated release qualification remains in C4.
-        timeout-minutes: 3
-        run: node developer/tests/e2e/operation_diagnostics.node.js
 
       - name: Check reading data integrity
         run: python developer/tests/ci/check_reading_data_integrity.py
 
       - name: Run unified E2E suite (file:// capable)
-        # Leave time for retained diagnostics before the job's 30-minute limit.
-        timeout-minutes: 15
+        # Includes C4's nine bounded diagnostic suites and the live reset flow.
+        timeout-minutes: 30
         run: python developer/tests/e2e/e2e_runner.py
-
-      - name: Qualify fresh intensive-reading release package
-        timeout-minutes: 6
-        env:
-          READING_RELEASE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          READING_RELEASE_REVIEWED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python developer/tests/ci/qualify_reading_release.py
 
       - name: Upload E2E diagnostics
         if: always()
@@ -117,4 +70,46 @@ jobs:
             developer/tests/e2e/reports/**/*.png
             developer/tests/e2e/reports/**/*.txt
           if-no-files-found: ignore
+          retention-days: 14
+
+  release-qualification:
+    name: Release qualification (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install Chromium test dependencies
+        run: |
+          npm ci --prefix developer
+          node developer/node_modules/playwright/cli.js install --with-deps chromium --only-shell
+      - name: Qualify freshly packaged and extracted runtime
+        timeout-minutes: 20
+        env:
+          INCLUDE_LOCAL_LISTENING: '0'
+          READING_RELEASE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          READING_RELEASE_REVIEWED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python developer/tests/ci/qualify_reading_release.py
+      - name: Upload sanitized release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-release-${{ matrix.os }}-${{ github.run_attempt }}
+          path: |
+            developer/tests/e2e/reports/reading-release-package/qualification.json
+            developer/tests/e2e/reports/reading-release-package/asset-manifest.json
+            developer/tests/e2e/reports/reading-release-package/diagnostics/*.json
+            developer/tests/e2e/reports/reading-release-package/*report.json
+          if-no-files-found: error
           retention-days: 14

@@ -98,7 +98,9 @@ function Test-ZipExcluded {
     if ($entry -eq 'assets/developer' -or $entry.StartsWith('assets/developer/', [System.StringComparison]::Ordinal)) { return $true }
 
     if (-not $IncludeLocalListening) {
-        if ($entry -eq 'assets/generated/listening-exams' -or $entry.StartsWith('assets/generated/listening-exams/', [System.StringComparison]::Ordinal)) { return $true }
+        # The wrapper is application code; only listening content is optional.
+        if ($entry.StartsWith('assets/generated/listening-exams/', [System.StringComparison]::Ordinal) -and
+            $entry -ne 'assets/generated/listening-exams/listening-practice-unified.html') { return $true }
         if ($entry -eq 'ListeningPractice' -or $entry.StartsWith('ListeningPractice/', [System.StringComparison]::Ordinal)) { return $true }
     }
 
@@ -331,6 +333,8 @@ Require-ZipEntry $zipEntries 'assets/generated/reading-exams/reading-practice-un
 Require-ZipEntry $zipEntries 'assets/generated/reading-explanations/manifest.js'
 Require-ZipEntry $zipEntries 'assets/generated/diagnostics/bootstrap-inline.js'
 Require-ZipEntry $zipEntries 'assets/generated/diagnostics/build-manifest.json'
+Require-ZipEntry $zipEntries 'assets/generated/listening-exams/listening-practice-unified.html'
+Require-ZipEntry $zipEntries 'css/incident-center.css'
 Require-ZipEntry $zipEntries 'js/bundles/runtime-entry.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/core-foundation.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/ui-shell.bundle.js'
@@ -350,7 +354,11 @@ if ($IncludeLocalListening -and (Test-Path -LiteralPath (Join-Path $ProjectRoot 
     Require-ZipEntry $zipEntries 'assets/generated/listening-exams/manifest.js'
     Require-ZipEntry $zipEntries 'assets/generated/listening-exams/listening-index.compat.js'
 } else {
-    Reject-ZipEntryPrefix $zipEntries 'assets/generated/listening-exams/'
+    $optionalListeningEntries = @($zipEntries | Where-Object {
+        $_ -ne 'assets/generated/listening-exams/' -and
+        $_ -ne 'assets/generated/listening-exams/listening-practice-unified.html'
+    })
+    Reject-ZipEntryPrefix $optionalListeningEntries 'assets/generated/listening-exams/'
 }
 
 if ($IncludeLocalListening -and (Test-Path -LiteralPath (Join-Path $ProjectRoot 'ListeningPractice'))) {

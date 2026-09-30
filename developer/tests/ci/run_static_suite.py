@@ -241,6 +241,7 @@ def _check_index_css_convergence(index_path: Path) -> Tuple[bool, dict]:
         "css/heroui-bridge.css",
         "css/theme-switcher-scroll.css",
         "css/onboarding.css",
+        "css/vocab-reader.css",
     }
     unexpected = sorted([href for href in css_hrefs if href not in allowed])
     missing_required = sorted([href for href in allowed if href not in css_hrefs])
@@ -492,6 +493,15 @@ def _check_v2_data_architecture() -> Tuple[bool, dict]:
             )
         if relative == "developer/tests/e2e/full_reset_flow.py" and label == "raw-storage":
             return True
+        if relative == "developer/tests/e2e/diagnostic_acceptance.node.js" and label == "raw-storage":
+            # C4 faults only the diagnostics database and enumerates names after
+            # the supported reset API; it never seeds raw business storage.
+            return "indexedDB" in token and (
+                "indexedDB.databases()" in line_text or in_region(
+                    source, offset, "} else if (scenario.startsWith('storage-')) {",
+                    "} else if (scenario === 'hostile-propagation-and-storm') {",
+                )
+            )
         if relative == "developer/tests/e2e/diagnostic_settings.node.js" and label == "raw-storage":
             # B3's isolated browser fixture verifies diagnostic deletion and
             # preservation of one unrelated key; business storage stays guarded.
@@ -839,6 +849,12 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "js/bundles/listening-wrapper.bundle.js",
     ])
     missing_bundles = sorted(set(expected_bundles) - set(bundled_scripts))
+    required_diagnostics = {
+        "assets/generated/listening-exams/listening-practice-unified.html",
+        "assets/generated/diagnostics/bootstrap-inline.js",
+        "assets/generated/diagnostics/build-manifest.json", "css/incident-center.css",
+    }
+    missing_diagnostics = sorted(required_diagnostics - name_set)
     unexpected_bundles = sorted(set(bundled_scripts) - set(expected_bundles))
 
     forbidden_templates = sorted([name for name in name_set if name == "templates" or name.startswith("templates/")])
@@ -861,7 +877,8 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
     ])
     optional_listening_generated_files = sorted([
         name for name in optional_listening_generated
-        if name != "assets/generated/listening-exams"
+        if name not in {"assets/generated/listening-exams",
+                        "assets/generated/listening-exams/listening-practice-unified.html"}
     ])
     expected_optional_generated = {
         "assets/generated/listening-exams/manifest.js",
@@ -870,7 +887,7 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
     optional_generated_present = set(optional_listening_generated_files)
     has_optional_listening_payload = bool(listening_parts_present)
     forbidden_default_listening_generated = (
-        optional_listening_generated
+        optional_listening_generated_files
         if not has_optional_listening_payload
         else []
     )
@@ -899,6 +916,7 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
 
     passed = (
         not missing_bundles
+        and not missing_diagnostics
         and not unexpected_bundles
         and not forbidden_templates
         and not forbidden_listening
@@ -915,6 +933,7 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "zip": str(archive_path.relative_to(REPO_ROOT)).replace("\\", "/"),
         "bundleCount": len(bundled_scripts),
         "missingBundles": missing_bundles,
+        "missingDiagnosticRuntime": missing_diagnostics,
         "unexpectedBundles": unexpected_bundles,
         "forbiddenTemplates": forbidden_templates,
         "forbiddenListeningPractice": forbidden_listening,
@@ -962,7 +981,11 @@ def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, di
         'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ]; then',
         'INCLUDE_LOCAL_LISTENING=1 requires both assets/generated/listening-exams/manifest.js and listening-index.compat.js',
         'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening-exams/manifest.js" ]; then',
-        'reject_entry_prefix "assets/generated/listening-exams/"',
+        'require_entry "assets/generated/listening-exams/listening-practice-unified.html"',
+        'require_entry "assets/generated/diagnostics/bootstrap-inline.js"',
+        'require_entry "assets/generated/diagnostics/build-manifest.json"',
+        'require_entry "css/incident-center.css"',
+        'ERROR: default release contains optional listening content',
         'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then',
         'reject_entry_prefix "templates/"',
         'reject_entry_prefix "ListeningPractice/vip/"',
@@ -1847,6 +1870,11 @@ def run_checks() -> Tuple[List[dict], bool]:
     bundle_current_passed, bundle_current_detail = _check_bundle_outputs_current(build_script)
     results.append(_format_result("bundle 产物原文同步守卫", bundle_current_passed, bundle_current_detail))
     all_passed &= bundle_current_passed
+    diagnostic_runtime_passed, diagnostic_runtime_detail = _run_json_subprocess(
+        ["node", str(REPO_ROOT / "scripts/verify-diagnostic-release.mjs"), str(REPO_ROOT)], timeout=30,
+    )
+    results.append(_format_result("Diagnostic release runtime and mappings", diagnostic_runtime_passed, diagnostic_runtime_detail))
+    all_passed &= diagnostic_runtime_passed
     v2_arch_passed, v2_arch_detail = _check_v2_data_architecture()
     results.append(_format_result("v2 数据架构唯一入口守卫", v2_arch_passed, v2_arch_detail))
     all_passed &= v2_arch_passed

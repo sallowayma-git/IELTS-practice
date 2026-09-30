@@ -39,11 +39,17 @@ try {
         try {
             const metadata = JSON.parse(fs.readFileSync(path.join(root, 'assets/generated/diagnostics/build-manifest.json'), 'utf8'));
             for (const name of standaloneBundles) {
-                await page.goto(new URL(`standalone-${name}.html`, url).href);
-                const standalone = await page.evaluate(() => AppDiagnosticExport.snapshot());
-                assert.equal(standalone.appVersion, metadata.appVersion, `${mode}: ${name}`);
-                assert.equal(standalone.buildId, metadata.buildId, `${mode}: ${name}`);
-                results.push({ mode, scenario: `${name}-standalone-build-provenance`, passed: true });
+                // Standalone bootstraps can persist initialization incidents;
+                // each provenance check owns disposable, separate storage.
+                const standaloneContext = await browser.newContext();
+                try {
+                    const standalonePage = await standaloneContext.newPage();
+                    await standalonePage.goto(new URL(`standalone-${name}.html`, url).href);
+                    const standalone = await standalonePage.evaluate(() => AppDiagnosticExport.snapshot());
+                    assert.equal(standalone.appVersion, metadata.appVersion, `${mode}: ${name}`);
+                    assert.equal(standalone.buildId, metadata.buildId, `${mode}: ${name}`);
+                    results.push({ mode, scenario: `${name}-standalone-build-provenance`, passed: true });
+                } finally { await standaloneContext.close(); }
             }
             await page.goto(url);
             await page.evaluate(() => AppDiagnosticStore.ready);

@@ -6,8 +6,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const reports = path.join(root, 'developer/tests/e2e/reports');
+const root = path.resolve(process.env.DIAGNOSTIC_RUNTIME_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
+const reports = path.resolve(process.env.DIAGNOSTIC_REPORT_DIR || path.join(root, 'developer/tests/e2e/reports'));
 fs.mkdirSync(reports, { recursive: true });
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'ielts-listening-diagnostics-'));
 for (const source of ['index.html', 'css', 'js/bundles', 'assets/vendor', 'assets/images',

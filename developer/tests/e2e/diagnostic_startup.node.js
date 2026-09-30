@@ -6,9 +6,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { prepareStartupEnrichmentAtCapacity } from '../js/helpers/diagnosticCapacity.js';
+import { runtimeRoot, reportRoot } from './diagnosticRuntimeFixture.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const reports = path.join(root, 'developer/tests/e2e/reports');
+const root = runtimeRoot;
+const reports = reportRoot;
 fs.mkdirSync(reports, { recursive: true });
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'ielts-diagnostic-startup-'));
 for (const source of ['index.html', 'css', 'js/bundles', 'assets/vendor', 'assets/images']) {

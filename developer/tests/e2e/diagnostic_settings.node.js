@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const reports = path.join(root, 'developer/tests/e2e/reports');
+const root = path.resolve(process.env.DIAGNOSTIC_RUNTIME_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
+const reports = path.resolve(process.env.DIAGNOSTIC_REPORT_DIR || path.join(root, 'developer/tests/e2e/reports'));
 fs.mkdirSync(reports, { recursive: true });
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'assets/generated/diagnostics/build-manifest.json')));
 function shipped(source) {
@@ -20,8 +20,10 @@ const sources = ['js/diagnostics/diagnosticContract.js', 'js/diagnostics/bootstr
     'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/diagnosticExport.js', 'js/presentation/incident-center.js',
     'js/presentation/message-center.js', 'js/components/diagnosticSettingsPanel.js', 'js/presentation/app-actions.js'];
 const entry = fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/<section class="hero-panel hero-section diagnostic-settings-panel">[\s\S]*?<\/section>/)[0];
+const styles = fs.readFileSync(path.join(root, 'css/main.css'), 'utf8')
+    .replace('@import url("./incident-center.css");', fs.readFileSync(path.join(root, 'css/incident-center.css'), 'utf8'));
 const html = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    + '<title>Diagnostic settings fixture</title><style>' + fs.readFileSync(path.join(root, 'css/main.css'), 'utf8')
+    + '<title>Diagnostic settings fixture</title><style>' + styles
     + '</style><body><main style="max-width:960px;margin:auto;padding:16px"><h1>系统设置</h1>' + entry + '</main>'
     + '<script>window.clock=Date.now(); Date.now=()=>clock;</script>'
     + sources.map((source) => '<script>' + shipped(source) + '</script>').join('\n')
@@ -93,7 +95,8 @@ try {
         assert.equal(single.selection.found, true);
         download = page.waitForEvent('download');
         await page.getByRole('button', { name: '导出保留的诊断历史', exact: true }).click();
-        assert.equal(JSON.parse(fs.readFileSync(await (await download).path(), 'utf8')).events.length, 25);
+        const retained = JSON.parse(fs.readFileSync(await (await download).path(), 'utf8')).events;
+        assert.equal(retained.length, 25, JSON.stringify(retained.filter(event => !ids.includes(event.eventId))));
         record('real-incident-and-retained-history-json-downloads');
 
         await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error(); } } }));
