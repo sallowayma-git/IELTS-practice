@@ -1760,7 +1760,7 @@ async function run() {
         assert.strictEqual(elements.listSwitcher.rendered, true);
     });
 
-    await record('more view vocab entry navigates', () => {
+    await record('more view vocab entry navigates', async () => {
         const moreContext = createMoreViewContext();
         const moreHooks = moreContext.hooks;
         const moreDoc = moreContext.document;
@@ -1786,7 +1786,7 @@ async function run() {
             }
         };
 
-        moreHooks.handleVocabEntry({ preventDefault() {} });
+        await moreHooks.handleVocabEntry({ preventDefault() {} });
 
         assert.strictEqual(navigatedTo, 'vocab');
         assert.ok(!vocabView.hidden);
@@ -1794,7 +1794,7 @@ async function run() {
         assert.ok(navButton.classList.contains('active'));
     });
 
-    await record('more view fallback without app', () => {
+    await record('more view fallback without app', async () => {
         const moreContext = createMoreViewContext();
         const moreHooks = moreContext.hooks;
         const moreDoc = moreContext.document;
@@ -1815,7 +1815,7 @@ async function run() {
             }
         };
 
-        moreHooks.handleVocabEntry({ preventDefault() {} });
+        await moreHooks.handleVocabEntry({ preventDefault() {} });
 
         assert.ok(vocabView.classList.contains('active'));
         assert.ok(!vocabView.hidden);

@@ -65,8 +65,11 @@ function main() {
     assert(stats.entries > 1000, 'dictionary should include a real local corpus');
 
     const buildSource = fs.readFileSync(path.join(repoRoot, 'scripts/build-bundles.mjs'), 'utf8');
-    assert(buildSource.includes('assets/wordlists/ecdict_reading.bundle.js'));
-    assert(buildSource.includes('js/core/dictionaryService.js'));
+    assert(buildSource.includes('js/runtime/dictionaryLoader.js'));
+    assert(!buildSource.includes('assets/wordlists/ecdict_reading.bundle.js'), 'reading bundle must defer dictionary data');
+    const loaderSource = fs.readFileSync(path.join(repoRoot, 'js/runtime/dictionaryLoader.js'), 'utf8');
+    assert(loaderSource.includes('assets/wordlists/ecdict_reading.bundle.js'));
+    assert(loaderSource.includes('js/bundles/dictionary.bundle.js'));
     assert(buildSource.includes('js/runtime/reviewHighlightDictionary.js'));
 
     const runtimeSource = fs.readFileSync(path.join(repoRoot, 'js/core/dictionaryService.js'), 'utf8');

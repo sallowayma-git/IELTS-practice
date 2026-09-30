@@ -96,3 +96,16 @@ test('notebook search still indexes occurrence text and the canonical article', 
         assert.equal(notebook.getEntries().length, 1, `expected ${query} to match`);
     }
 });
+
+
+test('large notebook renders one batch and searches the complete vocabulary', () => {
+    const entries = Array.from({ length: 250 }, (_, i) => ({ id: `term-${i}`, word: `word${i}`, associations: [], highlights: [] }));
+    const view = harness(entries, []);
+    const first = view.renderEntries(entries, true);
+    assert.equal((first.match(/class="reading-notebook-entry"/g) || []).length, 100);
+    assert.match(first, /notebook-load-more/);
+    view.state.visibleLimit = 300;
+    assert.equal((view.renderEntries(entries, true).match(/class="reading-notebook-entry"/g) || []).length, 250);
+    view.state.searchQuery = 'word249';
+    assert.equal(view.getEntries()[0].id, 'term-249', 'search must include entries outside the rendered batch');
+});

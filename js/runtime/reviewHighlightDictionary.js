@@ -316,10 +316,21 @@
             return;
         }
         activeHighlight = highlight;
-        activeLookup = lookupTerm(term);
         const bubble = ensureBubble();
-        bubble.innerHTML = renderLookup(activeLookup);
-        positionBubble(bubble, highlight);
+        if (!getLookupService() && typeof global.ensureReadingDictionary === 'function') {
+            activeLookup = null;
+            bubble.textContent = '正在加载词典…';
+            positionBubble(bubble, highlight);
+            global.ensureReadingDictionary().then(() => {
+                if (activeHighlight === highlight && highlight.isConnected && isEnabled()) openBubble(highlight);
+            }).catch(() => {
+                if (activeHighlight === highlight) bubble.textContent = '词典加载失败，请再次点击生词重试。';
+            });
+        } else {
+            activeLookup = lookupTerm(term);
+            bubble.innerHTML = renderLookup(activeLookup);
+            positionBubble(bubble, highlight);
+        }
         if (!outsideHandlerAttached) {
             outsideHandlerAttached = true;
             document.addEventListener('click', handleOutsideClick, true);

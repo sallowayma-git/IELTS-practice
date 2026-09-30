@@ -65,9 +65,6 @@ const bundles = {
         'js/app/examSessionMixin.js',
         'js/app/browseController.js',
         'js/components/PDFHandler.js',
-        'js/components/readingVocabContent.js',
-        'js/components/readingVocabAnchors.js',
-        'js/components/readingVocabReader.js',
         'js/components/BrowseStateManager.js',
         'js/utils/suiteBackGuard.js',
         'js/utils/answerMatchCore.js',
@@ -108,9 +105,7 @@ const bundles = {
         'js/runtime/readingHighlightShared.js',
         'js/utils/answerSanitizer.js',
         'js/utils/answerMatchCore.js',
-        'assets/wordlists/ielts_core.bundle.js',
-        'assets/wordlists/ecdict_reading.bundle.js',
-        'js/core/dictionaryService.js',
+        'js/runtime/dictionaryLoader.js',
         'js/runtime/reviewHighlightDictionary.js',
         'js/utils/practiceTimerPreferences.js',
         'js/components/readingVocabContent.js',
@@ -159,16 +154,26 @@ const bundles = {
         'js/utils/practiceTimerPreferences.js',
         'js/listeningUnifiedWrapper.js'
     ],
-    'js/bundles/more.bundle.js': [
+    'js/bundles/vocabulary.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',
         'js/utils/vocabDataIO.js',
         'js/core/vocabScheduler.js',
         'js/core/vocabStore.js',
         'js/app/vocabListSwitcher.js',
         'js/components/vocabDashboardCards.js',
-        'js/components/vocabSessionView.js',
+        'js/components/vocabSessionView.js'
+    ],
+    'js/bundles/reading-tools.bundle.js': [
+        'js/components/readingVocabContent.js',
+        'js/components/readingVocabAnchors.js',
+        'js/components/readingVocabReader.js'
+    ],
+    'js/bundles/reading-library.bundle.js': [
         'js/components/bookshelfView.js',
-        'js/components/readingNotebookView.js',
+        'js/components/readingNotebookView.js'
+    ],
+    'js/bundles/dictionary.bundle.js': ['js/core/dictionaryService.js'],
+    'js/bundles/more.bundle.js': [
         'js/presentation/moreView.js',
         'js/presentation/miniGames.js',
         'js/services/achievementManager.js'

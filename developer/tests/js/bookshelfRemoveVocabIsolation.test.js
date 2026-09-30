@@ -362,7 +362,7 @@ test('Cold Bookshelf loads real runtime groups and only opens the latest source-
     const first = view.launchExamVocabReader('same-exam', sourceA, f.model.articleId(sourceA, 'same-exam'));
     const second = view.launchExamVocabReader('same-exam', sourceB, f.model.articleId(sourceB, 'same-exam'));
     assert.equal(view.state.readerLoading, true);
-    assert.deepEqual(loadedGroups, ['exam-data', 'browse-runtime']);
+    assert.deepEqual(loadedGroups, ['exam-data', 'reading-tools']);
     gate.resolve();
     await Promise.all([first, second]);
     assert.equal(opens.length, 1);

@@ -1809,6 +1809,7 @@
             if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
                 await global.AppLazyLoader.ensureGroup('exam-data');
                 await global.AppLazyLoader.ensureGroup('browse-runtime');
+                await global.AppLazyLoader.ensureGroup('reading-tools');
             }
             if (sequence !== readingLaunchSequence || (navigation != null
                 && global.__getAppNavigationIntentGeneration() !== navigation)) return;

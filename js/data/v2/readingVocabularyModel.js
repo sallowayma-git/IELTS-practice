@@ -119,11 +119,22 @@
         return listId === 'default' ? snapshot.words : collectionWords(snapshot.lists[listId]);
     }
 
-    function ownerWord(snapshot, ref) {
+    function ownerWord(snapshot, ref, lookup = null) {
         object(ref, 'wordRef');
         exactString(ref.listId, 'wordRef.listId');
         exactString(ref.wordId, 'wordRef.wordId');
-        const matches = listWords(snapshot, ref.listId).filter((word) => word && word.id === ref.wordId);
+        if (lookup && !lookup.has(ref.listId)) {
+            const byId = new Map();
+            for (const word of listWords(snapshot, ref.listId)) {
+                if (!word) continue;
+                const rows = byId.get(word.id) || [];
+                rows.push(word);
+                byId.set(word.id, rows);
+            }
+            lookup.set(ref.listId, byId);
+        }
+        const matches = lookup ? lookup.get(ref.listId).get(ref.wordId) || []
+            : listWords(snapshot, ref.listId).filter((word) => word && word.id === ref.wordId);
         if (matches.length !== 1) fail('Canonical wordRef must resolve to exactly one existing vocabulary record');
         return matches[0];
     }
@@ -151,6 +162,7 @@
         const reading = object(snapshot.reading, 'snapshot.reading');
         if (reading.schemaVersion !== SCHEMA_VERSION) fail('Unsupported reading vocabulary schemaVersion');
         const idx = indexes(reading);
+        const wordLookup = new Map();
         for (const source of reading.sources) {
             exactString(source.libraryId, 'source.libraryId');
             if (source.id !== sourceId({ kind: source.kind, id: source.libraryId })) fail('Invalid source identity');
@@ -186,7 +198,7 @@
         }
         for (const term of reading.terms) {
             if (term.normalizedTerm !== normalizeTerm(term.normalizedTerm) || term.id !== termId(term.normalizedTerm)) fail('Invalid normalized term identity');
-            const word = ownerWord(snapshot, term.wordRef);
+            const word = ownerWord(snapshot, term.wordRef, wordLookup);
             if (normalizeTerm(word.word) !== term.normalizedTerm) fail('Canonical wordRef has a different normalized term');
             timestamp(term.createdAt, 'term.createdAt');
         }
@@ -611,13 +623,25 @@
         object(options, 'query options');
         if (own(options, 'articleId')) exactString(options.articleId, 'articleId');
         const associations = snapshot.reading.associations.filter((row) => !own(options, 'articleId') || row.articleId === options.articleId);
-        const activeTerms = new Set(associations.map((row) => row.termId));
-        const rows = snapshot.reading.terms.filter((term) => activeTerms.has(term.id)).map((term) => {
-            const related = associations.filter((row) => row.termId === term.id);
-            const ids = new Set(related.map((row) => row.id));
+        const byTerm = new Map();
+        const associationTerms = new Map();
+        const occurrencesByTerm = new Map();
+        for (const row of associations) {
+            if (!byTerm.has(row.termId)) byTerm.set(row.termId, []);
+            byTerm.get(row.termId).push(row);
+            associationTerms.set(row.id, row.termId);
+        }
+        for (const row of snapshot.reading.occurrences) {
+            const term = associationTerms.get(row.associationId);
+            if (!term) continue;
+            if (!occurrencesByTerm.has(term)) occurrencesByTerm.set(term, []);
+            occurrencesByTerm.get(term).push(row);
+        }
+        const wordLookup = new Map();
+        const rows = snapshot.reading.terms.filter((term) => byTerm.has(term.id)).map((term) => {
             return {
-                term, word: ownerWord(snapshot, term.wordRef), wordRef: term.wordRef,
-                associations: related, occurrences: snapshot.reading.occurrences.filter((row) => ids.has(row.associationId))
+                term, word: ownerWord(snapshot, term.wordRef, wordLookup), wordRef: term.wordRef,
+                associations: byTerm.get(term.id), occurrences: occurrencesByTerm.get(term.id) || []
             };
         });
         return copy({ terms: rows, distinctTermCount: rows.length, occurrenceCount: rows.reduce((sum, row) => sum + row.occurrences.length, 0) });
