@@ -21,6 +21,8 @@ failed, duplicate, partial or stale reports. Its `acceptance.json` records the
 tested Git commit, content-derived build ID, runtime source, case names, results,
 durations and links to the per-suite JSON artifacts. Arbitrary errors, business
 payloads and console arguments are excluded from these published JSON files.
+Failed checkpoints retain only their numeric test source line when available,
+so a failure can be located without exposing its exception text or local path.
 
 | #194 | Acceptance evidence | Suite / representative scenarios |
 | --- | --- | --- |

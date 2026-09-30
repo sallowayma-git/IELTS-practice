@@ -36,7 +36,7 @@ LIMITATIONS = ['javascript-disabled', 'page-not-opened', 'process-crash', 'block
               'chromium-only-automated-browser-evidence']
 
 
-def evidence_rows(payload, minimum: int, partial: bool = False) -> list[dict]:
+def evidence_rows(payload, minimum: int, partial: bool = False, script: str | None = None) -> list[dict]:
     """Fail closed on partial/duplicate/unknown output; never retain error payloads."""
     rows = payload if isinstance(payload, list) else payload.get('results', payload.get('cases', []))
     if not isinstance(rows, list) or (not rows and not partial):
@@ -53,7 +53,14 @@ def evidence_rows(payload, minimum: int, partial: bool = False) -> list[dict]:
             row.get('passed') is not True and row.get('status') != 'pass')
         if failed and not partial:
             raise ValueError('failed scenario')
-        evidence.append({'mode': mode, 'scenario': scenario, 'result': 'fail' if failed else 'pass'})
+        item = {'mode': mode, 'scenario': scenario, 'result': 'fail' if failed else 'pass'}
+        # Retain a useful assertion location without publishing exception text,
+        # absolute paths, fixture values or browser/console arguments.
+        if failed and script and isinstance(row.get('error'), str):
+            location = re.search(re.escape(script) + r'\.node\.js:(\d{1,5})(?=[:\s)]|$)', row['error'])
+            if location:
+                item['sourceLine'] = int(location.group(1))
+        evidence.append(item)
     scenarios = [{row['scenario'] for row in evidence if row['mode'] == mode} for mode in MODES]
     if not partial and (any(len(items) < minimum for items in scenarios) or not all(items == scenarios[0] for items in scenarios)):
         raise ValueError('incomplete three-mode evidence')
@@ -96,7 +103,8 @@ def run_suite(suite, destination: Path, runtime: Path) -> dict:
         result['failure'] = 'timeout' if result['exitCode'] == 124 else 'suite-failed-or-report-missing'
         if report_file.is_file():
             try:
-                result['cases'] = evidence_rows(json.loads(report_file.read_text(encoding='utf-8')), 0, partial=True)
+                result['cases'] = evidence_rows(json.loads(report_file.read_text(encoding='utf-8')), 0,
+                                              partial=True, script=name)
             except (ValueError, TypeError, AttributeError):
                 pass
     result['durationSeconds'] = round(time.monotonic() - started, 3)

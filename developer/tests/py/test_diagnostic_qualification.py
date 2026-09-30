@@ -42,3 +42,11 @@ class QualificationEvidenceTest(unittest.TestCase):
         rows = [{**self.rows()[0], 'passed': False}]
         self.assertEqual(qualification.evidence_rows(rows, 0, partial=True),
                          [{'mode': 'file', 'scenario': 'synthetic-case', 'result': 'fail'}])
+
+    def test_failure_location_excludes_paths_and_error_payloads(self):
+        rows = [{**self.rows()[0], 'passed': False,
+                 'error': 'PRIVATE_ANSWER\n at file:///C:/PRIVATE/listening_diagnostics.node.js:231:17'}]
+        result = qualification.evidence_rows(rows, 0, partial=True, script='listening_diagnostics')
+        self.assertEqual(result, [{'mode': 'file', 'scenario': 'synthetic-case', 'result': 'fail', 'sourceLine': 231}])
+        self.assertNotIn('PRIVATE', str(result))
+        self.assertNotIn('sourceLine', qualification.evidence_rows(rows, 0, partial=True, script='diagnostic_settings')[0])
