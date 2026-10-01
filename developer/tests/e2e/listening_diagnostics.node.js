@@ -133,6 +133,8 @@ async function verifyLocalExport(host, child, practice, scenario) {
         assert.equal(await child.getByRole('button', { name: 'Errors and diagnostics', exact: true }).count(), 1);
     }
 
+    // Keep IndexedDB snapshot reads in the foreground while the popup is open.
+    await host.bringToFront();
     const records = await host.evaluate(() => AppData.practice.list());
     await child.bringToFront();
     const access = practice.getByRole('button', { name: /^Errors and diagnostics/ });
@@ -155,7 +157,9 @@ async function verifyLocalExport(host, child, practice, scenario) {
     const text = await practice.getByRole('textbox', { name: 'Local diagnostic report' }).inputValue();
     assert.ok(JSON.parse(text).events.some(candidate => candidate.eventId === event.eventId));
     assert.doesNotMatch(text, /PRIVATE_|windowSessionToken|sourceUrl=/);
+    await host.bringToFront();
     assert.deepEqual(await host.evaluate(() => AppData.practice.list()), records);
+    await child.bringToFront();
     assert.equal(await practice.locator('[name="q1"]').inputValue(), 'PRIVATE_ANSWER');
     const after = await practice.evaluate(() => AppDiagnosticStore.status());
     assert.equal(after.enabled, storage.enabled);
