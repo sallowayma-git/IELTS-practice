@@ -2661,7 +2661,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px;
   border: 1px solid var(--atlas-line);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--atlas-glass) 48%, transparent);
+  background: var(--anth-surface);
 }
 
 .settings-list__main {
@@ -2773,14 +2773,14 @@ onBeforeUnmount(() => {
   border: 1px solid var(--atlas-line);
   border-radius: 14px;
   color: var(--atlas-ink);
-  background: color-mix(in srgb, var(--atlas-glass) 52%, transparent);
+  background: var(--anth-surface);
   text-align: left;
 }
 
 .settings-page .mode-card.active {
-  border-color: color-mix(in srgb, var(--atlas-accent) 16%, transparent);
-  background:
-    var(--atlas-sheen);
+  border-color: var(--anth-accent);
+  background: var(--anth-accent-soft);
+  box-shadow: var(--anth-shadow-xs);
 }
 
 .settings-page .mode-header {
@@ -2828,7 +2828,7 @@ onBeforeUnmount(() => {
   padding: 16px;
   border: 1px solid var(--atlas-line);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--atlas-glass) 44%, transparent);
+  background: var(--anth-surface);
 }
 
 .custom-temperature-grid {
@@ -2965,7 +2965,7 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   border: 1px solid var(--atlas-line);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--atlas-glass) 46%, transparent);
+  background: var(--anth-surface);
 }
 
 .info-row {

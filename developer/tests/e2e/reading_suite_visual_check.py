@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_flat_surfaces
 
 
 BASE_URL = os.environ.get("READING_SUITE_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -157,11 +158,14 @@ def assert_success(name, width, geometry):
     if len(geometry["rows"]) != 3:
         raise AssertionError(f"{name}: expected active/submitted/locked passage rows")
     rows = geometry["rows"]
-    if len({row["background"] for row in rows}) != 3:
-        raise AssertionError(f"{name}: passage row state surfaces are not visually distinct")
+    # The current theme puts state color on P1/P2/P3 badges, with explicit status text.
+    if len({row["indexBackground"] for row in rows}) != 3:
+        raise AssertionError(f"{name}: passage state badges are not visually distinct")
     active = next(row for row in rows if "passage-row--active" in row["status"])
     submitted = next(row for row in rows if "passage-row--submitted" in row["status"])
     locked = next(row for row in rows if "passage-row--pending" in row["status"])
+    if '当前篇' not in active['text'] or '已提交' not in submitted['text'] or '等待前一篇' not in locked['text']:
+        raise AssertionError(f"{name}: passage states lost their non-color labels")
     if submitted["shadow"] not in ("none", "rgba(0, 0, 0, 0)") or locked["shadow"] not in ("none", "rgba(0, 0, 0, 0)"):
         raise AssertionError(f"{name}: passive passage rows still behave as nested raised cards")
     if active["actionText"] != "开始":
@@ -196,9 +200,7 @@ def main():
                 page.wait_for_selector(".reading-suite-page > .loading")
                 loading = read_geometry(page)
                 assert_no_overflow(f"{name}: loading", loading)
-                loading_surface = page.locator(".reading-suite-page > .loading")
-                if loading_surface.evaluate("node => getComputedStyle(node).boxShadow") not in ("none", "rgba(0, 0, 0, 0)"):
-                    raise AssertionError(f"{name}: loading state is still a raised card")
+                assert_flat_surfaces(page, '.reading-suite-page > .loading', f'{name}: loading')
                 page.wait_for_function("() => typeof window.__resolveSuite === 'function'")
                 page.evaluate("() => window.__resolveSuite()")
                 page.wait_for_selector("[data-reading-suite-summary]")

@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import capture_state, wait_for_route_layout
 
 
 BASE_URL = os.environ.get("NAV_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -21,6 +22,12 @@ ROUTES = (
     ("history", "/history", "历史"),
     ("settings", "/settings", "设置"),
 )
+ROUTE_VIEWS = {
+    'reading': '.practice-library',
+    'agent': '.agent-page-header',
+    'history': '.history-page',
+    'settings': '.settings-page',
+}
 
 
 def expected_href_for(label):
@@ -115,7 +122,12 @@ def read_geometry(page):
               bottom: linksRect.bottom
             } : null,
             documentScrollWidth: document.documentElement.scrollWidth,
-            bodyScrollWidth: document.body.scrollWidth
+            bodyScrollWidth: document.body.scrollWidth,
+            overflowingElements: [...document.querySelectorAll('.app-main *')].flatMap(node => {
+              const rect = node.getBoundingClientRect();
+              return rect.width && (rect.right > innerWidth + 1 || rect.left < -1)
+                ? [{ tag: node.tagName, class: node.className, left: rect.left, right: rect.right, width: rect.width }] : [];
+            }).slice(0, 12)
           };
         }
         """
@@ -139,7 +151,7 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
         if item["scrollWidth"] > item["clientWidth"] + 1:
             raise AssertionError(f"{case_name}/{route_name}: {item['label']} text is clipped")
     if geometry["documentScrollWidth"] > width + 1 or geometry["bodyScrollWidth"] > width + 1:
-        raise AssertionError(f"{case_name}/{route_name}: nav causes horizontal page overflow")
+        raise AssertionError(f"{case_name}/{route_name}: page overflows: {json.dumps(geometry, ensure_ascii=False)}")
 
     if width <= 640:
         columns = [column for column in geometry["columns"].split(" ") if column]
@@ -157,7 +169,9 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
 
 def assert_focus_visible(page, case_name, route_name):
     settings = page.locator(".nav-item").filter(has_text="设置")
-    settings.focus()
+    # Exercise keyboard modality and navigation, including a genuinely visible ring.
+    page.locator('.nav-item').filter(has_text='历史').focus()
+    page.keyboard.press('Tab')
     focus = page.evaluate(
         """
         () => {
@@ -167,12 +181,13 @@ def assert_focus_visible(page, case_name, route_name):
             label: active?.textContent.trim(),
             outlineStyle: active ? getComputedStyle(active).outlineStyle : '',
             outlineWidth: active ? getComputedStyle(active).outlineWidth : '',
+            focusVisible: active?.matches(':focus-visible'),
             containerOverflow: links ? getComputedStyle(links).overflow : ''
           };
         }
         """
     )
-    if "设置" not in focus["label"] or focus["outlineStyle"] == "none" or focus["outlineWidth"] == "0px":
+    if not focus["focusVisible"] or "设置" not in focus["label"] or focus["outlineStyle"] == "none" or focus["outlineWidth"] == "0px":
         raise AssertionError(f"{case_name}/{route_name}: keyboard focus is not visible")
     if page.viewport_size["width"] <= 640 and focus["containerOverflow"] != "visible":
         raise AssertionError(f"{case_name}/{route_name}: focus ring can be clipped by compact nav")
@@ -196,6 +211,7 @@ def main():
                         "href => [...document.querySelectorAll('.nav-item[aria-current=page]')].some((item) => (item.getAttribute('href') || '').endsWith(href))",
                         arg=expected_href,
                     )
+                    wait_for_route_layout(page, ROUTE_VIEWS[route_name])
                     geometry = read_geometry(page)
                     assert_geometry(case_name, route_name, expected_active, geometry)
                     assert_focus_visible(page, case_name, route_name)
@@ -206,6 +222,9 @@ def main():
                 page.screenshot(path=str(REPORT_DIR / f"nav-{case_name}-current.png"), full_page=False)
                 report.append({"name": case_name, "routes": route_results})
                 page.close()
+        except Exception:
+            capture_state(page, f'nav-{case_name}-{route_name}-failure')
+            raise
         finally:
             browser.close()
     print(json.dumps(report, ensure_ascii=False, indent=2))

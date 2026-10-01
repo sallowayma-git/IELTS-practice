@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "issue": "https://github.com/sallowayma-git/IELTS-practice/issues/171",
+  "status": "pass",
+  "scope": "local Windows regression validation; clean GitHub job evidence is linked in the implementation PR",
+  "testedSource": {
+    "baseBranch": "IELTS-WRITING-FEAT",
+    "baseCommit": "617284eca6780d4069edb7a8af2a0246be22342e",
+    "implementationFile": ".github/workflows/tauri-ci.yml",
+    "implementationGitBlob": "8c3b29156ff77d3eba71d14a8cc2a29bf762a85b",
+    "note": "Validation preceded the signed implementation commit; the PR links that commit. Only the workflow changes shipping source inputs."
+  },
+  "environment": {
+    "platform": "Windows x86_64",
+    "python": "3.12.14",
+    "rust": "1.98.1",
+    "node": "24.19.0",
+    "npm": "10.8.2",
+    "pythonEnvironment": "fresh virtual environment with both repository dependency locks",
+    "rustDependencies": "existing local Cargo cache"
+  },
+  "nativeFreeze": {
+    "command": "python developer/tests/ci/build_agent_runtime_sidecar.py",
+    "preExistingExecutable": false,
+    "executableManifestAndMetricsHashesMatch": true,
+    "metrics": {
+      "schemaVersion": 1,
+      "target": "x86_64-pc-windows-msvc",
+      "binary": "src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.exe",
+      "sha256": "a87a4904c41bb2795041402f35084b9a412ca8bb104bc238fe4444bc7e50e08a",
+      "protocolVersion": 1,
+      "capabilities": {
+        "runtime.health": "1",
+        "runtime.shutdown": "1",
+        "memory.candidates.extract": "1",
+        "memory.candidates.generate": "1",
+        "dream.daily": "1",
+        "planner.study_plan": "1"
+      },
+      "unpackedBytes": 13368165,
+      "compressedBytes": 13147891,
+      "installerDeltaUpperBoundBytes": 13368165,
+      "coldStartMs": 1025.614,
+      "idleRssBytes": 6533120,
+      "thresholds": {
+        "unpackedSize": true,
+        "compressedSize": true,
+        "installerDelta": true,
+        "idleRss": true,
+        "coldStart": true
+      },
+      "status": "pass"
+    }
+  },
+  "regressionSequence": [
+    {
+      "order": 1,
+      "command": "python developer/tests/ci/run_static_suite.py",
+      "generatedAt": "2026-09-10T14:22:54.247762+00:00",
+      "status": "pass",
+      "summary": {
+        "total": 28,
+        "passed": 28,
+        "failed": 0
+      },
+      "checks": [
+        {
+          "name": "Shipping source layout",
+          "status": "pass"
+        },
+        {
+          "name": "Tauri shipping contract",
+          "status": "pass"
+        },
+        {
+          "name": "Current document drift",
+          "status": "pass"
+        },
+        {
+          "name": "Vue typecheck",
+          "status": "pass"
+        },
+        {
+          "name": "Reading payload contract",
+          "status": "pass"
+        },
+        {
+          "name": "Reading drag keyboard behavior",
+          "status": "pass"
+        },
+        {
+          "name": "Reading highlight core",
+          "status": "pass"
+        },
+        {
+          "name": "Reading mode flow core",
+          "status": "pass"
+        },
+        {
+          "name": "Reading mode idempotency",
+          "status": "pass"
+        },
+        {
+          "name": "Reading Library truth contract",
+          "status": "pass"
+        },
+        {
+          "name": "History view-model contract",
+          "status": "pass"
+        },
+        {
+          "name": "Writing source-mode contract",
+          "status": "pass"
+        },
+        {
+          "name": "Tauri Vue shell contract",
+          "status": "pass"
+        },
+        {
+          "name": "Phase 10 release contract",
+          "status": "pass"
+        },
+        {
+          "name": "Vue production build",
+          "status": "pass"
+        },
+        {
+          "name": "Rust workspace check",
+          "status": "pass"
+        },
+        {
+          "name": "Rust cognitive runtime contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory proposal validator",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory proposal wire contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory application service contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust data-truth regressions",
+          "status": "pass"
+        },
+        {
+          "name": "Rust M4 domain learner contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust M4 application learner contract",
+          "status": "pass"
+        },
+        {
+          "name": "AI configuration security",
+          "status": "pass"
+        },
+        {
+          "name": "Reading source data integrity",
+          "status": "pass"
+        },
+        {
+          "name": "Python cognitive protocol",
+          "status": "pass"
+        },
+        {
+          "name": "M3 contract boundary",
+          "status": "pass"
+        },
+        {
+          "name": "M4 learner model contract",
+          "status": "pass"
+        }
+      ],
+      "pythonRuntimeTestsPassed": 429
+    },
+    {
+      "order": 2,
+      "command": "python developer/tests/e2e/suite_practice_flow.py",
+      "generatedAt": "2026-09-10T14:32:35.783548+00:00",
+      "status": "passed",
+      "summary": {
+        "total": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "checks": {
+        "launch": "passed",
+        "vueRoutes": "passed",
+        "uiRouteVisuals": "passed",
+        "readingIpc": "passed",
+        "agentIpcBoundary": "passed",
+        "agentWorkspaceRun": "passed",
+        "readingArchiveBoundary": "passed",
+        "historyRetentionBoundary": "passed",
+        "bundledResources": "passed",
+        "readingView": "passed",
+        "readingPerformance": "passed",
+        "notesDialog": "passed",
+        "readingSubmitBoundary": "passed",
+        "backupPathBoundary": "passed",
+        "updaterBoundary": "passed",
+        "sqliteRestart": "passed"
+      },
+      "application": {
+        "buildCommand": "cargo build --workspace --all-targets --locked",
+        "profile": "debug",
+        "customProtocol": true,
+        "embeddedProductionFrontend": true,
+        "binarySha256": "de4d68a8974a2f1e0375931533eda03537b390029cf45d4055fd69bb614d2b6b",
+        "binarySize": 44200448,
+        "nativeDriverVersion": "Microsoft Edge WebDriver 143.0.3650.96 (d55fe85d014134f7b4677688f46db9d610ddcfd5)"
+      },
+      "installerAcceptanceClaimed": false
+    }
+  ],
+  "rustWorkspace": {
+    "command": "cargo test --workspace --locked",
+    "status": "pass",
+    "suiteResults": 52,
+    "passed": 507,
+    "failed": 0,
+    "ignored": 0
+  },
+  "independentVisualFollowUp": "https://github.com/sallowayma-git/IELTS-practice/issues/175",
+  "overallCiSuccessClaimed": false
+}

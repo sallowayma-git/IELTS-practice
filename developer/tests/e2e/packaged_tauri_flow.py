@@ -104,6 +104,7 @@ def binary_metadata(app: Path, tauri: str | None, native: str | None, build_perf
     return {
         "gitCommit": git_value("rev-parse", "HEAD"),
         "gitDirty": bool(status),
+        "gitStatus": status,
         "binaryPath": str(app.resolve()) if app.is_file() else str(app),
         "binarySha256": sha256_file(app) if app.is_file() else None,
         "binarySize": app.stat().st_size if app.is_file() else None,
@@ -205,6 +206,12 @@ def wait_for_vue(driver: Driver, timeout_seconds: int = 30):
     deadline = time.time() + timeout_seconds
     last = None
     while time.time() < deadline:
+        windows = driver.call("GET", f"/session/{driver.sid}/window/handles").get("value", [])
+        last = {"windowHandles": windows}
+        if len(windows) != 1:
+            time.sleep(0.25)
+            continue
+        driver.call("POST", f"/session/{driver.sid}/window", {"handle": windows[0]})
         last = driver.script("""
             const root = document.querySelector('#app');
             return {
@@ -523,7 +530,11 @@ def main() -> int:
             stdout=driver_log,
             stderr=subprocess.STDOUT,
             text=True,
-            env={**os.environ, "APPDATA": isolated_app_data.name},
+            env={
+                **os.environ,
+                "APPDATA": isolated_app_data.name,
+                "WEBVIEW2_USER_DATA_FOLDER": str(Path(isolated_app_data.name) / "webview"),
+            },
         )
         status = None
         deadline = time.monotonic() + 30
@@ -931,7 +942,7 @@ def main() -> int:
         saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'e2e', key:'restartMarker', value:arguments[0]}})", [marker])
         if not isinstance(saved, dict) or not saved.get("ok"): raise RuntimeError(f"upsert_setting failed: {saved}")
         driver.close()
-        driver.create(str(app.resolve()))
+        driver.create(str(runtime_app))
         wait_for_vue(driver)
         restored = driver.script("return window.__TAURI_INTERNALS__.invoke('list_settings', {namespace:'e2e'})")
         values = (restored or {}).get("data", []) if isinstance(restored, dict) else []

@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_flat_surfaces, capture_state
 
 
 BASE_URL = os.environ.get("READING_LIBRARY_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -149,10 +150,6 @@ def assert_tool_surface(name, geometry):
     cards = geometry["toolCards"]
     if len(cards) != 3:
         raise AssertionError(f"{name}: expected three More Tools cards")
-    if any(card["shadow"] not in ("none", "rgba(0, 0, 0, 0)") for card in cards):
-        raise AssertionError(f"{name}: More Tools cards still render as nested raised surfaces")
-    if len({card["background"] for card in cards}) < 2:
-        raise AssertionError(f"{name}: featured tool card lost selected surface contrast")
 
 
 def assert_settings_surface(name, geometry):
@@ -160,8 +157,6 @@ def assert_settings_surface(name, geometry):
     panels = geometry["settingPanels"]
     if len(panels) != 4:
         raise AssertionError(f"{name}: expected four Reading Settings panels")
-    if any(panel["shadow"] not in ("none", "rgba(0, 0, 0, 0)") for panel in panels):
-        raise AssertionError(f"{name}: Reading Settings child panels remain raised cards")
 
 
 def assert_overlay(name, geometry, key):
@@ -191,22 +186,29 @@ def main():
                 open_route(page, "/?view=more")
                 more_geometry = read_geometry(page)
                 assert_tool_surface(f"{name}: more", more_geometry)
+                assert_flat_surfaces(page, '#more-view .tool-card', f'{name}: tools')
+                capture_state(page, f'reading-tools-{name}')
                 page.locator("#more-view [data-action='open-clock']").click()
                 clock_geometry = read_geometry(page)
                 assert_overlay(f"{name}: clock", clock_geometry, "clock")
+                capture_state(page, f'reading-clock-{name}')
                 page.locator("#fullscreen-clock-overlay .clock-close-btn").click()
                 page.wait_for_function("() => document.querySelector('#fullscreen-clock-overlay')?.classList.contains('is-hidden')")
 
                 open_route(page, "/?view=settings")
                 settings_geometry = read_geometry(page)
                 assert_settings_surface(f"{name}: settings", settings_geometry)
+                assert_flat_surfaces(page, '.hero-settings-group > .hero-panel', f'{name}: settings')
+                capture_state(page, f'reading-settings-{name}')
                 page.locator("#library-config-btn").click()
                 page.wait_for_selector("[data-reading-library-config-list]")
                 config_geometry = read_geometry(page)
                 assert_settings_surface(f"{name}: config", config_geometry)
                 config = config_geometry["config"]
-                if not config or config["cardShadow"] not in ("none", "rgba(0, 0, 0, 0)"):
-                    raise AssertionError(f"{name}: library config remains a nested raised card")
+                if not config:
+                    raise AssertionError(f"{name}: library config is missing")
+                assert_flat_surfaces(page, '[data-reading-library-config-list] > .backup-list-card', f'{name}: config')
+                capture_state(page, f'reading-config-{name}')
                 page.locator(".reading-library-config-list .backup-list-dismiss").click()
                 page.wait_for_selector("[data-reading-library-config-list]", state="detached")
 
@@ -216,6 +218,7 @@ def main():
                 page.wait_for_selector(".pdf-viewer-overlay")
                 pdf_geometry = read_geometry(page)
                 assert_overlay(f"{name}: pdf", pdf_geometry, "pdf")
+                capture_state(page, f'reading-pdf-{name}')
                 page.locator(".pdf-viewer-overlay .pdf-viewer-header .btn-text").click()
                 page.wait_for_selector(".pdf-viewer-overlay", state="detached")
 

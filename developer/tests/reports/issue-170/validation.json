@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 1,
+  "status": "pass",
+  "issue": {
+    "number": 170,
+    "url": "https://github.com/sallowayma-git/IELTS-practice/issues/170",
+    "parentUrl": "https://github.com/sallowayma-git/IELTS-practice/issues/169"
+  },
+  "testedSource": {
+    "commit": "936ad4280171d19f89eb58433825992676808d18",
+    "url": "https://github.com/sallowayma-git/IELTS-practice/commit/936ad4280171d19f89eb58433825992676808d18",
+    "gpgSignature": "verified"
+  },
+  "base": {
+    "branch": "IELTS-WRITING-FEAT",
+    "commit": "2acf8cac5224e79c105bc2dcac479dd307ba8cb2",
+    "url": "https://github.com/sallowayma-git/IELTS-practice/commit/2acf8cac5224e79c105bc2dcac479dd307ba8cb2"
+  },
+  "nativeFreeze": {
+    "status": "pass",
+    "command": "python developer/tests/ci/build_agent_runtime_sidecar.py",
+    "metrics": {
+      "schemaVersion": 1,
+      "target": "x86_64-pc-windows-msvc",
+      "binary": "src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.exe",
+      "sha256": "6ebf1cdde33a8c9e85a708f08cbea00c04ee6947532ef2ef1a94efda44050984",
+      "protocolVersion": 1,
+      "capabilities": {
+        "runtime.health": "1",
+        "runtime.shutdown": "1",
+        "memory.candidates.extract": "1",
+        "memory.candidates.generate": "1",
+        "dream.daily": "1",
+        "planner.study_plan": "1"
+      },
+      "unpackedBytes": 13368224,
+      "compressedBytes": 13148457,
+      "installerDeltaUpperBoundBytes": 13368224,
+      "coldStartMs": 1352.059,
+      "idleRssBytes": 6893568,
+      "thresholds": {
+        "unpackedSize": true,
+        "compressedSize": true,
+        "installerDelta": true,
+        "idleRss": true,
+        "coldStart": true
+      },
+      "status": "pass"
+    },
+    "preexistingSidecarExecutable": false
+  },
+  "baselineRegression": {
+    "status": "reproduced",
+    "smokeSourceUrl": "https://github.com/sallowayma-git/IELTS-practice/blob/2acf8cac5224e79c105bc2dcac479dd307ba8cb2/developer/tests/ci/smoke_agent_runtime_sidecar.py",
+    "sameFrozenBinary": true,
+    "binarySha256": "6ebf1cdde33a8c9e85a708f08cbea00c04ee6947532ef2ef1a94efda44050984",
+    "observedError": "RuntimeError: handshake capability versions do not match the release contract",
+    "correctedSmokeStatus": "pass"
+  },
+  "artifactIntegrity": {
+    "status": "pass",
+    "executableManifestAndMetricsHashesMatch": true,
+    "sha256": "6ebf1cdde33a8c9e85a708f08cbea00c04ee6947532ef2ef1a94efda44050984"
+  },
+  "capabilityCompatibility": {
+    "status": "pass",
+    "executedIn": "cargo test --workspace --locked",
+    "reproductionCommand": "cargo test -p ielts-practice-tauri --lib cognitive_runtime::capability_contract_tests",
+    "independentLiteralFixture": true,
+    "usesProductionRustValidatorAndRequirements": true,
+    "testsPassed": 4,
+    "testsFailed": 0,
+    "negativeVariants": 12,
+    "cases": [
+      "Full six-capability version-1 handshake satisfies the Rust host.",
+      "Each of the six missing required capabilities produces the precise MissingCapability error.",
+      "Each of the six required capabilities changed to version 2 produces the precise CapabilityVersionMismatch error.",
+      "Additional runtime capabilities are accepted by the Rust host."
+    ],
+    "fullSetResponse": {
+      "status": "pass",
+      "frozenSmokeRequestedCapabilities": 4,
+      "frozenSmokeReturnedCapabilities": 6,
+      "pythonProtocolTestRequestedCapabilities": 1,
+      "pythonProtocolTestReturnedCapabilities": 6
+    },
+    "standaloneHostContract": {
+      "command": "cargo test -p ielts-practice-tauri --lib cognitive_runtime",
+      "passed": 15,
+      "failed": 0
+    }
+  },
+  "rustWorkspace": {
+    "status": "pass",
+    "command": "cargo test --workspace --locked",
+    "passed": 507,
+    "failed": 0,
+    "ignored": 0,
+    "suiteResults": 52,
+    "nonemptySuites": 47,
+    "includesAllFourNewCapabilityTests": true
+  },
+  "pythonRuntime": {
+    "status": "pass",
+    "command": "python -m unittest discover -s agent-runtime-python/tests -p test_*.py",
+    "passed": 429,
+    "failed": 0
+  },
+  "requiredRegressionSequence": [
+    {
+      "order": 1,
+      "name": "Repository static suite",
+      "command": "python developer/tests/ci/run_static_suite.py",
+      "status": "pass",
+      "generatedAt": "2026-09-10T13:21:53.756255+00:00",
+      "summary": {
+        "total": 28,
+        "passed": 28,
+        "failed": 0
+      },
+      "checks": [
+        {
+          "name": "Shipping source layout",
+          "status": "pass"
+        },
+        {
+          "name": "Tauri shipping contract",
+          "status": "pass"
+        },
+        {
+          "name": "Current document drift",
+          "status": "pass"
+        },
+        {
+          "name": "Vue typecheck",
+          "status": "pass"
+        },
+        {
+          "name": "Reading payload contract",
+          "status": "pass"
+        },
+        {
+          "name": "Reading drag keyboard behavior",
+          "status": "pass"
+        },
+        {
+          "name": "Reading highlight core",
+          "status": "pass"
+        },
+        {
+          "name": "Reading mode flow core",
+          "status": "pass"
+        },
+        {
+          "name": "Reading mode idempotency",
+          "status": "pass"
+        },
+        {
+          "name": "Reading Library truth contract",
+          "status": "pass"
+        },
+        {
+          "name": "History view-model contract",
+          "status": "pass"
+        },
+        {
+          "name": "Writing source-mode contract",
+          "status": "pass"
+        },
+        {
+          "name": "Tauri Vue shell contract",
+          "status": "pass"
+        },
+        {
+          "name": "Phase 10 release contract",
+          "status": "pass"
+        },
+        {
+          "name": "Vue production build",
+          "status": "pass"
+        },
+        {
+          "name": "Rust workspace check",
+          "status": "pass"
+        },
+        {
+          "name": "Rust cognitive runtime contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory proposal validator",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory proposal wire contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust memory application service contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust data-truth regressions",
+          "status": "pass"
+        },
+        {
+          "name": "Rust M4 domain learner contract",
+          "status": "pass"
+        },
+        {
+          "name": "Rust M4 application learner contract",
+          "status": "pass"
+        },
+        {
+          "name": "AI configuration security",
+          "status": "pass"
+        },
+        {
+          "name": "Reading source data integrity",
+          "status": "pass"
+        },
+        {
+          "name": "Python cognitive protocol",
+          "status": "pass"
+        },
+        {
+          "name": "M3 contract boundary",
+          "status": "pass"
+        },
+        {
+          "name": "M4 learner model contract",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "name": "Native desktop practice flow",
+      "command": "python developer/tests/e2e/suite_practice_flow.py",
+      "status": "pass",
+      "installerAcceptanceClaimed": false,
+      "generatedAt": "2026-09-10T13:42:31.435814+00:00",
+      "summary": {
+        "total": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "checks": {
+        "launch": "passed",
+        "vueRoutes": "passed",
+        "uiRouteVisuals": "passed",
+        "readingIpc": "passed",
+        "agentIpcBoundary": "passed",
+        "agentWorkspaceRun": "passed",
+        "readingArchiveBoundary": "passed",
+        "historyRetentionBoundary": "passed",
+        "bundledResources": "passed",
+        "readingView": "passed",
+        "readingPerformance": "passed",
+        "notesDialog": "passed",
+        "readingSubmitBoundary": "passed",
+        "backupPathBoundary": "passed",
+        "updaterBoundary": "passed",
+        "sqliteRestart": "passed"
+      },
+      "application": {
+        "profile": "debug",
+        "customProtocol": true,
+        "embeddedProductionFrontend": true,
+        "buildCommand": "cargo build --workspace --all-targets --locked",
+        "binarySha256": "8e9d1d93f770dbc78c08ed113a93cefe8c6b986a55f6dac5cb67fad241ce8d2c",
+        "binarySize": 44200448,
+        "nativeDriverVersion": "Microsoft Edge WebDriver 143.0.3650.96 (d55fe85d014134f7b4677688f46db9d610ddcfd5)"
+      },
+      "readingPerformance": {
+        "readingNavigationMs": [
+          271.9,
+          153.7,
+          48.1,
+          44.2,
+          145.7
+        ],
+        "readingP95Ms": 271.9,
+        "readingP95BudgetMs": 3000
+      }
+    }
+  ]
+}

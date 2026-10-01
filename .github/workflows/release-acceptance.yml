@@ -1,0 +1,150 @@
+name: Native release acceptance
+
+# Evidence collection for #172. This branch never publishes a release.
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/issue-172-release-acceptance]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  required-regressions:
+    name: Required static and native practice sequence
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Install native build prerequisites
+        run: |
+          npm --prefix apps/writing-vue ci --no-fund --no-audit
+          npm install --global @tauri-apps/cli@2.11.4 --no-fund --no-audit
+          python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Prepare fresh Windows sidecar
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target x86_64-pc-windows-msvc
+      - name: Required static suite
+        run: python developer/tests/ci/run_static_suite.py
+      - name: Prepare native practice host
+        run: tauri build --ci --no-bundle
+      - name: Install pinned native WebDriver
+        run: cargo install tauri-driver --version 2.0.6 --locked
+      - name: Install matching EdgeDriver
+        id: edge-driver
+        run: ./developer/tests/ci/install_edge_webdriver.ps1
+      - name: Required native practice flow
+        env:
+          TAURI_APP_BINARY: ${{ github.workspace }}/target/release/ielts-practice-tauri.exe
+          TAURI_NATIVE_DRIVER: ${{ steps.edge-driver.outputs.driver-path }}
+        run: |
+          $env:TAURI_DRIVER = (Get-Command tauri-driver).Source
+          ./developer/tests/ci/run_native_practice_acceptance.ps1
+      - name: Upload required regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-acceptance-required-regressions
+          path: |
+            developer/tests/e2e/reports/static-ci-report.json
+            developer/tests/e2e/reports/suite-practice-flow-report.json
+            developer/tests/e2e/reports/tauri-driver.log
+            developer/tests/e2e/reports/native-diagnostics/**
+            developer/tests/e2e/reports/*-current.png
+            developer/tests/benchmarks/reports/m3_sidecar_release.json
+            target/release/ielts-practice-tauri.exe
+            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc*
+          if-no-files-found: error
+
+  native-acceptance:
+    needs: required-regressions
+    # Collect the independent platform evidence after the required sequence,
+    # even if it fails. Its failure still fails the complete workflow.
+    if: ${{ !cancelled() }}
+    name: Native acceptance (${{ matrix.target }})
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            platform: windows
+            target: x86_64-pc-windows-msvc
+            pythonArchitecture: x64
+          - runner: macos-latest
+            platform: macos
+            target: aarch64-apple-darwin
+            pythonArchitecture: arm64
+          - runner: ubuntu-22.04
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+            pythonArchitecture: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.pythonArchitecture }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Linux native dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install frontend and pinned release tooling
+        run: |
+          npm --prefix apps/writing-vue ci --no-fund --no-audit
+          npm install --global @tauri-apps/cli@2.11.4 --no-fund --no-audit
+          python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Record source and acceptance boundary
+        run: python developer/tests/ci/native_acceptance_evidence.py source --target ${{ matrix.target }}
+      - name: Fresh native sidecar freeze and full smoke
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }}
+      - name: Build frontend for workspace tests
+        run: npm --prefix apps/writing-vue run build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Rust workspace acceptance
+        run: cargo test --workspace --locked
+      - name: Build native desktop bundles
+        run: tauri build --ci --target ${{ matrix.target }}
+      - name: Verify native installable bundles
+        run: python developer/tests/ci/verify_tauri_bundle.py --platform ${{ matrix.platform }} --report developer/tests/e2e/reports/native-acceptance/bundles.json
+      - name: Verify Windows and macOS packaged host and sidecar
+        if: matrix.platform != 'linux'
+        run: python developer/tests/ci/verify_packaged_sidecar.py --platform ${{ matrix.platform }} --report developer/tests/e2e/reports/native-acceptance/packaged-sidecar.json
+      - name: Verify Linux Debian package host and sidecar
+        if: matrix.platform == 'linux'
+        run: python developer/tests/ci/native_acceptance_evidence.py deb
+      - name: Upload native acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-acceptance-${{ matrix.target }}
+          path: |
+            developer/tests/e2e/reports/native-acceptance/**
+            developer/tests/benchmarks/reports/m3_sidecar_release.json
+            src-tauri/binaries/ielts-agent-runtime-${{ matrix.target }}.sha256
+            target/**/release/bundle/**
+          if-no-files-found: error

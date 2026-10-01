@@ -2339,7 +2339,7 @@ fn validate_embed_request(request: &ielts_domain::EmbeddingRequest) -> Result<()
     Ok(())
 }
 
-fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
+pub(crate) fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
     let path = sidecar_hash_path()?;
     let bytes = std::fs::read(&path)
         .map_err(|error| RuntimeHostError::Process(format!("cannot read {}: {error}", path.display())))?;
@@ -2456,6 +2456,10 @@ pub(crate) fn decode_frame(
         .map_err(|error| RuntimeHostError::InvalidJson(error.to_string()))?;
     Ok(Some((value, frame_size)))
 }
+
+#[cfg(test)]
+#[path = "../../developer/tests/rust/runtime_capability_contract.rs"]
+mod capability_contract_tests;
 
 #[cfg(test)]
 mod tests {

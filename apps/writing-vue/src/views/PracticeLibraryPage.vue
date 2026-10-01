@@ -1746,6 +1746,17 @@ function updateSegmentedIndicators() {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.practice-library .custom-suite-selection-bar,
+.practice-library .custom-suite-selection-main {
+  min-width: 0;
+}
+
+.practice-library .custom-suite-picked-list .custom-suite-picked-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .practice-library .practice-history-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -2162,6 +2173,16 @@ function updateSegmentedIndicators() {
   white-space: nowrap;
 }
 
+.practice-library .record-info {
+  min-width: 0;
+}
+
+.practice-library .record-percentage {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .practice-library .practice-history-list > .loading,
 .practice-library .practice-history-list > .history-empty-placeholder {
   grid-column: 1 / -1;
@@ -2203,6 +2224,7 @@ function updateSegmentedIndicators() {
 .practice-library .hero-settings-group > .hero-panel,
 .practice-library .backup-list-card {
   padding: 18px;
+  background: var(--anth-surface);
 }
 
 .practice-library .settings-file-input {
@@ -2279,6 +2301,9 @@ function updateSegmentedIndicators() {
 }
 
 .practice-library .suite-flow-option {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
   min-height: 96px;
   align-items: flex-start;
   justify-content: flex-start;
@@ -2388,10 +2413,10 @@ function updateSegmentedIndicators() {
   .practice-library .library-view-tabs {
     width: 100%;
     min-width: 0;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     justify-content: flex-start;
-    overflow-x: auto;
-    scrollbar-width: none;
+    overflow: visible;
   }
 
   .practice-library .library-view-tabs::-webkit-scrollbar {
@@ -2399,7 +2424,8 @@ function updateSegmentedIndicators() {
   }
 
   .practice-library .library-view-tabs__button {
-    flex: 0 0 auto;
+    min-height: 44px;
+    white-space: normal;
   }
 
   .practice-library .category-grid,
@@ -2442,6 +2468,11 @@ function updateSegmentedIndicators() {
     width: 100%;
   }
 
+  .practice-library .practice-history-header > .hero-panel__actions button {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
   .practice-library .practice-history-header > .hero-panel__actions:last-child {
     margin-left: 0;
   }
@@ -2469,6 +2500,15 @@ function updateSegmentedIndicators() {
 }
 
 @media (max-width: 580px) {
+  .practice-library .custom-suite-picked-list .custom-suite-picked-chip {
+    width: 100%;
+  }
+
+  .practice-library .custom-suite-selection-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .practice-library .category-actions {
     grid-template-columns: 1fr;
   }

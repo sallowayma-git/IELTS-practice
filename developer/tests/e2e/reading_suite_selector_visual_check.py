@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import _computed_color_alpha, assert_document_unlocked, assert_flat_surfaces
 
 
 BASE_URL = os.environ.get("READING_SUITE_SELECTOR_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -85,9 +86,18 @@ def read_geometry(page):
           const style = (node) => node ? getComputedStyle(node) : null;
           const content = modal?.querySelector('.suite-mode-selector-content');
           const body = modal?.querySelector('.suite-mode-selector-body');
+          const probe = document.createElement('span');
+          probe.style.backgroundColor = 'var(--lg-bg-scrim)';
+          modal.append(probe);
+          const themeScrim = style(probe).backgroundColor;
+          probe.remove();
           return {
             viewport: [innerWidth, innerHeight],
             modalDisplay: style(modal)?.display || '',
+            modalBackgroundColor: style(modal)?.backgroundColor || '',
+            modalBackgroundImage: style(modal)?.backgroundImage || '',
+            contentBackgroundColor: style(content)?.backgroundColor || '',
+            themeScrim,
             contentRect: rect(content),
             headerRect: rect(modal?.querySelector('.theme-modal-header')),
             bodyRect: rect(body),
@@ -109,6 +119,8 @@ def read_geometry(page):
             bodyScrollWidth: document.body.scrollWidth,
             appMainZ: style(document.querySelector('.app-main'))?.zIndex || '',
             navZ: style(document.querySelector('.nav-shell'))?.zIndex || '',
+            modalAboveNav: Boolean(modal?.contains(document.elementFromPoint(innerWidth / 2, 8))),
+            documentLocked: [document.documentElement, document.body].every(node => getComputedStyle(node).overflowY === 'hidden'),
           };
         }
         """
@@ -125,10 +137,10 @@ def assert_bounded(name, geometry):
     body = geometry["bodyRect"]
     if not body:
         raise AssertionError(f"{name}: modal body is not bounded")
-    if geometry["appMainZ"] != "130":
-        raise AssertionError(f"{name}: app-main stacking context was not raised above navigation")
-    if geometry["navZ"] != "120":
-        raise AssertionError(f"{name}: navigation stacking contract changed")
+    if int(geometry["appMainZ"]) <= int(geometry["navZ"]) or not geometry['modalAboveNav']:
+        raise AssertionError(f"{name}: suite selector is obscured by navigation")
+    if not geometry['documentLocked']:
+        raise AssertionError(f"{name}: suite selector leaves the background scrollable")
 
 
 def assert_options(name, geometry):
@@ -148,6 +160,17 @@ def assert_options(name, geometry):
             raise AssertionError(f"{name}: option description is not rendered")
 
 
+def assert_painted_surfaces(page, name, geometry):
+    assert_flat_surfaces(page, '.suite-mode-selector-content', name)
+    scrim = geometry['modalBackgroundColor']
+    if (
+        geometry['modalBackgroundImage'] != 'none'
+        or scrim != geometry['themeScrim']
+        or not 0 < _computed_color_alpha(scrim) < 1
+    ):
+        raise AssertionError(f"{name}: selector overlay must paint the translucent theme scrim: {scrim}")
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = []
@@ -162,12 +185,14 @@ def main():
                 closed = read_geometry(page)
                 if closed["modalDisplay"] != "none":
                     raise AssertionError(f"{name}: selector modal is not closed on initial route")
+                assert_document_unlocked(page, name)
 
                 page.locator("[data-action='start-suite-mode']").click()
                 page.wait_for_function("() => document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
                 geometry = read_geometry(page)
                 assert_bounded(name, geometry)
                 assert_options(name, geometry)
+                assert_painted_surfaces(page, name, geometry)
                 page.screenshot(path=str(REPORT_DIR / f"reading-suite-selector-{name}-current.png"))
 
                 frequency = page.locator("#suite-frequency-scope")
@@ -185,11 +210,13 @@ def main():
 
                 page.locator("#suite-mode-selector-modal [data-suite-flow-cancel='1']").last.click()
                 page.wait_for_function("() => !document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
+                assert_document_unlocked(page, name)
 
                 page.locator("[data-action='start-suite-mode']").click()
                 page.wait_for_function("() => document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
                 page.mouse.click(2, 2)
                 page.wait_for_function("() => !document.querySelector('#suite-mode-selector-modal')?.classList.contains('show')")
+                assert_document_unlocked(page, name)
 
                 report.append({"name": name, "geometry": geometry})
                 page.close()

@@ -1,0 +1,2 @@
+# Native startup verifies these payloads using their exact SHA-256 bytes.
+/assets/resource-pack/reading/payloads/*.json text eol=lf

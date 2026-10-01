@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import assert_document_unlocked, assert_flat_surfaces
 
 
 BASE_URL = os.environ.get("HISTORY_VISUAL_BASE_URL", "http://127.0.0.1:4175")
@@ -137,6 +138,7 @@ def open_detail(page):
 def close_detail(page):
     page.locator(".detail-modal .modal-header .btn-icon").click()
     page.wait_for_selector(".dialog-overlay > .detail-modal", state="detached")
+    assert_document_unlocked(page, 'History detail')
 
 
 def read_common_geometry(page):
@@ -162,6 +164,8 @@ def read_common_geometry(page):
             dialogMaxHeight: dialog ? getComputedStyle(dialog).maxHeight : '',
             dialogOverflow: dialog ? getComputedStyle(dialog).overflowY : '',
             dialogShadow: dialog ? getComputedStyle(dialog).boxShadow : '',
+            overlayAboveNav: Boolean(overlay?.contains(document.elementFromPoint(innerWidth / 2, 8))),
+            documentLocked: [document.documentElement, document.body].every(node => getComputedStyle(node).overflowY === 'hidden'),
             shellOverflow: shell ? getComputedStyle(shell).overflow : ''
           };
         }
@@ -183,8 +187,10 @@ def assert_common_geometry(name, geometry):
         raise AssertionError(f"{name}: History detail dialog is not internally scrollable")
     if geometry["dialogShadow"] in ("", "none"):
         raise AssertionError(f"{name}: History detail dialog lost its elevated surface")
-    if geometry["shellOverflow"] != "hidden":
+    if geometry["shellOverflow"] != "hidden" or not geometry['documentLocked']:
         raise AssertionError(f"{name}: app shell remains scrollable while History detail is open")
+    if not geometry['overlayAboveNav']:
+        raise AssertionError(f"{name}: navigation obscures History detail")
     if geometry["documentScrollWidth"] > width + 1 or geometry["bodyScrollWidth"] > width + 1:
         raise AssertionError(f"{name}: History detail causes page-level horizontal overflow")
 
@@ -203,6 +209,9 @@ def read_success_geometry(page):
           return {
             gridColumns: grid ? getComputedStyle(grid).gridTemplateColumns : '',
             totalBackground: total ? getComputedStyle(total).backgroundImage : '',
+            totalText: total?.textContent || '',
+            feedbackText: feedback?.textContent || '',
+            essayText: essay?.textContent || '',
             totalShadow: total ? getComputedStyle(total).boxShadow : '',
             feedbackBackground: feedback ? getComputedStyle(feedback).backgroundColor : '',
             essayBackground: essay ? getComputedStyle(essay).backgroundColor : '',
@@ -219,24 +228,14 @@ def read_success_geometry(page):
 
 
 def assert_success_geometry(name, width, geometry):
-    if "gradient" not in geometry["totalBackground"]:
-        raise AssertionError(f"{name}: total score is no longer the primary gradient surface")
-    if geometry["totalShadow"] in ("", "none"):
-        raise AssertionError(f"{name}: total score lost its visual anchor")
-    if geometry["feedbackBackground"] == geometry["essayBackground"]:
-        raise AssertionError(f"{name}: feedback and essay surfaces are visually indistinguishable")
+    if geometry["totalBackground"] != 'none' or '7.5' not in geometry['totalText']:
+        raise AssertionError(f"{name}: persisted total score lost its opaque summary surface")
+    if not geometry['feedbackText'].strip() or not geometry['essayText'].strip() or geometry['feedbackText'] == geometry['essayText']:
+        raise AssertionError(f"{name}: feedback and original essay content are incomplete")
     if geometry["scoreCount"] != 4:
         raise AssertionError(f"{name}: expected four score rows")
     if geometry["analysisCount"] < 2:
         raise AssertionError(f"{name}: expected task and rationale analysis sections")
-    if any(border != "0px" for border in geometry["infoBorders"]):
-        raise AssertionError(f"{name}: metadata items still render as nested cards")
-    if any(shadow != "none" for shadow in geometry["infoShadows"]):
-        raise AssertionError(f"{name}: metadata items still have raised shadows")
-    if any(shadow != "none" for shadow in geometry["scoreShadows"]):
-        raise AssertionError(f"{name}: score rows still have raised shadows")
-    if any(shadow != "none" for shadow in geometry["analysisShadows"]):
-        raise AssertionError(f"{name}: analysis sections still have raised shadows")
     column_count = len([value for value in geometry["gridColumns"].split(" ") if value])
     if width <= 960 and column_count != 1:
         raise AssertionError(f"{name}: mobile/tablet detail grid is not single-column")
@@ -319,6 +318,7 @@ def main():
                 success_geometry = read_success_geometry(page)
                 assert_common_geometry(f"{name}: success", success_common)
                 assert_success_geometry(f"{name}: success", width, success_geometry)
+                assert_flat_surfaces(page, '.detail-modal :is(.total-score, .info-item, .score-item, .detail-analysis-card)', f'{name}: detail')
                 page.screenshot(path=str(REPORT_DIR / f"history-detail-{name}-current.png"))
 
                 report.append(

@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-12T06:36:12.391075+00:00",
+  "scope": "tauri-vue-shipping-baseline",
+  "status": "pass",
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "name": "Shipping source layout",
+      "status": "pass",
+      "detail": {
+        "missing": []
+      }
+    },
+    {
+      "name": "Tauri shipping contract",
+      "status": "pass",
+      "detail": "Tauri-only host, least privilege, and release-overlay contract verified"
+    },
+    {
+      "name": "Current document drift",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "Document drift check passed (23 current documents checked)"
+    },
+    {
+      "name": "Vue typecheck",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "> writing-vue@0.1.0 typecheck\n> vue-tsc --noEmit"
+    },
+    {
+      "name": "Reading payload contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "reading asset payload shape: ok"
+    },
+    {
+      "name": "Reading drag keyboard behavior",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "reading drag selection controller: ok"
+    },
+    {
+      "name": "Reading highlight core",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "reading highlight core: ok"
+    },
+    {
+      "name": "Reading mode flow core",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "reading mode flow core: ok"
+    },
+    {
+      "name": "Reading mode idempotency",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "mode idempotency: ok"
+    },
+    {
+      "name": "Reading Library truth contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "practiceReadingCore10.test.js passed"
+    },
+    {
+      "name": "History view-model contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "history view model: ok"
+    },
+    {
+      "name": "Writing source-mode contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "writing mode: ok"
+    },
+    {
+      "name": "Tauri Vue shell contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "Tauri Vue shell contract: ok"
+    },
+    {
+      "name": "Phase 10 release contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "..............................................................\n----------------------------------------------------------------------\nRan 62 tests in 1.444s\n\nOK"
+    },
+    {
+      "name": "Vue production build",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "> writing-vue@0.1.0 build\n> vite build\n\nvite v6.4.2 building for production...\ntransforming...\n✓ 128 modules transformed.\nrendering chunks...\ncomputing gzip size...\n../../dist/writing/index.html                                      0.41 kB │ gzip:  0.29 kB\n../../dist/writing/assets/PracticeReadingSuitePage-CX-GTpVo.css    3.13 kB │ gzip:  0.93 kB\n../../dist/writing/assets/LearnerModelPage-D0Q67daA.css            3.35 kB │ gzip:  0.92 kB\n../../dist/writing/assets/ResultPage-WEbs5lE0.css                  8.79 kB │ gzip:  2.17 kB\n../../dist/writing/assets/EvaluatingPage-H9Tjevs2.css             10.51 kB │ gzip:  2.63 kB\n../../dist/writing/assets/ComposePage-Cz5i19TN.css                11.86 kB │ gzip:  2.37 kB\n../../dist/writing/assets/TopicManagePage-9vGJTiBo.css            13.14 kB │ gzip:  2.50 kB\n../../dist/writing/assets/PracticeLibraryPage-BMUqX1qe.css        17.76 kB │ gzip:  3.46 kB\n../../dist/writing/assets/HistoryPage-DJhXG5Ho.css                24.05 kB │ gzip:  4.31 kB\n../../dist/writing/assets/AgentConsolePage-BLkyoRjF.css           25.86 kB │ gzip:  3.84 kB\n../../dist/writing/assets/SettingsPage-C34tRa8R.css               29.75 kB │ gzip:  4.50 kB\n../../dist/writing/assets/PracticeReadingPage-D_4Nf-ah.css        34.78 kB │ gzip:  6.30 kB\n../../dist/writing/assets/index-Awq9yzIs.css                      54.57 kB │ gzip:  9.64 kB\n../../dist/writing/assets/debounce-B-6WCj1m.js                     0.12 kB │ gzip:  0.12 kB\n../../dist/writing/assets/request-gate-XTLp4srm.js                 0.12 kB │ gzip:  0.11 kB\n../../dist/writing/assets/tiptap-text-CTcHCAIN.js                  0.49 kB │ gzip:  0.31 kB\n../../dist/writing/assets/writing-categories-Dn3gp0Hp.js           1.12 kB │ gzip:  0.49 kB\n../../dist/writing/assets/tauri-bridge-43peDSeb.js                 1.57 kB │ gzip:  0.74 kB\n../../dist/writing/assets/useTauriPreferences-C0yUaBnx.js          2.06 kB │ gzip:  0.98 kB\n../../dist/writing/assets/core-DhEqZVGG.js                         2.44 kB │ gzip:  0.98 kB\n../../dist/writing/assets/LearnerModelPage-UMS3QPYE.js             4.31 kB │ gzip:  2.08 kB\n../../dist/writing/assets/PracticeReadingSuitePage-B9aqLJ5M.js     5.55 kB │ gzip:  2.34 kB\n../../dist/writing/assets/history-repository-Su0__TTS.js           5.97 kB │ gzip:  2.26 kB\n../../dist/writing/assets/EvaluatingPage-CUDg73f8.js              10.56 kB │ gzip:  4.62 kB\n../../dist/writing/assets/practice-client-CmBfLtnW.js             14.52 kB │ gzip:  3.86 kB\n../../dist/writing/assets/ResultPage-D--dHx_U.js                  14.54 kB │ gzip:  5.22 kB\n../../dist/writing/assets/ComposePage-DWV53Y96.js                 16.19 kB │ gzip:  6.17 kB\n../../dist/writing/assets/TopicManagePage-6W9P5PYH.js             17.40 kB │ gzip:  6.28 kB\n../../dist/writing/assets/client-DqPfiQqf.js                      26.29 kB │ gzip:  8.67 kB\n../../dist/writing/assets/HistoryPage-CJwn3ES7.js                 38.30 kB │ gzip: 12.80 kB\n../../dist/writing/assets/AgentConsolePage-Kr7yeMef.js            40.17 kB │ gzip: 13.88 kB\n../../dist/writing/assets/SettingsPage-CoCbJbz7.js                47.05 kB │ gzip: 14.96 kB\n../../dist/writing/assets/PracticeLibraryPage-CJn_ScsM.js         88.62 kB │ gzip: 25.08 kB\n../../dist/writing/assets/index-J683GKQx.js                      109.59 kB │ gzip: 42.96 kB\n../../dist/writing/assets/PracticeReadingPage-CkmcTsu7.js        138.94 kB │ gzip: 42.90 kB\n✓ built in 2.60s"
+    },
+    {
+      "name": "Rust workspace check",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "warning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Checking ielts-practice-tauri v0.1.0 (<validation-workspace>\\src-tauri)\nwarning: type `AgentCancelRegistry` is more private than the item `agent_run`\n   --> src-tauri\\src\\commands\\agent.rs:114:1\n    |\n114 | / pub async fn agent_run(\n115 | |     db: State<'_, AppDb>,\n116 | |     vault: State<'_, AppVault>,\n117 | |     grants: State<'_, WorkspaceGrants>,\n118 | |     cancels: State<'_, AgentCancelRegistry>,\n119 | |     request: RunWorkspaceAgentRequest,\n120 | | ) -> Result<CommandResponse<AgentRunOutcome>, ErrorEnvelope> {\n    | |____________________________________________________________^ function `agent_run` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = note: `#[warn(private_interfaces)]` on by default\n\nwarning: type `AgentCancelRegistry` is more private than the item `agent_run_attempt_review`\n   --> src-tauri\\src\\commands\\agent.rs:187:1\n    |\n187 | / pub async fn agent_run_attempt_review(\n188 | |     db: State<'_, AppDb>,\n189 | |     vault: State<'_, AppVault>,\n190 | |     cancels: State<'_, AgentCancelRegistry>,\n191 | |     request: RunAttemptReviewRequest,\n192 | | ) -> Result<CommandResponse<AgentRunOutcome>, ErrorEnvelope> {\n    | |____________________________________________________________^ function `agent_run_attempt_review` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: type `AgentCancelRegistry` is more private than the item `agent_cancel_run`\n   --> src-tauri\\src\\commands\\agent.rs:271:1\n    |\n271 | / pub fn agent_cancel_run(\n272 | |     cancels: State<'_, AgentCancelRegistry>,\n273 | |     run_id: String,\n274 | | ) -> CommandResponse<bool> {\n    | |__________________________^ function `agent_cancel_run` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: `ielts-practice-tauri` (lib) generated 3 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.25s"
+    },
+    {
+      "name": "Rust cognitive runtime contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "ial_and_coalesced_payloads ... ok\ntest cognitive_runtime::tests::lifecycle_is_single_state_and_restart_requires_a_new_handshake ... ok\ntest cognitive_runtime::capability_contract_tests::full_runtime_contract_satisfies_host_requirements ... ok\ntest cognitive_runtime::capability_contract_tests::host_accepts_additional_runtime_capabilities ... ok\ntest cognitive_runtime::tests::weekly_consolidation_is_not_a_registered_tauri_command ... ok\ntest cognitive_runtime::tests::weekly_window_fails_closed_on_garbage ... ok\ntest cognitive_runtime::tests::weekly_window_resolves_iso_week_to_its_monday ... ok\n\ntest result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.00s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n   Compiling ielts-practice-tauri v0.1.0 (<validation-workspace>\\src-tauri)\nwarning: type `AgentCancelRegistry` is more private than the item `agent_run`\n   --> src-tauri\\src\\commands\\agent.rs:114:1\n    |\n114 | / pub async fn agent_run(\n115 | |     db: State<'_, AppDb>,\n116 | |     vault: State<'_, AppVault>,\n117 | |     grants: State<'_, WorkspaceGrants>,\n118 | |     cancels: State<'_, AgentCancelRegistry>,\n119 | |     request: RunWorkspaceAgentRequest,\n120 | | ) -> Result<CommandResponse<AgentRunOutcome>, ErrorEnvelope> {\n    | |____________________________________________________________^ function `agent_run` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = note: `#[warn(private_interfaces)]` on by default\n\nwarning: type `AgentCancelRegistry` is more private than the item `agent_run_attempt_review`\n   --> src-tauri\\src\\commands\\agent.rs:187:1\n    |\n187 | / pub async fn agent_run_attempt_review(\n188 | |     db: State<'_, AppDb>,\n189 | |     vault: State<'_, AppVault>,\n190 | |     cancels: State<'_, AgentCancelRegistry>,\n191 | |     request: RunAttemptReviewRequest,\n192 | | ) -> Result<CommandResponse<AgentRunOutcome>, ErrorEnvelope> {\n    | |____________________________________________________________^ function `agent_run_attempt_review` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: type `AgentCancelRegistry` is more private than the item `agent_cancel_run`\n   --> src-tauri\\src\\commands\\agent.rs:271:1\n    |\n271 | / pub fn agent_cancel_run(\n272 | |     cancels: State<'_, AgentCancelRegistry>,\n273 | |     run_id: String,\n274 | | ) -> CommandResponse<bool> {\n    | |__________________________^ function `agent_cancel_run` is reachable at visibility `pub`\n    |\nnote: but type `AgentCancelRegistry` is only usable at visibility `pub(crate)`\n   --> src-tauri\\src\\agent\\cancel.rs:14:1\n    |\n 14 | pub(crate) struct AgentCancelRegistry {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: linker stdout: 正在创建库 <validation-workspace>\\target\\debug\\deps\\ielts_practice_tauri_lib-04bad9adc55b1cf1.lib 和对象 <validation-workspace>\\target\\debug\\deps\\ielts_practice_tauri_lib-04bad9adc55b1cf1.exp\n  |\n  = note: `#[warn(linker_messages)]` on by default\n\nwarning: `ielts-practice-tauri` (lib test) generated 4 warnings\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 29s\n     Running unittests src\\lib.rs (target\\debug\\deps\\ielts_practice_tauri_lib-04bad9adc55b1cf1.exe)"
+    },
+    {
+      "name": "Rust memory proposal validator",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "running 10 tests\ntest memory::validator::tests::source_authority_and_schema_bounds_fail_closed ... ok\ntest memory::validator::tests::scope_wire_shape_is_explicit_and_closed ... ok\ntest memory::validator::tests::unknown_index_is_not_a_legacy_mutation_alias ... ok\ntest memory::validator::tests::checked_in_v1_fixtures_parse_through_the_same_strict_contract ... ok\ntest memory::validator::tests::exact_identity_is_duplicate_and_noop_is_not_a_candidate ... ok\ntest memory::validator::tests::valid_cognitive_add_is_pending_and_source_is_host_derived ... ok\ntest memory::validator::tests::target_operations_require_stable_active_target_and_matching_scope ... ok\ntest memory::validator::tests::sensitive_or_injected_evidence_is_quarantined_before_duplicate_resolution ... ok\ntest memory::validator::tests::secret_like_statement_or_evidence_is_quarantined ... ok\ntest memory::validator::tests::missing_duplicate_cross_scope_and_bad_key_are_rejected ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.40s\n     Running unittests src\\lib.rs (target\\debug\\deps\\ielts_application-bf3f88dab1219579.exe)"
+    },
+    {
+      "name": "Rust memory proposal wire contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "running 11 tests\ntest scope_is_exactly_the_closed_activity_object ... ok\ntest every_target_action_rejects_an_unstable_target_id ... ok\ntest cross_user_and_cross_scope_evidence_are_rejected ... ok\ntest unsupported_schema_version_stops_before_any_proposal_decision ... ok\ntest sensitive_and_injected_evidence_are_quarantined ... ok\ntest unknown_batch_proposal_scope_fields_and_legacy_index_fail_closed ... ok\ntest cognitive_source_authority_is_host_enforced ... ok\ntest invalid_namespace_wire_value_and_canonical_keys_fail_closed ... ok\ntest exact_active_and_same_batch_identities_are_duplicates ... ok\ntest every_non_noop_action_rejects_empty_evidence ... ok\ntest all_nine_actions_round_trip_with_exact_camel_case_fields ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s\n     Running tests\\memory_proposal_contract.rs (target\\debug\\deps\\memory_proposal_contract-916e33a6dc58f6ce.exe)"
+    },
+    {
+      "name": "Rust memory application service contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "running 2 tests\ntest service_uses_fresh_evidence_and_host_owned_source_authority ... ok\ntest injection_evidence_is_quarantined_without_retaining_raw_proposal ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s\n     Running tests\\memory_service_contract.rs (target\\debug\\deps\\memory_service_contract-0b21eb1845ad3ed1.exe)"
+    },
+    {
+      "name": "Rust data-truth regressions",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "s_lineage ... ok\ntest retry_keeps_latest_result_when_an_older_provider_call_finishes_late ... ok\ntest writing_draft_requires_an_explicit_writing_source_mode ... ok\ntest writing_draft_and_submit_never_reopen_a_closed_attempt ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s\n\n\nrunning 4 tests\ntest annotation_stable_anchor_and_mismatch ... ok\ntest annotation_attempt_scope_isolates_highlights_without_hiding_global_notes ... ok\ntest dictionary_and_vocab_review ... ok\ntest coach_incremental_messages_failure_preserves_score ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s\n\n\nrunning 14 tests\ntest denied_self_modifying_tools_are_listed ... ok\ntest holdout_never_enters_prompt_generation_context ... ok\ntest promote_advances_version_to_active ... ok\ntest promote_then_rollback_round_trips_through_the_gate ... ok\ntest rollback_is_exact ... ok\ntest eval_failure_leaves_candidate_at_proposed ... ok\ntest rollback_never_activates_a_never_active_draft ... ok\ntest candidate_cannot_skip_eval ... ok\ntest list_prompt_versions_orders_by_version_desc ... ok\ntest candidate_cannot_skip_approval ... ok\ntest rollback_with_no_prior_active_version_reinstates_nothing ... ok\ntest only_one_active_version_per_template ... ok\ntest rollback_requires_an_actor ... ok\ntest shadow_run_rejects_user_visible_side_effect ... ok\n\ntest result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s\n\n\nrunning 8 tests\ntest unknown_schema_is_rejected_without_legacy_shape_loss ... ok\ntest annotation_asset_references_are_materialized_for_full_backup_integrity ... ok\ntest all_bad_records_return_a_report_and_leave_database_unchanged ... ok\ntest duplicate_annotation_ids_reject_the_whole_archive_before_any_write ... ok\ntest partial_bad_record_is_rejected_before_any_write ... ok\ntest database_conflict_rolls_back_prior_valid_records ... ok\ntest annotation_id_owned_by_another_attempt_is_rejected_without_overwrite ... ok\ntest canonical_archive_round_trip_preserves_full_reading_snapshot ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.23s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s\n     Running tests\\backup_full_roundtrip.rs (target\\debug\\deps\\backup_full_roundtrip-a53b73b2897e9ca7.exe)\n     Running tests\\cognitive_read.rs (target\\debug\\deps\\cognitive_read-2ed82dd19721e420.exe)\n     Running tests\\consolidation.rs (target\\debug\\deps\\consolidation-146969e6608ca881.exe)\n     Running tests\\context_snapshot.rs (target\\debug\\deps\\context_snapshot-6ee0a9eacad6087b.exe)\n     Running tests\\history_retention.rs (target\\debug\\deps\\history_retention-f39dcdfe166afb06.exe)\n     Running tests\\learner_model.rs (target\\debug\\deps\\learner_model-163fae9aabe73b8e.exe)\n     Running tests\\learning_events.rs (target\\debug\\deps\\learning_events-683ddb64a2b12e0e.exe)\n     Running tests\\learning_observations.rs (target\\debug\\deps\\learning_observations-494e05ce1adb1ea3.exe)\n     Running tests\\memory_profile_core.rs (target\\debug\\deps\\memory_profile_core-6dd14dca6b0bc2c3.exe)\n     Running tests\\phase4_history_settings.rs (target\\debug\\deps\\phase4_history_settings-76afe8a04fcc3ea7.exe)\n     Running tests\\phase5_writing_eval.rs (target\\debug\\deps\\phase5_writing_eval-27cfb038e921b32a.exe)\n     Running tests\\phase8_annotations_coach.rs (target\\debug\\deps\\phase8_annotations_coach-d6164283cfabf78f.exe)\n     Running tests\\prompt_skill.rs (target\\debug\\deps\\prompt_skill-ceeebed5cc59f6b4.exe)\n     Running tests\\reading_archive_transaction.rs (target\\debug\\deps\\reading_archive_transaction-e10ecac48c85101f.exe)"
+    },
+    {
+      "name": "Rust M4 domain learner contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "running 26 tests\ntest agent_thread::tests::action_kind_gate_classification_is_total ... ok\ntest agent_thread::tests::checkpoint_stage_round_trips ... ok\ntest agent_thread::tests::forbidden_action_kinds_are_rejected ... ok\ntest context::tests::estimate_tokens_uses_four_chars_per_token_rounded_up ... ok\ntest context::tests::section_serializes_as_screaming_snake ... ok\ntest corpus::tests::chunk_id_is_stable_and_versioned ... ok\ntest context::tests::rendered_hash_is_stable_for_identical_input ... ok\ntest dream::wire_casing_tests::proposal_kind_wire_matches_python_enum_values ... ok\ntest context::tests::section_priority_orders_current_task_above_soul ... ok\ntest embedding::tests::request_round_trips_camel_case ... ok\ntest context::tests::plan_round_trips_through_serde_camel_case ... ok\ntest embedding::tests::request_rejects_unknown_fields ... ok\ntest embedding::tests::signature_pins_schema_version ... ok\ntest embedding::tests::response_round_trips_with_optional_fields_absent ... ok\ntest learner::tests::declining_and_improving_trends_need_multiple_observations ... ok\ntest embedding::tests::signature_rejects_unknown_fields ... ok\ntest learner::tests::familiarity_bands_preserve_taskbook_order ... ok\ntest learner::tests::same_asset_is_strictly_less_evidence_than_new_asset ... ok\ntest learner::tests::time_decay_moves_posterior_toward_neutral_without_erasing_evidence ... ok\ntest learner::tests::weighted_beta_update_is_replayable_and_uncertain_at_start ... ok\ntest learning_tools::tests::transition_semantics_freeze_last_scored_state_contract ... ok\ntest text_guard::tests::forbidden_inference_domains_are_blocked ... ok\ntest text_guard::tests::injection_markers_are_case_insensitive_and_positional ... ok\ntest text_guard::tests::ordinary_study_behaviour_statements_pass ... ok\ntest text_guard::tests::secret_markers_catch_credential_shapes ... ok\ntest text_guard::tests::security_marker_is_the_union ... ok\n\ntest result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\nFinished `test` profile [unoptimized + debuginfo] target(s) in 0.44s\n     Running unittests src\\lib.rs (target\\debug\\deps\\ielts_domain-f70e391ed31c836c.exe)\n   Doc-tests ielts_domain"
+    },
+    {
+      "name": "Rust M4 application learner contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "running 1 test\ntest learner::tests::read_service_delegates_to_bounded_store ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s\nwarning: unused import: `chrono::Utc`\n --> crates\\ielts-db\\src\\consolidation.rs:8:5\n  |\n8 | use chrono::Utc;\n  |     ^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `ielts-db` (lib) generated 1 warning (run `cargo fix --lib -p ielts-db` to apply 1 suggestion)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s\n     Running unittests src\\lib.rs (target\\debug\\deps\\ielts_application-bf3f88dab1219579.exe)"
+    },
+    {
+      "name": "AI configuration security",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "AI configuration security gate passed"
+    },
+    {
+      "name": "Reading source data integrity",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "[reading-data-integrity] pass_with_duplicate_warnings\n{\"scannedFiles\": 225, \"duplicateEntries\": [{\"key\": \"p2::who wrote shakespeare s plays 莎士比亚\", \"examIds\": [\"p2-low-147\", \"p2-medium-058\"]}], \"allowlistedDuplicates\": [{\"key\": \"p2::who wrote shakespeare s plays 莎士比亚\", \"examIds\": [\"p2-low-147\", \"p2-medium-058\"]}], \"blockingDuplicates\": [], \"missingPdfRef\": [], \"malformedPdfRef\": []}"
+    },
+    {
+      "name": "Native reading resource checksums",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "{\"status\": \"passed\", \"verifiedPayloads\": 225, \"hashScope\": \"raw-bytes\"}"
+    },
+    {
+      "name": "Python cognitive protocol",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": ".............................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 429 tests in 12.223s\n\nOK"
+    },
+    {
+      "name": "M3 contract boundary",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "M3 contract gate passed"
+    },
+    {
+      "name": "M4 learner model contract",
+      "status": "pass",
+      "exitCode": 0,
+      "detail": "M4 learner-model contract verified"
+    }
+  ],
+  "excludedRetiredHosts": [
+    "Electron",
+    "Fastify",
+    "root index.html",
+    "file:// E2E host"
+  ]
+}

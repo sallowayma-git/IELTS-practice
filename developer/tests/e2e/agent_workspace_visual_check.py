@@ -211,12 +211,19 @@ def main():
                         "document.querySelector('.agent-page-header__status')?.innerText.includes('已完成')"
                     )
                     command_log = page.evaluate("window.__agentCommandLog")
-                    commands = [item["command"] for item in command_log if item["command"].startswith('agent_') and item["command"] not in ('agent_thread_list', 'agent_approval_list')]
+                    commands = [item["command"] for item in command_log]
+                    expected_initialization = [
+                        "memory_catalog_list", "background_job_status", "agent_approval_list",
+                        "agent_thread_list", "study_plan_get_latest", "journal_get_daily",
+                        "agent_get_workspace",
+                    ]
                     expected_commands = [
-                        "agent_get_workspace", "agent_get_workspace", "agent_run", "agent_get_run",
+                        "agent_get_workspace", "agent_run", "agent_get_run",
                         "agent_get_workspace", "agent_run", "agent_get_run"
                     ]
-                    if commands != expected_commands:
+                    # Independent mount reads may resolve in either order. User actions
+                    # must automatically renew, then hydrate each failed/successful run once.
+                    if sorted(commands[:7]) != sorted(expected_initialization) or commands[7:] != expected_commands:
                         raise AssertionError(f"mobile: unexpected Agent command sequence {commands}")
                     geometry["interaction"] = {
                         "selected": page.locator(".agent-file-row").nth(0).evaluate(

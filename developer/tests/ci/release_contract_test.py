@@ -12,19 +12,33 @@ import verify_tauri_bundle
 import verify_updater_manifest
 
 
-def top_level_block(document: str, key: str) -> str:
+def load_tests(loader, tests, pattern):
+    import packaged_sidecar_test
+    import sidecar_signing_test
+    import sidecar_memory_test
+    import reading_resource_test
+
+    tests.addTests(loader.loadTestsFromModule(packaged_sidecar_test))
+    tests.addTests(loader.loadTestsFromModule(sidecar_signing_test))
+    tests.addTests(loader.loadTestsFromModule(sidecar_memory_test))
+    tests.addTests(loader.loadTestsFromModule(reading_resource_test))
+    return tests
+
+
+def workflow_block(document: str, key: str, indent: int = 0) -> str:
     lines = document.splitlines()
+    heading = f"{' ' * indent}{key}:"
     start = next(
-        (index for index, line in enumerate(lines) if line == f"{key}:"),
+        (index for index, line in enumerate(lines) if line == heading),
         None,
     )
     if start is None:
-        raise AssertionError(f"missing top-level workflow key: {key}")
+        raise AssertionError(f"missing workflow key: {key}")
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
         line = lines[index]
-        if line and not line[0].isspace():
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
             end = index
             break
     return "\n".join(lines[start:end])
@@ -39,7 +53,7 @@ class WorkflowTriggerTests(unittest.TestCase):
         cls.release = (workflows / "release.yml").read_text(encoding="utf-8")
 
     def test_branch_ci_runs_gates_without_packaging_the_desktop_app(self) -> None:
-        trigger = top_level_block(self.branch_ci, "on")
+        trigger = workflow_block(self.branch_ci, "on")
         self.assertIn("push:", trigger)
         self.assertIn("branches:", trigger)
         self.assertNotIn("tags:", trigger)
@@ -52,16 +66,135 @@ class WorkflowTriggerTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.branch_ci)
 
-    def test_release_is_tag_only_and_owns_desktop_packaging(self) -> None:
-        trigger = top_level_block(self.release, "on")
+    def test_release_supports_manual_gates_and_owns_desktop_packaging(self) -> None:
+        trigger = workflow_block(self.release, "on")
         self.assertIn("push:", trigger)
         self.assertIn("tags:", trigger)
         self.assertIn("- 'v*'", trigger)
         self.assertNotIn("branches:", trigger)
         self.assertNotIn("pull_request:", trigger)
-        self.assertNotIn("workflow_dispatch:", trigger)
-        self.assertIn("cargo tauri build", self.release)
+        self.assertIn("workflow_dispatch:", trigger)
+        self.assertIn("tauri build --ci --no-bundle", self.release)
         self.assertIn("tauri-apps/tauri-action", self.release)
+
+    def test_manual_runs_cannot_sign_attach_or_publish_a_release(self) -> None:
+        self.assertEqual(workflow_block(self.release, "permissions"), "permissions:\n  contents: read\n")
+        tag_push_only = "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+        for name in ("tauri-release", "publish-release"):
+            with self.subTest(job=name):
+                job = workflow_block(self.release, name, indent=2)
+                # A dispatch on a tag must also stop before certificate import,
+                # signing, or creating draft assets. Guard the complete job.
+                self.assertIn(f"\n    {tag_push_only}\n", job)
+                self.assertIn("\n    permissions:\n      contents: write\n", job)
+                self.assertNotIn("always()", job)
+                self.assertNotIn("continue-on-error", job)
+        for name in ("shipping-gate", "rust-test"):
+            job = workflow_block(self.release, name, indent=2)
+            self.assertNotIn("\n    if:", job)
+            self.assertNotIn("contents: write", job)
+            self.assertNotIn("secrets.", job)
+
+    def test_shipping_runs_all_regressions_before_workspace_acceptance(self) -> None:
+        job = workflow_block(self.release, "shipping-gate", indent=2)
+        markers = (
+            "run: python developer/tests/ci/run_static_suite.py",
+            "run: python developer/tests/e2e/visual_test_support_test.py",
+            "run: python developer/tests/e2e/run_visual_regressions.py",
+            "run: tauri build --ci --no-bundle",
+            "./developer/tests/ci/run_native_practice_acceptance.ps1",
+        )
+        positions = [job.index(marker) for marker in markers]
+        self.assertEqual(positions, sorted(positions))
+        for marker in markers:
+            step = next(step for step in job.split("\n      - ") if marker in step)
+            self.assertNotIn("\n        if:", step)
+            self.assertNotIn("continue-on-error", step)
+        self.assertIn("developer/tests/e2e/reports/native-diagnostics/**", job)
+        self.assertIn("needs: shipping-gate", workflow_block(self.release, "rust-test", indent=2))
+
+    def test_release_prepares_sidecar_in_every_consuming_job(self) -> None:
+        consumers = (
+            ("shipping-gate", "x86_64-pc-windows-msvc", "run: python developer/tests/ci/run_static_suite.py"),
+            ("rust-test", "x86_64-pc-windows-msvc", "run: cargo test --workspace --locked"),
+            ("tauri-release", "${{ matrix.target }}", "uses: tauri-apps/tauri-action@v0"),
+        )
+        for job_name, target, consumer in consumers:
+            with self.subTest(job=job_name):
+                self.assert_sidecar_preparation(job_name, target, consumer)
+
+    def assert_sidecar_preparation(self, job_name: str, target: str, consumer: str) -> None:
+        job = workflow_block(self.release, job_name, indent=2)
+        install = (
+            "run: python -m pip install --disable-pip-version-check "
+            "-r agent-runtime-python/requirements-build.lock "
+            "-r agent-runtime-python/requirements.lock"
+        )
+        markers = (
+            "uses: actions/setup-python@v5",
+            install,
+            f"run: python developer/tests/ci/build_agent_runtime_sidecar.py --target {target}",
+            consumer,
+        )
+        positions = []
+        for marker in markers:
+            self.assertEqual(job.count(marker), 1, marker)
+            positions.append(job.index(marker))
+        self.assertEqual(positions, sorted(positions))
+        python_step = next(step for step in job.split("\n      - ") if markers[0] in step)
+        self.assertIn("python-version: '3.12'", python_step)
+        for step in job.split("\n      - "):
+            if any(marker in step for marker in markers[:3]):
+                self.assertNotIn("\n        if:", step)
+                self.assertNotIn("continue-on-error:", step)
+
+    def test_release_matrix_matches_native_sidecar_targets(self) -> None:
+        job = workflow_block(self.release, "tauri-release", indent=2)
+        matrix = workflow_block(job, "include", indent=8)
+        entries = [
+            dict(line.strip().split(": ", 1) for line in entry.splitlines())
+            for entry in matrix.split("          - ")[1:]
+        ]
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(
+            {
+                entry["platformKey"]: (entry["platform"], entry.get("target"), entry.get("pythonArchitecture"))
+                for entry in entries
+            },
+            {
+                "windows": ("windows-2022", "x86_64-pc-windows-msvc", "x64"),
+                "macos": ("macos-latest", "aarch64-apple-darwin", "arm64"),
+                "linux": ("ubuntu-22.04", "x86_64-unknown-linux-gnu", "x64"),
+            },
+        )
+        self.assertIn("targets: ${{ matrix.target }}", job)
+        self.assertIn("architecture: ${{ matrix.pythonArchitecture }}", job)
+        macos = next(entry for entry in entries if entry["platformKey"] == "macos")
+        self.assertEqual(macos["args"].strip("'\""), "--target aarch64-apple-darwin")
+        self.assertEqual(
+            {entry["platformKey"]: entry["sidecarArgs"].strip("'\"") for entry in entries},
+            {"windows": "--sign", "macos": "--sign", "linux": ""},
+        )
+
+    def test_signed_sidecar_identity_is_final_before_compile_and_checked_after_bundle(self) -> None:
+        job = workflow_block(self.release, "tauri-release", indent=2)
+        build = "run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }} ${{ matrix.sidecarArgs }}"
+        bundle = "uses: tauri-apps/tauri-action@v0"
+        verify = "run: python developer/tests/ci/verify_packaged_sidecar.py --platform ${{ matrix.platformKey }}"
+        for certificate in ("Import macOS Developer ID certificate", "Import Windows Authenticode certificate"):
+            self.assertLess(job.index(certificate), job.index(build))
+        self.assertLess(job.index(build), job.index(bundle))
+        pinned_cli = "npm install --global @tauri-apps/cli@${{ env.TAURI_CLI_VERSION }}"
+        self.assertLess(job.index(pinned_cli), job.index(bundle))
+        self.assertIn("tauriScript: tauri", job)
+        self.assertLess(job.index(bundle), job.index(verify))
+        step = next(step for step in job.split("\n      - ") if verify in step)
+        self.assertIn("if: matrix.platformKey != 'linux'", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("continue-on-error", job)
+        publish = workflow_block(self.release, "publish-release", indent=2)
+        self.assertIn("needs: tauri-release", publish)
+        self.assertNotIn("if: always()", publish)
 
 
 class ReleaseConfigTests(unittest.TestCase):
@@ -70,7 +203,7 @@ class ReleaseConfigTests(unittest.TestCase):
             prepare_tauri_release.DEFAULT_ENDPOINT,
             "A" * 64,
         )
-        self.assertTrue(overlay["bundle"]["createUpdaterArtifacts"])
+        self.assertIs(overlay["bundle"]["createUpdaterArtifacts"], True)
         updater = overlay["plugins"]["updater"]
         self.assertEqual(updater["endpoints"], [prepare_tauri_release.DEFAULT_ENDPOINT])
         self.assertEqual(updater["pubkey"], "A" * 64)
@@ -120,6 +253,11 @@ class ReleaseConfigTests(unittest.TestCase):
             },
         )
         self.assertTrue(macos["macOS"]["hardenedRuntime"])
+        self.assertEqual(macos["externalBin"], [])
+        self.assertEqual(
+            macos["macOS"]["files"],
+            {"MacOS/ielts-agent-runtime": "binaries/ielts-agent-runtime-aarch64-apple-darwin"},
+        )
 
 
 class BundleVerificationTests(unittest.TestCase):
@@ -156,27 +294,90 @@ class BundleVerificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             installer = root / "IELTS Practice_0.1.0_x64-setup.exe"
-            updater = root / "IELTS Practice_0.1.0_x64-setup.nsis.zip"
-            signature = Path(f"{updater}.sig")
-            for path in (installer, updater, signature):
+            msi = root / "IELTS Practice_0.1.0_x64.msi"
+            files = [installer, msi, Path(f"{installer}.sig"), Path(f"{msi}.sig")]
+            for path in files:
                 path.write_bytes(b"artifact")
             result = verify_tauri_bundle.verify_artifacts(
-                [installer, updater, signature],
+                files,
                 "windows",
                 require_updater=True,
                 require_signatures=True,
             )
             self.assertEqual(result["status"], "passed")
+            self.assertEqual(set(result["updaterArchives"]), {str(installer), str(msi)})
+
+    def test_linux_v2_updaters_use_native_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            packages = [
+                root / f"IELTS-Practice_0.1.0_amd64{suffix}"
+                for suffix in (".AppImage", ".deb", ".rpm")
+            ]
+            files = packages + [Path(f"{package}.sig") for package in packages]
+            for path in files:
+                path.write_bytes(b"artifact")
+            result = verify_tauri_bundle.verify_artifacts(files, "linux", True, True)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(set(result["updaterArchives"]), {str(package) for package in packages})
+
+    def test_macos_still_requires_the_signed_app_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dmg = root / "IELTS Practice_0.1.0_aarch64.dmg"
+            archive = root / "IELTS Practice.app.tar.gz"
+            signature = Path(f"{archive}.sig")
+            files = [dmg, archive, signature]
+            for path in files:
+                path.write_bytes(b"artifact")
+            result = verify_tauri_bundle.verify_artifacts(files, "macos", True, True)
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["updaterArchives"], [str(archive)])
+
+    def test_every_native_updater_requires_its_own_nonempty_signature(self) -> None:
+        cases = (
+            ("windows", "setup.exe"), ("windows", "app.msi"),
+            ("linux", "app.AppImage"), ("linux", "app.deb"), ("linux", "app.rpm"),
+        )
+        for platform_name, name in cases:
+            with self.subTest(platform=platform_name, name=name), tempfile.TemporaryDirectory() as directory:
+                artifact = Path(directory) / name
+                artifact.write_bytes(b"artifact")
+                result = verify_tauri_bundle.verify_artifacts([artifact], platform_name, True, True)
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
+                signature = Path(f"{artifact}.sig")
+                signature.write_bytes(b"")
+                result = verify_tauri_bundle.verify_artifacts([artifact, signature], platform_name, True, True)
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
+
+    def test_legacy_archive_signature_cannot_replace_native_package_signature(self) -> None:
+        cases = (
+            ("windows", "app.nsis.zip", "app-setup.exe"),
+            ("windows", "app.msi.zip", "app.msi"),
+            ("linux", "app.AppImage.tar.gz", "app.AppImage"),
+        )
+        for platform_name, name, native_name in cases:
+            with self.subTest(platform=platform_name, name=name), tempfile.TemporaryDirectory() as directory:
+                artifact = Path(directory) / native_name
+                legacy = Path(directory) / name
+                signature = Path(f"{legacy}.sig")
+                artifact.write_bytes(b"artifact")
+                legacy.write_bytes(b"legacy archive")
+                signature.write_bytes(b"legacy signature")
+                result = verify_tauri_bundle.verify_artifacts(
+                    [artifact, legacy, signature], platform_name, True, True,
+                )
+                self.assertEqual(result["updaterArchives"], [str(artifact)])
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(any("missing updater signatures" in error for error in result["errors"]))
 
     def test_missing_signature_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             installer = root / "IELTS Practice_0.1.0_amd64.AppImage"
-            updater = root / "IELTS Practice_0.1.0_amd64.AppImage.tar.gz"
-            for path in (installer, updater):
-                path.write_bytes(b"artifact")
+            installer.write_bytes(b"artifact")
             result = verify_tauri_bundle.verify_artifacts(
-                [installer, updater],
+                [installer],
                 "linux",
                 require_updater=True,
                 require_signatures=True,
