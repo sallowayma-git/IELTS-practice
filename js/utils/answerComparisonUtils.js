@@ -452,19 +452,31 @@
         // Keep candidates in source order so missing or stale verdicts cannot hide
         // a valid boolean in a later source. Display-generated flags are not grades.
         const correctnessSources = [
-            record.answerComparison,
-            record.realData && record.realData.answerComparison,
-            record.scoreInfo && record.scoreInfo.details,
-            record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details
-        ].filter(Boolean);
+            { entries: record.answerComparison },
+            { entries: record.realData && record.realData.answerComparison },
+            { entries: record.scoreInfo && record.scoreInfo.details, producer: record.scoreInfo && record.scoreInfo.source },
+            { entries: record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details,
+                producer: record.realData && record.realData.scoreInfo && record.realData.scoreInfo.source },
+            { entries: record.answerDetails },
+            { entries: record.realData && record.realData.answerDetails }
+        ];
         const correctnessMap = new Map();
-        correctnessSources.forEach(source => {
+        correctnessSources.forEach(({ entries: source, producer }) => {
             if (!isPlainObject(source)) {
                 return;
             }
             Object.entries(source).forEach(([rawKey, candidate]) => {
                 if (!isPlainObject(candidate) || typeof candidate.isCorrect !== 'boolean'
                     || candidate.isCorrectSource === 'display') {
+                    return;
+                }
+                // Older display enrichment also stored unmarked booleans. Only
+                // weighted grades or details from a submission producer can
+                // override matching; a questionId alone is normalization metadata.
+                const hasGradingEvidence = (Number.isFinite(candidate.weight) && candidate.weight > 0)
+                    || producer === 'unified_reading_page'
+                    || producer === 'listening_record_bridge';
+                if (!hasGradingEvidence) {
                     return;
                 }
                 const { canonicalKey } = normalizeKey(rawKey);

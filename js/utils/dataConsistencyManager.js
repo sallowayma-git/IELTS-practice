@@ -40,6 +40,10 @@ class DataConsistencyManager {
         return value !== null && typeof value === 'object' && !Array.isArray(value);
     }
 
+    hasAnswerComparison(value) {
+        return this.isAnswerMap(value) && Object.keys(value).length > 0;
+    }
+
     getCorrectAnswerMap(record) {
         if (!record || typeof record !== 'object') {
             return {};
@@ -95,7 +99,7 @@ class DataConsistencyManager {
         }
 
         // 检查答案比较数据
-        if (!target.answerComparison && target.answers && Object.keys(correctAnswerMap).length > 0) {
+        if (!this.hasAnswerComparison(target.answerComparison) && target.answers && Object.keys(correctAnswerMap).length > 0) {
             validation.warnings.push('缺少答案比较数据，将自动生成');
         }
 
@@ -131,12 +135,13 @@ class DataConsistencyManager {
         const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
         // Reuse persisted nested comparisons before generating display-only data.
-        if (!enriched.answerComparison && enriched.realData && enriched.realData.answerComparison) {
+        if (!this.hasAnswerComparison(enriched.answerComparison) && enriched.realData
+            && this.hasAnswerComparison(enriched.realData.answerComparison)) {
             enriched.answerComparison = enriched.realData.answerComparison;
         }
 
         // 生成缺失的答案比较数据
-        if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
+        if (!this.hasAnswerComparison(enriched.answerComparison) && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
                 enriched.answers, 
                 correctAnswerMap
@@ -145,7 +150,7 @@ class DataConsistencyManager {
         }
 
         // 修复分数信息
-        if (!enriched.scoreInfo && enriched.answerComparison) {
+        if (!enriched.scoreInfo && this.hasAnswerComparison(enriched.answerComparison)) {
             enriched.scoreInfo = this.calculateScoreFromComparison(enriched.answerComparison);
             console.log('[DataConsistencyManager] 从答案比较计算分数');
         }
@@ -229,7 +234,8 @@ class DataConsistencyManager {
             enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
                 ? correctAnswerMap
                 : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
-            enriched.realData.answerComparison = enriched.realData.answerComparison || enriched.answerComparison || {};
+            enriched.realData.answerComparison = this.hasAnswerComparison(enriched.realData.answerComparison)
+                ? enriched.realData.answerComparison : (enriched.answerComparison || {});
         }
 
         console.log('[DataConsistencyManager] 数据补充完成');

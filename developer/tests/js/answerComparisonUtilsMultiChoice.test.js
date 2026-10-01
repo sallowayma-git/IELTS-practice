@@ -262,7 +262,7 @@ function testMissingVerdictsFallThroughEverySource() {
         assert.strictEqual(normalized.q2.isCorrect, null, 'the production normalizer should supply the missing verdict');
         const sources = Array.from({ length: 4 }, () => clone(normalized));
         sources[storedSourceIndex] = {
-            [key]: { userAnswer: ['E', 'D'], correctAnswer: 'D', isCorrect: true }
+            [key]: { userAnswer: ['E', 'D'], correctAnswer: 'D', isCorrect: true, weight: 1 }
         };
         const record = {
             answers: { q2: ['D', 'E'] },
@@ -281,7 +281,7 @@ function testMissingVerdictsFallThroughEverySource() {
 
 function testStoredFalseKeepsSourcePrecedence() {
     const sandbox = createUtilsSandbox();
-    const comparison = { userAnswer: 'D', correctAnswer: 'D', isCorrect: false };
+    const comparison = { userAnswer: 'D', correctAnswer: 'D', isCorrect: false, weight: 1 };
     const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
         answers: { q2: 'D' },
         correctAnswerMap: { q2: 'D' },
@@ -294,9 +294,9 @@ function testStoredFalseKeepsSourcePrecedence() {
 function testStaleSnapshotsCannotSupplyAVerdict() {
     const sandbox = createUtilsSandbox();
     for (const staleDetail of [
-        { userAnswer: ['A', 'B'], correctAnswer: 'D', isCorrect: true },
-        { userAnswer: ['D', 'E'], correctAnswer: ['D', 'A'], isCorrect: true },
-        { userAnswer: ['D', 'E'], isCorrect: true }
+        { userAnswer: ['A', 'B'], correctAnswer: 'D', isCorrect: true, weight: 1 },
+        { userAnswer: ['D', 'E'], correctAnswer: ['D', 'A'], isCorrect: true, weight: 1 },
+        { userAnswer: ['D', 'E'], isCorrect: true, weight: 1 }
     ]) {
         const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
             answers: { q2: ['D', 'E'] },
@@ -323,14 +323,66 @@ function testSnapshotsAreCheckedAfterLetterKeyAlignment() {
         const entries = sandbox.AnswerComparisonUtils.getNormalizedEntries({
             answers: { qa: ['D', 'E'] },
             correctAnswerMap: { q1: correctAnswer },
-            answerComparison: { qa: { userAnswer: ['D', 'E'], correctAnswer: 'D', isCorrect: true } }
+            answerComparison: { qa: { userAnswer: ['D', 'E'], correctAnswer: 'D', isCorrect: true, weight: 1 } }
         });
         assert.strictEqual(entries.length, 1, 'letter answers should align to the numeric row');
         assert.strictEqual(entries[0].isCorrect, expectedVerdict, 'the verdict must match the final aligned answer snapshot');
     }
 }
 
+function testLegacyDisplayVerdictsDoNotOverrideMatchingOrSubmission() {
+    const sandbox = createUtilsSandbox();
+    const manager = new sandbox.DataConsistencyManager();
+    const labeled = {
+        id: 'legacy-display-labeled-answer',
+        startTime: '2026-09-20T00:00:00Z',
+        answers: { q1: 'D effects' },
+        correctAnswerMap: { q1: 'D' }
+    };
+    const grouped = buildSplitKeyRecord();
+    grouped.id = 'legacy-display-partial-credit';
+    grouped.startTime = labeled.startTime;
+    for (const [record, questionNumber] of [[labeled, 1], [grouped, 2]]) {
+        const legacy = manager.generateAnswerComparison(record.answers, record.correctAnswerMap);
+        Object.values(legacy).forEach(entry => { delete entry.isCorrectSource; });
+        assert.strictEqual(legacy[`q${questionNumber}`].isCorrect, false,
+            'the old display comparator reproduces the incorrect persisted verdict');
+        for (const comparison of [legacy, sandbox.PracticeCore.contracts.normalizeAnswerComparison(legacy)]) {
+            const stored = { ...clone(record), answerComparison: clone(comparison),
+                realData: { answerComparison: clone(comparison) } };
+            const entries = getModalEntries(sandbox, stored);
+            assert.strictEqual(entries.find(entry => entry.questionNumber === questionNumber).isCorrect, true,
+                'legacy display verdicts must not hide matching answers or genuine submission grading');
+        }
+    }
+}
+
+function testSubmissionProducerDetailsSurviveNormalizedComparisons() {
+    const sandbox = createUtilsSandbox();
+    for (const source of ['unified_reading_page', 'listening_record_bridge']) {
+        for (const nested of [false, true]) {
+            const scoreInfo = { source, details: {
+                q2: { userAnswer: ['D', 'E'], correctAnswer: 'D', isCorrect: true }
+            } };
+            const record = {
+                answers: { q2: ['D', 'E'] }, correctAnswerMap: { q2: 'D' },
+                answerComparison: { q2: { userAnswer: ['D', 'E'], correctAnswer: 'D', isCorrect: false } },
+                ...(nested ? { realData: { scoreInfo } } : { scoreInfo })
+            };
+            assert.strictEqual(sandbox.AnswerComparisonUtils.getNormalizedEntries(record)[0].isCorrect, true,
+                'known submission details must remain usable when normalized comparisons lost grading metadata');
+            scoreInfo.details.q2.isCorrect = false;
+            record.answers.q2 = 'D';
+            scoreInfo.details.q2.userAnswer = 'D';
+            assert.strictEqual(sandbox.AnswerComparisonUtils.getNormalizedEntries(record)[0].isCorrect, false,
+                'a genuine false submission verdict must still override ordinary matching');
+        }
+    }
+}
+
 const tests = [
+    testSubmissionProducerDetailsSurviveNormalizedComparisons,
+    testLegacyDisplayVerdictsDoNotOverrideMatchingOrSubmission,
     testSplitKeyPartialCreditSurvivesHistoryDetail,
     testSingleKeyArrayPartialStaysNonPerfect,
     testFallsBackToRecomputeWhenNoStoredFlag,
