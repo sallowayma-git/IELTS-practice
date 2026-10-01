@@ -1,5 +1,9 @@
 # 进度
 
+- merge提交 **1d5a1765ba809da7046763e4d23c5dddce99fda2** 已正常push到origin/IELTS-WRITING-FEAT，ls-remote核验相同；两父提交fddb930c/191c797a，双方历史保留；工作树仅用户.zcode未跟踪。
+- 本轮仅集成冲突与诊断，不实施上述新功能。planning-with-files用于保留读取进度、证据和验收边界。
+- 查询视觉报告时误用不存在的visual-ci-report.json；按run_visual_regressions.py的实际报告路径定位，不影响此前exit0的17/17结果。
+
 - 六个当前链路探子已全部完成并关闭，没有写文件；主代理已抽查关键源码。确认 M6 No-Go 仍成立，不能用通过的 shipping 回归替代个性化闭环。
 - 远端完整视觉回归 **17/17** 通过（2026-10-01T21:24:13Z），含冲突解决后的严格初始化+自动续期合同。静态29/29、packaged18/18均为当前合并工作树证据，不冒称测试时已绑定尚未创建的merge提交。
 

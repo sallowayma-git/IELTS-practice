@@ -6,7 +6,7 @@
 
 ## 阶段
 
-- [in_progress] 用户已授权保留双方改动并解决冲突。远端 191c797a 已执行 no-commit merge；保留远端隔离 Webview/真实窗口/重启验证及严格初始化命令断言，本地默认工作区/权限边界保留。解决两个 E2E 冲突后，重新验证再提交/推送，不强推。
+- [complete] 双方改动已保留、两个 E2E 内容冲突解决。合并提交 1d5a1765 的父提交为本地 fddb930c 与远端 191c797a；静态29/29、packaged18/18、视觉17/17通过后正常推送，ls-remote确认远端1d5a1765；未强推，.zcode未提交。
 - [complete] 主代理完整连续阅读任务书 1-11250 行；21.6+覆盖早期安排，冻结任务书不等于当前仓库状态。
 - [complete] 同批并发 6 个只读探子：学习事实/Coach、记忆/Dream、Context、策略/eval、线程/计划/UI、验收覆盖；不复制历史，全部返回并关闭。
 - [complete] 主代理抽查 Coach、M4读取、Context渲染、归档删除、策略 reward/归因、corpus DTO、runtime dispatch、planner DTO、thread/run和审批落库证据；结论与优先级记录于 findings.md。
