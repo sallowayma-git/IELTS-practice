@@ -260,6 +260,23 @@ function testAgentWorkspaceFailureContract() {
   assert.equal(thrown?.causeId, 'cause-failed')
 }
 
+function testMemoryMutationContract() {
+  const page = read('apps/writing-vue/src/views/AgentConsolePage.vue')
+  const repository = read('apps/writing-vue/src/api/memory-repository.js')
+  const host = read('src-tauri/src/lib.rs')
+  const archiveHandler = page.split('async function archiveEntry(entry)')[1].split('async function forgetEntry(entry)')[0]
+  has(archiveHandler, 'await archiveMemory(', 'archive uses non-destructive command')
+  lacks(archiveHandler, 'forgetMemory(', 'archive must not forget')
+  has(page, 'window.confirm(', 'permanent forget requires confirmation')
+  has(page, "submitMemoryFeedback(entry, 'accurate')", 'accurate verdict wire enum')
+  has(page, "submitMemoryFeedback(entry, 'inaccurate')", 'inaccurate verdict wire enum')
+  lacks(page, "submitMemoryFeedback(entry, 'helpful')", 'unsupported feedback enum')
+  has(page, 'await refreshMemoryCatalog()', 'refresh authoritative lifecycle state')
+  has(repository, "invokeCommand('memory_archive', { input: command })", 'archive bridge')
+  has(repository, "invokeCommand('memory_forget', { input: command })", 'forget bridge remains separate')
+  has(host, 'commands::memory::memory_archive,', 'archive registered in real command table')
+}
+
 function testAgentConsoleCopy() {
   const quiet = summarizeJournal({
     journalDate: '2026-08-24',
@@ -327,5 +344,6 @@ testTauriCommandBoundary()
 testSettingsNativeBackupOwnership()
 testNoRetiredHostBoundary()
 testAgentWorkspaceFailureContract()
+testMemoryMutationContract()
 testAgentConsoleCopy()
 console.log('Tauri Vue shell contract: ok')

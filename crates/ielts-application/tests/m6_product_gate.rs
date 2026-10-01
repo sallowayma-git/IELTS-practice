@@ -306,6 +306,10 @@ fn context_preview(
         })
     }
 
+    fn archive_memory(&self, _command: &ielts_domain::MemoryArchiveCommand) -> Result<(), ApplicationError> {
+        Ok(())
+    }
+
     fn forget_memory(&self, _command: &MemoryForgetCommand) -> Result<(), ApplicationError> {
         Ok(())
     }

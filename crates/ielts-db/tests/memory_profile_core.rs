@@ -579,6 +579,47 @@ fn active_memory_capacity_fails_without_partial_promotion() {
     );
 }
 
+#[test]
+fn user_archive_preserves_content_evidence_and_rejects_stale_version() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-archive", "2026-08-13T00:00:00Z");
+    let observation_id = first_observation_id(&conn);
+    let input = pending_input(&conn, "request-user-archive", MemoryMutationProposal::Add {
+        namespace: MemoryNamespace::Strategy,
+        canonical_key: "strategy.reading.archive".into(),
+        scope: MemoryScope::Activity { key: Activity::Reading },
+        statement: "Preserve this evidence on archive.".into(),
+        evidence_observation_ids: vec![observation_id],
+    }, MemorySourceClass::Inferred);
+    let receipt = persist_memory_candidate_batch(&conn, &input).unwrap();
+    promote(&conn, &receipt.candidates[0].id, 1);
+    let id: String = conn.query_row("SELECT id FROM memory_items", [], |r| r.get(0)).unwrap();
+    let evidence_count = count(&conn, "memory_evidence");
+    let facts_count = count(&conn, "learning_events");
+    let command = ielts_domain::MemoryArchiveCommand {
+        memory_id: id.clone(), expected_version: 1, actor_type: "user".into(),
+        actor_id: Some("local".into()), reason: "archive without forgetting".into(),
+    };
+    ielts_db::archive_memory(&conn, &command).unwrap();
+    assert_eq!(memory_field(&conn, &id, "status"), "archived");
+    assert_eq!(memory_field(&conn, &id, "content"), "Preserve this evidence on archive.");
+    assert_eq!(count(&conn, "memory_evidence"), evidence_count);
+    assert_eq!(count(&conn, "learning_events"), facts_count);
+    let catalog = load_memory_catalog(&conn, &MemoryCatalogQuery {
+        user_id: "local".into(), include_archived: true, limit: 100,
+    }).unwrap();
+    assert!(catalog.entries.iter().any(|e| e.id == id && !e.evidence_observation_ids.is_empty()));
+    let context = memory_context_preview(&conn, &MemoryContextQuery {
+        user_id: "local".into(), activity: Activity::Reading, current_instruction: None, limit: 50,
+    }).unwrap();
+    assert!(!context.entries.iter().any(|e| e.id.as_deref() == Some(id.as_str())));
+    let audits = count(&conn, "memory_mutations");
+    assert!(ielts_db::archive_memory(&conn, &command).is_err());
+    assert_eq!(count(&conn, "memory_mutations"), audits);
+    assert!(serde_json::to_string(&create_backup_package(&conn, "archive-test").unwrap())
+        .unwrap().contains("Preserve this evidence on archive."));
+}
+
 fn count(conn: &Connection, table: &str) -> i64 {
     conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
         .unwrap()

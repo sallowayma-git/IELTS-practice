@@ -645,6 +645,18 @@ pub struct MemoryForgetCommand {
     pub reason: String,
 }
 
+/// Non-destructive lifecycle action; never redacts content or evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryArchiveCommand {
+    pub memory_id: String,
+    pub expected_version: u64,
+    pub actor_type: String,
+    #[serde(default)]
+    pub actor_id: Option<String>,
+    pub reason: String,
+}
+
 fn default_local_user() -> String {
     "local".into()
 }

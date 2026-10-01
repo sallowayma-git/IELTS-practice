@@ -5,7 +5,6 @@
 //! IDs from `memory_items` (never trusting the LLM index), and applies
 //! consolidation as relations + supersede — never physically deleting supports.
 
-use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -178,22 +177,42 @@ pub fn apply_consolidation(
     })
 }
 
-/// M8-07: when a support memory changes status, decay/archive any consolidated
-/// pattern it feeds. Returns the propagation outcome for the first affected
-/// pattern (there is normally one).
+/// M8-07: same-owner, cycle-safe propagation. All changes are atomic.
 pub fn propagate_support_change(
     conn: &Connection,
     memory_id: &str,
     new_status: &str,
     now: &str,
 ) -> DbResult<SupportChangeOutcome> {
-    // Find consolidated patterns this memory supports.
+    let tx = conn.unchecked_transaction()?;
+    let outcome = propagate_support_change_in_transaction(&tx, memory_id, new_status, now)?;
+    tx.commit()?;
+    Ok(outcome)
+}
+
+pub(crate) fn propagate_support_change_in_transaction(
+    conn: &Connection,
+    memory_id: &str,
+    new_status: &str,
+    now: &str,
+) -> DbResult<SupportChangeOutcome> {
+    let owner: String = conn.query_row(
+        "SELECT user_id FROM memory_items WHERE id=?1", [memory_id], |row| row.get(0),
+    )?;
+    // UNION (not UNION ALL) visits each stable ID once, including old cyclic
+    // backup graphs. Never traverse a foreign owner, even to re-enter this one.
     let affected: Vec<String> = conn
         .prepare(
-            "SELECT target_memory_id FROM memory_relations
-             WHERE source_memory_id=?1 AND relation_kind='supports_consolidation'",
+            "WITH RECURSIVE dependents(id) AS (
+                SELECT ?1
+                UNION
+                SELECT r.target_memory_id FROM dependents d
+                JOIN memory_relations r ON r.source_memory_id=d.id
+                JOIN memory_items target ON target.id=r.target_memory_id
+                WHERE r.relation_kind='supports_consolidation' AND target.user_id=?2
+             ) SELECT id FROM dependents WHERE id != ?1 ORDER BY id",
         )?
-        .query_map(params![memory_id], |row| row.get::<_, String>(0))?
+        .query_map(params![memory_id, owner], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
     if affected.is_empty() {
         return Ok(SupportChangeOutcome::NoPatternAffected);
@@ -201,21 +220,20 @@ pub fn propagate_support_change(
     if new_status == "improved" {
         // Support improved → decay the pattern's confidence (not delete).
         for pattern_id in &affected {
-            let _ = conn.execute(
-                "UPDATE memory_items SET confidence=MAX(0, confidence*0.7), updated_at=?1
-                 WHERE id=?2",
+            conn.execute(
+                "UPDATE memory_items SET confidence=MAX(0, confidence*0.7),
+                     version=version+1, updated_at=?1
+                 WHERE id=?2 AND status IN ('active','superseded')",
                 params![now, pattern_id],
-            );
+            )?;
         }
         return Ok(SupportChangeOutcome::ConfidenceDecayed);
     }
-    // Any refuted/improved-all → archive (not delete).
+    // Missing/refuted evidence invalidates every derived conclusion, not just
+    // a currently active direct child. Preserve content and lineage for review.
     for pattern_id in &affected {
-        let _ = conn.execute(
-            "UPDATE memory_items SET status='archived', version=version+1, updated_at=?1
-             WHERE id=?2 AND status='active'",
-            params![now, pattern_id],
-        );
+        crate::memory::archive_memory_record(conn, pattern_id, "system", None,
+            "support memory invalidated", now)?;
     }
     Ok(SupportChangeOutcome::PatternArchived)
 }
@@ -242,6 +260,8 @@ pub fn propagate_support_change(
 /// already persisted with NULL in existing user databases, which the
 /// insert-side fix below cannot reach.
 pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveReport> {
+    let tx = conn.unchecked_transaction()?;
+    let conn = &*tx;
     let now_ts = chrono::DateTime::parse_from_rfc3339(now)
         .map(|dt| dt.timestamp())
         .unwrap_or(0);
@@ -249,7 +269,9 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
         .prepare("SELECT memory_kind FROM memory_capacity_state ORDER BY memory_kind")?
         .query_map([], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut archived = 0usize;
+    let archived_before: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_items WHERE status='archived'", [], |row| row.get(0),
+    )?;
     let mut skipped: Vec<String> = Vec::new();
     let mut policy_by_kind: Vec<(String, String)> = Vec::new();
     for kind in kinds {
@@ -277,18 +299,26 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
                 let cutoff_iso = chrono::DateTime::from_timestamp(cutoff_secs, 0)
                     .map(|dt| dt.to_rfc3339())
                     .unwrap_or_else(|| now.to_string());
-                let count = conn.execute(
-                    "UPDATE memory_items SET status='archived', version=version+1, updated_at=?1
+                let ids = conn.prepare(
+                    "SELECT id FROM memory_items
                      WHERE namespace=?2 AND status='active'
                        AND COALESCE(last_observed_at, updated_at, created_at) < ?3",
-                    params![now, kind, cutoff_iso],
-                )?;
-                archived += count;
+                )?.query_map(params![now, kind, cutoff_iso], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                for id in ids {
+                    crate::memory::archive_memory_record(
+                        conn, &id, "system", None, "stale memory policy", now)?;
+                    propagate_support_change_in_transaction(conn, &id, "archived", now)?;
+                }
             }
         }
     }
+    let archived_after: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_items WHERE status='archived'", [], |row| row.get(0),
+    )?;
+    tx.commit()?;
     Ok(StaleArchiveReport {
-        archived_count: archived,
+        archived_count: (archived_after - archived_before) as usize,
         skipped_kinds: skipped,
         policy_by_kind,
     })
@@ -304,24 +334,26 @@ pub fn record_memory_feedback(
     payload: &Value,
     now: &str,
 ) -> DbResult<MemoryFeedbackRecord> {
+    let tx = conn.unchecked_transaction()?;
+    let owned: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM memory_items
+         WHERE id=?1 AND user_id=?2 AND status != 'deleted')",
+        params![memory_id, user_id], |row| row.get(0),
+    )?;
+    if !owned { return Err(DbError::Validation("missing or foreign memory".into())); }
     let id = format!("mfb-{}", Uuid::new_v4());
-    conn.execute(
+    tx.execute(
         "INSERT INTO memory_feedback (id, memory_id, feedback_kind, user_id, payload_json,
             created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![id, memory_id, kind.as_str(), user_id, payload.to_string(), now],
     )?;
-    // M8-07: `inaccurate` triggers contradiction propagation; `outdated`/
-    // `not_about_me` archive without deleting.
-    if kind.is_contradiction() {
-        propagate_support_change(conn, memory_id, "refuted", now)?;
-    } else if kind.archives_memory() {
-        let _ = conn.execute(
-            "UPDATE memory_items SET status='archived', version=version+1, updated_at=?1
-             WHERE id=?2 AND status='active'",
-            params![now, memory_id],
-        );
+    if kind.is_contradiction() || kind.archives_memory() {
+        crate::memory::archive_memory_record(&tx, memory_id, "user", Some(user_id),
+            kind.as_str(), now)?;
+        propagate_support_change_in_transaction(&tx, memory_id, "refuted", now)?;
     }
+    tx.commit()?;
     Ok(MemoryFeedbackRecord {
         id,
         memory_id: memory_id.to_string(),

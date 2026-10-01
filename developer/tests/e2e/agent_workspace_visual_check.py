@@ -79,6 +79,15 @@ TAURI_AGENT_MOCK = """
     toolCalls: []
   };
   window.__agentCommandLog = [];
+  localStorage.setItem('memoryCenter.lastVisitAt', '2026-08-01T00:00:00Z');
+  window.__memoryCatalog = ['archive', 'feedback', 'forget'].map(name => ({
+    id: `mem-${name}`, canonicalKey: `knowledge.reading.${name}`,
+    statement: `记忆 ${name} 的正文`, sourceClass: 'observed', namespace: 'knowledge',
+    scope: 'activity:reading', status: 'active', version: 1,
+    confidenceBand: 'medium', supportCount: 2, contradictionCount: 0,
+    evidenceObservationIds: ['obs-evidence'], firstSeen: '2026-08-11T08:00:00Z',
+    lastSeen: '2026-08-11T08:00:00Z'
+  }));
   window.__agentShouldFail = false;
   const invokeMock = async (command, args = {}) => {
     window.__agentCommandLog.push({ command, args });
@@ -86,7 +95,30 @@ TAURI_AGENT_MOCK = """
       return { ok: true, data: { entries: [], source: 'active_memory' }, error: null };
     }
     if (command === 'memory_catalog_list') {
-      return { ok: true, data: { userId: 'local', entries: [], truncated: false }, error: null };
+      if (window.__memoryCatalogFailOnce) {
+        window.__memoryCatalogFailOnce = false;
+        return { ok: false, data: null, error: { code: 'memory.catalog_unavailable', message: 'catalog unavailable' } };
+      }
+      return { ok: true, data: { userId: 'local',
+        entries: window.__memoryCatalog.filter(row => row.status !== 'deleted'), truncated: false }, error: null };
+    }
+    if (command === 'memory_archive' || command === 'memory_forget') {
+      if (window.__memoryMutationFailOnce) {
+        window.__memoryMutationFailOnce = false;
+        return { ok: false, data: null, error: { code: 'memory.conflict', message: 'mutation rejected' } };
+      }
+      const row = window.__memoryCatalog.find(row => row.id === args.input.memoryId);
+      if (!row || row.version !== args.input.expectedVersion) throw new Error('stale memory');
+      row.status = command === 'memory_archive' ? 'archived' : 'deleted';
+      row.version += 1;
+      if (command === 'memory_forget') { row.statement = '[deleted]'; row.evidenceObservationIds = []; }
+      return { ok: true, data: null, error: null };
+    }
+    if (command === 'memory_record_feedback') {
+      if (!['accurate', 'inaccurate'].includes(args.feedbackKind)) throw new Error('bad feedback kind');
+      const row = window.__memoryCatalog.find(row => row.id === args.memoryId);
+      if (args.feedbackKind === 'inaccurate') { row.status = 'archived'; row.version += 1; }
+      return { ok: true, data: { feedbackKind: args.feedbackKind }, error: null };
     }
     if (command === 'study_plan_get_latest') {
       return { ok: true, data: null, error: null };
@@ -242,6 +274,78 @@ def main():
                         raise AssertionError("mobile: hydrated tool call was not rendered")
                     if "fake-agent-model" not in geometry["interaction"]["metadata"]:
                         raise AssertionError("mobile: trace metadata was not rendered")
+                    # Real button interactions, with a stateful IPC fixture.
+                    # SQLite propagation/atomicity is tested separately in Rust.
+                    page.locator('.agent-evo-tabs button').filter(has_text='近期变化').click()
+                    if '记忆 archive 的正文' not in page.locator('.agent-evolution-zone').inner_text():
+                        raise AssertionError('recent changes fixture must contain the original statement')
+                    page.locator('.agent-evo-tabs button').filter(has_text='系统观察').click()
+                    page.locator('[data-memory-id="mem-archive"]').get_by_role('button', name='归档', exact=True).click()
+                    page.wait_for_function("document.querySelector('[data-memory-id=\"mem-archive\"]') === null")
+                    page.locator('.agent-evo-tabs button').filter(has_text='已归档').click()
+                    archived = page.locator('[data-memory-id="mem-archive"]')
+                    archived.wait_for()
+                    if '记忆 archive 的正文' not in archived.inner_text() or '证据 2' not in archived.inner_text():
+                        raise AssertionError('archive lost its visible content/evidence')
+                    archived.get_by_role('button', name='查看证据', exact=True).click()
+                    if '关联 1 次练习观察' not in archived.inner_text():
+                        raise AssertionError('archive lost its observation evidence in the drawer')
+                    if page.evaluate("window.__memoryCatalog.find(x => x.id === 'mem-archive').evidenceObservationIds") != ['obs-evidence']:
+                        raise AssertionError('archive changed the observation evidence identifiers')
+                    archived.get_by_role('button', name='永久遗忘', exact=True).click()  # default dismiss
+                    if page.evaluate("window.__agentCommandLog.some(x => x.command === 'memory_forget')"):
+                        raise AssertionError('cancelled forget must not issue IPC')
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    archived.get_by_role('button', name='永久遗忘', exact=True).click()
+                    page.wait_for_function("document.querySelector('[data-memory-id=\"mem-archive\"]') === null")
+                    page.locator('.agent-evo-tabs button').filter(has_text='近期变化').click()
+                    if '记忆 archive 的正文' in page.locator('.agent-evolution-zone').inner_text():
+                        raise AssertionError('forgotten statement retained in recent changes')
+                    page.locator('.agent-evo-tabs button').filter(has_text='系统观察').click()
+                    feedback_card = page.locator('[data-memory-id="mem-feedback"]')
+                    feedback_card.get_by_role('button', name='准确', exact=True).click()
+                    page.wait_for_function("document.querySelector('.agent-inline-status')?.innerText.includes('准确')")
+                    feedback_card.get_by_role('button', name='不准确', exact=True).click()
+                    page.wait_for_function("document.querySelector('[data-memory-id=\"mem-feedback\"]') === null")
+                    mutations = page.evaluate("window.__agentCommandLog.filter(x => ['memory_archive','memory_forget','memory_record_feedback'].includes(x.command))")
+                    if [x['command'] for x in mutations] != ['memory_archive','memory_forget','memory_record_feedback','memory_record_feedback']:
+                        raise AssertionError(f'unexpected lifecycle commands: {mutations}')
+                    if mutations[0]['args']['input']['expectedVersion'] != 1 or mutations[1]['args']['input']['expectedVersion'] != 2:
+                        raise AssertionError('archive/forget must use authoritative refreshed versions')
+                    if [x['args']['feedbackKind'] for x in mutations[2:]] != ['accurate','inaccurate']:
+                        raise AssertionError('feedback verdicts do not match Rust wire schema')
+                    geometry['memoryLifecycle'] = mutations
+                    # A rejected write keeps the source visible. A committed write
+                    # followed by a failed read clears stale text and retries reads only.
+                    active_forget = page.locator('[data-memory-id="mem-forget"]')
+                    page.evaluate('window.__memoryMutationFailOnce = true')
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    active_forget.get_by_role('button', name='永久遗忘', exact=True).click()
+                    page.wait_for_function("document.querySelector('.agent-inline-error')?.innerText.includes('mutation rejected')")
+                    if '记忆 forget 的正文' not in active_forget.inner_text():
+                        raise AssertionError('rejected mutation must retain the original card')
+                    page.evaluate('window.__memoryCatalogFailOnce = true')
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    active_forget.get_by_role('button', name='永久遗忘', exact=True).click()
+                    retry = page.locator('[data-memory-retry]')
+                    retry.wait_for()
+                    if '操作已保存' not in page.locator('.agent-inline-error').inner_text():
+                        raise AssertionError('committed mutation misreported as failed')
+                    if '记忆 forget 的正文' in page.locator('.agent-evolution-zone').inner_text():
+                        raise AssertionError('failed catalog read retained forgotten text')
+                    before_retry = page.evaluate("window.__agentCommandLog.filter(x => x.command === 'memory_forget').length")
+                    retry.click()
+                    page.wait_for_function("document.querySelector('[data-memory-retry]') === null")
+                    if page.evaluate("window.__agentCommandLog.filter(x => x.command === 'memory_forget').length") != before_retry:
+                        raise AssertionError('read recovery repeated the mutation')
+                    page.locator('.agent-evo-tabs button').filter(has_text='已归档').click()
+                    feedback_archived = page.locator('[data-memory-id="mem-feedback"]')
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    feedback_archived.get_by_role('button', name='永久遗忘', exact=True).click()
+                    page.wait_for_function("document.querySelector('[data-memory-id=\"mem-feedback\"]') === null")
+                    last_forget = page.evaluate("window.__agentCommandLog.filter(x => x.command === 'memory_forget').at(-1)")
+                    if last_forget['args']['input']['expectedVersion'] != 2:
+                        raise AssertionError('feedback/forget must use the updated version')
                 page.evaluate("window.scrollTo(0, 0)")
                 page.screenshot(path=str(REPORT_DIR / f"agent-{name}-current.png"), full_page=True)
                 report.append({"name": name, "geometry": geometry})

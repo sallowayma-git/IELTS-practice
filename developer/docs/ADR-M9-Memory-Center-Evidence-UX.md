@@ -24,6 +24,8 @@ M3-M8 建立了完整的长期记忆 + learner model + dream + consolidation 能
 展示 statement/namespace/scope/status/source_class/confidence band（low/medium/high，**不展示伪精确小数** M9-08）/first-seen/last-seen/support_count/contradiction_count。操作：查看证据/准确/部分准确/不准确/已过时/编辑 preference/固定/暂停/忘记-archive。
 
 ### D4. Evidence Drawer（M9-04）
+
+2026-10-01：归档和永久遗忘分为不同命令。`memory_archive` 使用 expectedVersion CAS，保留正文及 evidence，归档后可在归档页查看；`memory_forget` 仍是不可恢复脱敏删除，UI必须明确确认。准确/不准确按钮使用真实Rust `accurate/inaccurate`枚举，操作成功后重读目录以更新源与派生状态。此修复不等于已补完证据跳转或显式偏好撤回入口。
 点「查看证据」展开 memory → observation → event → attempt/question/thread 跳转。展示最小必要原文，**不暴露模型 reasoning 为「证据」**。证据链复用 M2.1 CognitiveReadStore + M5 ContextMaterializer 的 lineage。
 
 ### D5. Since Last Visit delta（M9-06，view_marker 不混入 Memory）

@@ -2,7 +2,7 @@ use ielts_application::{MemoryService, SubmitMemoryCandidatesCommand};
 use ielts_domain::{
     Activity, AgentRunKind, CommandResponse, ErrorEnvelope, ExplicitPreference, ExplicitPreferenceUpsert,
     MemoryCandidateBatchReceipt, MemoryCatalogQuery, MemoryContextPreview, MemoryContextQuery,
-    MemoryForgetCommand, MemoryMutationProposalBatch, MemoryMutationReceipt,
+    MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposalBatch, MemoryMutationReceipt,
     MemoryPromotionCommand, MemorySourceClass, MAX_MEMORY_PROPOSALS,
 };
 use ielts_db::{BeginAgentRunCommand, StoredAgentRunStatus};
@@ -359,6 +359,24 @@ pub fn memory_catalog_list(
         user_id: "local".into(),
         include_archived: input.include_archived,
         limit: input.limit,
+    }))
+}
+
+#[tauri::command]
+pub fn memory_archive(
+    db: State<'_, AppDb>,
+    input: ForgetMemoryInput,
+) -> CommandResponse<()> {
+    if let Err(error) = require_local_memory(db.inner(), &input.memory_id) {
+        return db_failure(error);
+    }
+    let store = ApplicationStore::new(db.inner());
+    respond(MemoryService::new(&store).archive_memory(&MemoryArchiveCommand {
+        memory_id: input.memory_id,
+        expected_version: input.expected_version,
+        actor_type: "user".into(),
+        actor_id: Some("local".into()),
+        reason: input.reason,
     }))
 }
 

@@ -490,6 +490,15 @@ impl MemoryStore for ApplicationStore<'_> {
             .map_err(memory_error)
     }
 
+    fn archive_memory(
+        &self,
+        command: &ielts_domain::MemoryArchiveCommand,
+    ) -> Result<(), ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::archive_memory(conn, command))
+            .map_err(memory_error)
+    }
+
     fn forget_memory(
         &self,
         command: &ielts_domain::MemoryForgetCommand,

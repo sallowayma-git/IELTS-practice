@@ -7,7 +7,7 @@ use ielts_domain::{
     MemoryCandidateBatchReceipt, MemoryCandidatePersistenceInput, MemoryCandidateReceipt,
     MemoryCatalog, MemoryCatalogEntry, MemoryCatalogQuery, MemoryConfidenceBand,
     MemoryContextEntry, MemoryContextPreview, MemoryContextQuery, MemoryContextSource,
-    MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
+    MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, MAX_ACTIVE_MEMORY_PER_SCOPE,
     MAX_EXPLICIT_PREFERENCES, MAX_MEMORY_CANDIDATE_OBSERVATIONS, MAX_MEMORY_CONTEXT_ITEMS,
@@ -570,6 +570,57 @@ pub fn load_memory_catalog(conn: &Connection, query: &MemoryCatalogQuery) -> DbR
     })
 }
 
+pub fn archive_memory(conn: &Connection, command: &MemoryArchiveCommand) -> DbResult<()> {
+    validate_actor(&command.actor_type)?;
+    require_text(&command.reason, "reason")?;
+    let tx = conn.unchecked_transaction()?;
+    let current: Option<(String, u64)> = tx.query_row(
+        "SELECT status,version FROM memory_items WHERE id=?1",
+        [&command.memory_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).optional()?;
+    if !matches!(current, Some((ref status, version))
+        if matches!(status.as_str(), "active" | "superseded") && version == command.expected_version)
+    {
+        return Err(DbError::Validation("stale or non-archivable memory".into()));
+    }
+    let now = chrono::Utc::now().to_rfc3339();
+    archive_memory_record(&tx, &command.memory_id, &command.actor_type,
+        command.actor_id.as_deref(), &command.reason, &now)?;
+    crate::consolidation::propagate_support_change_in_transaction(
+        &tx, &command.memory_id, "archived", &now)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Shared non-destructive transition. Caller owns the transaction; archived
+/// supports remain traversable, while repeated invalidation is a no-op.
+pub(crate) fn archive_memory_record(
+    conn: &Connection,
+    memory_id: &str,
+    actor_type: &str,
+    actor_id: Option<&str>,
+    reason: &str,
+    now: &str,
+) -> DbResult<bool> {
+    let before = memory_state_json(conn, memory_id)?;
+    let changed = conn.execute(
+        "UPDATE memory_items SET status='archived',version=version+1,updated_at=?1
+         WHERE id=?2 AND status IN ('active','superseded')",
+        params![now, memory_id],
+    )?;
+    if changed == 0 { return Ok(false); }
+    let after = memory_state_json(conn, memory_id)?;
+    conn.execute(
+        "INSERT INTO memory_mutations
+         (id,memory_id,operation,actor_type,actor_id,before_json,after_json,reason,created_at)
+         VALUES (?1,?2,'archive',?3,?4,?5,?6,?7,?8)",
+        params![format!("mmut-{}", Uuid::new_v4()), memory_id, actor_type,
+            actor_id, before, after, reason, now],
+    )?;
+    Ok(true)
+}
+
 pub fn forget_memory(conn: &Connection, command: &MemoryForgetCommand) -> DbResult<()> {
     validate_actor(&command.actor_type)?;
     require_text(&command.reason, "reason")?;
@@ -587,6 +638,8 @@ pub fn forget_memory(conn: &Connection, command: &MemoryForgetCommand) -> DbResu
     if changed != 1 {
         return Err(DbError::Validation("stale or missing memory".into()));
     }
+    crate::consolidation::propagate_support_change_in_transaction(
+        &tx, &command.memory_id, "deleted", &now)?;
     tx.execute(
         "UPDATE memory_candidates
          SET proposed_statement=NULL, proposal_json=NULL,
@@ -1156,14 +1209,13 @@ fn update_target_memory(
                     version=version+1,updated_at=?1 WHERE id=?2 AND status='active' AND version=?3",
             now,
         )?,
-        MemoryMutationProposal::Archive { .. } => guarded_memory_update(
-            tx,
-            target_id,
-            expected,
-            "UPDATE memory_items SET status='archived',version=version+1,updated_at=?1
-             WHERE id=?2 AND status='active' AND version=?3",
-            now,
-        )?,
+        MemoryMutationProposal::Archive { .. } => {
+            guarded_memory_update(tx, target_id, expected,
+                "UPDATE memory_items SET status='archived',version=version+1,updated_at=?1
+                 WHERE id=?2 AND status='active' AND version=?3", now)?;
+            crate::consolidation::propagate_support_change_in_transaction(
+                tx, target_id, "archived", now)?;
+        }
         _ => return Err(DbError::Validation("unsupported target mutation".into())),
     }
     let after = memory_state_json(tx, target_id)?.unwrap_or_else(|| "{}".into());
@@ -1328,7 +1380,7 @@ fn load_candidate_context(
            AND NOT EXISTS (
                SELECT 1 FROM memory_items m
                WHERE m.id IN (c.target_memory_id, c.resolved_memory_id)
-                 AND m.sensitivity != 'normal'
+                 AND (m.sensitivity != 'normal' OR m.status != 'active')
            )
          ORDER BY c.created_at DESC,c.id",
     )?;

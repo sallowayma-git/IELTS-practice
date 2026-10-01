@@ -4,7 +4,7 @@ use ielts_domain::{
     Activity, ExplicitPreference, ExplicitPreferenceUpsert, MemoryCandidateBatchReceipt,
     MemoryCandidateInput,
     MemoryCandidatePersistenceInput, MemoryCatalog, MemoryCatalogQuery, MemoryContextPreview,
-    MemoryContextQuery, MemoryForgetCommand,
+    MemoryContextQuery, MemoryArchiveCommand, MemoryForgetCommand,
     MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryPromotionCommand, MemorySourceClass,
     MemoryValidationSnapshot,
 };
@@ -60,6 +60,7 @@ pub trait MemoryStore {
     /// console. Not a Context Pack; private/restricted rows never leave the db.
     fn load_catalog(&self, query: &MemoryCatalogQuery) -> Result<MemoryCatalog, ApplicationError>;
 
+    fn archive_memory(&self, command: &MemoryArchiveCommand) -> Result<(), ApplicationError>;
     fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError>;
 }
 
@@ -143,6 +144,10 @@ impl<'a> MemoryService<'a> {
     /// M9/18.3 product-host catalog read for the console.
     pub fn load_catalog(&self, query: &MemoryCatalogQuery) -> Result<MemoryCatalog, ApplicationError> {
         self.store.load_catalog(query)
+    }
+
+    pub fn archive_memory(&self, command: &MemoryArchiveCommand) -> Result<(), ApplicationError> {
+        self.store.archive_memory(command)
     }
 
     pub fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError> {

@@ -9,6 +9,7 @@ import {
 } from '@/api/agent-thread-repository.js'
 import {
   archiveStaleMemories,
+  archiveMemory,
   forgetMemory,
   getBackgroundJobStatus,
   getDailyJournal,
@@ -162,6 +163,9 @@ const planItems = ref([])
 const activePlanId = ref('')
 const planDoneIds = ref(new Set())
 const lastVisitAt = ref(readLastVisitAt())
+const deltaBaseline = lastVisitAt.value
+const memoryCatalogStale = ref(false)
+const memoryCatalogLoading = ref(false)
 const evidenceEntryId = ref(null)
 const feedbackInFlight = ref(new Set())
 const activeTab = ref('changes')
@@ -213,7 +217,7 @@ function entriesForTab(tabKey) {
   return entries.value.filter((entry) => bucketFor(entry) === tabKey)
 }
 
-const delta = ref({ newWeakPoints: [], improved: [], reappeared: [], newPatterns: [], newPreferences: [] })
+const delta = computed(() => computeDelta(entries.value, deltaBaseline))
 
 function computeDelta(allEntries, sinceIso) {
   if (!sinceIso) {
@@ -328,7 +332,6 @@ async function loadConsole() {
     jobs.value = jobList || []
     threads.value = threadList || []
     approvals.value = approvalList || []
-    delta.value = computeDelta(allEntries, lastVisitAt.value)
     writeLastVisitAt(new Date().toISOString())
     lastVisitAt.value = readLastVisitAt()
 
@@ -465,10 +468,12 @@ async function submitMemoryFeedback(entry, kind) {
   const id = memoryId(entry)
   if (!id) { actionError.value = '该条目没有稳定 ID，无法记录反馈。'; return }
   setBusy(id, true)
+  actionMessage.value = ''
   actionError.value = ''
   try {
     await recordMemoryFeedback(id, kind)
-    actionMessage.value = `已记下：这条记忆${formatFeedbackKind(kind)}。系统会据此调整可信度。`
+    if (!await refreshAfterMemoryMutation()) return
+    actionMessage.value = `已记录反馈：${formatFeedbackKind(kind)}。`
   } catch (error) {
     actionError.value = error?.message || '反馈提交失败'
   } finally {
@@ -476,17 +481,72 @@ async function submitMemoryFeedback(entry, kind) {
   }
 }
 
-async function forgetEntry(entry) {
+async function refreshMemoryCatalog() {
+  const catalog = await getMemoryCatalog({ includeArchived: true })
+  entries.value = (catalog?.entries || []).map(catalogToEntry).filter(Boolean)
+  preview.value = catalog ? { userId: catalog.userId, entries: entries.value, truncated: catalog.truncated } : null
+  evidenceEntryId.value = null
+  memoryCatalogStale.value = false
+}
+
+async function refreshAfterMemoryMutation() {
+  try {
+    await refreshMemoryCatalog()
+    return true
+  } catch {
+    entries.value = []
+    preview.value = null
+    evidenceEntryId.value = null
+    memoryCatalogStale.value = true
+    actionError.value = '操作已保存，但记忆目录读取失败。请重新读取，不要重复提交。'
+    return false
+  }
+}
+
+async function retryMemoryCatalog() {
+  if (memoryCatalogLoading.value) return
+  memoryCatalogLoading.value = true
+  try {
+    await refreshMemoryCatalog()
+    actionError.value = ''
+    actionMessage.value = '已重新读取记忆目录。'
+  } catch {
+    actionError.value = '记忆目录仍无法读取，请稍后重试。已保存的操作不会重复提交。'
+  } finally {
+    memoryCatalogLoading.value = false
+  }
+}
+
+async function archiveEntry(entry) {
   const id = memoryId(entry)
   if (!id) { actionError.value = '该条目没有稳定 ID，无法归档。'; return }
   setBusy(id, true)
+  actionMessage.value = ''
   actionError.value = ''
   try {
-    await forgetMemory({ memoryId: id, expectedVersion: memoryVersion(entry), reason: 'user_agent_console_archive' })
-    entries.value = entries.value.filter((e) => memoryId(e) !== id)
-    actionMessage.value = '已归档该记忆。需要时可以在「已归档」里查看。'
+    await archiveMemory({ memoryId: id, expectedVersion: memoryVersion(entry), reason: 'user_agent_console_archive' })
+    if (!await refreshAfterMemoryMutation()) return
+    actionMessage.value = '已归档该记忆及依赖它的结论，正文与证据保留在「已归档」。'
   } catch (error) {
     actionError.value = error?.message || '归档失败'
+  } finally {
+    setBusy(id, false)
+  }
+}
+
+async function forgetEntry(entry) {
+  const id = memoryId(entry)
+  if (!id) { actionError.value = '该条目没有稳定 ID，无法遗忘。'; return }
+  if (!window.confirm('永久遗忘会删除这条记忆的正文和关联证据，无法恢复。原始练习记录不会删除。确认继续？')) return
+  setBusy(id, true)
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    await forgetMemory({ memoryId: id, expectedVersion: memoryVersion(entry), reason: 'user_agent_console_forget' })
+    if (!await refreshAfterMemoryMutation()) return
+    actionMessage.value = '已永久遗忘该记忆，依赖它的结论已停用。原始练习记录保留。'
+  } catch (error) {
+    actionError.value = error?.message || '遗忘失败'
   } finally {
     setBusy(id, false)
   }
@@ -854,6 +914,7 @@ onMounted(() => {
 
       <!-- Zone 3: evolution timeline -->
       <section class="agent-evolution-zone" aria-label="理解演化">
+        <button v-if="memoryCatalogStale" class="agent-text-button" data-memory-retry :disabled="memoryCatalogLoading" @click="retryMemoryCatalog">重新读取记忆目录</button>
         <nav class="agent-evo-tabs" role="tablist" aria-label="记忆分区">
           <button
             v-for="tab in tabs"
@@ -915,22 +976,29 @@ onMounted(() => {
                   class="agent-text-button"
                   type="button"
                   :disabled="feedbackInFlight.has(memoryId(entry))"
-                  @click="submitMemoryFeedback(entry, 'helpful')"
-                >有帮助</button>
+                  @click="submitMemoryFeedback(entry, 'accurate')"
+                >准确</button>
                 <button
                   v-if="activeTab !== 'archived'"
                   class="agent-text-button"
                   type="button"
                   :disabled="feedbackInFlight.has(memoryId(entry))"
-                  @click="submitMemoryFeedback(entry, 'not_helpful')"
-                >没帮助</button>
+                  @click="submitMemoryFeedback(entry, 'inaccurate')"
+                >不准确</button>
+                <button
+                  v-if="classifySource(entry) !== 'user_explicit' && memoryStatus(entry) === 'active'"
+                  class="agent-text-button"
+                  type="button"
+                  :disabled="feedbackInFlight.has(memoryId(entry))"
+                  @click="archiveEntry(entry)"
+                >归档</button>
                 <button
                   v-if="classifySource(entry) !== 'user_explicit'"
                   class="agent-text-button"
                   type="button"
                   :disabled="feedbackInFlight.has(memoryId(entry))"
                   @click="forgetEntry(entry)"
-                >归档</button>
+                >永久遗忘</button>
               </div>
               <div v-if="evidenceEntryId === memoryId(entry)" class="agent-evidence-drawer">
                 <p v-for="(line, i) in evidenceCopy(entry).lines" :key="i">{{ line }}</p>

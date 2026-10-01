@@ -80,6 +80,10 @@ fn context_preview(
         memory_context_preview(&self.conn, query).map_err(app_error)
     }
 
+    fn archive_memory(&self, command: &ielts_domain::MemoryArchiveCommand) -> Result<(), ApplicationError> {
+        ielts_db::archive_memory(&self.conn, command).map_err(app_error)
+    }
+
     fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError> {
         forget_memory(&self.conn, command).map_err(app_error)
     }
@@ -126,6 +130,21 @@ fn service_uses_fresh_evidence_and_host_owned_source_authority() {
     );
     assert!(unauthorized.is_err());
     assert_eq!(count(&store.conn, "memory_candidate_batches"), 1);
+    let promoted = service.promote_candidate(&MemoryPromotionCommand {
+        candidate_id: receipt.candidates[0].id.clone(), expected_candidate_version: 1,
+        actor_type: "user".into(), actor_id: Some("local".into()), reason: "approved".into(),
+    }).unwrap();
+    let memory_id = promoted.memory_id.unwrap();
+    service.archive_memory(&ielts_domain::MemoryArchiveCommand {
+        memory_id: memory_id.clone(), expected_version: 1, actor_type: "user".into(),
+        actor_id: Some("local".into()), reason: "non-destructive archive".into(),
+    }).unwrap();
+    let (status, content): (String,String) = store.conn.query_row(
+        "SELECT status,content FROM memory_items WHERE id=?1", [memory_id],
+        |r| Ok((r.get(0)?,r.get(1)?)),
+    ).unwrap();
+    assert_eq!(status, "archived");
+    assert_eq!(content, "Use the local paragraph before answering.");
 }
 
 #[test]

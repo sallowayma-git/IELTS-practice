@@ -299,7 +299,8 @@ export function summarizeEvidence(bundle) {
 }
 
 export function formatFeedbackKind(kind) {
-  return kind === 'helpful' ? '有帮助' : kind === 'not_helpful' ? '没帮助' : '已记录'
+  return ({ accurate: '准确', inaccurate: '不准确', partially_accurate: '部分准确',
+    outdated: '已过时', not_about_me: '不属于我', acknowledged: '已知悉' })[kind] || '已记录'
 }
 
 export { ACTION_KIND_LABELS, SKILL_LABELS }

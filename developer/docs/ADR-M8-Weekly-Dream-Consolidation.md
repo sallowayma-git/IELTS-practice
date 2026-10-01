@@ -37,6 +37,10 @@ TechSpar consolidation 用 `supporting_wp_indices` 并在 LLM 返回后通过文
 ### D9. User feedback backend（M8-09，stable memory_id）
 `record_memory_feedback(memory_id, kind)`：6 种 kind（accurate/inaccurate/partially_accurate/outdated/not_about_me/acknowledged）。`inaccurate` 是强 contradiction，触发 M8-07 decay，但**不删 learning facts**（只记 feedback 行）。`outdated`/`not_about_me` archive 不删除。
 
+### 2026-10-01 生命周期纠偏（覆盖 D7/D9 的旧实现描述）
+
+用户 `inaccurate`、`outdated`、`not_about_me` 反馈在同一事务记录反馈、归档源记忆和其全部同用户 `supports_consolidation` 派生结论；普通无派生记忆也必须停止进入 active context。归档保留正文、证据和关系，并写 mutation audit；绝不删除 canonical learning facts。支持失效按稳定 ID 递归传播（UNION 去重），兼容已有循环/自环，不能跨用户节点继续遍历，任何 SQL 失败回滚全部动作。stale sweep、显式归档、候选 ARCHIVE 与 forget 共用该传播路径；forget 保持独立脱敏语义。
+
 ### D10. Predicted hypothesis 禁止自动 promotion（M8-10）
 `source_class='predicted'` 的 support 直接 reject（`predicted_only_support`）。必须有 observed support 才能晋升 active learner belief。
 

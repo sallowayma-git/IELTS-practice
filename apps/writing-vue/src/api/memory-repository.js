@@ -38,6 +38,11 @@ export async function putExplicitPreference(command) {
   return unwrapCommandResponse(response, 'memory_put_explicit_preference')
 }
 
+export async function archiveMemory(command) {
+  const response = await invokeCommand('memory_archive', { input: command })
+  return unwrapCommandResponse(response, 'memory_archive')
+}
+
 export async function forgetMemory(command) {
   const response = await invokeCommand('memory_forget', { input: command })
   return unwrapCommandResponse(response, 'memory_forget')
@@ -100,6 +105,7 @@ export const memoryRepository = {
   getMemoryContextPreview,
   promoteMemoryCandidate,
   putExplicitPreference,
+  archiveMemory,
   forgetMemory,
   recordCoachFeedback,
   recordMemoryFeedback,

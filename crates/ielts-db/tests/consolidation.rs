@@ -23,6 +23,149 @@ const NOW: &str = "2026-08-16T10:00:00+00:00";
 /// belonging to anybody else reads as a hallucinated id.
 const USER: &str = "local";
 
+fn support_graph(conn: &rusqlite::Connection) {
+    for (id, status) in [("mem-a", "superseded"), ("mem-b", "superseded"),
+        ("mem-c", "active"), ("mem-unrelated", "active"), ("mem-other", "active"),
+        ("mem-beyond-other", "active")] {
+        insert_memory(conn, id, "consolidated", "activity:reading", "asset", status);
+    }
+    conn.execute("UPDATE memory_items SET user_id='other' WHERE id='mem-other'", []).unwrap();
+    for (source, target, kind) in [("mem-a", "mem-b", "supports_consolidation"),
+        ("mem-b", "mem-c", "supports_consolidation"),
+        ("mem-a", "mem-a", "supports_consolidation"),
+        ("mem-b", "mem-a", "supports_consolidation"),
+        ("mem-a", "mem-other", "supports_consolidation"),
+        ("mem-other", "mem-beyond-other", "supports_consolidation"),
+        ("mem-a", "mem-unrelated", "contradicts")] {
+        conn.execute("INSERT INTO memory_relations
+            (id,source_memory_id,target_memory_id,relation_kind,created_at)
+            VALUES (?1,?2,?3,?4,?5)",
+            params![format!("mrel-{source}-{target}"),source,target,kind,NOW]).unwrap();
+    }
+}
+
+fn lifecycle_action(conn: &rusqlite::Connection, action: &str) -> ielts_db::DbResult<()> {
+    match action {
+        "archive" => ielts_db::archive_memory(conn, &ielts_domain::MemoryArchiveCommand {
+            memory_id: "mem-a".into(), expected_version: 1, actor_type: "user".into(),
+            actor_id: Some(USER.into()), reason: "user archive".into(),
+        }),
+        "forget" => ielts_db::forget_memory(conn, &ielts_domain::MemoryForgetCommand {
+            memory_id: "mem-a".into(), expected_version: 1, actor_type: "user".into(),
+            actor_id: Some(USER.into()), reason: "user forget".into(),
+        }),
+        "inaccurate" => record_memory_feedback(conn, "mem-a", MemoryFeedbackKind::Inaccurate,
+            USER, &json!({}), NOW).map(|_| ()),
+        _ => panic!("unknown test action"),
+    }
+}
+
+fn memory_state(conn: &rusqlite::Connection, id: &str) -> (String, i64, String) {
+    conn.query_row("SELECT status,version,content FROM memory_items WHERE id=?1",
+        [id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap()
+}
+
+#[test]
+fn lifecycle_invalidates_transitive_supports_once_without_crossing_owners() {
+    for action in ["archive", "forget", "inaccurate"] {
+        let (_dir, conn) = open_db();
+        support_graph(&conn);
+        lifecycle_action(&conn, action).unwrap();
+        for id in ["mem-b", "mem-c"] {
+            assert_eq!(memory_state(&conn, id), ("archived".into(),2,format!("content-{id}")), "{action}");
+        }
+        let source = memory_state(&conn, "mem-a");
+        assert_eq!(source.0, if action == "forget" { "deleted" } else { "archived" });
+        assert_eq!(source.1, 2, "cycle must not mutate the source again");
+        for id in ["mem-other", "mem-beyond-other", "mem-unrelated"] {
+            assert_eq!(memory_state(&conn, id).0, "active", "{action}: {id}");
+            assert_eq!(memory_state(&conn, id).1, 1);
+        }
+        let relation_count: i64 = conn.query_row("SELECT COUNT(*) FROM memory_relations", [], |r| r.get(0)).unwrap();
+        assert_eq!(relation_count, 7, "lineage survives {action}");
+        let archived_audits: i64 = conn.query_row("SELECT COUNT(*) FROM memory_mutations
+            WHERE operation='archive' AND memory_id IN ('mem-b','mem-c')", [], |r| r.get(0)).unwrap();
+        assert_eq!(archived_audits, 2);
+        let context = ielts_db::memory_context_preview(&conn, &ielts_domain::MemoryContextQuery {
+            user_id: USER.into(), activity: ielts_domain::Activity::Reading,
+            current_instruction: None, limit: 100,
+        }).unwrap();
+        assert!(!context.entries.iter().any(|e| matches!(e.id.as_deref(), Some("mem-a" | "mem-b" | "mem-c"))));
+    }
+}
+
+#[test]
+fn lifecycle_failure_rolls_back_source_feedback_audit_and_all_dependents() {
+    for action in ["archive", "forget", "inaccurate"] {
+        let (_dir, conn) = open_db();
+        support_graph(&conn);
+        conn.execute_batch("CREATE TRIGGER fail_late_dependent BEFORE UPDATE ON memory_items
+            WHEN OLD.id='mem-c' BEGIN SELECT RAISE(ABORT,'test propagation failure'); END;").unwrap();
+        assert!(lifecycle_action(&conn, action).is_err());
+        for (id, status) in [("mem-a","superseded"),("mem-b","superseded"),("mem-c","active")] {
+            assert_eq!(memory_state(&conn, id), (status.into(),1,format!("content-{id}")), "{action}");
+        }
+        for table in ["memory_feedback", "memory_mutations"] {
+            let count: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap();
+            assert_eq!(count, 0, "{action} must not leave {table}");
+        }
+    }
+}
+
+#[test]
+fn feedback_rejects_foreign_or_deleted_memory_and_preserves_positive_feedback() {
+    let (_dir, conn) = open_db();
+    support_graph(&conn);
+    assert!(record_memory_feedback(&conn, "mem-a", MemoryFeedbackKind::Inaccurate,
+        "other", &json!({}), NOW).is_err());
+    record_memory_feedback(&conn, "mem-c", MemoryFeedbackKind::Accurate, USER, &json!({}), NOW).unwrap();
+    assert_eq!(memory_state(&conn, "mem-c").0, "active");
+    lifecycle_action(&conn, "forget").unwrap();
+    assert!(record_memory_feedback(&conn, "mem-a", MemoryFeedbackKind::Accurate,
+        USER, &json!({}), NOW).is_err());
+}
+
+#[test]
+fn outdated_and_not_about_me_stop_source_and_dependents() {
+    for kind in [MemoryFeedbackKind::Outdated, MemoryFeedbackKind::NotAboutMe] {
+        let (_dir, conn) = open_db();
+        support_graph(&conn);
+        record_memory_feedback(&conn, "mem-a", kind, USER, &json!({}), NOW).unwrap();
+        for id in ["mem-a", "mem-b", "mem-c"] {
+            assert_eq!(memory_state(&conn,id).0, "archived");
+        }
+    }
+}
+
+#[test]
+fn stale_sweep_counts_and_audits_transitive_archives() {
+    let (_dir, conn) = open_db();
+    support_graph(&conn);
+    conn.execute("UPDATE memory_items SET namespace='behavior',status='active',
+        updated_at='2020-01-01T00:00:00Z',created_at='2020-01-01T00:00:00Z'
+        WHERE id='mem-a'", []).unwrap();
+    let report = ielts_db::archive_stale(&conn, NOW).unwrap();
+    assert_eq!(report.archived_count, 3);
+    for id in ["mem-a", "mem-b", "mem-c"] {
+        assert_eq!(memory_state(&conn,id).0, "archived");
+    }
+    let audits: i64 = conn.query_row("SELECT COUNT(*) FROM memory_mutations WHERE operation='archive'", [], |r| r.get(0)).unwrap();
+    assert_eq!(audits, 3);
+    assert_eq!(ielts_db::archive_stale(&conn,NOW).unwrap().archived_count, 0);
+}
+
+#[test]
+fn improved_support_failure_is_not_swallowed_or_partially_committed() {
+    let (_dir, conn) = open_db();
+    support_graph(&conn);
+    conn.execute_batch("CREATE TRIGGER fail_confidence BEFORE UPDATE ON memory_items
+        WHEN OLD.id='mem-c' BEGIN SELECT RAISE(ABORT,'confidence failure'); END;").unwrap();
+    assert!(ielts_db::propagate_support_change(&conn, "mem-a", "improved", NOW).is_err());
+    assert_eq!(memory_state(&conn,"mem-b").1, 1);
+    let confidence: f64 = conn.query_row("SELECT confidence FROM memory_items WHERE id='mem-b'", [], |r| r.get(0)).unwrap();
+    assert_eq!(confidence, 0.7);
+}
+
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
     let dir = tempdir().unwrap();
     let mut conn = open_connection(&DbOpenOptions::create(dir.path().join("consol.db"))).unwrap();

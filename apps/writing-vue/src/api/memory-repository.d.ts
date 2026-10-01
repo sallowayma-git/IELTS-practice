@@ -83,6 +83,8 @@ export interface ForgetMemoryCommand {
   reason: string
 }
 
+export interface ArchiveMemoryCommand extends ForgetMemoryCommand {}
+
 export interface DailyDreamQuery {
   userId?: string
   day: string
@@ -99,6 +101,7 @@ export function getMemoryContextPreview(query?: MemoryContextQuery): Promise<Mem
 export function promoteMemoryCandidate(command: PromoteMemoryCandidateCommand): Promise<unknown>
 export function putExplicitPreference(command: PutExplicitPreferenceCommand): Promise<unknown>
 export function forgetMemory(command: ForgetMemoryCommand): Promise<unknown>
+export function archiveMemory(command: ArchiveMemoryCommand): Promise<unknown>
 export function recordCoachFeedback(memoryId: string, feedbackKind: CoachFeedbackKind): Promise<unknown>
 export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedbackKind): Promise<unknown>
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
@@ -111,6 +114,7 @@ export const memoryRepository: {
   promoteMemoryCandidate: typeof promoteMemoryCandidate
   putExplicitPreference: typeof putExplicitPreference
   forgetMemory: typeof forgetMemory
+  archiveMemory: typeof archiveMemory
   recordCoachFeedback: typeof recordCoachFeedback
   recordMemoryFeedback: typeof recordMemoryFeedback
   triggerDailyDream: typeof triggerDailyDream

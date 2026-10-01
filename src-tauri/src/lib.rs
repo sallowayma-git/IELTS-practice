@@ -183,6 +183,7 @@ pub fn run() {
             commands::memory::memory_catalog_list,
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_forget,
+            commands::memory::memory_archive,
             #[cfg(feature = "developer-tools")]
             commands::learning::learning_events_rebuild,
             #[cfg(feature = "developer-tools")]
