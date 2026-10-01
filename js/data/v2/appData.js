@@ -503,20 +503,51 @@
         });
     }
 
+    // Derived only: authoritative summaries are still read on every request.
+    // Durable epochs also invalidate this cache after cross-tab writes even if
+    // a BroadcastChannel notification was delayed or unavailable.
+    let browseUpgradeCache = new Map();
+    let browseUpgradeEpoch = null;
     async function resolveBrowseSummaries(summaries) {
         const legacyIds = summaries.filter(needsBrowseScoreUpgrade).map(practiceLayerId);
         if (!legacyIds.length) return summaries;
+        const epochs = typeof kernel.getEntityRevisionEpochs === 'function'
+            ? await kernel.getEntityRevisionEpochs() : null;
+        const epoch = epochs ? JSON.stringify([epochs.practiceSummaries, epochs.practiceDetails]) : null;
+        if (epoch === null || epoch !== browseUpgradeEpoch) {
+            browseUpgradeCache = new Map();
+            browseUpgradeEpoch = epoch;
+        }
+        const cache = browseUpgradeCache;
+        const signatures = new Map(summaries.filter(needsBrowseScoreUpgrade).map(row => [practiceLayerId(row), checksum(row)]));
+        const missingIds = legacyIds.filter(id => !cache.has(id) || cache.get(id).signature !== signatures.get(id));
         // Read matching summaries and details together so an intervening restore
         // or replacement cannot mix grading evidence from different revisions.
         // Modern light reads remain summary-only; annotations are never loaded.
-        const snapshot = await kernel.readPracticeSnapshot(legacyIds, { stores: ['practiceSummaries', 'practiceDetails'] });
+        const snapshot = missingIds.length
+            ? await kernel.readPracticeSnapshot(missingIds, { stores: ['practiceSummaries', 'practiceDetails'] }) : {};
         const current = new Map(asArray(snapshot.practiceSummaries).map(row => [practiceLayerId(row), row]));
         const details = new Map(asArray(snapshot.practiceDetails).map(row => [practiceLayerId(row), row]));
-        return summaries.map(summary => {
+        const result = summaries.map(summary => {
             if (!needsBrowseScoreUpgrade(summary)) return summary;
             const id = practiceLayerId(summary);
+            // Include the summary bytes so a request whose initial read crossed
+            // a commit cannot associate an old summary with a newer epoch.
+            const signature = signatures.get(id);
+            const cached = cache.get(id);
+            if (cached && cached.signature === signature) return clone(cached.value);
             return current.has(id) ? upgradeBrowseSummary(current.get(id), details.get(id)) : null;
         }).filter(Boolean);
+        if (epoch !== null && missingIds.length) {
+            const after = await kernel.getEntityRevisionEpochs();
+            if (JSON.stringify([after.practiceSummaries, after.practiceDetails]) === epoch) {
+                for (const row of result) {
+                    const id = practiceLayerId(row);
+                    if (current.has(id)) cache.set(id, { signature: checksum(current.get(id)), value: clone(row) });
+                }
+            }
+        }
+        return result;
     }
 
     function firstNonEmpty(...values) {
@@ -972,14 +1003,18 @@
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
-            const summaries = await kernel.listEntities('practiceSummaries');
-            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(summaries);
+            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'));
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;
             const snapshot = await kernel.readPracticeSnapshot(null, { stores });
-            return (await Promise.all(asArray(snapshot.practiceSummaries)
-                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
+            const details = new Map(asArray(snapshot.practiceDetails).map(row => [practiceLayerId(row), row]));
+            const annotations = new Map(asArray(snapshot.practiceAnnotations).map(row => [practiceLayerId(row), row]));
+            return asArray(snapshot.practiceSummaries).map(summary => {
+                const id = practiceLayerId(summary);
+                const detail = details.get(id);
+                return joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection);
+            }).filter(Boolean);
         },
         async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
         // Positive journal evidence only: retention can remove old receipts, so
@@ -2318,6 +2353,26 @@
 
     const backups = Object.freeze({
         onDataCommitted(listener) { return kernel.onCommitted(listener); },
+        async getStorageIdentity() {
+            await ready;
+            // Installation-local, excluded from portable snapshots. A restored
+            // snapshot must not make a rebuilt database impersonate the old one.
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const meta = await kernel.read('system.migrations', { withMeta: true });
+                if (typeof meta.data.storageIdentity === 'string' && meta.data.storageIdentity) return meta.data.storageIdentity;
+                const identity = randomId('data-installation');
+                try {
+                    await kernel.mutate([{ logicalKey: 'system.migrations', data: Object.assign({}, meta.data, { storageIdentity: identity }),
+                        expectedRevision: metaRevision(meta) }], { operationId: randomId('data-identity') });
+                    return identity;
+                } catch (error) {
+                    if (error.code !== 'CONFLICT' || attempt === 2) throw error;
+                }
+            }
+        },
+        // Explicit recovery for a V1 folder discovered after migration. Never
+        // poll old JSON files on an already migrated user's startup.
+        async recoverLegacy() { await ready; await migrateLegacyData({ includeExternal: true }); },
         async getSettings() { await ready; return kernel.read('backups.settings'); },
         async setSettings(values, options = {}) { await ready; const current = await kernel.read('backups.settings', { withMeta: true }); return kernel.mutate([{ logicalKey: 'backups.settings', data: asObject(values), expectedRevision: current.envelope ? current.envelope.revision : 0 }], optionsMutationOptions(options, 'backup-settings', values)); },
         async getExportHistory() { await ready; return kernel.read('backups.exportHistory'); },
@@ -2496,12 +2551,13 @@
         return result;
     }
     const metaRevision = (meta) => Number(meta && meta.envelope && meta.envelope.revision) || 0;
-    async function readReadingDocuments() {
+    async function readReadingDocuments({ includeMirrors = true } = {}) {
         // Every canonical vocabulary mutation also checks/increments readingState.
         // Read that fence twice so a split readonly read never exposes mixed owners.
         for (let attempt = 0; attempt < 12; attempt += 1) {
             const before = await kernel.read(READING_STATE_KEY, { withMeta: true });
-            const values = await Promise.all(READING_DOCUMENT_KEYS.filter((key) => key !== READING_STATE_KEY)
+            const keys = includeMirrors ? READING_DOCUMENT_KEYS : ['vocab.words', 'vocab.lists', READING_STATE_KEY];
+            const values = await Promise.all(keys.filter((key) => key !== READING_STATE_KEY)
                 .map(async (key) => [key, await kernel.read(key, { withMeta: true })]));
             const after = await kernel.read(READING_STATE_KEY, { withMeta: true });
             if (metaRevision(before) !== metaRevision(after)) continue;
@@ -2637,9 +2693,9 @@
             if (clearIndex >= 0) clearedKeys.splice(clearIndex, 1);
         }
     }
-    function readingProjection(snapshot) {
+    function readingProjection(snapshot, { includeWords = true } = {}) {
         const model = readingModel();
-        const query = model.query(snapshot);
+        const query = includeWords ? model.query(snapshot) : { terms: [] };
         const articles = new Map(snapshot.reading.articles.map((row) => [row.id, row]));
         const sources = new Map(snapshot.reading.sources.map((row) => [row.id, row]));
         const words = query.terms.map((row) => {
@@ -2662,13 +2718,20 @@
         });
         return { words, bookshelf };
     }
-    function readingChanges(current, snapshot, state) {
+    function readingChanges(current, snapshot, state, { visitOnly = false } = {}) {
         state.reading = snapshot.reading;
-        const projection = readingProjection(snapshot);
+        // All owner mutations check/increment readingState. Its CAS fence is
+        // sufficient for a visit which changes neither canonical words nor
+        // relationships; rewriting those large documents adds no protection.
+        const oldTitles = new Map(current.snapshot.reading.articles.map(row => [row.id, row.title]));
+        const includeWords = !visitOnly || snapshot.reading.articles.some(row => oldTitles.has(row.id) && oldTitles.get(row.id) !== row.title);
+        const projection = readingProjection(snapshot, { includeWords });
         const values = { 'vocab.words': snapshot.words, 'vocab.lists': snapshot.lists,
             [READING_STATE_KEY]: state, 'vocab.readingVocabWords': projection.words,
             'vocab.readingBookshelfExams': projection.bookshelf };
-        return READING_DOCUMENT_KEYS.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
+        const keys = visitOnly ? [READING_STATE_KEY, 'vocab.readingBookshelfExams']
+            .concat(includeWords ? ['vocab.readingVocabWords'] : []) : READING_DOCUMENT_KEYS;
+        return keys.map((logicalKey) => ({ logicalKey, data: values[logicalKey],
             expectedRevision: metaRevision(current.metas[logicalKey]) }));
     }
     function tombstoneRevision(value) { return Number(value && value.revision) || 0; }
@@ -2695,12 +2758,14 @@
         await ready; await ensureReadingMigration();
         assertObject(input, 'Reading command must be an object');
         const command = Object.assign({ at: nowIso() }, clone(input));
-        const initial = await readReadingDocuments();
+        let initial = options.observedRevision !== undefined && options.observedGeneration !== undefined
+            ? null : await readReadingDocuments();
         const observed = { revision: options.observedRevision ?? initial.revision,
             generation: options.observedGeneration ?? initial.generation };
         const mutation = optionsMutationOptions(options, `reading-${type}`, { type, command: input });
         return retryVocabMutation(options, async () => {
-            const current = await readReadingDocuments();
+            const current = initial || await readReadingDocuments();
+            initial = null;
             assertFreshReadingIntent(current, type, command, observed);
             const model = readingModel(); let next = current.snapshot;
             const state = clone(current.state); const tombstones = state.tombstones;
@@ -2737,17 +2802,19 @@
                 mark('visits', command.articleId);
             } else throw new AppDataError('VALIDATION', `Unknown reading operation: ${type}`);
             // Remember concrete removals as well as broad fences for portable merges.
+            const retainedAssociations = new Set(next.reading.associations.map(row => row.id));
+            const retainedOccurrences = new Set(next.reading.occurrences.map(row => row.id));
             for (const row of current.snapshot.reading.associations) {
-                if (!next.reading.associations.some((item) => item.id === row.id)) mark('associations', row.id);
+                if (!retainedAssociations.has(row.id)) mark('associations', row.id);
             }
             for (const row of current.snapshot.reading.occurrences) {
-                if (!next.reading.occurrences.some((item) => item.id === row.id)) mark('occurrences', row.id);
+                if (!retainedOccurrences.has(row.id)) mark('occurrences', row.id);
             }
             model.validate(next);
-            const receipt = await kernel.mutate(readingChanges(current, next, state), mutation);
+            const receipt = await kernel.mutate(readingChanges(current, next, state, { visitOnly: type === 'recordVisit' }), mutation);
             if (!receipt || receipt.committed !== true) throw new AppDataError('BACKEND_UNAVAILABLE', 'Reading save was not acknowledged');
             // A replay may acknowledge an earlier operation; return current durable data.
-            const committed = await readReadingDocuments();
+            const committed = await readReadingDocuments({ includeMirrors: false });
             if (type === 'collect') {
                 const articleId = model.articleId(command.source, command.article.examId);
                 const termId = model.termId(command.word.word);
@@ -2831,11 +2898,26 @@
         });
     }
 
+    let readingViewCache;
+    function readingViews() {
+        if (!readingViewCache) {
+            if (typeof global.createReadingViewCache !== 'function') throw new Error('Reading view cache unavailable');
+            readingViewCache = global.createReadingViewCache({
+                readToken: async () => (await kernel.read('system.readingViewToken')).token || 'initial',
+                readSnapshot: async () => readingResult(await readReadingDocuments({ includeMirrors: false }))
+            });
+        }
+        return readingViewCache;
+    }
+
     const vocab = Object.freeze({
         // Pure schema/relationship operations. Persistence commands consume this
         // contract; a returned snapshot is not a durable commit acknowledgement.
         get readingModel() { return global.ReadingVocabularyModel; },
-        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments()); },
+        async getReadingBookshelf() { await ready; await ensureReadingMigration(); return readingViews().index(); },
+        async getReadingArticleWords(articleId, page = 0) { await ready; await ensureReadingMigration(); return readingViews().words(articleId, page); },
+        async searchReadingArticles(query) { await ready; await ensureReadingMigration(); return readingViews().search(query); },
+        async getReadingSnapshot() { await ready; await ensureReadingMigration(); return readingResult(await readReadingDocuments({ includeMirrors: false })); },
         async shouldInitializeDefaultWords() {
             await ready; await ensureReadingMigration();
             if (!global.ReadingVocabularyModel) return !(await kernel.read('vocab.words', { withMeta: true })).envelope;
@@ -3645,12 +3727,13 @@
         };
     }
 
-    async function migrateLegacyData() {
+    async function migrateLegacyData({ includeExternal = false } = {}) {
         // Unit embedders may provide a deliberately minimal kernel bootstrap.
         if (typeof internals.readLegacyValues !== 'function') return;
         const migrationMeta = await kernel.read('system.migrations', { withMeta: true });
         const migrationState = asObject(migrationMeta.data);
         const v1Complete = asObject(migrationState.v1ToV2).status === 'complete';
+        if (v1Complete && !includeExternal) return;
         const externalConsumed = asObject(migrationState.externalBackupV1).status === 'consumed';
         let externalBackup = null;
         if (!externalConsumed && typeof internals.readLegacyExternalBackup === 'function') {
@@ -3755,11 +3838,6 @@
                 if (global.console && console.error) console.error('[AppData v2] legacy migration skipped:', error);
             }
             try {
-                await cleanupExpiredRecovery();
-            } catch (error) {
-                if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
-            }
-            try {
                 await migrateLegacyReadingData();
             } catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] reading data sync skipped:', error);
@@ -3770,6 +3848,16 @@
             if (global.console && console.error) console.error('[AppData v2] initialization blocked:', error);
             throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
         });
+
+    // Each recovery read prunes its own key. The startup sweep is maintenance,
+    // and must not delay basic data availability or the first painted screen.
+    ready.then(() => {
+        const run = () => cleanupExpiredRecovery().catch(error => {
+            if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
+        });
+        if (typeof global.requestIdleCallback === 'function') global.requestIdleCallback(run, { timeout: 15000 });
+        else if (typeof global.setTimeout === 'function') global.setTimeout(run, 5000);
+    }).catch(() => {});
 
     const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
     Object.defineProperties(AppData, {

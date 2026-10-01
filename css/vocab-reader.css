@@ -2294,3 +2294,23 @@ mark.vocab-highlight:active,
 }
 
 .vocab-highlight:focus-visible { outline: 2px solid #315ac8; outline-offset: 2px; }
+
+/* The card keeps one ten-word page in memory; controls share the card palette. */
+.bookshelf-word-pages {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--shui-text-muted, #64748b);
+}
+.bookshelf-word-pages button {
+    border: 1px solid var(--shui-panel-border, rgba(148, 163, 184, 0.35));
+    border-radius: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--shui-panel-bg, rgba(255, 255, 255, 0.2));
+    color: inherit;
+    cursor: pointer;
+}
+.bookshelf-word-pages button:disabled { opacity: 0.45; cursor: default; }

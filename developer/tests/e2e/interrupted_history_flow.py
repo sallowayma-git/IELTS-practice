@@ -317,6 +317,16 @@ def main() -> None:
             ) == 0
             show_history(page)
             empty_record_id = observe_timeout(page, READING_EXAM_ID)
+            # The draft-isolation assertion is complete. Stop the live child
+            # before comparing unrelated recovery fixtures: late SESSION_READY
+            # messages may otherwise legitimately recreate its active session.
+            if not popup.is_closed():
+                popup.close()
+            page.wait_for_function(
+                """async examId => !(await AppData.recovery.listActiveSessions()).some(row => row.examId === examId)""",
+                arg=READING_EXAM_ID,
+                timeout=15_000,
+            )
             assert page.evaluate(
                 "async id => (await window.AppData.recovery.getInterrupted(id)).metadata.type", empty_record_id
             ) == "reading"
@@ -384,7 +394,7 @@ def main() -> None:
                     rejected: await window.AppData.recovery.listRejectedCompletions()
                 })"""
             )
-            assert after_clear == before_clear
+            assert after_clear == before_clear, json.dumps({"before": before_clear, "after": after_clear}, ensure_ascii=False)
             expect(page.locator("#total-practiced")).to_have_text("0")
             final_canonical = canonical_snapshot(page)
             assert final_canonical["ids"] == []

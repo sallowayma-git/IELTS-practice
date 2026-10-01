@@ -9,6 +9,9 @@
     // written back as a whole collection.
     const ReadingBookshelfStore = {
         _snapshot: null,
+        _index: null,
+        _previewPages: new Map(),
+        _previewPending: new Set(),
         _revision: null,
         _generation: null,
         _commitBound: false,
@@ -35,7 +38,17 @@
         },
 
         _adopt(result) {
-            if (!result || !result.snapshot) throw new Error('Reading snapshot is unavailable');
+            if (!result || (!result.snapshot && !result.articles)) throw new Error('Reading snapshot is unavailable');
+            if (result.articles) {
+                if (this._generation === result.generation && this._revision !== null && result.revision < this._revision) return false;
+                if (!this._index || this._index.token !== result.token) this._previewPages.clear();
+                this._index = result;
+                this._snapshot = { reading: { sources: result.sources } };
+                this._revision = result.revision;
+                this._generation = result.generation;
+                this._loadError = null;
+                return true;
+            }
             if (this._generation === result.generation && this._revision !== null && result.revision < this._revision) return false;
             this._snapshot = result.snapshot;
             this._revision = result.revision;
@@ -59,8 +72,9 @@
                 if (!vocab || typeof vocab.getReadingSnapshot !== 'function') {
                     throw new Error('Reading persistence is unavailable');
                 }
-                const result = await vocab.getReadingSnapshot();
-                const metadata = await this._readSourceMetadata(result.snapshot);
+                const result = typeof vocab.getReadingBookshelf === 'function'
+                    ? await vocab.getReadingBookshelf() : await vocab.getReadingSnapshot();
+                const metadata = await this._readSourceMetadata(result.snapshot || { reading: { sources: result.sources } });
                 if (sequence === this._loadSequence) {
                     if (this._adopt(result)) this._sourceMetadata = metadata;
                     this._loading = false;
@@ -132,7 +146,8 @@
             if (!result || result.saved !== true) throw new Error('Reading change was not durably acknowledged');
             // An in-flight reload may predate this acknowledgement.
             ++this._loadSequence;
-            this._adopt(result);
+            if (typeof global.AppData.vocab.getReadingBookshelf === 'function') await this.init();
+            else this._adopt(result);
             this._loading = false;
             this._notify({ action: type, articleId: command.articleId });
             return result;
@@ -147,6 +162,25 @@
         },
 
         getBookshelfExams() {
+            if (this._index) {
+                const manifest = global.__READING_EXAM_MANIFEST__ || {};
+                return this._index.articles.map(row => {
+                    const sourceId = global.AppData.vocab.readingModel.sourceId(row.source);
+                    const config = this._sourceMetadata.get(sourceId);
+                    const meta = row.source.kind === 'builtin' ? manifest[row.examId] || {}
+                        : config?.index?.find(item => String(item.id || item.examId) === row.examId) || {};
+                    const preview = this._previewPages.get(row.articleId);
+                    return { ...row, title: row.title || meta.title || meta.name || row.examId,
+                        category: meta.category || meta.type || '雅思阅读',
+                        sourceLabel: row.source.kind === 'builtin' ? '内置题库'
+                            : `导入题库 · ${config?.name && config.name !== row.source.id ? `${config.name} (${row.source.id})` : row.source.id}`,
+                        sourceUnavailable: row.source.kind === 'imported' && Array.isArray(config?.index)
+                            && !config.index.some(item => String(item.id || item.examId) === row.examId),
+                        hasPdf: Boolean(meta.pdfPath || meta.pdf),
+                        sampleWords: preview?.words || [], previewPage: preview?.page || 0,
+                        previewLoaded: Boolean(preview), previewError: preview?.error || null };
+                }).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+            }
             const snapshot = this._snapshot;
             if (!snapshot) return [];
             const reading = snapshot.reading;
@@ -183,7 +217,7 @@
                     title: article.title || meta.title || meta.name || article.examId,
                     category: meta.category || meta.type || '雅思阅读',
                     wordCount: termIds.length, allWords: words.map((word) => word.word),
-                    sampleWords: words.slice(0, 6).map((word) => word.word),
+                    sampleWords: words.slice(0, 10).map((word) => word.word),
                     lastActivityAt, hasPdf: Boolean(meta.pdfPath || meta.pdf)
                 };
             }).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -197,7 +231,30 @@
             return words.find((word) => word.id === ref.wordId) || null;
         },
 
+        async loadPreview(articleId, page = 0) {
+            if (!this._index || this._previewPending.has(articleId)) return;
+            const token = this._index.token;
+            this._previewPending.add(articleId);
+            try {
+                const result = await global.AppData.vocab.getReadingArticleWords(articleId, page);
+                if (!this._index || this._index.token !== token) return;
+                if (result.token !== token) { await this.init(); return; }
+                this._previewPages.set(articleId, { page, words: result.words });
+            } catch (error) {
+                if (this._index?.token === token) this._previewPages.set(articleId, { page, words: [], error: error.message });
+            } finally {
+                this._previewPending.delete(articleId);
+                if (!this._previewNotifyPending) {
+                    this._previewNotifyPending = true;
+                    const flush = () => { this._previewNotifyPending = false; this._notify({ action: 'preview-loaded' }); };
+                    if (typeof global.requestAnimationFrame === 'function') global.requestAnimationFrame(flush);
+                    else setTimeout(flush, 0);
+                }
+            }
+        },
+
         getDistinctWordCount() {
+            if (this._index) return this._index.distinctWordCount;
             if (!this._snapshot) return 0;
             return new Set(this._snapshot.reading.associations.map((row) => row.termId)).size;
         },
@@ -226,7 +283,7 @@
         async _exportTxt(articleId, title) {
             // init may defer cache adoption to a later pending refresh; its
             // returned snapshot is still the durable read for this export.
-            const { snapshot } = await this.init();
+            const { snapshot } = await global.AppData.vocab.getReadingSnapshot();
             const result = global.AppData.vocab.readingModel.toPlainText(snapshot, articleId ? { articleId } : {});
             if (result.count === 0) return false;
 
@@ -268,7 +325,12 @@
             fromView: null,
             toastTimer: null,
             readerLoading: false,
-            readerError: null
+            readerError: null,
+            cardLimit: 20,
+            searchMatches: new Set(),
+            searchKey: null,
+            searchError: null,
+            searchLoading: false
         },
         _readerRequestId: 0,
         _readerLoadPromise: null,
@@ -291,14 +353,36 @@
 
             this.render();
             this.bindGlobalEvents();
-            ReadingBookshelfStore.init().catch(() => {});
+            if (!ReadingBookshelfStore._loading) ReadingBookshelfStore.init().catch(() => {});
         },
 
         render() {
             const root = document.querySelector(this.containerSelector);
             if (!root) return;
 
+            const focusedSearch = document.activeElement?.matches?.('[data-action="search-input"]')
+                ? { start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd } : null;
             const allExams = ReadingBookshelfStore.getBookshelfExams();
+            const query = this.state.searchQuery.trim().toLowerCase();
+            const searchKey = ReadingBookshelfStore._index ? `${ReadingBookshelfStore._index.token}:${query}` : null;
+            if (searchKey && searchKey !== this.state.searchKey) {
+                this.state.searchKey = searchKey;
+                this.state.searchMatches = new Set();
+                this.state.searchError = null;
+                this.state.searchLoading = Boolean(query);
+                this.state.cardLimit = 20;
+                if (query) global.AppData.vocab.searchReadingArticles(query).then(ids => {
+                    if (this.state.searchKey !== searchKey) return;
+                    this.state.searchMatches = new Set(ids);
+                    this.state.searchLoading = false;
+                    this.render();
+                }).catch(error => {
+                    if (this.state.searchKey !== searchKey) return;
+                    this.state.searchError = error.message;
+                    this.state.searchLoading = false;
+                    this.render();
+                });
+            }
             const totalWords = ReadingBookshelfStore.getDistinctWordCount();
 
             // 过滤与搜索
@@ -309,7 +393,9 @@
                     const matchTitle = (item.title || '').toLowerCase().includes(q);
                     const matchCategory = (item.category || '').toLowerCase().includes(q);
                     const matchSource = `${item.sourceLabel || ''} ${item.source.kind} ${item.source.id}`.toLowerCase().includes(q);
-                    const matchWords = (item.allWords || []).some(w => w.toLowerCase().includes(q));
+                    const matchWords = ReadingBookshelfStore._index
+                        ? this.state.searchMatches.has(item.articleId)
+                        : (item.allWords || []).some(w => w.toLowerCase().includes(q));
                     return matchTitle || matchCategory || matchSource || matchWords;
                 });
             }
@@ -327,6 +413,7 @@
                 filtered.sort((a, b) => a.title.localeCompare(b.title));
             }
 
+            const visible = filtered.slice(0, this.state.cardLimit);
             const isFromOverview = this.state.fromView === 'overview';
             const backBtnTitle = isFromOverview ? '返回学习总览' : '返回更多工具';
             const backBtnText = isFromOverview ? '返回总览' : '返回更多';
@@ -424,7 +511,10 @@
 
                     <!-- 篇目卡片网格 -->
                     <div class="bookshelf-content-area">
-                        ${!ReadingBookshelfStore._snapshot ? (ReadingBookshelfStore._loadError ? '' : '<p role="status">正在加载书架…</p>') : filtered.length > 0 ? this.renderCardGrid(filtered) : this.renderEmptyState(allExams.length === 0)}
+                        ${this.state.searchLoading ? '<p role="status">正在搜索全部生词…</p>' : ''}
+                        ${this.state.searchError ? '<p role="alert">生词搜索失败，请稍后重试。<button data-action="retry-search">重试</button></p>' : ''}
+                        ${!ReadingBookshelfStore._snapshot ? (ReadingBookshelfStore._loadError ? '' : '<p role="status">正在加载书架…</p>') : filtered.length > 0 ? this.renderCardGrid(visible) : this.renderEmptyState(allExams.length === 0)}
+                        ${filtered.length > visible.length ? '<button type="button" class="btn btn-secondary" data-action="load-more-cards">加载更多篇目</button>' : ''}
                     </div>
                 </div>
 
@@ -433,6 +523,13 @@
             `;
 
             this.bindCardEvents(root);
+            if (focusedSearch) {
+                const input = root.querySelector('[data-action="search-input"]');
+                input?.focus();
+                input?.setSelectionRange(focusedSearch.start, focusedSearch.end);
+            }
+            if (ReadingBookshelfStore._index) visible.filter(row => row.wordCount > 0 && !row.previewLoaded)
+                .forEach(row => ReadingBookshelfStore.loadPreview(row.articleId));
         },
 
         renderCardGrid(exams) {
@@ -482,11 +579,18 @@
                                             <span class="bookshelf-chip-audio">🔊</span>
                                         </button>
                                     `).join('')}
-                                    ${exam.wordCount > wordsList.length ? `<span class="bookshelf-vocab-chip-more">+${exam.wordCount - wordsList.length}</span>` : ''}
+                                    ${!ReadingBookshelfStore._index && exam.wordCount > wordsList.length ? `<span class="bookshelf-vocab-chip-more">+${exam.wordCount - wordsList.length}</span>` : ''}
                                 </div>
                             ` : `
-                                <p class="bookshelf-vocab-empty-hint">暂未划词收录，可在全文中自由选词加入生词本</p>
+                                <p class="bookshelf-vocab-empty-hint">${exam.wordCount > 0 ? (exam.previewError ? '预览加载失败，请重试' : '正在加载生词预览…') : '暂未划词收录，可在全文中自由选词加入生词本'}</p>
                             `}
+                            ${ReadingBookshelfStore._index && exam.wordCount > 0 ? `
+                                <div class="bookshelf-word-pages">
+                                    <button type="button" data-action="word-page" data-page="${Math.max(0, exam.previewPage - 1)}" ${exam.previewPage === 0 ? 'disabled' : ''}>上一页</button>
+                                    <span>第 ${exam.previewPage + 1} / ${Math.ceil(exam.wordCount / 10)} 页</span>
+                                    <button type="button" data-action="word-page" data-page="${exam.previewPage + 1}" ${(exam.previewPage + 1) * 10 >= exam.wordCount ? 'disabled' : ''}>下一页</button>
+                                    ${exam.previewError ? '<button type="button" data-action="word-page" data-page="0">重试</button>' : ''}
+                                </div>` : ''}
                         </div>
                     </div>
 
@@ -572,6 +676,7 @@
             if (sortSelect) {
                 sortSelect.addEventListener('change', (e) => {
                     this.state.sortBy = e.target.value;
+                    this.state.cardLimit = 20;
                     this.render();
                 });
             }
@@ -580,6 +685,7 @@
             root.querySelectorAll('[data-action="set-filter"]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     this.state.filterMode = btn.dataset.mode || 'all';
+                    this.state.cardLimit = 20;
                     this.render();
                 });
             });
@@ -653,9 +759,21 @@
                     else await this.launchGlobalNotebook();
                     return;
                 }
+                if (e.target.closest('[data-action="load-more-cards"]')) {
+                    this.state.cardLimit += 20; this.render(); return;
+                }
+                if (e.target.closest('[data-action="retry-search"]')) {
+                    this.state.searchKey = null; this.render(); return;
+                }
                 const card = e.target.closest('[data-article-id]');
                 const articleId = card && card.dataset.articleId;
                 const article = ReadingBookshelfStore.getBookshelfExams().find((exam) => exam.articleId === articleId);
+                const wordPage = e.target.closest('[data-action="word-page"]');
+                if (wordPage && articleId) {
+                    wordPage.disabled = true;
+                    await ReadingBookshelfStore.loadPreview(articleId, Number(wordPage.dataset.page));
+                    return;
+                }
                 // 打开生词本精读
                 const openVocabTrigger = e.target.closest('[data-action="open-reading-vocab"]');
                 if (openVocabTrigger) {
@@ -835,7 +953,7 @@
             this._readerLoadPromise = (async () => {
                 const loader = global.AppLazyLoader;
                 if (loader && typeof loader.ensureGroup === 'function') {
-                    await Promise.all(['exam-data', 'browse-runtime'].map((group) => loader.ensureGroup(group)));
+                    await Promise.all(['exam-data', 'reading-tools'].map((group) => loader.ensureGroup(group)));
                 }
                 if (!global.ReadingVocabReader || typeof global.ReadingVocabReader.open !== 'function') {
                     throw new Error('Reading reader is unavailable');
@@ -1042,6 +1160,11 @@
         });
         window.addEventListener('reading-vocab-store-updated', () => {
             const state = global.ReadingVocabStore && global.ReadingVocabStore._state;
+            if (state && typeof global.AppData?.vocab?.getReadingBookshelf === 'function') {
+                // Opening a reader/notebook must not initialize an unused shelf.
+                if (ReadingBookshelfStore._index) ReadingBookshelfStore.init().catch(() => {});
+                return;
+            }
             if (state && ReadingBookshelfStore._adopt(state)) {
                 const sequence = ++ReadingBookshelfStore._loadSequence;
                 ReadingBookshelfStore._loading = false;
@@ -1061,5 +1184,5 @@
     }
 
     global.BookshelfView = BookshelfView;
-    ReadingBookshelfStore.init().catch((error) => console.warn('[ReadingBookshelfStore] Initialization failed:', error));
+    // The bookshelf loads data when mounted, not when its script is evaluated.
 })(window);

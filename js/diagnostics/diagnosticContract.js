@@ -69,7 +69,8 @@
         'assets/generated/listening-exams/listening-practice-unified.html',
         ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
             'diagnostics', 'practice', 'session', 'reading-page', 'practice-page-enhancer',
-            'listening-record-bridge', 'listening-wrapper', 'more', 'theme']
+            'listening-record-bridge', 'listening-wrapper', 'vocabulary', 'reading-tools',
+            'reading-library', 'dictionary', 'more', 'theme']
             .map((name) => `js/bundles/${name}.bundle.js`)
     ]);
     const EVENT_ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;

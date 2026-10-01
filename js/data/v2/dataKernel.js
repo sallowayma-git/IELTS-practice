@@ -388,6 +388,14 @@
         compactJournal(journal);
         return journal;
     }
+    function invalidateReadingView(tx, changes, operationIdValue) {
+        if (!changes.some(change => ['vocab.words', 'vocab.lists', 'vocab.readingState'].includes(change.logicalKey))) return;
+        const logicalKey = 'system.readingViewToken';
+        const envelope = makeEnvelope(lookupEntry(logicalKey), { token: randomId('reading-view') },
+            { revision: 1, operationId: operationIdValue });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey, envelope });
+    }
+
     function putJournal(tx, currentRow, journal, spec, receipt) {
         const current = currentRow && currentRow.envelope;
         const envelope = makeEnvelope(lookupEntry('system.operationJournal'), writeJournal(journal, spec, receipt), {
@@ -820,7 +828,7 @@
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
                 const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
-                if (logicalKey === 'system.operationJournal' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
+                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
                     throw validation(`${logicalKey} is managed by DataKernel`);
                 }
                 if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
@@ -861,6 +869,7 @@
                             });
                             tx.objectStore(storeFor(item.change.logicalKey)).put({ logicalKey: item.change.logicalKey, envelope: canonicalizeJson(envelope) }); revisions[item.change.logicalKey] = envelope.revision;
                         }
+                        invalidateReadingView(tx, spec.changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
                         putJournal(tx, journalRow, journal, spec, receipt);
                         done(receipt);
@@ -1032,6 +1041,7 @@
                             }
                             for (const store of affectedStores) bumpEntityEpoch(revisionState, store);
                             putEntityRevisionState(tx, revisionRequest.result || null, revisionState, spec.operationId);
+                            invalidateReadingView(tx, documents, spec.operationId);
                             const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                             putJournal(tx, journalRow, journal, spec, receipt);
                             done(receipt);
@@ -1262,6 +1272,7 @@
                         if (Object.keys(entityRows).length) {
                             putEntityRevisionState(tx, revisionRead.request.result || null, revisionState, spec.operationId);
                         }
+                        invalidateReadingView(tx, changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                         putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
                         done(receipt);

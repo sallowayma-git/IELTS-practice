@@ -61,7 +61,7 @@ async function ready(page, protocol = 'http') {
         await AppData.ready;
         await window.LicenseModal?.accept();
         document.querySelector('#library-loader-overlay [data-library-action="close"]')?.click();
-        await window.AppLazyLoader.ensureGroup('browse-runtime');
+        await window.AppLazyLoader.ensureGroup('reading-tools');
     });
     await page.waitForFunction(() => !!window.ReadingVocabReader);
     assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');

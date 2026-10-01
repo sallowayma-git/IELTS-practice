@@ -37,6 +37,21 @@ test('identical build inputs reproduce the ID, inline hook, stamped bundles and 
     }
 });
 
+test('every emitted bundle retains its resource path and stack coordinates in diagnostics', () => {
+    const manifest = JSON.parse(read('assets/generated/diagnostics/build-manifest.json'));
+    const normalizer = harness({ install: false }).sandbox.AppDiagnosticContract.createNormalizer();
+    for (const asset of Object.keys(manifest.mappings).filter(file => file.startsWith('js/bundles/'))) {
+        const url = `https://private.invalid/app/${asset}?token=PRIVATE_TOKEN#PRIVATE_FRAGMENT`;
+        const event = normalizer.normalize({ code: 'RESOURCE_LOAD_FAILED', resource: { url },
+            error: { name: 'Error', stack: `Error\n    at load (${url}:123:7)` } });
+        assert.equal(event.resource.path, asset);
+        assert.equal(event.error.stack[0].path, asset);
+        assert.equal(event.error.stack[0].line, 123);
+        assert.equal(event.error.stack[0].column, 7);
+        assert.doesNotMatch(JSON.stringify(event), /private\.invalid|PRIVATE_TOKEN|PRIVATE_FRAGMENT/);
+    }
+});
+
 test('relevant emitted code, entry, style and build recipe changes alter the build ID', () => {
     const options = inputs();
     const first = buildDiagnosticArtifacts(options).metadata.buildId;

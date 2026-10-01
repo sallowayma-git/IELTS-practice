@@ -9,7 +9,8 @@ export const requiredDiagnosticAssets = [
     'assets/generated/reading-exams/reading-practice-unified.html',
     'assets/generated/listening-exams/listening-practice-unified.html',
     ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse', 'diagnostics', 'practice',
-        'session', 'reading-page', 'practice-page-enhancer', 'listening-record-bridge', 'listening-wrapper', 'more', 'theme']
+        'session', 'reading-page', 'practice-page-enhancer', 'listening-record-bridge', 'listening-wrapper',
+        'vocabulary', 'reading-tools', 'reading-library', 'dictionary', 'more', 'theme']
         .map(name => `js/bundles/${name}.bundle.js`)
 ];
 
