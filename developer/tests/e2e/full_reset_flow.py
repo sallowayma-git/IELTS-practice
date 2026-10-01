@@ -83,6 +83,7 @@ def main() -> None:
                         type: 'manual'
                     });
                     await window.AppData.preferences.setTheme('full-reset-theme');
+                    await window.AppData.vocab.getReadingBookshelf();
                     localStorage.setItem('hasSeenGplLicense', 'true');
                     localStorage.setItem('full-reset-legacy-local', 'present');
                     sessionStorage.setItem('full-reset-legacy-session', 'present');
@@ -123,6 +124,8 @@ def main() -> None:
                 }"""
             )
 
+            assert page.evaluate("async () => (await indexedDB.databases()).some(db => db.name === 'IELTSAtlasReadingViewCache')")
+
             page.locator("nav.main-nav button[data-view='settings']").click()
             page.wait_for_selector("#settings-view.active", timeout=10_000)
             with page.expect_navigation(timeout=30_000):
@@ -159,6 +162,7 @@ def main() -> None:
             assert result["legacySession"] is None
             assert result["externalBound"] is False
             assert "ExamSystemDB" not in result["databaseNames"]
+            assert "IELTSAtlasReadingViewCache" not in result["databaseNames"]
             assert diagnostic_id not in result["diagnosticHistory"]
             survivor_result = survivor.evaluate(
                 """async () => {

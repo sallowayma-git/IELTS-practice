@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:2b16d2103085876a27ae1c43497c9bff6d2175fc0845ae9d7d05117d0461c451",
+  "buildId": "sha256:f26f80127610d1db60932f0fa280eee20a1925ea3a12cd3c3e8af1ef85fae068",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -556,7 +556,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "f080ce782c7e5f70719ee2a2d2539dceec7310b44aa81d509733b6f72a8f60eb"
+      "sha256": "50c3247c984c215d732cc853d5c40965951fcb609553699209f434a53ad600ab"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -794,55 +794,55 @@
       {
         "source": "js/core/siteDataReset.js",
         "startLine": 11598,
-        "endLine": 11950,
+        "endLine": 11951,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceCore.js",
-        "startLine": 11954,
-        "endLine": 13458,
+        "startLine": 11955,
+        "endLine": 13459,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/resourceCore.js",
-        "startLine": 13462,
-        "endLine": 14114,
+        "startLine": 13463,
+        "endLine": 14115,
         "sourceStartLine": 1
       },
       {
         "source": "assets/generated/reading-exams/manifest.js",
-        "startLine": 14118,
-        "endLine": 21745,
+        "startLine": 14119,
+        "endLine": 21746,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 21749,
-        "endLine": 21786,
+        "startLine": 21750,
+        "endLine": 21787,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 21790,
-        "endLine": 21827,
+        "startLine": 21791,
+        "endLine": 21828,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/state-service.js",
-        "startLine": 21831,
-        "endLine": 22497,
+        "startLine": 21832,
+        "endLine": 22498,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryDiscovery.js",
-        "startLine": 22501,
-        "endLine": 23215,
+        "startLine": 22502,
+        "endLine": 23216,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryManager.js",
-        "startLine": 23219,
-        "endLine": 24147,
+        "startLine": 23220,
+        "endLine": 24148,
         "sourceStartLine": 1
       }
     ],

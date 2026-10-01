@@ -226,7 +226,8 @@ async function testSuccessfulReset() {
         'ExamSystemDB',
         'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2',
-        'IELTSAtlasDiagnosticsV1'
+        'IELTSAtlasDiagnosticsV1',
+        'IELTSAtlasReadingViewCache'
     ]);
     assert.equal(result.databases.includes('ExamSystemExternalBackup'), true,
         'full reset must remove the legacy directory handle so old data cannot auto-migrate on reload');
@@ -239,7 +240,7 @@ async function testSuccessfulReset() {
 }
 
 async function testBlockedDeletionKeepsWaiting() {
-    const harness = createHarness({ deleteModes: { IELTSAtlasDataV2: 'blocked' } });
+    const harness = createHarness({ deleteModes: { IELTSAtlasReadingViewCache: 'blocked' } });
     const pending = harness.windowStub.SiteDataReset.perform({ reload: false });
     let settled = false;
     pending.finally(() => { settled = true; });
@@ -247,7 +248,7 @@ async function testBlockedDeletionKeepsWaiting() {
     assert.equal(settled, false);
     assert.equal(harness.localStorage.clearCalls, 0, 'storage clears only after every database is deleted');
     assert.ok(harness.messages.some((entry) => entry.type === 'warning' && /关闭其他标签页/.test(entry.message)));
-    harness.complete('IELTSAtlasDataV2');
+    harness.complete('IELTSAtlasReadingViewCache');
     const result = await pending;
     assert.equal(result.success, true);
     assert.equal(harness.localStorage.values.size, 0);
@@ -319,7 +320,8 @@ async function testDeletionFailureIsVisible() {
             'deleted:ExamSystemExternalBackup',
             'deleted:IELTSAtlasDataV2',
             'deleted:IELTSAtlasDiagnosticsV1',
-            'deleted:IELTSAtlasExternalBackupV2'
+            'deleted:IELTSAtlasExternalBackupV2',
+            'deleted:IELTSAtlasReadingViewCache'
         ],
         'a failed database deletion does not undo the other completed deletions'
     );
@@ -505,7 +507,7 @@ async function testConcurrentCallsShareOneRun() {
     const second = harness.windowStub.SiteDataReset.perform({ reload: false });
     assert.equal(first, second);
     await flush();
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 5);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 6);
     assert.equal(harness.externalBackup.calls, 1);
     harness.complete('IELTSAtlasDataV2');
     const [left, right] = await Promise.all([first, second]);
@@ -516,7 +518,7 @@ async function testFinishedNonTerminalRunCanRepeat() {
     const harness = createHarness();
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 10);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 12);
     assert.equal(harness.localStorage.clearCalls, 2);
 }
 

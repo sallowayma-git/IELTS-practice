@@ -12,7 +12,8 @@
         'ExamSystemDB',
         'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2',
-        'IELTSAtlasDiagnosticsV1'
+        'IELTSAtlasDiagnosticsV1',
+        'IELTSAtlasReadingViewCache'
     ]);
     let resetPromise = null;
 
