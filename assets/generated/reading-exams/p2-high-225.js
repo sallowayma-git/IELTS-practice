@@ -13,7 +13,8 @@
     "pdfFilename": "225. P2 - The problem of graffiti 涂鸦之困.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "225. P2 - The problem of graffiti 涂鸦之困.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -28,7 +29,13 @@
     {
       "groupId": "group-1",
       "kind": "matching",
-      "questionIds": ["q1", "q2", "q3", "q4", "q5"],
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n<h4>Questions 14-18</h4>\n<p>Reading Passage 2 has six paragraphs, A-F.</p>\n<p>Which paragraph contains the following information?</p>\n<p>Write the correct letter, A-F, in boxes 14-18 on your answer sheet.</p>\n<p><em>NB You may use any letter more than once.</em></p>\n<div class=\"question-item\">\n<p><strong>14</strong> A suggestion that might assist in bringing an effective legal action against graffitists</p>\n<div class=\"match-dropzone\" data-question=\"q1\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>15</strong> An explanation why all instances of graffiti cannot be removed in the same way</p>\n<div class=\"match-dropzone\" data-question=\"q2\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>16</strong> An argument that graffiti can have a negative effect on community life</p>\n<div class=\"match-dropzone\" data-question=\"q3\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>17</strong> An admission that some strategies for tackling graffiti may lead to an increase in graffiti</p>\n<div class=\"match-dropzone\" data-question=\"q4\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>18</strong> Some risks people face when graffiti is being removed</p>\n<div class=\"match-dropzone\" data-question=\"q5\"></div>\n</div>\n<div class=\"options-pool\" id=\"paragraph-options-pool\">\n<div class=\"pool-items\">\n<div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F</div>\n</div>\n</div>\n</div>",
       "allowOptionReuse": true,
       "leadHtml": "<h3>Questions</h3>"
@@ -36,19 +43,30 @@
     {
       "groupId": "group-2",
       "kind": "multi_choice",
-      "questionIds": ["q6", "q7"],
+      "questionIds": [
+        "q6",
+        "q7"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q6-7-anchor\">\n<h4>Questions 19 and 20</h4>\n<p>Choose <strong>TWO</strong> letters, A-E.</p>\n<p>The article gives details about different methods of removing graffiti.</p>\n<p>Which <strong>TWO</strong> points are made by the writer of this article?</p>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q6_7\" value=\"A\"> A Chemicals are an expensive method of removing graffiti from surfaces.</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q6_7\" value=\"B\"> B An inconspicuous part of a surface should be used to test a cleaning method.</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q6_7\" value=\"C\"> C Alcohol-based chemical preparations are often successful at removing graffiti.</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q6_7\" value=\"D\"> D Localised pollution can result from some cleaning methods.</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q6_7\" value=\"E\"> E It is best to use the strongest available cleaning method.</label>\n</div>\n</div>"
     },
     {
       "groupId": "group-3",
       "kind": "multi_choice",
-      "questionIds": ["q8", "q9"],
+      "questionIds": [
+        "q8",
+        "q9"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q8-9-anchor\">\n<h4>Questions 21 and 22</h4>\n<p>Choose <strong>TWO</strong> letters, A-E.</p>\n<p>The writer describes ways of combating a recurring problem of graffiti.</p>\n<p>Which <strong>TWO</strong> of these ideas are mentioned by the writer?</p>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q8_9\" value=\"A\"> A Running advertising campaigns against graffiti</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q8_9\" value=\"B\"> B Creating a new building material that repels graffiti</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q8_9\" value=\"C\"> C Hiring security guards and increasing police patrols</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q8_9\" value=\"D\"> D Ensuring surfaces are visible and monitored both day and night</label>\n</div>\n<div class=\"choice-item\">\n<label><input type=\"checkbox\" name=\"q8_9\" value=\"E\"> E Adding a covering layer that graffiti cannot penetrate</label>\n</div>\n</div>"
     },
     {
       "groupId": "group-4",
       "kind": "short_answer",
-      "questionIds": ["q10", "q11", "q12", "q13"],
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n<h4>Questions 23-26</h4>\n<p>Complete the sentences below.</p>\n<p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n<div class=\"question-item\">\n<p><strong>23</strong> Ancient graffiti is studied because it records a <input name=\"q10\" class=\"blank\" data-answer=\"social history\"> of the culture of that period.</p>\n</div>\n<div class=\"question-item\">\n<p><strong>24</strong> The unique signature of graffitists, known as a <input name=\"q11\" class=\"blank\" data-answer=\"tag\">, can assist police in finding and prosecuting them.</p>\n</div>\n<div class=\"question-item\">\n<p><strong>25</strong> Operators of both chemical and mechanical graffiti removal systems must have <input name=\"q12\" class=\"blank\" data-answer=\"protective clothing\">.</p>\n</div>\n<div class=\"question-item\">\n<p><strong>26</strong> Surfaces treated with a barrier-coating can normally be cleaned with <input name=\"q13\" class=\"blank\" data-answer=\"water\">.</p>\n</div>\n</div>"
     }
   ],
@@ -78,7 +96,21 @@
     "verifiedAt": "2026-03-31T19:30:00.000Z",
     "notes": "signature:dragdrop,checkbox,textarea"
   },
-  "questionOrder": ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "q11", "q12", "q13"],
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
   "questionDisplayMap": {
     "q1": "14",
     "q2": "15",

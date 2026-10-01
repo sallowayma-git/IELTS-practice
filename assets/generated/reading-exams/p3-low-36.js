@@ -9,11 +9,12 @@
   "meta": {
     "title": "Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA/",
     "legacyFilename": "130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

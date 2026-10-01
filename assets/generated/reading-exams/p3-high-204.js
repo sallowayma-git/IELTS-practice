@@ -4,7 +4,8 @@
   "meta": {
     "title": "When people are ‘deaf’ to music 失乐症【高】",
     "category": "P3",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -9,11 +9,12 @@
   "meta": {
     "title": "Looking at daily life in ancient Rome  古罗马的日常",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "low",
     "pdfFilename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
     "legacyFilename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -13,7 +13,8 @@
     "pdfFilename": "129. P1 - The Slow Food Organization 慢食运动组织.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
     "legacyFilename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

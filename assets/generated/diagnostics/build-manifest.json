@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:1824d7239f9cd9245b556102fb233cd4a8d0d06ad5fd87910f7b3cb4f72bac4a",
+  "buildId": "sha256:2b16d2103085876a27ae1c43497c9bff6d2175fc0845ae9d7d05117d0461c451",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -71,6 +71,8 @@
     "assets/generated/reading-exams/p1-medium-20.js",
     "assets/generated/reading-exams/p1-medium-246.js",
     "assets/generated/reading-exams/p1-medium-247.js",
+    "assets/generated/reading-exams/p1-medium-249.js",
+    "assets/generated/reading-exams/p1-medium-251.js",
     "assets/generated/reading-exams/p1-medium-29.js",
     "assets/generated/reading-exams/p1-medium-33.js",
     "assets/generated/reading-exams/p1-medium-57.js",
@@ -106,6 +108,7 @@
     "assets/generated/reading-exams/p2-high-236.js",
     "assets/generated/reading-exams/p2-high-239.js",
     "assets/generated/reading-exams/p2-high-25.js",
+    "assets/generated/reading-exams/p2-high-250.js",
     "assets/generated/reading-exams/p2-high-91.js",
     "assets/generated/reading-exams/p2-low-051.js",
     "assets/generated/reading-exams/p2-low-06.js",
@@ -241,6 +244,7 @@
     "assets/generated/reading-exams/p3-medium-22.js",
     "assets/generated/reading-exams/p3-medium-241.js",
     "assets/generated/reading-exams/p3-medium-244.js",
+    "assets/generated/reading-exams/p3-medium-248.js",
     "assets/generated/reading-exams/p3-medium-66.js",
     "assets/generated/reading-explanations/p1-high-01.js",
     "assets/generated/reading-explanations/p1-high-05.js",
@@ -309,6 +313,8 @@
     "assets/generated/reading-explanations/p1-medium-20.js",
     "assets/generated/reading-explanations/p1-medium-246.js",
     "assets/generated/reading-explanations/p1-medium-247.js",
+    "assets/generated/reading-explanations/p1-medium-249.js",
+    "assets/generated/reading-explanations/p1-medium-251.js",
     "assets/generated/reading-explanations/p1-medium-29.js",
     "assets/generated/reading-explanations/p1-medium-33.js",
     "assets/generated/reading-explanations/p1-medium-57.js",
@@ -344,6 +350,7 @@
     "assets/generated/reading-explanations/p2-high-236.js",
     "assets/generated/reading-explanations/p2-high-239.js",
     "assets/generated/reading-explanations/p2-high-25.js",
+    "assets/generated/reading-explanations/p2-high-250.js",
     "assets/generated/reading-explanations/p2-high-91.js",
     "assets/generated/reading-explanations/p2-low-051.js",
     "assets/generated/reading-explanations/p2-low-06.js",
@@ -478,6 +485,7 @@
     "assets/generated/reading-explanations/p3-medium-22.js",
     "assets/generated/reading-explanations/p3-medium-241.js",
     "assets/generated/reading-explanations/p3-medium-244.js",
+    "assets/generated/reading-explanations/p3-medium-248.js",
     "assets/generated/reading-explanations/p3-medium-66.js"
   ],
   "identity": "sha256 of sorted path/content-hash pairs; normalized unstamped bundles, bootstrap sources, entry skeleton, styles, vendor, images and build recipes",
@@ -488,7 +496,7 @@
     },
     {
       "path": "assets/generated/reading-exams/manifest.js",
-      "sha256": "9e7604f97df92f735ad4f94c4cc5996593b9d21abbdbcc77a61b61eaafa24b9e"
+      "sha256": "bda30fa8c2fad55774a1d8dbed4d872cdb5885f730a6eeab6a15da9083bee1eb"
     },
     {
       "path": "assets/generated/reading-exams/reading-practice-unified.html",
@@ -496,7 +504,7 @@
     },
     {
       "path": "assets/generated/reading-explanations/manifest.js",
-      "sha256": "a3394f3d52da7f9cc1421026393a3ef6299872ae720fb3f641f85a490bf5cfed"
+      "sha256": "16a47a835d9e9b26aa78223546502703e5f2d082ce7aeedd07e63f823f3970b2"
     },
     {
       "path": "assets/images/favicon.svg",
@@ -548,7 +556,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "d717f6b8bfb19ce9087e11f1b463d6584a1c747c87c5b5c8588598fe9f00df50"
+      "sha256": "f080ce782c7e5f70719ee2a2d2539dceec7310b44aa81d509733b6f72a8f60eb"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -804,37 +812,37 @@
       {
         "source": "assets/generated/reading-exams/manifest.js",
         "startLine": 14118,
-        "endLine": 17742,
+        "endLine": 21745,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 17746,
-        "endLine": 17783,
+        "startLine": 21749,
+        "endLine": 21786,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 17787,
-        "endLine": 17824,
+        "startLine": 21790,
+        "endLine": 21827,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/state-service.js",
-        "startLine": 17828,
-        "endLine": 18494,
+        "startLine": 21831,
+        "endLine": 22497,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryDiscovery.js",
-        "startLine": 18498,
-        "endLine": 19212,
+        "startLine": 22501,
+        "endLine": 23215,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryManager.js",
-        "startLine": 19216,
-        "endLine": 20144,
+        "startLine": 23219,
+        "endLine": 24147,
         "sourceStartLine": 1
       }
     ],

@@ -13,7 +13,8 @@
     "pdfFilename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
     "legacyFilename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

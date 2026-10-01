@@ -9,11 +9,12 @@
   "meta": {
     "title": "Carnivorous plants 食虫植物",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "153. P1 - Carnivorous plants 食虫植物.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
     "legacyFilename": "153. P1 - Carnivorous plants 食虫植物.html",
-    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+    "questionIntroHtml": "<h3>Questions 1–5</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

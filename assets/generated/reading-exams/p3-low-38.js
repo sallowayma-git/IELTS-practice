@@ -9,11 +9,12 @@
   "meta": {
     "title": "Research into the effects of different teaching styles 教学风格研究",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/",
     "legacyFilename": "132. P3 - Research into the effects of different teaching styles 教学风格研究.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

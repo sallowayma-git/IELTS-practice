@@ -9,11 +9,12 @@
   "meta": {
     "title": "Urban Regeneration 柏林公园改造",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "176. P2 - Urban Regeneration 柏林公园改造.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
     "legacyFilename": "176. P2 - Urban Regeneration 柏林公园改造.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

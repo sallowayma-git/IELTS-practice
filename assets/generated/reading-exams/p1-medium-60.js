@@ -13,7 +13,8 @@
     "pdfFilename": "152. P1 - Sorry—who are you 脸盲症【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
     "legacyFilename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
-    "questionIntroHtml": "<h3>Questions 1–7</h3>"
+    "questionIntroHtml": "<h3>Questions 1–7</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

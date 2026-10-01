@@ -18,7 +18,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/1. P1 - A Brief History of Tea 茶叶简史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b011.new-005.a-brief-history-of-tea",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-low-02": {
     "examId": "p1-low-02",
@@ -33,7 +47,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-03": {
     "examId": "p3-high-03",
@@ -48,7 +74,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/100. P3 - What makes a musical expert_ 音乐天赋.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-015.musical-expert",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-04": {
     "examId": "p3-high-04",
@@ -63,7 +107,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/101. P3 - Yawning 打哈欠.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p3-068.yawning",
+    "questionTypes": [
+      "summary-completion",
+      "multiple-choice",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-high-05": {
     "examId": "p1-high-05",
@@ -78,7 +140,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-006.katherine-mansfield",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-06": {
     "examId": "p2-low-06",
@@ -86,14 +162,32 @@
     "script": "./p2-low-06.js",
     "title": "Biomimicry 仿生学",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
     "filename": "103. P2 - Biomimicry 仿生学.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-052.biomimicry",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-07": {
     "examId": "p3-low-07",
@@ -108,7 +202,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/104. P3 - Star Performers 明星员工.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-038.star-performers",
+    "questionTypes": [
+      "matching-information",
+      "short-answer",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "short-answer": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-08": {
     "examId": "p2-low-08",
@@ -123,7 +235,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-09": {
     "examId": "p2-high-09",
@@ -138,7 +266,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/106. P2 - Early Approaches to Organisational Design 组织设计.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-029.organisational-design",
+    "questionTypes": [
+      "multiple-choice",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-10": {
     "examId": "p2-medium-10",
@@ -146,14 +288,32 @@
     "script": "./p2-medium-10.js",
     "title": "A study of western celebrity 西方名人",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/107. P2 - A study of western celebrity 西方名人【次】/",
     "filename": "107. P2 - A study of western celebrity 西方名人【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/107. P2 - A study of western celebrity 西方名人.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-017.western-celebrity",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-11": {
     "examId": "p1-low-11",
@@ -168,7 +328,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/108. P1 - Bovids 牛科动物.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-12": {
     "examId": "p3-low-12",
@@ -183,7 +359,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/109. P3 - Humanities and the health professional 人文医学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-low-13": {
     "examId": "p1-low-13",
@@ -198,7 +390,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "diagram-labelling",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "diagram-labelling": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-14": {
     "examId": "p2-high-14",
@@ -213,7 +417,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/110. P2 - Should space be explored by robots or by humans 人机太空探索.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-15": {
     "examId": "p3-high-15",
@@ -228,7 +448,29 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/111. P3 - Whale Culture 鲸鱼文化.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-033.whale-culture",
+    "questionTypes": [
+      "yes-no-not-given",
+      "summary-completion",
+      "multiple-choice",
+      "matching-information"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-16": {
     "examId": "p2-high-16",
@@ -236,14 +478,32 @@
     "script": "./p2-high-16.js",
     "title": "The Importance of Law 法律的意义",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
     "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-015.the-importance-of-law",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-17": {
     "examId": "p2-high-17",
@@ -251,14 +511,32 @@
     "script": "./p2-high-17.js",
     "title": "Herbal Medicines 新西兰草药",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
     "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-039.herbal-medicines",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-medium-18": {
     "examId": "p3-medium-18",
@@ -273,7 +551,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/114. P3 - Unlocking the mystery of dreams 梦的解析.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "multiple-choice",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-19": {
     "examId": "p2-high-19",
@@ -288,7 +582,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-021.mind-music",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-medium-20": {
     "examId": "p1-medium-20",
@@ -303,7 +615,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.plastics",
+    "questionTypes": [
+      "table-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-21": {
     "examId": "p2-high-21",
@@ -311,14 +637,32 @@
     "script": "./p2-high-21.js",
     "title": "Stress Less 工作压力",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/",
     "filename": "117. P2 - Stress Less 工作压力【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/117. P2 - Stress Less 工作压力.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-061.stress-less",
+    "questionTypes": [
+      "matching-features",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-22": {
     "examId": "p3-medium-22",
@@ -326,14 +670,36 @@
     "script": "./p3-medium-22.js",
     "title": "Neanderthal Technology 尼安德特人的生存技艺",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
     "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-034.neanderthal-technology",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-23": {
     "examId": "p2-high-23",
@@ -348,7 +714,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-030.the-constant-evolution-of-the-humble-tomato",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-24": {
     "examId": "p1-high-24",
@@ -363,7 +747,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/12. P1 - Rubber 橡胶.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b011.new-006.rubber",
+    "questionTypes": [
+      "true-false-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-25": {
     "examId": "p2-high-25",
@@ -378,7 +776,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-004.eating-less",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-27": {
     "examId": "p1-high-27",
@@ -393,7 +809,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/122. P1 - Footprints in the Mud 恐龙脚印.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-033.footprints-in-the-mud",
+    "questionTypes": [
+      "true-false-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-28": {
     "examId": "p3-low-28",
@@ -408,7 +838,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/123. P3 - Images and Places 风景与印记.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-051.images-and-places",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p1-medium-29": {
     "examId": "p1-medium-29",
@@ -416,14 +864,28 @@
     "script": "./p1-medium-29.js",
     "title": "The extinction of the cave bear 洞熊的灭绝",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
     "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-037.extinction-cave-bear",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-30": {
     "examId": "p1-low-30",
@@ -438,7 +900,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/125. P1 - Investing in the Future 投资未来.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-034.investing-in-the-future",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-31": {
     "examId": "p1-high-31",
@@ -453,7 +929,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/126. P1 - Dolls through the ages 玩偶的变迁史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-32": {
     "examId": "p3-high-32",
@@ -468,7 +956,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/127. P3 - Science and Filmmaking 电影科学(CGI).pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-medium-33": {
     "examId": "p1-medium-33",
@@ -483,7 +987,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/128. P1 - The Pyramid of Cestius 罗马金字塔.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-028.the-pyramid-of-cestius",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-34": {
     "examId": "p1-low-34",
@@ -491,14 +1009,32 @@
     "script": "./p1-low-34.js",
     "title": "The Slow Food Organization 慢食运动组织",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
     "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-040.slow-food-organization",
+    "questionTypes": [
+      "true-false-not-given",
+      "table-completion",
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "table-completion": [
+        "text_entry"
+      ],
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-35": {
     "examId": "p1-low-35",
@@ -513,7 +1049,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/13. P1 - Sweet Trouble 澳洲制糖产业.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "matching-features",
+      "multiple-choice",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-36": {
     "examId": "p3-low-36",
@@ -528,7 +1080,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-007.mona",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-37": {
     "examId": "p2-low-37",
@@ -536,14 +1106,32 @@
     "script": "./p2-low-37.js",
     "title": "Keeping the water away 洪水防控",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/",
     "filename": "131. P2 - Keeping the water away 洪水防控.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/131. P2 - Keeping the water away 洪水防控.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-012.keeping-the-water-away",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-38": {
     "examId": "p3-low-38",
@@ -558,7 +1146,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-027.research-teaching-styles",
+    "questionTypes": [
+      "summary-completion",
+      "matching-features",
+      "matching-information"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-39": {
     "examId": "p2-low-39",
@@ -573,7 +1179,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-042.how-to-be-happy",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-40": {
     "examId": "p1-low-40",
@@ -588,7 +1212,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-054.dyes-fabric-dyeing",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-41": {
     "examId": "p2-low-41",
@@ -596,14 +1234,32 @@
     "script": "./p2-low-41.js",
     "title": "The Myth of the Eight-hour Sleep 八小时睡眠",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/",
     "filename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-043.myth-eight-hour-sleep",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-42": {
     "examId": "p3-low-42",
@@ -611,14 +1267,32 @@
     "script": "./p3-low-42.js",
     "title": "The peopling of Patagonia 巴塔哥尼亚的人类迁徙",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/",
     "filename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-047.peopling-patagonia",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-43": {
     "examId": "p3-low-43",
@@ -633,7 +1307,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/137. P3 - What is social history 社会史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-039.social-history",
+    "questionTypes": [
+      "summary-completion",
+      "yes-no-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-44": {
     "examId": "p3-low-44",
@@ -648,7 +1340,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/138. P3 - Conformity 从众心理.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "summary-completion",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-45": {
     "examId": "p1-low-45",
@@ -663,7 +1371,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-011.sleep-study",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-46": {
     "examId": "p1-low-46",
@@ -678,7 +1400,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-017.sydney-opera-house",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-47": {
     "examId": "p1-low-47",
@@ -693,7 +1429,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-013.burgess-shale",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-48": {
     "examId": "p1-low-48",
@@ -708,7 +1462,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/141. P1 - The history of the guitar 吉他的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-49": {
     "examId": "p2-low-49",
@@ -723,7 +1489,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/142. P2 - Born to Trade 交易的本能.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p2-062.born-to-trade",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-50": {
     "examId": "p2-low-50",
@@ -738,7 +1522,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-022.jellyfish-dominant-species",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-51": {
     "examId": "p2-low-51",
@@ -753,7 +1555,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "summary-completion",
+      "table-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "table-completion": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-low-52": {
     "examId": "p1-low-52",
@@ -761,14 +1579,28 @@
     "script": "./p1-low-52.js",
     "title": "Caral an ancient South American city 卡拉尔古城",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
     "filename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-047.caral",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-53": {
     "examId": "p1-low-53",
@@ -783,7 +1615,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.olive-oil",
+    "questionTypes": [
+      "true-false-not-given",
+      "flow-chart",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-54": {
     "examId": "p3-low-54",
@@ -798,7 +1648,20 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/147. P3 - Movement Underwater 水下运动.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "diagram-labelling"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice",
+        "text_entry"
+      ],
+      "diagram-labelling": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-55": {
     "examId": "p3-low-55",
@@ -806,14 +1669,32 @@
     "script": "./p3-low-55.js",
     "title": "Improving Patient Safety 药品包装设计",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
     "filename": "148. P3 - Improving Patient Safety 药品包装设计.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-032.patient-safety",
+    "questionTypes": [
+      "matching-features",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-56": {
     "examId": "p3-low-56",
@@ -828,7 +1709,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/149. P3 - Learning to be bilingual 双语学习.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-medium-57": {
     "examId": "p1-medium-57",
@@ -843,7 +1740,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-031.blockbuster-phenomenon",
+    "questionTypes": [
+      "matching-information",
+      "sentence-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p2-medium-58": {
     "examId": "p2-medium-58",
@@ -851,14 +1766,32 @@
     "script": "./p2-medium-58.js",
     "title": "Insect Decision-Making 昆虫决策",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/",
     "filename": "150. P2 - Insect Decision-Making 昆虫决策【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/150. P2 - Insect Decision-Making 昆虫决策.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-053.insect-decision-making",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-59": {
     "examId": "p3-low-59",
@@ -873,7 +1806,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/151. P3 - Inside the mind of a fan 观赛心境.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p3-048.inside-the-mind-of-a-fan",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-medium-60": {
     "examId": "p1-medium-60",
@@ -881,14 +1832,28 @@
     "script": "./p1-medium-60.js",
     "title": "Sorry—who are you 脸盲症",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
     "filename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-024.sorry-who-are-you",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-61": {
     "examId": "p1-low-61",
@@ -903,7 +1868,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-041.carnivorous-plants",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-62": {
     "examId": "p2-low-62",
@@ -918,7 +1897,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/154. P2 - The purpose of facial expressions 面部表情.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-medium-63": {
     "examId": "p1-medium-63",
@@ -926,14 +1921,28 @@
     "script": "./p1-medium-63.js",
     "title": "A Brief History of Humans and Food 人类食物的历史",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
     "filename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-021.humans-food",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-64": {
     "examId": "p2-low-64",
@@ -941,14 +1950,32 @@
     "script": "./p2-low-64.js",
     "title": "New filter promises clean water for millions 新型泥土净水器",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/",
     "filename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.filter",
+    "questionTypes": [
+      "flow-chart",
+      "true-false-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "flow-chart": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-65": {
     "examId": "p2-low-65",
@@ -963,7 +1990,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/157. P2 - Boring Buildings 无聊建筑.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-66": {
     "examId": "p3-medium-66",
@@ -971,14 +2014,28 @@
     "script": "./p3-medium-66.js",
     "title": "Mercator - The Map Maker 地理制图师",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
     "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.mercator-the-map-maker",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-67": {
     "examId": "p1-low-67",
@@ -986,14 +2043,32 @@
     "script": "./p1-low-67.js",
     "title": "Scented Plants 植物的味道",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
     "filename": "159. P1 - Scented Plants 植物的味道.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/159. P1 - Scented Plants 植物的味道.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-063.scented-plants",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-68": {
     "examId": "p1-low-68",
@@ -1008,7 +2083,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/16. P1 - The Clipper Races 帆船竞速.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-045.clipper-races",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-69": {
     "examId": "p1-low-69",
@@ -1016,14 +2105,28 @@
     "script": "./p1-low-69.js",
     "title": "An important language development 楔形文字",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
     "filename": "160. P1 - An important language development 楔形文字.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-043.important-language-development",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-70": {
     "examId": "p1-low-70",
@@ -1031,14 +2134,28 @@
     "script": "./p1-low-70.js",
     "title": "Fluorescence Deep sea discovery深海发光生物研究",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/",
     "filename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-058.deep-sea-discovery",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-71": {
     "examId": "p3-low-71",
@@ -1046,14 +2163,32 @@
     "script": "./p3-low-71.js",
     "title": "Sea Change for Salinity 土地盐碱化",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
     "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-054.sea-change-salinity",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-72": {
     "examId": "p1-low-72",
@@ -1061,14 +2196,28 @@
     "script": "./p1-low-72.js",
     "title": "How to find your way out of a food desert 城市食物荒漠",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/",
     "filename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-042.food-desert",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-73": {
     "examId": "p2-low-73",
@@ -1076,14 +2225,32 @@
     "script": "./p2-low-73.js",
     "title": "The Power of Smell 嗅觉的力量",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "低频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/",
     "filename": "164. P2 - The Power of Smell 嗅觉的力量.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-036.power-of-smell",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-74": {
     "examId": "p3-low-74",
@@ -1098,7 +2265,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/165. P3 - The Placebo Effect5 安慰剂效应.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "multiple-choice",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-75": {
     "examId": "p2-low-75",
@@ -1113,7 +2296,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/166. P2 - Lean Production Innovation 精益生产.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-76": {
     "examId": "p3-low-76",
@@ -1128,7 +2323,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-77": {
     "examId": "p2-low-77",
@@ -1143,7 +2350,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p2-023.mammoth-kill",
+    "questionTypes": [
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-78": {
     "examId": "p3-low-78",
@@ -1158,7 +2379,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p3-049.the-costs-of-brand-loyalty",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-high-79": {
     "examId": "p1-high-79",
@@ -1173,7 +2412,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/17. P1 - The Development of The Silk Industry 丝绸产业发展.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-038.silk-industry",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-80": {
     "examId": "p1-low-80",
@@ -1188,7 +2441,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/170. P1 - The unsung sense 被低估的嗅觉.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-048.unsung-sense",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-81": {
     "examId": "p1-low-81",
@@ -1203,7 +2470,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/171. P1 - Salt  盐的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "sentence-completion",
+      "diagram-labelling"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "diagram-labelling": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-82": {
     "examId": "p1-high-82",
@@ -1211,14 +2494,28 @@
     "script": "./p1-high-82.js",
     "title": "Think Small 微观科学",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
     "filename": "172. P1 - Think Small 微观科学.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/172. P1 - Think Small 微观科学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-055.think-small",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-83": {
     "examId": "p3-low-83",
@@ -1233,7 +2530,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/173. P3(1018纸笔 ) - Looking for inspiration 寻找灵感.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "matching-features",
+      "summary-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-84": {
     "examId": "p1-low-84",
@@ -1248,7 +2561,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/174. P1 - Why good ideas fail TF公司.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-049.why-good-ideas-fail",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-85": {
     "examId": "p3-low-85",
@@ -1263,7 +2590,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/175. P3 - Music soothes and awes 音乐疗愈.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-86": {
     "examId": "p2-medium-86",
@@ -1271,14 +2614,32 @@
     "script": "./p2-medium-86.js",
     "title": "Urban Regeneration 柏林公园改造",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
     "filename": "176. P2 - Urban Regeneration 柏林公园改造.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-037.urban-regeneration",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-87": {
     "examId": "p2-low-87",
@@ -1293,7 +2654,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/177. P2（1025纸笔）[Pretest]  - Speaking of Nothing 闲聊的意义.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-88": {
     "examId": "p3-low-88",
@@ -1308,7 +2685,27 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/178. P3（1025纸笔）[Pretest]  - Translating a key to international understanding 翻译的艺术.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p3-high-89": {
     "examId": "p3-high-89",
@@ -1316,14 +2713,32 @@
     "script": "./p3-high-89.js",
     "title": "Looking at daily life in ancient Rome  古罗马的日常",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
     "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-050.ancient-rome",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-high-90": {
     "examId": "p1-high-90",
@@ -1338,7 +2753,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/18. P1 - The History of Tea 茶叶的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-91": {
     "examId": "p2-high-91",
@@ -1346,14 +2773,32 @@
     "script": "./p2-high-91.js",
     "title": "Australia’s camouflaged creatures 澳洲伪装生物",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/",
     "filename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-028.camouflaged-creatures",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-92": {
     "examId": "p1-high-92",
@@ -1368,7 +2813,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/181. P1 - Dust and the American West 美国西部尘埃.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-027.dust-american-west",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-93": {
     "examId": "p2-medium-93",
@@ -1376,14 +2835,32 @@
     "script": "./p2-medium-93.js",
     "title": "Antarctic research 南极考察",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
     "filename": "182. P2 - Antarctic research 南极考察.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-047.antarctic-research",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-94": {
     "examId": "p2-low-94",
@@ -1398,7 +2875,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-048.importance-being-playful",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-95": {
     "examId": "p3-low-95",
@@ -1413,7 +2908,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-006.strange-world-sight",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-96": {
     "examId": "p2-low-96",
@@ -1428,7 +2941,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-97": {
     "examId": "p3-low-97",
@@ -1443,7 +2972,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/186. P3 - Saving languages 拯救濒危语言.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-98": {
     "examId": "p3-low-98",
@@ -1458,7 +3003,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-023.petrol-power",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-99": {
     "examId": "p1-low-99",
@@ -1466,14 +3029,28 @@
     "script": "./p1-low-99.js",
     "title": "The history of the bar code 条形码的历史",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/",
     "filename": "188. P1 - The history of the bar code 条形码的历史.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/188. P1 - The history of the bar code 条形码的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-035.history-bar-code",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-100": {
     "examId": "p3-low-100",
@@ -1488,7 +3065,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/189. P3 - Mirror 镜子研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "short-answer": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-high-101": {
     "examId": "p1-high-101",
@@ -1503,7 +3096,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/19. P1 - The Impact of the Potato 土豆的影响.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-102": {
     "examId": "p2-low-102",
@@ -1518,7 +3123,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/190. P2 - The power of music 音乐的力量.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-103": {
     "examId": "p2-low-103",
@@ -1533,7 +3154,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/191. P2 - The economic effect of climate 气候对经济的影响.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-104": {
     "examId": "p2-low-104",
@@ -1541,14 +3174,32 @@
     "script": "./p2-low-104.js",
     "title": "1115纸笔Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
     "filename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-high-105": {
     "examId": "p1-high-105",
@@ -1563,7 +3214,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/2. P1 - A survivor’s story 新西兰猫头鹰.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-003.survivor-story",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-106": {
     "examId": "p1-low-106",
@@ -1571,14 +3236,28 @@
     "script": "./p1-low-106.js",
     "title": "The Importance of Business Cards 名片的重要性",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/",
     "filename": "20. P1 - The Importance of Business Cards 名片的重要性.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/20. P1 - The Importance of Business Cards 名片的重要性.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-036.business-cards",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-107": {
     "examId": "p1-low-107",
@@ -1593,7 +3272,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b010.p1-079.the-life-of-beatrix-potter",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-108": {
     "examId": "p1-low-108",
@@ -1608,7 +3301,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/22. P1 - The nature of Yawning 打哈欠的本质.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-109": {
     "examId": "p1-low-109",
@@ -1623,7 +3328,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/23. P1 - The Origin of Paper 造纸术起源.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b011.new-010.the-origin-of-paper",
+    "questionTypes": [
+      "true-false-not-given",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-110": {
     "examId": "p1-high-110",
@@ -1638,7 +3357,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/24. P1 - The Pearls 珍珠.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-111": {
     "examId": "p1-low-111",
@@ -1646,14 +3381,28 @@
     "script": "./p1-low-111.js",
     "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
     "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-064.rise-fall-detective-stories",
+    "questionTypes": [
+      "true-false-not-given",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-112": {
     "examId": "p1-low-112",
@@ -1661,14 +3410,28 @@
     "script": "./p1-low-112.js",
     "title": "The Tuatara of New Zealand 新西兰蜥蜴",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/",
     "filename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p1-065.tuatara-new-zealand",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-113": {
     "examId": "p1-low-113",
@@ -1676,14 +3439,28 @@
     "script": "./p1-low-113.js",
     "title": "Thomas Young The last man who knew everything 托马斯·杨",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/",
     "filename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-061.the-last-man-who-knew-everything",
+    "questionTypes": [
+      "true-false-not-given",
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-114": {
     "examId": "p1-low-114",
@@ -1691,14 +3468,28 @@
     "script": "./p1-low-114.js",
     "title": "Triumph of the City 城市的胜利",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
     "filename": "28. P1 - Triumph of the City 城市的胜利.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-052.triumph-of-the-city",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-medium-115": {
     "examId": "p1-medium-115",
@@ -1713,7 +3504,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-022.tunnelling-thames",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-116": {
     "examId": "p1-low-116",
@@ -1728,7 +3533,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/3. P1 - Advertising Needs Attention 广告的吸引力.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-medium-117": {
     "examId": "p1-medium-117",
@@ -1743,7 +3560,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/30. P1 - What Lucy Taught Us 露西化石.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-018.what-lucy-taught-us",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-118": {
     "examId": "p1-high-118",
@@ -1758,7 +3589,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/31. P1 - William Gilbert and Magnetism 电磁学之父.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "true-false-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p1-medium-119": {
     "examId": "p1-medium-119",
@@ -1766,14 +3613,28 @@
     "script": "./p1-medium-119.js",
     "title": "Wood 新西兰木材产业",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "低频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
     "filename": "32. P1 - Wood 新西兰木材产业【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-053.wood",
+    "questionTypes": [
+      "true-false-not-given",
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-120": {
     "examId": "p2-high-120",
@@ -1781,14 +3642,32 @@
     "script": "./p2-high-120.js",
     "title": "A new look for Talbot Park 奥克兰社区改造",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
     "filename": "ai_studio_code (9).html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-014.talbot-park",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-121": {
     "examId": "p2-medium-121",
@@ -1796,14 +3675,32 @@
     "script": "./p2-medium-121.js",
     "title": "A unique golden textile 蜘蛛丝",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/34. P2 - A unique golden textile 蜘蛛丝【次】/",
     "filename": "34. P2 - A unique golden textile 蜘蛛丝【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/34. P2 - A unique golden textile 蜘蛛丝.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-002.golden-textile",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-122": {
     "examId": "p2-low-122",
@@ -1811,14 +3708,32 @@
     "script": "./p2-low-122.js",
     "title": "Biophilic Design 亲自然设计",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
     "filename": "35. P2 - Biophilic Design 亲自然设计.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-040.biophilic-design",
+    "questionTypes": [
+      "matching-information",
+      "sentence-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p2-high-123": {
     "examId": "p2-high-123",
@@ -1826,14 +3741,32 @@
     "script": "./p2-high-123.js",
     "title": "Bird Migration 鸟类迁徙",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
     "filename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-010.bird-migration",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-124": {
     "examId": "p2-high-124",
@@ -1841,14 +3774,32 @@
     "script": "./p2-high-124.js",
     "title": "Corporate Social Responsibility  企业社会责任",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/37. P2 - Corporate Social Responsibility  企业社会责任【高】/",
     "filename": "37. P2 - Corporate Social Responsibility  企业社会责任【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/37. P2 - Corporate Social Responsibility  企业社会责任.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-008.corporate-social-responsibility",
+    "questionTypes": [
+      "heading-matching",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-125": {
     "examId": "p2-low-125",
@@ -1863,7 +3814,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "sentence-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-126": {
     "examId": "p2-medium-126",
@@ -1878,7 +3845,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/39. P2 - How are deserts formed 沙漠成因.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-127": {
     "examId": "p1-low-127",
@@ -1893,7 +3872,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/4. P1 - Ambergris 龙涎香.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.matching-variants.features-main.ambergris",
+    "questionTypes": [
+      "classification",
+      "flow-chart",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "classification": [
+        "option_mapping"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-128": {
     "examId": "p2-high-128",
@@ -1901,14 +3898,32 @@
     "script": "./p2-high-128.js",
     "title": "How Well Do We Concentrate_  多任务处理",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/",
     "filename": "40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-050.how-well-do-people-concentrate",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-129": {
     "examId": "p2-medium-129",
@@ -1923,7 +3938,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/41. P2 - Intelligent behaviour in birds 鸟类智慧行为.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-058.intelligent-behaviour-in-birds",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-130": {
     "examId": "p2-high-130",
@@ -1938,7 +3967,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/42. P2 - Investment in shares versus investment in other assets 回报数据分析.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p2-063.investment-shares-versus-other-assets",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-131": {
     "examId": "p2-high-131",
@@ -1953,7 +4000,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-007.learning-from-the-romans",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-132": {
     "examId": "p2-low-132",
@@ -1968,7 +4033,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/44. P2 - Orientation of Birds 鸟类的定位能力.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "summary-completion",
+      "table-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "table-completion": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-133": {
     "examId": "p2-high-133",
@@ -1983,7 +4064,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/45. P2 - Playing soccer 街头足球.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-006.playing-soccer",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-134": {
     "examId": "p2-high-134",
@@ -1998,7 +4097,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/46. P2 - Roller coaster 过山车.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.diagram.roller",
+    "questionTypes": [
+      "diagram-labelling",
+      "summary-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "diagram-labelling": [
+        "text_entry"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-135": {
     "examId": "p2-low-135",
@@ -2013,7 +4130,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "short-answer",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "short-answer": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-136": {
     "examId": "p2-high-136",
@@ -2028,7 +4161,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/48. P2 - Solving the problem of waste disposal 垃圾处理.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-011.waste-disposal",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-137": {
     "examId": "p2-high-137",
@@ -2036,14 +4187,32 @@
     "script": "./p2-high-137.js",
     "title": "Surviving city life 动物适应城市",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
     "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-046.surviving-city-life",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-low-138": {
     "examId": "p1-low-138",
@@ -2058,7 +4227,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-139": {
     "examId": "p2-high-139",
@@ -2073,7 +4254,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/50. P2 - The conquest of malaria in Italy 意大利疟疾防治.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-033.malaria-italy",
+    "questionTypes": [
+      "summary-completion",
+      "true-false-not-given",
+      "matching-information"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-140": {
     "examId": "p2-low-140",
@@ -2081,14 +4280,32 @@
     "script": "./p2-low-140.js",
     "title": "The dingo debate 澳洲野犬",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/",
     "filename": "51. P2 - The dingo debate 澳洲野犬.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p2-064.the-dingo-debate",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-141": {
     "examId": "p2-high-141",
@@ -2103,7 +4320,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-009.attine-ants",
+    "questionTypes": [
+      "matching-information",
+      "classification",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "classification": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-142": {
     "examId": "p2-low-142",
@@ -2111,14 +4346,32 @@
     "script": "./p2-low-142.js",
     "title": "The fashion industry 时尚产业",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
     "filename": "53. P2 - The fashion industry 时尚产业.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-018.fashion-industry",
+    "questionTypes": [
+      "heading-matching",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p2-low-143": {
     "examId": "p2-low-143",
@@ -2133,7 +4386,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/54. P2 - The impact of invasive species 入侵物种的影响.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-051.invasive-species",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-144": {
     "examId": "p2-medium-144",
@@ -2141,14 +4412,32 @@
     "script": "./p2-medium-144.js",
     "title": "The plan to bring an asteroid to Earth 捕获小行星",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】/",
     "filename": "55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/55. P2 - The plan to bring an asteroid to Earth 捕获小行星.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-034.asteroid-earth",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-145": {
     "examId": "p2-high-145",
@@ -2156,14 +4445,32 @@
     "script": "./p2-high-145.js",
     "title": "The return of monkey life 猴群回归",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/",
     "filename": "56. P2 - The return of monkey life 猴群回归【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/56. P2 - The return of monkey life 猴群回归.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-035.return-monkey-life",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-146": {
     "examId": "p2-medium-146",
@@ -2178,7 +4485,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/57. P2 - The Tasmanian Tiger 袋狼.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-003.tasmanian-tiger",
+    "questionTypes": [
+      "summary-completion",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-low-147": {
     "examId": "p2-low-147",
@@ -2186,14 +4511,32 @@
     "script": "./p2-low-147.js",
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "高频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-low-148": {
     "examId": "p2-low-148",
@@ -2208,7 +4551,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/59. P2 - Why do we need the arts_ 艺术的意义.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p1-low-149": {
     "examId": "p1-low-149",
@@ -2223,7 +4582,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/6. P1 - Categorizing societies 社会分类.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-150": {
     "examId": "p3-high-150",
@@ -2238,7 +4609,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-005.verbal-messages",
+    "questionTypes": [
+      "summary-completion",
+      "yes-no-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-151": {
     "examId": "p3-low-151",
@@ -2253,7 +4642,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p3-064.book-review-the-discovery-of-slowness",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-152": {
     "examId": "p3-medium-152",
@@ -2261,14 +4668,32 @@
     "script": "./p3-medium-152.js",
     "title": "Charles Darwin and Evolutionary Psychology 进化心理学",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/",
     "filename": "62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-018.charles-darwin-evolutionary-psychology",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-153": {
     "examId": "p3-low-153",
@@ -2283,7 +4708,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-154": {
     "examId": "p3-medium-154",
@@ -2298,7 +4739,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/64. P3 - Decisions, Decisions 决策之间.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-155": {
     "examId": "p3-medium-155",
@@ -2313,7 +4770,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-024.class-size",
+    "questionTypes": [
+      "matching-information",
+      "classification"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "classification": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-156": {
     "examId": "p3-high-156",
@@ -2328,7 +4799,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/66. P3 - Elephant Communication 大象交流.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "diagram-labelling",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "diagram-labelling": [
+        "text_entry"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-157": {
     "examId": "p3-high-157",
@@ -2336,14 +4823,32 @@
     "script": "./p3-high-157.js",
     "title": "Flower Power 鲜花的力量(花之力)",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
     "filename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-021.flower-power",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-158": {
     "examId": "p3-low-158",
@@ -2358,7 +4863,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/68. P3 - Game theory 博弈论.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-159": {
     "examId": "p3-high-159",
@@ -2373,7 +4890,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/69. P3 - Grimm’s Fairy Tales 格林童话.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-160": {
     "examId": "p1-low-160",
@@ -2388,7 +4917,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/7. P1 - Chili peppers 辣椒的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "true-false-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-161": {
     "examId": "p3-high-161",
@@ -2396,14 +4937,32 @@
     "script": "./p3-high-161.js",
     "title": "Insect-inspired robots 昆虫机器人",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
     "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-044.insect-inspired-robots",
+    "questionTypes": [
+      "matching-information",
+      "short-answer",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "short-answer": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-medium-162": {
     "examId": "p3-medium-162",
@@ -2418,7 +4977,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-025.jean-piaget",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-163": {
     "examId": "p3-low-163",
@@ -2433,7 +5010,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "short-answer",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "short-answer": [
+        "text_entry"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-164": {
     "examId": "p3-high-164",
@@ -2448,7 +5041,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "summary-completion",
+      "sentence-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-165": {
     "examId": "p3-low-165",
@@ -2463,7 +5072,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-166": {
     "examId": "p3-low-166",
@@ -2478,7 +5103,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-167": {
     "examId": "p3-high-167",
@@ -2493,7 +5134,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/76. P3 - Living dunes 流动沙丘.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-037.living-dunes",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-168": {
     "examId": "p3-medium-168",
@@ -2501,14 +5160,32 @@
     "script": "./p3-medium-168.js",
     "title": "Marketing and the information age 信息时代营销",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
     "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-045.marketing-information-age",
+    "questionTypes": [
+      "matching-information",
+      "yes-no-not-given",
+      "flow-chart"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-169": {
     "examId": "p3-medium-169",
@@ -2523,7 +5200,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-170": {
     "examId": "p3-high-170",
@@ -2531,14 +5224,32 @@
     "script": "./p3-high-170.js",
     "title": "Pacific Navigation and Voyaging 太平洋航海",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/",
     "filename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/79. P3 - Pacific Navigation and Voyaging 太平洋航海.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p3-065.pacific-navigation-and-voyaging",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p1-high-171": {
     "examId": "p1-high-171",
@@ -2553,7 +5264,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/8. P1 - Fishbourne Roman Palace 罗马宫殿.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-010.fishbourne-roman-palace",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-172": {
     "examId": "p3-low-172",
@@ -2568,7 +5293,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-010.rebranding-art-museums",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-173": {
     "examId": "p3-high-173",
@@ -2583,7 +5326,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/81. P3 - Robert Louis Stevenson 苏格兰作家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-008.robert-louis-stevenson",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-174": {
     "examId": "p3-high-174",
@@ -2598,7 +5359,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/82. P3 - Some views on the use of headphones 耳机使用.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-012.headphones",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-175": {
     "examId": "p3-low-175",
@@ -2606,14 +5385,32 @@
     "script": "./p3-low-175.js",
     "title": "Termite Mounds 白蚁丘",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/",
     "filename": "83. P3 - Termite Mounds 白蚁丘.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/83. P3 - Termite Mounds 白蚁丘.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-026.termite-mounds",
+    "questionTypes": [
+      "heading-matching",
+      "diagram-labelling",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "diagram-labelling": [
+        "text_entry"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-176": {
     "examId": "p3-medium-176",
@@ -2628,7 +5425,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/84. P3 - The Analysis of Fear 猴子恐惧实验.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-177": {
     "examId": "p3-medium-177",
@@ -2643,7 +5452,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/85. P3 - The Art of Deception 欺骗的艺术.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-014.art-of-deception",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-178": {
     "examId": "p3-high-178",
@@ -2658,7 +5485,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/86. P3 - The benefits of learning an instrument 学乐器的好处.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-medium-179": {
     "examId": "p3-medium-179",
@@ -2673,7 +5516,15 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/87. P3 - The Exploration of Mars 火星探索.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-180": {
     "examId": "p3-high-180",
@@ -2688,7 +5539,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/88. P3 - The fluoridation controversy 氟化水争议.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-181": {
     "examId": "p3-high-181",
@@ -2703,7 +5570,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/89. P3 - The Fruit Book 果实之书.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "table-completion",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "table-completion": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-medium-182": {
     "examId": "p1-medium-182",
@@ -2718,7 +5597,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/9. P1 - Listening to the Ocean 海洋探测.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p1-039.listening-to-the-ocean",
+    "questionTypes": [
+      "true-false-not-given",
+      "matching-information",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-183": {
     "examId": "p3-medium-183",
@@ -2726,14 +5623,32 @@
     "script": "./p3-medium-183.js",
     "title": "The hazards of multitasking 多任务处理",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/90. P3 - The hazards of multitasking 多任务处理【次】/",
     "filename": "90. P3 - The hazards of multitasking 多任务处理【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/90. P3 - The hazards of multitasking 多任务处理.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p3-066.the-hazards-of-multitasking",
+    "questionTypes": [
+      "matching-features",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-184": {
     "examId": "p3-high-184",
@@ -2748,7 +5663,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.authoring.margaret",
+    "questionTypes": [
+      "yes-no-not-given",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-185": {
     "examId": "p3-medium-185",
@@ -2756,14 +5689,32 @@
     "script": "./p3-medium-185.js",
     "title": "The Pirahã people of Brazil  巴西皮拉罕部落语言",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】/",
     "filename": "92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p3-067.the-piraha-people-of-brazil",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-186": {
     "examId": "p3-low-186",
@@ -2771,14 +5722,32 @@
     "script": "./p3-low-186.js",
     "title": "The Robbers Cave Study (山洞)群体行为实验",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/",
     "filename": "93. P3 - The Robbers Cave Study (山洞)群体行为实验.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p3-046.the-robbers-cave-study",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-187": {
     "examId": "p3-low-187",
@@ -2793,7 +5762,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/94. P3 - The science of sleep 睡眠的科学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "matching-features",
+      "sentence-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-188": {
     "examId": "p3-medium-188",
@@ -2808,7 +5793,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/95. P3 - The Significant Role of Mother Tongue in Education 母语教育.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b011.new-018.the-significant-role-of-mother-tongue-in-education",
+    "questionTypes": [
+      "multiple-choice",
+      "summary-completion",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-189": {
     "examId": "p3-high-189",
@@ -2823,7 +5826,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/96. P3 - The tuatara – past and future 新西兰蜥蜴.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-031.tuatara",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-190": {
     "examId": "p3-low-190",
@@ -2838,7 +5859,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/97. P3 - The value of literary prizes 文学奖项的价值.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-medium-191": {
     "examId": "p3-medium-191",
@@ -2853,7 +5890,15 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-192": {
     "examId": "p3-high-192",
@@ -2868,7 +5913,29 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/99. P3 - Voynich Manuscript 伏尼契手稿.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-001.voynich-manuscript",
+    "questionTypes": [
+      "true-false-not-given",
+      "matching-features",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p1-high-200": {
     "examId": "p1-high-200",
@@ -2883,7 +5950,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-030.airborne-dentists",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-211": {
     "examId": "p1-high-211",
@@ -2898,7 +5979,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/211. P1 - Ahead of its time 新西兰头骨.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-007.ahead-of-its-time",
+    "questionTypes": [
+      "true-false-not-given",
+      "flow-chart",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-216": {
     "examId": "p1-high-216",
@@ -2913,7 +6012,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-005.cane-toad",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-high-194": {
     "examId": "p1-high-194",
@@ -2921,14 +6034,28 @@
     "script": "./p1-high-194.js",
     "title": "The history of the British wool industry 英国羊毛产业的历史",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 2.5,
     "path": "三月/2.P1 次高频/",
     "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-050.british-wool-industry",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-222": {
     "examId": "p2-low-222",
@@ -2943,7 +6070,19 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/222. P2 - Ideal Homes 理想居所.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-low-223": {
     "examId": "p1-low-223",
@@ -2951,14 +6090,28 @@
     "script": "./p1-low-223.js",
     "title": "Effect and Cause 湖泊海啸研究",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "三月/",
     "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b003.p1-051.effect-and-cause",
+    "questionTypes": [
+      "true-false-not-given",
+      "flow-chart"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-201": {
     "examId": "p2-high-201",
@@ -2973,7 +6126,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/201. P2 - Multi-tasking and the brain 大脑与多任务处理.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-031.multi-tasking-and-the-brain",
+    "questionTypes": [
+      "heading-matching",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-217": {
     "examId": "p2-medium-217",
@@ -2988,7 +6159,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/217. P2 - A mechanical friend for children 孩子的机器人朋友.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b007.p2-055.a-mechanical-friend-for-children",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-192": {
     "examId": "p2-high-192",
@@ -3003,7 +6192,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-209": {
     "examId": "p2-medium-209",
@@ -3018,7 +6225,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/209. P2 - Decision Fatigue 决策疲劳.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-049.decision-fatigue",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-medium-213": {
     "examId": "p2-medium-213",
@@ -3033,7 +6258,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/213. P2 - Growing more for less 卫星农业.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-025.growing-more-for-less",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-051": {
     "examId": "p2-low-051",
@@ -3041,14 +6284,32 @@
     "script": "./p2-low-051.js",
     "title": "The dingo debate 澳洲野犬_澳洲野狗",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "低频",
     "difficultyScore": null,
     "path": "三月/4.P2 次高频/",
     "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b008.p2-064.the-dingo-debate",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-058": {
     "examId": "p2-medium-058",
@@ -3056,14 +6317,32 @@
     "script": "./p2-medium-058.js",
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "三月/4.P2 次高频/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-204": {
     "examId": "p3-high-204",
@@ -3078,7 +6357,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/204. P3 - When people are ‘deaf’ to music 失乐症.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-016.deaf-to-music",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-206": {
     "examId": "p3-high-206",
@@ -3093,7 +6390,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-002.australian-landscapes",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-212": {
     "examId": "p3-high-212",
@@ -3108,7 +6423,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/212. P3 - Children’s literature studies today 儿童文学.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-009.childrens-literature",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-218": {
     "examId": "p3-high-218",
@@ -3116,14 +6449,32 @@
     "script": "./p3-high-218.js",
     "title": "The Causes of Linguistic Change 语音的演变",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "三月/5.P3 高频/",
     "filename": "218. P3 - The Causes of Linguistic Change 语音的演变【高】.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/218. P3 - The Causes of Linguistic Change 语音的演变.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-042.causes-linguistic-change",
+    "questionTypes": [
+      "summary-completion",
+      "true-false-not-given",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-219": {
     "examId": "p3-low-219",
@@ -3138,7 +6489,22 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/219. P3 - The origin of language 语言的起源.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-020.origin-language",
+    "questionTypes": [
+      "multiple-choice",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice",
+        "choice_set"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-low-999": {
     "examId": "p3-low-999",
@@ -3146,14 +6512,32 @@
     "script": "./p3-low-999.js",
     "title": "Risk taking",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "三月/5.P3 高频/",
     "filename": "P3 - Risk taking.html",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - Risk taking.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-035.risk-taking",
+    "questionTypes": [
+      "matching-sentence-endings",
+      "matching-information",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-sentence-endings": [
+        "option_mapping"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-197": {
     "examId": "p3-medium-197",
@@ -3168,7 +6552,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/197. P3 - Australia’s Megafauna Controversy 巨兽灭绝.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-040.megafauna",
+    "questionTypes": [
+      "yes-no-not-given",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-198": {
     "examId": "p3-low-198",
@@ -3183,7 +6585,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.matching-variants.features-main.childs-play",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p3-low-078": {
     "examId": "p3-low-078",
@@ -3198,7 +6618,27 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "short-answer",
+      "true-false-not-given",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "short-answer": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-227": {
     "examId": "p1-high-227",
@@ -3213,7 +6653,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-025.whale-goes-to-court",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-225": {
     "examId": "p2-high-225",
@@ -3228,7 +6682,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/225. P2 - The problem of graffiti 涂鸦之困.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.graffiti",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "sentence-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "sentence-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-high-228": {
     "examId": "p3-high-228",
@@ -3243,7 +6715,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-019.on-art-and-artists",
+    "questionTypes": [
+      "matching-information",
+      "matching-features",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-229": {
     "examId": "p1-high-229",
@@ -3258,7 +6748,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.giraffe",
+    "questionTypes": [
+      "true-false-not-given",
+      "table-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "table-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-230": {
     "examId": "p1-high-230",
@@ -3273,7 +6777,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/230. P1 - The History of the Pencil 铅笔的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.pencil.standard",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-high-231": {
     "examId": "p1-high-231",
@@ -3288,7 +6806,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/231. P1 - The History of the Pencil 铅笔的历史（流程图版）.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.pencil.flow-chart",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given",
+      "flow-chart"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-232": {
     "examId": "p2-high-232",
@@ -3303,7 +6839,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.origin-and-development-of-applause",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-high-233": {
     "examId": "p2-high-233",
@@ -3318,7 +6872,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/233. P2 - Why don’t we sleep 失眠的原因.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b009.p2-073.why-don-t-we-sleep",
+    "questionTypes": [
+      "summary-completion",
+      "matching-information",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-234": {
     "examId": "p2-high-234",
@@ -3333,7 +6905,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/234. P2 - The Secret Language of Plants 植物交流.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-020.plants-talk",
+    "questionTypes": [
+      "heading-matching",
+      "summary-completion",
+      "matching-features"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ]
+    }
   },
   "p3-high-221": {
     "examId": "p3-high-221",
@@ -3341,14 +6931,32 @@
     "script": "./p3-high-221.js",
     "title": "The Animal Connection 动物联结",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "221. P3 - The Animal Connection 动物联结.pdf",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/221. P3 - The Animal Connection 动物联结.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-055.animal-connection",
+    "questionTypes": [
+      "yes-no-not-given",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p2-high-235": {
     "examId": "p2-high-235",
@@ -3356,14 +6964,32 @@
     "script": "./p2-high-235.js",
     "title": "The return of the black-footed ferret 黑足鼬",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "ReadingPractice/PDF/",
     "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-013.ferret",
+    "questionTypes": [
+      "sentence-completion",
+      "matching-features",
+      "matching-information"
+    ],
+    "questionTypeDetails": {
+      "sentence-completion": [
+        "text_entry"
+      ],
+      "matching-features": [
+        "option_mapping"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-236": {
     "examId": "p2-high-236",
@@ -3378,7 +7004,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P2 - War of the Plants.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-044.war-of-the-plants",
+    "questionTypes": [
+      "matching-information",
+      "true-false-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-high-229": {
     "examId": "p3-high-229",
@@ -3386,14 +7030,32 @@
     "script": "./p3-high-229.js",
     "title": "All in the family 兄弟姐妹的影响",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-004.all-in-family",
+    "questionTypes": [
+      "yes-no-not-given",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   },
   "p2-high-239": {
     "examId": "p2-high-239",
@@ -3408,7 +7070,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-038.nanotechnology",
+    "questionTypes": [
+      "summary-completion",
+      "matching-information",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p2-low-240": {
     "examId": "p2-low-240",
@@ -3423,7 +7103,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P2 - Coins – the first form of money.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-045.coins-first-money",
+    "questionTypes": [
+      "heading-matching",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "heading-matching": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-high-240": {
     "examId": "p1-high-240",
@@ -3431,14 +7129,28 @@
     "script": "./p1-high-240.js",
     "title": "The Origins of Weather Forecasting 天气预报",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "ReadingPractice/PDF/",
     "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b002.p1-026.weather-forecasting",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-low-242": {
     "examId": "p2-low-242",
@@ -3453,7 +7165,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b004.p2-001.walking-and-shoes",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p3-low-240": {
     "examId": "p3-low-240",
@@ -3468,7 +7198,23 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "questionTypes": [
+      "summary-completion",
+      "yes-no-not-given",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ]
+    }
   },
   "p3-medium-241": {
     "examId": "p3-medium-241",
@@ -3476,14 +7222,32 @@
     "script": "./p3-medium-241.js",
     "title": "Who looks after the children in today's Britain? 育儿分工",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "低频",
     "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - Who looks after the children in today's Britain.pdf",
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-036.who-looks-after-children",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-243": {
     "examId": "p2-medium-243",
@@ -3498,7 +7262,25 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b005.p2-054.internal-body-clock",
+    "questionTypes": [
+      "matching-information",
+      "summary-completion",
+      "multiple-choice"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ]
+    }
   },
   "p3-medium-244": {
     "examId": "p3-medium-244",
@@ -3513,7 +7295,21 @@
     "hasHtml": true,
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b006.p3-053.look-who-was-talking",
+    "questionTypes": [
+      "matching-features",
+      "yes-no-not-given"
+    ],
+    "questionTypeDetails": {
+      "matching-features": [
+        "option_mapping"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p2-medium-245": {
     "examId": "p2-medium-245",
@@ -3521,14 +7317,36 @@
     "script": "./p2-medium-245.js",
     "title": "Understanding climate change 理解气候变化",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "低频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
     "hasHtml": true,
     "hasPdf": false,
     "pdfFilename": "",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.climate",
+    "questionTypes": [
+      "summary-completion",
+      "table-completion",
+      "multiple-choice",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "summary-completion": [
+        "text_entry"
+      ],
+      "table-completion": [
+        "text_entry"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
   },
   "p1-medium-246": {
     "examId": "p1-medium-246",
@@ -3543,7 +7361,21 @@
     "hasHtml": true,
     "hasPdf": false,
     "pdfFilename": "",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.socotra-island",
+    "questionTypes": [
+      "true-false-not-given",
+      "note-completion"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "note-completion": [
+        "text_entry"
+      ]
+    }
   },
   "p1-medium-247": {
     "examId": "p1-medium-247",
@@ -3558,7 +7390,25 @@
     "hasHtml": true,
     "hasPdf": false,
     "pdfFilename": "",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.castle",
+    "questionTypes": [
+      "true-false-not-given",
+      "multiple-choice",
+      "flow-chart"
+    ],
+    "questionTypeDetails": {
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "flow-chart": [
+        "text_entry"
+      ]
+    }
   },
   "p2-medium-248": {
     "examId": "p2-medium-248",
@@ -3566,24 +7416,176 @@
     "script": "./p2-medium-248.js",
     "title": "Introduction to a book about the assessment of carbon footprints 碳足迹",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
     "hasHtml": true,
     "hasPdf": false,
     "pdfFilename": "",
-    "sourceKind": "generated-reading"
+    "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-10",
+    "zyzPassageId": "passage.b011.new-014.introduction-to-a-book-about-the-assessment-of-carbon-footprints",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
+  },
+  "p3-medium-248": {
+    "examId": "p3-medium-248",
+    "dataKey": "p3-medium-248",
+    "script": "./p3-medium-248.js",
+    "title": "Marketing and Mind Control 营销心理学",
+    "category": "P3",
+    "frequency": "中频",
+    "difficultyScore": 4.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading",
+    "zyzPassageId": "passage.b009.p3-073.marketing-and-mind-control",
+    "frequencyMonth": "2026-10",
+    "questionTypes": [
+      "multiple-choice",
+      "yes-no-not-given",
+      "matching-sentence-endings"
+    ],
+    "questionTypeDetails": {
+      "multiple-choice": [
+        "single_choice"
+      ],
+      "yes-no-not-given": [
+        "single_choice"
+      ],
+      "matching-sentence-endings": [
+        "option_mapping"
+      ]
+    }
+  },
+  "p1-medium-249": {
+    "examId": "p1-medium-249",
+    "dataKey": "p1-medium-249",
+    "script": "./p1-medium-249.js",
+    "title": "Mystery Drawing 达芬奇画作",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 2.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading",
+    "zyzPassageId": "passage.b009.p1-070.mystery-drawing",
+    "frequencyMonth": "2026-10",
+    "questionTypes": [
+      "note-completion",
+      "true-false-not-given"
+    ],
+    "questionTypeDetails": {
+      "note-completion": [
+        "text_entry"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ]
+    }
+  },
+  "p2-high-250": {
+    "examId": "p2-high-250",
+    "dataKey": "p2-high-250",
+    "script": "./p2-high-250.js",
+    "title": "Seeing in the Sea 海中视觉",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading",
+    "zyzPassageId": "passage.b007.p2-060.seeing-in-the-sea",
+    "frequencyMonth": "2026-10",
+    "questionTypes": [
+      "matching-information",
+      "multiple-choice",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "multiple-choice": [
+        "choice_set"
+      ],
+      "summary-completion": [
+        "text_entry"
+      ]
+    }
+  },
+  "p1-medium-251": {
+    "examId": "p1-medium-251",
+    "dataKey": "p1-medium-251",
+    "script": "./p1-medium-251.js",
+    "title": "Learning by example 动物学习",
+    "category": "P1",
+    "frequency": "中频",
+    "difficultyScore": 3,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading",
+    "zyzPassageId": "passage.b009.p1-069.learning-by-example-evidence-from-studies-of-rats-and-birds",
+    "frequencyMonth": "2026-10",
+    "questionTypes": [
+      "matching-information",
+      "true-false-not-given",
+      "summary-completion"
+    ],
+    "questionTypeDetails": {
+      "matching-information": [
+        "option_mapping"
+      ],
+      "true-false-not-given": [
+        "single_choice"
+      ],
+      "summary-completion": [
+        "option_mapping"
+      ]
+    }
   }
-
-  };
+};
 
   function clonePathRoot() {
     return Object.assign({}, PATH_ROOT);
   }
 
   function cloneIndexEntry(entry) {
-    return Object.assign({}, entry);
+    return Object.assign({}, entry, cloneQuestionTypeMetadata(entry));
+  }
+
+  function cloneQuestionTypeMetadata(entry) {
+    return {
+      questionTypes: Array.isArray(entry.questionTypes) ? entry.questionTypes.slice() : [],
+      questionTypeDetails: Object.fromEntries(Object.entries(entry.questionTypeDetails || {}).map(function ([type, variants]) { return [type, variants.slice()]; }))
+    };
   }
 
   function buildReadingExamIndex() {
@@ -3594,6 +7596,7 @@
         title: entry.title || '',
         category: entry.category || '',
         frequency: entry.frequency || '',
+        ...cloneQuestionTypeMetadata(entry),
         difficultyScore: entry.difficultyScore,
         path: entry.path || '',
         filename: entry.filename || '',

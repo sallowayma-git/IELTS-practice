@@ -9,7 +9,8 @@
   "meta": {
     "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

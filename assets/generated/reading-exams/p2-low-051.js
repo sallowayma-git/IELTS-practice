@@ -4,7 +4,8 @@
   "meta": {
     "title": "The dingo debate 澳洲野犬_澳洲野狗",
     "category": "P2",
-    "frequency": "low"
+    "frequency": "low",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

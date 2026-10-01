@@ -9,11 +9,12 @@
   "meta": {
     "title": "Solving the problem of waste disposal 垃圾处理",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/",
     "legacyFilename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

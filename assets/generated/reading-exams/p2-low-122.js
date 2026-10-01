@@ -9,11 +9,12 @@
   "meta": {
     "title": "Biophilic Design 亲自然设计",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "35. P2 - Biophilic Design 亲自然设计.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
     "legacyFilename": "35. P2 - Biophilic Design 亲自然设计.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
