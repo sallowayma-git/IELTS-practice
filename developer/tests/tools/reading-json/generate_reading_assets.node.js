@@ -130,6 +130,8 @@ function resetGeneratedDir(dirPath, preserveFileNames = new Set()) {
 }
 
 function buildGeneratedPreserveFileNames(readingIndex) {
+    // This HTML is maintained independently. Only build-bundles.mjs owns its
+    // marked inline diagnostic block; data regeneration must preserve every byte.
     const preserveFileNames = new Set(['reading-practice-unified.html']);
     for (const entry of Array.isArray(readingIndex) ? readingIndex : []) {
         if (!entry || typeof entry.script !== 'string' || !entry.script.trim()) {
@@ -1522,6 +1524,8 @@ function buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, fail
 }
 
 function main() {
+    const maintainedEntry = path.join(GENERATED_DIR, 'reading-practice-unified.html');
+    const entryBefore = fs.readFileSync(maintainedEntry);
     const existingSourceRecords = loadBaselineSourceRecords();
     const readingIndexData = loadReadingIndex();
     const readingIndex = readingIndexData.items;
@@ -1589,10 +1593,13 @@ function main() {
     writeJson(MIGRATION_REPORT_FILE, migrationReport);
     writeJson(CROSSWALK_REVIEW_FILE, buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, failures, overrides));
 
+    if (!fs.readFileSync(maintainedEntry).equals(entryBefore)) throw new Error('Maintained reading entry changed during data generation');
     process.stdout.write(`Generated ${sourceRecords.length} reading exam assets. Failed: ${failures.length}.\n`);
 }
 
 export {
+    resetGeneratedDir,
+    buildGeneratedPreserveFileNames,
     detectGroupKind,
     extractParagraphMatchLetters,
     isParagraphLetterSelectionGroup,

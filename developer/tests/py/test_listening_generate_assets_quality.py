@@ -1,6 +1,10 @@
 import importlib.util
+import json
+import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -15,6 +19,27 @@ def load_tool():
 
 
 class ListeningGenerateAssetsQualityTest(unittest.TestCase):
+    def test_index_generation_preserves_controlled_wrapper_and_excludes_fixture_content(self):
+        tool = load_tool()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            imports = root / "ListeningPractice/P1/fixture"
+            imports.mkdir(parents=True)
+            (imports / "exam.html").write_text('<html><head><title>Synthetic fixture</title></head><body><input name="q1" value="PRIVATE_ANSWER"></body></html>', encoding="utf-8")
+            output = root / "generated"
+            output.mkdir()
+            wrapper = output / "listening-practice-unified.html"
+            original = b'<!-- controlled diagnostic bootstrap -->\r\n<html>maintained wrapper</html>'
+            wrapper.write_bytes(original)
+            argv = ["generate_listening_assets.py", "--root", str(root / "ListeningPractice"),
+                    "--index-output", str(output / "index.js"), "--manifest-output", str(output / "manifest.js"),
+                    "--report", str(output / "report.json")]
+            with mock.patch.object(sys, "argv", argv):
+                self.assertEqual(tool.main(), 0)
+            self.assertEqual(wrapper.read_bytes(), original)
+            self.assertNotIn("PRIVATE_ANSWER", (output / "manifest.js").read_text(encoding="utf-8"))
+            self.assertEqual(json.loads((output / "report.json").read_text(encoding="utf-8"))["wrapperOwner"], "scripts/build-bundles.mjs")
+
     def test_clean_title_removes_corrupt_middle_dot_separator(self):
         tool = load_tool()
 

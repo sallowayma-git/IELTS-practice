@@ -72,6 +72,10 @@ async def wait_exam_change(page, old_exam_id: str, timeout_ms: int = 25000) -> s
         if current and current != old_exam_id:
             await page.wait_for_load_state("load")
             await page.wait_for_selector("#submit-btn", state="attached", timeout=20000)
+            await page.wait_for_function(
+                "() => !window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState().suiteActivating",
+                timeout=20000,
+            )
             return current
         await page.wait_for_timeout(250)
     return await safe_exam_id(page)
@@ -286,7 +290,14 @@ async def run() -> Dict[str, Any]:
         suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}", file=sys.stderr))
         await suite_page.wait_for_load_state("load")
         await suite_page.wait_for_selector("#submit-btn", state="attached", timeout=30000)
-        await suite_page.wait_for_timeout(600)
+        await suite_page.wait_for_function(
+            """() => {
+                const state = window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState();
+                return state?.sessionReadySent && state.suiteInline && !state.suiteActivating
+                    && state.suiteSequence.length === 3;
+            }""",
+            timeout=30000,
+        )
  
         first_exam = await safe_exam_id(suite_page)
         if first_exam != TARGET_EXAMS[0]:

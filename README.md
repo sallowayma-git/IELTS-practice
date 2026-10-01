@@ -126,6 +126,14 @@ Settings centralizes system, question-bank, and data management:
 
 Core data persists in IndexedDB; if it is unavailable the app reports an error explicitly rather than silently degrading records. localStorage only handles legacy migration and a few compatibility states, and sessionStorage holds session drafts. Data is isolated per browser, protocol, and origin.
 
+### Errors & Diagnostics
+
+Open **Settings → Errors and diagnostics (错误与诊断)** to look up failures by incident ID, export a local JSON report, or copy a summary. Reports are sanitized and exclude answers; they do not replace learning-data backups. Exporting a report does not resubmit practice or run active diagnostics. If clipboard access or downloads are unavailable, select the diagnostic text on the page. If a practice window disconnects from the main page, export from that window; the report identifies incomplete cross-window coverage.
+
+Diagnostic history retains at most 7 days, 2,000 events, or about 2 MiB, whichever limit is reached first. You can clear diagnostics separately, disable persistence, retry diagnostic storage, or enable detailed diagnostics for 15 minutes. With persistence disabled, short-lived page context remains available for immediate notifications and exports. Clearing all site data also clears learning data.
+
+Capture cannot be guaranteed when JavaScript is disabled, the page is closed, the browser crashes, the main thread is fully blocked, or cross-origin error details are inaccessible. See the [diagnostic acceptance guide](developer/docs/diagnostic-acceptance.md) for hosting modes, verified scenarios, and release qualification.
+
 ### More Tools & Themes
 
 - **Vocabulary practice** with built-in word lists and spaced review.

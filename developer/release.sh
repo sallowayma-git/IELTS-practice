@@ -136,6 +136,9 @@ zip -r "${ZIP_PATH}" \
        "node_modules/*" \
        "${LISTENING_EXCLUDE_PATTERNS[@]}"
 
+# Application wrapper code ships even when optional listening content is absent.
+zip "${ZIP_PATH}" assets/generated/listening-exams/listening-practice-unified.html
+
 ZIP_LIST="$(mktemp)"
 zipinfo -1 "${ZIP_PATH}" > "${ZIP_LIST}"
 
@@ -170,6 +173,7 @@ reject_entry_pattern() {
 
 require_entry "index.html"
 require_entry "css/main.css"
+require_entry "css/incident-center.css"
 require_entry "css/heroui-bridge.css"
 require_entry "css/theme-switcher-scroll.css"
 require_entry "css/onboarding.css"
@@ -182,6 +186,9 @@ require_entry "assets/wordlists/ecdict_reading.bundle.js"
 require_entry "assets/generated/reading-exams/manifest.js"
 require_entry "assets/generated/reading-exams/reading-practice-unified.html"
 require_entry "assets/generated/reading-explanations/manifest.js"
+require_entry "assets/generated/diagnostics/bootstrap-inline.js"
+require_entry "assets/generated/diagnostics/build-manifest.json"
+require_entry "assets/generated/listening-exams/listening-practice-unified.html"
 require_entry "js/bundles/runtime-entry.bundle.js"
 require_entry "js/bundles/core-foundation.bundle.js"
 require_entry "js/bundles/ui-shell.bundle.js"
@@ -205,7 +212,10 @@ if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening
     require_entry "assets/generated/listening-exams/manifest.js"
     require_entry "assets/generated/listening-exams/listening-index.compat.js"
 else
-    reject_entry_prefix "assets/generated/listening-exams/"
+    if grep '^assets/generated/listening-exams/' "${ZIP_LIST}" | grep -Fvx 'assets/generated/listening-exams/listening-practice-unified.html' > /dev/null; then
+        echo 'ERROR: default release contains optional listening content'
+        exit 1
+    fi
 fi
 
 if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then

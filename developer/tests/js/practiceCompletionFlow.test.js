@@ -120,7 +120,8 @@ function createAppHarness(options = {}) {
         clearInterval,
         Date,
         Math,
-        JSON
+        JSON,
+        URL
     };
     sandbox.globalThis = sandbox.window;
     const context = vm.createContext(sandbox);
@@ -200,7 +201,7 @@ async function testSaveFailureShowsErrorOnly() {
     assert.strictEqual(harness.syncCalls.length, 0, '保存失败不能继续同步成功链路');
     assert.strictEqual(harness.messages.length, 1, '保存失败应给用户一个明确错误');
     assert.strictEqual(harness.messages[0].type, 'error');
-    assert.match(harness.messages[0].message, /记录保存失败/);
+    assert.match(harness.messages[0].message, /尚未确认保存/);
 }
 
 async function testDurationDoesNotRenderNaN() {
@@ -214,11 +215,30 @@ async function testDurationDoesNotRenderNaN() {
     assert(harness.messages[0].message.includes('用时: 0 分钟'));
 }
 
+async function testListeningReceiptSurvivesCompletionCleanup() {
+    const harness = createAppHarness({ syncRejects: true });
+    const child = { closed: false, postMessage() {} };
+    const info = harness.app.examWindows.get('reading-p1');
+    info.window = child;
+    harness.app.ensureExamWindowSession = () => info;
+    harness.app._resolveExamWindowSessionForTarget = () => ({ examId: 'reading-p1', windowInfo: info });
+    harness.app._postExamMessage = () => true; // Simulate dispatch with a lost ACK.
+    const data = { sessionId: 'session-p1', submissionId: 'original-listening-submit', type: 'listening',
+        scoreInfo: { correct: 1, total: 1, percentage: 100 }, answers: { q1: 'original' }, endTime: '2026-09-29T00:00:00.000Z' };
+    await harness.app.handlePracticeComplete('reading-p1', data, child, { retainSubmitReceipt: true });
+    assert.strictEqual(harness.cleanupCalls.length, 0, 'a live authenticated receipt route must survive completion');
+    assert.strictEqual(harness.app.examWindows.get('reading-p1').status, 'completed');
+    assert.strictEqual(harness.app.examWindows.get('reading-p1').practiceSubmitReceipts['session-p1:original-listening-submit'].succeeded, true);
+    await harness.app.handlePracticeComplete('reading-p1', data, child, { retainSubmitReceipt: true });
+    assert.strictEqual(harness.savedCompletions.length, 1, 'receipt reconciliation must not issue another write');
+}
+
 async function main() {
     try {
         await testCompletionWaitsForSyncAndDedupes();
         await testSaveFailureShowsErrorOnly();
         await testDurationDoesNotRenderNaN();
+        await testListeningReceiptSurvivesCompletionCleanup();
         process.stdout.write(JSON.stringify({
             status: 'pass',
             detail: '单篇完成链路等待同步、按 session 去重，保存失败显示错误且通知不渲染 NaN'

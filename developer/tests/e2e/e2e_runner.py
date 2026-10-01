@@ -18,7 +18,7 @@ REPORT_PATH = REPORT_DIR / "e2e-unified-report.json"
 CASE_TIMEOUT_SECONDS = 180
 # Reading timing runs complete single/suite scenarios in three hosting modes.
 # Keep its combined budget bounded without changing other cases' deadlines.
-CASE_TIMEOUT_OVERRIDES = {"reading_timing.py": 360}
+CASE_TIMEOUT_OVERRIDES = {"reading_timing.py": 360, "diagnostic_qualification.py": 1200}
 PROCESS_CLEANUP_TIMEOUT_SECONDS = 5
 REPORT_REPLACE_ATTEMPTS = 10
 REPORT_REPLACE_RETRY_SECONDS = 0.1
@@ -31,6 +31,7 @@ if hasattr(sys.stderr, "reconfigure"):
 # Keep this list the single source of truth for "full e2e" in CI and local runs.
 # Prefer file://-capable scripts; do not require a temporary HTTP host.
 E2E_CASES = [
+    "diagnostic_qualification.py",
     "browse_preference_toggle_flow.py",
     "browse_learning_state.py",
     "reading_analytics.py",
@@ -47,6 +48,7 @@ E2E_CASES = [
     "file_init_referrer_trap.py",
     "ui_export_import_click.py",
     "unified_submit_readonly_regression.py",
+    "full_reset_flow.py",
 ]
 
 

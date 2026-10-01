@@ -1,3 +1,5 @@
+@import url("./incident-center.css");
+
 /* Reset and base styles */
 * {
     margin: 0;
@@ -8366,3 +8368,20 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+/* Diagnostics stay separate from learning-data backup and full-reset controls. */
+.diagnostic-settings-panel { margin-top: 24px; min-width: 0; }
+.diagnostic-settings-panel summary { cursor: pointer; font-weight: 600; }
+.diagnostic-settings-panel p { margin-block: 0.75rem; }
+.diagnostic-settings-controls { padding: 1rem; border: 1px solid currentColor; border-radius: 12px; }
+.diagnostic-settings-controls label { display: flex; align-items: center; gap: 0.65rem; }
+.diagnostic-settings-controls input { width: 1.2rem; height: 1.2rem; }
+.diagnostic-settings-actions, .diagnostic-lookup { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-block: 1rem; }
+.diagnostic-lookup input { flex: 1 1 18rem; min-width: 0; padding: 0.65rem; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; }
+.diagnostic-event-list { display: grid; gap: 0.5rem; margin-block: 1rem; }
+.diagnostic-event-list button { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.diagnostic-selected { margin-block: 1rem; padding-block: 1rem; border-block: 1px solid currentColor; }
+.diagnostic-selected h4 { overflow-wrap: anywhere; }
+.diagnostic-selected pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; }
+.diagnostic-settings-panel textarea { box-sizing: border-box; width: 100%; color: inherit; background: transparent; padding: 0.75rem; }
+.diagnostic-settings-panel :is(button, input, textarea, summary):focus-visible { outline: 3px solid #5679dd; outline-offset: 3px; }
+.diagnostic-settings-panel button:disabled { opacity: 0.55; cursor: not-allowed; }

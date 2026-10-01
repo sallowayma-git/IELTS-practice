@@ -42,6 +42,24 @@
             }, options || {});
             this.activeMessage = null;
             this.activeTimer = null;
+            this.incidents = global.IncidentCenter ? new global.IncidentCenter({ transient: (...args) => this.show(...args) }) : null;
+        }
+
+        showIncident(eventOrId, presentation) {
+            return this.incidents?.show(eventOrId, presentation) || null;
+        }
+
+        reportIncident(input, presentation) {
+            return this.incidents?.report(input, presentation) || null;
+        }
+
+        showIncidentHistory() {
+            return this.incidents?.openHistory();
+        }
+
+        /** Share the notification workflow's bounded export and minimal text fallback. */
+        deliverDiagnostics(eventId, textTarget, action = 'download') {
+            return this.incidents?.deliver(eventId, textTarget, action === 'copySummary' ? action : 'download');
         }
 
         show(message, type = 'info', duration = 4000) {
@@ -124,4 +142,5 @@
     global.showMessage = function showMessage(message, type, duration) {
         return sharedInstance.show(message, type, duration);
     };
+    global.showIncident = (eventOrId, presentation) => sharedInstance.showIncident(eventOrId, presentation);
 })(typeof window !== 'undefined' ? window : this);

@@ -1,4 +1,2252 @@
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:a9386461a353b0a6ef59cdc8e0973d6208e41fa7956d8d59098809a6ec32bd56","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
+
+/* ===== js/diagnostics/diagnosticContract.js ===== */
+(function installDiagnosticContract(global) {
+    'use strict';
+
+    if (global.AppDiagnosticContract) return;
+
+    const SCHEMA_VERSION = 1;
+    const LIMITS = Object.freeze({
+        eventBytes: 8192, stackFrames: 20, causeDepth: 3, breadcrumbs: 50,
+        inputStringUnits: 8192, correlationEntries: 1024, correlationIdUnits: 512,
+        repetitionWindowMs: 60000, snapshotEvents: 200
+    });
+    const CODES = Object.freeze([
+        'APP_BOOT_FAILED', 'RESOURCE_LOAD_FAILED', 'PRACTICE_SAVE_FAILED',
+        'RECOVERY_SAVE_FAILED', 'PRACTICE_CHANNEL_TIMEOUT', 'DATA_IMPORT_FAILED',
+        'DATA_EXPORT_FAILED', 'UNEXPECTED_RUNTIME_ERROR'
+    ]);
+    const CAUSE_CODES = Object.freeze([
+        'BACKEND_UNAVAILABLE', 'QUOTA_EXCEEDED', 'CONFLICT', 'CORRUPT_RECORD', 'VALIDATION',
+        'INITIALIZATION_BLOCKED', 'TIMING_FINALIZED', 'TIMING_STALE_WRITER', 'TIMING_STALE_REVISION'
+    ]);
+    const ERROR_NAMES = [
+        'Error', 'AppDataError', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError',
+        'URIError', 'EvalError', 'AggregateError', 'DOMException', 'QuotaExceededError',
+        'AbortError', 'SecurityError', 'NotFoundError', 'NetworkError', 'UnknownError'
+    ];
+    const MESSAGES = Object.freeze({
+        APP_BOOT_FAILED: 'Application startup failed.',
+        RESOURCE_LOAD_FAILED: 'A resource could not be loaded.',
+        PRACTICE_SAVE_FAILED: 'Practice persistence failed.',
+        RECOVERY_SAVE_FAILED: 'Recovery persistence failed.',
+        PRACTICE_CHANNEL_TIMEOUT: 'Practice communication timed out.',
+        DATA_IMPORT_FAILED: 'Data import failed.',
+        DATA_EXPORT_FAILED: 'Data export failed.',
+        UNEXPECTED_RUNTIME_ERROR: 'An unexpected runtime error occurred.'
+    });
+    const MODULES = ['bootstrap', 'main', 'practice', 'reading', 'listening', 'suite',
+        'logger', 'data-kernel', 'storage', 'import', 'export', 'diagnostics', 'channel'];
+    const ACTIONS = ['initialize', 'load-resource', 'open-practice', 'handshake', 'submit',
+        'host-receipt', 'acknowledgement', 'save', 'save-draft', 'save-recovery', 'storage-confirmed',
+        'suite-navigation', 'import', 'export', 'retry', 'reset', 'report'];
+    const RETRY_ACTIONS = ['submit', 'save', 'save-draft', 'save-recovery', 'import', 'export', 'load-resource'];
+    const SOURCES = ['bootstrap', 'business', 'console', 'global', 'resource', 'storage', 'relay'];
+    const CORRELATION_KINDS = ['session', 'suite', 'submission', 'operation'];
+    const COVERAGE_LIMITATIONS = Object.freeze([
+        'javascript-disabled', 'page-not-opened', 'process-crash', 'blocked-main-thread',
+        'cross-origin-details'
+    ]);
+    // Exact code-owned paths only: arbitrary resource names can contain learning data.
+    // Extend this list when an integration needs another shipped resource.
+    const PROJECT_PATHS = Object.freeze([
+        'index.html', 'js/app.js', 'js/main.js', 'js/utils/logger.js',
+        'js/presentation/incident-center.js', 'js/presentation/message-center.js',
+        'js/data/v2/dataKernel.js', 'js/data/v2/appData.js',
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js', 'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/operationDiagnostics.js',
+        'js/diagnostics/diagnosticStore.js', 'js/diagnostics/diagnosticExport.js', 'js/diagnostics/diagnosticChannel.js',
+        'js/runtime/lazyLoader.js', 'js/runtime/bootScreen.js', 'js/boot-fallbacks.js',
+        'css/main.css', 'css/incident-center.css', 'css/heroui-bridge.css', 'css/theme-switcher-scroll.css',
+        'css/onboarding.css', 'css/vocab-reader.css', 'assets/vendor/three.min.js',
+        'assets/images/favicon.svg', 'assets/images/logo.svg',
+        'assets/generated/listening-exams/manifest.js',
+        'assets/generated/listening-exams/listening-index.compat.js',
+        'assets/generated/reading-exams/manifest.js',
+        'assets/generated/reading-explanations/manifest.js',
+        'js/runtime/unifiedReadingPage.js',
+        'js/listeningRecordBridge.js', 'js/listeningUnifiedWrapper.js', 'js/practice-page-enhancer.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js', 'js/diagnostics/practiceDiagnostics.js',
+        'assets/generated/reading-exams/reading-practice-unified.html',
+        'assets/generated/listening-exams/listening-practice-unified.html',
+        ...['runtime-entry', 'core-foundation', 'ui-shell', 'legacy-app', 'browse',
+            'diagnostics', 'practice', 'session', 'reading-page', 'practice-page-enhancer',
+            'listening-record-bridge', 'listening-wrapper', 'vocabulary', 'reading-tools',
+            'reading-library', 'dictionary', 'more', 'theme']
+            .map((name) => `js/bundles/${name}.bundle.js`)
+    ]);
+    const EVENT_ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;
+    const WINDOW_ID = /^win_[a-f0-9]{32}$/;
+    const SCOPE_ID = /^scope_[a-f0-9]{32}$/;
+    const ALIAS_ID = /^alias_(session|suite|submission|operation)_[a-f0-9]{32}$/;
+    const scopeInternals = new WeakMap();
+    const identityInternals = new WeakMap();
+    const readingResourcePaths = new Set();
+    try {
+        const resources = Object.getOwnPropertyDescriptor(global.AppDiagnosticBuild, 'readingResources')?.value;
+        if (Array.isArray(resources)) {
+            for (let i = 0; i < Math.min(resources.length, 1024); i += 1) {
+                const value = Object.getOwnPropertyDescriptor(resources, String(i))?.value;
+                if (typeof value === 'string' && /^assets\/generated\/reading-(?:exams|explanations)\/p[123]-(?:high|medium|low)-[0-9]{2,3}\.js$/.test(value)) readingResourcePaths.add(value);
+            }
+        }
+    } catch (_) { }
+    let nativeDOMExceptionName;
+    try { nativeDOMExceptionName = Object.getOwnPropertyDescriptor(global.DOMException.prototype, 'name')?.get; } catch (_) { }
+
+    function platformErrorName(value) {
+        try { return nativeDOMExceptionName?.call(value); } catch (_) { return undefined; }
+    }
+
+    function objectLike(value) { return value !== null && (typeof value === 'object' || typeof value === 'function'); }
+    function state() { return { issues: new Set(), stackFrames: 0 }; }
+    function field(value, key, context) {
+        if (!objectLike(value)) return undefined;
+        try {
+            const descriptor = Object.getOwnPropertyDescriptor(value, key);
+            if (!descriptor) return undefined;
+            if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+                context.issues.add('accessor-skipped');
+                return undefined;
+            }
+            return descriptor.value;
+        } catch (_) {
+            context.issues.add('unreadable');
+            return undefined;
+        }
+    }
+    function choice(value, values, fallback = 'unknown') {
+        return typeof value === 'string' && values.includes(value) ? value : fallback;
+    }
+    function errorName(value, context) {
+        // Native Error names are usually inherited. Inspect descriptors without calling getters.
+        let current = value;
+        for (let depth = 0; objectLike(current) && depth < 4; depth += 1) {
+            const name = field(current, 'name', context);
+            if (name !== undefined) return choice(name, ERROR_NAMES);
+            if (context.issues.has('accessor-skipped') || context.issues.has('unreadable')) break;
+            try { current = Object.getPrototypeOf(current); }
+            catch (_) { context.issues.add('unreadable'); break; }
+        }
+        return 'unknown';
+    }
+    function integer(value, min, max, fallback = null) {
+        return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
+    }
+    function matches(value, expression) {
+        return typeof value === 'string' && value.length <= 128 && expression.test(value);
+    }
+    function textInput(value, context) {
+        if (typeof value !== 'string') return '';
+        if (value.length > LIMITS.inputStringUnits) {
+            context.issues.add('input-truncated');
+            return ''; // Do not cut a URL or secret in half and reinterpret its suffix.
+        }
+        return value;
+    }
+    function arrayLength(value, context) {
+        try {
+            return Array.isArray(value) ? integer(field(value, 'length', context), 0, 4294967295, 0) : 0;
+        } catch (_) { context.issues.add('unreadable'); return 0; }
+    }
+    function randomHex() {
+        const bytes = new Uint8Array(16);
+        try {
+            global.crypto.getRandomValues(bytes);
+        } catch (_) {
+            // Identifiers are correlation references, never authentication tokens.
+            for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+        }
+        return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+    function freeze(value) {
+        if (value && typeof value === 'object') {
+            Object.values(value).forEach(freeze);
+            Object.freeze(value);
+        }
+        return value;
+    }
+    function utf8Bytes(value) {
+        if (typeof value !== 'string') return 0;
+        let bytes = 0;
+        for (let i = 0; i < value.length; i += 1) {
+            const code = value.charCodeAt(i);
+            if (code < 0x80) bytes += 1;
+            else if (code < 0x800) bytes += 2;
+            else if (code >= 0xd800 && code <= 0xdbff && i + 1 < value.length
+                && value.charCodeAt(i + 1) >= 0xdc00 && value.charCodeAt(i + 1) <= 0xdfff) {
+                bytes += 4;
+                i += 1;
+            } else bytes += 3;
+        }
+        return bytes;
+    }
+
+    function createCorrelationScope() {
+        const id = `scope_${randomHex()}`;
+        const entries = new Map();
+        let disposed = false;
+        const alias = (kind, value) => {
+            if (disposed || !CORRELATION_KINDS.includes(kind) || typeof value !== 'string'
+                || !value.length || value.length > LIMITS.correlationIdUnits) return 'unknown';
+            const key = `${kind}:${value}`;
+            if (entries.has(key)) return entries.get(key);
+            if (entries.size >= LIMITS.correlationEntries) return 'unknown';
+            const result = `alias_${kind}_${randomHex()}`;
+            entries.set(key, result);
+            return result;
+        };
+        const scope = Object.freeze({ id, alias, dispose() { disposed = true; entries.clear(); } });
+        scopeInternals.set(scope, { id, alias });
+        return scope;
+    }
+
+    function createWindowIdentity() {
+        const nonce = randomHex();
+        const identity = Object.freeze({ windowId: `win_${nonce}` });
+        identityInternals.set(identity, { nonce, windowId: identity.windowId, sequence: 0, errors: new WeakMap() });
+        return identity;
+    }
+
+    function location(value, context, browserFrame = false) {
+        let text = textInput(value, context).trim().replace(/\)$/, '');
+        // Browsers append positions after the entire URL, including its query/fragment.
+        // A plain resource URL has no such suffix; never interpret its query as a position.
+        if (!browserFrame) text = text.split(/[?#]/, 1)[0];
+        const suffix = /:(\d{1,10})(?::(\d{1,10}))?$/.exec(text);
+        let line = null;
+        let column = null;
+        if (suffix) {
+            line = integer(Number(suffix[1]), 1, 2147483647);
+            column = suffix[2] ? integer(Number(suffix[2]), 1, 2147483647) : null;
+            text = text.slice(0, suffix.index);
+        }
+        // A query or fragment must never supply an allowlisted project path.
+        text = text.split(/[?#]/, 1)[0].replace(/\\/g, '/');
+        const readingPath = text.match(/(?:^|\/)(assets\/generated\/reading-(?:exams|explanations)\/[^/]+)$/)?.[1];
+        const path = PROJECT_PATHS.find((candidate) => text === candidate || text.endsWith(`/${candidate}`))
+            || (readingResourcePaths.has(readingPath) ? readingPath : null);
+        return { path: path || 'unknown', line: path ? line : null, column: path ? column : null };
+    }
+    function frame(value, context) {
+        if (typeof value === 'string') {
+            let text = textInput(value, context).trim();
+            const prefix = text.split(/[?#]/, 1)[0];
+            if (prefix.includes('(')) text = text.slice(prefix.lastIndexOf('(') + 1);
+            else if (prefix.includes('@')) text = text.slice(prefix.lastIndexOf('@') + 1);
+            else text = text.replace(/^at\s+/, '');
+            return location(text, context, true);
+        }
+        const result = location(field(value, 'path', context), context);
+        if (result.path !== 'unknown') {
+            result.line = integer(field(value, 'line', context), 1, 2147483647, result.line);
+            result.column = integer(field(value, 'column', context), 1, 2147483647, result.column);
+        }
+        return result;
+    }
+    function stack(value, context) {
+        const output = [];
+        let values = value;
+        if (typeof value === 'string') {
+            values = textInput(value, context).split(/\r?\n/).filter((line) => /^\s*at\s/.test(line) || line.includes('@'));
+        }
+        const length = arrayLength(values, context);
+        const remaining = LIMITS.stackFrames - context.stackFrames;
+        if (length > remaining) context.issues.add('stack-truncated');
+        for (let i = 0; i < Math.min(length, remaining); i += 1) {
+            output.push(frame(field(values, String(i), context), context));
+            context.stackFrames += 1;
+        }
+        return output;
+    }
+    function errorCause(value, context) {
+        const cause = field(value, 'cause', context);
+        return cause == null ? field(field(value, 'details', context), 'cause', context) : cause;
+    }
+    function errorDetails(value, context, depth = 0, seen = new Set()) {
+        const result = { name: 'unknown', message: '[redacted]', code: 'unknown', kind: 'unknown', stack: [], cause: null };
+        if (!objectLike(value)) {
+            result.kind = choice(typeof value, ['string', 'number', 'boolean', 'bigint', 'symbol', 'undefined']);
+            return result;
+        }
+        if (seen.has(value)) { result.kind = 'cycle'; context.issues.add('cause-cycle'); return result; }
+        seen.add(value);
+        result.kind = 'object';
+        const nativeName = platformErrorName(value);
+        const name = nativeName || errorName(value, context);
+        const message = field(value, 'message', context);
+        result.name = choice(name, ERROR_NAMES);
+        result.code = result.name === 'AppDataError' ? choice(field(value, 'code', context), CAUSE_CODES)
+            : result.name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED' : 'unknown';
+        result.message = choice(message, Object.values(MESSAGES).concat('[redacted]'), '[redacted]');
+        if (typeof message === 'string' && message.length > LIMITS.inputStringUnits) context.issues.add('input-truncated');
+        if (integer(field(value, 'nodeType', context), 1, 12)) {
+            result.kind = 'dom';
+            return result;
+        }
+        // Do not materialize a lazy Error stack after discovering hostile accessors.
+        if (!context.issues.has('accessor-skipped') && !context.issues.has('unreadable')) {
+            result.stack = stack(field(value, 'stack', context), context);
+        }
+        const cause = errorCause(value, context);
+        if (cause != null) {
+            if (depth < LIMITS.causeDepth) result.cause = errorDetails(cause, context, depth + 1, seen);
+            else context.issues.add('causes-truncated');
+        }
+        // Preserve explicit markers when sanitizing an already normalized record.
+        result.kind = choice(field(value, 'kind', context), ['object', 'cycle', 'dom', 'string',
+            'number', 'boolean', 'bigint', 'symbol', 'undefined', 'unknown'], result.kind);
+        return result;
+    }
+    function causeCode(error) {
+        let current = error;
+        while (current) {
+            if (current.code !== 'unknown') return current.code;
+            current = current.cause;
+        }
+        return 'unknown';
+    }
+    function environment(value, context) {
+        const browserVersion = field(value, 'browserVersion', context);
+        return {
+            runMode: choice(field(value, 'runMode', context), ['file', 'http', 'subpath']),
+            browser: choice(field(value, 'browser', context), ['chromium', 'firefox', 'safari']),
+            browserVersion: matches(browserVersion, /^\d{1,3}(?:\.\d{1,5}){0,3}$/) ? browserVersion : 'unknown',
+            platform: choice(field(value, 'platform', context), ['windows', 'macos', 'linux', 'android', 'ios']),
+            online: choice(field(value, 'online', context), ['online', 'offline']),
+            context: choice(field(value, 'context', context), ['main', 'reading', 'listening', 'legacy', 'worker'])
+        };
+    }
+    function correlations(value, scope, context, wire) {
+        const output = { scopeId: scope.id };
+        if (wire) {
+            const scopeId = field(value, 'scopeId', context);
+            output.scopeId = matches(scopeId, SCOPE_ID) ? scopeId : 'unknown';
+        }
+        for (const kind of CORRELATION_KINDS) {
+            const raw = field(value, kind, context);
+            output[kind] = wire
+                ? (output.scopeId !== 'unknown' && matches(raw, ALIAS_ID) && raw.startsWith(`alias_${kind}_`) ? raw : 'unknown')
+                : scope.alias(kind, raw);
+        }
+        return output;
+    }
+    function breadcrumbs(value, scope, context, wire) {
+        const length = arrayLength(value, context);
+        if (length > LIMITS.breadcrumbs) context.issues.add('breadcrumbs-truncated');
+        const output = [];
+        for (let i = Math.max(0, length - LIMITS.breadcrumbs); i < length; i += 1) {
+            const item = field(value, String(i), context);
+            const action = choice(field(item, 'action', context), ACTIONS);
+            if (action === 'unknown') continue; // No keystrokes, DOM events, or free-form messages.
+            output.push({
+                action, module: choice(field(item, 'module', context), MODULES),
+                timestamp: integer(field(item, 'timestamp', context), 0, 8640000000000000),
+                outcome: choice(field(item, 'outcome', context), ['started', 'succeeded', 'failed', 'unconfirmed', 'cancelled']),
+                correlation: correlations(!wire && field(item, 'correlationAliases', context) !== undefined
+                    ? field(item, 'correlationAliases', context) : field(item, 'correlation', context),
+                    scope, context, wire || field(item, 'correlationAliases', context) !== undefined)
+            });
+        }
+        return output;
+    }
+    function fingerprint(event) {
+        // Only normalized fields enter this non-cryptographic grouping hash.
+        const parts = [event.code, event.causeCode, event.module, event.action, event.error.name,
+            event.error.stack[0] || null, event.resource.path];
+        const text = JSON.stringify(parts);
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+        return `fp_${(hash >>> 0).toString(16).padStart(8, '0')}`;
+    }
+    function bound(event, context) {
+        event.collection.issues = Array.from(context.issues).sort();
+        const size = () => utf8Bytes(JSON.stringify(event));
+        if (size() > LIMITS.eventBytes) {
+            context.issues.add('event-truncated');
+            context.issues.add('breadcrumbs-truncated');
+            event.collection.issues = Array.from(context.issues).sort();
+            while (event.breadcrumbs.length && size() > LIMITS.eventBytes) event.breadcrumbs.shift();
+            if (size() > LIMITS.eventBytes) {
+                context.issues.add('stack-truncated');
+                event.collection.issues = Array.from(context.issues).sort();
+                // Keep the first frame (part of the fingerprint) and all cause codes.
+                const errors = [];
+                for (let error = event.error; error; error = error.cause) errors.push(error);
+                for (const error of errors.reverse()) {
+                    while (error.stack.length > (error === event.error ? 1 : 0) && size() > LIMITS.eventBytes) {
+                        error.stack.pop();
+                        context.issues.add('stack-truncated');
+                    }
+                }
+                event.collection.issues = Array.from(context.issues).sort();
+            }
+        }
+        return freeze(event);
+    }
+
+    function createNormalizer(options = {}) {
+        const setup = state();
+        const candidate = field(options, 'correlationScope', setup);
+        const scope = scopeInternals.get(candidate) || scopeInternals.get(createCorrelationScope());
+        const origin = identityInternals.get(field(options, 'windowIdentity', setup))
+            || identityInternals.get(createWindowIdentity());
+        const windowId = origin.windowId;
+        const identities = origin.errors;
+        const appVersion = field(options, 'appVersion', setup);
+        const buildId = field(options, 'buildId', setup);
+        const defaults = {
+            appVersion: matches(appVersion, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? appVersion : 'unknown',
+            buildId: matches(buildId, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? buildId : 'unknown',
+            environment: environment(field(options, 'environment', setup), setup)
+        };
+        function freshIdentity() {
+            origin.sequence += 1;
+            return { eventId: `evt_${origin.nonce}_${origin.sequence}`, windowId,
+                sequence: origin.sequence, timestamp: Date.now() };
+        }
+        function identify(error, fresh, context) {
+            const chain = [];
+            let current = error;
+            let existing;
+            for (let depth = 0; objectLike(current) && depth <= LIMITS.causeDepth; depth += 1) {
+                if (chain.includes(current)) break;
+                chain.push(current);
+                if (!fresh && identities.has(current)) { existing = identities.get(current); break; }
+                current = errorCause(current, context);
+            }
+            const identity = existing || freshIdentity();
+            // A new occurrence must not steal the identity of a shared underlying cause.
+            for (const item of fresh ? chain.slice(0, 1) : chain) identities.set(item, identity);
+            return identity;
+        }
+        function project(input, identity, context, wire) {
+            const error = errorDetails(field(input, 'error', context), context);
+            const rawResource = field(input, 'resource', context);
+            const resource = wire ? frame(rawResource, context) : location(field(rawResource, 'url', context), context);
+            if (!wire && resource.path !== 'unknown') {
+                resource.line = integer(field(rawResource, 'line', context), 1, 2147483647, resource.line);
+                resource.column = integer(field(rawResource, 'column', context), 1, 2147483647, resource.column);
+            }
+            resource.status = integer(field(rawResource, 'status', context), 100, 599, 'unknown');
+            const optional = field(rawResource, 'optional', context);
+            resource.optional = typeof optional === 'boolean' ? optional : 'unknown';
+            const persistence = field(input, 'persistence', context);
+            const collection = field(input, 'collection', context);
+            const entryCoverage = sanitizeEntryCoverage(field(collection, 'entryCoverage', context));
+            const notification = field(input, 'notification', context);
+            const retry = field(input, 'retry', context);
+            const aliases = wire ? undefined : field(input, 'correlationAliases', context);
+            const correlation = correlations(aliases === undefined ? field(input, 'correlation', context) : aliases,
+                scope, context, wire || aliases !== undefined);
+            const version = wire ? field(input, 'appVersion', context) : defaults.appVersion;
+            const build = wire ? field(input, 'buildId', context) : defaults.buildId;
+            const event = {
+                schemaVersion: SCHEMA_VERSION,
+                appVersion: matches(version, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? version : 'unknown',
+                buildId: matches(build, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? build : 'unknown',
+                ...identity,
+                fingerprint: '',
+                code: choice(field(input, 'code', context), CODES, 'UNEXPECTED_RUNTIME_ERROR'),
+                causeCode: causeCode(error),
+                module: choice(field(input, 'module', context), MODULES),
+                action: choice(field(input, 'action', context), ACTIONS),
+                repetitionCount: 1,
+                error, resource, correlation,
+                environment: wire ? environment(field(input, 'environment', context), context) : { ...defaults.environment },
+                persistence: {
+                    operation: choice(field(persistence, 'operation', context), ['committed', 'not-committed', 'unconfirmed'], 'unconfirmed'),
+                    diagnostics: choice(field(persistence, 'diagnostics', context), ['memory-only', 'pending', 'persisted', 'disabled', 'failed'], 'memory-only'),
+                    generation: matches(field(persistence, 'generation', context), /^dg-[a-f0-9]{32}$/)
+                        ? field(persistence, 'generation', context) : 'unknown'
+                },
+                notification: {
+                    kind: choice(field(notification, 'kind', context), ['none', 'transient', 'persistent', 'dialog', 'startup'], 'none'),
+                    requiresDismissal: field(notification, 'requiresDismissal', context) === true
+                },
+                retry: {
+                    available: field(retry, 'available', context) === true && correlation.operation !== 'unknown'
+                        && choice(field(retry, 'action', context), RETRY_ACTIONS) !== 'unknown',
+                    action: choice(field(retry, 'action', context), RETRY_ACTIONS),
+                    operationAlias: correlation.operation,
+                    submissionAlias: correlation.submission
+                },
+                breadcrumbs: breadcrumbs(field(input, 'breadcrumbs', context), scope, context, wire),
+                collection: {
+                    ...(entryCoverage.entry !== 'unknown' ? { entryCoverage } : {}),
+                    source: choice(field(collection, 'source', context), SOURCES),
+                    coverage: choice(field(collection, 'coverage', context), ['complete', 'partial']),
+                    aggregation: choice(field(collection, 'aggregation', context), ['local', 'complete', 'incomplete']),
+                    redaction: 'allowlist-v1', limitations: COVERAGE_LIMITATIONS.slice(), issues: []
+                }
+            };
+            if (wire) {
+                const issues = field(collection, 'issues', context);
+                const knownIssues = ['accessor-skipped', 'unreadable', 'input-truncated', 'stack-truncated',
+                    'cause-cycle', 'causes-truncated', 'breadcrumbs-truncated', 'event-truncated', 'normalization-failed'];
+                for (let i = 0; i < Math.min(arrayLength(issues, context), knownIssues.length); i += 1) {
+                    const issue = choice(field(issues, String(i), context), knownIssues);
+                    if (issue !== 'unknown') context.issues.add(issue);
+                }
+            }
+            event.fingerprint = fingerprint(event);
+            return bound(event, context);
+        }
+        function normalize(input) {
+            const context = state();
+            let identity;
+            try {
+                identity = identify(field(input, 'error', context), field(input, 'newOccurrence', context) === true, context);
+                return project(input, identity, context, false);
+            } catch (_) {
+                context.issues.add('normalization-failed');
+                return project(null, identity || freshIdentity(), context, false);
+            }
+        }
+        function sanitizeEvent(input) {
+            const context = state();
+            try {
+                if (field(input, 'schemaVersion', context) !== SCHEMA_VERSION) return null;
+                const eventId = field(input, 'eventId', context);
+                const originWindow = field(input, 'windowId', context);
+                const originSequence = integer(field(input, 'sequence', context), 1, Number.MAX_SAFE_INTEGER);
+                const timestamp = integer(field(input, 'timestamp', context), 0, 8640000000000000);
+                if (!matches(eventId, EVENT_ID) || !matches(originWindow, WINDOW_ID) || timestamp === null
+                    || eventId !== `evt_${originWindow.slice(4)}_${originSequence}`) return null;
+                return project(input, { eventId, windowId: originWindow, sequence: originSequence, timestamp }, context, true);
+            } catch (_) { return null; }
+        }
+        return Object.freeze({ windowId, normalize, sanitizeEvent });
+    }
+
+    function sanitizeTransportStatus(input) {
+        if (!input) return null;
+        const context = state();
+        return Object.freeze({
+            connection: choice(field(input, 'connection', context), ['waiting', 'connected', 'disconnected', 'unavailable', 'incomplete']),
+            aggregation: 'incomplete',
+            pendingEvents: integer(field(input, 'pendingEvents', context), 0, 200, 0),
+            pendingBytes: integer(field(input, 'pendingBytes', context), 0, 256 * 1024, 0),
+            dropped: integer(field(input, 'dropped', context), 0, Number.MAX_SAFE_INTEGER, 0)
+        });
+    }
+
+    function sanitizeEntryCoverage(input) {
+        const context = state();
+        const entry = choice(field(input, 'entry', context), ['listening-wrapper', 'listening-bridge', 'legacy-enhancer']);
+        const capture = choice(field(input, 'capture', context), ['before-dependencies', 'late-injection']);
+        return Object.freeze({ entry, capture, limitations: Object.freeze([
+            ...(capture === 'late-injection' ? ['earlier-failures-unavailable'] : []),
+            ...(entry === 'listening-wrapper' ? ['embedded-content-separate-context'] : []),
+            ...(['listening-bridge', 'legacy-enhancer'].includes(entry) ? ['legacy-draft-recovery-unavailable'] : [])
+        ]) });
+    }
+
+    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
+        PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
+    global.AppDiagnosticContract = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/bootstrapCollector.js ===== */
+(function defineDiagnosticBootstrap(global) {
+    'use strict';
+    if (global.AppDiagnosticBootstrap) return;
+
+    let installed;
+    const MAX_EVENTS = 200;
+    const MAX_BYTES = 256 * 1024;
+    const TEXT_BYTES = 32 * 1024;
+    const BATCH_SIZE = 20;
+    // Capture the platform getter once. Its receiver brand check reads native
+    // DOMException state without consulting caller-owned name getters or prototypes.
+    let nativeDOMExceptionName;
+    try { nativeDOMExceptionName = Object.getOwnPropertyDescriptor(global.DOMException.prototype, 'name')?.get; }
+    catch (_) { }
+
+    function isNativeAbort(error) {
+        try { return typeof nativeDOMExceptionName === 'function' && nativeDOMExceptionName.call(error) === 'AbortError'; }
+        catch (_) { return false; }
+    }
+
+    function classificationPriority(event) {
+        if (event.code !== 'UNEXPECTED_RUNTIME_ERROR') return event.collection.source === 'business' ? 3 : 2;
+        return event.collection.source === 'console' ? 0 : 1;
+    }
+
+    // Never invoke accessors on caller-owned inputs (including console arguments).
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; }
+        catch (_) { return undefined; }
+    }
+    function method(value, key) {
+        try {
+            for (let depth = 0; value && depth < 4; depth += 1, value = Object.getPrototypeOf(value)) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (descriptor) return typeof descriptor.value === 'function' ? descriptor.value : null;
+            }
+        } catch (_) { }
+        return null;
+    }
+
+    function install(options = {}) {
+        if (installed) return installed;
+        const contract = global.AppDiagnosticContract;
+        const build = global.AppDiagnosticBuild || {};
+        const context = field(options, 'context');
+        const entryCoverage = contract.sanitizeEntryCoverage(field(options, 'entryCoverage'));
+        let runMode = 'unknown';
+        try {
+            const entryRoot = global.location.pathname.replace(/assets\/generated\/(?:reading|listening)-exams\/(?:reading|listening)-practice-unified\.html$/, '');
+            runMode = global.location.protocol === 'file:' ? 'file'
+                : /^https?:$/.test(global.location.protocol)
+                    ? (entryRoot.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
+        } catch (_) { }
+        const correlationScope = contract.createCorrelationScope();
+        const normalizer = contract.createNormalizer({
+            windowIdentity: contract.createWindowIdentity(), correlationScope,
+            appVersion: field(build, 'appVersion'), buildId: field(build, 'buildId'),
+            environment: { context, runMode }
+        });
+        // Utility normalization must not allocate incident sequence numbers.
+        const utility = contract.createNormalizer({ correlationScope });
+        const records = new Map();
+        const resources = new Map();
+        const elements = new WeakMap();
+        const resourceErrors = new WeakMap();
+        const crumbs = [];
+        const observers = new Set();
+        let bytes = 0;
+        let dropped = 0;
+        let startup = true;
+        let reporting = false;
+        let internal = false;
+        let handedOff = false;
+        let sink = null;
+        let append;
+        let memoryOnlyConsole = false;
+        let sinkFailed = false;
+        let persistence = 'memory-only';
+        let pending = null;
+        let startupId = null;
+        let panel = null;
+        let fallbackFailed = false;
+        let waitingForBody = false;
+        let transport = null;
+
+        function transportStatus() {
+            try { return contract.sanitizeTransportStatus(method(transport, 'status')?.call(transport)); }
+            catch (_) { return contract.sanitizeTransportStatus({ connection: 'unavailable' }); }
+        }
+
+        function trim() {
+            while (records.size > MAX_EVENTS || bytes > MAX_BYTES) {
+                const available = Array.from(records.values()).filter((item) => !item.inFlight && item.event.eventId !== startupId);
+                const victim = available.find((item) => item.event.notification.kind === 'none') || available[0];
+                if (!victim) break;
+                records.delete(victim.event.eventId);
+                bytes -= victim.bytes;
+                dropped += 1;
+            }
+        }
+
+        function schedule() {
+            if (!sink || sinkFailed || pending) return;
+            if (!Array.from(records.values()).some((item) => !item.delivered)) return;
+            persistence = 'pending';
+            // The only queue is the bounded records map. Batches share its immutable values.
+            pending = Promise.resolve().then(async function drain() {
+                const batch = Array.from(records.values()).filter((item) => !item.delivered).slice(0, BATCH_SIZE);
+                if (!batch.length) return;
+                batch.forEach((item) => { item.inFlight = true; updatePersistence(item, 'pending'); });
+                const revisions = batch.map((item) => item.revision);
+                try {
+                    internal = true;
+                    let result;
+                    try { result = append.call(sink, Object.freeze(batch.map((item) => item.event))); }
+                    finally { internal = false; }
+                    result = await result;
+                    const status = field(result, 'persistence');
+                    const persistedIds = field(result, 'persistedEventIds');
+                    if (!['persisted', 'disabled', 'memory-only'].includes(status)) throw new Error('Invalid sink result');
+                    persistence = status;
+                    batch.forEach((item, index) => {
+                        // An enrichment during append needs its own identity-keyed upsert.
+                        // Confirmation of the old version cannot acknowledge the new one.
+                        if (item.revision === revisions[index]) {
+                            item.delivered = true;
+                            updatePersistence(item, status === 'persisted' && Array.isArray(persistedIds)
+                                && !persistedIds.includes(item.event.eventId) ? 'memory-only' : status);
+                        }
+                    });
+                } catch (_) {
+                    sinkFailed = true;
+                    persistence = 'failed';
+                    batch.forEach((item) => updatePersistence(item, 'failed'));
+                } finally {
+                    batch.forEach((item) => { item.inFlight = false; });
+                    trim();
+                }
+            }).catch(function isolateDrain() {
+                sinkFailed = true;
+                persistence = 'failed';
+            }).then(function drained() {
+                pending = null;
+                if (!sinkFailed && Array.from(records.values()).some((item) => !item.delivered)) schedule();
+            });
+        }
+
+        function updatePersistence(item, status) {
+            const event = normalizer.sanitizeEvent({ ...item.event,
+                persistence: { ...item.event.persistence, diagnostics: status } });
+            replaceEvent(item, event);
+        }
+
+        function replaceEvent(item, event) {
+            bytes -= item.bytes;
+            item.event = event;
+            item.bytes = contract.utf8Bytes(JSON.stringify(event));
+            bytes += item.bytes;
+        }
+
+        function persistenceStatus() {
+            const storage = storageStatus();
+            if (storage && storage.persistence !== 'persisted') return storage.persistence;
+            if (sinkFailed) return 'failed';
+            if (pending) return 'pending';
+            if (Array.from(records.values()).some((item) => item.event.persistence.diagnostics === 'memory-only')) return 'memory-only';
+            return persistence;
+        }
+
+        function storageStatus() {
+            try { return method(sink, 'status')?.call(sink); } catch (_) { return null; }
+        }
+
+        function storageChanged(change) {
+            const state = field(change, 'status');
+            if (!state) return;
+            persistence = state.persistence;
+            for (const item of records.values()) {
+                const current = item.event.persistence.generation === state.generation
+                    && item.event.timestamp > state.cutoff && !state.suspended && state.enabled;
+                if (change.type === 'retry' && current && item.event.persistence.diagnostics !== 'persisted') {
+                    item.delivered = false;
+                    updatePersistence(item, 'memory-only');
+                } else if (!current || state.failure) {
+                    item.revision += 1; // Fence acknowledgements already in flight.
+                    item.delivered = true;
+                    updatePersistence(item, state.enabled ? 'memory-only' : 'disabled');
+                }
+            }
+            trim();
+            if (change.type === 'retry') { sinkFailed = false; schedule(); }
+        }
+
+        function report(input) {
+            // Reentrant internal calls get a reference without buffering or scheduling work.
+            if (reporting || internal) return normalizer.normalize(null).eventId;
+            reporting = true;
+            let event;
+            try {
+                const safeInput = {};
+                ['code', 'module', 'action', 'error', 'newOccurrence', 'resource', 'correlation',
+                    'correlationAliases', 'persistence', 'notification', 'retry', 'collection', 'breadcrumbs']
+                    .forEach((key) => { safeInput[key] = field(input, key); });
+                // Only sink confirmation can promote diagnostic persistence.
+                const storage = storageStatus();
+                safeInput.persistence = { operation: field(safeInput.persistence, 'operation'), diagnostics: 'memory-only',
+                    generation: storage?.generation };
+                if (safeInput.breadcrumbs === undefined) {
+                    safeInput.breadcrumbs = crumbs.map((item) => ({ ...item, correlationAliases: item.correlation }));
+                }
+                if (safeInput.collection === undefined) {
+                    safeInput.collection = { source: 'business', coverage: 'partial', aggregation: 'local' };
+                }
+                safeInput.collection = { source: field(safeInput.collection, 'source'),
+                    coverage: field(safeInput.collection, 'coverage'), aggregation: field(safeInput.collection, 'aggregation'), entryCoverage };
+                event = normalizer.normalize(safeInput);
+                // Explicit cancellation is an observation, never a startup incident.
+                if (field(input, 'cancelled') === true) {
+                    event = normalizer.sanitizeEvent({ ...event, notification: { kind: 'none' } });
+                }
+                const existing = records.get(event.eventId);
+                if (!existing) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, revision: 0, delivered: memoryOnlyConsole, inFlight: false });
+                    bytes += size;
+                } else if (classificationPriority(event) > classificationPriority(existing.event)) {
+                    // The normalizer preserves identity, sequence and first-seen time.
+                    // Keep a known browser location when the business boundary lacks one.
+                    if (event.resource.path === 'unknown' && existing.event.resource.path !== 'unknown') {
+                        event = normalizer.sanitizeEvent({ ...event, resource: existing.event.resource });
+                    }
+                    replaceEvent(existing, event);
+                    existing.revision += 1;
+                    existing.delivered = false;
+                } else {
+                    event = existing.event;
+                }
+                // Pin the canonical startup incident before capacity trimming, including
+                // when enrichment grows an older record or rendering waits for the body.
+                if (event.notification.kind === 'startup') startupId = event.eventId;
+                trim();
+                schedule();
+                if (event.notification.kind === 'startup') showStartup(event.eventId);
+                // Observers receive only normalized evidence, after capture. UI failures
+                // cannot throw into reporting or recursively allocate more incidents.
+                for (const observer of Array.from(observers)) {
+                    try { Promise.resolve(observer(event)).catch(() => {}); } catch (_) { }
+                }
+                return event.eventId;
+            } catch (_) {
+                // The contract's fail-closed normalizer supplies a synchronous identity.
+                return event ? event.eventId : normalizer.normalize(null).eventId;
+            } finally { reporting = false; }
+        }
+
+        function breadcrumb(input, options) {
+            try {
+                if (field(options, 'detailed') === true && !storageStatus()?.detailedMode?.active) return;
+                const normalized = utility.normalize({ breadcrumbs: [input] }).breadcrumbs[0];
+                if (normalized) {
+                    crumbs.push(normalized);
+                    if (crumbs.length > contract.LIMITS.breadcrumbs) crumbs.shift();
+                }
+            } catch (_) { }
+        }
+
+        // Only the validated channel calls this ingress. Preserve origin identity and
+        // lifecycle instead of allocating a local occurrence through report(). No UI,
+        // observer callbacks, business acknowledgements, or retry actions run here.
+        function acceptRelayed(input) {
+            try {
+                let event = normalizer.sanitizeEvent(input);
+                const state = storageStatus();
+                if (!event || event.windowId === normalizer.windowId || !state || !state.enabled || state.suspended
+                    || !['active', 'reset-complete'].includes(state.phase) || state.failure === 'COORDINATION_UNAVAILABLE'
+                    || event.persistence.generation === 'unknown' || event.persistence.generation !== state.generation
+                    || event.timestamp <= state.cutoff) return false;
+                const originPriority = classificationPriority(event);
+                event = normalizer.sanitizeEvent({ ...event,
+                    persistence: { ...event.persistence, diagnostics: 'memory-only' },
+                    collection: { ...event.collection, source: 'relay', aggregation: 'incomplete' },
+                    notification: { kind: 'none', requiresDismissal: false }, retry: { available: false } });
+                const existing = records.get(event.eventId);
+                if (existing && existing.event.timestamp !== event.timestamp) return false;
+                if (!existing) {
+                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    records.set(event.eventId, { event, bytes: size, revision: 0, delivered: false, inFlight: false, originPriority });
+                    bytes += size;
+                } else if (originPriority > (existing.originPriority ?? classificationPriority(existing.event))) {
+                    replaceEvent(existing, event); existing.revision += 1; existing.delivered = false;
+                    existing.originPriority = originPriority;
+                }
+                trim(); schedule();
+                return records.has(event.eventId);
+            } catch (_) { return false; }
+        }
+
+        function declareResource(target, declaration = {}) {
+            try {
+                const resource = utility.normalize({ resource: {
+                    url: typeof target === 'string' ? target : field(declaration, 'url'),
+                    optional: field(declaration, 'optional')
+                } }).resource;
+                if (typeof target === 'object' && target) {
+                    elements.set(target, resource);
+                    resourceErrors.delete(target); // A new declared load is a new attempt.
+                }
+                // Unknown or user-owned URLs never become registry keys.
+                if (resource.path !== 'unknown') resources.set(resource.path, resource);
+                breadcrumb({ module: 'bootstrap', action: 'load-resource', outcome: 'started' }, { detailed: true });
+            } catch (_) { }
+        }
+
+        function resourceFailure(target, error) {
+            try {
+                let identity = resourceErrors.get(target);
+                if (!identity) {
+                    // This registry retains only a code-owned identity token, never a raw
+                    // browser/loader payload, private URL, or local stack from the caller.
+                    identity = new Error(contract.MESSAGES.RESOURCE_LOAD_FAILED);
+                    identity.stack = '';
+                    resourceErrors.set(target, identity);
+                }
+                const url = target.src || target.href;
+                const location = utility.normalize({ resource: { url } }).resource;
+                const declaration = elements.get(target) || resources.get(location.path);
+                // Declared by the entry before its media sources are parsed/loaded.
+                const optionalMedia = field(options, 'optionalMedia') === true
+                    && ['AUDIO', 'VIDEO', 'SOURCE'].includes(String(target.tagName || '').toUpperCase());
+                const optional = declaration ? declaration.optional : optionalMedia ? true : 'unknown';
+                report({ code: 'RESOURCE_LOAD_FAILED', module: 'bootstrap', action: 'load-resource',
+                    error: identity, resource: { url, optional },
+                    notification: { kind: optional === false ? (startup ? 'startup' : 'persistent') : 'none' },
+                    collection: { source: 'resource', coverage: 'partial', aggregation: 'local' } });
+                return identity;
+            } catch (_) { return error; }
+        }
+
+        function globalFailure(error, location) {
+            const checked = utility.normalize({ error, resource: location });
+            const declaration = resources.get(checked.resource.path);
+            const expected = checked.error.name === 'AbortError' || isNativeAbort(error)
+                || (declaration && declaration.optional === true);
+            return report({ code: startup && !expected ? 'APP_BOOT_FAILED' : 'UNEXPECTED_RUNTIME_ERROR',
+                module: startup ? 'bootstrap' : 'main', action: startup ? 'initialize' : 'report', error,
+                resource: { ...location, optional: declaration ? declaration.optional : undefined },
+                notification: { kind: startup && !expected ? 'startup' : 'none' },
+                collection: { source: handedOff ? 'global' : 'bootstrap', coverage: 'partial', aggregation: 'local' } });
+        }
+
+        function captureError(event) {
+            if (internal) return;
+            try {
+                if (event.target && event.target !== global && (event.target.src || event.target.href)) {
+                    resourceFailure(event.target);
+                } else {
+                    globalFailure(event.error || event, { url: event.filename, line: event.lineno, column: event.colno });
+                }
+            } catch (_) { }
+            // Do not preventDefault, return true, or echo the browser's exception to console.
+        }
+
+        function captureRejection(event) {
+            if (internal) return;
+            try { globalFailure(event.reason); } catch (_) { }
+        }
+
+        function getIncident(eventId) { storageStatus(); return records.get(eventId)?.event || null; }
+
+        function snapshot(query = {}) {
+            const storage = storageStatus();
+            const id = field(query, 'eventId');
+            const requested = field(query, 'limit');
+            const limit = Number.isSafeInteger(requested) ? Math.max(0, Math.min(MAX_EVENTS, requested)) : MAX_EVENTS;
+            const matching = Array.from(records.values()).map((item) => item.event).filter((event) => !id || event.eventId === id);
+            const events = limit ? matching.slice(-limit).map(normalizer.sanitizeEvent).filter(Boolean) : [];
+            return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: persistenceStatus(), coverage: 'partial',
+                entryCoverage,
+                truncated: dropped > 0 || matching.length > events.length, ...(storage ? { storage } : {}),
+                ...(transport ? { transport: transportStatus() } : {}) });
+        }
+
+        function exportText(eventId = startupId) {
+            try {
+                const current = snapshot();
+                const chosen = current.events.find((event) => event.eventId === eventId);
+                const ordered = current.events.filter((event) => event !== chosen).reverse();
+                if (chosen) ordered.unshift(chosen);
+                const output = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
+                    entryCoverage: current.entryCoverage,
+                    truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
+                    ...(current.transport ? { transport: current.transport } : {}),
+                    notice: 'Local diagnostics; not an answer backup.', events: [] };
+                for (const event of ordered) {
+                    output.events.push(event);
+                    if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
+                        output.events.pop();
+                        output.truncated = true;
+                        break;
+                    }
+                }
+                return JSON.stringify(output);
+            } catch (_) { return 'Local diagnostic export unavailable. No practice data was changed.'; }
+        }
+
+        function showStartup(eventId) {
+            startupId = eventId;
+            if (fallbackFailed) return;
+            try {
+                const doc = global.document;
+                if (!doc || !doc.body) {
+                    if (doc && !waitingForBody) {
+                        waitingForBody = true;
+                        doc.addEventListener('DOMContentLoaded', function renderWhenReady() {
+                            waitingForBody = false;
+                            showStartup(startupId);
+                        }, { once: true });
+                    }
+                    return;
+                }
+                internal = true;
+                if (!panel) {
+                    const root = doc.createElement('section');
+                    root.id = 'diagnostic-startup-failure';
+                    root.setAttribute('role', 'alert');
+                    root.style.cssText = 'position:fixed;inset:16px 16px auto;z-index:2147483647;max-height:85vh;overflow:auto;padding:20px;background:#fff;color:#17202a;border:2px solid #a11;border-radius:8px;font:16px/1.5 system-ui;white-space:normal;';
+                    const heading = doc.createElement('h2');
+                    const explanation = doc.createElement('p');
+                    const reference = doc.createElement('p');
+                    const button = doc.createElement('button');
+                    button.type = 'button';
+                    button.textContent = '导出诊断';
+                    const details = doc.createElement('details');
+                    const summary = doc.createElement('summary');
+                    summary.textContent = '查看或复制诊断文本';
+                    const text = doc.createElement('textarea');
+                    text.readOnly = true;
+                    text.rows = 8;
+                    text.style.cssText = 'display:block;width:100%;color:#17202a;background:#fff;font:12px monospace;';
+                    text.setAttribute('aria-label', '诊断文本');
+                    details.appendChild(summary);
+                    details.appendChild(text);
+                    details.addEventListener('toggle', function refreshText() {
+                        try { if (details.open) text.value = panel?.exportedText || exportText(); } catch (_) { }
+                    });
+                    button.addEventListener('click', async function download() {
+                        // The full exporter is optional. Missing/broken bundles retain
+                        // the bootstrap's independent synchronous text path below.
+                        const exporter = global.AppDiagnosticExport;
+                        const richDownload = method(exporter, 'download');
+                        if (richDownload) {
+                            try {
+                                const result = await richDownload.call(exporter, { eventId: startupId }, { textTarget: text });
+                                if (result?.status === 'download-started') return;
+                                // Only a generated report can replace bootstrap evidence.
+                                // Delivery failures keep its summary; generation failures
+                                // must continue through the independent minimal export.
+                                if (result?.status === 'text-fallback' && result.report
+                                    && !result.report.issues?.includes('export-generation-failed')) {
+                                    panel.exportedText = result.text;
+                                    details.open = true; text.focus(); text.select(); return;
+                                }
+                            } catch (_) { }
+                        }
+                        panel.exportedText = null;
+                        let url;
+                        try {
+                            text.value = exportText();
+                            url = global.URL.createObjectURL(new global.Blob([text.value], { type: 'text/plain;charset=utf-8' }));
+                            const link = doc.createElement('a');
+                            link.href = url;
+                            link.download = 'ielts-startup-diagnostics.txt';
+                            root.appendChild(link);
+                            try { link.click(); } finally { root.removeChild(link); }
+                        } catch (_) {
+                            try { details.open = true; text.value = exportText(); text.focus(); text.select(); } catch (_) { }
+                        } finally {
+                            if (url) {
+                                try { global.setTimeout(function release() { try { global.URL.revokeObjectURL(url); } catch (_) { } }, 1000); }
+                                catch (_) { try { global.URL.revokeObjectURL(url); } catch (_) { } }
+                            }
+                        }
+                    });
+                    [heading, explanation, reference, button, details].forEach((node) => root.appendChild(node));
+                    doc.body.appendChild(root);
+                    panel = { root, heading, explanation, reference, text, details };
+                }
+                panel.root.style.position = 'fixed';
+                panel.root.setAttribute('role', 'alert');
+                panel.heading.textContent = '应用启动失败';
+                panel.explanation.textContent = '请保留此页面，并导出诊断信息以便排查。诊断信息不包含答案，也不是练习备份。';
+                panel.reference.textContent = '事件编号：' + startupId;
+                panel.exportedText = null;
+                if (panel.details.open) panel.text.value = exportText();
+            } catch (_) {
+                fallbackFailed = true;
+                // One plain-text attempt, with no logger, reporter call, timers, or retry loop.
+                try {
+                    const pre = global.document.createElement('pre');
+                    pre.textContent = '应用启动失败。事件编号：' + startupId + '\n' + exportText();
+                    global.document.body.appendChild(pre);
+                } catch (_) { }
+            } finally { internal = false; }
+        }
+
+        function startupFailed(error) {
+            if (internal) return normalizer.normalize(null).eventId;
+            const id = report({ code: 'APP_BOOT_FAILED', module: 'main', action: 'initialize', error,
+                notification: { kind: 'startup' } });
+            showStartup(id);
+            return id;
+        }
+
+        function captureConsole(level, args) {
+            if (level !== 'error' || internal) return;
+            try {
+                let error;
+                const length = Math.min(field(args, 'length') || 0, 20);
+                for (let i = 0; i < length; i += 1) {
+                    const value = field(args, String(i));
+                    if (value && typeof value === 'object') {
+                        // Select an Error only; never retain arbitrary argument objects or text.
+                        const checked = utility.normalize({ error: value }).error;
+                        if (checked.name !== 'unknown' && checked.kind === 'object') { error = value; break; }
+                    }
+                }
+                // Keep console evidence during asynchronous delivery in memory, but do not
+                // feed a sink's own asynchronous logging back into that sink indefinitely.
+                memoryOnlyConsole = !!pending;
+                report({ code: 'UNEXPECTED_RUNTIME_ERROR', module: 'logger', action: 'report', error,
+                    collection: { source: 'console', coverage: 'partial', aggregation: 'local' } });
+            } catch (_) { } finally { memoryOnlyConsole = false; }
+        }
+
+        installed = Object.freeze({
+            report, breadcrumb, getIncident, snapshot, exportText, declareResource, resourceFailure,
+            // Allocate local aliases or revalidate aliases from an authenticated handshake.
+            // This never records the raw identifiers or changes already captured evidence.
+            correlate(correlation, aliases) {
+                return utility.normalize(aliases === undefined ? { correlation } : { correlationAliases: aliases }).correlation;
+            },
+            startupFailed, captureConsole, acceptRelayed, windowId: normalizer.windowId,
+            attachTransport(next) { if (method(next, 'status')) transport = next; },
+            subscribe(observer) {
+                if (typeof observer !== 'function' || observers.size >= 16) return () => {};
+                observers.add(observer);
+                return () => observers.delete(observer);
+            },
+            markReady() {
+                startup = false;
+                // Retain the incident and export controls without covering the recovered app.
+                try {
+                    if (panel) {
+                        panel.root.style.position = 'static';
+                        panel.root.setAttribute('role', 'region');
+                        panel.root.setAttribute('aria-label', '启动故障诊断');
+                        panel.heading.textContent = '启动故障记录';
+                        panel.explanation.textContent = '应用已完成启动，诊断信息保留供排查。诊断信息不包含答案，也不是练习备份。';
+                    }
+                } catch (_) { }
+            },
+            handoff() { handedOff = true; return installed; },
+            attachSink(next) {
+                if (sink === next) return;
+                // A single sink owns delivery; replacing it requires an explicit future lifecycle API.
+                const candidate = method(next, 'append');
+                if (sink || !candidate) return;
+                sink = next;
+                append = candidate;
+                const state = storageStatus();
+                if (state) {
+                    // Only this page's pre-sink bootstrap evidence may adopt the
+                    // initial generation. Relayed records must carry their origin's.
+                    for (const item of records.values()) {
+                        if (item.event.persistence.generation === 'unknown' && item.event.collection.source !== 'relay'
+                            && item.event.timestamp > state.cutoff) {
+                            replaceEvent(item, normalizer.sanitizeEvent({ ...item.event,
+                                persistence: { ...item.event.persistence, generation: state.generation } }));
+                        }
+                    }
+                    storageChanged({ type: 'barrier', status: state });
+                    method(next, 'subscribe')?.call(next, storageChanged);
+                }
+                persistence = 'memory-only';
+                schedule();
+            },
+            retrySink() {
+                const retry = method(sink, 'retry');
+                if (retry) return retry.call(sink);
+                if (!sinkFailed || pending) return;
+                sinkFailed = false;
+                persistence = 'pending';
+                schedule();
+            },
+            async flush() {
+                schedule();
+                while (pending) await pending;
+                return Object.freeze({ persistence: persistenceStatus() });
+            },
+            status() {
+                return Object.freeze({ events: records.size, bytes, dropped, persistence: persistenceStatus(), handedOff, fallbackFailed,
+                    ...(storageStatus() ? { storage: storageStatus() } : {}),
+                    ...(transport ? { transport: transportStatus() } : {}) });
+            }
+        });
+        for (const key of ['requiredResources', 'optionalResources']) {
+            const list = field(options, key);
+            if (Array.isArray(list)) list.slice(0, 100).forEach((url) => declareResource(url, { optional: key === 'optionalResources' }));
+        }
+        if (typeof global.addEventListener === 'function') {
+            global.addEventListener('error', captureError, true);
+            global.addEventListener('unhandledrejection', captureRejection);
+        }
+        return installed;
+    }
+    global.AppDiagnosticBootstrap = Object.freeze({ install, current: () => installed || null });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticStore.js ===== */
+(function defineDiagnosticStorage(global) {
+    'use strict';
+    if (global.AppDiagnosticStorage) return;
+
+    const DATABASE_NAME = 'IELTSAtlasDiagnosticsV1';
+    const CONTROL_KEY = 'ielts-atlas-diagnostics-control-v1';
+    const LOCK_NAME = 'ielts-atlas-diagnostics-lifecycle-v1';
+    const ZERO = 'dg-' + '0'.repeat(32);
+    const GENERATION = /^dg-[a-f0-9]{32}$/;
+    const DETAILED_MODE_MS = 15 * 60 * 1000;
+    const LIMITS = Object.freeze({ ageMs: 7 * 86400000, events: 2000, bytes: 2 * 1024 * 1024,
+        batchEvents: 20, pendingEvents: 200, pendingBytes: 256 * 1024 });
+
+    function priority(event) {
+        return ['startup', 'dialog', 'persistent'].includes(event.notification.kind) ? 2
+            : event.code !== 'UNEXPECTED_RUNTIME_ERROR' ? 1 : 0;
+    }
+    function create(options = {}) {
+        const contract = global.AppDiagnosticContract;
+        const normalizer = contract.createNormalizer();
+        const databaseName = options.databaseName || DATABASE_NAME;
+        const controlKey = options.controlKey || CONTROL_KEY;
+        const lockName = options.lockName || LOCK_NAME;
+        const now = options.now || Date.now;
+        const timeoutMs = options.timeoutMs || 2000;
+        const limits = Object.fromEntries(['ageMs', 'events', 'bytes'].map((key) => [key,
+            Number.isSafeInteger(options.limits?.[key]) && options.limits[key] > 0
+                ? Math.min(options.limits[key], LIMITS[key]) : LIMITS[key]]));
+        const listeners = new Set();
+        const defaults = { generation: ZERO, resetGeneration: ZERO, cutoff: -1, enabled: true, phase: 'active',
+            detailedStartedAt: 0, detailedUntil: 0 };
+        let control = { ...defaults };
+        let initialReset;
+        let suspended = false;
+        let closed = false;
+        let failure = null;
+        let coordinationReady = false;
+        let coordinationFailed = false;
+        let pendingEvents = 0;
+        let pendingBytes = 0;
+        let dropped = 0;
+        let channel;
+        let expiredDetailedUntil = 0;
+
+        function detailedMode() {
+            const timestamp = now();
+            if (timestamp >= control.detailedUntil) expiredDetailedUntil = Math.max(expiredDetailedUntil, control.detailedUntil);
+            const coordinated = !coordinationFailed && !closed && !suspended;
+            const active = coordinated && control.detailedUntil > expiredDetailedUntil
+                && timestamp >= control.detailedStartedAt && timestamp < control.detailedUntil;
+            return Object.freeze({ active, expiresAt: control.detailedUntil,
+                remainingMs: active ? Math.min(DETAILED_MODE_MS, control.detailedUntil - timestamp) : 0,
+                coordination: coordinated ? 'supported-windows' : 'unavailable' });
+        }
+
+        function view() {
+            return Object.freeze({ persistence: !control.enabled ? 'disabled'
+                : failure || !coordinationReady || suspended || closed ? 'memory-only' : pendingEvents ? 'pending' : 'persisted',
+                enabled: control.enabled, generation: control.generation, cutoff: control.cutoff,
+                suspended: suspended || closed, phase: control.phase, failure,
+                coverage: failure || !coordinationReady || suspended || closed ? 'partial' : 'complete', pendingEvents, pendingBytes, dropped,
+                detailedMode: detailedMode() });
+        }
+        function emit(type) {
+            for (const listener of listeners) { try { listener(Object.freeze({ type, status: view() })); } catch (_) { } }
+        }
+        function fail(code) {
+            // Coordination can fail after an unrelated IDB failure has latched.
+            // Do not let that earlier failure hide an unsafe/stale mode lease.
+            if (code === 'COORDINATION_UNAVAILABLE') { coordinationFailed = true; coordinationReady = false; }
+            if (!failure) { failure = code; emit('status'); }
+        }
+        function failureCode(error) {
+            const name = error && error.name;
+            return name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED'
+                : name === 'SecurityError' || name === 'InvalidStateError' ? 'UNAVAILABLE'
+                    : name === 'AbortError' ? 'TRANSACTION_ABORTED' : 'TRANSACTION_FAILED';
+        }
+        function readControl() {
+            const raw = global.localStorage.getItem(controlKey);
+            if (raw === null) return { ...defaults };
+            const value = JSON.parse(raw);
+            if (!value || !GENERATION.test(value.generation) || !GENERATION.test(value.resetGeneration)
+                || !Number.isSafeInteger(value.cutoff) || value.cutoff < -1 || typeof value.enabled !== 'boolean'
+                || !['active', 'resetting', 'reset-complete'].includes(value.phase)) throw new Error('Invalid diagnostic control');
+            // Old control records have no mode fields. Reject invalid/overlong leases
+            // without invalidating the existing persistence/reset fence.
+            const validMode = Number.isSafeInteger(value.detailedStartedAt) && value.detailedStartedAt > 0
+                && Number.isSafeInteger(value.detailedUntil) && value.detailedUntil > value.detailedStartedAt
+                && value.detailedUntil - value.detailedStartedAt <= DETAILED_MODE_MS;
+            return { generation: value.generation, resetGeneration: value.resetGeneration,
+                cutoff: value.cutoff, enabled: value.enabled, phase: value.phase,
+                detailedStartedAt: validMode ? value.detailedStartedAt : 0, detailedUntil: validMode ? value.detailedUntil : 0 };
+        }
+        function sync() {
+            try {
+                const next = readControl();
+                if (initialReset === undefined) initialReset = next.resetGeneration;
+                if (next.phase === 'resetting' || initialReset !== next.resetGeneration) suspended = true;
+                const changed = next.generation !== control.generation || next.phase !== control.phase;
+                const modeChanged = next.detailedUntil !== control.detailedUntil || next.detailedStartedAt !== control.detailedStartedAt;
+                control = next;
+                if (changed) emit('barrier');
+                else if (modeChanged) emit('status');
+            } catch (_) { fail('COORDINATION_UNAVAILABLE'); }
+            return control;
+        }
+        function capabilities() {
+            sync();
+            try {
+                if (!global.navigator?.locks?.request || !global.localStorage) fail('COORDINATION_UNAVAILABLE');
+                if (!global.indexedDB?.open) fail('UNAVAILABLE');
+            } catch (_) { fail('UNAVAILABLE'); }
+            return !failure && !closed;
+        }
+        function writeControl(next) {
+            try {
+                // A fresh token makes even an unchanged control record a real write.
+                // Reserve room for longer cutoff/phase values before storage fills.
+                const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(384, ' ');
+                global.localStorage.setItem(controlKey, serialized);
+                if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
+                coordinationReady = true;
+            } catch (error) {
+                coordinationReady = false;
+                fail('COORDINATION_UNAVAILABLE');
+                throw error;
+            }
+        }
+        function publish(next) {
+            // All control mutations and IDB operations share one cross-window lock.
+            writeControl(next);
+            control = next;
+            try { channel?.postMessage({ type: 'control-changed' }); } catch (_) { }
+            emit('barrier');
+        }
+        function generation() {
+            const values = new Uint8Array(16);
+            global.crypto.getRandomValues(values);
+            return 'dg-' + Array.from(values, (value) => value.toString(16).padStart(2, '0')).join('');
+        }
+        function nextControl(changes = {}) {
+            return { ...control, generation: generation(), cutoff: Math.max(now(), control.cutoff), ...changes };
+        }
+        async function locked(callback) {
+            const abort = new global.AbortController();
+            const timer = global.setTimeout(() => abort.abort(), timeoutMs);
+            try {
+                return await global.navigator.locks.request(lockName, { mode: 'exclusive', signal: abort.signal }, async () => {
+                    global.clearTimeout(timer);
+                    sync();
+                    return callback();
+                });
+            } finally { global.clearTimeout(timer); }
+        }
+        function open(createDatabase) {
+            return new Promise((resolve, reject) => {
+                let request;
+                let finished = false;
+                const finish = (error, db) => {
+                    if (finished) { db?.close(); return; }
+                    finished = true;
+                    global.clearTimeout(timer);
+                    if (error) reject(error); else resolve(db);
+                };
+                const timer = global.setTimeout(() => {
+                    fail('OPEN_TIMEOUT');
+                    finish(new Error('Diagnostic open timed out'));
+                }, timeoutMs);
+                try { request = global.indexedDB.open(databaseName, 1); }
+                catch (error) { finish(error); return; }
+                request.onblocked = () => { fail('OPEN_BLOCKED'); finish(new Error('Diagnostic open blocked')); };
+                request.onupgradeneeded = () => {
+                    // A timed-out/blocked open may resume after a reset. Never let it
+                    // create a database after its lifecycle lock has been released.
+                    if (finished || !createDatabase) { request.transaction.abort(); return; }
+                    request.result.createObjectStore('events', { keyPath: 'eventId' });
+                };
+                request.onerror = () => {
+                    if (!createDatabase && request.error?.name === 'AbortError') finish(null, null);
+                    else finish(request.error || new Error('Diagnostic open failed'));
+                };
+                request.onsuccess = () => {
+                    request.result.onversionchange = () => request.result.close();
+                    finish(null, request.result);
+                };
+            });
+        }
+        async function transaction(mode, action, createDatabase = false) {
+            // Every caller holds the lifecycle lock and has synchronized control.
+            if (!coordinationReady) writeControl(control);
+            const db = await open(createDatabase);
+            if (!db) return [];
+            try {
+                return await new Promise((resolve, reject) => {
+                    let tx;
+                    let result;
+                    let thrown;
+                    const timer = global.setTimeout(() => {
+                        fail('TRANSACTION_TIMEOUT');
+                        try { tx.abort(); } catch (_) { }
+                    }, timeoutMs);
+                    try {
+                        tx = db.transaction('events', mode);
+                        tx.oncomplete = () => { global.clearTimeout(timer); resolve(result); };
+                        tx.onabort = tx.onerror = () => { global.clearTimeout(timer); reject(thrown || tx.error || new Error('Diagnostic transaction failed')); };
+                        const store = tx.objectStore('events');
+                        const request = store.getAll();
+                        request.onsuccess = () => {
+                            try { result = action(store, request.result); }
+                            catch (error) { thrown = error; tx.abort(); }
+                        };
+                    } catch (error) { global.clearTimeout(timer); reject(error); }
+                });
+            } finally { db.close(); }
+        }
+        function eligible(event) {
+            return event && event.persistence.generation === control.generation
+                && event.timestamp > control.cutoff && event.timestamp >= now() - limits.ageMs;
+        }
+        function retained(rows) {
+            return rows.map((row) => normalizer.sanitizeEvent(row.event)).filter(eligible);
+        }
+        function select(events) {
+            const ordered = events.sort((a, b) => priority(b) - priority(a)
+                || b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+            const keep = new Map();
+            let total = 0;
+            for (const event of ordered) {
+                const size = contract.utf8Bytes(JSON.stringify(event));
+                if (keep.size < limits.events && total + size <= limits.bytes) {
+                    keep.set(event.eventId, { eventId: event.eventId, event, bytes: size });
+                    total += size;
+                }
+            }
+            return keep;
+        }
+        async function prune() {
+            if (!capabilities() || suspended || !control.enabled) return;
+            try {
+                await locked(async () => {
+                    if (failure || suspended || closed || !control.enabled) return;
+                    await transaction('readwrite', (store, rows) => {
+                        const keep = select(retained(rows));
+                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
+                        dropped += rows.length - keep.size;
+                    });
+                });
+            } catch (error) { fail(failureCode(error)); }
+        }
+        function receipt(ids = []) {
+            const status = view();
+            return Object.freeze({ persistence: status.persistence === 'pending' ? 'persisted' : status.persistence,
+                persistedEventIds: Object.freeze(ids), status });
+        }
+        async function append(input) {
+            capabilities();
+            if (failure || suspended || closed || !control.enabled) return receipt();
+            const events = [];
+            // Normalize before retaining a queue reference; never buffer caller objects.
+            for (let index = 0; index < Math.min(input?.length || 0, LIMITS.batchEvents); index += 1) {
+                const event = normalizer.sanitizeEvent(input[index]);
+                if (eligible(event)) events.push(event);
+            }
+            const bytes = events.reduce((sum, event) => sum + contract.utf8Bytes(JSON.stringify(event)), 0);
+            if (pendingEvents + events.length > LIMITS.pendingEvents || pendingBytes + bytes > LIMITS.pendingBytes) {
+                dropped += events.length;
+                return Object.freeze({ persistence: 'memory-only', persistedEventIds: Object.freeze([]), status: view() });
+            }
+            if (!events.length) return receipt();
+            pendingEvents += events.length;
+            pendingBytes += bytes;
+            let ids = [];
+            try {
+                ids = await locked(async () => {
+                    if (failure || suspended || closed || !control.enabled) return [];
+                    const batch = events.filter(eligible);
+                    if (!batch.length) return [];
+                    return transaction('readwrite', (store, rows) => {
+                        const merged = new Map(retained(rows).map((event) => [event.eventId, event]));
+                        for (const event of batch) {
+                            const previous = merged.get(event.eventId);
+                            if (!previous || priority(event) >= priority(previous)) {
+                                merged.set(event.eventId, normalizer.sanitizeEvent({ ...event,
+                                    persistence: { ...event.persistence, diagnostics: 'persisted' } }));
+                            }
+                        }
+                        const keep = select(Array.from(merged.values()));
+                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
+                        for (const event of batch) if (keep.has(event.eventId)) store.put(keep.get(event.eventId));
+                        dropped += merged.size - keep.size;
+                        return batch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
+                    }, true);
+                });
+            } catch (error) { fail(failureCode(error)); }
+            finally { pendingEvents -= events.length; pendingBytes -= bytes; }
+            return receipt(ids);
+        }
+        async function snapshot(query = {}) {
+            capabilities();
+            let events = [];
+            let truncated = false;
+            if (!failure && !suspended && !closed && control.enabled) {
+                try {
+                    events = await locked(async () => {
+                        if (failure || suspended || closed || !control.enabled) return [];
+                        return transaction('readonly', (_store, rows) => retained(rows));
+                    });
+                } catch (error) { fail(failureCode(error)); }
+            }
+            events = events.filter((event) => !query.eventId || event.eventId === query.eventId)
+                .sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence || a.eventId.localeCompare(b.eventId));
+            const limit = Number.isSafeInteger(query.limit) ? Math.max(0, Math.min(LIMITS.events, query.limit)) : contract.LIMITS.snapshotEvents;
+            truncated = events.length > limit;
+            events = limit ? events.slice(-limit) : [];
+            return Object.freeze({ schemaVersion: 1, events: Object.freeze(events), persistence: view().persistence,
+                coverage: view().coverage, truncated, storage: view() });
+        }
+        function deleteHistory() {
+            return new Promise((resolve, reject) => {
+                const request = global.indexedDB.deleteDatabase(databaseName);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error || new Error('Diagnostic deletion failed'));
+                request.onblocked = () => { failure = 'DELETE_BLOCKED'; emit('status'); };
+            });
+        }
+        async function clearHistory(enabled) {
+            if (!capabilities() && coordinationFailed) return { success: false, status: view() };
+            try {
+                return await locked(async () => {
+                    if (suspended || closed) return { success: false, status: view() };
+                    publish(nextControl({ enabled: typeof enabled === 'boolean' ? enabled : control.enabled }));
+                    // Removal is an explicit action even after a failed write. The
+                    // generation/preference remains in force if deletion is blocked.
+                    await deleteHistory();
+                    failure = null;
+                    emit('status');
+                    return Object.freeze({ success: true, status: view() });
+                });
+            } catch (error) { fail(failureCode(error)); return Object.freeze({ success: false, status: view() }); }
+        }
+        async function retry() {
+            if (closed || suspended || !sync().enabled) return Object.freeze({ success: false, status: view() });
+            coordinationReady = false;
+            coordinationFailed = false;
+            failure = null;
+            if (capabilities()) {
+                try {
+                    await locked(async () => {
+                        if (failure || !control.enabled || suspended || closed) return;
+                        writeControl(control);
+                        // Probe a real write transaction; explicit retry has an
+                        // observable outcome even when the reporter has no queue.
+                        await transaction('readwrite', (store) => {
+                            store.put({ eventId: '__retry_probe__' });
+                            store.delete('__retry_probe__');
+                        }, true);
+                    });
+                } catch (error) { fail(failureCode(error)); }
+            }
+            const success = !failure && coordinationReady && !suspended && !closed && control.enabled;
+            if (success) emit('retry');
+            return Object.freeze({ success, status: view() });
+        }
+        async function setDetailedMode(enabled) {
+            capabilities();
+            if (closed || suspended || coordinationFailed) {
+                return Object.freeze({ success: false, status: view() });
+            }
+            try {
+                await locked(() => {
+                    if (closed || suspended || coordinationFailed) throw new Error('Mode coordination unavailable');
+                    const timestamp = now();
+                    // Repeated enable requests do not silently extend a running lease.
+                    if (enabled === true && detailedMode().active) return;
+                    publish({ ...control, detailedStartedAt: enabled === true ? timestamp : 0,
+                        detailedUntil: enabled === true ? timestamp + DETAILED_MODE_MS : 0 });
+                });
+                return Object.freeze({ success: true, status: view() });
+            } catch (_) { return Object.freeze({ success: false, status: view() }); }
+        }
+        async function withFullReset(callback) {
+            // A reset must still work after diagnostic storage failed. It requires
+            // working coordination, but never opens this database to establish it.
+            if (closed || !global.navigator?.locks?.request) throw new Error('Diagnostic coordination unavailable');
+            return locked(async () => {
+                const next = nextControl({ enabled: true, phase: 'resetting', detailedStartedAt: 0, detailedUntil: 0 });
+                next.resetGeneration = next.generation;
+                suspended = true;
+                publish(next);
+                const result = await callback();
+                // Keep the tombstone after localStorage.clear(), on success and on
+                // partial failure. Existing/reconnecting windows stay suspended.
+                publish({ ...next, phase: result?.success === true ? 'reset-complete' : 'resetting' });
+                return result;
+            });
+        }
+        const onStorage = (event) => { if (event.key === controlKey || event.key === null) sync(); };
+        capabilities();
+        try {
+            channel = new global.BroadcastChannel(controlKey);
+            channel.onmessage = () => sync(); // Notifications are hints; storage is authoritative.
+        } catch (_) { }
+        global.addEventListener?.('storage', onStorage);
+        const ready = Promise.resolve().then(prune);
+        const api = Object.freeze({ append, snapshot, retry, setDetailedMode, withFullReset, controlKey, ready,
+            getIncident: async (eventId) => (await snapshot({ eventId, limit: 1 })).events[0] || null,
+            clear: () => clearHistory(), setEnabled: (enabled) => clearHistory(enabled === true),
+            status() { sync(); return view(); },
+            subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+            close() { closed = true; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
+        });
+        return api;
+    }
+    global.AppDiagnosticStorage = Object.freeze({ create, DATABASE_NAME, CONTROL_KEY, LOCK_NAME, LIMITS, DETAILED_MODE_MS });
+    global.AppDiagnosticStore = create();
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticReporter.js ===== */
+(function attachDiagnosticReporter(global) {
+    'use strict';
+    if (global.AppDiagnostics) return;
+    // Handoff keeps the normalizer, identities, buffer and listeners in the same owner.
+    global.AppDiagnostics = global.AppDiagnosticBootstrap.install({
+        context: global.document?.documentElement?.dataset?.diagnosticContext || 'main'
+    }).handoff();
+    if (global.AppDiagnosticStore) global.AppDiagnostics.attachSink(global.AppDiagnosticStore);
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticExport.js ===== */
+(function defineDiagnosticExport(global) {
+    'use strict';
+    if (global.AppDiagnosticExport) return;
+
+    const LIMITS = Object.freeze({ events: 2000, bytes: 2 * 1024 * 1024, context: 50,
+        summaryBytes: 8192, readTimeoutMs: 3000 });
+    const NOTICE = 'Local diagnostics help investigation; they are not an answer backup.';
+    const ORDERING = 'Sequence within each originating window; cross-window clocks are not synchronized.';
+    const FALLBACK = NOTICE + '\nDiagnostic export generation failed. Keep this page open and use the startup text export if available.';
+    const PERSISTENCE = ['persisted', 'pending', 'memory-only', 'disabled', 'failed'];
+    const FAILURES = ['COORDINATION_UNAVAILABLE', 'UNAVAILABLE', 'QUOTA_EXCEEDED', 'TRANSACTION_ABORTED',
+        'TRANSACTION_FAILED', 'OPEN_BLOCKED', 'OPEN_TIMEOUT', 'TRANSACTION_TIMEOUT', 'DELETE_BLOCKED'];
+    const EVENT_ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;
+
+    // Retained records, status objects and caller queries all cross the same
+    // default-deny boundary. Never enumerate caller objects or invoke getters.
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; } catch (_) { return undefined; }
+    }
+    function method(value, key) {
+        try {
+            for (let depth = 0; value && depth < 4; depth += 1, value = Object.getPrototypeOf(value)) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (descriptor) return typeof descriptor.value === 'function' ? descriptor.value : null;
+            }
+        } catch (_) { }
+        return null;
+    }
+    function choice(value, values, fallback = 'unknown') { return values.includes(value) ? value : fallback; }
+    function count(value) { return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, Number.MAX_SAFE_INTEGER) : 0; }
+    function freeze(value) {
+        if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
+        return value;
+    }
+    function storageStatus(raw) {
+        if (!raw) return null;
+        const generation = field(raw, 'generation');
+        const mode = field(raw, 'detailedMode');
+        return { persistence: choice(field(raw, 'persistence'), PERSISTENCE),
+            enabled: choice(field(raw, 'enabled'), [true, false]),
+            generation: typeof generation === 'string' && /^dg-[a-f0-9]{32}$/.test(generation) ? generation : 'unknown',
+            cutoff: Number.isSafeInteger(field(raw, 'cutoff')) ? Math.max(-1, field(raw, 'cutoff')) : -1,
+            suspended: choice(field(raw, 'suspended'), [true, false]),
+            phase: choice(field(raw, 'phase'), ['active', 'resetting', 'reset-complete']),
+            failure: choice(field(raw, 'failure'), FAILURES, field(raw, 'failure') === null ? null : 'unknown'),
+            coverage: choice(field(raw, 'coverage'), ['complete', 'partial']),
+            pendingEvents: count(field(raw, 'pendingEvents')), pendingBytes: count(field(raw, 'pendingBytes')),
+            dropped: count(field(raw, 'dropped')),
+            ...(mode ? { detailedMode: { active: field(mode, 'active') === true,
+                expiresAt: count(field(mode, 'expiresAt')), remainingMs: Math.min(900000, count(field(mode, 'remainingMs'))),
+                coordination: choice(field(mode, 'coordination'), ['supported-windows', 'unavailable'], 'unavailable') } } : {}) };
+    }
+    function priority(event) {
+        if (event.code !== 'UNEXPECTED_RUNTIME_ERROR') return event.collection.source === 'business' ? 3 : 2;
+        return event.collection.source === 'console' ? 0 : 1;
+    }
+    function correlationKeys(event) {
+        const keys = [];
+        for (const correlation of [event.correlation, ...event.breadcrumbs.map((crumb) => crumb.correlation)]) {
+            if (correlation.scopeId === 'unknown') continue;
+            for (const kind of ['operation', 'submission', 'session', 'suite']) {
+                if (correlation[kind] !== 'unknown') keys.push(correlation.scopeId + ':' + correlation[kind]);
+            }
+        }
+        return keys;
+    }
+
+    function create(options = {}) {
+        const requestedTimeout = field(options, 'timeoutMs');
+        const timeout = Number.isSafeInteger(requestedTimeout)
+            ? Math.max(1, Math.min(LIMITS.readTimeoutMs, requestedTimeout)) : LIMITS.readTimeoutMs;
+        const contract = global.AppDiagnosticContract;
+        const normalizer = contract.createNormalizer();
+
+        async function bounded(action) {
+            let timer;
+            try {
+                return await Promise.race([
+                    Promise.resolve().then(action).then((value) => ({ state: 'available', value }), () => ({ state: 'failed' })),
+                    new Promise((resolve) => { timer = global.setTimeout(() => resolve({ state: 'timed-out' }), timeout); })
+                ]);
+            } catch (_) { return { state: 'failed' }; }
+            finally { try { global.clearTimeout(timer); } catch (_) { } }
+        }
+
+        function readers() {
+            // current() observes an installed bootstrap without starting collection.
+            return { memory: field(options, 'reporter') || global.AppDiagnostics,
+                bootstrap: field(options, 'bootstrap') || global.AppDiagnosticBootstrap?.current?.(),
+                persisted: field(options, 'store') || global.AppDiagnosticStore };
+        }
+        async function read(reader, limit) {
+            const snapshot = method(reader, 'snapshot');
+            if (!snapshot) return { state: 'unavailable' };
+            return bounded(() => snapshot.call(reader, { limit }));
+        }
+        function cleanSource(result, maximum, byteLimit) {
+            const raw = result.value;
+            const input = field(raw, 'events');
+            let array = false;
+            try { array = Array.isArray(input); } catch (_) { }
+            const length = array ? count(field(input, 'length')) : 0;
+            const events = [];
+            let bytes = 0;
+            let rejected = 0;
+            let truncated = field(raw, 'truncated') === true || length > maximum;
+            for (let index = 0; index < Math.min(length, maximum); index += 1) {
+                const event = normalizer.sanitizeEvent(field(input, String(index)));
+                if (!event) { rejected += 1; continue; }
+                const size = contract.utf8Bytes(JSON.stringify(event));
+                if (bytes + size > byteLimit) { truncated = true; break; }
+                bytes += size;
+                events.push(event);
+            }
+            return { events, storage: storageStatus(field(raw, 'storage')),
+                entryCoverage: contract.sanitizeEntryCoverage(field(raw, 'entryCoverage')),
+                transport: contract.sanitizeTransportStatus(field(raw, 'transport')),
+                status: { state: result.state === 'available' && !array ? 'failed' : result.state,
+                    persistence: choice(field(raw, 'persistence'), PERSISTENCE),
+                    coverage: choice(field(raw, 'coverage'), ['complete', 'partial']),
+                    events: events.length, rejected, truncated } };
+        }
+        function metadata(local) {
+            let runMode = 'unknown';
+            const environment = { ...local?.environment };
+            try {
+                runMode = global.location.protocol === 'file:' ? 'file'
+                    : /^https?:$/.test(global.location.protocol)
+                        ? (global.location.pathname.replace(/[^/]*$/, '') === '/' ? 'http' : 'subpath') : 'unknown';
+            } catch (_) { }
+            try {
+                const agent = global.navigator.userAgent;
+                if (typeof agent === 'string' && agent.length <= 1024) {
+                    const browser = /(?:Chrome|Chromium|CriOS)\/([0-9.]+)/.exec(agent)
+                        || /Firefox\/([0-9.]+)/.exec(agent) || /Version\/([0-9.]+).*Safari\//.exec(agent);
+                    if (browser) {
+                        environment.browser = /^(?:Chrome|Chromium|CriOS)/.test(browser[0]) ? 'chromium'
+                            : browser[0].startsWith('Firefox') ? 'firefox' : 'safari';
+                        environment.browserVersion = browser[1];
+                    }
+                    environment.platform = /Android/.test(agent) ? 'android' : /iPhone|iPad|iPod/.test(agent) ? 'ios'
+                        : /Windows/.test(agent) ? 'windows' : /Macintosh/.test(agent) ? 'macos' : /Linux/.test(agent) ? 'linux' : 'unknown';
+                }
+                environment.online = global.navigator.onLine === true ? 'online' : global.navigator.onLine === false ? 'offline' : 'unknown';
+            } catch (_) { }
+            const build = global.AppDiagnosticBuild;
+            const event = contract.createNormalizer({ appVersion: field(build, 'appVersion'), buildId: field(build, 'buildId'),
+                environment: { ...environment, runMode,
+                    context: field(options, 'context') || local?.environment.context } }).normalize(null);
+            return { appVersion: event.appVersion, buildId: event.buildId, environment: event.environment };
+        }
+        function connection(context) {
+            if (context === 'main') return 'not-applicable';
+            if (!['reading', 'listening', 'legacy'].includes(context)) return 'unknown';
+            try { return !global.opener || global.opener.closed ? 'disconnected' : 'unverified'; }
+            catch (_) { return 'unknown'; }
+        }
+        function failureReport() {
+            return freeze({ schemaVersion: 1, reportType: 'passive-diagnostics', notice: NOTICE,
+                appVersion: 'unknown', buildId: 'unknown', environment: { context: 'unknown', runMode: 'unknown' },
+                selection: { kind: 'unknown', eventId: null, found: false }, persistence: 'unknown', storage: null,
+                sources: {}, collection: { coverage: 'partial', aggregation: 'incomplete', connection: 'unknown',
+                    limitations: contract.COVERAGE_LIMITATIONS.slice() },
+                truncated: true, issues: ['export-generation-failed'], events: [], timeline: { ordering: ORDERING, windows: [] } });
+        }
+
+        async function snapshot(query = {}) {
+            try {
+                const inputId = field(query, 'eventId');
+                const incident = inputId !== undefined;
+                const eventId = typeof inputId === 'string' && inputId.length <= 64 && EVENT_ID.test(inputId) ? inputId : null;
+                const issues = [];
+                const selectedLimit = incident ? LIMITS.context + 1 : LIMITS.events;
+                const requested = field(query, 'limit');
+                const limit = Number.isSafeInteger(requested)
+                    ? Math.max(incident ? 1 : 0, Math.min(selectedLimit, requested)) : selectedLimit;
+                const owners = readers();
+                // Capture memory before awaiting the durable read; never flush/retry the sink.
+                const memoryRead = read(owners.memory, 200);
+                const bootstrapRead = owners.bootstrap && owners.bootstrap === owners.memory
+                    ? Promise.resolve({ state: 'shared' }) : read(owners.bootstrap, 200);
+                const storedRead = read(owners.persisted, LIMITS.events);
+                const results = await Promise.all([memoryRead, bootstrapRead, storedRead]);
+                const memory = cleanSource(results[0], 200, 256 * 1024);
+                const bootstrap = cleanSource(results[1], 200, 256 * 1024);
+                const persisted = cleanSource(results[2], LIMITS.events, LIMITS.bytes);
+                const sources = { memory: memory.status, bootstrap: bootstrap.status, persisted: persisted.status };
+                for (const [name, status] of Object.entries(sources)) {
+                    if (!['available', 'shared'].includes(status.state)) issues.push(name + '-' + status.state);
+                    if (status.rejected) issues.push(name + '-records-rejected');
+                }
+                const storage = persisted.storage || memory.storage || bootstrap.storage;
+                const transport = memory.transport || bootstrap.transport;
+                const merged = new Map();
+                // Prefer the latest memory classification on equal priority. An older
+                // persisted revision must not acknowledge a pending enrichment.
+                for (const event of [...persisted.events, ...bootstrap.events, ...memory.events]) {
+                    const previous = merged.get(event.eventId);
+                    if (previous && previous.timestamp !== event.timestamp && !issues.includes('identity-conflict')) issues.push('identity-conflict');
+                    if (!previous || priority(event) >= priority(previous)) merged.set(event.eventId, event);
+                }
+                const all = Array.from(merged.values());
+                const chosen = eventId ? merged.get(eventId) : null;
+                let candidates;
+                if (incident) {
+                    if (!eventId) issues.push('invalid-incident-reference');
+                    else if (!chosen) issues.push('incident-not-retained');
+                    const aliases = new Set(chosen ? correlationKeys(chosen) : []);
+                    const correlated = chosen ? all.filter((event) => event !== chosen
+                        && correlationKeys(event).some((key) => aliases.has(key))) : [];
+                    const nearby = chosen ? all.filter((event) => event !== chosen && !correlated.includes(event)
+                        && event.windowId === chosen.windowId && Math.abs(event.sequence - chosen.sequence) <= 10) : [];
+                    const nearest = (a, b) => Math.abs(a.timestamp - chosen.timestamp) - Math.abs(b.timestamp - chosen.timestamp)
+                        || a.eventId.localeCompare(b.eventId);
+                    candidates = chosen ? [chosen, ...correlated.sort(nearest), ...nearby.sort(nearest)] : [];
+                } else {
+                    // Timestamps select retained context, not a claimed causal order.
+                    candidates = all.sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+                }
+                const meta = metadata(memory.events[0] || bootstrap.events[0]);
+                const statuses = candidates.map((event) => event.persistence.diagnostics);
+                const persistence = storage?.enabled === false ? 'disabled'
+                    : storage?.failure || statuses.includes('failed') || persisted.status.state !== 'available' ? 'memory-only'
+                        : statuses.includes('pending') ? 'pending' : statuses.includes('memory-only') ? 'memory-only'
+                            : statuses.includes('disabled') ? 'disabled' : statuses.length ? 'persisted' : storage?.persistence || 'memory-only';
+                const report = { schemaVersion: 1, reportType: 'passive-diagnostics', notice: NOTICE, ...meta,
+                    selection: { kind: incident ? 'incident' : 'history', eventId, found: incident ? !!chosen : null },
+                    persistence, storage, sources, ...(transport ? { transport } : {}),
+                    collection: { coverage: 'partial', aggregation: 'incomplete', connection: transport?.connection || connection(meta.environment.context),
+                        entryCoverage: memory.entryCoverage.entry !== 'unknown' ? memory.entryCoverage : bootstrap.entryCoverage,
+                        limitations: [...contract.COVERAGE_LIMITATIONS, 'cross-window-completeness-unverified',
+                            'retained-context-only', 'independent-source-snapshots'] },
+                    truncated: Object.values(sources).some((source) => source.truncated) || !!storage?.dropped || candidates.length > limit,
+                    issues, events: [], timeline: { ordering: ORDERING, windows: [] } };
+                let bytes = contract.utf8Bytes(JSON.stringify(report)) + 256;
+                for (const event of candidates.slice(0, limit)) {
+                    // Reserve an entire window entry per event, a conservative bound
+                    // on the timeline and all enclosing JSON separators/keys.
+                    const size = contract.utf8Bytes(JSON.stringify(event)) + event.eventId.length + event.windowId.length + 128;
+                    if (bytes + size > LIMITS.bytes) { report.truncated = true; break; }
+                    report.events.push(event);
+                    bytes += size;
+                }
+                report.events.sort((a, b) => a.windowId.localeCompare(b.windowId) || a.sequence - b.sequence);
+                const windows = new Map();
+                for (const event of report.events) {
+                    if (!windows.has(event.windowId)) windows.set(event.windowId, { windowId: event.windowId, eventIds: [] });
+                    windows.get(event.windowId).eventIds.push(event.eventId);
+                }
+                report.timeline.windows = Array.from(windows.values());
+                return freeze(report);
+            } catch (_) { return failureReport(); }
+        }
+
+        function summary(report) {
+            const lines = [NOTICE, 'Build: ' + report.appVersion + ' / ' + report.buildId,
+                'Context: ' + report.environment.context + ' / ' + report.environment.runMode,
+                'Selection: ' + report.selection.kind + (report.selection.eventId ? ' / ' + report.selection.eventId : ''),
+                'Incident found: ' + report.selection.found, 'Diagnostic persistence: ' + report.persistence,
+                'Coverage: partial; aggregation: incomplete; connection: ' + report.collection.connection,
+                'Truncated: ' + report.truncated + '; retained events: ' + report.events.length,
+                'Storage: ' + (report.storage ? report.storage.persistence + '; failure: ' + report.storage.failure : 'unavailable'), ORDERING];
+            for (const [name, status] of Object.entries(report.sources)) lines.push(name + ': ' + status.state + '; ' + status.persistence);
+            lines.push('Limitations: ' + report.collection.limitations.join(', '));
+            if (report.collection.entryCoverage) lines.push('Entry: ' + report.collection.entryCoverage.entry
+                + '; capture: ' + report.collection.entryCoverage.capture + '; limitations: ' + report.collection.entryCoverage.limitations.join(', '));
+            if (report.issues.length) lines.push('Issues: ' + report.issues.join(', '));
+            const chosen = report.events.find((event) => event.eventId === report.selection.eventId);
+            const events = chosen ? [chosen, ...report.events.filter((event) => event !== chosen)] : report.events;
+            for (const event of events.slice(0, 12)) {
+                const line = event.eventId + ' ' + event.code + ' / ' + event.causeCode + ' ' + event.module + '/' + event.action
+                    + '; operation: ' + event.persistence.operation + '; diagnostics: ' + event.persistence.diagnostics
+                    + '; resource: ' + event.resource.path + ':' + event.resource.line + ':' + event.resource.column;
+                if (contract.utf8Bytes(lines.join('\n') + '\n' + line) > LIMITS.summaryBytes - 100) break;
+                lines.push(line);
+            }
+            if (events.length > 12) lines.push('Additional events are available in the bounded JSON report.');
+            return lines.join('\n');
+        }
+        async function exportJSON(query) {
+            try {
+                const report = await snapshot(query);
+                const json = JSON.stringify(report);
+                const text = summary(report);
+                if (contract.utf8Bytes(json) > LIMITS.bytes || contract.utf8Bytes(text) > LIMITS.summaryBytes) throw new Error();
+                return freeze({ status: report.issues.includes('export-generation-failed') ? 'fallback' : 'ready', report, json, text });
+            } catch (_) { return freeze({ status: 'fallback', report: null, json: null, text: FALLBACK }); }
+        }
+        function selectable(text, target) {
+            try {
+                const doc = global.document;
+                let area = target;
+                if (!area) {
+                    area = doc.getElementById('diagnostic-export-text');
+                    if (!area) {
+                        area = doc.createElement('textarea');
+                        area.id = 'diagnostic-export-text';
+                        area.setAttribute('aria-label', '诊断摘要（不包含答案备份）');
+                        area.rows = 12;
+                        area.style.cssText = 'display:block;width:100%;max-height:60vh;color:#17202a;background:#fff;';
+                        doc.body.appendChild(area);
+                    }
+                }
+                area.readOnly = true;
+                area.value = text;
+                area.focus();
+                area.select();
+                return true;
+            } catch (_) { return false; }
+        }
+        async function copySummary(query, presentation = {}) {
+            const result = await exportJSON(query);
+            const copied = await bounded(() => global.navigator.clipboard.writeText(result.text));
+            return { ...result, status: copied.state === 'available' ? 'copied' : 'text-fallback',
+                selectable: copied.state !== 'available' && selectable(result.text, field(presentation, 'textTarget')) };
+        }
+        async function download(query, presentation = {}) {
+            const result = await exportJSON(query);
+            let url;
+            let link;
+            try {
+                if (result.status !== 'ready' || !result.json) throw new Error();
+                url = global.URL.createObjectURL(new global.Blob([result.json], { type: 'application/json;charset=utf-8' }));
+                link = global.document.createElement('a');
+                link.href = url;
+                link.download = 'ielts-diagnostics.json';
+                global.document.body.appendChild(link);
+                link.click();
+                return { ...result, status: 'download-started', selectable: false };
+            } catch (_) {
+                return { ...result, status: 'text-fallback', selectable: selectable(result.text, field(presentation, 'textTarget')) };
+            } finally {
+                try { if (link?.parentNode) link.parentNode.removeChild(link); } catch (_) { }
+                if (url) {
+                    const release = () => { try { global.URL.revokeObjectURL(url); } catch (_) { } };
+                    try { global.setTimeout(release, 1000); } catch (_) { release(); }
+                }
+            }
+        }
+        return Object.freeze({ snapshot, exportJSON, copySummary, download,
+            async getIncident(eventId) {
+                const report = await snapshot({ eventId, limit: 1 });
+                return report.events.find((event) => event.eventId === report.selection.eventId) || null;
+            } });
+    }
+    global.AppDiagnosticExport = Object.freeze({ create, LIMITS, ...create() });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+/* ===== js/diagnostics/diagnosticChannel.js ===== */
+(function defineDiagnosticChannel(global) {
+    'use strict';
+    if (global.AppDiagnosticChannel) return;
+
+    const TYPE = 'IELTS_DIAGNOSTIC_V1';
+    const LIMITS = Object.freeze({ envelopeBytes: 72 * 1024, batchEvents: 8,
+        queueEvents: 200, queueBytes: 256 * 1024, attempts: 3, retryMs: 500,
+        messagesPerInterval: 64, intervalMs: 10000 });
+    const KEYS = ['type', 'version', 'kind', 'sessionId', 'windowSessionToken',
+        'connectionId', 'channelId', 'windowId', 'batch', 'hop', 'payload'];
+    const NONCE = /^dc-[a-f0-9]{32}$/;
+    const WINDOW = /^win_[a-f0-9]{32}$/;
+    const GENERATION = /^dg-[a-f0-9]{32}$/;
+    const contract = global.AppDiagnosticContract;
+    const children = new WeakMap();
+
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; } catch (_) { return undefined; }
+    }
+    function text(value, max = 512) { return typeof value === 'string' && value.length > 0 && value.length <= max; }
+    function nonce() {
+        try {
+            const bytes = new Uint8Array(16);
+            global.crypto.getRandomValues(bytes);
+            return 'dc-' + Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        } catch (_) { return null; }
+    }
+    function isMessage(data) { return field(data, 'type') === TYPE; }
+    function binding(input) {
+        try {
+            if (!input || !input.window || input.window.closed || !text(input.sessionId)
+                || !text(input.windowSessionToken)) return null;
+            const opaque = input.allowOpaqueOrigin === true && input.origin === 'null';
+            if (!opaque && (!text(input.origin) || !/^https?:$/.test(new URL(input.origin).protocol)
+                || new URL(input.origin).origin !== input.origin)) return null;
+            return { window: input.window, sessionId: input.sessionId, windowSessionToken: input.windowSessionToken,
+                origin: input.origin, allowOpaqueOrigin: opaque };
+        } catch (_) { return null; }
+    }
+    function sameBinding(a, b) {
+        return a && b && a.window === b.window && a.sessionId === b.sessionId
+            && a.windowSessionToken === b.windowSessionToken && a.origin === b.origin
+            && a.allowOpaqueOrigin === b.allowOpaqueOrigin;
+    }
+    function trusted(event, peer) {
+        try { return peer && !peer.window.closed && event.source === peer.window
+            && (peer.allowOpaqueOrigin ? event.origin === 'null' || event.origin === 'file://'
+                : event.origin === peer.origin); } catch (_) { return false; }
+    }
+    function decode(data, peer) {
+        try {
+            if (!isMessage(data) || Object.getOwnPropertyNames(data).length !== KEYS.length) return null;
+            const copy = {};
+            for (const key of KEYS) {
+                const value = field(data, key);
+                if (!['string', 'number'].includes(typeof value)) return null;
+                if (typeof value === 'string' && value.length > (key === 'payload' ? LIMITS.envelopeBytes : 512)) return null;
+                copy[key] = value;
+            }
+            if (copy.version !== 1 || copy.hop !== 1 || copy.sessionId !== peer.sessionId
+                || copy.windowSessionToken !== peer.windowSessionToken || !NONCE.test(copy.connectionId)
+                || !WINDOW.test(copy.windowId) || (copy.channelId !== '' && !NONCE.test(copy.channelId))
+                || !['hello', 'ready', 'events', 'ack'].includes(copy.kind)
+                || !Number.isSafeInteger(copy.batch) || copy.batch < 0
+                || contract.utf8Bytes(JSON.stringify(copy)) > LIMITS.envelopeBytes) return null;
+            if (copy.kind === 'events') {
+                if (!copy.batch || !copy.channelId || !copy.payload) return null;
+            } else if (copy.payload !== '' || (copy.kind === 'ack' ? !copy.batch : copy.batch !== 0)) return null;
+            return copy;
+        } catch (_) { return null; }
+    }
+    function envelope(peer, state, kind, batch = 0, payload = '') {
+        // Authentication lives only in this control envelope, never in an event.
+        return { type: TYPE, version: 1, kind, sessionId: peer.sessionId,
+            windowSessionToken: peer.windowSessionToken, connectionId: state.connectionId,
+            channelId: state.channelId, windowId: state.windowId, batch, hop: 1, payload };
+    }
+    function post(peer, message) {
+        try {
+            if (peer.window.closed || contract.utf8Bytes(JSON.stringify(message)) > LIMITS.envelopeBytes) return false;
+            peer.window.postMessage(message, peer.allowOpaqueOrigin ? '*' : peer.origin);
+            return true;
+        } catch (_) { return false; }
+    }
+    function lifecycle(store) {
+        try {
+            const state = store.status(); // Re-reads the durable barrier even if notifications were missed.
+            // Fresh stores retain the completed-reset tombstone; older instances remain suspended.
+            return state && state.enabled && !state.suspended && ['active', 'reset-complete'].includes(state.phase)
+                && state.failure !== 'COORDINATION_UNAVAILABLE' && GENERATION.test(state.generation) ? state : null;
+        } catch (_) { return null; }
+    }
+    function eligible(event, state) {
+        return state && event.persistence.generation === state.generation && event.timestamp > state.cutoff;
+    }
+
+    function createHost(options = {}) {
+        const normalizer = contract.createNormalizer();
+        const reporter = options.reporter || global.AppDiagnostics;
+        const store = options.store || global.AppDiagnosticStore;
+        let peer = null, active = null, disposed = false;
+        let interval = 0, messages = 0;
+        function receive(event) {
+            if (!isMessage(event?.data)) return false;
+            try {
+                if (disposed) return true;
+                const next = binding(options.getBinding());
+                if (!sameBinding(peer, next)) { peer = next; active = null; }
+                if (!trusted(event, peer)) return true;
+                const now = Date.now();
+                if (now < interval || now - interval >= LIMITS.intervalMs) { interval = now; messages = 0; }
+                if (++messages > LIMITS.messagesPerInterval) return true;
+                const message = decode(event.data, peer);
+                if (!message || !lifecycle(store)) return true;
+                if (message.kind === 'hello' && message.channelId === '') {
+                    if (!active || active.connectionId !== message.connectionId || active.windowId !== message.windowId) {
+                        const channelId = nonce();
+                        if (!channelId) return true;
+                        active = { connectionId: message.connectionId, windowId: message.windowId,
+                            channelId, hellos: 0, batch: 0, payload: '', acknowledgements: 0 };
+                    }
+                    if (++active.hellos <= LIMITS.attempts) post(peer, envelope(peer, active, 'ready'));
+                    return true;
+                }
+                if (message.kind !== 'events' || !active || message.connectionId !== active.connectionId
+                    || message.channelId !== active.channelId || message.windowId !== active.windowId
+                    || message.batch < active.batch || message.batch > active.batch + 1) return true;
+                if (message.batch === active.batch && message.payload !== active.payload) return true;
+                const inputs = JSON.parse(message.payload);
+                if (!Array.isArray(inputs) || !inputs.length || inputs.length > LIMITS.batchEvents) return true;
+                const state = lifecycle(store);
+                const events = [];
+                for (const input of inputs) {
+                    if (contract.utf8Bytes(JSON.stringify(input)) > contract.LIMITS.eventBytes) return true;
+                    const clean = normalizer.sanitizeEvent(input);
+                    if (!clean || clean.windowId !== active.windowId || clean.collection.source === 'relay'
+                        || !eligible(clean, state)) return true;
+                    events.push(clean);
+                }
+                if (message.batch !== active.batch) {
+                    // Receipt means retained diagnostic evidence, never a business persistence ACK.
+                    if (!events.every(item => reporter.acceptRelayed(item))) return true;
+                    active.batch = message.batch;
+                    active.payload = message.payload;
+                    active.acknowledgements = 0;
+                }
+                if (++active.acknowledgements <= LIMITS.attempts) post(peer, envelope(peer, active, 'ack', message.batch));
+            } catch (_) { /* Untrusted payloads and reporter failures never reach business handlers or logs. */ }
+            return true;
+        }
+        return Object.freeze({ receive, dispose() { disposed = true; peer = null; active = null; } });
+    }
+
+    function createChild(options = {}) {
+        const reporter = options.reporter || global.AppDiagnostics;
+        if (children.has(reporter)) return children.get(reporter);
+        const store = options.store || global.AppDiagnosticStore;
+        const normalizer = contract.createNormalizer();
+        const queue = new Map();
+        let peer = null, state = null, pending = null, timer = null;
+        let bytes = 0, dropped = 0, sequence = 0, attempts = 0;
+        let connectedOnce = false, disposed = false, connection = 'waiting';
+        let unsubscribe = () => {}, unsubscribeStore = () => {};
+
+        function status() {
+            let current = connection;
+            try { if (peer?.window.closed) current = 'disconnected'; } catch (_) { current = 'unavailable'; }
+            return Object.freeze({ connection: current, aggregation: 'incomplete', pendingEvents: queue.size,
+                pendingBytes: bytes, dropped });
+        }
+        function cancel() { try { global.clearTimeout(timer); } catch (_) { } timer = null; }
+        function stop(reason) { cancel(); pending = null; connection = reason; }
+        function remove(id) {
+            const item = queue.get(id);
+            if (item) { bytes -= item.bytes; queue.delete(id); }
+        }
+        function fence() {
+            const current = lifecycle(store);
+            for (const [id, item] of queue) {
+                if (!eligible(item.event, current)) { remove(id); dropped += 1; }
+            }
+            // Capacity eviction does not invalidate the immutable in-flight batch.
+            if (pending && pending.items.some(item => !eligible(item.event, current))) {
+                stop('incomplete'); // Old acknowledgements cannot settle a later generation.
+            }
+            return current;
+        }
+        function later(action) {
+            cancel();
+            try { timer = global.setTimeout(() => { timer = null; action(); }, LIMITS.retryMs); }
+            catch (_) { stop('unavailable'); }
+        }
+        function hello() {
+            if (disposed || !peer || !state) return;
+            if (++attempts > LIMITS.attempts) { stop('disconnected'); return; }
+            if (!post(peer, envelope(peer, state, 'hello'))) { stop('unavailable'); return; }
+            // Install before postMessage delivery (which is asynchronous in browsers).
+            later(hello);
+        }
+        function send() {
+            if (disposed || !fence() || connection !== 'connected') return;
+            if (!pending) {
+                const items = [];
+                let payload = '[]';
+                for (const item of Array.from(queue.values()).slice(0, LIMITS.batchEvents)) {
+                    const next = '[' + [...items, item].map(entry => entry.json).join(',') + ']';
+                    if (contract.utf8Bytes(JSON.stringify(envelope(peer, state, 'events', sequence + 1, next))) > LIMITS.envelopeBytes) break;
+                    items.push(item); payload = next;
+                }
+                if (!items.length) return;
+                pending = { items, batch: ++sequence, payload, attempts: 0 };
+            }
+            if (++pending.attempts > LIMITS.attempts) { stop('disconnected'); return; }
+            if (!post(peer, envelope(peer, state, 'events', pending.batch, pending.payload))) { stop('unavailable'); return; }
+            later(send);
+        }
+        function capture(input) {
+            try {
+                if (disposed) return;
+                const event = normalizer.sanitizeEvent(input);
+                if (!event || event.windowId !== reporter.windowId || event.collection.source === 'relay') return;
+                const json = JSON.stringify(event), size = contract.utf8Bytes(json);
+                const existing = queue.get(event.eventId);
+                if (existing?.json === json) return;
+                remove(event.eventId);
+                queue.set(event.eventId, { event, json, bytes: size });
+                bytes += size;
+                while (queue.size > LIMITS.queueEvents || bytes > LIMITS.queueBytes) {
+                    remove(queue.keys().next().value); dropped += 1;
+                }
+                if (connection === 'connected' && !timer && !pending) later(send);
+            } catch (_) { }
+        }
+        function receive(event) {
+            if (!isMessage(event?.data)) return false;
+            try {
+                if (disposed || !trusted(event, peer) || !state) return true;
+                const message = decode(event.data, peer);
+                if (!message || message.connectionId !== state.connectionId || message.windowId !== state.windowId) return true;
+                if (message.kind === 'ready' && connection === 'waiting' && NONCE.test(message.channelId)) {
+                    cancel(); state.channelId = message.channelId; connection = 'connected'; later(send);
+                } else if (message.kind === 'ack' && connection === 'connected' && pending
+                    && message.channelId === state.channelId && message.batch === pending.batch) {
+                    fence();
+                    if (!pending) return true;
+                    for (const item of pending.items) {
+                        if (queue.get(item.event.eventId) === item) remove(item.event.eventId);
+                    }
+                    pending = null; cancel();
+                    if (queue.size) later(send);
+                }
+            } catch (_) { }
+            return true;
+        }
+        function connect(input) {
+            try {
+                if (disposed) return false;
+                const next = binding(input);
+                if (!next) { stop('unavailable'); return false; }
+                if (sameBinding(peer, next)) return true; // Repeated INIT cannot restart exhausted retries.
+                cancel(); pending = null;
+                if (connectedOnce) { dropped += queue.size; queue.clear(); bytes = 0; }
+                connectedOnce = true; peer = next; attempts = 0; sequence = 0;
+                const connectionId = nonce();
+                if (!connectionId || !WINDOW.test(reporter.windowId)) { stop('unavailable'); return false; }
+                state = { connectionId, channelId: '', windowId: reporter.windowId };
+                connection = 'waiting'; fence(); hello();
+                return true;
+            } catch (_) { stop('unavailable'); return false; }
+        }
+        function dispose() {
+            if (disposed) return;
+            disposed = true; stop('disconnected'); peer = null; state = null; queue.clear(); bytes = 0;
+            children.delete(reporter);
+            try { unsubscribe(); unsubscribeStore(); } catch (_) { }
+            try { global.removeEventListener('message', receive); global.removeEventListener('pagehide', dispose); } catch (_) { }
+        }
+        const api = Object.freeze({ connect, receive, status, dispose });
+        try {
+            children.set(reporter, api);
+            reporter.attachTransport(api);
+            unsubscribe = reporter.subscribe(capture);
+            // The reporter has already sanitized and retained these before transport observes them.
+            reporter.snapshot().events.forEach(capture);
+            unsubscribeStore = store?.subscribe?.(fence) || (() => {});
+            global.addEventListener('message', receive);
+            global.addEventListener('pagehide', dispose);
+        } catch (_) { stop('unavailable'); }
+        return api;
+    }
+    global.AppDiagnosticChannel = Object.freeze({ TYPE, LIMITS, isMessage, createHost, createChild });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 
 /* ===== js/utils/environmentDetector.js ===== */
 (function initEnvironmentDetector(global) {
@@ -79,7 +2327,14 @@
 
     class AppLogger {
         constructor(config = {}) {
-            this.nativeConsole = { ...global.console }; // Backup native methods
+            this.nativeConsole = {};
+            ['log', 'info', 'warn', 'error', 'debug', 'trace'].forEach((method) => {
+                try {
+                    if (typeof global.console[method] === 'function') {
+                        this.nativeConsole[method] = global.console[method].bind(global.console);
+                    }
+                } catch (_) { }
+            });
             this.config = this.loadConfig(config);
 
             // Bind methods to ensure 'this' context
@@ -123,7 +2378,7 @@
                     categories: { ...this.config.categories, ...(storedConfig.categories || {}) }
                 };
             } catch (error) {
-                this.nativeConsole.warn('[AppLogger] 无法读取日志配置:', error);
+                this.internalLog('warn', '无法读取日志配置');
             }
         }
 
@@ -138,7 +2393,7 @@
                     categories: this.config.categories
                 })
             ).then(() => true).catch((error) => {
-                this.nativeConsole.warn('[AppLogger] 无法保存日志配置:', error);
+                this.internalLog('warn', '无法保存日志配置');
                 return false;
             });
         }
@@ -162,7 +2417,8 @@
                             this.output(categoryInfo.category, level, categoryInfo.args);
                         } else {
                             // It's a raw console log, pass through to native
-                            this.nativeConsole[method].apply(global.console, args);
+                            this.captureDiagnostic(method, args);
+                            try { this.nativeConsole[method](...args); } catch (_) { }
                         }
                     };
                 }
@@ -218,18 +2474,23 @@
          * Core output method
          */
         output(category, level, args) {
-            if (!this.shouldLog(category, level)) {
-                return;
-            }
+            this.captureDiagnostic(level, args);
+            try {
+                if (!this.shouldLog(category, level)) return;
 
-            const timestamp = new Date().toLocaleTimeString();
-            const prefix = `[${timestamp}] [${category}]`;
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = `[${timestamp}] [${category}]`;
 
-            // Map our levels to console methods
-            const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
+                // Map our levels to console methods.
+                const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
 
-            // Use native console to print, preserving object inspection capabilities
-            consoleMethod.call(global.console, prefix, ...args);
+                // Preserve native object inspection; console failures cannot escape.
+                if (consoleMethod) consoleMethod(prefix, ...args);
+            } catch (_) { }
+        }
+
+        captureDiagnostic(level, args) {
+            try { global.AppDiagnostics?.captureConsole(level, args); } catch (_) { }
         }
 
         /**
@@ -237,11 +2498,9 @@
          */
         internalLog(level, message, data) {
             const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
-            if (data) {
-                consoleMethod.call(global.console, `[Logger] ${message}`, data);
-            } else {
-                consoleMethod.call(global.console, `[Logger] ${message}`);
-            }
+            try {
+                if (consoleMethod) consoleMethod(`[Logger] ${message}`, ...(data ? [data] : []));
+            } catch (_) { }
         }
 
         // --- Public API ---
@@ -4700,6 +6959,20 @@
         if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(light, detail, null, mode);
         return joinPracticeRecord(light, detail, find('practiceAnnotations'), mode);
     }
+    const operationFailures = new WeakMap();
+    function rememberOperationFailure(error, attempted, receipt) {
+        if (!error || (typeof error !== 'object' && typeof error !== 'function')) return;
+        try {
+            const operation = receipt?.committed === true ? 'committed' : !attempted ? 'not-committed'
+                : error instanceof AppDataError && error.details?.reason !== 'timeout' ? 'not-committed' : 'unconfirmed';
+            operationFailures.set(error, operation);
+        } catch (_) { /* Unknown is safer than changing the business failure. */ }
+    }
+    function getOperationFailureState(error) {
+        return error && (typeof error === 'object' || typeof error === 'function')
+            ? operationFailures.get(error) || 'unconfirmed' : 'unconfirmed';
+    }
+
     const practice = Object.freeze({
         async list(options = {}) {
             await ready;
@@ -4718,38 +6991,70 @@
             }).filter(Boolean);
         },
         async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
-        async completeAttempt(command) {
+        // Positive journal evidence only: retention can remove old receipts, so
+        // absence is never proof that an operation did not commit. This read-only
+        // reconciliation does not resubmit, clear recovery, or alter sessions.
+        async getCommitState(operationId) {
             await ready;
-            const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
-            const mutation = mutationOptions(command, 'practice-complete', source);
-            const recordInput = await practiceRecordWithLibraryProvenance(source, command);
-            if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
-            const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
-            const receipt = await retryMergeConflict(command || {}, async () => {
-                const existing = await practiceLayersForUpsert(recordId);
-                return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
-                    { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
-            });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            if (typeof operationId !== 'string' || !operationId.trim()) {
+                throw new AppDataError('VALIDATION', 'A stable operation id is required');
+            }
+            const journal = await kernel.read('system.operationJournal');
+            const entry = journal && Object.prototype.hasOwnProperty.call(journal, operationId)
+                ? journal[operationId] : null;
+            return { verified: true, operation: entry?.receipt?.committed === true
+                && entry.receipt.operationId === operationId ? 'committed' : 'unconfirmed', operationId };
+        },
+        async completeAttempt(command) {
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready;
+                const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
+                const mutation = mutationOptions(command, 'practice-complete', source);
+                const recordInput = await practiceRecordWithLibraryProvenance(source, command);
+                if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
+                const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
+                attempted = true;
+                receipt = await retryMergeConflict(command || {}, async () => {
+                    const existing = await practiceLayersForUpsert(recordId);
+                    return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
+                        { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+                });
+                return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
+            }
         },
         async finalizeSuite(command) {
-            await ready; assertObject(command, 'finalizeSuite command is required');
-            const mutation = mutationOptions(command, 'practice-suite', command);
-            const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
-            if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
-            const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
-            const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
-            const children = new Set((await kernel.listEntities('practiceSummaries'))
-                .filter((summary) => practiceRecordMatches(summary, childIdentities))
-                .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
-            children.delete(recordId);
-            const receipt = await retryMergeConflict(command, async () => {
-                const existing = await practiceLayersForUpsert(recordId);
-                const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
-                    { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
-            });
-            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready; assertObject(command, 'finalizeSuite command is required');
+                const mutation = mutationOptions(command, 'practice-suite', command);
+                const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
+                if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
+                const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
+                const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
+                const children = new Set((await kernel.listEntities('practiceSummaries'))
+                    .filter((summary) => practiceRecordMatches(summary, childIdentities))
+                    .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
+                children.delete(recordId);
+                attempted = true;
+                receipt = await retryMergeConflict(command, async () => {
+                    const existing = await practiceLayersForUpsert(recordId);
+                    const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
+                    return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
+                        { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
+                });
+                return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
+            }
         },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
@@ -4956,20 +7261,29 @@
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
     }
     async function saveRecovery(kind, value, options = {}) {
-        await ready; assertObject(value, `recovery ${kind} value must be an object`);
-        const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
-        const key = recoveryKey(kind);
-        const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
-        const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
-        const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
-            const current = await readCollectionMeta(key);
-            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
-            if (index >= 0) current.items[index] = item; else current.items.push(item);
-            return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
-        }));
-        const committedItem = (await kernel.read(key))
-            .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
-        return Object.assign({}, receipt, { item: clone(committedItem || item) });
+        let attempted = false;
+        let receipt = null;
+        try {
+            await ready; assertObject(value, `recovery ${kind} value must be an object`);
+            const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
+            const key = recoveryKey(kind);
+            const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
+            const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
+            attempted = true;
+            receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+                const current = await readCollectionMeta(key);
+                const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+                if (index >= 0) current.items[index] = item; else current.items.push(item);
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+            }));
+            const committedItem = (await kernel.read(key))
+                .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+            return Object.assign({}, receipt, { item: clone(committedItem || item) });
+
+        } catch (error) {
+            rememberOperationFailure(error, attempted, receipt);
+            throw error;
+        }
     }
     async function discardRecovery(kind, id, options = {}) {
         await ready;
@@ -6110,25 +8424,34 @@
             importPlans.set(planId, plan); return { id: planId, format: plan.format, scope: plan.scope, keys: plan.keys, clearedKeys: clone(plan.clearedKeys), warnings: clone(plan.warnings), createdAt: plan.createdAt, practice: clone(plan.practiceSummary), diagnostics: clone(plan.diagnostics), destructive: plan.destructive };
         },
         async commitImport(planId, options = {}) {
-            await ready; const plan = importPlans.get(String(planId)); if (!plan) throw new AppDataError('VALIDATION', `Unknown import plan: ${planId}`);
-            if (plan.destructive && options.confirmDestructive !== true) {
-                throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
+            let attempted = false;
+            let receipt = null;
+            try {
+                await ready; const plan = importPlans.get(String(planId)); if (!plan) throw new AppDataError('VALIDATION', `Unknown import plan: ${planId}`);
+                if (plan.destructive && options.confirmDestructive !== true) {
+                    throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
+                }
+                // Mirrors may arrive after preview, including callers without a
+                // safety backup. Keep the reviewed token: a late successful migration
+                // changes its revision and requires a new preview instead of data loss.
+                await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
+                const mutation = optionsMutationOptions(options, 'import-commit', {
+                    planId: plan.id,
+                    signature: plan.signature
+                }, { warnings: plan.warnings });
+                attempted = true;
+                receipt = await kernel.installSnapshot(plan.snapshot, Object.assign({}, mutation, {
+                    resetJournal: plan.resetJournal === true,
+                    expectedRevisionToken: plan.revisionToken
+                }));
+                importPlans.delete(String(planId));
+                await refreshReadingMirrors(Object.keys(plan.snapshot.envelopes));
+                return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
+
+            } catch (error) {
+                rememberOperationFailure(error, attempted, receipt);
+                throw error;
             }
-            // Mirrors may arrive after preview, including callers without a
-            // safety backup. Keep the reviewed token: a late successful migration
-            // changes its revision and requires a new preview instead of data loss.
-            await migrateLegacyReadingData({ required: true, logicalKeys: Object.keys(plan.snapshot.envelopes) });
-            const mutation = optionsMutationOptions(options, 'import-commit', {
-                planId: plan.id,
-                signature: plan.signature
-            }, { warnings: plan.warnings });
-            const receipt = await kernel.installSnapshot(plan.snapshot, Object.assign({}, mutation, {
-                resetJournal: plan.resetJournal === true,
-                expectedRevisionToken: plan.revisionToken
-            }));
-            importPlans.delete(String(planId));
-            await refreshReadingMirrors(Object.keys(plan.snapshot.envelopes));
-            return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
         },
         async restore(id, options = {}) {
             await ready; const backup = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(id));
@@ -7513,6 +9836,7 @@
     const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
+        getOperationFailureState: { value: getOperationFailureState, enumerable: false },
         status: { value: () => kernel.status(), enumerable: false }
     });
     Object.freeze(AppData);
@@ -8123,15 +10447,30 @@
             }
     }
 
+    function reportTransfer(action, error, operation, cancelled = false) {
+        try { global.AppOperationDiagnostics?.failure({ code: action === 'import' ? 'DATA_IMPORT_FAILED' : 'DATA_EXPORT_FAILED',
+            module: action, action, error, operation, cancelled }); } catch (_) { }
+    }
+
     async function writeToBoundDirectory(options) {
         var opts = options || {};
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
-        await ensureReady();
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        return withDiskWriteLock(function () {
-            return writeToBoundDirectoryUnlocked(opts);
-        });
+        try {
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
+            await ensureReady();
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            var result = await withDiskWriteLock(function () {
+                return writeToBoundDirectoryUnlocked(opts);
+            });
+            if (opts.interactive === true && result?.success !== true
+                && !['busy', 'unbound', 'restore_required', 'suspended', 'reset_pending'].includes(result?.reason)) {
+                reportTransfer('export', result?.error);
+            }
+            return result;
+        } catch (error) {
+            if (opts.interactive === true) reportTransfer('export', error);
+            throw error;
+        }
     }
 
     async function bindDirectory(options) {
@@ -8682,6 +11021,7 @@
             operationId: opts.operationId || createOperationId('external-restore'),
             confirmDestructive: preview.destructive === true
         });
+        if (!result || result.committed !== true) throw new Error('Import commit was not confirmed', { cause: result?.error });
         try {
             if (typeof backups.recordImport === 'function') {
                 await backups.recordImport({
@@ -8699,83 +11039,103 @@
     }
 
     async function restorePayload(payload, options) {
-        return withDiskWriteLock(function () {
-            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            return restorePayloadUnlocked(payload, options);
-        });
+        var restored = false;
+        try {
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result?.success !== true) reportTransfer('import', result?.error, 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : undefined);
+            throw error;
+        }
     }
 
     async function restoreFromLatest(options) {
-        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-        await ensureReady();
-        return withDiskWriteLock(async function () {
+        var restored = false;
+        try {
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            await refreshStoredBindingForWrite();
-            var payload = await readLatestPayload(true);
-            var result = await restorePayloadUnlocked(payload, options);
-            if (result && result.success) {
-                // The import itself may notify onDataCommitted. Start the
-                // freshness window after that commit so only a later
-                // concurrent change keeps the restored state dirty.
-                var restoreGeneration = state.dirtyGeneration;
-                var backups = requireBackupApi();
-                var currentSnapshot = null;
-                try {
-                    currentSnapshot = await backups.export();
-                } catch (_) {
-                    state.freshnessUnknown = true;
-                }
-                var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
-                var currentMatchesRestore = currentSnapshotValid
-                    && currentSnapshot.checksum === payload.checksum;
-                var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
-                if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
-                    if (!state.dirty) state.dirtyGeneration += 1;
-                    state.dirty = true;
-                    state.freshnessUnknown = !currentSnapshotValid;
-                } else {
-                    state.dirty = false;
-                    state.freshnessUnknown = false;
-                }
-                // Adopt this installation only after the restore has committed.
-                // Failure keeps the disk overwrite guard active.
-                var restoredIdentity;
-                try {
-                    restoredIdentity = typeof backups.getStorageIdentity === 'function'
-                        ? await backups.getStorageIdentity() : state.meta.storageIdentity;
-                } catch (_) {
-                    state.meta.awaitingRestore = true;
-                    result.success = false;
-                    result.restored = true;
-                    result.reason = 'storage_identity_unavailable';
-                    return result;
-                }
-                var metadataPersisted = await persistMeta({
-                    lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
-                    storageIdentity: restoredIdentity,
-                    lastWriteError: null,
-                    awaitingRestore: false
-                }, { requireDurable: true });
-                result.metadataPersisted = metadataPersisted;
-                if (!metadataPersisted) {
-                    result.success = false;
-                    result.restored = true;
-                    result.reason = 'metadata_persistence_failed';
-                }
+            await ensureReady();
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                await refreshStoredBindingForWrite();
+                var payload = await readLatestPayload(true);
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result && result.success) {
+                    // The import itself may notify onDataCommitted. Start the
+                    // freshness window after that commit so only a later
+                    // concurrent change keeps the restored state dirty.
+                    var restoreGeneration = state.dirtyGeneration;
+                    var backups = requireBackupApi();
+                    var currentSnapshot = null;
+                    try {
+                        currentSnapshot = await backups.export();
+                    } catch (_) {
+                        state.freshnessUnknown = true;
+                    }
+                    var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
+                    var currentMatchesRestore = currentSnapshotValid
+                        && currentSnapshot.checksum === payload.checksum;
+                    var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
+                    if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
+                        if (!state.dirty) state.dirtyGeneration += 1;
+                        state.dirty = true;
+                        state.freshnessUnknown = !currentSnapshotValid;
+                    } else {
+                        state.dirty = false;
+                        state.freshnessUnknown = false;
+                    }
+                    // Adopt this installation only after the restore has committed.
+                    // Failure keeps the disk overwrite guard active.
+                    var restoredIdentity;
+                    try {
+                        restoredIdentity = typeof backups.getStorageIdentity === 'function'
+                            ? await backups.getStorageIdentity() : state.meta.storageIdentity;
+                    } catch (error) {
+                        state.meta.awaitingRestore = true;
+                        result.success = false;
+                        result.restored = true;
+                        result.reason = 'storage_identity_unavailable';
+                        reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+                        return result;
+                    }
+                    var metadataPersisted = await persistMeta({
+                        lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                        storageIdentity: restoredIdentity,
+                        lastWriteError: null,
+                        awaitingRestore: false
+                    }, { requireDurable: true });
+                    result.metadataPersisted = metadataPersisted;
+                    if (!metadataPersisted) {
+                        result.success = false;
+                        result.restored = true;
+                        result.reason = 'metadata_persistence_failed';
+                    }
 
-                // `scheduleSilentFlush` deliberately refuses to schedule
-                // while awaitingRestore is true. Clear that durable guard
-                // first, then schedule based on the final state. Also retain
-                // a commit that lands while metadata persistence yields.
-                if (state.dirtyGeneration !== restoreGeneration
-                    && !state.dirty) {
-                    state.dirty = true;
-                    state.dirtyGeneration += 1;
+                    // `scheduleSilentFlush` deliberately refuses to schedule
+                    // while awaitingRestore is true. Clear that durable guard
+                    // first, then schedule based on the final state. Also retain
+                    // a commit that lands while metadata persistence yields.
+                    if (state.dirtyGeneration !== restoreGeneration
+                        && !state.dirty) {
+                        state.dirty = true;
+                        state.dirtyGeneration += 1;
+                    }
+                    if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
                 }
-                if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
-            }
-            return result;
-        });
+                if (result?.success !== true) reportTransfer('import', result?.error, restored ? 'committed' : 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : undefined);
+            throw error;
+        }
     }
 
     function scheduleSilentFlush() {
@@ -8973,6 +11333,7 @@
                     notify('已绑定并写入：' + bound.directoryName, 'success');
                 }
             } catch (error) {
+                reportTransfer('export', error, 'not-committed', error?.name === 'AbortError');
                 notify(error && error.name === 'AbortError' ? '已取消选择文件夹' : (error.message || '绑定失败'), error && error.name === 'AbortError' ? 'info' : 'error');
             }
             refreshPanel();
@@ -9247,7 +11608,8 @@
         'IELTSAtlasDataV2',
         'ExamSystemDB',
         'ExamSystemExternalBackup',
-        'IELTSAtlasExternalBackupV2'
+        'IELTSAtlasExternalBackupV2',
+        'IELTSAtlasDiagnosticsV1'
     ]);
     let resetPromise = null;
 
@@ -9364,7 +11726,13 @@
                     });
                     continue;
                 }
-                storage.clear();
+                // Keep only the diagnostic lifecycle tombstone. Removing it even
+                // briefly must not allow a surviving writer to adopt a fresh epoch.
+                const controlKey = global.AppDiagnosticStore && global.AppDiagnosticStore.controlKey;
+                if (name === 'localStorage' && controlKey && typeof storage.key === 'function') {
+                    const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
+                    for (const key of keys) if (key !== controlKey) storage.removeItem(key);
+                } else storage.clear();
             } catch (error) {
                 errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
@@ -9403,6 +11771,22 @@
             return result;
         }
 
+        try {
+            const diagnostics = global.AppDiagnosticStore;
+            if (!diagnostics || typeof diagnostics.withFullReset !== 'function') {
+                throw new Error('诊断存储跨标签清理协调不可用');
+            }
+            return await diagnostics.withFullReset(() => deleteAndCommit(service));
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify('诊断存储未能安全停止写入，本次清理需要重试。', 'error');
+            return { success: false, reason: 'diagnostic_reset_failed', terminal: false, retryable: true,
+                errors: [{ stage: 'diagnostic-reset', error }].concat(rollbackErrors),
+                databases: DATABASE_NAMES.slice(), externalBackupFilesPreserved: true };
+        }
+    }
+
+    async function deleteAndCommit(service) {
         const errors = [];
         let deletionResults;
         try {
@@ -10786,6 +13170,8 @@
         if (!isPlainObject(envelope)) {
             return null;
         }
+        // The dedicated diagnostic receiver owns this envelope and its bounded payload.
+        if (envelope.type === 'IELTS_DIAGNOSTIC_V1') return null;
 
         const rawType = envelope.type || envelope.messageType || envelope.action || envelope.event || '';
         const type = normalizeMessageType(rawType);
@@ -17762,6 +20148,12 @@
 (function markBundleProvided(global) {
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
         global.AppLazyLoader.markProvided([
+    "js/diagnostics/diagnosticContract.js",
+    "js/diagnostics/bootstrapCollector.js",
+    "js/diagnostics/diagnosticStore.js",
+    "js/diagnostics/diagnosticReporter.js",
+    "js/diagnostics/diagnosticExport.js",
+    "js/diagnostics/diagnosticChannel.js",
     "js/utils/environmentDetector.js",
     "js/utils/logger.js",
     "js/data/practiceRecordSource.js",

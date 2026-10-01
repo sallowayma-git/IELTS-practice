@@ -1,0 +1,68 @@
+/* Incident controls keep opaque, readable surfaces independently of theme startup. */
+.incident-notifications,
+.incident-dialog {
+    color: #17202a;
+    background: #fff;
+    border: 1px solid #aeb8c4;
+    border-radius: 12px;
+    font: 15px/1.6 system-ui, sans-serif;
+    text-align: left;
+    overflow-wrap: anywhere;
+    box-shadow: 0 8px 32px #10243a33;
+}
+.incident-notifications {
+    position: fixed;
+    z-index: 12000;
+    right: 16px;
+    bottom: 16px;
+    width: min(420px, calc(100vw - 32px));
+    max-height: 40vh;
+    overflow: auto;
+    padding: 16px;
+}
+/* Reading keeps submission and passage navigation in its bottom toolbar. */
+html[data-diagnostic-context="reading"] .incident-notifications {
+    top: calc(var(--header-height, 56px) + 12px);
+    bottom: auto;
+    max-height: min(40vh, calc(100dvh - var(--header-height, 56px) - var(--footer-height, 54px) - 32px));
+}
+.incident-notice { padding: 12px 0; border-bottom: 1px solid #d4dce6; }
+.incident-reference { font-size: 12px; overflow-wrap: anywhere; }
+.incident-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483646;
+    background: #101827a6;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+}
+.incident-dialog { width: min(680px, 100%); max-height: 90vh; max-height: 90dvh; overflow: auto; padding: 24px; }
+.incident-dialog > * + * { margin-top: 14px; }
+.incident-dialog h2 { font-size: 22px; line-height: 1.4; }
+.incident-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.incident-notifications button,
+.incident-dialog button {
+    background: #f1f5f9;
+    color: #17202a;
+    border: 1px solid #8290a0;
+    border-radius: 6px;
+    min-height: 44px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font: inherit;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.incident-dialog button:disabled { opacity: .6; cursor: default; }
+.incident-dialog :focus-visible,
+.incident-notifications :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+.incident-dialog pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font: 12px/1.5 monospace; }
+.incident-dialog textarea { width: 100%; background: #fff; color: #17202a; font: 12px/1.5 monospace; }
+.incident-history { display: grid; gap: 8px; }
+.incident-history button { text-align: left; }
+.incident-dialog [hidden] { display: none !important; }
+@media (max-width: 480px) {
+    .incident-dialog { padding: 16px; }
+    .incident-actions > button { flex: 1 1 100%; }
+}

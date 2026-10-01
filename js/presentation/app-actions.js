@@ -6,6 +6,15 @@
     var browsePrefetchPromise = null;
     var morePrefetchTriggered = false;
 
+    function openDiagnosticsSettings(eventId) {
+        if (typeof global.showView === 'function') global.showView('settings', false);
+        if (global.DiagnosticSettingsPanel) global.DiagnosticSettingsPanel.open(eventId);
+        else {
+            var diagnostics = global.document?.getElementById('diagnostic-settings');
+            if (diagnostics) diagnostics.open = true;
+        }
+    }
+
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
@@ -14,7 +23,7 @@
     }
 
     function exportPracticeMarkdown() {
-        ensurePracticeSuite().then(function handleExportReady() {
+        return ensurePracticeSuite().then(function handleExportReady() {
             if (!global.markdownExporter || typeof global.markdownExporter.exportToMarkdown !== 'function') {
                 if (typeof global.MarkdownExporter === 'function') {
                     try {
@@ -26,14 +35,14 @@
             }
 
             if (global.markdownExporter && typeof global.markdownExporter.exportToMarkdown === 'function') {
-                global.markdownExporter.exportToMarkdown();
-                return;
+                return global.markdownExporter.exportToMarkdown();
             }
 
             if (typeof global.showMessage === 'function') {
                 global.showMessage('Markdown 导出模块未就绪', 'warning');
             }
         }).catch(function handleExportError(error) {
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export', action: 'export', error }); } catch (_) { }
             console.error('[AppActions] 导出失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('导出失败，请稍后重试', 'error');
@@ -1025,6 +1034,7 @@
     }
 
     global.AppActions = Object.assign({}, global.AppActions, {
+        openDiagnosticsSettings: openDiagnosticsSettings,
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
         preloadPracticeSuite: triggerPrefetch,

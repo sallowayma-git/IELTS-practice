@@ -267,7 +267,8 @@ function createHarness(options = {}) {
         preview: [],
         create: [],
         commit: [],
-        history: []
+        history: [],
+        diagnostics: []
     };
     let snapshot = options.snapshot || makeSnapshot('fnv1a-first');
     let committedListener = null;
@@ -282,7 +283,10 @@ function createHarness(options = {}) {
         : undefined;
 
     const backups = {
-        async getStorageIdentity() { return options.storageIdentity || 'installation-original'; },
+        async getStorageIdentity() {
+            if (typeof options.getStorageIdentity === 'function') return options.getStorageIdentity(calls);
+            return options.storageIdentity || 'installation-original';
+        },
         onDataCommitted(listener) {
             committedListener = listener;
             return () => { committedListener = null; };
@@ -361,6 +365,7 @@ function createHarness(options = {}) {
             locks: options.locks === undefined ? createWebLocksHarness() : options.locks
         },
         AppData: { ready: options.appDataReady || Promise.resolve(true), backups },
+        AppOperationDiagnostics: { failure(input) { calls.diagnostics.push(input); } },
         crypto: { randomUUID: () => 'uuid-1' },
         confirm: () => true,
         setTimeout(callback, delay) {
@@ -1366,6 +1371,9 @@ async function testRestoreMetadataFailureRemainsDurablyGuarded() {
     assert.equal(restored.restored, true, 'the business data commit is reported separately from metadata persistence');
     assert.equal(restored.reason, 'metadata_persistence_failed');
     assert.equal(restored.metadataPersisted, false);
+    assert.equal(harness.calls.diagnostics.length, 1);
+    assert.equal(harness.calls.diagnostics[0].code, 'DATA_IMPORT_FAILED');
+    assert.equal(harness.calls.diagnostics[0].operation, 'committed');
     assert.equal(harness.service.getStatus().awaitingRestore, true,
         'a failed durable metadata write must keep the overwrite guard enabled in memory');
 
@@ -1373,6 +1381,43 @@ async function testRestoreMetadataFailureRemainsDurablyGuarded() {
     await reloaded.ready();
     assert.equal(reloaded.service.getStatus().awaitingRestore, true,
         'reload must observe the same guarded state after metadata persistence failure');
+}
+
+async function testRestoreIdentityFailureReportsCommittedAndPreservesDisk() {
+    const original = createHarness();
+    await original.ready();
+    await original.service.bindDirectory({ writeNow: true });
+    const diskBefore = Array.from(original.directory.files.entries());
+    const identityError = new Error('identity unavailable after restore');
+    let failIdentity = true;
+    const rebuilt = createHarness({ indexedDB: original.indexedDB, directory: original.directory,
+        snapshot: makeSnapshot('fnv1a-empty'),
+        getStorageIdentity(calls) {
+            if (calls.commit.length && failIdentity) throw identityError;
+            return 'installation-rebuilt';
+        } });
+    await rebuilt.ready();
+    const result = await rebuilt.service.restoreFromLatest({ confirmed: true });
+    assert.equal(result.success, false);
+    assert.equal(result.restored, true);
+    assert.equal(result.reason, 'storage_identity_unavailable');
+    assert.equal(rebuilt.calls.commit.length, 1);
+    assert.equal(rebuilt.calls.diagnostics.length, 1);
+    assert.equal(rebuilt.calls.diagnostics[0].code, 'DATA_IMPORT_FAILED');
+    assert.equal(rebuilt.calls.diagnostics[0].operation, 'committed');
+    assert.equal(rebuilt.calls.diagnostics[0].error, identityError);
+    assert.equal(rebuilt.service.getStatus().awaitingRestore, true);
+    assert.equal((await rebuilt.service.writeNow()).reason, 'restore_required');
+    assert.deepEqual(Array.from(original.directory.files.entries()), diskBefore);
+    assert.equal(original.indexedDB.values.get('metadata').storageIdentity, 'installation-original');
+
+    failIdentity = false;
+    const retry = await rebuilt.service.restoreFromLatest({ confirmed: true });
+    assert.equal(retry.success, true);
+    assert.equal(rebuilt.service.getStatus().awaitingRestore, false);
+    assert.equal(original.indexedDB.values.get('metadata').storageIdentity, 'installation-rebuilt');
+    assert.equal((await rebuilt.service.writeNow()).success, true);
+    assert.equal(rebuilt.calls.diagnostics.length, 1, 'successful recovery must not add another failure');
 }
 
 async function testReadinessDoesNotExportWholeDatabase() {
@@ -1427,6 +1472,7 @@ async function testReminderCooldownAndNonInterruption() {
 }
 
 async function main() {
+    await testRestoreIdentityFailureReportsCommittedAndPreservesDisk();
     await testReminderCooldownAndNonInterruption();
     await testRebuiltDatabaseCannotOverwriteFolder();
     await testReadinessDoesNotExportWholeDatabase();
