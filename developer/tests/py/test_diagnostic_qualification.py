@@ -50,3 +50,15 @@ class QualificationEvidenceTest(unittest.TestCase):
         self.assertEqual(result, [{'mode': 'file', 'scenario': 'synthetic-case', 'result': 'fail', 'sourceLine': 231}])
         self.assertNotIn('PRIVATE', str(result))
         self.assertNotIn('sourceLine', qualification.evidence_rows(rows, 0, partial=True, script='diagnostic_settings')[0])
+
+    def test_submission_checkpoints_keep_only_fixed_boolean_fields_on_failures(self):
+        row = {**self.rows()[0], 'passed': False, 'submitCheckpoint': {
+            'completionReceived': True, 'ackAttempted': False, 'nackAttempted': 'PRIVATE_TOKEN',
+            'answers': 'PRIVATE_ANSWER', 'sessionId': 'PRIVATE_SESSION'}}
+        result = qualification.evidence_rows([row], 0, partial=True, script='listening_diagnostics')
+        self.assertEqual(result[0]['submitCheckpoint'], {'completionReceived': True, 'ackAttempted': False})
+        self.assertNotIn('PRIVATE', str(result))
+        self.assertNotIn('submitCheckpoint', qualification.evidence_rows(
+            [row], 0, partial=True, script='reading_diagnostics')[0])
+        self.assertNotIn('submitCheckpoint', qualification.evidence_rows(
+            [{**row, 'passed': True}], 0, partial=True, script='listening_diagnostics')[0])
