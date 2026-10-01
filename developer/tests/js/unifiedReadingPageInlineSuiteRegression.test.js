@@ -178,11 +178,12 @@ function createContext() {
     };
 }
 
-function loadHooks() {
+export function loadHooks(configure = () => {}) {
     const { context, window, document, windowSession, getCloseCount } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
+    configure({ context, window, document, windowSession });
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
@@ -809,7 +810,7 @@ async function testSubmitAcknowledgementStateMachine() {
     assert.strictEqual(hooks.getTestState().submissionStatus, 'draft', 'late ACK after NACK must not submit the page');
     assert.strictEqual(hooks.getTestState().readOnly, false);
 
-    assert.strictEqual(hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }), true);
+    const retry = hooks.retryPendingSubmission();
     assert.strictEqual(delivered.length, 2);
     assert.strictEqual(delivered[1].data.submissionId, submissionId, 'retry must reuse the idempotency key');
 
@@ -820,6 +821,7 @@ async function testSubmitAcknowledgementStateMachine() {
         windowSessionToken: 'token-submit-current'
     }));
     state = hooks.getTestState();
+    assert.strictEqual((await retry).verified, true);
     assert.strictEqual(state.submissionStatus, 'submitted');
     assert.strictEqual(state.submitted, true);
     assert.strictEqual(state.readOnly, true, 'only a valid ACK may lock the page');
@@ -864,9 +866,7 @@ async function testSubmitAcknowledgementStateMachine() {
     }));
     assert.strictEqual(suiteHarness.getCloseCount(), 0, 'a persistence NACK must keep the final child open for retry');
     assert.strictEqual(suiteHarness.hooks.getTestState().submissionStatus, 'draft');
-    assert.strictEqual(suiteHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
-        suiteSessionId: 'suite-final'
-    }, finalPresentation), true);
+    const suiteRetry = suiteHarness.hooks.retryPendingSubmission();
     assert.strictEqual(
         suiteHarness.hooks.getTestState().submissionId,
         suiteSubmissionId,
@@ -880,6 +880,7 @@ async function testSubmitAcknowledgementStateMachine() {
         windowSessionToken: 'token-suite-final'
     }));
     assert.strictEqual(suiteHarness.getCloseCount(), 1, 'the final suite child must close after its valid ACK');
+    assert.strictEqual((await suiteRetry).verified, true);
 
     const lateHarness = loadHooks();
     const lateParent = { postMessage() {} };
@@ -979,7 +980,7 @@ async function main() {
     process.exit(0);
 }
 
-main().catch((error) => {
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) main().catch((error) => {
     const detail = error && error.stack ? error.stack : String(error);
     process.stdout.write(JSON.stringify({ status: 'fail', detail }));
     process.exit(1);

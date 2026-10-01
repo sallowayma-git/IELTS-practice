@@ -393,7 +393,10 @@ try {
     browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     report.browser = browser.version(); persist();
     const protocols = ['http', 'https', 'file'];
-    const results = await Promise.allSettled(protocols.map(async protocol => {
+    // Hosted Windows runners need a bounded protocol workload. Each protocol
+    // still exercises simultaneous pages and real concurrent IndexedDB writes.
+    report.protocolConcurrency = process.platform === 'win32' ? 1 : protocols.length;
+    const runProtocol = async protocol => {
         const context = await newContext(); let fixtures;
         try {
             const page = await context.newPage();
@@ -401,7 +404,15 @@ try {
             await checkpoint(`${protocol}-multi-window-indexeddb`, () => multiWindow(page, context, protocol, fixtures));
         } finally { await context.close(); }
         await checkpoint(`${protocol}-migration-backup-authority`, () => migrationAndBackups(protocol, fixtures.emptyBackup));
-    }));
+    };
+    const results = [];
+    if (report.protocolConcurrency === 1) {
+        for (const protocol of protocols) {
+            results.push(...await Promise.allSettled([runProtocol(protocol)]));
+        }
+    } else {
+        results.push(...await Promise.allSettled(protocols.map(runProtocol)));
+    }
     report.protocols = results.map((result, index) => ({ protocol: protocols[index], status: result.status === 'fulfilled' ? 'pass' : 'fail',
         ...(result.status === 'rejected' ? { error: result.reason?.stack || String(result.reason) } : {}) }));
     const failures = results.filter(result => result.status === 'rejected');

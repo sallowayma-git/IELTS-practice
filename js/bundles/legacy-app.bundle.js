@@ -803,16 +803,27 @@
   function processImportPayload(file, mode) {
     const inputFile = file;
     if (!inputFile) {
-      window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
+      try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled'); } catch (_) { }
       return;
     }
+    const operationId = `file-import:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    let importCommitted = false;
+    const reportFailure = (error, operation) => {
+      try { window.AppOperationDiagnostics?.failure({ code: 'DATA_IMPORT_FAILED', module: 'import',
+        action: 'import', error, operation, correlation: { operation: operationId } }); } catch (_) { }
+    };
     const reader = new FileReader();
-    reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
+    reader.onerror = () => {
+      reportFailure(reader.error, 'not-committed');
+      window.showMessage && window.showMessage('文件读取失败', 'error');
+    };
+    reader.onabort = () => { try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled', { operation: operationId }); } catch (_) { } };
     reader.onload = async () => {
       let data;
       try {
         data = JSON.parse(reader.result);
       } catch (error) {
+        reportFailure(error, 'not-committed');
         window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
         return;
       }
@@ -831,22 +842,28 @@
           }
           summary.push('', '是否确认继续？');
           if (!window.confirm(summary.join('\n'))) {
+            try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled', { operation: operationId }); } catch (_) { }
             window.showMessage && window.showMessage('已取消导入，现有数据未改变', 'info');
             return;
           }
         }
         const backup = await window.AppData.backups.create({ type: 'pre-import' });
         const result = await window.AppData.backups.commitImport(preview.id, {
+          operationId,
           confirmDestructive: preview.destructive === true
         });
+        if (!result || result.committed !== true) throw new Error('Import commit was not confirmed', { cause: result?.error });
+        importCommitted = true;
+        try { window.AppOperationDiagnostics?.breadcrumb('import', 'storage-confirmed', 'succeeded', { operation: operationId }); } catch (_) { }
         try { await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup.id, practice: preview.practice }); } catch (historyError) { console.warn('[Fallback] 导入历史记录失败:', historyError); }
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
+        reportFailure(error, importCommitted ? 'committed' : undefined);
         console.error('[importData] failed', error);
         window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
       }
     };
-    reader.readAsText(inputFile, 'utf-8');
+    try { reader.readAsText(inputFile, 'utf-8'); } catch (error) { reportFailure(error, 'not-committed'); }
   }
 
   if (typeof window.exportAllData !== 'function') {
@@ -855,6 +872,8 @@
         await _fallbackExportAllData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
+        try { window.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+          action: 'export', error }); } catch (_) { }
         console.error('[Fallback] 数据导出失败:', error);
         window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
       }
@@ -2288,6 +2307,31 @@ class ExamSystemApp {
     };
 
     const integratedFallbackMixin = {
+        showRecoveryUI(content) {
+            const appContainer = document.getElementById('app');
+            if (!appContainer) {
+                return;
+            }
+            if (!this._recoveryUI) {
+                const container = document.createElement('div');
+                container.id = 'app-recovery';
+                container.className = appContainer.className;
+                appContainer.parentNode.insertBefore(container, appContainer);
+                this._recoveryUI = { container, appContainer, display: appContainer.style.display };
+            }
+            // Keep the live shell and its listeners available to the next initialization.
+            this._recoveryUI.container.replaceChildren(content);
+            appContainer.style.display = 'none';
+        },
+        restoreApplicationUI() {
+            if (!this._recoveryUI) {
+                return;
+            }
+            const { container, appContainer, display } = this._recoveryUI;
+            appContainer.style.display = display;
+            container.remove();
+            this._recoveryUI = null;
+        },
         showLoading(show) {
             const loading = document.getElementById('loading');
             if (!loading) {
@@ -2350,18 +2394,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const solutionList = createNode('ul', { className: 'solution-list' }, [
                 createNode('li', null, '🔄 刷新页面重新加载系统'),
                 createNode('li', null, '🧹 清除浏览器缓存和Cookie'),
@@ -2391,9 +2423,9 @@ class ExamSystemApp {
                     createNode('div', { className: 'fallback-footer' }, [createNode('p', null, '如果问题持续存在，请联系技术支持并提供系统信息。')])
                 ])
             ]);
-            replaceContent(appContainer, fallbackRoot);
+            this.showRecoveryUI(fallbackRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = fallbackRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -2466,18 +2498,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const featuresList = createNode('ul', null, [
                 createNode('li', null, '基本题库浏览'),
                 createNode('li', null, '简单练习记录'),
@@ -2494,9 +2514,9 @@ class ExamSystemApp {
                     ])
                 ])
             ]);
-            replaceContent(appContainer, safeModeRoot);
+            this.showRecoveryUI(safeModeRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = safeModeRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -2841,8 +2861,10 @@ class ExamSystemApp {
 
     const integratedLifecycleMixin = {
         async initialize() {
+            try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'started'); } catch (_) { }
             try {
                 this.showLoading(true);
+                this.restoreApplicationUI();
                 this.updateLoadingMessage('正在检查系统依赖...');
                 this.checkDependencies();
                 this.updateLoadingMessage('正在初始化状态管理...');
@@ -2871,69 +2893,37 @@ class ExamSystemApp {
                 this.isInitialized = true;
                 this.showLoading(false);
                 this.showUserMessage('系统初始化完成', 'success');
+                try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'succeeded'); } catch (_) { }
+                try { window.AppDiagnostics?.markReady(); } catch (_) { }
             } catch (error) {
-                this.showLoading(false);
                 this.handleInitializationError(error);
+                try { this.showLoading(false); } catch (_) { }
             }
         },
         handleInitializationError(error) {
-            console.error('[App] 系统初始化失败:', error);
-            let userMessage = '系统初始化失败';
+            // Capture before console or optional UI so the operation keeps its identity.
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
+            try { console.error('[App] 系统初始化失败:', error); } catch (_) { }
+            try { this.showUserMessage('系统初始化失败，请导出诊断信息以便排查。', 'error'); } catch (_) { }
             let canRecover = false;
-            if (error.message.includes('组件加载超时')) {
-                userMessage = '系统组件加载超时，请刷新页面重试';
-                canRecover = true;
-            } else if (error.message.includes('依赖')) {
-                userMessage = '系统依赖检查失败，请确保所有必需文件已正确加载';
-            } else if (error.message.includes('网络')) {
-                userMessage = '网络连接问题，请检查网络连接后重试';
-                canRecover = true;
-            } else {
-                userMessage = '系统遇到未知错误，请联系技术支持';
-            }
-            this.showUserMessage(userMessage, 'error');
-            if (window.handleError) {
-                window.handleError(error, 'App Initialization');
-            }
-            this.showFallbackUI(canRecover);
+            try {
+                const message = Object.getOwnPropertyDescriptor(error, 'message')?.value;
+                canRecover = typeof message === 'string' && (message.includes('组件加载超时')
+                    || (!message.includes('依赖') && message.includes('网络')));
+            } catch (_) { }
+            try { this.showFallbackUI(canRecover); } catch (_) { }
         },
         setupGlobalErrorHandling() {
-            window.addEventListener('unhandledrejection', (event) => {
-                console.error('[App] 未处理的Promise拒绝:', event.reason);
-                this.handleGlobalError(event.reason, 'Promise拒绝');
-                event.preventDefault();
-            });
-            window.addEventListener('error', (event) => {
-                console.error('[App] JavaScript错误:', event.error);
-                this.handleGlobalError(event.error, 'JavaScript错误');
-            });
+            // The inline collector owns listeners for the entire page lifetime.
+            try { window.AppDiagnosticBootstrap?.install({ context: 'main' }); } catch (_) { }
         },
-        handleGlobalError(error, context) {
+        handleGlobalError(error) {
             try {
-                const normalizedError = error && typeof error === 'object'
-                    ? error
-                    : { message: String(error || 'Unknown error'), stack: undefined };
-                if (!this.globalErrors) {
-                    this.globalErrors = [];
-                }
-                this.globalErrors.push({
-                    error: normalizedError.message || String(error),
-                    context,
-                    timestamp: Date.now(),
-                    stack: normalizedError.stack
+                return window.AppDiagnostics?.report({
+                    code: 'UNEXPECTED_RUNTIME_ERROR', module: 'main', action: 'report', error,
+                    collection: { source: 'global', coverage: 'partial', aggregation: 'local' }
                 });
-                if (this.globalErrors.length > 100) {
-                    this.globalErrors = this.globalErrors.slice(-50);
-                }
-                const recentErrors = this.globalErrors.filter((e) => Date.now() - e.timestamp < 60000);
-                if (recentErrors.length > 5) {
-                    this.showUserMessage('系统遇到多个错误，建议刷新页面', 'warning');
-                } else if (!normalizedError.message || !normalizedError.message.includes('Script error')) {
-                    this.showUserMessage('系统遇到错误，但仍可继续使用', 'warning');
-                }
-            } catch (handlingError) {
-                console.error('[App] 错误处理失败:', handlingError);
-            }
+            } catch (_) { }
         },
         updateLoadingMessage(message) {
             const loadingText = document.querySelector('.loading-text');
@@ -3266,7 +3256,7 @@ class ExamSystemApp {
                 console.error('Failed to refresh data:', error);
             }
         },
-        destroy() {
+        destroy(options = {}) {
             window.removeEventListener('resize', this.handleResize);
             if (this.sessionMonitorInterval) {
                 clearInterval(this.sessionMonitorInterval);
@@ -3277,6 +3267,21 @@ class ExamSystemApp {
             }
             if (this.examWindows) {
                 this.examWindows.forEach((windowData, examId) => {
+                    // A departing host leaves supported practice pages available
+                    // for unconfirmed work and local diagnostic export. Explicit
+                    // session closure still uses the normal cleanup path below.
+                    let preserveReading = false;
+                    if (options.preserveReadingWindows === true) {
+                        try { preserveReading = new URL(windowData.expectedUrl, window.location.href).pathname
+                            .endsWith('/assets/generated/reading-exams/reading-practice-unified.html'); } catch (_) { }
+                    }
+                    if (options.preservePracticeWindows === true) preserveReading = true;
+                    if (preserveReading) {
+                        try { this._diagnosticChannels?.get(examId)?.dispose(); } catch (_) { }
+                        const handler = this.messageHandlers?.get(examId);
+                        if (handler) window.removeEventListener('message', handler);
+                        return; // Keep the existing interrupted-session/recovery data.
+                    }
                     if (windowData.window && !windowData.window.closed) {
                         windowData.window.close();
                     }
@@ -3363,17 +3368,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.app = new ExamSystemApp();
                     Promise.resolve(window.app.initialize())
                         .catch((error) => {
+                            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
                             console.error('[App] 初始化失败:', error);
                         })
                         .finally(() => {
                             signalAppCoreReady();
                         });
                 } catch (e) {
+                    try { window.AppDiagnostics?.startupFailed(e); } catch (_) { }
                     console.error('[App] 初始化失败:', e);
                     signalAppCoreReady();
                 }
             })();
         } catch (error) {
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
             console.error('Failed to start application:', error);
             if (window.handleError) {
                 window.handleError(error, 'Application Startup');
@@ -3401,7 +3409,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 页面卸载时清理
 window.addEventListener('beforeunload', () => {
     if (window.app) {
-        window.app.destroy();
+        window.app.destroy({ preserveReadingWindows: true, preservePracticeWindows: true });
     }
 });
 

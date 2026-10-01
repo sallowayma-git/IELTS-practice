@@ -1999,6 +1999,8 @@
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
         } catch (e) {
             try { global.showMessage && global.showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+                action: 'export', error: e }); } catch (_) { }
             console.error('[Export] failed', e);
         }
     }
@@ -2016,6 +2018,8 @@
             try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
             return snapshot;
         } catch (error) {
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+                action: 'export', error }); } catch (_) { }
             console.error('[ExamActions] 数据导出失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('数据导出失败: ' + (error && error.message || error), 'error');

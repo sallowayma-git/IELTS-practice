@@ -158,7 +158,7 @@
         return providedScripts.has(normalized) || scriptStatus[url] === 'loaded' || scriptStatus[normalized] === 'loaded';
     }
 
-    function loadScript(url) {
+    function loadScript(url, options) {
         if (!url) {
             return Promise.resolve();
         }
@@ -182,29 +182,52 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
+            var settled = false;
+            var timer = null;
+            var diagnostics = global.AppDiagnostics;
+            // Declare before setting src or inserting the element: capture listeners run first.
+            try {
+                if (diagnostics) diagnostics.declareResource(script, { url: url, optional: !!(options && options.optional) });
+            } catch (_) { }
             script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = 'loaded';
                 resolve();
             };
             script.onerror = function handleError(error) {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = null;
+                var failure = new Error('加载脚本失败: ' + url);
+                try {
+                    if (diagnostics) failure = diagnostics.resourceFailure(script, failure) || failure;
+                } catch (_) { }
                 try {
                     if (script.parentNode) {
                         script.parentNode.removeChild(script);
                     }
                 } catch (_) { }
-                reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
+                try {
+                    global.AppOperationDiagnostics?.failure({ code: 'RESOURCE_LOAD_FAILED', module: 'main',
+                        action: 'load-resource', error: failure, operation: 'not-committed',
+                        resource: { url: url, optional: !!(options && options.optional) } });
+                } catch (_) { }
+                reject(failure);
             };
-            document.head.appendChild(script);
+            try { timer = global.setTimeout?.(function () { script.onerror(); }, 15000); } catch (_) { }
+            try { document.head.appendChild(script); } catch (error) { script.onerror(error); }
         });
 
         return scriptStatus[url];
     }
 
     function loadOptionalScript(url, label) {
-        return loadScript(url).then(function onOptionalLoaded() {
+        return loadScript(url, { optional: true }).then(function onOptionalLoaded() {
             return true;
         }).catch(function onOptionalFailed(error) {
             scriptStatus[url] = null;
@@ -256,7 +279,7 @@
         if (batch.length === 1) {
             return loadScript(batch[0]);
         }
-        return Promise.all(batch.map(loadScript)).then(function () {
+        return Promise.all(batch.map(function (url) { return loadScript(url); })).then(function () {
             return undefined;
         });
     }
