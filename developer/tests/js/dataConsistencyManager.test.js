@@ -154,12 +154,35 @@ async function testCanonicalCorrectAnswerMapWins() {
     });
 }
 
+async function testEmptyNestedComparisonStillGeneratesScore() {
+    const manager = loadManager();
+    for (const topLevel of [undefined, {}]) {
+        const canonical = {
+            id: 'record-empty-nested-comparison',
+            startTime: '2026-05-13T00:00:00.000Z',
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'A' },
+            ...(topLevel ? { answerComparison: topLevel } : {}),
+            realData: { answerComparison: {} }
+        };
+        const before = JSON.stringify(canonical);
+        const projected = manager.ensureConsistency(canonical);
+        assert.strictEqual(projected.scoreInfo.total, 1, 'an empty placeholder must not produce a 0/0 score');
+        assert.strictEqual(projected.scoreInfo.correct, 1, 'the available answer must be scored');
+        assert.strictEqual(projected.realData.answerComparison.q1.isCorrect, true,
+            'the nested display projection should receive the generated comparison');
+        assert.strictEqual(JSON.stringify(canonical), before, 'display enrichment must not rewrite stored data');
+    }
+    recordResult('empty nested comparison placeholders do not suppress score generation', true, {});
+}
+
 async function runAllTests() {
     const tests = [
         testEnsureConsistencyDoesNotMutateCanonicalRecord,
         testFixDataInconsistenciesDoesNotMutateInputList,
         testNumericCorrectAnswersRemainScoreCount,
-        testCanonicalCorrectAnswerMapWins
+        testCanonicalCorrectAnswerMapWins,
+        testEmptyNestedComparisonStillGeneratesScore
     ];
     for (const testFn of tests) {
         try {

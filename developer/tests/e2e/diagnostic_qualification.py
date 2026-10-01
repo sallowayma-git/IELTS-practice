@@ -60,6 +60,15 @@ def evidence_rows(payload, minimum: int, partial: bool = False, script: str | No
             location = re.search(re.escape(script) + r'\.node\.js:(\d{1,5})(?=[:\s)]|$)', row['error'])
             if location:
                 item['sourceLine'] = int(location.group(1))
+        # Listening submission failures expose only fixed protocol checkpoints.
+        # Never copy arbitrary browser state, identifiers or payload fields.
+        checkpoint = row.get('submitCheckpoint')
+        if failed and script == 'listening_diagnostics' and isinstance(checkpoint, dict):
+            safe_checkpoint = {key: checkpoint[key] for key in
+                               ('completionReceived', 'ackAttempted', 'nackAttempted')
+                               if isinstance(checkpoint.get(key), bool)}
+            if safe_checkpoint:
+                item['submitCheckpoint'] = safe_checkpoint
         evidence.append(item)
     scenarios = [{row['scenario'] for row in evidence if row['mode'] == mode} for mode in MODES]
     if not partial and (any(len(items) < minimum for items in scenarios) or not all(items == scenarios[0] for items in scenarios)):

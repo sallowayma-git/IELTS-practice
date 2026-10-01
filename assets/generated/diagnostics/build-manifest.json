@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:a9386461a353b0a6ef59cdc8e0973d6208e41fa7956d8d59098809a6ec32bd56",
+  "buildId": "sha256:1824d7239f9cd9245b556102fb233cd4a8d0d06ad5fd87910f7b3cb4f72bac4a",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -544,7 +544,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "95432ca44b76e73a237f13e4ba5a4613e4b6df94d1ce462e9e7d6b91b1c0d26b"
+      "sha256": "824ef3facc5d8bb606bb08163ce3a323489e4fc5393d3b9effe6ea4ba6e68e96"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -552,7 +552,7 @@
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
-      "sha256": "1f4b7bbf3f55bf8fdb6be58fefe507a1a34b5dd4a84a94116ad2a63725b9132e"
+      "sha256": "de0ebd1a149b97bbcb4ba549200ed58ff66c351fbae7e35917c475fe819a2216"
     },
     {
       "path": "js/bundles/dictionary.bundle.js",
@@ -588,7 +588,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "300790b37896778360d95132c8ebf2071a80b991773024f1cefba54d2bcd85f9"
+      "sha256": "30a642bf2fe8b4d36c3e2ef16d9079d304c543c619a7333feba0ee9bd410ceeb"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -1014,31 +1014,31 @@
       {
         "source": "js/utils/answerComparisonUtils.js",
         "startLine": 17283,
-        "endLine": 17984,
+        "endLine": 18054,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 17988,
-        "endLine": 19020,
+        "startLine": 18058,
+        "endLine": 19090,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 19024,
-        "endLine": 19273,
+        "startLine": 19094,
+        "endLine": 19343,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 19277,
-        "endLine": 19482,
+        "startLine": 19347,
+        "endLine": 19552,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 19486,
-        "endLine": 24656,
+        "startLine": 19556,
+        "endLine": 24726,
         "sourceStartLine": 1
       }
     ],
@@ -1058,13 +1058,13 @@
       {
         "source": "js/utils/dataConsistencyManager.js",
         "startLine": 1425,
-        "endLine": 1891,
+        "endLine": 1904,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/performance.js",
-        "startLine": 1895,
-        "endLine": 2345,
+        "startLine": 1908,
+        "endLine": 2358,
         "sourceStartLine": 1
       }
     ],
@@ -1298,7 +1298,7 @@
       {
         "source": "js/runtime/unifiedReadingPage.js",
         "startLine": 14767,
-        "endLine": 23459,
+        "endLine": 23485,
         "sourceStartLine": 1
       }
     ],

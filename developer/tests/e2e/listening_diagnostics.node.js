@@ -64,7 +64,15 @@ async function openPractice(context, host, base, kind, dropAck) {
         window.__originalPostExam = window.app._postExamMessage;
         window.__dropAck = dropAck;
         window.__droppedAck = false;
+        window.__submitCheckpoint = { completionReceived: false, ackAttempted: false, nackAttempted: false };
+        const originalComplete = window.app.handlePracticeComplete;
+        window.app.handlePracticeComplete = function (...args) {
+            __submitCheckpoint.completionReceived = true;
+            return originalComplete.apply(this, args);
+        };
         window.app._postExamMessage = function (...args) {
+            if (args[2] === 'PRACTICE_SUBMIT_ACK') __submitCheckpoint.ackAttempted = true;
+            if (args[2] === 'PRACTICE_SUBMIT_FAILED') __submitCheckpoint.nackAttempted = true;
             // Drop outcome replies throughout the fault window. An automatic
             // retry may receive a transient NACK while the first save is still
             // running; delivering it would test rejection instead of reply loss.
@@ -126,6 +134,7 @@ async function verifyLocalExport(host, child, practice, scenario) {
     }
 
     const records = await host.evaluate(() => AppData.practice.list());
+    await child.bringToFront();
     const access = practice.getByRole('button', { name: /^Errors and diagnostics/ });
     assert.equal(await access.count(), 1, 'Locally retained errors need a frame-local history/export entry');
     await access.click();
@@ -199,7 +208,9 @@ try {
                         assert.equal(await submit(practice, kind), true);
                         // Wait for the real commit receipt, then read canonical data
                         // once instead of opening transactions in every polling frame.
-                        await host.waitForFunction(() => __droppedAck);
+                        // The practice popup owns the foreground. Poll this host-side
+                        // protocol flag on a timer instead of background animation frames.
+                        await host.waitForFunction(() => __droppedAck, null, { polling: 100 });
                         assert.equal(await host.evaluate(async () => (await AppData.practice.list()).length), 1);
                         await practice.waitForFunction(() => AppDiagnostics.snapshot().events.some(event => event.code === 'PRACTICE_CHANNEL_TIMEOUT' && event.action === 'submit'), null, { timeout: 15000 });
                         const report = await exported(practice);
@@ -211,6 +222,7 @@ try {
                         await practice.evaluate(() => { document.querySelector('[name="q1"]').value = 'PRIVATE_EDITED'; });
                         await host.evaluate(() => { __dropAck = false; });
                         // Exercise the actual explicit incident retry, including its receipt promise.
+                        await child.bringToFront();
                         await practice.getByRole('button', { name: /重试/ }).click();
                         await practice.waitForFunction(kind => kind === 'listening' ? __listeningBridgeGetState().completed
                             : practicePageEnhancer.pendingSubmissions.size === 0, kind);
@@ -243,7 +255,9 @@ try {
                 results.push({ mode, scenario, status: 'pass' });
                 console.log(`PASS ${mode} ${scenario}`);
             } catch (error) {
-                results.push({ mode, scenario, status: 'fail', error: error.stack });
+                const submitCheckpoint = scenario.includes('lost-ack') && !host.isClosed()
+                    ? await host.evaluate(() => window.__submitCheckpoint).catch(() => null) : null;
+                results.push({ mode, scenario, status: 'fail', error: error.stack, submitCheckpoint });
                 console.error(`FAIL ${mode} ${scenario}: ${error.stack}`);
                 console.error('Runtime errors', runtimeErrors);
                 if (!host.isClosed()) console.error('Host state', await host.evaluate(async () => ({
