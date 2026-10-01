@@ -80,3 +80,12 @@ M12     ⚠️ CONTRACT VALIDATED（受控线程合同通过，不代表前置�
 ## Round 3 Post-Audit Addendum（2026-08-31）
 
 上面的阶段表已按 Round 3 审计改为“契约验证”口径。它不构成 M0-M12 产品级整体 Go；尤其 M6 产品门为 No-Go，M7-M12 的后续交付不能追溯性地把该门改写为通过。当前产品状态必须同时参考代码生产调用路径、各阶段“诚实限制”、[Round 3 审计报告](PLAN_V1.3_ADVERSARIAL_AUDIT_ROUND3_REPORT.md) 和 [后端审计发现](../../.planning/agent_backend_audit_20260824/findings.md)。
+
+## 默认工作区产品整改验证（2026-10-01）
+
+- 按用户确认，`agent_get_workspace` 自动准备 `<安装目录>/agent-workspace`，不可写时回退 `<app data>/agent-workspace`。Vue 自动初始化、运行前续期，无目录选择入口；只授权专用子目录，保留短期、进程内 grant、文件越界拒绝及 SHA-256 写保护。
+- Rust host lib **54/54**，其中 Agent 工具/授权 **20/20**、工作区 **6/6**。新增固定路径与已有文件保留、安装路径受阻回退、双路径失败关闭、Windows junction 拒绝测试。全部 host lib 已纳入静态门。
+- 静态套件 **28/28**；Vue typecheck/build、Python **431** 均通过。首次并发重链接的 LNK1104 在定向测试结束后串行重跑解决，未删文件或杀进程。
+- 四屏宽 UI 核验通过（1440/980/390/360）：默认授权与运行前续期、失败 trace 回读、成功文件轨迹，无页面横向溢出。
+- 按规定在静态门后执行 packaged E2E：**18/18，exit 0**，`buildPerformed=true`，新 release SHA256 `ca2a2a465483f6f067aea25f86f61c7b7a56a3d77189c0c7fdb657238321d1ba`。真实 IPC 忽略伪造路径，授权根与隔离安装的专用子目录是同一目录；模型工具实际读取 note.txt，哈希及 SQLite trace 正确。测试临时安装不改变产品默认目录策略。
+- 同一新 release 通过 M11 `promptAuthorityBoundary`（四个生产写入口精确 command-not-found）与查询正向测试。本次通过不改变 M6 No-Go，也不宣称整体审计整改完成。

@@ -6,16 +6,16 @@ use ielts_domain::{AgentRunKind, ErrorEnvelope};
 use serde::Deserialize;
 use serde_json::json;
 use tauri::State;
-use tauri_plugin_dialog::DialogExt;
 
 use crate::agent::{
-    AgentCancelRegistry, LearningReadTools, WorkspaceFileTools, WorkspaceGrant, WorkspaceGrants,
+    default_workspace, AgentCancelRegistry, LearningReadTools, WorkspaceFileTools, WorkspaceGrant,
+    WorkspaceGrants,
 };
 use crate::ai::{load_runtime, load_runtime_for_config};
 use crate::app::run_audit::RunAuditGuard;
 use crate::cognitive_runtime::RuntimeManager;
 use crate::app::application_store::ApplicationStore;
-use crate::app::state::{AppDb, AppVault};
+use crate::app::state::{AppDb, AppPaths, AppVault};
 
 const AGENT_SYSTEM_PROMPT: &str = "You are IELTS Atlas's local workspace assistant. Use only the provided tools, inspect a file before modifying an existing file, preserve unrelated content, and report exactly what changed. Never invent tool results or claim access outside the granted workspace.";
 const ATTEMPT_REVIEW_SYSTEM_PROMPT: &str = "You are IELTS Atlas's Reading attempt review assistant. Use only the provided read-only learning evidence tools. Base every claim on returned canonical evidence, distinguish deterministic observations from interpretation, never invent answers or question text, and never claim to modify learning records.\n\nYou have access to seven read-only tools. The first four are attempt/evidence reads: get_attempt_detail, compare_attempts_for_asset, get_question_history, and search_learning_events. Three additional tools give you the learner's personal context: get_learner_skill_state (bounded learner skill mastery/uncertainty/trend snapshots), search_active_memories (active memory and explicit preference preview for the activity), and get_memory_evidence (canonical upstream learning-event evidence by stable IDs).\n\nFollow the Reading Review Context priority when building your explanation:\n1. CURRENT ATTEMPT — call get_attempt_detail first for score, per-question outcomes, and timing/change signals.\n2. RELEVANT HISTORY — call compare_attempts_for_asset and get_question_history for same-asset transitions and related skill state.\n3. PERSONAL MEMORY — call search_active_memories and get_learner_skill_state to surface only relevant active memories and the learner's current skill state. Use get_memory_evidence to ground any memory in canonical events.\n4. TEACHING PREFERENCE — explicit preferences first, high-confidence inferred candidates second; both arrive through search_active_memories.\n\nNever assert a preference the tools did not return. Feedback is an interaction fact, not a confirmed preference.";
@@ -92,20 +92,21 @@ impl Drop for CancellableRun<'_> {
 }
 
 #[tauri::command]
-pub fn agent_pick_workspace(
-    app: tauri::AppHandle,
+pub fn agent_get_workspace(
+    paths: State<'_, AppPaths>,
     grants: State<'_, WorkspaceGrants>,
-) -> CommandResponse<Option<WorkspaceGrant>> {
-    let folder = app.dialog().file().blocking_pick_folder();
-    let Some(folder) = folder else {
-        return CommandResponse::success(None);
-    };
-    let path = match folder.into_path() {
-        Ok(path) => path,
-        Err(error) => return CommandResponse::failure(path_error(error.to_string())),
-    };
-    match grants.issue(&path) {
-        Ok(grant) => CommandResponse::success(Some(grant)),
+) -> CommandResponse<WorkspaceGrant> {
+    let result = std::env::current_exe()
+        .map_err(|error| error.to_string())
+        .and_then(|executable| {
+            let installation = executable
+                .parent()
+                .ok_or("installation directory is unavailable")?;
+            default_workspace(installation, &paths.app_data)
+        })
+        .and_then(|root| grants.issue(&root));
+    match result {
+        Ok(grant) => CommandResponse::success(grant),
         Err(error) => CommandResponse::failure(path_error(error)),
     }
 }

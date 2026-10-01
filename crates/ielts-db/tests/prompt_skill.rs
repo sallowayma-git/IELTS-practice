@@ -388,6 +388,89 @@ fn list_prompt_versions_orders_by_version_desc() {
 }
 
 #[test]
+fn failed_reevaluation_revokes_previous_pass_before_approval() {
+    let (_dir, conn) = open_db();
+    let version_id = seed_prompt_version(&conn, "candidate", "tester");
+    let candidate = propose_candidate(&conn, &ProposeCandidateCommand {
+        target_kind: CandidateTargetKind::Prompt,
+        target_version_id: version_id,
+        proposal: json!({}),
+        proposed_by: "tester".into(),
+    }).unwrap();
+    let case_id = seed_eval_case(&conn, EvalCaseKind::PromptInjection, true);
+    for passed in [true, false] {
+        let result = run_eval(&conn, &RunEvalCommand {
+            candidate_id: candidate.id.clone(),
+            results: vec![EvalCaseGrading {
+                case_id: case_id.clone(), passed,
+                score: if passed { 1.0 } else { 0.0 },
+                grading: json!({"criticalSafetyRegression": !passed}),
+            }],
+        }).unwrap();
+        assert_eq!(result.candidate_advanced, passed);
+    }
+    let error = approve_candidate(&conn, &ielts_domain::ApproveCandidateCommand {
+        candidate_id: candidate.id.clone(), approved_by: "release-manager".into(),
+    }).expect_err("the latest failed eval must revoke approval eligibility");
+    assert!(error.to_string().contains("requires eval_passed"));
+    let status: String = conn.query_row(
+        "SELECT status FROM candidate_promotions WHERE id = ?1", [&candidate.id],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(status, "proposed");
+    let run_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM eval_runs WHERE candidate_promotion_id = ?1", [&candidate.id],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(run_count, 2, "both verdicts must remain in the audit trail");
+    assert!(promote_candidate(&conn, &PromoteCandidateCommand {
+        candidate_id: candidate.id,
+    }).is_err());
+}
+
+#[test]
+fn eval_result_write_failure_rolls_back_the_whole_receipt() {
+    let (_dir, conn) = open_db();
+    let version_id = seed_prompt_version(&conn, "candidate", "tester");
+    let candidate = propose_candidate(&conn, &ProposeCandidateCommand {
+        target_kind: CandidateTargetKind::Prompt,
+        target_version_id: version_id,
+        proposal: json!({}),
+        proposed_by: "tester".into(),
+    }).unwrap();
+    let first = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    let second = seed_eval_case(&conn, EvalCaseKind::PromptInjection, true);
+    conn.execute_batch(
+        "CREATE TRIGGER reject_second_eval_result BEFORE INSERT ON eval_results
+         WHEN NEW.passed = 0
+         BEGIN SELECT RAISE(ABORT, 'simulated result write failure'); END;",
+    ).unwrap();
+    let command = RunEvalCommand {
+        candidate_id: candidate.id.clone(),
+        results: vec![
+            EvalCaseGrading { case_id: first, passed: true, score: 1.0, grading: json!({}) },
+            EvalCaseGrading { case_id: second, passed: false, score: 0.0, grading: json!({}) },
+        ],
+    };
+    assert!(run_eval(&conn, &command).is_err());
+    for table in ["eval_runs", "eval_results"] {
+        let count: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(count, 0, "{table} must not retain a partial completed receipt");
+    }
+    let status: String = conn.query_row(
+        "SELECT status FROM candidate_promotions WHERE id = ?1", [&candidate.id],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(status, "proposed");
+    conn.execute_batch("DROP TRIGGER reject_second_eval_result").unwrap();
+    let retry = run_eval(&conn, &command).unwrap();
+    assert_eq!(retry.results.len(), 2);
+    assert!(!retry.candidate_advanced);
+}
+
+#[test]
 fn denied_self_modifying_tools_are_listed() {
     assert!(ielts_domain::is_denied_self_modifying_tool("update_system_prompt"));
     assert!(ielts_domain::is_denied_self_modifying_tool("edit_soul"));

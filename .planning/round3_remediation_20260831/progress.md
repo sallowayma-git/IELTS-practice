@@ -1,5 +1,47 @@
 # Round 3 整改进度
 
+## 2026-10-01 — 用户确认固定默认 Agent 工作区
+
+- 用户已接受安装目录 agent-workspace，实际不可写时自动回退 app_data/agent-workspace；不再要求选择目录。
+- Rust agent_get_workspace 无路径参数，检查实际写权限、拒绝符号链接/junction，仅授权专用子目录；保留 15 分钟、进程内 grant 和既有工具边界。
+- Vue 页面自动初始化，每次运行自动续期；删除 picker、清除目录选择和可点击目录上下文入口。
+- Packaged 测试使用 staged 安装目录内真实文件，不伪造 grant；移除失败的原生 picker 自动化。整个测试安装仍隔离，产品工作区不是临时目录。
+- 定向 workspace 5/5 通过；完整门禁验证尚未完成。
+- 增补 junction 根目录拒绝测试，全部 Agent 工具/授权/学习只读边界 20/20。首轮静态 27/28，唯一失败是与定向测试共用 host exe 的 LNK1104；定向进程已结束，串行重跑。静态 host gate 扩展为全部 lib 测试，让新工作区安全回归纳入门禁。
+- 串行静态 **28/28**（host lib **54/54**、Python **431**）；四屏宽检查 **4/4**，亲自检查移动端截图，无选择入口/溢出，自动续期与 failed-run hydration 正常。
+- 随后 packaged E2E **18/18，exit 0**，新构建 release SHA256 `ca2a2a465483f6f067aea25f86f61c7b7a56a3d77189c0c7fdb657238321d1ba`。agentDefaultWorkspace 验证伪造外部路径不能改根目录，agentWorkspaceRun 实际读 note.txt 并从 SQLite 核验 hash/trace；M11 四写入口拒绝也通过。
+- M12 ADR/gate 已同步真实产品决策和证据；本轮预览进程已结束，既有用户修改保留。下一批继续可信 eval/overlay 与 catch-up 消费，整体审计未完成。
+
+## 2026-10-01 — 对照任务书继续 M11 权限整改
+
+- 主代理读取任务书 §16 全章、§17.7/17.8、M11 全段、§25.8 和 ADR-M11；确认生产 UI 不应获得产品 registry 发布权，caller grading 记账不是受控 offline evaluator。
+- 两名干净只读探子并发完成并关闭：命令消费/门禁覆盖，以及 catch-up 消费者接线风险。遵守派发后主线程等待全部返回。
+- 移除生产 Webview eval grading / prompt approval / promotion / rollback 四入口及其 Tauri wrapper，保留 proposal 与 registry read；应用/DB 离线服务保留。没有用户 Vue 消费这些四入口的证据；用户 writing prompt bank 另属显式配置，未移除。
+- 修正 runtime 的过时 UI-only 注释；增加源注册合同和 packaged IPC forged passed=true 防回归（必须 command-not-found），同时正向验证 registry 查询。
+- ADR-M11 与 M11 gate 增加覆盖历史能力描述的权限整改附录；明确真实 evaluator / holdout / shadow / canary / overlay 仍未完成。
+- 定向 cognitive_runtime 12/12，doc drift 23 文档通过，静态门 28/28；packaged E2E 正在用已验证匹配驱动、新 release 验证。
+- 继续发现离线状态机缺陷：run_eval 接受 EvalPassed 重评，但失败时不复位状态，旧 pass 仍可批准；run/results/status 也不在一个事务。下一小批将补“最新失败作废旧通过”与原子记账，不能将此包装为可信 evaluator。
+- 新 packaged 首轮四个 authority command 精确 not-found、registry read 均通过，后续 Agent workspace 条件返回 false 超时；没有将局部安全测试通过写成全套通过。harness 补阶段 label、picker 收据与失败按钮状态，用于本轮真实排障。
+- 两条新增 DB 回归修复前分别失败：重评 false 之后仍批准，以及第二条 result 拒写后 completed run 残留。run_eval 现以单事务写 run/results/status，最新完成 failed 始终复位 proposed；prompt_skill 16/16。Domain 注释改为 offline grader receipt，避免宣称已实现 evaluator。
+- 第二轮静态 28/28，application prompt_skill 9/9、backup roundtrip 11/11。E2E 精确四入口 not-found 再次通过，但新诊断显示 picker 选的是 `Documents` 而非临时工作区，Agent 未启动（主断言保护了错误目录）。
+- 修复测试助手：只匹配本轮 staged executable 拥有的目录对话框；检查前台与焦点控件归属；WM_SETTEXT 写入并校验地址栏、等待导航完成后点击确认；完全移除全局剪贴板读写。保持临时工作区名称断言，不用伪造 grant 或取消路径门禁。
+- 第三轮静态 28/28；packaged 再次确认 prompt authority 边界通过，但新的原生助手失败于“address did not accept the test path”，仍未全绿，助手改动未宣称完成。
+- 用户新增产品方向：默认固定 Agent 工作区，位于安装目录某个子目录，不要求选目录。当前生产 agent_pick_workspace 仍调用 blocking_pick_folder；本轮暂停目录选择器自动化排障，转向确认固定默认目录及安装目录不可写时的策略。测试临时目录只是隔离；不应将用户产品决定与测试隔离混为一谈。尚未修改默认工作区代码。
+
+## 2026-10-01 — 六路复核与 DTO / 启动恢复修复
+
+- 按当前 AGENTS 规则同时派发 6 个不复制历史的只读探子，主线程等待全部返回，返回后逐个关闭。无超时异常。
+- 路线 10：修复 Python `prompt.get_active` reader，读取真实 PromptVersion.id，不再虚构 skill version；fixture 改为完整 Rust wire shape，并补 null/畸形 envelope 回归。33/33 定向测试通过。
+- 暂不启用 production prompt overlay：当前 Webview eval.run 仍接受自报通过，接线会扩大漏洞；结构 evaluator 不代表真实效果评估。
+- 路线 9：启动 recovery、重复窗口清理和 catch-up 放入同一事务；耗尽 interrupted 归为 failed，重复 interrupted 留终止收据，已有 queued/running 优先。自动 catch-up 跳过 failed 窗口，显式手动 enqueue 仍可重试。
+- `cargo test ... --offline` 首次失败：当前锁定 `cc v1.2.67` 等 crate 未缓存；移除 offline 后按 Cargo.lock 下载，15/15 后台任务测试通过，锁文件未修改。
+- 正在依次运行静态套件和 packaged E2E；历史任务的生产消费者、prompt 晋升可信 eval 和 overlay 仍未完成。
+- 新增恢复原子性测试：dream enqueue 触发器故意失败时，lease/requeue/catch-up 全部回滚；移除触发器后可再次恢复。后台任务 16/16、journal lifecycle 6/6、DB 全库测试通过；Python 全量 431。
+- 静态套件最终 28/28，background_jobs 已纳入 Rust data-truth gate。
+- E2E 首次新 release 构建成功（buildPerformed=true），但系统 EdgeDriver 150 与 WebView 154 版本不匹配，尚未执行业务检查。使用仓库既有安装脚本在临时目录 `C:/Users/25788/AppData/Local/Temp/ielts-round3-driver-9a7ac5d277bd48fabd2bec1049f8d79f` 获取匹配 154.0.4258.48 驱动，版本及 Authenticode 签名校验通过，以 TAURI_NATIVE_DRIVER 仅覆盖本轮进程并重跑；未改系统工具。
+- E2E 匹配驱动重跑 **16/16，exit 0**，使用上一轮刚构建的同一 release（SHA256 `8649e02a4161a441bb0c32f0a7afff5997fd238b4e79ef24f4cd6d379906cd7c`），并非历史旧二进制。源码、锁文件没有因环境排障额外变更；清除本轮测试造成的 tracked pycache 差异，保留用户 `.zcode/`。
+- 本轮交付仅关闭真实 prompt DTO 合同错位和 startup recovery 两项缺陷；没有宣称 overall remediation、prompt overlay 或历史 catch-up 消费链完成。下一批从可信 prompt eval/overlay 与历史任务消费继续。
+
 ## 2026-08-31
 
 - 读取 `planning-with-files` 技能与 session catch-up；未发现需要恢复的未同步会话。

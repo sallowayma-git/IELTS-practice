@@ -624,14 +624,25 @@ fn load_candidate(conn: &Connection, candidate_id: &str) -> DbResult<CandidatePr
 
 // === Eval Run ===
 
-/// M11-05: run the offline eval for a candidate. Records an eval run + per-
-/// case results. The candidate advances to eval_passed only when all cases
-/// pass. A failing case leaves the candidate at proposed.
+/// M11-05: record offline grader output, not execute an experiment. The run,
+/// case results and candidate status are one atomic receipt. Only the latest
+/// successfully recorded verdict determines approval eligibility; a failed
+/// reevaluation revokes an earlier pass.
 ///
 /// M11-05: holdout cases ARE included here (they are the held-out evaluation
 /// set that scores candidate versions) - they just never enter the
 /// prompt-generation read path (`get_active_prompt_version`).
 pub fn run_eval(
+    conn: &Connection,
+    command: &RunEvalCommand,
+) -> DbResult<EvalRunOutcome> {
+    let tx = conn.unchecked_transaction()?;
+    let outcome = record_eval_in_transaction(&tx, command)?;
+    tx.commit()?;
+    Ok(outcome)
+}
+
+fn record_eval_in_transaction(
     conn: &Connection,
     command: &RunEvalCommand,
 ) -> DbResult<EvalRunOutcome> {
@@ -711,13 +722,11 @@ pub fn run_eval(
         });
     }
     let candidate_advanced = all_passed;
-    if all_passed {
-        conn.execute(
-            "UPDATE candidate_promotions SET status = 'eval_passed', updated_at = ?2
-             WHERE id = ?1",
-            params![candidate.id, now],
-        )?;
-    }
+    let status = if all_passed { "eval_passed" } else { "proposed" };
+    conn.execute(
+        "UPDATE candidate_promotions SET status = ?2, updated_at = ?3 WHERE id = ?1",
+        params![candidate.id, status, now],
+    )?;
     Ok(EvalRunOutcome {
         run: EvalRun {
             id: run_id,

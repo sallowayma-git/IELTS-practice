@@ -6,4 +6,4 @@ mod workspace;
 pub(crate) use cancel::AgentCancelRegistry;
 pub(crate) use file_tools::WorkspaceFileTools;
 pub(crate) use learning_tools::LearningReadTools;
-pub(crate) use workspace::{WorkspaceGrant, WorkspaceGrants};
+pub(crate) use workspace::{default_workspace, WorkspaceGrant, WorkspaceGrants};

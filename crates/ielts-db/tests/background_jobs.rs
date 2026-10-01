@@ -163,14 +163,114 @@ fn startup_recovery_does_not_requeue_exhausted_jobs() {
         startup_recovery(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
     }
     let interrupted = load_job(&conn, &job_id).unwrap().unwrap();
-    assert_eq!(interrupted.status, "interrupted");
+    assert_eq!(interrupted.status, "failed");
     assert_eq!(interrupted.attempts, 3);
 
     // Startup recovery must not requeue: attempts == max_attempts.
     let requeued = startup_recovery(&conn, "2026-08-16T00:07:00Z", 300).unwrap();
     assert_eq!(requeued, 0);
     let after = load_job(&conn, &job_id).unwrap().unwrap();
-    assert_eq!(after.status, "interrupted");
+    assert_eq!(after.status, "failed");
+}
+
+fn seed_recovery_activity(conn: &Connection) {
+    conn.execute(
+        "INSERT INTO attempts
+           (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+         VALUES ('attempt-recovery', 'reading', 'single', 'completed', ?1, 0, 2, ?1, ?1)",
+        [NOW],
+    ).unwrap();
+}
+
+#[test]
+fn startup_recovery_preserves_queued_replacement_without_blocking_catch_up() {
+    let (_dir, conn) = open_db();
+    seed_recovery_activity(&conn);
+    let key = "daily_journal:local:2026-08-16";
+    let old = enqueue_job(&conn, "daily_journal", "local", NOW, 1, Some(key), None).unwrap();
+    claim_job(&conn, NOW, WORKER_A).unwrap();
+    let replacement = enqueue_job(&conn, "daily_journal", "local", NOW, 1, Some(key), None).unwrap();
+    let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+    assert_eq!(report.requeued_jobs, 0);
+    assert_eq!(report.journal_jobs_enqueued, 0);
+    assert_eq!(report.dream_jobs_enqueued, 1);
+    let retired = load_job(&conn, &old).unwrap().unwrap();
+    assert_eq!(retired.status, "failed");
+    assert_eq!(retired.attempts, 1);
+    assert!(retired.last_error.unwrap().contains("duplicate window"));
+    assert_eq!(load_job(&conn, &replacement).unwrap().unwrap().status, "queued");
+    let again = startup_recovery_with_catch_up(&conn, "2026-08-16T00:07:00Z", 300).unwrap();
+    assert_eq!(again.requeued_jobs, 0);
+    assert_eq!(again.dream_jobs_enqueued, 0);
+}
+
+#[test]
+fn startup_recovery_collapses_multiple_interrupted_rows_but_not_other_users() {
+    let (_dir, conn) = open_db();
+    let mut local_ids = Vec::new();
+    for _ in 0..3 {
+        let id = enqueue_job(&conn, "daily_journal", "local", NOW, 1, Some("same-window"), None).unwrap();
+        claim_job(&conn, NOW, WORKER_A).unwrap();
+        local_ids.push(id);
+    }
+    let other = enqueue_job(&conn, "daily_journal", "other", NOW, 1, Some("same-window"), None).unwrap();
+    claim_job(&conn, NOW, WORKER_B).unwrap();
+    let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+    assert_eq!(report.requeued_jobs, 2);
+    let states: Vec<_> = local_ids.iter().map(|id| load_job(&conn, id).unwrap().unwrap()).collect();
+    assert_eq!(states.iter().filter(|job| job.status == "queued").count(), 1);
+    assert_eq!(states.iter().filter(|job| job.status == "failed").count(), 2);
+    assert_eq!(load_job(&conn, &other).unwrap().unwrap().status, "queued");
+}
+
+#[test]
+fn startup_catch_up_does_not_reset_terminal_failure_budget() {
+    for crash in [false, true] {
+        let (_dir, conn) = open_db();
+        seed_recovery_activity(&conn);
+        let id = enqueue_job(&conn, "daily_journal", "local", NOW, 1,
+            Some("daily_journal:local:2026-08-16"), None).unwrap();
+        claim_job(&conn, NOW, WORKER_A).unwrap();
+        conn.execute("UPDATE background_jobs SET attempts = max_attempts WHERE id = ?1", [&id]).unwrap();
+        if !crash {
+            ielts_db::fail_job(&conn, &id, WORKER_A, NOW, "exhausted", 0).unwrap();
+        }
+        for _ in 0..2 {
+            let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+            assert_eq!(report.journal_jobs_enqueued, 0);
+            assert_eq!(report.requeued_jobs, 0);
+            let job = load_job(&conn, &id).unwrap().unwrap();
+            assert_eq!(job.status, "failed");
+            assert_eq!(job.attempts, job.max_attempts);
+        }
+        // Only explicit enqueue may create a fresh user-authorized retry.
+        let manual = enqueue_job(&conn, "daily_journal", "local", NOW, 1,
+            Some("daily_journal:local:2026-08-16"), None).unwrap();
+        assert_ne!(manual, id);
+    }
+}
+
+#[test]
+fn startup_recovery_rolls_back_when_catch_up_enqueue_fails() {
+    let (_dir, conn) = open_db();
+    seed_recovery_activity(&conn);
+    let id = enqueue_job(&conn, "daily_journal", "local", NOW, 1, None, None).unwrap();
+    claim_job(&conn, NOW, WORKER_A).unwrap();
+    conn.execute_batch(
+        "CREATE TRIGGER reject_dream_enqueue BEFORE INSERT ON background_jobs
+         WHEN NEW.job_kind = 'daily_dream'
+         BEGIN SELECT RAISE(ABORT, 'simulated enqueue failure'); END;",
+    ).unwrap();
+    assert!(startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).is_err());
+    let job = load_job(&conn, &id).unwrap().unwrap();
+    assert_eq!(job.status, "running");
+    assert_eq!(job.locked_by.as_deref(), Some(WORKER_A));
+    assert_eq!(list_recent_jobs(&conn, 20).unwrap().len(), 1);
+    conn.execute_batch("DROP TRIGGER reject_dream_enqueue").unwrap();
+    let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+    assert_eq!(report.requeued_jobs, 1);
+    assert_eq!(report.journal_jobs_enqueued, 1);
+    assert_eq!(report.dream_jobs_enqueued, 1);
 }
 
 #[test]

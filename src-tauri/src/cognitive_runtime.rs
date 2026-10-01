@@ -1158,8 +1158,9 @@ impl RuntimeManager {
             // They activate a version, reverse one, author the eval verdict that
             // gates approval, or decide an approval outright — the sidecar is a
             // derived runtime and must not hold that authority. They now fall
-            // through to the `unsupported host method` arm below. The UI reaches
-            // them through the Tauri commands, which keep the approval path.
+            // through to the `unsupported host method` arm below. Product
+            // prompt release operations are also absent from Webview commands;
+            // controlled-action approval retains its separate human UI gate.
             #[cfg(feature = "daily-dream-v1")]
             Some(method @ ("prompt.list_versions"
                 | "prompt.get_active"
@@ -1786,7 +1787,8 @@ impl RuntimeManager {
             // persists caller-supplied `passed` gradings and advances a candidate
             // to `eval_passed`, which is the sole precondition for approval — so
             // serving it to the sidecar would let the runtime author the very
-            // evidence the human gate reviews. All three stay UI-only.
+            // evidence the human gate reviews. All three are offline-only,
+            // not Webview commands; a caller-supplied grade is not a release eval.
             "skill.list_versions" => {
                 let skill = serde_json::from_value::<SkillName>(
                     params.get("skill").cloned().unwrap_or(Value::Null),
@@ -2261,7 +2263,8 @@ fn fail_pending(process: &mut RuntimeProcess, message: &str) {
 /// is a derived runtime — it may PROPOSE (`prompt.propose_candidate`) and it may
 /// REQUEST a decision (`approval.record`), but it may not grant one.
 ///
-/// All of these remain available to the UI through their Tauri commands.
+/// Host ownership does not imply Webview access: product prompt eval/release
+/// operations have no Tauri command. Controlled-action approval is separate.
 pub(crate) const HOST_ONLY_METHODS: &[&str] = &[
     "prompt.promote_candidate",
     "prompt.rollback",
@@ -2570,6 +2573,42 @@ mod tests {
                     .iter()
                     .any(|(name, _)| *name == method),
                 "{method} must not be advertised to the sidecar"
+            );
+        }
+    }
+
+    /// Task book §17.8: the production UI may read the product registry and
+    /// propose drafts, but may not author verdicts or release global versions.
+    #[test]
+    fn product_prompt_release_is_not_a_webview_command() {
+        let lib_source = include_str!("lib.rs");
+        let handler = lib_source
+            .split_once("tauri::generate_handler![")
+            .expect("generate_handler! block must exist")
+            .1
+            .split_once("])")
+            .expect("generate_handler! block must terminate")
+            .0;
+        for command in [
+            "eval_run_case",
+            "prompt_approve_candidate",
+            "prompt_promote_candidate",
+            "prompt_rollback",
+        ] {
+            assert!(
+                !handler.contains(&format!("commands::prompt_skill::{command}")),
+                "{command} must not be registered for the Webview"
+            );
+        }
+        for command in [
+            "prompt_list_versions",
+            "prompt_get_active",
+            "prompt_propose_candidate",
+            "skill_list_versions",
+        ] {
+            assert!(
+                handler.contains(&format!("commands::prompt_skill::{command}")),
+                "{command} must remain registered"
             );
         }
     }

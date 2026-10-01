@@ -206,7 +206,9 @@ def main() -> int:
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(
             "Rust cognitive runtime contract",
-            ["cargo", "test", "-p", "ielts-practice-tauri", "--lib", "cognitive_runtime"],
+            # Includes fixed workspace fallback/junction/grant boundaries as
+            # well as runtime authority. Do not leave host security un-gated.
+            ["cargo", "test", "-p", "ielts-practice-tauri", "--lib"],
         ),
         run_command(
             "Rust memory proposal validator",
@@ -271,6 +273,10 @@ def main() -> int:
                 "prompt_skill",
                 "--test",
                 "context_snapshot",
+                # Startup recovery must survive duplicate windows and must
+                # not reset terminal retry budgets on every reboot.
+                "--test",
+                "background_jobs",
             ],
         ),
         run_command(

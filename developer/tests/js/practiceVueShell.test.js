@@ -216,7 +216,12 @@ function testAgentWorkspaceFailureContract() {
   const workspace = read('apps/writing-vue/src/views/AgentConsolePage.vue')
   const repository = read('apps/writing-vue/src/api/agent-repository.js')
 
-  has(workspace, ':disabled="workspaceLocked"', 'Agent workspace run mutex')
+  has(workspace, "workspaceBusy.value || runState.value === 'running'", 'Agent workspace run mutex')
+  has(workspace, 'initializeWorkspace()', 'default workspace initializes without a picker')
+  has(workspace, 'workspaceGrant.value = await agentRepository.getWorkspace()', 'default grant renews automatically')
+  has(workspace, 'data-agent-workspace-path', 'default directory remains visible')
+  lacks(workspace, 'pickWorkspace', 'no manual workspace selection')
+  has(repository, "invokeCommand('agent_get_workspace')", 'host-owned default workspace')
   has(workspace, '!workspaceLocked.value', 'Agent run button shares workspace mutex')
   has(workspace, 'error?.context?.runId', 'failed Agent run hydration ID')
   has(workspace, 'agentRepository.getRun(runId)', 'failed Agent SQLite hydration')

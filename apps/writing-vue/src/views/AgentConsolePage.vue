@@ -537,7 +537,7 @@ function approvalCopy(approval) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Advanced workspace (zone 4): ported from AgentWorkspacePage verbatim.
+// Advanced workspace (zone 4): fixed host-managed directory, no folder picker.
 // Selectors are pinned by packaged_tauri_flow.py agentWorkspaceRun.
 // ════════════════════════════════════════════════════════════════════
 
@@ -550,7 +550,7 @@ const runState = ref('idle')
 const lastRun = ref(null)
 const lastRunAt = ref('')
 const activeRunId = ref('')
-const outputText = ref('选择本地工作区后，运行结果会出现在这里。')
+const outputText = ref('默认工作区准备好后，运行结果会出现在这里。')
 const workspaceLocked = computed(() => workspaceBusy.value || runState.value === 'running')
 
 const files = computed(() => {
@@ -570,9 +570,9 @@ const files = computed(() => {
 })
 const workspaceName = computed(() => {
   const path = workspaceGrant.value?.displayPath || ''
-  return path.split(/[\\/]/).filter(Boolean).pop() || '选择本地工作区'
+  return path.split(/[\\/]/).filter(Boolean).pop() || '默认工作区'
 })
-const workspaceStatus = computed(() => workspaceGrant.value?.displayPath || '仅授权所选目录')
+const workspaceStatus = computed(() => workspaceGrant.value?.displayPath || '正在准备专用目录…')
 const selectedFileName = computed(() => {
   return files.value.find((file) => file.path === selectedFile.value)?.name || workspaceName.value
 })
@@ -597,7 +597,7 @@ const runSteps = computed(() => {
   const steps = [{
     key: 'workspace',
     label: '工作区授权',
-    detail: workspaceGrant.value ? workspaceName.value : '尚未选择',
+    detail: workspaceGrant.value ? workspaceName.value : '正在初始化',
     state: workspaceGrant.value ? 'complete' : 'pending'
   }]
   if (runState.value === 'running') {
@@ -639,33 +639,17 @@ function selectFile(path) {
   selectedFile.value = path
 }
 
-async function pickWorkspace() {
+async function initializeWorkspace() {
   if (workspaceLocked.value) return
   workspaceBusy.value = true
   try {
-    const grant = await agentRepository.pickWorkspace()
-    if (!grant) return
-    workspaceGrant.value = grant
-    selectedFile.value = ''
-    lastRun.value = null
-    runState.value = 'idle'
-    outputText.value = '工作区已授权，可以开始运行。'
-    lastRunAt.value = ''
+    workspaceGrant.value = await agentRepository.getWorkspace()
+    outputText.value = '默认工作区已准备好，可以开始运行。'
   } catch (error) {
     showError(error)
   } finally {
     workspaceBusy.value = false
   }
-}
-
-function resetWorkspace() {
-  if (workspaceLocked.value) return
-  workspaceGrant.value = null
-  selectedFile.value = ''
-  lastRun.value = null
-  runState.value = 'idle'
-  outputText.value = '选择本地工作区后，运行结果会出现在这里。'
-  lastRunAt.value = ''
 }
 
 async function runAgent() {
@@ -676,6 +660,8 @@ async function runAgent() {
   outputText.value = '正在执行模型与工作区工具…'
   lastRunAt.value = ''
   try {
+    // A long-open page renews its short-lived grant without a user decision.
+    workspaceGrant.value = await agentRepository.getWorkspace()
     const outcome = await agentRepository.run({
       grantId: workspaceGrant.value.grantId,
       prompt: promptText.value,
@@ -751,7 +737,10 @@ function toolStatusLabel(status) {
   })[status] || status || '未知'
 }
 
-onMounted(loadConsole)
+onMounted(() => {
+  loadConsole()
+  initializeWorkspace()
+})
 </script>
 
 <template>
@@ -999,37 +988,19 @@ onMounted(loadConsole)
                   <p class="agent-panel__eyebrow">本机目录</p>
                   <h2>本地工作区</h2>
                 </div>
-                <button
-                  class="agent-icon-button"
-                  type="button"
-                  aria-label="清除工作区选择"
-                  title="清除工作区选择"
-                  :disabled="workspaceLocked"
-                  @click="resetWorkspace"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8"></path>
-                    <path d="M21 3v5h-5"></path>
-                    <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16"></path>
-                    <path d="M3 21v-5h5"></path>
-                  </svg>
-                </button>
               </div>
 
-              <button class="agent-workspace-select" type="button" :disabled="workspaceLocked" @click="pickWorkspace">
-                <span class="agent-workspace-select__icon" aria-hidden="true">
+              <div class="agent-workspace-location" data-agent-workspace-path aria-live="polite">
+                <span class="agent-workspace-location__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z"></path>
                   </svg>
                 </span>
-                <span class="agent-workspace-select__copy">
+                <span class="agent-workspace-location__copy">
                   <strong>{{ workspaceName }}</strong>
                   <small>{{ workspaceStatus }}</small>
                 </span>
-                <svg class="agent-workspace-select__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6"></path>
-                </svg>
-              </button>
+              </div>
 
               <div class="agent-file-tree">
                 <div class="agent-file-tree__label">
@@ -1058,13 +1029,13 @@ onMounted(loadConsole)
                   <span v-if="selectedFile === file.path" class="agent-file-row__marker" aria-hidden="true"></span>
                 </button>
                 <p v-if="files.length === 0" class="agent-file-tree__empty">
-                  {{ workspaceGrant ? 'Agent 访问文件后会显示在这里。' : '选择工作区后开始运行。' }}
+                  {{ workspaceGrant ? 'Agent 访问文件后会显示在这里。' : '正在准备默认工作区。' }}
                 </p>
               </div>
 
               <div class="agent-sidebar__footer">
                 <span class="agent-sidebar__footer-dot" aria-hidden="true"></span>
-                <span>{{ workspaceGrant ? '短期本地授权' : '尚未授权工作区' }}</span>
+                <span>{{ workspaceGrant ? '仅授权专用目录 · 自动续期' : '正在初始化工作区' }}</span>
               </div>
             </aside>
 
@@ -1087,14 +1058,13 @@ onMounted(loadConsole)
                 <div class="agent-context-strip__label">
                   <span>上下文</span>
                 </div>
-                <button v-if="workspaceGrant" class="agent-context-chip" type="button" :disabled="workspaceLocked" @click="pickWorkspace">
+                <span v-if="workspaceGrant" class="agent-context-chip">
                   <span>{{ selectedFileName }}</span>
-                  <span aria-hidden="true">&#8599;</span>
-                </button>
+                </span>
               </div>
 
               <div class="agent-prompt-footer">
-                <span class="agent-prompt-footer__hint">{{ workspaceGrant ? '准备好后运行 Agent' : '先选择一个本地工作区' }}</span>
+                <span class="agent-prompt-footer__hint">{{ workspaceGrant ? '准备好后运行 Agent' : '正在准备默认工作区' }}</span>
                 <button
                   v-if="runState === 'running'"
                   class="agent-text-button"

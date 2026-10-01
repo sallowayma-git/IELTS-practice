@@ -41,3 +41,13 @@ Rust `prompt.list_versions`/`prompt.get_active`/`prompt.propose_candidate`/`prom
 
 ## Capabilities（供 Python 对齐）
 - `prompt.list_versions` v1 / `prompt.get_active` v1 / `prompt.propose_candidate` v1 / `prompt.promote_candidate` v1 / `prompt.rollback` v1 / `eval.run_case` v1 / `skill.list_versions` v1。
+
+## Round 3 权限整改附录（2026-10-01，覆盖上述历史 capability 描述）
+
+任务书 §16.1/§17.8 将产品级 Prompt/Skill 发布权归于开发者演化管线，而不是生产 Webview。
+因此生产 IPC 只保留版本读取和候选提议；四个评估记账、批准、晋升、回滚入口已从注册表及命令模块移除。
+Sidecar 同样不能调用产品发布/回滚或评估记账；实际能力为 prompt.list_versions、prompt.get_active、prompt.propose_candidate、skill.list_versions。
+
+Application/DB 的离线服务和持久化合同测试继续保留。现有 run_eval 仍是调用方 grading 的记账服务，
+不是可信实验执行器；它不能重新作为生产入口开放。可信评估、holdout/shadow/canary 和 production overlay 仍待实现。
+本次不改用户显式配置的 writing prompt bank，也不把它等同于 M11 全体用户共享的产品 registry。

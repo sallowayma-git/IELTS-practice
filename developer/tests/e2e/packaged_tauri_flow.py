@@ -9,7 +9,6 @@ on PATH (or set TAURI_DRIVER/TAURI_NATIVE_DRIVER).
 from __future__ import annotations
 
 import base64
-import ctypes
 import hashlib
 import http.server
 import json
@@ -160,7 +159,8 @@ def blocked(reason: str, missing: list[str]) -> int:
                          "readingSubmitBoundary": "blocked",
                          "backupPathBoundary": "blocked",
                          "updaterBoundary": "blocked",
-                         "sqliteRestart": "blocked"}}
+                         "sqliteRestart": "blocked",
+                         "promptAuthorityBoundary": "blocked"}}
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -220,7 +220,7 @@ def wait_for_vue(driver: Driver, timeout_seconds: int = 30):
     raise RuntimeError(f"Vue root did not mount: {last}")
 
 
-def wait_for_value(driver: Driver, source: str, timeout_seconds: int = 15):
+def wait_for_value(driver: Driver, source: str, timeout_seconds: int = 15, *, label: str = "WebDriver condition"):
     deadline = time.time() + timeout_seconds
     last = None
     while time.time() < deadline:
@@ -228,7 +228,7 @@ def wait_for_value(driver: Driver, source: str, timeout_seconds: int = 15):
         if last:
             return last
         time.sleep(0.1)
-    raise RuntimeError(f"WebDriver condition timed out: {last}")
+    raise RuntimeError(f"{label} timed out: {last}")
 
 
 def log_tail(path: Path, limit: int = 4000) -> str:
@@ -334,107 +334,6 @@ class FakeAgentProvider:
         self.thread.join(timeout=5)
 
 
-def drive_windows_folder_picker(path: Path) -> tuple[threading.Thread, dict]:
-    if os.name != "nt":
-        raise RuntimeError("packaged workspace picker automation currently requires Windows")
-    state: dict = {"status": "waiting"}
-    resolved = str(path.resolve())
-
-    def worker() -> None:
-        try:
-            from ctypes import wintypes
-
-            user32 = ctypes.windll.user32
-            kernel32 = ctypes.windll.kernel32
-            kernel32.GlobalAlloc.restype = ctypes.c_void_p
-            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
-            kernel32.GlobalLock.restype = ctypes.c_void_p
-            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
-            user32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
-            user32.SetClipboardData.restype = ctypes.c_void_p
-            user32.GetDlgItem.restype = wintypes.HWND
-            callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-
-            def window_text(hwnd) -> str:
-                length = user32.GetWindowTextLengthW(hwnd)
-                buffer = ctypes.create_unicode_buffer(length + 1)
-                user32.GetWindowTextW(hwnd, buffer, len(buffer))
-                return buffer.value
-
-            def class_name(hwnd) -> str:
-                buffer = ctypes.create_unicode_buffer(256)
-                user32.GetClassNameW(hwnd, buffer, len(buffer))
-                return buffer.value
-
-            dialog = None
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline and dialog is None:
-                candidates = []
-
-                @callback_type
-                def collect(hwnd, _lparam):
-                    if user32.IsWindowVisible(hwnd) and class_name(hwnd) == "#32770":
-                        candidates.append(hwnd)
-                    return True
-
-                user32.EnumWindows(collect, 0)
-                dialog = next(
-                    (hwnd for hwnd in candidates if user32.GetDlgItem(hwnd, 1)),
-                    None,
-                )
-                if dialog is None:
-                    time.sleep(0.1)
-            if dialog is None:
-                raise RuntimeError("workspace folder dialog was not found")
-
-            encoded = (resolved + "\0").encode("utf-16-le")
-            handle = kernel32.GlobalAlloc(0x0002, len(encoded))
-            if not handle:
-                raise RuntimeError("failed to allocate clipboard memory")
-            pointer = kernel32.GlobalLock(handle)
-            ctypes.memmove(pointer, encoded, len(encoded))
-            kernel32.GlobalUnlock(handle)
-            if not user32.OpenClipboard(None):
-                raise RuntimeError("failed to open clipboard")
-            try:
-                user32.EmptyClipboard()
-                if not user32.SetClipboardData(13, handle):
-                    raise RuntimeError("failed to set clipboard path")
-            finally:
-                user32.CloseClipboard()
-
-            def key(vk: int, up: bool = False) -> None:
-                user32.keybd_event(vk, 0, 0x0002 if up else 0, 0)
-
-            def chord(modifier: int, value: int) -> None:
-                key(modifier)
-                key(value)
-                key(value, True)
-                key(modifier, True)
-
-            user32.SetForegroundWindow(dialog)
-            time.sleep(0.15)
-            chord(0x11, ord("L"))
-            time.sleep(0.1)
-            chord(0x11, ord("V"))
-            key(0x0D)
-            key(0x0D, True)
-            time.sleep(0.6)
-            confirm = user32.GetDlgItem(dialog, 1)
-            if not confirm:
-                raise RuntimeError("workspace folder confirmation button was not found")
-            user32.PostMessageW(confirm, 0x00F5, 0, 0)
-            state.update({
-                "status": "submitted",
-                "dialogTitle": window_text(dialog),
-                "buttonTitle": window_text(confirm),
-            })
-        except Exception as error:
-            state.update({"status": "failed", "error": str(error)})
-
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
-    return thread, state
 
 
 def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Path]:
@@ -594,19 +493,19 @@ def main() -> int:
     driver_log = None
     staged_runtime = None
     isolated_app_data = None
-    agent_workspace = None
     fake_agent_provider = None
-    picker_thread = None
-    picker_state = None
     try:
         isolated_app_data = tempfile.TemporaryDirectory(prefix="ielts-tauri-appdata-")
-        agent_workspace = tempfile.TemporaryDirectory(prefix="ielts-agent-workspace-")
-        agent_note = Path(agent_workspace.name, "note.txt")
+        staged_runtime, runtime_app = stage_test_runtime(app)
+        # The product workspace is persistent and installation-relative. Only
+        # the complete test installation is temporary, to isolate test writes.
+        agent_workspace = runtime_app.parent / "agent-workspace"
+        agent_workspace.mkdir()
+        agent_note = agent_workspace / "note.txt"
         agent_note.write_text("Packaged Agent workspace evidence.", encoding="utf-8")
         expected_agent_note_hash = sha256_file(agent_note)
         fake_agent_provider = FakeAgentProvider(expected_agent_note_hash)
         fake_agent_provider.start()
-        staged_runtime, runtime_app = stage_test_runtime(app)
         metadata["stagedRuntimePath"] = str(runtime_app)
         DRIVER_LOG.parent.mkdir(parents=True, exist_ok=True)
         driver_log = DRIVER_LOG.open("w", encoding="utf-8", errors="replace")
@@ -678,6 +577,36 @@ def main() -> int:
         assets = (result or {}).get("data") if isinstance(result, dict) else None
         if not assets: raise RuntimeError("Tauri IPC bridge unavailable or reading_list_assets returned empty")
         checks["readingIpc"] = "passed"
+        # The real packaged command table must reject product release writes.
+        # Missing args, an ACL error, or a business error is NOT evidence that a
+        # command is absent. Even a forged passing verdict must hit not-found.
+        for command in (
+            "eval_run_case", "prompt_approve_candidate",
+            "prompt_promote_candidate", "prompt_rollback",
+        ):
+            rejected = driver.script("""
+                return window.__TAURI_INTERNALS__.invoke(arguments[0], {
+                  command: {
+                    candidateId: 'e2e-forged-candidate', approvedBy: 'e2e',
+                    targetKind: 'prompt', targetVersionId: 'e2e-forged-version',
+                    rolledBackBy: 'e2e',
+                    results: [{caseId: 'e2e-forged-case', passed: true,
+                               score: 1, grading: {allPassed: true}}]
+                  }
+                }).then(value => ({resolved: true, value}))
+                  .catch(error => ({resolved: false, error: String(error)}));
+            """, [command])
+            if (not isinstance(rejected, dict) or rejected.get("resolved") is not False
+                    or rejected.get("error") != f"Command {command} not found"):
+                raise RuntimeError(f"product prompt authority still exposed: {command}: {rejected}")
+        for command in ("prompt_list_versions", "prompt_get_active"):
+            readable = driver.script(
+                "return window.__TAURI_INTERNALS__.invoke(arguments[0], {module: 'coach_reading'})",
+                [command],
+            )
+            if not isinstance(readable, dict) or not readable.get("ok"):
+                raise RuntimeError(f"product prompt read contract failed: {command}: {readable}")
+        checks["promptAuthorityBoundary"] = "passed"
         missing_agent_run = driver.script(
             "return window.__TAURI_INTERNALS__.invoke('agent_get_run', {runId: 'e2e-missing-agent-run'})"
         )
@@ -714,31 +643,31 @@ def main() -> int:
         if not isinstance(selected_ai, dict) or not selected_ai.get("ok"):
             raise RuntimeError(f"packaged Agent default provider selection failed: {selected_ai}")
 
-        picker_thread, picker_state = drive_windows_folder_picker(Path(agent_workspace.name))
-        clicked = driver.script("""
+        opened = driver.script("""
             location.hash = '#/agent';
             const consoleRoot = document.querySelector('[data-agent-console]');
             if (!consoleRoot) return false;
             const panel = document.querySelector('details[data-agent-workspace]');
             if (!panel) return false;
             panel.open = true;
-            const button = document.querySelector('.agent-workspace-select');
-            if (!button) return false;
-            button.click();
             return true;
         """)
-        if not clicked:
-            raise RuntimeError("packaged Agent workspace button was unavailable")
-        picker_thread.join(timeout=15)
-        if picker_thread.is_alive():
-            raise RuntimeError("native Agent workspace picker automation timed out")
-        if picker_state.get("status") != "submitted":
-            raise RuntimeError(f"native Agent workspace picker automation failed: {picker_state}")
-        workspace_name = Path(agent_workspace.name).name
+        if not opened:
+            raise RuntimeError("packaged Agent default workspace panel was unavailable")
         wait_for_value(
             driver,
-            f"return document.querySelector('.agent-workspace-select')?.textContent.includes({workspace_name!r})",
+            "return document.querySelector('[data-agent-workspace-path] small')?.textContent.includes('agent-workspace') && !document.querySelector('.agent-run-button')?.disabled",
+            label="automatic default Agent workspace grant",
         )
+        default_grant = driver.script(
+            "return window.__TAURI_INTERNALS__.invoke('agent_get_workspace', {path: arguments[0]})",
+            [str(runtime_app.parent)],
+        )
+        grant_data = (default_grant or {}).get("data") or {}
+        if (not default_grant.get("ok") or not grant_data.get("grantId")
+                or not Path(grant_data.get("displayPath", "")).samefile(agent_workspace)):
+            raise RuntimeError(f"default grant escaped the staged installation subdirectory: {default_grant}")
+        checks["agentDefaultWorkspace"] = "passed"
         started = driver.script("""
             const button = document.querySelector('.agent-run-button');
             if (!button || button.disabled) return false;
@@ -805,7 +734,7 @@ def main() -> int:
             "toolCalls": hydrated_data["toolCalls"],
             "trace": trace,
             "providerRounds": len(fake_agent_provider.requests),
-            "workspacePicker": picker_state,
+            "workspacePath": grant_data["displayPath"],
         }
         driver.screenshot(AGENT_SCREENSHOT)
         checks["agentWorkspaceRun"] = "passed"
@@ -1027,8 +956,6 @@ def main() -> int:
             driver_log.close()
         if staged_runtime:
             staged_runtime.cleanup()
-        if agent_workspace:
-            agent_workspace.cleanup()
         if isolated_app_data:
             isolated_app_data.cleanup()
     REPORT.parent.mkdir(parents=True, exist_ok=True)

@@ -63,3 +63,14 @@ M11 Prompt Registry、Skill Registry 与 Eval-driven Evolution 阶段契约验�
 ## Round 3 Post-Audit Addendum（2026-08-31）
 
 本报告只证明 registry/schema/promotion 状态机和边界测试通过。当前硬编码 AgentService prompt overlay 尚未接入；eval case 的生产燃料与执行器、shadow/canary 运行证据也不能由合同测试替代。因此 M11 不应被解释为 Prompt/Skill 已在线自进化或已完成产品级 release gate。
+
+## Round 3 权限整改附录（2026-10-01）
+
+依据任务书 §17.8，产品级 eval grading、审批、晋升及回滚已从生产 Webview 命令面移除，
+只保留 registry 读取和候选提议；Sidecar 发布权限仍被拒绝。DB/application 离线服务保留，
+但调用方自报 grading 不是受控评估证据，不据此打开 production prompt overlay。
+这修复的是生产权限漏洞，不是宣告 offline evaluator、完整 release lifecycle 或产品 Go 已完成。
+
+离线记账状态机另补两项原子性回归：最新完成的失败评估撤销旧通过资格；run、全部 case results
+和候选状态同事务提交，任一结果拒写不会留下伪 completed 收据。DB prompt_skill 定向 16/16、
+application prompt_skill 9/9、backup roundtrip 11/11 通过；这些仍是合同测试，不是模型效果证据。

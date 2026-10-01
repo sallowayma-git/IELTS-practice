@@ -43,3 +43,11 @@ Python planner 产 proposal 提交 `study_plan.create`；Rust 持久化 + 分配
 
 ## Capabilities（供 Python 对齐）
 - `thread.create`/`thread.append_message`/`thread.list`/`thread.save_checkpoint` v1 + `approval.list`/`approval.decide` v1 + `study_plan.create`/`study_plan.list_items`/`study_plan.mark_done` v1（均 daily-dream-v1 feature）。
+
+## 产品默认工作区决策（2026-10-01，覆盖历史目录选择流程）
+
+- 用户已确认默认使用可执行文件安装目录下的 `agent-workspace`；不能实际写入时，自动回退到应用数据目录下的同名子目录。无需选择目录，不请求提权；现有内容不清空，也不自动迁移。
+- `agent_get_workspace` 由 Rust 解析固定路径并签发 15 分钟、进程内授权，无调用方路径输入。仅授予专用子目录，不授予整个安装目录或 app data。默认根目录的符号链接和 Windows junction 被拒绝。
+- 控制台进入时自动初始化，每次运行前自动续期；目录只作信息展示。文件工具既有相对路径、越界拒绝和 SHA-256 并发保护不变。
+- Packaged E2E 的临时对象是完整隔离的安装目录和 app data，不是要求用户选择的产品工作区；真实 IPC、文件读取和 SQLite trace 保留。
+- 这是工作区默认路径的产品决策，不代表线程 checkpoint、历史 catch-up 或 M6-M12 产品闭环已经完成。

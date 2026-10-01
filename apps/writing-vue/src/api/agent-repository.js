@@ -1,8 +1,8 @@
 import { invokeCommand, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 
-export async function pickAgentWorkspace() {
-  const response = await invokeCommand('agent_pick_workspace')
-  return unwrapCommandResponse(response, 'agent_pick_workspace')
+export async function getAgentWorkspace() {
+  const response = await invokeCommand('agent_get_workspace')
+  return unwrapCommandResponse(response, 'agent_get_workspace')
 }
 
 export async function runWorkspaceAgent(payload) {
@@ -90,7 +90,7 @@ function numberOr(primary, fallback) {
 }
 
 export const agentRepository = {
-  pickWorkspace: pickAgentWorkspace,
+  getWorkspace: getAgentWorkspace,
   run: runWorkspaceAgent,
   cancelRun: cancelAgentRun,
   getRun: getAgentRun,

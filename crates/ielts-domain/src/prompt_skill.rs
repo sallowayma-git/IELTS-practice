@@ -441,17 +441,18 @@ pub struct ProposeCandidateCommand {
 }
 
 /// M11-05: run the offline eval for a candidate against a set of cases.
-/// Records an eval run + per-case results. The candidate is only advanced
-/// past `proposed` when at least one `completed` run exists with all cases
-/// passing. Holdout cases are included here (they are the held-out
+/// Records offline grader output atomically; it does not execute an eval.
+/// Only the latest successfully recorded run may authorize `eval_passed`;
+/// a failing reevaluation resets the candidate to `proposed`.
+/// Holdout cases are included here (they are the held-out
 /// evaluation set) but never enter prompt generation context.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RunEvalCommand {
     pub candidate_id: String,
     /// Case IDs to score. Must reference existing `eval_cases`. The grader
-    /// outputs (`passed`/`score`/`grading`) are supplied by the caller; Rust
-    /// is the authority that persists them and advances the candidate.
+    /// outputs (`passed`/`score`/`grading`) are supplied by offline tooling.
+    /// This contract is not a production Webview/sidecar release capability.
     pub results: Vec<EvalCaseGrading>,
 }
 

@@ -249,16 +249,46 @@ pub fn startup_recovery_with_catch_up(
     lease_timeout_secs: i64,
 ) -> DbResult<StartupRecoveryReport> {
     require_text(now, "now")?;
-    lease_recover(conn, now, lease_timeout_secs)?;
-    // Requeue interrupted jobs that still have attempts available.
-    let requeued = conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    lease_recover(&tx, now, lease_timeout_secs)?;
+    // A crashed final attempt and an explicit final failure have the same
+    // terminal semantics. Keep the row (and checkpoint) as the retry receipt.
+    tx.execute(
+        "UPDATE background_jobs
+         SET status = 'failed', last_error = 'retry budget exhausted during startup recovery',
+             updated_at = ?1
+         WHERE status = 'interrupted' AND attempts >= max_attempts",
+        params![now],
+    )?;
+    // enqueue_job deliberately allows a manual rerun while a prior job is
+    // running. Recovering that prior job must not collide with the queued
+    // rerun's unique key. Prefer an existing live replacement; otherwise keep
+    // the oldest interrupted row. Preserve losers as terminal audit receipts,
+    // not stranded interrupted rows that can resurrect on the next startup.
+    tx.execute(
+        "UPDATE background_jobs AS job
+         SET status = 'failed', last_error = 'duplicate window superseded during startup recovery',
+             updated_at = ?1
+         WHERE job.status = 'interrupted' AND job.dedupe_key IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM background_jobs AS other
+             WHERE other.id != job.id AND other.job_kind = job.job_kind
+               AND other.user_id = job.user_id AND other.dedupe_key = job.dedupe_key
+               AND (other.status IN ('queued', 'running')
+                    OR (other.status = 'interrupted'
+                        AND (other.created_at, other.id) < (job.created_at, job.id)))
+           )",
+        params![now],
+    )?;
+    let requeued = tx.execute(
         "UPDATE background_jobs
          SET status = 'queued', last_error = 'requeued after startup recovery',
              updated_at = ?1
          WHERE status = 'interrupted' AND attempts < max_attempts",
         params![now],
     )?;
-    let (journal_jobs_enqueued, dream_jobs_enqueued) = enqueue_missing_daily_jobs(conn, now)?;
+    let (journal_jobs_enqueued, dream_jobs_enqueued) = enqueue_missing_daily_jobs(&tx, now)?;
+    tx.commit()?;
     Ok(StartupRecoveryReport {
         requeued_jobs: requeued as u64,
         journal_jobs_enqueued,
@@ -322,7 +352,7 @@ fn enqueue_missing_daily_jobs(
         let day = &window.day;
         let journal_dedupe = format!("daily_journal:{user_id}:{day}");
         if !journal_exists(conn, user_id, &day)?
-            && !active_job_exists(conn, "daily_journal", user_id, &journal_dedupe)?
+            && !catch_up_job_exists(conn, "daily_journal", user_id, &journal_dedupe)?
         {
             enqueue_job(
                 conn,
@@ -338,7 +368,7 @@ fn enqueue_missing_daily_jobs(
 
         let dream_dedupe = format!("daily_dream:{user_id}:{day}");
         if !dream_exists(conn, user_id, &day)?
-            && !active_job_exists(conn, "daily_dream", user_id, &dream_dedupe)?
+            && !catch_up_job_exists(conn, "daily_dream", user_id, &dream_dedupe)?
         {
             enqueue_job(
                 conn,
@@ -388,7 +418,9 @@ fn dream_exists(conn: &Connection, user_id: &str, day: &str) -> DbResult<bool> {
     Ok(exists != 0)
 }
 
-fn active_job_exists(
+// Startup is not an explicit user retry. A terminal failure must not acquire a
+// fresh attempts=0 identity on every reboot. Manual enqueue remains available.
+fn catch_up_job_exists(
     conn: &Connection,
     job_kind: &str,
     user_id: &str,
@@ -398,7 +430,7 @@ fn active_job_exists(
         "SELECT EXISTS(
            SELECT 1 FROM background_jobs
            WHERE job_kind = ?1 AND user_id = ?2 AND dedupe_key = ?3
-             AND status IN ('queued', 'running', 'interrupted')
+             AND status IN ('queued', 'running', 'interrupted', 'failed')
          )",
         params![job_kind, user_id, dedupe_key],
         |row| row.get(0),

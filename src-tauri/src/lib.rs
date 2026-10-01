@@ -91,7 +91,7 @@ pub fn run() {
             commands::ai::ai_upsert_config,
             commands::ai::ai_delete_config,
             commands::ai::ai_set_default_config,
-            commands::agent::agent_pick_workspace,
+            commands::agent::agent_get_workspace,
             commands::agent::agent_run,
             commands::agent::agent_run_attempt_review,
             commands::agent::agent_get_run,
@@ -318,14 +318,6 @@ pub fn run() {
             commands::prompt_skill::prompt_get_active,
             #[cfg(feature = "daily-dream-v1")]
             commands::prompt_skill::prompt_propose_candidate,
-            #[cfg(feature = "daily-dream-v1")]
-            commands::prompt_skill::eval_run_case,
-            #[cfg(feature = "daily-dream-v1")]
-            commands::prompt_skill::prompt_approve_candidate,
-            #[cfg(feature = "daily-dream-v1")]
-            commands::prompt_skill::prompt_promote_candidate,
-            #[cfg(feature = "daily-dream-v1")]
-            commands::prompt_skill::prompt_rollback,
             #[cfg(feature = "daily-dream-v1")]
             commands::prompt_skill::skill_list_versions,
         ])

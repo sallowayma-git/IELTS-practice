@@ -398,7 +398,7 @@ class EvalOrchestrator:
         trace_id: str,
         available_host_capabilities: dict[str, str] | None = None,
     ) -> dict[str, str]:
-        """Fetch the active prompt/skill versions for a module via
+        """Fetch the active prompt version for a module via
         ``prompt.get_active``. Returns an empty dict on fallback. Never
         raises."""
         started = time.monotonic()
@@ -413,12 +413,12 @@ class EvalOrchestrator:
             )
             if not isinstance(result, dict):
                 return {}
-            versions: dict[str, str] = {}
-            for key in ("promptVersionId", "skillVersionId"):
-                value = result.get(key)
-                if isinstance(value, str) and value:
-                    versions[key] = value
-            return versions
+            # The host returns a PromptVersion row, not a combined
+            # prompt/skill envelope. A module lookup cannot pin a skill.
+            version_id = result.get("id")
+            if isinstance(version_id, str) and version_id.strip():
+                return {"promptVersionId": version_id}
+            return {}
         except _Fallback:
             return {}
         except Exception:  # pragma: no cover - last-resort boundary

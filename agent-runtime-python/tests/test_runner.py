@@ -73,8 +73,16 @@ class FakeHostBridge:
             "restoredVersionId": "prompt-v1",
         }
         self._get_active_result = get_active_result or {
-            "promptVersionId": "prompt-v1",
-            "skillVersionId": "skill-v1",
+            "id": "prompt-v1",
+            "templateId": "pt-coach",
+            "moduleName": "coach_reading",
+            "version": 1,
+            "contentHash": "hash-v1",
+            "contentText": "Explain IELTS reading reasoning.",
+            "promptMetadata": {},
+            "status": "active",
+            "createdBy": "developer",
+            "createdAt": "2026-10-01T00:00:00Z",
         }
         self._fail_methods = fail_methods or frozenset()
 
@@ -107,6 +115,30 @@ class FakeHostBridge:
         raise ProtocolError(
             "method_not_found", f"unhandled fake method {method}"
         )
+
+
+class ActivePromptWireTests(unittest.TestCase):
+    def test_reads_real_host_prompt_version_without_inventing_skill_id(self):
+        bridge = FakeHostBridge()
+        versions = EvalOrchestrator(bridge).get_active_versions(
+            module="coach_reading", trace_id="trace-active",
+            available_host_capabilities=_capabilities(),
+        )
+        self.assertEqual(versions, {"promptVersionId": "prompt-v1"})
+        self.assertEqual(bridge.calls, [
+            ("prompt.get_active", {"module": "coach_reading"}),
+        ])
+
+    def test_null_or_malformed_host_row_falls_back(self):
+        for row in (None, {}, {"id": " "}, {"id": 1},
+                    {"promptVersionId": "fictional-envelope"}):
+            bridge = FakeHostBridge()
+            bridge._get_active_result = row
+            with self.subTest(row=row):
+                self.assertEqual(EvalOrchestrator(bridge).get_active_versions(
+                    module="coach_reading", trace_id="trace-active",
+                    available_host_capabilities=_capabilities(),
+                ), {})
 
 
 class ExplodingBridge(FakeHostBridge):

@@ -103,10 +103,10 @@ TAURI_AGENT_MOCK = """
     if (command === 'agent_approval_list') {
       return { ok: true, data: [], error: null };
     }
-    if (command === 'agent_pick_workspace') {
+    if (command === 'agent_get_workspace') {
       return { ok: true, data: {
         grantId: 'grant-m0',
-        displayPath: 'C:\\\\IELTS Atlas\\\\study',
+        displayPath: 'C:\\\\IELTS Atlas\\\\agent-workspace',
         expiresAt: '2026-08-11T08:15:00Z'
       }, error: null };
     }
@@ -148,7 +148,7 @@ def main():
                 page.evaluate(
                     "document.querySelector('details[data-agent-workspace]')?.setAttribute('open', '')"
                 )
-                page.wait_for_selector("[data-agent-workspace] .agent-workspace-select")
+                page.wait_for_selector("[data-agent-workspace-path]")
                 geometry = page.evaluate(
                     """
                     () => {
@@ -187,15 +187,13 @@ def main():
                             f"mobile: console zones incomplete (cards={geometry['heartbeatCards']}, "
                             f"plan={geometry['planZone']}, tabs={geometry['evoTabs']})"
                         )
-                    page.locator(".agent-workspace-select").click()
                     page.wait_for_function(
-                        "document.querySelector('.agent-workspace-select')?.innerText.includes('study')"
+                        "document.querySelector('[data-agent-workspace-path]')?.innerText.includes('agent-workspace')"
                     )
                     page.evaluate("window.__agentShouldFail = true")
                     page.locator(".agent-run-button").click()
                     page.wait_for_function(
-                        "document.querySelector('.agent-icon-button')?.disabled && "
-                        "document.querySelector('.agent-workspace-select')?.disabled"
+                        "document.querySelector('.agent-run-button')?.disabled"
                     )
                     page.wait_for_function(
                         "document.querySelector('.agent-page-header__status')?.innerText.includes('运行失败')"
@@ -213,9 +211,10 @@ def main():
                         "document.querySelector('.agent-page-header__status')?.innerText.includes('已完成')"
                     )
                     command_log = page.evaluate("window.__agentCommandLog")
-                    commands = [item["command"] for item in command_log]
+                    commands = [item["command"] for item in command_log if item["command"].startswith('agent_') and item["command"] not in ('agent_thread_list', 'agent_approval_list')]
                     expected_commands = [
-                        "agent_pick_workspace", "agent_run", "agent_get_run", "agent_run", "agent_get_run"
+                        "agent_get_workspace", "agent_get_workspace", "agent_run", "agent_get_run",
+                        "agent_get_workspace", "agent_run", "agent_get_run"
                     ]
                     if commands != expected_commands:
                         raise AssertionError(f"mobile: unexpected Agent command sequence {commands}")

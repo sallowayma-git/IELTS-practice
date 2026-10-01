@@ -3,14 +3,15 @@
 //! Feature-gated on `daily-dream-v1` (the evolution layer sits above the
 //! context/journal/dream surface). These commands wrap the
 //! `PromptSkillService` use cases for the IPC boundary. Rust is the release
-//! gate; the LLM may only propose candidates.
+//! gate; the LLM may only propose candidates. Product eval verdicts, approval,
+//! promotion and rollback are NOT Webview commands (task book §17.8). The
+//! offline application/db services remain available to engineering tooling.
 
 #[cfg(feature = "daily-dream-v1")]
 use ielts_application::PromptSkillService;
 #[cfg(feature = "daily-dream-v1")]
 use ielts_domain::{
-    ApproveCandidateCommand, CommandResponse, ErrorEnvelope, PromoteCandidateCommand,
-    ProposeCandidateCommand, PromptModule, RollbackCommand, RunEvalCommand, SkillName,
+    CommandResponse, ErrorEnvelope, ProposeCandidateCommand, PromptModule, SkillName,
 };
 #[cfg(feature = "daily-dream-v1")]
 use tauri::State;
@@ -53,52 +54,6 @@ pub fn prompt_propose_candidate(
 ) -> CommandResponse<ielts_domain::CandidatePromotion> {
     let store = ApplicationStore::new(db.inner());
     respond(PromptSkillService::new(&store).propose_candidate(&command))
-}
-
-/// M11-05: run the offline eval for a candidate.
-#[tauri::command]
-#[cfg(feature = "daily-dream-v1")]
-pub fn eval_run_case(
-    db: State<'_, AppDb>,
-    command: RunEvalCommand,
-) -> CommandResponse<ielts_domain::EvalRunOutcome> {
-    let store = ApplicationStore::new(db.inner());
-    respond(PromptSkillService::new(&store).run_eval(&command))
-}
-
-/// M11-05: approve a candidate (manual gate). Requires eval_passed.
-#[tauri::command]
-#[cfg(feature = "daily-dream-v1")]
-pub fn prompt_approve_candidate(
-    db: State<'_, AppDb>,
-    command: ApproveCandidateCommand,
-) -> CommandResponse<ielts_domain::CandidatePromotion> {
-    let store = ApplicationStore::new(db.inner());
-    respond(PromptSkillService::new(&store).approve_candidate(&command))
-}
-
-/// M11-05: promote a candidate. Requires approved; sets the underlying
-/// version active and the previously active version rollback.
-#[tauri::command]
-#[cfg(feature = "daily-dream-v1")]
-pub fn prompt_promote_candidate(
-    db: State<'_, AppDb>,
-    command: PromoteCandidateCommand,
-) -> CommandResponse<ielts_domain::CandidateDecision> {
-    let store = ApplicationStore::new(db.inner());
-    respond(PromptSkillService::new(&store).promote_candidate(&command))
-}
-
-/// M11-05: exact rollback. Marks the active version rollback and reinstates
-/// the prior version.
-#[tauri::command]
-#[cfg(feature = "daily-dream-v1")]
-pub fn prompt_rollback(
-    db: State<'_, AppDb>,
-    command: RollbackCommand,
-) -> CommandResponse<ielts_domain::RollbackOutcome> {
-    let store = ApplicationStore::new(db.inner());
-    respond(PromptSkillService::new(&store).rollback_version(&command))
 }
 
 /// M11-05: list skill versions.

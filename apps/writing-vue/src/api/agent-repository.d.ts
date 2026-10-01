@@ -69,7 +69,7 @@ export interface NormalizedAgentRun {
   completedAt: string | null
 }
 
-export function pickAgentWorkspace(): Promise<AgentWorkspaceGrant | null>
+export function getAgentWorkspace(): Promise<AgentWorkspaceGrant>
 export function runWorkspaceAgent(payload: {
   grantId: string
   prompt: string
@@ -82,7 +82,7 @@ export function normalizeAgentRun(
 ): NormalizedAgentRun
 
 export const agentRepository: {
-  pickWorkspace: typeof pickAgentWorkspace
+  getWorkspace: typeof getAgentWorkspace
   run: typeof runWorkspaceAgent
   getRun: typeof getAgentRun
   normalizeRun: typeof normalizeAgentRun
