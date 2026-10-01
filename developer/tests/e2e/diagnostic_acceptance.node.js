@@ -38,20 +38,26 @@ try {
             try {
                 await ready(page, base);
                 if (scenario === 'required-lazy-load') {
-                    const target = path.join(fixture.root, 'js/bundles/diagnostics.bundle.js');
-                    const bytes = fs.readFileSync(target);
-                    restore = () => fs.writeFileSync(target, bytes);
-                    fs.unlinkSync(target);
-                    const result = await page.evaluate(async () => {
-                        let rejected = false;
-                        try { await AppLazyLoader.ensureGroup('diagnostics-tools'); } catch (_) { rejected = true; }
-                        return { rejected, events: AppDiagnostics.snapshot().events };
-                    });
-                    assert.equal(result.rejected, true);
-                    const failure = result.events.find(event => event.resource?.path === 'js/bundles/diagnostics.bundle.js');
-                    assert.ok(failure);
-                    assert.equal(failure.resource.status, 'unknown');
-                    assert.equal(failure.action, 'load-resource');
+                    for (const [group, bundle] of [['diagnostics-tools', 'diagnostics'], ['reading-tools', 'reading-tools'],
+                        ['reading-library', 'reading-library'], ['vocabulary-tools', 'vocabulary']]) {
+                        const asset = `js/bundles/${bundle}.bundle.js`;
+                        const target = path.join(fixture.root, asset);
+                        const bytes = fs.readFileSync(target);
+                        restore = () => fs.writeFileSync(target, bytes);
+                        fs.unlinkSync(target);
+                        const result = await page.evaluate(async group => {
+                            let rejected = false;
+                            try { await AppLazyLoader.ensureGroup(group); } catch (_) { rejected = true; }
+                            return { rejected, events: AppDiagnostics.snapshot().events };
+                        }, group);
+                        assert.equal(result.rejected, true, group);
+                        const failure = result.events.find(event => event.resource?.path === asset);
+                        assert.ok(failure, asset);
+                        assert.equal(failure.resource.status, 'unknown');
+                        assert.equal(failure.action, 'load-resource');
+                        restore();
+                        restore = undefined;
+                    }
                     await output(page);
                 } else if (scenario.startsWith('storage-')) {
                     const state = await page.evaluate(async scenario => {

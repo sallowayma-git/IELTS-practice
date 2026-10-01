@@ -27,7 +27,7 @@ so a failure can be located without exposing its exception text or local path.
 | #194 | Acceptance evidence | Suite / representative scenarios |
 | --- | --- | --- |
 | 1 | Early actionable failure and export | `diagnostic_startup`: missing, parse, rejected and caught initialization; reading/listening startup faults |
-| 2 | Required resource/action versus expected optional failure | `diagnostic_acceptance`: required-lazy-load; `listening_diagnostics`: optional-media; startup healthy/abort and required reading dataset |
+| 2 | Required resource/action versus expected optional failure | `diagnostic_acceptance`: required-lazy-load for diagnostics, reading tools, reading library and vocabulary; `listening_diagnostics`: optional-media; startup healthy/abort and required reading dataset |
 | 3 | Accurate save outcomes and isolated memory fallback | `operation_diagnostics`: quota, aborted-transaction, backend-unavailable, recovery-failure; acceptance storage faults stop repeated failed writes |
 | 4 | Committed result, lost ACK, idempotent reconciliation | `reading_diagnostics`: committed-lost-ack-single/suite and delayed-suite-ack; listening/legacy lost-ack; operation receipt reconciliation |
 | 5 | Same-event propagation, distinct incidents and bounded UI | `incident_notifications`: aggregation, queues, keyboard focus and failure storms; acceptance hostile-propagation-and-storm |
@@ -70,7 +70,10 @@ SHA-256 values. No source-JS fallback is available inside the extraction.
 settings, diagnostic modules in all practice bundles, identical inline capture,
 stable build stamps and section line mappings. The deterministic Node build test
 also compares original source lines and proves identical inputs reproduce the
-build. Python generation tests verify preserved reading HTML and maintained
+build. Every emitted bundle, including separately loaded reading, vocabulary
+and dictionary bundles, must retain its resource path and stack coordinates
+after diagnostic redaction. Missing lazy bundles fail release verification.
+Python generation tests verify preserved reading HTML and maintained
 listening/template wiring. Development templates are not runtime dependencies.
 The listening wrapper is application code and ships in the default package;
 optional listening indexes and content remain excluded.

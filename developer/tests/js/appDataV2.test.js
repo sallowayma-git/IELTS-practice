@@ -50,13 +50,14 @@ function synchronizeStoredBackup(stored, mutate) {
     stored.checksum = data.checksum;
 }
 
-function harness() {
+function harness(options = {}) {
     const catalogSandbox = { structuredClone }; catalogSandbox.globalThis = catalogSandbox;
     vm.runInContext(catalogSource, vm.createContext(catalogSandbox), { filename: 'dataCatalog.js' });
     const catalog = catalogSandbox.__AppDataV2Catalog;
     const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null, beforeInstall: null };
     const envelope = (key, data, state = 'present', revision = 1, operationId = 'seed') => ({ schemaVersion: 2, revision, operationId, updatedAt: new Date().toISOString(), state, data: state === 'cleared' ? null : clone(data), checksum: checksum(state === 'cleared' ? null : data) });
     class Kernel {
+        constructor() { if (options.cacheEpochs) this.getEntityRevisionEpochs = async () => ({ practiceSummaries: shared.counter, practiceDetails: shared.detailEpoch || 0 }); }
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
         async read(key, options = {}) { const entry = catalog.get(key); const value = shared.docs.get(key) || null; const data = !value || value.state === 'cleared' ? entry.defaultValue() : value.data; return options.withMeta ? { data: clone(data), envelope: clone(value) } : clone(data); }
         async mutate(changes, options = {}) { const op = String(options.operationId || `doc-${++shared.counter}`); const revisions = {}; for (const change of changes) { const old = shared.docs.get(change.logicalKey); if (change.expectedRevision !== undefined && Number(change.expectedRevision) !== Number(old && old.revision || 0)) throw new AppDataError('CONFLICT', 'document revision'); const revision = Number(old && old.revision || 0) + 1; shared.docs.set(change.logicalKey, envelope(change.logicalKey, change.data, change.state, revision, op)); revisions[change.logicalKey] = revision; } return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] }; }
@@ -2391,6 +2392,38 @@ async function run() {
     assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.category, 'P3');
     assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
     assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].metadata.libraryConfigurationId, 'launch-source');
+
+    const installation = harness();
+    await installation.app.ready;
+    const beforeIdentity = JSON.parse(JSON.stringify(installation.shared.docs.get('system.migrations').data));
+    const identity = await installation.app.backups.getStorageIdentity();
+    assert.ok(identity);
+    assert.strictEqual(await installation.app.backups.getStorageIdentity(), identity);
+    const metadata = Object.assign({}, installation.shared.docs.get('system.migrations').data);
+    delete metadata.storageIdentity;
+    assert.deepStrictEqual(metadata, beforeIdentity, 'identity creation preserves all migration markers');
+    const portableIdentity = await installation.app.backups.export();
+    assert.ok(!JSON.stringify(portableIdentity).includes(identity), 'installation identity never travels with a snapshot');
+
+    const cached = harness({ cacheEpochs: true });
+    await cached.app.practice.completeAttempt({ record: { id: 'cached-old', type: 'reading', correctAnswers: 2, totalQuestions: 4 } });
+    const oldSummary = cached.shared.entities.get('practiceSummaries').get('cached-old');
+    delete oldSummary.data.readingAnalytics;
+    await cached.app.practice.list({ projection: 'light' });
+    const firstDetailReads = cached.shared.reads.filter(store => store === 'practiceDetails').length;
+    const warm = await cached.app.practice.list({ projection: 'light' });
+    assert.strictEqual(cached.shared.reads.filter(store => store === 'practiceDetails').length, firstDetailReads,
+        'warm old-summary reads reuse derived upgrades without loading details');
+    warm[0].title = 'caller mutation';
+    assert.notStrictEqual((await cached.app.practice.list({ projection: 'light' }))[0].title, 'caller mutation');
+    cached.shared.detailEpoch = 1; // A commit from another tab, without a notification.
+    await cached.app.practice.list({ projection: 'light' });
+    assert.strictEqual(cached.shared.reads.filter(store => store === 'practiceDetails').length, firstDetailReads + 1,
+        'durable detail epoch invalidates upgrades even when notifications are missed');
+    oldSummary.data.title = 'changed-summary'; // Initial summary read raced an epoch observation.
+    assert.strictEqual((await cached.app.practice.list({ projection: 'light' }))[0].title, 'changed-summary');
+    await cached.app.practice.delete('cached-old');
+    assert.strictEqual((await cached.app.practice.list({ projection: 'light' })).length, 0, 'cache cannot resurrect deleted records');
 
     console.log(JSON.stringify({ status: 'pass', tests: 61 }));
 }

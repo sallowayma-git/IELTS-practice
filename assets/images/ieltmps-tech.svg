@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="136" height="44" viewBox="0 0 136 44" role="img" aria-label="技术：Docker Compose、PostgreSQL">
-  <title>技术：Docker Compose、PostgreSQL</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="136" height="44" viewBox="0 0 136 44" role="img" aria-label="Tech: Docker Compose, PostgreSQL">
+  <title>Tech: Docker Compose, PostgreSQL</title>
   <!-- Static Shields.io badges share one viewBox to preserve equal heights and original proportions when the README table resizes. -->
-  <svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="136" height="20" role="img" aria-label="技术: Docker Compose">
-  <title>技术: Docker Compose</title>
+  <svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="136" height="20" role="img" aria-label="Tech: Docker Compose">
+  <title>Tech: Docker Compose</title>
   <filter id="docker-blur">
   <feGaussianBlur stdDeviation="16"/>
   </filter>
@@ -21,10 +21,10 @@
   <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
   <g transform="scale(.1)">
   <g aria-hidden="true" fill="#010101">
-  <text x="175" y="150" fill-opacity=".8" filter="url(#docker-blur)" textLength="230">技术</text>
-  <text x="175" y="150" fill-opacity=".3" textLength="230">技术</text>
+  <text x="175" y="150" fill-opacity=".8" filter="url(#docker-blur)" textLength="230">Tech</text>
+  <text x="175" y="150" fill-opacity=".3" textLength="230">Tech</text>
   </g>
-  <text x="175" y="140" textLength="230">技术</text>
+  <text x="175" y="140" textLength="230">Tech</text>
   </g>
   <g transform="scale(.1)">
   <g aria-hidden="true" fill="#010101">
@@ -35,8 +35,8 @@
   </g>
   </g>
   </svg>
-  <svg x="0" y="24" xmlns="http://www.w3.org/2000/svg" width="106" height="20" role="img" aria-label="技术: PostgreSQL">
-  <title>技术: PostgreSQL</title>
+  <svg x="0" y="24" xmlns="http://www.w3.org/2000/svg" width="106" height="20" role="img" aria-label="Tech: PostgreSQL">
+  <title>Tech: PostgreSQL</title>
   <filter id="postgresql-blur">
   <feGaussianBlur stdDeviation="16"/>
   </filter>
@@ -55,10 +55,10 @@
   <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
   <g transform="scale(.1)">
   <g aria-hidden="true" fill="#010101">
-  <text x="175" y="150" fill-opacity=".8" filter="url(#postgresql-blur)" textLength="230">技术</text>
-  <text x="175" y="150" fill-opacity=".3" textLength="230">技术</text>
+  <text x="175" y="150" fill-opacity=".8" filter="url(#postgresql-blur)" textLength="230">Tech</text>
+  <text x="175" y="150" fill-opacity=".3" textLength="230">Tech</text>
   </g>
-  <text x="175" y="140" textLength="230">技术</text>
+  <text x="175" y="140" textLength="230">Tech</text>
   </g>
   <g transform="scale(.1)">
   <g aria-hidden="true" fill="#010101">

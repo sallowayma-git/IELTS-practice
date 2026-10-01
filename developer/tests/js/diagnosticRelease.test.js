@@ -18,10 +18,12 @@ test('release gate rejects missing runtime, stale builds and incomplete or shift
         fs.mkdirSync(path.dirname(path.join(fixture, file)), { recursive: true });
         fs.copyFileSync(path.join(root, file), path.join(fixture, file));
     }
-    const wrapper = 'assets/generated/listening-exams/listening-practice-unified.html';
-    fs.unlinkSync(path.join(fixture, wrapper));
-    assert.throws(() => verifyDiagnosticRuntime(fixture), /ENOENT/);
-    fs.copyFileSync(path.join(root, wrapper), path.join(fixture, wrapper));
+    for (const asset of ['assets/generated/listening-exams/listening-practice-unified.html',
+        ...['vocabulary', 'reading-tools', 'reading-library', 'dictionary'].map(name => `js/bundles/${name}.bundle.js`)]) {
+        fs.unlinkSync(path.join(fixture, asset));
+        assert.throws(() => verifyDiagnosticRuntime(fixture), /ENOENT/, asset);
+        fs.copyFileSync(path.join(root, asset), path.join(fixture, asset));
+    }
     const bundle = path.join(fixture, 'js/bundles/listening-wrapper.bundle.js');
     const original = fs.readFileSync(bundle, 'utf8');
     fs.writeFileSync(bundle, original.replace(/"buildId":"sha256:[a-f0-9]{64}"/, '"buildId":"stale"'));

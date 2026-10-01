@@ -51,7 +51,7 @@ test('Browse first invocation loads its groups and keeps the rendered card sourc
     h.activate('library-b');
     ready.resolve();
     await new Promise(resolve => setImmediate(resolve));
-    assert.deepEqual(h.groups, ['exam-data', 'browse-runtime']);
+    assert.deepEqual(h.groups, ['exam-data', 'browse-runtime', 'reading-tools']);
     assert.equal(h.opens.length, 1);
     assert.equal(h.opens[0].options.libraryConfigurationId, 'library-a');
     assert.equal(h.opens[0].options.contentRef, 'original-source-reference');
@@ -130,7 +130,7 @@ test('the visible More card accepts its first click before tools bind, without d
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(mounts.length, 1);
     assert.equal(mounts[0].fromView, 'more');
-    assert.deepEqual(h.groups, ['more-tools', 'exam-data']);
+    assert.deepEqual(h.groups, ['reading-library', 'exam-data']);
     // An installed More handler owns a warm click by preventing its default.
     h.listeners.get('click').forEach(listener => listener({ ...event, defaultPrevented: true }));
     await new Promise(resolve => setImmediate(resolve));

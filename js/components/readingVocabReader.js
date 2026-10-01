@@ -25,6 +25,8 @@
         _state: null,
         _commitBound: false,
         _loadSequence: 0,
+        _projectionSnapshot: null,
+        _projections: new Map(),
 
         async resolveSource(options = {}) {
             if (options.source) return { ...options.source };
@@ -39,22 +41,33 @@
         project(articleId = null) {
             if (!this._state) return [];
             const snapshot = this._state.snapshot;
+            if (this._projectionSnapshot !== snapshot) {
+                this._projectionSnapshot = snapshot;
+                this._projections.clear();
+            }
+            if (this._projections.has(articleId)) return JSON.parse(JSON.stringify(this._projections.get(articleId)));
             const model = global.AppData.vocab.readingModel;
-            return model.query(snapshot, articleId ? { articleId } : {}).terms.map(entry => {
+            const articles = new Map(snapshot.reading.articles.map(row => [row.id, row]));
+            const result = model.query(snapshot, articleId ? { articleId } : {}).terms.map(entry => {
                 const associations = entry.associations;
-                const article = snapshot.reading.articles.find(row => row.id === associations[0]?.articleId);
+                const byAssociation = new Map(associations.map(row => [row.id, row]));
+                const article = articles.get(associations[0]?.articleId);
                 return {
                     ...entry.word, id: entry.term.id, word: entry.word.word,
                     examId: article?.examId || '', examTitle: article?.title || '',
                     context: entry.word.example || entry.word.context || '',
                     associations, occurrences: entry.occurrences,
                     highlights: entry.occurrences.map(occurrence => {
-                        const relation = associations.find(row => row.id === occurrence.associationId);
-                        const owner = snapshot.reading.articles.find(row => row.id === relation?.articleId);
+                        const relation = byAssociation.get(occurrence.associationId);
+                        const owner = articles.get(relation?.articleId);
                         return { ...occurrence, examId: owner?.examId, scope: occurrence.scopeId, text: occurrence.quote };
                     })
                 };
             });
+            // Keep only the current article and the global notebook projection.
+            if (this._projections.size >= 2) this._projections.clear();
+            this._projections.set(articleId, result);
+            return JSON.parse(JSON.stringify(result));
         },
 
         getByExam(examId, source = DEFAULT_SOURCE) {
@@ -64,9 +77,15 @@
 
         getOccurrenceOwner(occurrence) {
             const reading = this._state?.snapshot.reading;
-            const association = reading?.associations.find(row => row.id === occurrence.associationId);
-            const article = reading?.articles.find(row => row.id === association?.articleId);
-            const source = reading?.sources.find(row => row.id === article?.sourceId);
+            if (this._ownerReading !== reading) {
+                this._ownerReading = reading;
+                this._ownerAssociations = new Map((reading?.associations || []).map(row => [row.id, row]));
+                this._ownerArticles = new Map((reading?.articles || []).map(row => [row.id, row]));
+                this._ownerSources = new Map((reading?.sources || []).map(row => [row.id, row]));
+            }
+            const association = this._ownerAssociations?.get(occurrence.associationId);
+            const article = this._ownerArticles?.get(association?.articleId);
+            const source = this._ownerSources?.get(article?.sourceId);
             if (!article || !source) return null;
             return { articleId: article.id,
                 contentAmbiguous: (article.contentRefs || []).length > 1,
@@ -1243,6 +1262,16 @@
                 // 获取 Exam Meta
                 this.currentExam = Object.assign({}, payload.meta || {}, resolved.exam);
 
+                // Article/source checks have passed. Paint the original before
+                // the bookshelf bookkeeping; controls remain disabled until
+                // the normal acknowledged-save path below finishes.
+                this.renderContent();
+                this.updateCounts();
+                if (typeof global.requestAnimationFrame === 'function') {
+                    await new Promise(resolve => global.requestAnimationFrame(() => global.requestAnimationFrame(resolve)));
+                    if (requestId !== this._openRequestId) return;
+                }
+
                 // 记录至阅读书架
                 const examTitle = this.currentExam.title || this.currentExam.name || examId;
                 const examCategory = this.currentExam.category || this.currentExam.type || '雅思阅读';
@@ -1323,7 +1352,7 @@
                 });
             }
             if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-                return Promise.resolve(global.AppLazyLoader.ensureGroup('more-tools'))
+                return Promise.resolve(global.AppLazyLoader.ensureGroup('reading-library'))
                     .then(() => global.ReadingNotebookView && typeof global.ReadingNotebookView.open === 'function'
                         ? global.ReadingNotebookView.open({
                             ...options,
@@ -1967,7 +1996,6 @@
         return ReadingVocabReader.open(examId, options);
     };
 
-    // 启动数据同步初始化
-    ReadingVocabStore.init().catch(error => console.warn('[ReadingVocabStore] Initialization failed:', error));
+    // Data is loaded by open()/notebook mount, never by script evaluation.
 
 })(typeof window !== 'undefined' ? window : globalThis);

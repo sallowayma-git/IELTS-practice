@@ -267,7 +267,8 @@ function createHarness(options = {}) {
         preview: [],
         create: [],
         commit: [],
-        history: []
+        history: [],
+        diagnostics: []
     };
     let snapshot = options.snapshot || makeSnapshot('fnv1a-first');
     let committedListener = null;
@@ -282,6 +283,10 @@ function createHarness(options = {}) {
         : undefined;
 
     const backups = {
+        async getStorageIdentity() {
+            if (typeof options.getStorageIdentity === 'function') return options.getStorageIdentity(calls);
+            return options.storageIdentity || 'installation-original';
+        },
         onDataCommitted(listener) {
             committedListener = listener;
             return () => { committedListener = null; };
@@ -360,6 +365,7 @@ function createHarness(options = {}) {
             locks: options.locks === undefined ? createWebLocksHarness() : options.locks
         },
         AppData: { ready: options.appDataReady || Promise.resolve(true), backups },
+        AppOperationDiagnostics: { failure(input) { calls.diagnostics.push(input); } },
         crypto: { randomUUID: () => 'uuid-1' },
         confirm: () => true,
         setTimeout(callback, delay) {
@@ -385,6 +391,7 @@ function createHarness(options = {}) {
 
     return {
         service: windowStub.ExternalBackupService,
+        setDocument(document) { windowStub.document = document; },
         directory,
         indexedDB,
         calls,
@@ -423,6 +430,24 @@ function createHarness(options = {}) {
             }
         }
     };
+}
+
+async function testRebuiltDatabaseCannotOverwriteFolder() {
+    const original = createHarness();
+    await original.ready();
+    await original.service.bindDirectory({ writeNow: true });
+    const bytes = Array.from(original.directory.files.entries());
+    const rebuilt = createHarness({ indexedDB: original.indexedDB, directory: original.directory,
+        storageIdentity: 'installation-rebuilt', snapshot: makeSnapshot('fnv1a-empty') });
+    await rebuilt.ready();
+    const blocked = await rebuilt.service.writeNow();
+    assert.equal(blocked.reason, 'restore_required');
+    assert.deepEqual(Array.from(original.directory.files.entries()), bytes);
+    const restored = await rebuilt.service.restoreFromLatest({ confirmed: true });
+    assert.equal(restored.success, true);
+    rebuilt.setSnapshot(makeSnapshot('fnv1a-after-recovery'));
+    const saved = await rebuilt.service.writeNow();
+    assert.equal(saved.success, true);
 }
 
 async function testBindingWritesVerifiedV2Snapshots() {
@@ -1346,6 +1371,9 @@ async function testRestoreMetadataFailureRemainsDurablyGuarded() {
     assert.equal(restored.restored, true, 'the business data commit is reported separately from metadata persistence');
     assert.equal(restored.reason, 'metadata_persistence_failed');
     assert.equal(restored.metadataPersisted, false);
+    assert.equal(harness.calls.diagnostics.length, 1);
+    assert.equal(harness.calls.diagnostics[0].code, 'DATA_IMPORT_FAILED');
+    assert.equal(harness.calls.diagnostics[0].operation, 'committed');
     assert.equal(harness.service.getStatus().awaitingRestore, true,
         'a failed durable metadata write must keep the overwrite guard enabled in memory');
 
@@ -1355,7 +1383,99 @@ async function testRestoreMetadataFailureRemainsDurablyGuarded() {
         'reload must observe the same guarded state after metadata persistence failure');
 }
 
+async function testRestoreIdentityFailureReportsCommittedAndPreservesDisk() {
+    const original = createHarness();
+    await original.ready();
+    await original.service.bindDirectory({ writeNow: true });
+    const diskBefore = Array.from(original.directory.files.entries());
+    const identityError = new Error('identity unavailable after restore');
+    let failIdentity = true;
+    const rebuilt = createHarness({ indexedDB: original.indexedDB, directory: original.directory,
+        snapshot: makeSnapshot('fnv1a-empty'),
+        getStorageIdentity(calls) {
+            if (calls.commit.length && failIdentity) throw identityError;
+            return 'installation-rebuilt';
+        } });
+    await rebuilt.ready();
+    const result = await rebuilt.service.restoreFromLatest({ confirmed: true });
+    assert.equal(result.success, false);
+    assert.equal(result.restored, true);
+    assert.equal(result.reason, 'storage_identity_unavailable');
+    assert.equal(rebuilt.calls.commit.length, 1);
+    assert.equal(rebuilt.calls.diagnostics.length, 1);
+    assert.equal(rebuilt.calls.diagnostics[0].code, 'DATA_IMPORT_FAILED');
+    assert.equal(rebuilt.calls.diagnostics[0].operation, 'committed');
+    assert.equal(rebuilt.calls.diagnostics[0].error, identityError);
+    assert.equal(rebuilt.service.getStatus().awaitingRestore, true);
+    assert.equal((await rebuilt.service.writeNow()).reason, 'restore_required');
+    assert.deepEqual(Array.from(original.directory.files.entries()), diskBefore);
+    assert.equal(original.indexedDB.values.get('metadata').storageIdentity, 'installation-original');
+
+    failIdentity = false;
+    const retry = await rebuilt.service.restoreFromLatest({ confirmed: true });
+    assert.equal(retry.success, true);
+    assert.equal(rebuilt.service.getStatus().awaitingRestore, false);
+    assert.equal(original.indexedDB.values.get('metadata').storageIdentity, 'installation-rebuilt');
+    assert.equal((await rebuilt.service.writeNow()).success, true);
+    assert.equal(rebuilt.calls.diagnostics.length, 1, 'successful recovery must not add another failure');
+}
+
+async function testReadinessDoesNotExportWholeDatabase() {
+    const first = createHarness();
+    await first.ready();
+    await first.service.bindDirectory({ writeNow: true });
+    let exports = 0;
+    const reloaded = createHarness({ indexedDB: first.indexedDB, directory: first.directory, onExport() { exports++; } });
+    await reloaded.ready();
+    assert.equal(exports, 0, 'binding readiness must not export the whole database');
+    assert.equal(reloaded.service.getStatus().dirty, true, 'unknown freshness is conservatively dirty');
+    await reloaded.service.flushSilentlyIfPermitted();
+    assert.ok(exports > 0, 'the deferred flush still validates the actual snapshot');
+}
+
+function reminderDocument() {
+    const state = { shown: false, view: 'overview-view', visibility: 'visible', anotherDialog: false };
+    const modal = { classList: { add() { state.shown = true; }, remove() { state.shown = false; } } };
+    return { state, body: {}, get visibilityState() { return state.visibility; },
+        getElementById(id) { return id === 'external-backup-modal' ? modal : null; },
+        querySelector(selector) { return selector === '.view.active' ? { id: state.view }
+            : state.shown || state.anotherDialog ? modal : null; } };
+}
+async function testReminderCooldownAndNonInterruption() {
+    const unbound = createHarness(); await unbound.ready();
+    const unboundDocument = reminderDocument(); unbound.setDocument(unboundDocument);
+    assert.equal(await unbound.service.checkReminder(), false, 'an unbound installation must not receive save reminders');
+    assert.equal(unboundDocument.state.shown, false);
+    const harness = createHarness(); await harness.ready();
+    await harness.service.bindDirectory({ writeNow: true });
+    const document = reminderDocument(); harness.setDocument(document);
+    assert.equal(await harness.service.checkReminder(), false, 'a recent disk save suppresses reminders');
+    const meta = harness.indexedDB.values.get('metadata');
+    meta.lastWriteAt = new Date(Date.now() - 4 * 86400000).toISOString();
+    document.state.view = 'practice-view';
+    assert.equal(await harness.service.checkReminder(), false, 'practice cannot be interrupted');
+    document.state.view = 'more-view'; document.state.visibility = 'hidden';
+    assert.equal(await harness.service.checkReminder(), false, 'background tabs cannot show reminders');
+    document.state.visibility = 'visible'; document.state.anotherDialog = true;
+    assert.equal(await harness.service.checkReminder(), false, 'another dialog cannot be interrupted');
+    document.state.anotherDialog = false;
+    const promptsBefore = harness.directory.state.permissionRequests;
+    assert.equal(await harness.service.checkReminder(), true);
+    assert.equal(document.state.shown, true);
+    assert.equal(harness.directory.state.permissionRequests, promptsBefore, 'reminders do not request permission automatically');
+    harness.service.closeModal();
+    assert.equal(await harness.service.checkReminder(), false, 'dismissal persists the three-day cooldown');
+    const reloaded = createHarness({ indexedDB: harness.indexedDB, directory: harness.directory });
+    await reloaded.ready(); reloaded.setDocument(reminderDocument());
+    assert.equal(await reloaded.service.checkReminder(), false, 'reload observes the same reminder cooldown');
+    assert.equal(reloaded.service.getStatus().dirty, true, 'a reminder never reports a successful save');
+}
+
 async function main() {
+    await testRestoreIdentityFailureReportsCommittedAndPreservesDisk();
+    await testReminderCooldownAndNonInterruption();
+    await testRebuiltDatabaseCannotOverwriteFolder();
+    await testReadinessDoesNotExportWholeDatabase();
     await testBindingWritesVerifiedV2Snapshots();
     await testMissingCrossTabLockFailsClosed();
     await testPublicWriteNowRejectsWithoutCrossTabLock();

@@ -272,7 +272,7 @@ test('Bookshelf counts distinct associated terms, searches beyond previews, and 
     assert.equal(rows[0].wordCount, 8);
     assert.equal(rows[1].wordCount, 2);
     assert.equal(f.store.getDistinctWordCount(), 9, 'shared terms count only once globally');
-    assert.equal(rows[0].sampleWords.length, 6);
+    assert.equal(rows[0].sampleWords.length, 8);
     assert.equal(rows[0].allWords.includes('word-8'), true);
 
     const root = { innerHTML: '' };
@@ -362,7 +362,7 @@ test('Cold Bookshelf loads real runtime groups and only opens the latest source-
     const first = view.launchExamVocabReader('same-exam', sourceA, f.model.articleId(sourceA, 'same-exam'));
     const second = view.launchExamVocabReader('same-exam', sourceB, f.model.articleId(sourceB, 'same-exam'));
     assert.equal(view.state.readerLoading, true);
-    assert.deepEqual(loadedGroups, ['exam-data', 'browse-runtime']);
+    assert.deepEqual(loadedGroups, ['exam-data', 'reading-tools']);
     gate.resolve();
     await Promise.all([first, second]);
     assert.equal(opens.length, 1);
@@ -485,4 +485,35 @@ test('Bookshelf practice source guard rechecks source and displayed index proven
     assert.equal(await view.canOpenOriginalSource(article), false, 'another imported index with the same exam ID is rejected');
     f.sandbox.examIndex = [{ id: 'same-exam', libraryConfigurationId: 'library-b' }];
     assert.equal(await view.canOpenOriginalSource(article), true);
+});
+
+test('lightweight bookshelf keeps only the current ten-word preview and rejects a stale page', async () => {
+    const f = fixture();
+    const articleId = f.model.articleId(sourceA, 'same-exam');
+    const sourceId = f.model.sourceId(sourceA);
+    let index = { token: 'one', revision: 1, generation: 'original', distinctWordCount: 25,
+        sources: [{ id: sourceId, kind: 'builtin', libraryId: 'default' }],
+        articles: [{ articleId, examId: 'same-exam', source: sourceA, title: 'Article', wordCount: 25, lastActivityAt: 0 }] };
+    let fullReads = 0;
+    f.sandbox.AppData.vocab.getReadingSnapshot = async () => { fullReads++; throw new Error('must not read full words for cards'); };
+    f.sandbox.AppData.vocab.getReadingBookshelf = async () => clone(index);
+    let pending;
+    f.sandbox.AppData.vocab.getReadingArticleWords = async (_article, page) => pending
+        ? pending.promise : { token: 'one', words: Array.from({ length: 10 }, (_, i) => `word${page * 10 + i}`) };
+    await f.store.init();
+    assert.equal(f.store._snapshot.words, undefined);
+    assert.equal(f.store.getBookshelfExams()[0].wordCount, 25);
+    assert.equal(f.store.getDistinctWordCount(), 25);
+    await f.store.loadPreview(articleId, 1);
+    assert.equal(f.store.getBookshelfExams()[0].sampleWords[0], 'word10');
+    assert.equal(f.store.getBookshelfExams()[0].sampleWords.length, 10);
+    pending = deferred();
+    const oldPage = f.store.loadPreview(articleId, 2);
+    index = { ...index, token: 'replaced', revision: 2, generation: 'replace', articles: [] };
+    await f.store.init();
+    pending.resolve({ token: 'one', words: ['deleted word'] });
+    await oldPage;
+    assert.equal(f.store.getBookshelfExams().length, 0);
+    assert.equal(f.store._previewPages.size, 0);
+    assert.equal(fullReads, 0);
 });
