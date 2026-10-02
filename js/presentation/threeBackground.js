@@ -2,6 +2,64 @@
     'use strict';
 
     const THREE = global.THREE;
+    let themeIntentGeneration = 0;
+    let pendingInitialBackground = null;
+
+    function cancelInitialBackground() {
+        if (!pendingInitialBackground) return;
+        const pending = pendingInitialBackground;
+        pendingInitialBackground = null;
+        pending.cancel();
+        if (global.SHUIThreeBackground === pending.controller) global.SHUIThreeBackground = null;
+    }
+
+    function startInitialBackgroundAfterPaint(themeName, generation) {
+        if (themeName === 'newjeans' || themeName === 'ascii-flower'
+            || typeof global.requestAnimationFrame !== 'function' || typeof global.setTimeout !== 'function') {
+            start(themeName);
+            return;
+        }
+        let frameId = null;
+        let timerId = null;
+        const controller = {
+            refresh() {},
+            destroy() {
+                themeIntentGeneration += 1;
+                cancelInitialBackground();
+            }
+        };
+        const pending = {
+            controller,
+            cancel() {
+                if (frameId !== null) global.cancelAnimationFrame(frameId);
+                if (timerId !== null) global.clearTimeout(timerId);
+            }
+        };
+        pendingInitialBackground = pending;
+        // Keep cancellation available while the optional renderer waits for a
+        // painted shell. Explicit theme switches remain immediate.
+        global.SHUIThreeBackground = controller;
+        const initializeRenderer = () => {
+            if (pendingInitialBackground !== pending) return;
+            if (themeIntentGeneration !== generation || global.SHUIThreeBackground !== controller) {
+                cancelInitialBackground();
+                return;
+            }
+            pendingInitialBackground = null;
+            global.SHUIThreeBackground = null;
+            start(themeName);
+        };
+        if (document.hidden) {
+            timerId = global.setTimeout(initializeRenderer, 0);
+        } else {
+            frameId = global.requestAnimationFrame(() => {
+                frameId = null;
+                // Constructing a WebGL context and its shader is substantial
+                // synchronous work; perform it after the frame can paint.
+                timerId = global.setTimeout(initializeRenderer, 0);
+            });
+        }
+    }
 
     const vertexShader = `
         varying vec2 vUv;
@@ -349,9 +407,22 @@
 
         let rafId = 0;
         let lastFrame = 0;
-        let paused = false;
+        let destroyed = false;
+        const motionQuery = typeof global.matchMedia === 'function'
+            ? global.matchMedia('(prefers-reduced-motion: reduce)') : null;
+        // Floral bloom has no time uniform in its shader: redraw only on resize
+        // or refresh rather than spending GPU time on identical frames.
+        const animated = /uniform\s+float\s+uTime\s*;/.test(fragmentShader);
         const startedAt = performance.now();
         const frameInterval = 1000 / 24;
+
+        function canAnimate() {
+            return !destroyed && animated && !document.hidden && !(motionQuery && motionQuery.matches);
+        }
+
+        function scheduleFrame() {
+            if (!rafId && canAnimate()) rafId = global.requestAnimationFrame(render);
+        }
 
         function resize() {
             const width = Math.max(1, global.innerWidth || 1);
@@ -364,34 +435,36 @@
         }
 
         function render(now, force) {
-            if (paused && !force) {
-                rafId = global.requestAnimationFrame(render);
-                return;
-            }
+            if (!force) rafId = 0;
+            if (destroyed || (!force && !canAnimate())) return;
             if (!force && now - lastFrame < frameInterval) {
-                rafId = global.requestAnimationFrame(render);
+                scheduleFrame();
                 return;
             }
             lastFrame = now;
             uniforms.uTime.value = (now - startedAt) / 1000;
             renderer.render(scene, camera);
-            if (!force) {
-                rafId = global.requestAnimationFrame(render);
-            }
+            if (!force) scheduleFrame();
         }
 
         function handleVisibility() {
-            paused = document.hidden;
-            if (!paused) {
+            if (rafId) {
+                global.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            if (!document.hidden) {
                 render(performance.now(), true);
+                scheduleFrame();
             }
         }
 
         resize();
         global.addEventListener('resize', resize);
         document.addEventListener('visibilitychange', handleVisibility);
-        render(performance.now(), true);
-        rafId = global.requestAnimationFrame(render);
+        if (motionQuery && typeof motionQuery.addEventListener === 'function') {
+            motionQuery.addEventListener('change', handleVisibility);
+        }
+        scheduleFrame();
 
         document.body.classList.add('three-bg-active');
 
@@ -399,12 +472,16 @@
             renderer,
             refresh: () => render(performance.now(), true),
             destroy() {
+                destroyed = true;
                 if (rafId) {
                     global.cancelAnimationFrame(rafId);
                     rafId = 0;
                 }
                 global.removeEventListener('resize', resize);
                 document.removeEventListener('visibilitychange', handleVisibility);
+                if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
+                    motionQuery.removeEventListener('change', handleVisibility);
+                }
                 renderer.dispose();
                 material.dispose();
                 mesh.geometry.dispose();
@@ -532,6 +609,7 @@
     }
 
     function start(themeName = null) {
+        cancelInitialBackground();
         if (!themeName) {
             themeName = 'floral-bloom';
         }
@@ -576,6 +654,7 @@
     }
 
     global.switchBgTheme = function(themeName) {
+        themeIntentGeneration += 1;
         if (global.AppData && global.AppData.preferences) {
             global.AppData.preferences.setThreeBackground(themeName).catch((error) => console.warn('[SHUI Three Background] preference save failed:', error));
         }
@@ -583,13 +662,16 @@
     };
 
     async function init() {
+        if (themeIntentGeneration > 0) return;
+        const generation = themeIntentGeneration;
+        let saved = 'floral-bloom';
         try {
             await global.AppData.ready;
-            const saved = await global.AppData.preferences.getThreeBackground();
-            start(saved || 'floral-bloom');
-        } catch (_) {
-            start('floral-bloom');
-        }
+            saved = await global.AppData.preferences.getThreeBackground() || 'floral-bloom';
+        } catch (_) { }
+        // A theme selected while preferences load is newer than this startup
+        // read, including when that read fails and falls back to the default.
+        if (generation === themeIntentGeneration) startInitialBackgroundAfterPaint(saved, generation);
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

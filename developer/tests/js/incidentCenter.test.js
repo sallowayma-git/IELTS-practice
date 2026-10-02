@@ -411,3 +411,120 @@ test('changing subscriptions during delivery cannot extend the current observer 
     h.report();
     assert.equal(calls, 2);
 });
+
+function controlledScheduler(h) {
+    const frames = new Map();
+    const timers = new Map();
+    let id = 0;
+    h.sandbox.requestAnimationFrame = callback => { frames.set(++id, callback); return id; };
+    h.sandbox.cancelAnimationFrame = token => frames.delete(token);
+    h.sandbox.setTimeout = callback => { timers.set(++id, callback); return id; };
+    h.sandbox.clearTimeout = token => timers.delete(token);
+    const flush = callbacks => {
+        const pending = Array.from(callbacks.values());
+        callbacks.clear();
+        pending.forEach(callback => callback());
+    };
+    return { frames, timers, frame: () => flush(frames), timer: () => flush(timers) };
+}
+
+test('ordinary notice bursts update incident state synchronously and render once per frame', () => {
+    const h = fixture();
+    const scheduler = controlledScheduler(h);
+    let renders = 0;
+    h.center.render = () => renders++;
+    const ids = Array.from({ length: 30 }, (_, i) => h.report({ persistence: { operation: 'not-committed' },
+        correlation: { operation: 'burst-' + i } }));
+    assert.equal(h.collector.snapshot().events.length, 30);
+    ids.forEach(id => assert.equal(h.collector.getIncident(id).eventId, id));
+    assert.equal(h.center.groups.size, 20);
+    assert.equal(h.center.overflow, 10);
+    assert.equal(renders, 0);
+    assert.equal(scheduler.frames.size, 1);
+    assert.equal(scheduler.timers.size, 1);
+    scheduler.frame();
+    assert.equal(renders, 1);
+    assert.equal(scheduler.timers.size, 0);
+    h.report({ persistence: { operation: 'not-committed' } });
+    scheduler.frame();
+    assert.equal(renders, 2);
+});
+
+test('dialog escalation and retry revocation stay immediate while notices await a frame', () => {
+    const h = fixture();
+    const scheduler = controlledScheduler(h);
+    let refreshes = 0;
+    h.center.refreshDialog = () => refreshes++;
+    const error = new Error('generic failure');
+    const id = h.report({ error, code: 'UNEXPECTED_RUNTIME_ERROR', retry: { available: true, action: 'submit' },
+        correlation: { operation: 'retry-operation' } });
+    assert.equal(h.center.dialog.item.id, id);
+    h.center.show(id, { retry: { ...h.collector.getIncident(id).retry, run() {} } });
+    assert.ok(h.center.groups.get(id).retry);
+    h.report({ error, retry: { available: false }, correlation: { operation: 'retry-operation' } });
+    assert.equal(h.center.groups.get(id).retry, null);
+    assert.ok(refreshes > 0);
+    assert.equal(scheduler.frames.size, 1);
+    scheduler.frame();
+});
+
+test('paused animation frames use the timer and cannot cause a second render', () => {
+    const h = fixture();
+    const scheduler = controlledScheduler(h);
+    let renders = 0;
+    h.center.render = () => renders++;
+    h.report({ persistence: { operation: 'not-committed' } });
+    const staleFrame = scheduler.frames.values().next().value;
+    scheduler.timer();
+    assert.equal(renders, 1);
+    assert.equal(scheduler.frames.size, 0);
+    staleFrame();
+    assert.equal(renders, 1);
+});
+
+test('batched rendering failure keeps an open save warning as the fallback reference', () => {
+    const h = fixture();
+    const scheduler = controlledScheduler(h);
+    const critical = h.report();
+    const later = h.report({ persistence: { operation: 'not-committed' }, correlation: { operation: 'later-notice' } });
+    assert.notEqual(later, critical);
+    let fallback;
+    h.center.render = () => { throw new Error('UI unavailable'); };
+    h.center.fallback = event => { fallback = event; };
+    scheduler.frame();
+    assert.equal(fallback.eventId, critical);
+    assert.equal(fallback.persistence.operation, 'unconfirmed');
+    assert.equal(h.collector.snapshot().events.length, 2);
+});
+
+test('dialog technical text reuses immutable event identity and refreshes persistence revisions', () => {
+    const h = fixture();
+    controlledScheduler(h);
+    const id = h.report();
+    const item = h.center.groups.get(id);
+    const dialog = h.center.dialog;
+    Object.assign(dialog, { heading: h.element('h2'), panel: h.element('section'),
+        technical: h.element('pre'), outcome: h.element('p'), reference: h.element('p'),
+        retryButton: h.element('button'), status: h.element('p') });
+    let prettySerializations = 0;
+    h.sandbox.JSON = { ...JSON, stringify(value, replacer, spacing) {
+        if (spacing === 2) prettySerializations++;
+        return JSON.stringify(value, replacer, spacing);
+    } };
+    h.center.refreshDialog();
+    for (let index = 0; index < 10; index++) h.center.refreshDialog();
+    assert.equal(prettySerializations, 1);
+    assert.equal(JSON.parse(dialog.technical.textContent).persistence.diagnostics, 'memory-only');
+    const revision = h.sandbox.AppDiagnosticContract.createNormalizer().sanitizeEvent({ ...item.event,
+        persistence: { ...item.event.persistence, diagnostics: 'persisted' } });
+    assert.ok(Object.isFrozen(revision));
+    item.event = revision;
+    h.center.refreshDialog();
+    assert.equal(prettySerializations, 2);
+    const technical = JSON.parse(dialog.technical.textContent);
+    assert.equal(technical.eventId, id);
+    assert.equal(technical.persistence.diagnostics, 'persisted');
+    assert.equal(technical.persistence.operation, 'unconfirmed');
+    h.center.refreshDialog();
+    assert.equal(prettySerializations, 2);
+});

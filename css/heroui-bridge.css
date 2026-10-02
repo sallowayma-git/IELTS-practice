@@ -213,12 +213,9 @@ body.hero-body {
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     opacity: 0;
-    transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
-                top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
-                width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
-                height 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
                 opacity 0.22s ease;
-    will-change: left, top, width, height;
+    will-change: transform;
 }
 
 .hero-nav__btn {

@@ -501,3 +501,85 @@ test('every shipped execution context includes the shared contract and reviewed 
         assert.ok(optionalDistributionResources.has(resource) || fs.existsSync(path.join(root, resource)), resource);
     }
 });
+
+test('only internally validated immutable events reuse sanitization and cached byte sizing across normalizers', () => {
+    let serializations = 0;
+    const context = vm.createContext({ JSON: {
+        stringify(...args) { serializations++; return JSON.stringify(...args); }
+    } });
+    vm.runInContext(source, context);
+    const api = context.AppDiagnosticContract;
+    const normalizer = api.createNormalizer();
+    const event = normalizer.normalize({ code: 'PRACTICE_SAVE_FAILED', error: error() });
+    const before = serializations;
+    const otherNormalizer = api.createNormalizer();
+    for (let i = 0; i < 200; i++) {
+        assert.equal(otherNormalizer.sanitizeEvent(event), event);
+        assert.equal(api.eventBytes(event), Buffer.byteLength(JSON.stringify(event), 'utf8'));
+    }
+    assert.equal(serializations, before, 'Repeated trusted reads must not reserialize or reconstruct events');
+    assert.equal(Object.isFrozen(event.error), true);
+    assert.equal(Object.isFrozen(event.error.stack), true);
+    assert.equal(api.eventBytes(null), null);
+    assert.equal(api.eventBytes(42), null);
+});
+
+test('frozen external impostors, accessors and proxies never inherit internal event trust', () => {
+    const normalizer = contract.createNormalizer();
+    const event = normalizer.normalize({ error: error() });
+    const external = Object.freeze({ ...JSON.parse(JSON.stringify(event)), answers: secret });
+    assert.equal(contract.eventBytes(external), null);
+    const first = normalizer.sanitizeEvent(external);
+    assert.notEqual(first, external);
+    assertSafe(first);
+    external.error.code = 'CONFLICT';
+    const second = normalizer.sanitizeEvent(external);
+    assert.notEqual(second, first, 'Mutable external children must be revalidated on every read');
+    assert.equal(second.causeCode, 'CONFLICT');
+    assert.equal(first.causeCode, 'QUOTA_EXCEEDED');
+    assert.equal(contract.eventBytes(external), null, 'External inputs themselves must never be memoized');
+
+    let getters = 0;
+    const hostile = Object.freeze({ ...event, error: Object.freeze({
+        get name() { getters++; return 'AppDataError'; },
+        get message() { getters++; return secret; },
+        get stack() { getters++; return secret; }
+    }) });
+    const checked = normalizer.sanitizeEvent(hostile);
+    assert.notEqual(checked, hostile);
+    assert.equal(getters, 0);
+    assert.ok(checked.collection.issues.includes('accessor-skipped'));
+    assertSafe(checked);
+    assert.equal(contract.eventBytes(hostile), null);
+
+    let descriptors = 0;
+    const proxy = new Proxy(event, { getOwnPropertyDescriptor(target, key) {
+        descriptors++; return Object.getOwnPropertyDescriptor(target, key);
+    } });
+    const copied = normalizer.sanitizeEvent(proxy);
+    assert.notEqual(copied, event);
+    assert.ok(descriptors > 0);
+    const before = descriptors;
+    normalizer.sanitizeEvent(proxy);
+    assert.ok(descriptors > before, 'Proxies around trusted events still require full revalidation');
+    assert.equal(contract.eventBytes(proxy), null);
+});
+
+test('cached sizes include final truncation issues and newly sanitized persistence revisions', () => {
+    const normalizer = contract.createNormalizer();
+    const event = normalizer.normalize({ error: error(), breadcrumbs: Array.from({ length: 50 }, () => ({
+        action: 'submit', module: 'practice', timestamp: 8640000000000000,
+        correlation: { session: 'long-session', suite: 'long-suite', submission: 'long-submission', operation: 'long-operation' }
+    })) });
+    assert.ok(event.collection.issues.includes('event-truncated'));
+    assert.equal(contract.eventBytes(event), Buffer.byteLength(JSON.stringify(event), 'utf8'));
+    assert.ok(contract.eventBytes(event) <= contract.LIMITS.eventBytes);
+    const revised = normalizer.sanitizeEvent({ ...event,
+        persistence: { ...event.persistence, diagnostics: 'persisted', generation: 'dg-' + 'a'.repeat(32) } });
+    assert.notEqual(revised, event);
+    assert.equal(revised.eventId, event.eventId);
+    assert.equal(revised.timestamp, event.timestamp);
+    assert.equal(revised.persistence.diagnostics, 'persisted');
+    assert.equal(event.persistence.diagnostics, 'memory-only');
+    assert.equal(contract.eventBytes(revised), Buffer.byteLength(JSON.stringify(revised), 'utf8'));
+});

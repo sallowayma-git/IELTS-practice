@@ -504,7 +504,7 @@
         }
         close() { const db = this.db; this.db = null; try { if (db) db.close(); } catch (_) {} }
         _open() { if (!this.db) throw new Error('IndexedDB connection closed'); }
-        _transaction(stores, mode, description, work, mutation = false) {
+        _transaction(stores, mode, description, work, mutation = false, detachedRead = false) {
             this._open();
             return new Promise((resolve, reject) => {
                 let failure = null;
@@ -512,7 +512,10 @@
                 let tx;
                 try { tx = this.db.transaction(stores, mode); } catch (error) { reject(error); return; }
                 const settle = withDeadline(tx, mutation ? this.mutationTimeoutMs : this.requestTimeoutMs, description, resolve, reject);
-                tx.oncomplete = () => settle.resolve(clone(value));
+                // IDB request results are already detached from stored data.
+                // Large summary lists are validated and cloned per row after
+                // completion so an extra full-list clone cannot block a frame.
+                tx.oncomplete = () => settle.resolve(detachedRead ? value : clone(value));
                 tx.onerror = () => { failure = failure || tx.error || new Error(`IndexedDB ${description} failed`); };
                 tx.onabort = () => settle.reject(failure || tx.error || new Error(`IndexedDB ${description} aborted`));
                 const fail = (error) => { failure = failure || error; try { tx.abort(); } catch (_) {} };
@@ -586,7 +589,7 @@
                 const request = tx.objectStore(store).getAll();
                 request.onsuccess = () => done(request.result || []);
                 request.onerror = () => fail(request.error || new Error('Entity list failed'));
-            });
+            }, false, true);
         }
         atomic(spec) {
             return this._transaction(spec.stores, 'readwrite', `mutation ${spec.operationId}`, (tx, done, fail) => {
@@ -927,14 +930,34 @@
             if (store !== 'practiceSummaries') throw validation('Only practiceSummaries supports listEntities; load details and annotations by recordId');
             try {
                 const rows = await this.driver.listEntities(store);
-                const validRows = rows.filter((row) => {
-                    try { validateEntityRow(store, row); return true; }
-                    catch (error) {
-                        if (error instanceof AppDataError && error.code === 'CORRUPT_RECORD') return false;
-                        throw error;
+                const result = [];
+                const cooperative = rows.length > 250 && typeof global.requestAnimationFrame === 'function';
+                const now = () => global.performance && typeof global.performance.now === 'function'
+                    ? global.performance.now() : Date.now();
+                let sliceStart = now();
+                for (let index = 0; index < rows.length; index += 1) {
+                    const row = rows[index];
+                    try {
+                        validateEntityRow(store, row);
+                        result.push(clone(options.withMeta ? row : row.data));
                     }
-                });
-                return options.withMeta ? clone(validRows) : validRows.map((row) => clone(row.data));
+                    catch (error) {
+                        if (!(error instanceof AppDataError && error.code === 'CORRUPT_RECORD')) throw error;
+                    }
+                    // No IDB transaction is open here. Keep checksums and
+                    // ordering intact while allowing input and paint between
+                    // bounded batches; never return a partially checked list.
+                    if (cooperative && index + 1 < rows.length
+                        && ((index + 1) % 100 === 0 || now() - sliceStart >= 6)) {
+                        if (global.scheduler && typeof global.scheduler.yield === 'function') {
+                            await global.scheduler.yield();
+                        } else {
+                            await new Promise(resolve => global.setTimeout(resolve, 0));
+                        }
+                        sliceStart = now();
+                    }
+                }
+                return result;
             }
             catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
         }

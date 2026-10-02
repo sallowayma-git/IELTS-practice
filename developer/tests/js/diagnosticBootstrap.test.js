@@ -538,3 +538,46 @@ test('directory entry URLs retain the correct root or subpath run mode', () => {
         assert.equal(c.getIncident(id).environment.runMode, expected);
     }
 });
+
+test('repeated immutable snapshots avoid sanitization serialization and bootstrap export sizes incrementally', () => {
+    const h = harness();
+    h.evaluate(`globalThis.__diagnosticSerializationCount = 0;
+        const originalDiagnosticStringify = JSON.stringify;
+        JSON.stringify = function (...args) {
+            globalThis.__diagnosticSerializationCount++;
+            return originalDiagnosticStringify.apply(this, args);
+        };`);
+    const ids = [];
+    for (let i = 0; i < 40; i++) {
+        ids.push(h.collector.report({ code: 'PRACTICE_SAVE_FAILED', module: 'practice', action: 'save',
+            error: new Error('private answer must be redacted'), newOccurrence: true }));
+    }
+    const before = h.evaluate('__diagnosticSerializationCount');
+    const current = h.collector.snapshot();
+    for (let i = 0; i < 20; i++) {
+        const again = h.collector.snapshot();
+        assert.equal(again.events[0], current.events[0], 'Unchanged validated event objects may be shared');
+        assert.equal(again.events.at(-1), h.collector.getIncident(ids.at(-1)));
+    }
+    assert.equal(h.evaluate('__diagnosticSerializationCount'), before,
+        'Snapshotting trusted events must not reconstruct or serialize them');
+    const chosen = current.events.find(event => event.eventId === ids[0]);
+    const ordered = current.events.filter(event => event !== chosen).reverse();
+    ordered.unshift(chosen);
+    const expected = { schemaVersion: 1, persistence: current.persistence, coverage: 'partial',
+        entryCoverage: current.entryCoverage, truncated: current.truncated,
+        notice: 'Local diagnostics; not an answer backup.', events: [] };
+    for (const event of ordered) {
+        expected.events.push(event);
+        if (Buffer.byteLength(JSON.stringify(expected), 'utf8') > 32 * 1024 - 32) {
+            expected.events.pop(); expected.truncated = true; break;
+        }
+    }
+    const text = h.collector.exportText(ids[0]);
+    assert.equal(text, JSON.stringify(expected), 'Incremental sizing must preserve exact bounded export contents');
+    assert.equal(h.evaluate('__diagnosticSerializationCount') - before, 2,
+        'Export should serialize its envelope and final report once each');
+    assert.ok(Buffer.byteLength(text, 'utf8') <= 32 * 1024);
+    assert.equal(h.collector.status().bytes,
+        current.events.reduce((sum, event) => sum + Buffer.byteLength(JSON.stringify(event), 'utf8'), 0));
+});

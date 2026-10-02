@@ -111,6 +111,25 @@ try {
             await settle();
         });
     }
+    result.historyRenderedNodes = await page.locator('.practice-history-list .history-record-item').count();
+    if (!baseline) {
+        assert.ok(result.historyRenderedNodes > 0 && result.historyRenderedNodes < 100,
+            `history must render a bounded viewport, got ${result.historyRenderedNodes}`);
+        await page.evaluate(() => {
+            const list = document.getElementById('practice-history-list') || document.getElementById('history-list');
+            list.scrollTop = list.scrollHeight;
+            list.dispatchEvent(new Event('scroll'));
+        });
+        await page.waitForSelector('.practice-history-list [data-record-id="perf-0"]');
+        result.historyBottomRenderedNodes = await page.locator('.practice-history-list .history-record-item').count();
+        assert.ok(result.historyBottomRenderedNodes < 100);
+        await page.evaluate(() => {
+            const list = document.getElementById('practice-history-list') || document.getElementById('history-list');
+            list.scrollTop = 0;
+            list.dispatchEvent(new Event('scroll'));
+        });
+        await page.waitForSelector(`.practice-history-list [data-record-id="perf-${count - 1}"]`);
+    }
     for (let i = 0; i < 3; i++) await measure(`summaryRead${i}Ms`, () => page.evaluate(async count => {
         const rows = await AppData.practice.list({ projection: 'light' });
         if (rows.length !== count) throw new Error(`Lost records: ${rows.length}/${count}`);

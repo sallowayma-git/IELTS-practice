@@ -146,6 +146,7 @@
         }
 
         function updatePersistence(item, status) {
+            if (item.event.persistence.diagnostics === status) return;
             const event = normalizer.sanitizeEvent({ ...item.event,
                 persistence: { ...item.event.persistence, diagnostics: status } });
             replaceEvent(item, event);
@@ -154,7 +155,7 @@
         function replaceEvent(item, event) {
             bytes -= item.bytes;
             item.event = event;
-            item.bytes = contract.utf8Bytes(JSON.stringify(event));
+            item.bytes = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
             bytes += item.bytes;
         }
 
@@ -220,7 +221,7 @@
                 }
                 const existing = records.get(event.eventId);
                 if (!existing) {
-                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    const size = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
                     records.set(event.eventId, { event, bytes: size, revision: 0, delivered: memoryOnlyConsole, inFlight: false });
                     bytes += size;
                 } else if (classificationPriority(event) > classificationPriority(existing.event)) {
@@ -283,7 +284,7 @@
                 const existing = records.get(event.eventId);
                 if (existing && existing.event.timestamp !== event.timestamp) return false;
                 if (!existing) {
-                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    const size = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
                     records.set(event.eventId, { event, bytes: size, revision: 0, delivered: false, inFlight: false, originPriority });
                     bytes += size;
                 } else if (originPriority > (existing.originPriority ?? classificationPriority(existing.event))) {
@@ -391,13 +392,19 @@
                     truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
                     ...(current.transport ? { transport: current.transport } : {}),
                     notice: 'Local diagnostics; not an answer backup.', events: [] };
+                // JSON event payloads are immutable and already sized by the
+                // contract. Account for array commas without serializing the
+                // growing report once per event.
+                let outputBytes = contract.utf8Bytes(JSON.stringify(output));
                 for (const event of ordered) {
-                    output.events.push(event);
-                    if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
-                        output.events.pop();
+                    const eventSize = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
+                    const nextBytes = outputBytes + eventSize + (output.events.length ? 1 : 0);
+                    if (nextBytes > TEXT_BYTES - 32) {
                         output.truncated = true;
                         break;
                     }
+                    output.events.push(event);
+                    outputBytes = nextBytes;
                 }
                 return JSON.stringify(output);
             } catch (_) { return 'Local diagnostic export unavailable. No practice data was changed.'; }

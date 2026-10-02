@@ -79,6 +79,9 @@
     const ALIAS_ID = /^alias_(session|suite|submission|operation)_[a-f0-9]{32}$/;
     const scopeInternals = new WeakMap();
     const identityInternals = new WeakMap();
+    // Membership is provenance: only code-owned, fully projected and deeply
+    // frozen events enter this cache. Frozen external inputs are still untrusted.
+    const validatedEvents = new WeakMap();
     const readingResourcePaths = new Set();
     try {
         const resources = Object.getOwnPropertyDescriptor(global.AppDiagnosticBuild, 'readingResources')?.value;
@@ -359,7 +362,11 @@
     }
     function bound(event, context) {
         event.collection.issues = Array.from(context.issues).sort();
-        const size = () => utf8Bytes(JSON.stringify(event));
+        let bytes;
+        const size = () => {
+            bytes = utf8Bytes(JSON.stringify(event));
+            return bytes;
+        };
         if (size() > LIMITS.eventBytes) {
             context.issues.add('event-truncated');
             context.issues.add('breadcrumbs-truncated');
@@ -379,8 +386,18 @@
                 }
                 event.collection.issues = Array.from(context.issues).sort();
             }
+            // The final issue list can change after the last trimming check.
+            size();
         }
-        return freeze(event);
+        const immutable = freeze(event);
+        validatedEvents.set(immutable, { bytes });
+        return immutable;
+    }
+
+    function eventBytes(input) {
+        // Do not serialize unknown caller objects: even a frozen object may
+        // contain getters, mutable children, or a hostile toJSON callback.
+        return validatedEvents.get(input)?.bytes ?? null;
     }
 
     function createNormalizer(options = {}) {
@@ -502,6 +519,7 @@
             }
         }
         function sanitizeEvent(input) {
+            if (validatedEvents.has(input)) return input;
             const context = state();
             try {
                 if (field(input, 'schemaVersion', context) !== SCHEMA_VERSION) return null;
@@ -541,7 +559,7 @@
     }
 
     const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
-        PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
+        PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes, eventBytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

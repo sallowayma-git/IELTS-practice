@@ -498,6 +498,13 @@ async function syncPracticeRecords(options = {}) {
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
         updatePracticeView(records, examIndex);
+    } else if (typeof flushPracticeInsightsRender === 'function') {
+        // A hidden-view sync may leave insights waiting. Activation must resume
+        // them even when the authoritative records signature did not change.
+        if (typeof flushPracticeViewSnapshot === 'function') {
+            flushPracticeViewSnapshot();
+        }
+        flushPracticeInsightsRender();
     }
     // Recovery is a separate view, never a formal score or completion projection.
     // Always render its fresh read, even when canonical history has not changed.
@@ -1935,8 +1942,91 @@ function filterRealPracticeRecordsForView(records) {
     return classifier.filterRecordsForHistoryView(list);
 }
 
+// Dashboard charts are independent of the history list. Yield a paint before
+// computing them, then give each section its own task. Keep the latest work for
+// a later Practice activation, rather than painting a hidden or stale view.
+let pendingPracticeViewSnapshot = null;
+let pendingPracticeInsightsRender = null;
+let practiceInsightsFrame = null;
+let practiceInsightsTimer = null;
+
+function isPracticeInsightsViewActive() {
+    const view = document.getElementById('practice-view');
+    return !view || !view.classList || typeof view.classList.contains !== 'function'
+        || view.classList.contains('active');
+}
+
+function cancelPracticeInsightsRender() {
+    if (practiceInsightsFrame !== null && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(practiceInsightsFrame);
+    }
+    if (practiceInsightsTimer !== null) {
+        clearTimeout(practiceInsightsTimer);
+    }
+    practiceInsightsFrame = null;
+    practiceInsightsTimer = null;
+    pendingPracticeInsightsRender = null;
+}
+
+function queuePracticeInsightsRender(tasks) {
+    cancelPracticeInsightsRender();
+    pendingPracticeInsightsRender = { tasks };
+    flushPracticeInsightsRender();
+}
+
+function flushPracticeViewSnapshot() {
+    if (!pendingPracticeViewSnapshot || !isPracticeInsightsViewActive()) return;
+    const snapshot = pendingPracticeViewSnapshot;
+    pendingPracticeViewSnapshot = null;
+    updatePracticeView(snapshot.records, snapshot.examIndex);
+}
+
+function flushPracticeInsightsRender() {
+    const job = pendingPracticeInsightsRender;
+    if (!job || practiceInsightsFrame !== null || practiceInsightsTimer !== null
+        || !isPracticeInsightsViewActive()) return;
+
+    // Keep non-browser consumers synchronous (including the contract harness).
+    if (typeof window.requestAnimationFrame !== 'function') {
+        pendingPracticeInsightsRender = null;
+        job.tasks.forEach(task => task());
+        return;
+    }
+    const navigationGeneration = readBrowseProgressGeneration('__getAppNavigationIntentGeneration');
+    let index = 0;
+    const runSection = () => {
+        practiceInsightsTimer = null;
+        if (pendingPracticeInsightsRender !== job || !isPracticeInsightsViewActive()
+            || (navigationGeneration !== null && navigationGeneration !== readBrowseProgressGeneration('__getAppNavigationIntentGeneration'))) {
+            return;
+        }
+        try {
+            job.tasks[index++]();
+        } catch (error) {
+            console.warn('[PracticeHistory] 更新练习洞察失败:', error);
+        }
+        if (index < job.tasks.length) {
+            practiceInsightsTimer = setTimeout(runSection, 0);
+        } else {
+            pendingPracticeInsightsRender = null;
+        }
+    };
+    practiceInsightsFrame = window.requestAnimationFrame(() => {
+        practiceInsightsFrame = null;
+        practiceInsightsTimer = setTimeout(runSection, 0);
+    });
+}
+
 // Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
 function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
+    if (typeof window.requestAnimationFrame === 'function' && !isPracticeInsightsViewActive()) {
+        // Data publication still happens in syncPracticeRecords. Only the
+        // hidden Practice DOM/calculations wait until this view is activated.
+        pendingPracticeViewSnapshot = { records: recordsSnapshot, examIndex: examIndexSnapshot };
+        cancelPracticeInsightsRender();
+        return;
+    }
+    pendingPracticeViewSnapshot = null;
     const rawRecords = Array.isArray(recordsSnapshot) ? recordsSnapshot : [];
     const examIndex = Array.isArray(examIndexSnapshot) ? examIndexSnapshot : [];
     // 排除演示/种子记录。判定必须与 practice.stats / achievements.progress 两个投影器
@@ -1999,20 +2089,6 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
-    if (dashboard && typeof dashboard.updateAccuracy === 'function') {
-        dashboard.updateAccuracy(records, examType);
-    }
-
-    const trendRenderer = ensurePracticeTrendRenderer();
-    if (trendRenderer && typeof trendRenderer.update === 'function') {
-        trendRenderer.update(recordsToShow);
-    }
-
-    const priorityRenderer = ensurePracticePriorityRenderer();
-    if (priorityRenderer && typeof priorityRenderer.update === 'function') {
-        priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records });
-    }
-
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
     if (!renderer) {
@@ -2034,6 +2110,25 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         practiceListScroller = renderResult.scroller;
     }
     refreshBulkDeleteButton();
+    queuePracticeInsightsRender([
+        () => {
+            if (dashboard && typeof dashboard.updateAccuracy === 'function') {
+                dashboard.updateAccuracy(records, examType);
+            }
+        },
+        () => {
+            const trendRenderer = ensurePracticeTrendRenderer();
+            if (trendRenderer && typeof trendRenderer.update === 'function') {
+                trendRenderer.update(recordsToShow);
+            }
+        },
+        () => {
+            const priorityRenderer = ensurePracticePriorityRenderer();
+            if (priorityRenderer && typeof priorityRenderer.update === 'function') {
+                priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records });
+            }
+        }
+    ]);
 }
 
 function searchPracticeHistory(query) {

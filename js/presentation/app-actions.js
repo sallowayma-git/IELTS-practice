@@ -95,24 +95,35 @@
         }
         attachedPrefetchHandlers = true;
 
+        function hintGroup(name) {
+            return function onNavigationIntent() {
+                // Intent warms bytes without running view initialization before
+                // navigation. Explicit preload APIs retain their ready semantics.
+                if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
+                if (global.AppLazyLoader && typeof global.AppLazyLoader.preloadGroup === 'function') {
+                    global.AppLazyLoader.preloadGroup(name);
+                }
+            };
+        }
+
         var practiceButton = document.querySelector('.main-nav [data-view="practice"]');
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                practiceButton.addEventListener(eventName, triggerPrefetch, { once: true });
+                practiceButton.addEventListener(eventName, hintGroup('practice-suite'), { once: true });
             });
         }
 
         var browseButton = document.querySelector('.main-nav [data-view="browse"]');
         if (browseButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                browseButton.addEventListener(eventName, triggerBrowsePrefetch, { once: true });
+                browseButton.addEventListener(eventName, hintGroup('browse-runtime'), { once: true });
             });
         }
 
         var moreButton = document.querySelector('.main-nav [data-view="more"]');
         if (moreButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                moreButton.addEventListener(eventName, triggerMorePrefetch, { once: true });
+                moreButton.addEventListener(eventName, hintGroup('more-tools'), { once: true });
             });
         }
 

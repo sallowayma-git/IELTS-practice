@@ -467,8 +467,7 @@ function ensureSettings() {
         if (!indicator || !rect) {
             return;
         }
-        indicator.style.left = rect.left + 'px';
-        indicator.style.top = rect.top + 'px';
+        indicator.style.transform = 'translate3d(' + rect.left + 'px, ' + rect.top + 'px, 0)';
         indicator.style.width = rect.width + 'px';
         indicator.style.height = rect.height + 'px';
     }
@@ -490,12 +489,8 @@ function ensureSettings() {
 
         applyHeroNavIndicatorRect(indicator, targetRect);
         
-        // 强制浏览器重排以便 none 立即生效后再恢复
-        if (immediate || shouldReduceMotion) {
-            void indicator.offsetWidth;
-            indicator.style.transition = '';
-        }
-
+        // The next animated update restores the CSS transition. Keeping it
+        // disabled here avoids a forced layout during initialization/resize.
         state.lastRect = targetRect;
         state.ready = true;
     }
@@ -532,7 +527,9 @@ function ensureSettings() {
                 return;
             }
             animateHeroNavIndicator(state, targetRect, !!immediate);
-            nav.classList.add('hero-nav--liquid-ready');
+            if (!nav.classList.contains('hero-nav--liquid-ready')) {
+                nav.classList.add('hero-nav--liquid-ready');
+            }
         };
 
         var resizeToken = 0;
@@ -557,7 +554,9 @@ function ensureSettings() {
             var shouldSync = false;
             for (var i = 0; i < mutations.length; i += 1) {
                 var mutation = mutations[i];
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class'
+                    && mutation.target && mutation.target.classList
+                    && mutation.target.classList.contains('hero-nav__btn')) {
                     shouldSync = true;
                     break;
                 }

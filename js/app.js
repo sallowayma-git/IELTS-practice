@@ -634,7 +634,7 @@ class ExamSystemApp {
             if (viewName !== 'browse' && window.__pendingBrowseFilter) {
                 delete window.__pendingBrowseFilter;
             }
-            if (this.currentView === viewName) {
+            if (this.currentView === viewName && !this._pendingViewActivation) {
                 return { navigationIntentGeneration, sharedNavigationIntentGeneration };
             }
             document.querySelectorAll('.view').forEach((view) => {
@@ -660,11 +660,21 @@ class ExamSystemApp {
                 const url = new URL(window.location);
                 url.searchParams.set('view', viewName);
                 window.history.replaceState({}, '', url);
-                this.onViewActivated(
-                    viewName,
-                    navigationIntentGeneration,
-                    sharedNavigationIntentGeneration
+                const activate = () => this.onViewActivated(
+                    viewName, navigationIntentGeneration, sharedNavigationIntentGeneration
                 );
+                if (window.AppEntry && typeof window.AppEntry.scheduleViewActivation === 'function') {
+                    const pendingActivation = { viewName, navigationIntentGeneration };
+                    this._pendingViewActivation = pendingActivation;
+                    Promise.resolve(window.AppEntry.scheduleViewActivation(viewName, activate, () =>
+                        this.currentView === viewName
+                        && this._navigationIntentGeneration === navigationIntentGeneration
+                    )).catch((error) => console.warn('[App] 激活视图失败:', error)).finally(() => {
+                        if (this._pendingViewActivation === pendingActivation) this._pendingViewActivation = null;
+                    });
+                } else {
+                    activate();
+                }
             }
             return { navigationIntentGeneration, sharedNavigationIntentGeneration };
         },
@@ -804,10 +814,17 @@ class ExamSystemApp {
                     break;
                 case 'practice':
                     console.log('[App] 练习视图已激活，开始加载练习记录模块');
-                    Promise.resolve()
+                    return Promise.resolve()
                         .then(() => (typeof window.ensureBrowseGroup === 'function' ? window.ensureBrowseGroup() : null))
                         .then(() => (typeof window.ensurePracticeSuiteReady === 'function' ? window.ensurePracticeSuiteReady() : null))
                         .then(() => {
+                            if (this.currentView !== 'practice'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) {
+                                return false;
+                            }
                             if (typeof window.ensurePracticeRecordsSync === 'function') {
                                 return window.ensurePracticeRecordsSync('practice-view');
                             }
@@ -822,7 +839,6 @@ class ExamSystemApp {
                         .catch((error) => {
                             console.error('[App] 激活练习视图失败:', error);
                         });
-                    break;
                 case 'more':
                     Promise.resolve()
                         .then(() => {
@@ -1138,8 +1154,16 @@ class ExamSystemApp {
                 // Browse intent is hydrated once by initializeBrowseView from
                 // the canonical lastFilter preference. Data refreshes must not
                 // replay an older durable scope into the live state service.
-                await this.loadUserStats();
-                await this.updateOverviewStats();
+                // Both reads use AppData's canonical projections independently.
+                // Wait for both even on failure so readiness cannot race a still
+                // running stats read; preserve the former stats-first error order.
+                const results = await Promise.allSettled([
+                    this.loadUserStats(),
+                    this.updateOverviewStats()
+                ]);
+                for (const result of results) {
+                    if (result.status === 'rejected') throw result.reason;
+                }
             } catch (error) {
                 console.error('Failed to load initial data:', error);
             }
@@ -1202,14 +1226,29 @@ class ExamSystemApp {
         updateCategoryStats(examIndex, practiceRecords) {
             const categories = ['P1', 'P2', 'P3'];
             const list = Array.isArray(examIndex) ? examIndex : [];
+            const categoryTotals = new Map(categories.map((category) => [category, 0]));
+            const completedByCategory = new Map(categories.map((category) => [category, new Set()]));
+            const firstExamCategoryById = new Map();
+            list.forEach((exam) => {
+                if (categoryTotals.has(exam.category)) {
+                    categoryTotals.set(exam.category, categoryTotals.get(exam.category) + 1);
+                }
+                // Preserve Array.find's first-match behavior for duplicate IDs.
+                // NaN never matched the former strict-equality lookup.
+                const id = exam.id;
+                if (id === id && !firstExamCategoryById.has(id)) {
+                    firstExamCategoryById.set(id, exam.category);
+                }
+            });
+            practiceRecords.forEach((record) => {
+                const category = firstExamCategoryById.get(record.examId);
+                if (completedByCategory.has(category)) {
+                    completedByCategory.get(category).add(record.examId);
+                }
+            });
             categories.forEach((category) => {
-                const categoryExams = list.filter((exam) => exam.category === category);
-                const categoryRecords = practiceRecords.filter((record) => {
-                    const exam = list.find((e) => e.id === record.examId);
-                    return exam && exam.category === category;
-                });
-                const completed = new Set(categoryRecords.map((r) => r.examId)).size;
-                const total = categoryExams.length;
+                const completed = completedByCategory.get(category).size;
+                const total = categoryTotals.get(category);
                 const progress = total > 0 ? (completed / total) * 100 : 0;
                 const progressBar = document.querySelector(`[data-category="${category}"] .progress-fill`);
                 if (progressBar) {

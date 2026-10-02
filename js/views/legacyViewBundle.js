@@ -215,9 +215,13 @@
     }
 
     function sortByDateDesc(records) {
-        return ensureArray(records).slice().sort(function (a, b) {
-            return new Date(b.date) - new Date(a.date);
-        });
+        // Parse each timestamp once instead of constructing Dates inside every
+        // comparator invocation. Preserve stable ordering for equal/invalid dates.
+        return ensureArray(records).map(function (record) {
+            return { record: record, timestamp: new Date(record.date).getTime() };
+        }).sort(function (a, b) {
+            return b.timestamp - a.timestamp;
+        }).map(function (entry) { return entry.record; });
     }
 
     function filterByExamType(records, exams, type) {
@@ -226,6 +230,14 @@
         }
         var targetType = normalizeTypeValue(type);
         var index = ensureArray(exams);
+        var examById = new Map();
+        var examByTitle = new Map();
+        index.forEach(function (exam, order) {
+            if (!exam) return;
+            var candidate = { exam: exam, order: order };
+            if (!examById.has(exam.id)) examById.set(exam.id, candidate);
+            if (!examByTitle.has(exam.title)) examByTitle.set(exam.title, candidate);
+        });
         return ensureArray(records).filter(function (record) {
             if (!record) {
                 return false;
@@ -245,9 +257,14 @@
             if (recordType) {
                 return recordType === targetType;
             }
-            var exam = index.find(function (item) {
-                return item && (item.id === record.examId || item.title === record.title);
-            });
+            var idMatch = examById.get(record.examId);
+            var titleMatch = examByTitle.get(record.title);
+            // Match the original find predicate's first item, including when
+            // an earlier title match competes with a later id match.
+            var match = idMatch && titleMatch
+                ? (idMatch.order < titleMatch.order ? idMatch : titleMatch)
+                : (idMatch || titleMatch);
+            var exam = match && match.exam;
             var examType = exam ? normalizeTypeValue(exam.type) : '';
             if (examType) {
                 return examType === targetType;
@@ -608,20 +625,36 @@
                     value: Math.max(0, Math.min(100, value))
                 };
             })
-            .filter(Boolean)
-            .sort(function sortPoints(a, b) {
-                if (a.timestamp !== b.timestamp) {
-                    return a.timestamp - b.timestamp;
-                }
-                return a.order - b.order;
-            });
+            .filter(Boolean);
+        function comparePoints(a, b) {
+            return a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.order - b.order;
+        }
 
         if (!range || points.length === 0) {
-            return points;
+            return points.sort(comparePoints);
         }
 
         if (range.mode === 'count') {
-            return points.slice(-range.value);
+            var limit = Number(range.value);
+            if (!(limit > 0 && Number.isInteger(limit))) {
+                return points.sort(comparePoints).slice(-range.value);
+            }
+            // The common recent10/recent20 view only needs a small ordered
+            // window, not an O(n log n) sort of the complete history.
+            var recent = [];
+            points.forEach(function selectRecent(point) {
+                if (recent.length === limit && comparePoints(point, recent[0]) <= 0) return;
+                var low = 0;
+                var high = recent.length;
+                while (low < high) {
+                    var middle = (low + high) >>> 1;
+                    if (comparePoints(recent[middle], point) <= 0) low = middle + 1;
+                    else high = middle;
+                }
+                recent.splice(low, 0, point);
+                if (recent.length > limit) recent.shift();
+            });
+            return recent;
         }
 
         if (range.mode === 'days') {
@@ -633,10 +666,10 @@
             var cutoff = anchor - range.value * 24 * 60 * 60 * 1000;
             return points.filter(function inWindow(point) {
                 return point.timestamp > 0 && point.timestamp >= cutoff;
-            });
+            }).sort(comparePoints);
         }
 
-        return points;
+        return points.sort(comparePoints);
     };
 
     PracticeTrendRenderer.prototype._drawEmpty = function _drawEmpty(canvas) {
@@ -2613,19 +2646,27 @@
 
             var maxHeight = 0;
             var samples = Math.min(list.length, 30);
-            for (var i = 0; i < samples; i += 1) {
-                var node = itemFactory(list[i], i);
-                if (!node || !(node instanceof Node)) continue;
-                node.style.position = 'relative';
-                node.style.width = targetWidth > 0 ? (targetWidth + 'px') : '100%';
-                wrapper.appendChild(node);
-                var h = node.offsetHeight || node.clientHeight || 0;
-                if (h > maxHeight) {
-                    maxHeight = h;
+            var sampleNodes = [];
+            try {
+                // Insert every sample before reading geometry: alternating writes
+                // and height reads forces a separate layout for each record.
+                for (var i = 0; i < samples; i += 1) {
+                    var node = itemFactory(list[i], i);
+                    if (!node || !(node instanceof Node)) continue;
+                    node.style.position = 'relative';
+                    node.style.width = targetWidth > 0 ? (targetWidth + 'px') : '100%';
+                    wrapper.appendChild(node);
+                    sampleNodes.push(node);
                 }
-                node.remove();
+                for (var j = 0; j < sampleNodes.length; j += 1) {
+                    var h = sampleNodes[j].offsetHeight || sampleNodes[j].clientHeight || 0;
+                    if (h > maxHeight) {
+                        maxHeight = h;
+                    }
+                }
+            } finally {
+                wrapper.remove();
             }
-            wrapper.remove();
             return maxHeight > 0 ? maxHeight : null;
         }
 

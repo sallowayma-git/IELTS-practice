@@ -69,6 +69,7 @@ const bundles = {
     'js/bundles/browse.bundle.js': [
         'js/services/browseLearningState.js',
         'js/services/readingAnalytics.js',
+        'js/components/virtualScroller.js',
         'js/views/legacyViewBundle.js',
         'js/data/practiceRecordSource.js',
         'js/app/examActions.js',
@@ -87,6 +88,7 @@ const bundles = {
     ],
     'js/bundles/diagnostics.bundle.js': [
         'js/components/SystemDiagnostics.js',
+        'js/components/virtualScroller.js',
         'js/components/PerformanceOptimizer.js',
         'js/utils/dataConsistencyManager.js',
         'js/utils/performance.js'
