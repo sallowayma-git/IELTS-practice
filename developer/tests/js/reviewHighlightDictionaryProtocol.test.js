@@ -2,11 +2,13 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
+const readingModel = createRequire(import.meta.url)(path.join(repoRoot, 'js/data/v2/readingVocabularyModel.js'));
 const sourcePath = path.join(repoRoot, 'js/runtime/reviewHighlightDictionary.js');
 const source = fs.readFileSync(sourcePath, 'utf8');
 const instrumentedSource = source.replace(
@@ -85,13 +87,14 @@ async function run() {
     assert.strictEqual(posted.length, 1);
     assert.strictEqual(posted[0].type, 'VOCAB_HIGHLIGHT_SAVE');
     assert.strictEqual(posted[0].payload.requestId, 'vocab-highlight-request-1');
-    assert.strictEqual(failedButton.textContent, '加入生词', 'bare postMessage delivery must not show success');
+    assert.strictEqual(failedButton.textContent, '保存中…', 'bare postMessage delivery must remain pending');
+    assert.strictEqual(failedButton.disabled, true);
     assert.strictEqual(
         dictionary.handleSaveOutcome({ requestId: 'unknown-request' }, true),
         false,
         'unknown ACK must not settle another request'
     );
-    assert.strictEqual(failedButton.textContent, '加入生词');
+    assert.strictEqual(failedButton.textContent, '保存中…');
     assert.strictEqual(
         dictionary.handleSaveOutcome({ requestId: posted[0].payload.requestId }, false),
         true,
@@ -127,28 +130,34 @@ async function run() {
     harness.AppData = {
         ready: Promise.resolve(),
         vocab: {
-            async mergeListWords(command) {
+            async getReadingSnapshot() {
+                return { revision: 3, generation: 0 };
+            },
+            async mutateReading(operation, command, options) {
+                assert.strictEqual(operation, 'collect');
+                assert.strictEqual(options.observedRevision, 3);
                 directWrites.push(command);
-                const incoming = command.words[0];
-                existingDirectWord.meaning = incoming.meaning;
-                if (incoming.example) existingDirectWord.example = incoming.example;
-                if (typeof incoming.phonetic === 'string' && incoming.phonetic.trim()) {
-                    existingDirectWord.phonetic = incoming.phonetic.trim().replace(/^\/(.*)\/$/, '$1').trim();
-                }
+                const snapshot = readingModel.collect(readingModel.createSnapshot({ words: [existingDirectWord] }), JSON.parse(JSON.stringify(command)));
+                assert.strictEqual(snapshot.reading.associations.length, 1);
+                assert.strictEqual(snapshot.reading.terms[0].wordRef.listId, 'default');
+                assert.deepStrictEqual(snapshot.words[0], existingDirectWord);
+                return { saved: true, snapshot };
             }
         }
     };
     hooks.configure({
         postMessage() {
             return false;
-        }
+        },
+        getContext() { return { examId: 'article-a', libraryConfigurationId: 'library-a' }; }
     });
     hooks.setActiveLookup({ term: 'durable', zh: '持久的', phonetic: '/ˈdjʊərəbəl/' }, 'durable');
     const directButton = new HTMLButtonElement();
     await hooks.saveActiveLookup(directButton);
     assert.strictEqual(directWrites.length, 1, 'unavailable host route must commit through direct AppData');
-    assert.strictEqual(directWrites[0].listId, 'reading-highlights');
-    const incomingDirectWord = directWrites[0].words[0];
+    assert.strictEqual(directWrites[0].source.id, 'library-a');
+    assert.strictEqual(directWrites[0].article.examId, 'article-a');
+    const incomingDirectWord = directWrites[0].word;
     ['easeFactor', 'interval', 'repetitions', 'intraCycles', 'correctCount', 'lastReviewed', 'nextReview'].forEach((field) => {
         assert.ok(
             !Object.prototype.hasOwnProperty.call(incomingDirectWord, field),
@@ -168,8 +177,8 @@ async function run() {
         !incomingDirectWord.note.includes('ˈdjʊərəbəl'),
         'phonetic must not be duplicated into the free-form note'
     );
-    assert.strictEqual(existingDirectWord.meaning, '持久的');
-    assert.strictEqual(existingDirectWord.phonetic, 'ˈdjʊərəbəl');
+    assert.strictEqual(existingDirectWord.meaning, '旧释义');
+    assert.strictEqual(existingDirectWord.phonetic, 'old-phonetic');
     assert.strictEqual(existingDirectWord.note, '用户笔记');
     assert.strictEqual(existingDirectWord.correctCount, 5);
     assert.strictEqual(existingDirectWord.interval, 10);
@@ -180,14 +189,14 @@ async function run() {
     const blankPhoneticButton = new HTMLButtonElement();
     await hooks.saveActiveLookup(blankPhoneticButton);
     assert.strictEqual(directWrites.length, 2);
-    const blankPhoneticWord = directWrites[1].words[0];
+    const blankPhoneticWord = directWrites[1].word;
     assert.ok(
         !Object.prototype.hasOwnProperty.call(blankPhoneticWord, 'phonetic'),
         'blank lookup phonetic must be omitted from the merge patch'
     );
     assert.strictEqual(
         existingDirectWord.phonetic,
-        'ˈdjʊərəbəl',
+        'old-phonetic',
         'omitted phonetic must not erase the existing stored value'
     );
     assert.ok(
@@ -197,9 +206,41 @@ async function run() {
     assert.strictEqual(blankPhoneticButton.textContent, '已加入');
     assert.strictEqual(blankPhoneticButton.disabled, true);
 
+    hooks.configure({ postMessage(type, payload) { posted.push({ type, payload }); return true; } });
+    const rejectedHostButton = new HTMLButtonElement();
+    const rejectedHostSave = hooks.saveActiveLookup(rejectedHostButton);
+    dictionary.handleSaveOutcome({ requestId: posted[posted.length - 1].payload.requestId }, false);
+    await rejectedHostSave;
+    assert.strictEqual(directWrites.length, 2, 'a rejected host operation must remain failed until an explicit retry');
+    assert.strictEqual(rejectedHostButton.textContent, '保存失败');
+    assert.strictEqual(rejectedHostButton.disabled, false);
+
+    const unavailableHostButton = new HTMLButtonElement();
+    const unavailableHostSave = hooks.saveActiveLookup(unavailableHostButton);
+    dictionary.handleSaveOutcome({
+        requestId: posted[posted.length - 1].payload.requestId,
+        errorCode: 'BACKEND_UNAVAILABLE'
+    }, false);
+    await unavailableHostSave;
+    assert.strictEqual(unavailableHostButton.textContent, '请刷新主页并重开阅读页后重试');
+    assert.strictEqual(unavailableHostButton.disabled, false);
+
+    hooks.configure({ postMessage() { return false; } });
+    harness.AppData.vocab.mutateReading = async () => { throw Object.assign(new Error('unavailable'), { code: 'BACKEND_UNAVAILABLE' }); };
+    const unavailableDirectButton = new HTMLButtonElement();
+    await hooks.saveActiveLookup(unavailableDirectButton);
+    assert.strictEqual(unavailableDirectButton.textContent, '请刷新页面后重试');
+    assert.strictEqual(unavailableDirectButton.disabled, false);
+
+    harness.AppData.vocab.mutateReading = async () => { throw Object.assign(new Error('quota exceeded'), { code: 'QUOTA' }); };
+    const quotaButton = new HTMLButtonElement();
+    await hooks.saveActiveLookup(quotaButton);
+    assert.strictEqual(quotaButton.textContent, '保存失败');
+    assert.strictEqual(quotaButton.disabled, false);
+
     console.log(JSON.stringify({
         status: 'pass',
-        detail: 'vocab requestId ACK/FAILED, direct-commit phonetic merge, and UI checks passed'
+        detail: 'vocab requestId ACK/FAILED, canonical reading collection, and explicit retry checks passed'
     }));
 }
 

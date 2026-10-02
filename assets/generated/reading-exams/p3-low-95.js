@@ -9,11 +9,12 @@
   "meta": {
     "title": "The strange world of sight 奇异的视觉世界",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "184. P3 - The strange world of sight 奇异的视觉世界.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
     "legacyFilename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

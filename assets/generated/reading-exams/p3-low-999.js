@@ -4,7 +4,8 @@
   "meta": {
     "title": "Risk taking",
     "category": "P3",
-    "frequency": "low"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

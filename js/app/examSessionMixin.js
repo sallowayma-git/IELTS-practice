@@ -1,4 +1,36 @@
 (function (global) {
+    function rawOperationContext(examId, data = {}) {
+        return { session: data?.sessionId, suite: data?.suiteSessionId, submission: data?.submissionId,
+            operation: data?.operationId || data?.messageId || (data?.submissionId
+                ? `practice-complete:${examId}:${data.sessionId || 'session'}:${data.submissionId}` : undefined) };
+    }
+    function operationContext(examId, data = {}) {
+        const raw = rawOperationContext(examId, data);
+        try {
+            if (data.diagnosticCorrelation && global.AppDiagnostics?.correlate) {
+                const local = global.AppDiagnostics.correlate(raw);
+                const incoming = global.AppDiagnostics.correlate(undefined, data.diagnosticCorrelation);
+                if (incoming.scopeId === local.scopeId && incoming.session === local.session && incoming.suite === local.suite) {
+                    return { ...local, submission: incoming.submission === 'unknown' ? local.submission : incoming.submission,
+                        operation: incoming.operation === 'unknown' ? local.operation : incoming.operation };
+                }
+            }
+        } catch (_) { }
+        return raw;
+    }
+    function observeFailure(code, module, action, error, correlation, operation, retry) {
+        try { global.AppOperationDiagnostics?.failure({ code, module, action, error, correlation, operation }, retry); } catch (_) { }
+    }
+    function observeStep(module, action, outcome, correlation) {
+        try { global.AppOperationDiagnostics?.breadcrumb(module, action, outcome, correlation); } catch (_) { }
+    }
+    function operationFailureState(error, previous) {
+        let current = 'unconfirmed';
+        try { current = global.AppData?.getOperationFailureState?.(error) || current; } catch (_) { }
+        if (previous === 'committed' || current === 'committed') return 'committed';
+        if (previous === 'unconfirmed' || current === 'unconfirmed') return 'unconfirmed';
+        return 'not-committed';
+    }
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
@@ -475,6 +507,7 @@
           * 打开指定题目进行练习
           */
         async openExam(examId, options = {}) {
+            observeStep('practice', 'open-practice', 'started', { suite: options.suiteSessionId });
             const openGeneration = this._beginExamOpenGeneration(examId, options);
             const reviewMode = Boolean(options && options.reviewMode);
             let examWindow = null;
@@ -658,6 +691,7 @@
                     : examWindow;
 
             } catch (error) {
+                observeFailure('RESOURCE_LOAD_FAILED', 'practice', 'open-practice', error, {}, 'not-committed');
                 console.error('Failed to open exam:', error);
                 window.showMessage('打开题目失败，请重试', 'error');
                 if (launchRegistration) await this._abortExamOpen(examId, launchRegistration);
@@ -944,6 +978,11 @@
                 examId: data && data.examId != null ? data.examId : examId,
                 windowSessionToken: windowInfo.windowSessionToken
             });
+            if (String(type).toUpperCase() === 'INIT_SESSION' || String(type).toUpperCase() === 'INIT_EXAM_SESSION') {
+                try { payload.diagnosticCorrelation = global.AppDiagnostics?.correlate({
+                    session: payload.sessionId, suite: payload.suiteSessionId
+                }); } catch (_) { }
+            }
             targetWindow.postMessage({
                 type,
                 data: payload,
@@ -2282,6 +2321,19 @@
                 );
             }
             const ownsRegistration = () => this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
+            let diagnosticChannel = null;
+            try {
+                if (!this._diagnosticChannels) this._diagnosticChannels = new Map();
+                this._diagnosticChannels.get(examId)?.dispose();
+                diagnosticChannel = global.AppDiagnosticChannel?.createHost({ getBinding: () => {
+                    if (!ownsRegistration()) return null;
+                    const info = expectedRegistration.windowInfo;
+                    return { window: expectedRegistration.window, sessionId: info.expectedSessionId,
+                        windowSessionToken: info.windowSessionToken, origin: info.allowOpaqueOrigin ? 'null' : info.expectedOrigin,
+                        allowOpaqueOrigin: info.allowOpaqueOrigin };
+                } });
+                if (diagnosticChannel) this._diagnosticChannels.set(examId, diagnosticChannel);
+            } catch (_) { /* Diagnostic capability failures cannot interrupt practice setup. */ }
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
                 try {
@@ -2447,6 +2499,12 @@
             };
 
             const messageHandler = async (event) => {
+                // Reserve this channel even when diagnostics are unavailable. Never
+                // normalize it as a business error, emit rejection logs, or touch session state.
+                if (Object.getOwnPropertyDescriptor(event?.data || {}, 'type')?.value === 'IELTS_DIAGNOSTIC_V1') {
+                    try { diagnosticChannel?.receive(event); } catch (_) { }
+                    return;
+                }
                 if (!ownsRegistration()) {
                     this._reportExamMessageRejected(examId, '', 'stale-registration', event);
                     return;
@@ -2545,6 +2603,14 @@
                     : '';
                 const permitsPreInitWithoutToken = type === 'REQUEST_INIT'
                     || (type === 'SESSION_READY' && data.initialized !== true);
+                // Inline navigation keeps one registered window while its URL
+                // changes to another suite passage. Reload must retain that
+                // registration, source/origin checks and suite identity.
+                const isInlineSuiteInitRequest = type === 'REQUEST_INIT'
+                    && sourceMatched && windowInfo.suiteFlowMode === 'simulation'
+                    && windowInfo.suiteSessionId === activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && isPayloadExamInActiveSuite;
                 if (!permitsPreInitWithoutToken && (
                     !expectedWindowSessionToken
                     || !payloadWindowSessionToken
@@ -2554,7 +2620,7 @@
                     return;
                 }
                 const canRoutePayloadExamInActiveSuite = Boolean(
-                    suiteRoutableMessageTypes.has(type)
+                    (suiteRoutableMessageTypes.has(type) || isInlineSuiteInitRequest)
                     && isPayloadExamInActiveSuite
                     && activeSuiteSessionId
                     && payloadSuiteSessionId
@@ -2743,7 +2809,7 @@
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_ACTIVE_EXAM_CHANGE'
                         || type === 'SIMULATION_SUBMIT'
-                        || type === 'SESSION_READY')
+                        || type === 'SESSION_READY' || isInlineSuiteInitRequest)
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
@@ -2873,14 +2939,27 @@
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
                         await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow, {
-                            expectedRegistration
+                            expectedRegistration,
+                            retainSubmitReceipt: isListeningBridgeSource || src === 'practice_page'
                         });
                         break;
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
                         break;
                     case 'REQUEST_INIT':
-                        sendInitEnvelope(sourceWindow || examWindow);
+                        if (isInlineSuiteInitRequest) {
+                            const suite = this.currentSuiteSession;
+                            await this._sendExamInitEnvelope(examId, sourceWindow, {
+                                examId: routedExamId,
+                                suiteSequenceIndex: activeSuiteSequence.findIndex(entry => String(entry.examId) === routedExamId),
+                                draftsByExam: this._cloneReadingDraftValue(suite.draftsByExam || {}),
+                                suiteTimerRunning: suite.suiteTimerRunning !== false,
+                                suiteTimerPausedOffsetMs: suite.suiteTimerPausedOffsetMs || 0,
+                                suiteTimerPausedAtMs: suite.suiteTimerPausedAtMs || null
+                            }, expectedRegistration);
+                        } else {
+                            sendInitEnvelope(sourceWindow || examWindow);
+                        }
                         break;
                     case 'PRACTICE_RESET_REQUEST':
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow, expectedRegistration);
@@ -2908,8 +2987,16 @@
                             break;
                         }
                         try {
+                            const savePayload = Object.assign({}, data, {
+                                context: Object.assign({}, data.context || {}, {
+                                    examId,
+                                    libraryConfigurationId: Object.prototype.hasOwnProperty.call(windowInfo, 'libraryConfigurationId')
+                                        ? windowInfo.libraryConfigurationId
+                                        : this._readLaunchLibraryConfigurationId(examId)
+                                })
+                            });
                             const saved = typeof window.saveReadingHighlightVocab === 'function'
-                                ? await window.saveReadingHighlightVocab(data)
+                                ? await window.saveReadingHighlightVocab(savePayload)
                                 : null;
                             this._announceVocabHighlightOutcome(
                                 examId,
@@ -2925,7 +3012,7 @@
                                 data,
                                 sourceWindow || expectedWindow,
                                 false,
-                                'save_failed'
+                                saveError && saveError.code || 'save_failed'
                             );
                         }
                         break;
@@ -3091,6 +3178,7 @@
 
             let attempts = 0;
             const maxAttempts = 30; // ~9s
+            let lastHandshakeError = null;
             const tick = async () => {
                 if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
                     clearInterval(timer);
@@ -3106,12 +3194,16 @@
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
                         await this._sendExamInitEnvelope(examId, examWindow, {}, expectedRegistration);
-                    } catch (_) { /* 忽略 */ }
+                    } catch (error) { lastHandshakeError = error; }
                 }
                 attempts++;
                 if (attempts >= maxAttempts) {
                     clearInterval(timer);
                     this._handshakeTimers.delete(examId);
+                    const info = this.examWindows && this.examWindows.get(examId);
+                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'handshake',
+                        lastHandshakeError || new Error('Practice handshake timed out'),
+                        { session: info?.sessionId, suite: info?.suiteSessionId }, 'not-committed');
                     console.warn('[App] 握手超时，练习页可能未加载增强器');
                 }
             };
@@ -4245,6 +4337,7 @@
             const libraryConfigurationId = this._readLaunchLibraryConfigurationId(examId, windowInfo);
             return {
                 id: this._readingDraftId(examId, libraryConfigurationId),
+                readingTiming: this._cloneReadingDraftValue(source.readingTiming || null),
                 examId: String(examId),
                 libraryConfigurationId: libraryConfigurationId == null ? null : String(libraryConfigurationId),
                 sessionId,
@@ -4274,9 +4367,13 @@
         },
 
         async _writeReadingDraftStore(store, changedDraft = null) {
+            let draftCommitted = false;
             try {
                 if (changedDraft) {
-                    await window.AppData.recovery.saveDraft(changedDraft);
+                    const receipt = await window.AppData.recovery.saveDraft(changedDraft);
+                    if (!receipt || receipt.committed !== true) throw new Error('Draft commit was not confirmed', { cause: receipt?.error });
+                    draftCommitted = true;
+                    observeStep('reading', 'save-draft', 'succeeded', { session: changedDraft.sessionId, operation: receipt.operationId });
                 }
                 const drafts = await window.AppData.recovery.listDrafts();
                 const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -4296,6 +4393,8 @@
                 }
                 return true;
             } catch (error) {
+                observeFailure('RECOVERY_SAVE_FAILED', 'reading', 'save-draft', error,
+                    { session: changedDraft?.sessionId }, draftCommitted ? 'committed' : undefined);
                 console.warn('[ReadingDraftGateway] 写入草稿失败:', error);
                 return false;
             }
@@ -4486,17 +4585,13 @@
                 || !completionTime(record)) {
                 return false;
             }
-            try {
-                const persisted = await window.AppData.practice.get(String(record.id), { projection: 'light' });
-                if (!persisted || typeof persisted !== 'object') {
-                    return false;
-                }
-                return identityFields.every((key) => String(persisted[key] ?? '') === String(record[key]))
-                    && String(completionTime(persisted) || '') === String(completionTime(record));
-            } catch (error) {
-                console.warn('[ReadingDraftGateway] 无法确认完成记录已落库，保留草稿:', error);
+            // Let the completion boundary retain the original readback Error and its cause.
+            const persisted = await window.AppData.practice.get(String(record.id), { projection: 'light' });
+            if (!persisted || typeof persisted !== 'object') {
                 return false;
             }
+            return identityFields.every((key) => String(persisted[key] ?? '') === String(record[key]))
+                && String(completionTime(persisted) || '') === String(completionTime(record));
         },
 
         async handleReadingAnnotationSync(examId, data = {}, windowInfo = null) {
@@ -4622,6 +4717,10 @@
                 : '';
             const targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : null;
             if (!submissionId || !sessionId || !targetWindow) {
+                if (submissionId && sessionId && sourceWindow?.closed && succeeded) {
+                    observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement',
+                        new Error('Practice acknowledgement target closed'), operationContext(examId, completionData));
+                }
                 return false;
             }
             try {
@@ -4633,7 +4732,8 @@
                     suiteSessionId: completionData && completionData.suiteSessionId
                         ? String(completionData.suiteSessionId)
                         : null,
-                    errorCode: succeeded ? null : String(details.errorCode || 'save_failed')
+                    errorCode: succeeded ? null : String(details.errorCode || 'save_failed'),
+                    operation: succeeded ? 'committed' : details.operation === 'not-committed' ? 'not-committed' : 'unconfirmed'
                 };
                 const delivered = this._postExamMessage(examId, targetWindow, type, payload);
                 if (succeeded) {
@@ -4649,8 +4749,12 @@
                     windowInfo.practiceSubmitReceipts = receipts;
                     this.examWindows && this.examWindows.set(resolvedSession.examId, windowInfo);
                 }
+                observeStep('channel', 'acknowledgement', 'unconfirmed', operationContext(examId, completionData));
+                if (!delivered && succeeded) observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement',
+                    new Error('Practice acknowledgement was not delivered'), operationContext(examId, completionData));
                 return delivered;
             } catch (error) {
+                observeFailure('PRACTICE_CHANNEL_TIMEOUT', 'channel', 'acknowledgement', error, operationContext(examId, completionData));
                 console.warn('[DataCollection] 提交结果回执发送失败:', error);
                 return false;
             }
@@ -5614,6 +5718,7 @@
                     windowInfo.listeningBridgeInitialized = !isPreInitReady;
                 }
                 if (!isPreInitReady) {
+                    observeStep('channel', 'handshake', 'succeeded', operationContext(examId, payload));
                     windowInfo.dataCollectorReady = true;
                 }
                 if (payload.pageType) {
@@ -5887,6 +5992,8 @@
                 console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
                 return;
             }
+            const diagnosticContext = operationContext(examId, data);
+            observeStep('channel', 'host-receipt', 'succeeded', diagnosticContext);
             if (this._replayPracticeSubmitReceipt(examId, data, sourceWindow)) {
                 return true;
             }
@@ -5978,7 +6085,11 @@
                     if (!ownsRegistration()) return false;
                     const handled = suiteOutcome === true || Boolean(suiteOutcome && suiteOutcome.handled);
                     if (handled) {
-                        const committed = !suiteOutcome || typeof suiteOutcome !== 'object' || suiteOutcome.committed !== false;
+                        const committed = suiteOutcome === true || suiteOutcome?.committed === true;
+                        if (!committed) observeFailure(suiteOutcome?.errorCode === 'suite_recovery_save_failed'
+                            ? 'RECOVERY_SAVE_FAILED' : 'PRACTICE_SAVE_FAILED', 'suite', 'submit',
+                            suiteOutcome?.error, diagnosticContext);
+                        else observeStep('suite', 'storage-confirmed', 'succeeded', diagnosticContext);
                         this._announcePracticeSubmitOutcome(examId, data, sourceWindow, committed, {
                             errorCode: suiteOutcome && suiteOutcome.errorCode
                         });
@@ -5993,8 +6104,9 @@
                     }
                     suiteHandlerDeclined = true;
                 } catch (suiteError) {
+                    observeFailure('PRACTICE_SAVE_FAILED', 'suite', 'submit', suiteError, diagnosticContext);
                     console.error('[SuitePractice] 处理套题结果失败，保留 v2 恢复快照:', suiteError);
-                    window.showMessage && window.showMessage('套题模式出现异常，恢复快照已保留，请稍后重试。', 'error');
+                    window.showMessage && window.showMessage('套题提交尚未确认保存，请保留练习页面并查看诊断详情。', 'error');
                     suiteHandlerDeclined = true;
                 }
             }
@@ -6011,19 +6123,30 @@
             // The generic completion rebind above already covers listening payloads.
 
             let completionCommitted = false;
+            // A successful write receipt remains authoritative even if final readback fails.
+            // Keep this evidence separate from the completion/draft/session cleanup gate.
+            let saveCommitted = false;
+            const onCommitReceipt = receipt => {
+                if (receipt?.committed === true) saveCommitted = true;
+            };
             let completedViaFallback = false;
+            let failureOutcome;
             try {
                 let persistedRecord = null;
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        persistedRecord = await recorder.handleSessionCompleted(completionData);
+                        persistedRecord = await recorder.handleSessionCompleted(completionData, { deferDiagnostics: true, onCommitReceipt });
                     } catch (recErr) {
+                        failureOutcome = operationFailureState(recErr);
+                        try {
+                            failureOutcome = recorder.combineSaveFailureOutcome?.(recErr) || failureOutcome;
+                        } catch (_) { }
                         console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
-                        persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                        persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true, onCommitReceipt });
                         completedViaFallback = true;
                     }
                 } else {
-                    persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
+                    persistedRecord = await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true, onCommitReceipt });
                     completedViaFallback = true;
                 }
 
@@ -6034,17 +6157,14 @@
 
                 let completionReadable = false;
                 if (typeof this._isPracticeCompletionPersisted === 'function') {
-                    try {
-                        completionReadable = await this._isPracticeCompletionPersisted(persistedRecord);
-                    } catch (verificationError) {
-                        console.warn('[DataCollection] 练习记录提交后回读失败，不影响已提交结果:', verificationError);
-                    }
+                    completionReadable = await this._isPracticeCompletionPersisted(persistedRecord);
                 }
                 if (!completionReadable) {
                     throw new Error('Practice completion could not be verified in canonical storage');
                 }
                 if (!ownsRegistration()) return false;
                 completionCommitted = true;
+                observeStep('practice', 'storage-confirmed', 'succeeded', diagnosticContext);
 
                 if (completedViaFallback && recorder && typeof recorder.endPracticeSession === 'function') {
                     recorder.endPracticeSession(examId);
@@ -6115,15 +6235,32 @@
                 }
 
             } catch (error) {
+                const operation = saveCommitted || completionCommitted ? 'committed' : operationFailureState(error, failureOutcome);
+                observeFailure('PRACTICE_SAVE_FAILED', 'practice', 'submit', error, diagnosticContext,
+                    operation, operation === 'unconfirmed' && rawOperationContext(examId, data).operation
+                        && typeof window.AppData.practice.getCommitState === 'function'
+                        ? () => window.AppData.practice.getCommitState(rawOperationContext(examId, data).operation) : undefined);
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
-                window.showMessage && window.showMessage('练习记录保存失败，请稍后重试', 'error');
-                this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
-                    errorCode: 'save_failed'
+                window.showMessage && window.showMessage(operation === 'committed'
+                    ? '练习记录已保存，但后续操作失败，请查看诊断详情。'
+                    : operation === 'not-committed' ? '练习提交已确认未保存，请保留练习页面。'
+                        : '练习提交尚未确认保存，请保留练习页面。', 'error');
+                if (operation !== 'committed') this._announcePracticeSubmitOutcome(examId, completionData, sourceWindow, false, {
+                    errorCode: 'save_failed', operation
                 });
             } finally {
                 if (completionCommitted) {
                     try {
-                        if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
+                        const info = this.examWindows && this.examWindows.get(examId);
+                        const receiptKey = `${completionData?.sessionId || ''}:${completionData?.submissionId || ''}`;
+                        // Bridge/enhancer sends can commit before their ACK is lost.
+                        // Keep the existing authenticated receipt route until the
+                        // registered window closes or is replaced, just as reading
+                        // does. Retrying this ID then replays a receipt, not a write.
+                        const canReconcile = options.retainSubmitReceipt === true
+                            && sourceWindow && !sourceWindow.closed && info?.window === sourceWindow
+                            && info.practiceSubmitReceipts?.[receiptKey]?.succeeded === true;
+                        if (canReconcile || this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
                             await this.retainExamWindowAfterCompletion(
                                 examId,
                                 sourceWindow,
@@ -6237,7 +6374,7 @@
                 const metadata = Object.assign({}, realData?.metadata || {}, {
                     examId,
                     examTitle: exam.title || realData?.title || '',
-                    category: exam.category || realData?.category || realData?.metadata?.category || 'unknown',
+                    category: realData?.category || realData?.metadata?.category || 'unknown',
                     frequency: exam.frequency || realData?.frequency || realData?.metadata?.frequency || 'unknown',
                     type: exam.type || realData?.type || realData?.practiceType || null,
                     // 启动时捕获的题库配置 ID；优先取 realData.metadata 显式值，再回退到启动时
@@ -6264,6 +6401,8 @@
                             : undefined)
                 });
 
+                if (!receipt || receipt.committed !== true) throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+                try { options.onCommitReceipt?.(receipt); } catch (_) { }
                 console.log('[DataCollection] 练习完成数据已保存到 canonical store');
                 return receipt.record;
             } catch (error) {
@@ -6543,6 +6682,8 @@
             if (expectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
                 return false;
             }
+            try { this._diagnosticChannels?.get(examId)?.dispose(); this._diagnosticChannels?.delete(examId); }
+            catch (_) { }
             const expectedSessionId = expectedRegistration && expectedRegistration.windowInfo.expectedSessionId
                 ? String(expectedRegistration.windowInfo.expectedSessionId)
                 : '';

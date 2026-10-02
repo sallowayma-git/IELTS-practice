@@ -9,11 +9,12 @@
   "meta": {
     "title": "The peopling of Patagonia 巴塔哥尼亚的人类迁徙",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/",
     "legacyFilename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

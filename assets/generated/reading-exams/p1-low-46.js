@@ -9,11 +9,12 @@
   "meta": {
     "title": "Sydney Opera House 悉尼歌剧院",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/",
     "legacyFilename": "14. P1 - Sydney Opera House 悉尼歌剧院.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

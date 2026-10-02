@@ -4,7 +4,8 @@
   "meta": {
     "title": "Children’s literature studies today 儿童文学【高】",
     "category": "P3",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

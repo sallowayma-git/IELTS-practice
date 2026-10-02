@@ -13,7 +13,8 @@
     "pdfFilename": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/",
     "legacyFilename": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

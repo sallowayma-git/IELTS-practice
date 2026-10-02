@@ -4,7 +4,8 @@
   "meta": {
     "title": "Effect and Cause 湖泊海啸研究",
     "category": "P1",
-    "frequency": "low"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

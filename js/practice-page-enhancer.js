@@ -15,6 +15,8 @@
 
     console.log('[PracticeEnhancer] 初始化增强器');
     const HOST_MESSAGE_SOURCE = 'exam_host';
+    let diagnostics;
+    try { diagnostics = window.AppPracticeDiagnostics?.create('practice'); } catch (_) { }
 
     function deriveParentOriginFromReferrer() {
         try {
@@ -137,9 +139,16 @@
                 const script = document.createElement('script');
                 script.type = 'text/javascript';
                 script.defer = true;
+                try { window.AppDiagnostics?.declareResource(script, { url, optional: false }); } catch (_) { }
                 script.src = url;
-                script.onload = () => resolve(true);
-                script.onerror = (err) => reject(err);
+                const fail = (error) => {
+                    clearTimeout(deadline);
+                    diagnostics?.failure('RESOURCE_LOAD_FAILED', 'load-resource', 'not-committed', null, null, error, { url, optional: false });
+                    reject(error);
+                };
+                const deadline = setTimeout(() => fail(new Error('Required practice dependency timed out')), 15000);
+                script.onload = () => { clearTimeout(deadline); resolve(true); };
+                script.onerror = () => fail(window.AppDiagnostics?.resourceFailure(script) || new Error('Required practice dependency failed'));
                 (document.head || document.body || document.documentElement).appendChild(script);
             });
             this.cache.set(url, promise);
@@ -811,6 +820,7 @@
         mixinsApplied: false,
         activeMixins: [],
         hookHandlers: {},
+        pendingSubmissions: new Map(), // Business snapshots; excluded from diagnostic input/export.
 
         registerHook: function (hookName, handler) {
             if (!hookName || typeof handler !== 'function') {
@@ -913,6 +923,7 @@
                 this.interceptSubmit();
                 this.setupInteractionTracking();
                 this.isInitialized = true;
+                diagnostics?.ready(this.parentWindow);
                 console.log('[PracticeEnhancer] 初始化完成');
 
                 // 页面加载完成后进行一次初始收集
@@ -924,6 +935,7 @@
                     });
                 }
             })().catch((error) => {
+                diagnostics?.failure('APP_BOOT_FAILED', 'initialize', 'not-committed', null, null, error);
                 this.initializationPromise = null;
                 throw error;
             });
@@ -1139,6 +1151,7 @@
         },
 
         cleanup: function () {
+            diagnostics?.dispose();
             console.log('[PracticeEnhancer] 清理资源');
             if (this.answerCollectionInterval) {
                 clearInterval(this.answerCollectionInterval);
@@ -1743,6 +1756,7 @@
             this.startInitRequestLoop();
             window.addEventListener('message', (event) => {
                 const payload = event && event.data ? event.data : null;
+                if (payload?.type === 'IELTS_DIAGNOSTIC_V1') return;
                 if (!payload || typeof payload.type !== 'string') {
                     return;
                 }
@@ -1790,6 +1804,7 @@
                         this.parentOrigin = incomingOrigin;
                         this.parentOriginIsOpaque = false;
                     }
+                    if (this.sessionId && this.sessionId !== initData.sessionId) this.pendingSubmissions.clear();
                     this.windowSessionToken = incomingToken;
                     this.sessionId = initData.sessionId;
                     this.examId = initData.examId; // 存储 examId
@@ -1805,6 +1820,10 @@
                     if (initData.suiteSessionId) {
                         this.enableSuiteMode(initData);
                     }
+                    diagnostics?.connect(this, initData);
+                    this.pendingSubmissions.forEach((pending, id) => {
+                        diagnostics?.watch(id, () => this.retrySubmission(id, pending));
+                    });
                     this.stopInitRequestLoop();
                     console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId, 'Exam ID:', this.examId);
                     this.sendMessage('SESSION_READY', {
@@ -1835,7 +1854,9 @@
                 }
 
                 if (messageType === 'REPLAY_PRACTICE_RECORD') {
+                    diagnostics?.step('suite-navigation', 'started');
                     this.applyReplayRecord(payloadData || {});
+                    diagnostics?.step('suite-navigation', 'succeeded');
                     return;
                 }
 
@@ -1844,12 +1865,24 @@
                     return;
                 }
 
+                if (messageType === 'PRACTICE_SUBMIT_ACK' || messageType === 'PRACTICE_SUBMIT_FAILED') {
+                    const pending = this.pendingSubmissions.get(payloadData.submissionId);
+                    if (!pending || payloadData.sessionId !== this.sessionId || pending.sessionId !== this.sessionId) return;
+                    const committed = messageType === 'PRACTICE_SUBMIT_ACK';
+                    diagnostics?.outcome(payloadData.submissionId, committed,
+                        !pending.retried && payloadData.operation === 'not-committed' ? 'not-committed' : 'unconfirmed', payloadData.errorCode);
+                    if (committed) this.pendingSubmissions.delete(payloadData.submissionId);
+                    return;
+                }
+
                 if (!this.suiteModeActive) {
                     return;
                 }
 
                 if (messageType === 'SUITE_NAVIGATE') {
+                    diagnostics?.step('suite-navigation', 'started');
                     this.handleSuiteNavigation(payloadData || {});
+                    diagnostics?.step('suite-navigation', 'succeeded');
                 } else if (messageType === 'SUITE_FORCE_CLOSE') {
                     this.teardownSuiteGuards();
                     if (this._nativeClose) {
@@ -1867,6 +1900,7 @@
             if (this.initRequestTimer) {
                 return;
             }
+            diagnostics?.ready(this.parentWindow);
             const sendRequest = () => {
                 if (this.sessionId) {
                     this.stopInitRequestLoop();
@@ -4485,24 +4519,38 @@
         },
 
         sendMessage: function (type, data) {
-            if (!this.parentWindow) {
-                console.warn('[PracticeEnhancer] 无父窗口，无法发送消息');
-                return false;
-            }
             if (this.readOnly && type === 'PRACTICE_COMPLETE') {
                 console.info('[PracticeEnhancer] 回顾模式阻止 PRACTICE_COMPLETE 上报');
                 return false;
             }
 
-            const payload = data && typeof data === 'object' ? data : {};
+            let payload = data && typeof data === 'object' ? data : {};
             if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
                 payload.sessionId = payload.sessionId || this.sessionId || null;
                 payload.submissionId = payload.submissionId || this.createSubmissionId();
             }
-            this.runHooks('beforeSendMessage', type, payload);
+            const completion = type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT';
+            const existing = completion && this.pendingSubmissions.get(payload.submissionId);
+            if (existing) payload = existing.payload;
+            else this.runHooks('beforeSendMessage', type, payload);
+            if (completion) {
+                let pending = existing;
+                if (!pending) {
+                    try {
+                        pending = { payload: JSON.parse(JSON.stringify(payload)), sessionId: payload.sessionId, retried: false };
+                        this.pendingSubmissions.set(payload.submissionId, pending);
+                    } catch (_) { /* A non-cloneable legacy payload still follows its original send path. */ }
+                }
+                diagnostics?.watch(payload.submissionId, pending ? () => this.retrySubmission(payload.submissionId, pending) : undefined);
+            }
+            if (!this.parentWindow) {
+                if (completion) diagnostics?.failure('PRACTICE_CHANNEL_TIMEOUT', 'submit', 'unconfirmed', payload.submissionId);
+                return false;
+            }
             const secureData = Object.assign({}, payload, {
                 windowSessionToken: this.windowSessionToken || null
             });
+            try { secureData.diagnosticCorrelation = diagnostics?.correlation(payload.submissionId); } catch (_) { }
             const message = {
                 type: type,
                 data: secureData,
@@ -4522,9 +4570,16 @@
                 console.log('[PracticeEnhancer] 消息已发送:', type);
                 return true;
             } catch (error) {
+                if (completion) diagnostics?.failure('PRACTICE_CHANNEL_TIMEOUT', 'submit', 'unconfirmed', payload.submissionId, null, error);
                 console.error('[PracticeEnhancer] 发送消息失败:', error);
                 return false;
             }
+        },
+
+        retrySubmission: function (id, pending) {
+            if (this.pendingSubmissions.get(id) !== pending || pending.sessionId !== this.sessionId) return false;
+            pending.retried = true;
+            return this.sendMessage('PRACTICE_COMPLETE', pending.payload);
         },
 
         getStatus: function () {

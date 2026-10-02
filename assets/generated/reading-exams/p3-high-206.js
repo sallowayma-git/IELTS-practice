@@ -4,7 +4,8 @@
   "meta": {
     "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展【高】",
     "category": "P3",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

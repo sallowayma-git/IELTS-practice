@@ -23,6 +23,26 @@ class PracticeRecorder {
         });
     }
 
+    captureScoreEvidence(record = {}) {
+        if (record.browseScore && typeof record.browseScore === 'object') return { ...record.browseScore };
+        const firstNumber = (...values) => {
+            for (const value of values) {
+                if ((typeof value === 'number' || (typeof value === 'string' && value.trim()))
+                    && Number.isFinite(Number(value))) return Number(value);
+            }
+            return null;
+        };
+        const info = record.scoreInfo || record.realData?.scoreInfo || {};
+        const submittedAt = [record.completedAt, record.endTime, record.date, record.timestamp]
+            .filter(value => value != null && value !== '')
+            .map(value => new Date(value).getTime()).find(value => Number.isFinite(value) && value > 0) ?? null;
+        return {
+            earned: firstNumber(record.correctAnswers, record.correctAnswersCount, info.correct, info.correctAnswers),
+            possible: firstNumber(record.totalQuestions, info.total, info.totalQuestions),
+            submittedAt
+        };
+    }
+
     normalizePracticeType(rawType) {
         const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
@@ -32,6 +52,18 @@ class PracticeRecorder {
         const normalized = String(rawType).toLowerCase();
         if (normalized.includes('listen')) return 'listening';
         if (normalized.includes('read')) return 'reading';
+        return null;
+    }
+
+    resolveSessionPracticeType(...sources) {
+        for (const source of sources) {
+            if (!source || typeof source !== 'object') continue;
+            const metadata = source.metadata || {};
+            for (const candidate of [source.type, source.examType, metadata.type, metadata.examType, source.pageType, metadata.pageType]) {
+                const type = this.normalizePracticeType(candidate);
+                if (type) return type;
+            }
+        }
         return null;
     }
 
@@ -80,7 +112,16 @@ class PracticeRecorder {
 
     async persistActiveSession(session, previousEntityId = null) {
         const entity = Object.assign({}, session, { id: this.activeSessionEntityId(session) });
-        const receipt = await window.AppData.recovery.saveActiveSession(entity);
+        let receipt;
+        try {
+            receipt = await window.AppData.recovery.saveActiveSession(entity);
+            if (!receipt || receipt.committed !== true) throw new Error('Recovery commit was not confirmed', { cause: receipt?.error });
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'save-recovery', 'succeeded', { session: session.sessionId }); } catch (_) { }
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'RECOVERY_SAVE_FAILED', module: 'practice',
+                action: 'save-recovery', error, correlation: { session: session.sessionId } }); } catch (_) { }
+            throw error;
+        }
         if (previousEntityId && previousEntityId !== entity.id) {
             await window.AppData.recovery.discardActiveSession(previousEntityId);
         }
@@ -443,7 +484,7 @@ class PracticeRecorder {
         }
 
         const rawType = typeof rawMessage.type === 'string' ? rawMessage.type.trim() : '';
-        if (!rawType) {
+        if (!rawType || rawType === 'IELTS_DIAGNOSTIC_V1') {
             return null;
         }
 
@@ -565,10 +606,17 @@ class PracticeRecorder {
         return {
             examId,
             sessionId: payload.sessionId || null,
+            submissionId: payload.submissionId || null,
+            operationId: payload.operationId || payload.messageId || null,
             originalExamId: payload.originalExamId || payload.metadata?.originalExamId || null,
             derivedExamId: payload.derivedExamId || payload.metadata?.derivedExamId || null,
             rawExamId: payload.examId || null,
             results: {
+                // Capture the raw submission before compatibility score defaults.
+                browseScore: this.captureScoreEvidence(payload),
+                status: payload.status || payload.metadata?.status,
+                graded: payload.graded,
+                gradable: payload.gradable,
                 score: toNumber(scoreInfo.score, correctAnswers),
                 totalQuestions,
                 correctAnswers,
@@ -581,6 +629,7 @@ class PracticeRecorder {
                 answerDetails,
                 answerComparison: normalizedComparison,
                 questionTypePerformance: payload.questionTypePerformance || {},
+                ...(payload.readingTiming ? { readingTiming: this.clonePlainObject(payload.readingTiming) } : {}),
                 interactions: payload.interactions || [],
                 ...annotations,
                 questionTypeMap,
@@ -729,11 +778,13 @@ class PracticeRecorder {
         const previousEntityId = existing
             ? this.activeSessionEntityId(existing)
             : null;
+        const type = this.resolveSessionPracticeType(examData, existing);
 
         const sessionData = {
             id: this.activeSessionEntityId(sessionId),
             sessionId,
             examId,
+            type,
             startTime,
             lastActivity: new Date().toISOString(),
             status: existing ? (existing.status || 'started') : 'started',
@@ -748,6 +799,7 @@ class PracticeRecorder {
                 examTitle: examData.title || '',
                 category: examData.category || '',
                 frequency: examData.frequency || '',
+                pageType: examData.pageType || examData.metadata?.pageType || null,
                 userAgent: navigator.userAgent,
                 screenResolution: `${screen.width}x${screen.height}`,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -764,6 +816,7 @@ class PracticeRecorder {
         if (examData && examData.title) {
             sessionData.metadata.examTitle = examData.title;
         }
+        if (type) sessionData.metadata.type = type;
 
         // 存储会话
         this.activeSessions.set(examId, sessionData);
@@ -802,6 +855,8 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) {
             this.startPracticeSession(examId, Object.assign({}, metadata || {}, {
                 sessionId,
+                type: this.resolveSessionPracticeType(data),
+                pageType: data.pageType || metadata?.pageType || null,
                 title: metadata && (metadata.title || metadata.examTitle) || '',
                 category: metadata && metadata.category || '',
                 frequency: metadata && metadata.frequency || '',
@@ -820,6 +875,7 @@ class PracticeRecorder {
 
         let session = this.activeSessions.get(examId);
         const previousEntityId = this.activeSessionEntityId(session);
+        const type = this.resolveSessionPracticeType(data, session);
         // A host start supersedes pending cleanup even if its ID, status, and
         // timestamp are unchanged. Keep this generation out of stored sessions.
         this.sessionStartGenerations.set(session, (this.sessionStartGenerations.get(session) || 0) + 1);
@@ -830,6 +886,10 @@ class PracticeRecorder {
 
         if (metadata) {
             session.metadata = { ...session.metadata, ...metadata };
+        }
+        if (type) {
+            session.type = type;
+            session.metadata = { ...session.metadata, type };
         }
 
         this.activeSessions.set(examId, session);
@@ -867,7 +927,7 @@ class PracticeRecorder {
     /**
      * 处理会话完成
      */
-    async handleSessionCompleted(rawData) {
+    async handleSessionCompleted(rawData, options = {}) {
         const payload = this.ensureCompletionPayloadShape(rawData);
         if (!payload) {
             console.warn('[PracticeRecorder] 无法处理会话完成事件：缺少必要数据');
@@ -960,6 +1020,7 @@ class PracticeRecorder {
             examEntry,
             type
         );
+        metadata.category = results?.category || results?.metadata?.category || session.metadata?.category || '';
         let suiteSessionId = payload.suiteSessionId
             || metadata?.suiteSessionId
             || session?.metadata?.suiteSessionId
@@ -1039,10 +1100,17 @@ class PracticeRecorder {
             id: `record_${session.sessionId || this.generateSessionId(resolvedExamId)}`,
             examId: resolvedExamId,
             sessionId: session.sessionId || payload.sessionId || this.generateSessionId(resolvedExamId),
+            submissionId: payload.submissionId || results?.submissionId || null,
+            operationId: payload.operationId || results?.operationId || (payload.submissionId
+                ? `practice-complete:${resolvedExamId}:${session.sessionId || payload.sessionId}:${payload.submissionId}`
+                : undefined),
             startTime: resolvedStartTime,
             endTime: resolvedEndTime,
             duration: Math.floor(durationMs / 1000),
-            status: 'completed',
+            status: results?.status || 'completed',
+            graded: results?.graded,
+            gradable: results?.gradable,
+            browseScore: this.captureScoreEvidence({ ...results, endTime: resolvedEndTime }),
             type,
             date: recordDate,
             score: resolvedScore,
@@ -1055,6 +1123,7 @@ class PracticeRecorder {
             correctAnswerMap,
             scoreInfo,
             questionTypePerformance: results?.questionTypePerformance || {},
+            ...(results?.readingTiming ? { readingTiming: this.clonePlainObject(results.readingTiming) } : {}),
             ...annotations,
             metadata,
             suiteSessionId,
@@ -1094,7 +1163,7 @@ class PracticeRecorder {
         }
 
         try {
-            const savedRecord = await this.savePracticeRecord(practiceRecord);
+            const savedRecord = await this.savePracticeRecord(practiceRecord, options);
 
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId);
@@ -1223,7 +1292,9 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) return false;
 
         const session = this.activeSessions.get(examId);
+        const sessionId = session.sessionId;
         const sessionStartGeneration = this.sessionStartGenerations.get(session) || 0;
+        let interruptedRecordSaved = false;
         let sessionEntityId;
         try {
             sessionEntityId = this.activeSessionEntityId(session);
@@ -1237,11 +1308,13 @@ class PracticeRecorder {
         if (reason !== 'completed' && session.status !== 'completed') {
             const endTime = new Date().toISOString();
             const duration = new Date(endTime) - new Date(session.startTime);
+            const type = this.resolveSessionPracticeType(session);
 
             const interruptedRecord = {
-                id: `interrupted_${session.sessionId}`,
+                id: `interrupted_${sessionId}`,
                 examId,
-                sessionId: session.sessionId,
+                sessionId,
+                type,
                 startTime: session.startTime,
                 endTime,
                 duration: Math.floor(duration / 1000),
@@ -1249,7 +1322,7 @@ class PracticeRecorder {
                 reason,
                 progress: session.progress,
                 answers: session.answers,
-                metadata: session.metadata,
+                metadata: Object.assign({}, session.metadata, type ? { type } : {}),
                 createdAt: endTime
             };
 
@@ -1258,6 +1331,7 @@ class PracticeRecorder {
                 // interrupted record commits. Never discard it on a failed
                 // conversion (quota, backend loss, validation, etc.).
                 await this.saveInterruptedRecord(interruptedRecord);
+                interruptedRecordSaved = true;
             } catch (error) {
                 console.error('[PracticeRecorder] 保存中断记录失败:', error);
                 this.dispatchSessionEvent('sessionError', { examId, error });
@@ -1270,6 +1344,9 @@ class PracticeRecorder {
         if (this.activeSessions.get(examId) !== session
             || this.activeSessionEntityId(session) !== sessionEntityId
             || (this.sessionStartGenerations.get(session) || 0) !== sessionStartGeneration) {
+            if (interruptedRecordSaved) {
+                this.dispatchSessionEvent('InterruptedRecordSaved', { examId, reason, sessionId, interruptedRecordSaved: true });
+            }
             return true;
         }
 
@@ -1284,12 +1361,17 @@ class PracticeRecorder {
 
         // A new session can also start while the old checkpoint is discarded.
         if (this.activeSessions.has(examId)) {
+            if (interruptedRecordSaved) {
+                this.dispatchSessionEvent('InterruptedRecordSaved', { examId, reason, sessionId, interruptedRecordSaved: true });
+            }
             return true;
         }
 
         console.log(`Practice session ended: ${examId} (${reason})`);
 
-        // 触发结束事件
+        // Publish the consumer-facing contract after durable interruption storage.
+        this.dispatchSessionEvent('SessionEnded', { examId, reason, interruptedRecordSaved });
+        // Keep the historical spelling and payload for existing integrations.
         this.dispatchSessionEvent('sessionEnded', { examId, reason });
         return true;
     }
@@ -1320,7 +1402,7 @@ class PracticeRecorder {
      * 检查会话活动状态
      */
     checkSessionActivity(examId) {
-        if (!this.activeSessions.has(examId)) return;
+        if (!this.activeSessions.has(examId)) return Promise.resolve(false);
 
         let session = this.activeSessions.get(examId);
         const now = new Date();
@@ -1330,8 +1412,13 @@ class PracticeRecorder {
         // 如果超过30分钟无活动，标记为超时
         if (inactiveTime > 30 * 60 * 1000) {
             console.warn(`Session timeout detected for exam: ${examId}`);
-            this.endPracticeSession(examId, 'timeout');
+            // Expose the durable end lifecycle to callers that need to wait
+            // for the interruption record and session-ended event. The timer
+            // based callers intentionally ignore this Promise, while recovery
+            // and regression callers can synchronize without polling.
+            return this.endPracticeSession(examId, 'timeout');
         }
+        return Promise.resolve(false);
     }
 
     /**
@@ -1380,8 +1467,12 @@ class PracticeRecorder {
      */
     async savePracticeRecord(record, options = {}) {
         const maxRetries = 3;
+        let failureOutcome;
         const storageReadyRecord = this.prepareRecordForStorage(record);
         const saveOperationId = storageReadyRecord.operationId || this.generateOperationId('practice-complete');
+        try { window.AppOperationDiagnostics?.breadcrumb('practice', 'submit', 'started', {
+            session: record.sessionId, submission: record.submissionId, operation: saveOperationId
+        }); } catch (_) { }
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -1391,6 +1482,14 @@ class PracticeRecorder {
                     record: storageReadyRecord,
                     operationId: saveOperationId
                 });
+                if (!receipt || receipt.committed !== true) {
+                    throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+                }
+                failureOutcome = 'committed';
+                try { options.onCommitReceipt?.(receipt); } catch (_) { }
+                try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
+                    session: record.sessionId, submission: record.submissionId, operation: saveOperationId
+                }); } catch (_) { }
                 const savedRawRecord = receipt.record;
                 const savedRecord = this.restoreRecordAnswerState(savedRawRecord, record);
                 console.log(`[PracticeRecorder] AppData.practice 保存成功: ${savedRecord.id}`);
@@ -1413,8 +1512,10 @@ class PracticeRecorder {
                     error
                 );
 
+                failureOutcome = this.combineSaveFailureOutcome(error, failureOutcome);
                 if (attempt === maxRetries || this.isCriticalError(error)) {
-                    return await this.retrySaveWithStandardizedRecord(record, saveOperationId);
+                    return await this.retrySaveWithStandardizedRecord(record, saveOperationId,
+                        Object.assign({}, options, { failureOutcome }));
                 }
 
                 const delay = attempt * 100;
@@ -1423,13 +1524,29 @@ class PracticeRecorder {
             }
         }
 
-        return await this.retrySaveWithStandardizedRecord(record, saveOperationId);
+        return await this.retrySaveWithStandardizedRecord(record, saveOperationId, options);
     }
 
     /**
      * 用标准化后的 payload 再走统一 API 保存。
      */
-    async retrySaveWithStandardizedRecord(record, operationId = null) {
+    combineSaveFailureOutcome(error, previous) {
+        let current = 'unconfirmed';
+        try { current = window.AppData.getOperationFailureState?.(error) || current; } catch (_) { }
+        // Preserve evidence across distinct retry errors even when the host defers reporting.
+        // Weak keys retain the original exception identity without retaining failed records.
+        if (!this._saveFailureOutcomes) this._saveFailureOutcomes = new WeakMap();
+        const outcomes = [previous, current, this._saveFailureOutcomes.get(error)];
+        const operation = outcomes.includes('committed') ? 'committed'
+            : outcomes.includes('unconfirmed') ? 'unconfirmed' : 'not-committed';
+        if (error && (typeof error === 'object' || typeof error === 'function')) {
+            this._saveFailureOutcomes.set(error, operation);
+        }
+        return operation;
+    }
+
+    async retrySaveWithStandardizedRecord(record, operationId = null, options = {}) {
+        const originalOperationId = operationId || record.operationId || this.generateOperationId('practice-complete');
         try {
             console.log('[PracticeRecorder] 使用标准化记录重试保存');
 
@@ -1437,10 +1554,26 @@ class PracticeRecorder {
             const standardizedRecord = this.normalizeRecordForAppData(record, examIndex);
             const receipt = await window.AppData.practice.completeAttempt({
                 record: standardizedRecord,
-                operationId: operationId || standardizedRecord.operationId || this.generateOperationId('practice-complete')
+                operationId: originalOperationId
             });
+            if (!receipt || receipt.committed !== true) {
+                throw new Error('Practice commit was not confirmed', { cause: receipt?.error });
+            }
+            try { options.onCommitReceipt?.(receipt); } catch (_) { }
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'storage-confirmed', 'succeeded', {
+                session: record.sessionId, submission: record.submissionId, operation: originalOperationId
+            }); } catch (_) { }
             return receipt.record;
         } catch (error) {
+            const operation = this.combineSaveFailureOutcome(error, options.failureOutcome);
+            if (options.deferDiagnostics !== true) {
+                try { window.AppOperationDiagnostics?.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'practice',
+                    action: 'submit', error, operation,
+                    correlation: { session: record.sessionId,
+                        submission: record.submissionId, operation: originalOperationId }
+                }, typeof window.AppData.practice.getCommitState === 'function'
+                    ? () => window.AppData.practice.getCommitState(originalOperationId) : undefined); } catch (_) { }
+            }
             console.error('[PracticeRecorder] 标准化重试保存失败:', {
                 error: error?.message,
                 validationErrors: error?.validationErrors || null,
@@ -1521,6 +1654,8 @@ class PracticeRecorder {
         );
         const annotations = this.resolveAnnotationState(recordData, [recordData.metadata || {}]);
         metadata.markedQuestions = this.clonePlainObject(annotations.markedQuestions);
+        // The active index can belong to another library by the time this save runs.
+        metadata.category = recordData.category || recordData.metadata?.category || '';
 
         return {
             // 基础信息
@@ -1537,6 +1672,9 @@ class PracticeRecorder {
 
             // 成绩信息
             status: recordData.status || 'completed',
+            graded: recordData.graded,
+            gradable: recordData.gradable,
+            browseScore: this.captureScoreEvidence(recordData),
             type: inferredType,
             score: Number(recordData.score) || 0,
             totalQuestions: Number(recordData.totalQuestions) || 0,
@@ -1550,6 +1688,7 @@ class PracticeRecorder {
             correctAnswerMap,
             scoreInfo: Object.assign({}, recordData.scoreInfo || {}, { details: answerDetails }),
             questionTypePerformance: recordData.questionTypePerformance || {},
+            ...(recordData.readingTiming ? { readingTiming: this.clonePlainObject(recordData.readingTiming) } : {}),
             ...annotations,
             realData: Object.assign({}, recordData.realData || {}, {
                 answers: answerMap,
@@ -1747,14 +1886,26 @@ class PracticeRecorder {
      */
     async saveToTemporaryStorage(record) {
         const recordId = String(record && (record.id || record.sessionId) || `record-${Date.now()}`);
-        const receipt = await window.AppData.recovery.saveDraft({
-            id: `practice-record:${recordId}`,
-            recordId,
-            kind: 'practice_record_recovery',
-            record: this.clonePlainObject(record),
-            tempSavedAt: new Date().toISOString(),
-            needsRecovery: true
-        });
+        let receipt;
+        try {
+            receipt = await window.AppData.recovery.saveDraft({
+                id: `practice-record:${recordId}`,
+                recordId,
+                kind: 'practice_record_recovery',
+                record: this.clonePlainObject(record),
+                tempSavedAt: new Date().toISOString(),
+                needsRecovery: true
+            });
+            if (!receipt || receipt.committed !== true) throw new Error('Recovery commit was not confirmed', { cause: receipt?.error });
+            try { window.AppOperationDiagnostics?.breadcrumb('practice', 'save-recovery', 'succeeded', {
+                session: record.sessionId, submission: record.submissionId, operation: receipt.operationId
+            }); } catch (_) { }
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'RECOVERY_SAVE_FAILED', module: 'practice',
+                action: 'save-recovery', error, correlation: { session: record.sessionId,
+                    submission: record.submissionId, operation: record.operationId } }); } catch (_) { }
+            throw error;
+        }
 
         try {
             const drafts = await window.AppData.recovery.listDrafts();
@@ -1775,15 +1926,22 @@ class PracticeRecorder {
      * 保存中断记录
      */
     async saveInterruptedRecord(record) {
-        await window.AppData.recovery.saveInterrupted(record);
-        const existing = await window.AppData.recovery.listInterrupted();
-        const records = (Array.isArray(existing) ? existing : [])
-            .slice()
-            .sort((left, right) => Date.parse(right.updatedAt || right.createdAt || 0) - Date.parse(left.updatedAt || left.createdAt || 0));
-        for (const stale of records.slice(100)) {
-            await window.AppData.recovery.discardInterrupted(stale.id || stale.sessionId || stale.recordId);
+        const receipt = await window.AppData.recovery.saveInterrupted(record);
+        try {
+            const existing = await window.AppData.recovery.listInterrupted();
+            const records = (Array.isArray(existing) ? existing : [])
+                .slice()
+                .sort((left, right) => Date.parse(right.updatedAt || right.createdAt || 0) - Date.parse(left.updatedAt || left.createdAt || 0));
+            for (const stale of records.slice(100)) {
+                await window.AppData.recovery.discardInterrupted(stale.id || stale.sessionId || stale.recordId);
+            }
+        } catch (error) {
+            // Retention is best-effort after the record has committed. A cleanup
+            // failure must not hide saved answers or report the write as failed.
+            console.warn('[PracticeRecorder] 中断记录保留清理失败，不影响已保存记录:', error);
         }
         console.log(`Interrupted record saved: ${record.id}`);
+        return receipt;
     }
 
     /**
@@ -1890,40 +2048,51 @@ class PracticeRecorder {
      * 导出练习数据
      */
     async exportData(format = 'json') {
-        const normalizedFormat = String(format || 'json').toLowerCase();
-        if (normalizedFormat === 'csv') {
-            const records = await this.listPracticeRecordsForStats();
-            return this.convertRecordsToCSV(records);
+        try {
+            const normalizedFormat = String(format || 'json').toLowerCase();
+            if (normalizedFormat === 'csv') {
+                const records = await this.listPracticeRecordsForStats();
+                return this.convertRecordsToCSV(records);
+            }
+            if (normalizedFormat !== 'json') {
+                throw new Error(`Unsupported export format: ${format}`);
+            }
+            const snapshot = await window.AppData.backups.export({ domains: ['practice'] });
+            return JSON.stringify(snapshot, null, 2);
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export', action: 'export', error }); } catch (_) { }
+            throw error;
         }
-        if (normalizedFormat !== 'json') {
-            throw new Error(`Unsupported export format: ${format}`);
-        }
-        const snapshot = await window.AppData.backups.export({ domains: ['practice'] });
-        return JSON.stringify(snapshot, null, 2);
     }
 
     /**
      * 导入练习数据
      */
     async importData(data, options = {}) {
-        const mergeMode = options.merge === false || options.mergeMode === 'replace'
-            ? 'replace'
-            : (options.mergeMode || 'merge');
-        const payload = Array.isArray(data) ? { records: data } : data;
-        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
-        const backup = options.createBackup === false
-            ? null
-            : await window.AppData.backups.create({ type: 'pre-import' });
-        const receipt = await window.AppData.backups.commitImport(preview.id, {
-            operationId: options.operationId,
-            confirmDestructive: mergeMode === 'replace'
-        });
         try {
-            await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup && backup.id, practice: preview.practice });
-        } catch (historyError) {
-            console.warn('[PracticeRecorder] 导入已提交，但历史记录写入失败:', historyError);
+            const mergeMode = options.merge === false || options.mergeMode === 'replace'
+                ? 'replace'
+                : (options.mergeMode || 'merge');
+            const payload = Array.isArray(data) ? { records: data } : data;
+            const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
+            const backup = options.createBackup === false
+                ? null
+                : await window.AppData.backups.create({ type: 'pre-import' });
+            const receipt = await window.AppData.backups.commitImport(preview.id, {
+                operationId: options.operationId,
+                confirmDestructive: mergeMode === 'replace'
+            });
+            if (!receipt || receipt.committed !== true) throw new Error('Import commit was not confirmed', { cause: receipt?.error });
+            try {
+                await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup && backup.id, practice: preview.practice });
+            } catch (historyError) {
+                console.warn('[PracticeRecorder] 导入已提交，但历史记录写入失败:', historyError);
+            }
+            return Object.assign({}, receipt, { backupId: backup && backup.id });
+        } catch (error) {
+            try { window.AppOperationDiagnostics?.failure({ code: 'DATA_IMPORT_FAILED', module: 'import', action: 'import', error, correlation: { operation: options.operationId } }); } catch (_) { }
+            throw error;
         }
-        return Object.assign({}, receipt, { backupId: backup && backup.id });
     }
 
     /**
@@ -2176,7 +2345,10 @@ class PracticeRecorder {
             duration: realData.duration || 0,
 
             // 成绩信息
-            status: 'completed',
+            status: realData.status || 'completed',
+            graded: realData.graded,
+            gradable: realData.gradable,
+            browseScore: this.captureScoreEvidence({ ...realData, endTime: realData.endTime || now.toISOString() }),
             score: score,
             totalQuestions: totalQuestions,
             correctAnswers: score, // 正确答案数等于分数
@@ -2188,12 +2360,13 @@ class PracticeRecorder {
             answerComparison,
             questionTypeMap,
             questionTypePerformance: this.extractQuestionTypePerformance(realData),
+            ...(realData.readingTiming ? { readingTiming: this.clonePlainObject(realData.readingTiming) } : {}),
             ...annotations,
 
             // 元数据
             metadata: {
                 examTitle: exam.title || '',
-                category: exam.category || '',
+                category: realData.category || realData.metadata?.category || '',
                 frequency: exam.frequency || '',
                 markedQuestions: this.clonePlainObject(annotations.markedQuestions),
                 collectionMethod: 'automatic',

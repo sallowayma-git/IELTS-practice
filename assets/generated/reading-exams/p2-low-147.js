@@ -9,11 +9,12 @@
   "meta": {
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
     "legacyFilename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

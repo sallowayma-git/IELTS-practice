@@ -9,11 +9,12 @@
   "meta": {
     "title": "The fashion industry 时尚产业",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "53. P2 - The fashion industry 时尚产业.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
     "legacyFilename": "53. P2 - The fashion industry 时尚产业.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -13,7 +13,8 @@
     "pdfFilename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/",
     "legacyFilename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

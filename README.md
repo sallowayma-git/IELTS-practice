@@ -1,273 +1,192 @@
 # IELTS Atlas / IELTS Practice
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
-## 重要使用声明
+**English** | [简体中文](README.zh-CN.md)
 
-本项目允许个人基于学习、研究和自用目的进行本地运行、私人部署或在个人控制的网页环境中使用。使用者可以将项目部署到自己的电脑、私人服务器、NAS 或个人网页空间，但应确保访问范围和传播范围可控。
+[v0.6.3.1 Release Notes](RELEASE_NOTE-0.6.3.1.md)
 
-请勿将包含题源、音频、PDF、解析、二次修改页面或打包产物的网站、镜像站、压缩包继续公开分发给更多人；请勿将本项目用于商业售卖、付费社群、引流推广、公开宣传或其他盈利行为。项目涉及的题源和部分素材存在第三方版权风险，机考网页形式的公开部署也可能触及相关从业者利益。大规模传播会显著增加被投诉、举报、删除仓库或关闭页面的风险，最终影响所有使用者。
+[![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
-为保证项目能够长期稳定存在，请遵循以下原则：**自行部署，个人使用，控制传播范围，不以项目或其题源牟利。**
+## Important Usage Notice
 
-代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
+This project may be run locally, self-hosted, or deployed in a personally controlled web environment for learning, research, and personal use. You may deploy it on your own computer, private server, NAS, or personal web space, provided you keep access and distribution under control.
 
-## 分支概览
+Do not publicly redistribute websites, mirror sites, or archives that contain question sources, audio, PDFs, explanations, modified pages, or packaged builds. Do not use this project for commercial sales, paid communities, traffic generation, promotion, or any other for-profit activity. The question sources and some materials carry third-party copyright risk, and publicly hosting exam-style web pages may also harm the interests of practitioners in this field. Large-scale distribution significantly increases the risk of complaints, takedown reports, repository deletion, or page closure, ultimately affecting all users.
 
-本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+To keep this project available long-term, please follow these principles: **self-host, use personally, control distribution, and never profit from the project or its question sources.**
 
-| 分支 | 说明 | 状态 | 完成度 | 技术特征 |
-|------|------|------|--------|----------|
-| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版（当前分支），纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
-| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
-| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
+Code licensing is governed by [LICENSE](LICENSE). Question sources, articles, audio, PDFs, images, and other third-party content remain the property of their original copyright holders, and are recommended for personal study and exam preparation only.
 
-| 关联仓库 | 说明 | 状态 | 技术特征 |
+## Branch Overview
+
+This project currently maintains three main branches, each targeting different use cases and technical needs:
+
+| Branch | Description | Status | Maturity | Tech |
+|------|------|--------|----------|------|
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | Static web edition (this branch), pure frontend, runs on almost any device | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-95%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-pure_frontend-blue) |
+| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | Self-hosted server edition with multi-device data sync, for users with some technical background | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-100%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-Node.js-blue) |
+| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI-native collaboration client with AI-powered writing scoring, reading coaching, self-evolution, and more | ![Status](https://img.shields.io/badge/status-in_development-orange) | ![Maturity](https://img.shields.io/badge/maturity-80%25-orange) | ![Tech](https://img.shields.io/badge/tech-AI_Agent-blue) |
+
+| Related Repository | Description | Status | Tech |
 |:--------:|------|------|----------|
-| [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![技术：Docker Compose、PostgreSQL](assets/images/ieltmps-tech.svg) |
+| [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | Integrated solution for a standalone web server, covering a complete backend, routing, database, and security infrastructure | ![Status](https://img.shields.io/badge/status-in_development-orange) | ![Tech: Docker Compose, PostgreSQL](assets/images/ieltmps-tech.svg) |
 
-## 项目概述
+## Project Overview
 
-IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
+IELTS Atlas is a pure-frontend practice system focused on IELTS reading, with an optional local listening extension. The single entry point is `index.html`; the app runs on static HTML, CSS, JavaScript bundles, and local question-bank assets, with no backend service required.
 
-系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
+The system provides question-bank browsing, reading practice, optional listening practice, test-set practice, practice records, score statistics, mistake analysis, data backup, question-bank import, vocabulary tools, reading review, and achievements. Data is stored in browser-local storage by default; the app runs directly over `file://` and can also be deployed to static web hosting.
 
-## 快速开始
+## Quick Start
 
-### 系统要求
+![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
 
-- 推荐浏览器：Chrome 或 Edge 最新稳定版。
-- 基础能力：支持 ES6、IndexedDB、localStorage、sessionStorage、`window.open` 和 `postMessage`。
-- 运行方式：支持直接通过 `file://` 打开，也支持通过本地静态服务器或静态网页托管访问。
-- 浏览器设置：首次练习时需要允许弹窗，否则练习窗口可能无法打开。
+**Requirements:** a recent stable version of Chrome or Edge. Allow pop-ups when prompted — practice pages open in a new window.
 
-Firefox、Safari 和移动浏览器可以使用，但对 `file://`、PDF、音频、跨窗口通信和弹窗策略的限制可能更严格。
+**Run locally:**
 
-### 本地直接运行
+1. Download and extract the full project. Keep the directory structure intact — do not copy `index.html` alone.
+2. Open `index.html` in your browser.
+3. Go to **Library (题库浏览)** and confirm the question list loads.
+4. If the browser blocks a pop-up when you start a practice, allow it and try again.
 
-1. 下载或解压完整项目目录。
-2. 保持目录结构完整，不要只复制 `index.html`。
-3. 双击打开根目录下的 `index.html`。
-4. 进入“题库浏览”确认题库列表是否正常显示。
-5. 点击任意练习项时，如浏览器提示弹窗拦截，请允许该页面打开新窗口。
-
-当前入口只有 `index.html`。旧文档中出现过的 `improved-working-system.html` 不再是有效入口。
-
-### 本地静态服务器运行
-
-如果浏览器对 `file://` 的资源访问限制较多，可以在项目根目录启动静态服务器：
+`index.html` is the only entry point; older entry pages mentioned in legacy docs are no longer valid. If your browser restricts `file://` resources, serve the project root instead:
 
 ```bash
-python -m http.server 8000
+python -m http.server 8000   # then open http://localhost:8000/
 ```
 
-然后访问：
+**Static hosting:** the runtime files can be deployed to static web hosting for personal or small-scale use. Keep the full directory hierarchy to avoid 404s for bundles, question banks, fonts, images, PDFs, audio, and generated assets. Re-read the usage notice above before any public deployment — a page that can be deployed is not a license to distribute it.
 
-```text
-http://localhost:8000/
-```
+## Features
 
-本地服务器适合调试资源路径、浏览器控制台错误、PDF 或音频加载问题。正式分发给个人用户时，发布包仍应保持解压后可直接打开 `index.html` 使用。
+### Learning Overview
 
-### 静态网页部署
+The overview page summarizes your practice state from local records: items practiced, average performance, study time, streaks, and per-category progress. Use it as your daily entry point to decide what comes next — more practice, mistake review, or vocabulary.
 
-可以将运行时文件部署到静态网页空间，但应仅用于个人或小范围自用场景。部署时必须保留目录层级，避免 bundle、题库、字体、图片、PDF、音频或生成资产出现 404。
+### Question Bank
 
-公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
+The library is the core entry of the system. Reading resources are supported by default; listening resources attach as an optional local extension.
 
-## 功能说明
+- Filter by type (All / Reading / Listening) and by category (P1, P2, P3); search by title, filename, or metadata; sort and view practice status and progress.
+- Import custom question banks from a folder via **Settings → Load question bank**, switch between bank configurations, or force-refresh the index from Settings.
 
-### 学习总览
+The default reading index is generated under `assets/generated/` and should not be hand-edited. Listening indexes are produced by the browser-side scan when you import your own resources.
 
-总览页面用于展示学习状态和练习概况。系统会根据本地练习记录汇总已练习题目、平均表现、学习时长、连续学习状态和分类进度等信息。该页面适合作为每日打开应用后的入口，用于判断后续应继续刷题、复盘错题还是切换到词汇辅助。
+### Reading Practice
 
-### 题库浏览与管理
-
-题库浏览是系统的核心入口。当前实现默认支持阅读资源；听力资源作为可选本地扩展接入，并按题目元数据生成可检索、可筛选的题库列表。
-
-主要能力包括：
-
-- 类型筛选：支持“全部”“阅读”“听力”等过滤方式；未配置听力扩展资源时，听力列表可能为空。
-- 分类筛选：支持按 P1、P2、P3 等分类查看题目。
-- 关键词搜索：支持按题目标题、文件名或元数据关键字检索。
-- 排序与状态：支持题库排序、练习状态展示和进度回显。
-- 资源区分：阅读资源主要来自生成后的阅读题库资产；听力资源来自用户自行配置的本地扩展索引或本地听力目录。
-- 题库导入：设置页提供“加载题库”入口，可通过文件夹选择器导入自定义阅读或听力资源。
-- 配置切换：设置页提供“题库配置切换”，用于在默认题库和导入题库配置之间切换。
-- 强制刷新：设置页提供“强制刷新题库”，用于重新同步当前题库索引和界面状态。
-
-题库索引不应手写维护。默认阅读索引来自 `assets/generated/` 下的生成资产；听力索引属于可选本地扩展资源，用户导入题库时由浏览器侧扫描和标准化流程生成配置。
-
-### 阅读练习
-
-阅读练习使用统一阅读页面运行，核心资产位于：
+Reading practice runs in the unified reading page, built on generated assets:
 
 ```text
 assets/generated/reading-exams/
 assets/generated/reading-explanations/
 ```
 
-当前实现支持：
+- Open a practice from a library card; answer, submit, and view results in the unified page.
+- Explanations, passage highlighting, and answer comparison are built in; completed results sync automatically into practice records.
+- The same page also powers **reading review (背题)** mode for studying answers and explanations.
 
-- 通过题库卡片打开阅读练习窗口。
-- 在统一阅读页中完成答题、提交和查看结果。
-- 回传用户答案、正确答案、得分信息和题目上下文。
-- 支持解析内容、定位高亮和答案对比。
-- 与练习记录系统同步，完成后自动写入本地历史。
-- 支持阅读背题模式，复用统一阅读页查看答案、解析和定位信息。
+If a practice opens but the score is not saved, check pop-up permissions, console errors, and cross-window messaging (see FAQ).
 
-阅读练习依赖浏览器新窗口和跨窗口通信。若练习页能打开但成绩没有保存，应优先检查弹窗权限、控制台错误和 `postMessage` 通信状态。
+### Listening Practice
 
-### 听力练习
+Listening practice connects through a listening index and the record bridge. For copyright compliance, the public repository and standard release packages do not include listening audio, question sources, PDFs, the full `ListeningPractice/` directory, or pre-generated listening indexes.
 
-听力练习通过听力索引和记录桥接模块接入。出于版权合规考虑，公开仓库和普通发布包默认不包含听力音频、配套题源、PDF、完整 `ListeningPractice/` 目录或预生成听力索引。
-
-如需在个人本地环境启用听力练习，可自行准备听力资源，并按可选扩展路径放置生成索引：
+To enable listening locally, prepare your own resources and place the generated index at:
 
 ```text
 assets/generated/listening-exams/manifest.js
 assets/generated/listening-exams/listening-index.compat.js
 ```
 
-主要能力包括：
+It supports importing self-prepared listening resources, the P1–P4 structure, and unifying listening results into the same record and statistics pipeline as reading via `listening-record-bridge`. Missing files in a public package are expected, not a defect. To include your own `ListeningPractice/P1–P4` in a personal-use package, build with `INCLUDE_LOCAL_LISTENING=1` (see Build & Release).
 
-- 支持从本地扩展听力索引加载听力题目。
-- 支持用户通过题库加载流程导入自备本地听力资源。
-- 支持 P1-P4 听力目录结构。
-- 通过 `listening-record-bridge` 将听力练习结果转换为统一练习记录。
-- 在练习记录和统计系统中与阅读记录使用同一套数据管理流程。
+### Test-Set Mode
 
-这些路径只表示扩展资源的约定位置。若公开包中不存在上述文件，这是预期行为，不代表仓库缺失。需要随个人自用发布包包含 `ListeningPractice/P1-P4` 时，应先在本地准备资源并使用 `INCLUDE_LOCAL_LISTENING=1` 进行打包。
+Test-set mode chains several practice units into one session and aggregates the results — useful for simulating a full run without manual jumps between items.
 
-### 套题练习模式
+- Creates a test-set session and opens items in order, tracking the current window and item.
+- Aggregates scores, durations, and results into a single test-set record, and keeps completed results when the session is interrupted.
+- Cleans up sub-records so the history list does not show duplicates.
 
-套题模式用于连续完成多个练习单元，并将结果聚合为套题记录。该模式适合模拟完整练习流程，减少单篇练习之间的手动跳转。
+This mode relies on stricter window management; if pop-ups are blocked or a window is closed manually, the system falls back to a degraded save path.
 
-当前支持：
+### Practice Records & Statistics
 
-- 创建套题会话。
-- 顺序打开和切换题目。
-- 跟踪当前套题窗口和当前题目。
-- 聚合每个子题目的得分、耗时和结果。
-- 保存完整套题记录。
-- 在异常关闭、中断或部分完成时尽量保留已完成记录。
-- 清理套题子记录，避免历史列表重复展示。
+The records page views, filters, exports, and manages history from reading, listening, test sets, and degraded saves:
 
-套题模式依赖更严格的窗口管理和通信流程。如果浏览器阻止弹窗或用户手动关闭练习窗口，系统会进入降级保存路径。
+- Stat cards (items practiced, average accuracy, study time), trend analysis with time ranges, a practice heatmap, priority-bank progress, and a reading mistake radar.
+- A history list filterable by All / Reading / Listening, with batch selection and deletion, Markdown export, and per-record details (score, duration, answer comparison, raw results).
 
-### 练习记录与统计
+Practice records are the core user data of this system. Clearing cache, switching browsers, private mode, or automatic site-data cleanup can all affect persistence — export or back up your data regularly from Settings.
 
-练习记录页面用于查看、筛选、导出和管理历史记录。记录来源包括阅读练习、听力练习、套题练习和部分降级保存流程。
+### Settings & Data Management
 
-主要能力包括：
+Settings centralizes system, question-bank, and data management:
 
-- 统计卡片：展示已练习题目、平均正确率、学习时长等核心指标。
-- 趋势分析：展示近期练习趋势，可按时间范围切换。
-- 练习热力图：按日期展示练习频率。
-- 中高频进度：展示重点题库或优先级题目的练习进度。
-- 阅读错题雷达：根据最近阅读记录统计错题题型分布。
-- 历史列表：按全部、阅读、听力等维度筛选记录。
-- 批量管理：支持选择多条记录并批量删除。
-- Markdown 导出：支持将练习历史导出为 Markdown 报告。
-- 详情查看：支持打开单条练习记录，查看分数、耗时、答案对比和原始结果信息。
+- **System:** clear all local data (restores first-run; external JSON backups are kept), load question banks, switch themes, switch bank configurations, force-refresh the bank index.
+- **Data:** create backups and restore from the backup list, export/import data as JSON for migration and long-term storage, with basic integrity checks on import.
 
-练习记录是本系统的核心用户数据。清理缓存、切换浏览器、隐私模式和浏览器自动清理站点数据都可能影响记录持久性，建议定期使用设置页的数据导出或备份功能。
+Core data persists in IndexedDB; if it is unavailable the app reports an error explicitly rather than silently degrading records. localStorage only handles legacy migration and a few compatibility states, and sessionStorage holds session drafts. Data is isolated per browser, protocol, and origin.
 
-### 系统设置与数据管理
+### Errors & Diagnostics
 
-设置页集中放置系统维护、题库管理和数据管理功能。
+Open **Settings → Errors and diagnostics (错误与诊断)** to look up failures by incident ID, export a local JSON report, or copy a summary. Reports are sanitized and exclude answers; they do not replace learning-data backups. Exporting a report does not resubmit practice or run active diagnostics. If clipboard access or downloads are unavailable, select the diagnostic text on the page. If a practice window disconnects from the main page, export from that window; the report identifies incomplete cross-window coverage.
 
-系统管理能力：
+Diagnostic history retains at most 7 days, 2,000 events, or about 2 MiB, whichever limit is reached first. You can clear diagnostics separately, disable persistence, retry diagnostic storage, or enable detailed diagnostics for 15 minutes. With persistence disabled, short-lived page context remains available for immediate notifications and exports. Clearing all site data also clears learning data.
 
-- 清除全部本地数据：删除浏览器中的练习、题库、词汇、设置、应用内备份和本地文件夹绑定，刷新后回到首次启动并重新显示 GPL 协议；外部文件夹中的 JSON 备份不会删除。
-- 加载题库：导入阅读或听力题库目录。
-- 主题切换：切换当前界面的背景与视觉主题。
-- 题库配置切换：查看、切换或管理题库配置。
-- 强制刷新题库：重新同步题库索引、统计和界面状态。
+Capture cannot be guaranteed when JavaScript is disabled, the page is closed, the browser crashes, the main thread is fully blocked, or cross-origin error details are inaccessible. See the [diagnostic acceptance guide](developer/docs/diagnostic-acceptance.md) for hosting modes, verified scenarios, and release qualification.
 
-数据管理能力：
+### More Tools & Themes
 
-- 创建备份：将当前练习数据、统计数据和相关配置保存为备份。
-- 备份列表：查看已有备份并选择恢复。
-- 导出数据：导出当前本地数据，便于迁移或长期保存。
-- 导入数据：从外部 JSON 数据恢复或合并历史记录。
-- 完整性检查：对导入数据和本地数据进行基础校验。
+- **Vocabulary practice** with built-in word lists and spaced review.
+- **Reading review** to study answers, explanations, and highlights in the unified page.
+- **Achievements** unlocked by practice and usage behavior.
+- The main UI is HeroUI-styled with dynamic backgrounds and dedicated panels for library, records, settings, and tools. Themes change visuals only — never records, indexes, or storage formats. Theme logic lives in `js/plugins/themes/` and `js/presentation/`.
 
-核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
+## Usage Guide
 
-### 更多工具
+The demos below were captured from a live session with real data.
 
-“更多工具”页面提供练习以外的辅助能力：
+### Run a practice
 
-- 词汇练习：使用内置词表和记忆调度能力辅助复习。
-- 阅读背题：复用统一阅读页，直接查看答案、解析和定位高亮。
-- 成就系统：根据练习和使用行为展示已解锁徽章。
+![Reading practice demo: drag answers into place, submit, and study the analysis view](.github/assets/reading-practice.gif)
 
-这些功能共享主应用的数据层和界面状态，不需要额外后端服务。
+As shown: locate an item in **Library (题库浏览)** and click its practice button, complete and submit in the new window — explanations, passage highlighting, and answer comparison appear immediately, and the result lands in **Practice Records (练习记录)**.
 
-### 主题与界面
+If nothing opens, allow pop-ups; if nothing saves, check the console for resource or messaging errors (see FAQ).
 
-当前主界面为 HeroUI 风格，包含动态背景、主导航、题库面板、练习记录面板、设置面板和更多工具面板。项目保留了主题适配基础设施，主题相关逻辑位于 `js/plugins/themes/` 和 `js/presentation/`。
+### Use test-set mode
 
-主题切换主要影响视觉呈现，不应改变练习记录、题库索引或数据存储格式。
+1. Pick a test set from the library and complete each item in order.
+2. The session aggregates all sub-results into one test-set record, visible in Practice Records.
 
-## 详细使用指南
+Avoid running the same set in parallel windows — it complicates window tracking and record merging.
 
-### 开始单篇练习
+### View and export records
 
-1. 打开 `index.html`。
-2. 进入“题库浏览”。
-3. 使用类型筛选、分类筛选或搜索框定位题目。
-4. 点击题目卡片上的练习入口。
-5. 在新窗口中完成答题并提交。
-6. 返回主窗口，在“练习记录”中查看保存结果。
+![Practice records demo: stat cards, trends, heatmap, and history list](.github/assets/practice-records.gif)
 
-如果练习窗口未打开，请先允许浏览器弹窗。如果练习完成后没有记录，请检查控制台是否存在资源加载失败或通信错误。
+Stat cards, trends, the heatmap, and the history list are shown above; filter by All / Reading / Listening, open a record for details, export a Markdown report, or batch-delete records.
 
-### 使用套题模式
+Export or back up before deleting — recovery depends on available backups.
 
-1. 在题库或相关练习入口中选择套题练习。
-2. 系统创建套题会话并打开练习窗口。
-3. 按顺序完成每个题目。
-4. 套题结束后，系统聚合子题目结果并保存为套题记录。
-5. 在“练习记录”中查看套题结果。
+### Import a custom question bank
 
-套题模式不适合在多个浏览器窗口中并行操作同一套题。并行操作会增加窗口引用、状态同步和记录归并的复杂度。
+1. Go to **Settings (系统设置) → Load question bank**, choose a reading or listening directory, then run a full or incremental import.
+2. Verify the list in Library; switch between configurations via **Bank configuration** if you have several.
 
-### 查看与导出练习记录
+Keep custom bank directories stable — moving files or renaming folders can break the match between records and bank items.
 
-1. 进入“练习记录”。
-2. 查看统计卡片、趋势、热力图和历史列表。
-3. 使用“全部 / 阅读 / 听力”筛选历史记录。
-4. 点击单条记录查看详情。
-5. 使用“导出 Markdown”生成学习报告。
-6. 如需清理历史，使用批量选择和批量删除。
+### Back up, restore, migrate
 
-删除记录前建议先导出或创建备份。删除后的数据是否可恢复取决于是否存在可用备份。
+1. **Settings → Create backup** saves a local snapshot; **Export data** produces a portable file; **Import data** restores it in a new environment.
+2. After importing, verify records, stat cards, and the bank list.
 
-### 导入自定义题库
+Local storage is bound to the browser, protocol, and origin — data opened via `file://` and data served from `http://localhost:8000/` do not necessarily share.
 
-1. 进入“系统设置”。
-2. 点击“加载题库”。
-3. 选择阅读或听力资源目录。
-4. 根据界面提示选择全量或增量导入。
-5. 导入完成后返回“题库浏览”检查列表。
-6. 如有多个配置，通过“题库配置切换”选择当前使用的题库配置。
+## Project Structure
 
-自定义题库应保持稳定的目录结构。频繁移动文件、重命名目录或混合不同来源题库，可能导致记录与题目索引无法准确匹配。
-
-### 备份、恢复与迁移
-
-1. 进入“系统设置”。
-2. 使用“创建备份”保存当前数据快照。
-3. 使用“导出数据”生成外部文件，用于跨浏览器或跨设备迁移。
-4. 在新环境中使用“导入数据”恢复记录。
-5. 导入后检查练习记录、统计卡片和题库状态。
-
-浏览器本地存储与协议和域名绑定。例如，`file://` 打开的数据与 `http://localhost:8000/` 下的数据不一定共享。
-
-## 项目结构
-
-运行时文件：
+Runtime files:
 
 ```text
 index.html
@@ -277,267 +196,106 @@ assets/
 ReadingPractice/
 ```
 
-主要源码目录：
+Key source directories:
 
 ```text
-js/app/              应用入口、状态桥、题库浏览、练习会话和套题逻辑
-js/core/             练习、记录、存储、词汇等核心能力
-js/data/             repository 与数据源封装
-js/runtime/          懒加载、启动屏、统一阅读页运行时
-js/services/         题库发现、题库管理、统计、成就等服务
-js/components/       设置、诊断、记录弹窗、题库状态等 UI 组件
-js/presentation/     导航、主题、更多工具、首页交互
-js/utils/            存储、答案匹配、导入导出、性能和 DOM 工具
-js/plugins/          主题和扩展桥接
-assets/generated/    生成后的阅读题库索引、页面、解析资产，以及可选听力扩展索引
-assets/wordlists/    词汇数据
-developer/doc/Wiki/  架构文档、历史决策和模块说明
-developer/tests/     静态回归、E2E、工具脚本和测试报告
-scripts/             构建脚本
+js/app/            App entry, state bridge, library browsing, sessions, test sets
+js/core/           Practice, records, storage, vocabulary
+js/data/           Repositories and data sources
+js/runtime/        Lazy loading, startup screen, unified reading runtime
+js/services/       Bank discovery and management, statistics, achievements
+js/components/     Settings, diagnostics, record dialogs, bank status UI
+js/presentation/   Navigation, themes, More Tools, home interactions
+js/utils/          Storage, answer matching, import/export, DOM helpers
+js/plugins/        Themes and extension bridges
+assets/generated/  Generated reading bank pages and explanations; optional listening index
+developer/         Docs, tests, and build/release scripts
 ```
 
-发布包只应包含用户运行所需文件。源码目录、开发文档、测试工具和 `node_modules/` 不应进入普通分发包。
+Release packages should contain only the files users need at runtime — no source directories, dev docs, test tooling, or `node_modules/`.
 
-## 构建与发布
+## Build & Release
 
-### 生成 bundle
-
-`index.html` 当前加载 `js/bundles/*.bundle.js`。修改源码后必须重新生成 bundle：
+`index.html` loads prebuilt `js/bundles/*.bundle.js`. After editing any source file, rebuild the bundles — never edit them by hand:
 
 ```bash
 node scripts/build-bundles.mjs
 ```
 
-不要手动编辑 `js/bundles/*.bundle.js`。这些文件是构建产物，应由脚本生成。
-
-### 生成发布包
-
-Linux / Git Bash：
+Create a release package (the script rebuilds bundles first, then packs the runtime files into a zip that opens via `index.html` after extraction):
 
 ```bash
+# Linux / Git Bash
 bash developer/release.sh 0.6.2-fix
-```
-
-Windows PowerShell：
-
-```powershell
+# Windows PowerShell
 powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
 ```
 
-输出位置：
+Output: `dist/ielts-practice-{version}.zip`.
 
-```text
-dist/ielts-practice-{version}.zip
-```
-
-发布脚本会先运行 `node scripts/build-bundles.mjs`，再创建只包含运行时文件的压缩包。用户解压后可直接打开 `index.html` 使用。
-
-### 包含本地听力资源
-
-普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
+Standard packages exclude your local `ListeningPractice/` directory and listening assets. To bundle self-prepared listening resources into a personal-use package, first make sure `assets/generated/listening-exams/manifest.js` and `listening-index.compat.js` exist, then build with:
 
 ```bash
 INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
+# PowerShell: set $env:INCLUDE_LOCAL_LISTENING = "1" before running release.ps1
 ```
 
-PowerShell：
+The script then includes whichever of `ListeningPractice/P1` through `P4` exist locally.
 
-```powershell
-$env:INCLUDE_LOCAL_LISTENING = "1"
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
-```
+## Testing
 
-该模式要求存在：
-
-```text
-assets/generated/listening-exams/manifest.js
-assets/generated/listening-exams/listening-index.compat.js
-```
-
-并会按脚本规则包含 `ListeningPractice/P1` 至 `ListeningPractice/P4` 中存在的目录。
-
-## 测试要求
-
-功能或优化改动后，按顺序运行：
+After functional or optimization changes, run in order:
 
 ```bash
-python developer/tests/ci/run_static_suite.py
+python developer/tests/ci/run_static_suite.py    # writes developer/tests/e2e/reports/static-ci-report.json
 python developer/tests/e2e/full_reset_flow.py
 python developer/tests/e2e/suite_practice_flow.py
 ```
 
-第一条会生成：
+These are mandatory after changes to runtime code, bank indexes, asset paths, practice records, test-set flow, or release scripts. Documentation-only changes may skip the browser flows, but should still verify that referenced paths and commands exist. New QA, test, or verification scripts belong under `developer/tests/` so release packages stay clean.
 
-```text
-developer/tests/e2e/reports/static-ci-report.json
-```
+## Technical Notes
 
-测试原则：
+- **Startup:** `index.html` loads the core bundles (`runtime-entry`, `core-foundation`, `ui-shell`, `legacy-app`), initializes storage namespaces and the app instance, loads bank indexes and records, then lazy-loads feature bundles (library, records, test sets, settings, tools) on demand.
+- **Data storage:** IndexedDB holds all core persistent data (records, vocabulary, settings, bank configs, backups) with transactions and revision conflict detection; localStorage is legacy migration only; sessionStorage holds session drafts. Data is isolated per browser, protocol, and origin — migrate via export/import, never by copying internal storage.
+- **Practice messaging:** practice windows talk to the main window via `postMessage`. The main window opens the practice page and session, the page loads its enhancer/bridge scripts, the user submits, and the main window normalizes the score and saves the record. Relevant bundles: `practice-page-enhancer`, `listening-record-bridge`, `session`, `practice`.
+- **Bank assets:** generated reading assets live in `assets/generated/reading-exams/` and `assets/generated/reading-explanations/`, with the optional listening extension in `assets/generated/listening-exams/`. The public repo may not ship listening assets; runtime bank counts come from the manifests and the active configuration — this document intentionally does not state fixed counts.
 
-- 修改运行时代码、题库索引、资源路径、练习记录、套题流程或发布脚本后，必须运行上述测试。
-- 修改 README、说明文档或纯文本材料时，可不运行浏览器流程，但仍应检查路径和命令是否真实存在。
-- 新增 QA、测试工具或验证脚本应放在 `developer/tests/` 下，避免污染发布包。
+## FAQ
 
-## 技术说明
+### Styles broken or features missing after opening the page
 
-### 启动流程
+Usually an incomplete directory or wrong asset path. Verify that `css/`, `js/bundles/`, `assets/`, and `ReadingPractice/` exist with relative paths intact, and extract release packages fully. Never run `index.html` alone from another directory.
 
-应用启动由 `index.html` 加载 bundle 完成。核心 bundle 包括：
+### Clicking a practice opens no window
 
-```text
-js/bundles/runtime-entry.bundle.js
-js/bundles/core-foundation.bundle.js
-js/bundles/ui-shell.bundle.js
-js/bundles/legacy-app.bundle.js
-```
+The practice page needs a new window or tab. Allow pop-ups for the site, click the entry again, and check DevTools Console for errors and 404s on the practice resource.
 
-初始化过程包括：
+### No record saved after completing a practice
 
-1. 启动屏和基础运行时加载。
-2. 存储命名空间初始化。
-3. 应用实例创建。
-4. 题库索引和练习记录加载。
-5. 导航、题库、记录、设置等视图初始化。
-6. 按需加载题库浏览、练习记录、套题、设置、更多工具等功能 bundle。
+Typical causes: blocked cross-window messaging, failed resource loading, private-mode storage restrictions, disabled or quota-exhausted IndexedDB, or viewing data under a different protocol or origin. Check the console for `postMessage`, storage, or loading errors, export data in Settings to confirm what exists, retest on recent Chrome or Edge, or serve via a local static server.
 
-### 数据存储
+### The question bank list is empty
 
-系统按数据用途使用本地存储：
+Check that `assets/generated/reading-exams/manifest.js` and `reading-practice-unified.html` exist, that `js/bundles/core-foundation.bundle.js` loads, and that the `assets/` directory was not moved or pruned. For custom banks, re-import via **Settings → Load question bank**.
 
-- IndexedDB：存储练习记录、词汇、设置、题库配置和备份等核心持久化数据，并提供事务与修订冲突检测。
-- localStorage：仅保留旧版数据迁移和少量兼容状态。
-- sessionStorage：存储会话级草稿，不作为核心数据降级后端。
+### The listening bank is invisible
 
-主要数据包括：
+This is expected in the public repo and standard packages — listening resources are not included. To enable listening locally, prepare your own resources and the two index files under `assets/generated/listening-exams/` (see Listening Practice), and build with `INCLUDE_LOCAL_LISTENING=1` to ship `ListeningPractice/P1–P4`.
 
-- 题库索引。
-- 练习记录。
-- 用户设置。
-- 备份数据。
-- 统计和派生状态。
+### Data lost or statistics reset to zero
 
-不同浏览器、不同域名、不同协议下的数据隔离。迁移数据时应使用导出和导入功能，不要直接复制浏览器内部存储。
+Local data can become invisible after cache clearing, private mode, or a protocol/origin change. Use the same browser, path, protocol, and origin as before, check the backup list in Settings, and import earlier exports. Export regularly for long-term safety.
 
-### 练习通信
+### `file://` behaves differently from a local server
 
-练习窗口与主窗口通过 `postMessage` 通信。典型流程如下：
+This is a normal consequence of browser security policy. The project aims to stay `file://`-compatible, but browsers may restrict audio, PDF, new windows, cross-page scripts, or local file access. Verify on Chrome or Edge first, then use a local static server to isolate the difference.
 
-1. 主窗口打开练习页面。
-2. 主窗口创建练习会话。
-3. 练习页加载增强或桥接脚本。
-4. 用户提交答案。
-5. 练习页发送完成消息。
-6. 主窗口标准化成绩并保存记录。
+## License & Content Copyright
 
-相关运行时包括：
+Code licensing is governed by [LICENSE](LICENSE). Follow its terms when using, modifying, or redistributing the code.
 
-```text
-js/bundles/practice-page-enhancer.bundle.js
-js/bundles/listening-record-bridge.bundle.js
-js/bundles/session.bundle.js
-js/bundles/practice.bundle.js
-```
-
-### 题库资产
-
-阅读生成资产位于：
-
-```text
-assets/generated/reading-exams/
-assets/generated/reading-explanations/
-```
-
-可选听力扩展生成资产位于：
-
-```text
-assets/generated/listening-exams/
-```
-
-公开仓库和普通发布包可能不包含该目录。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
-
-## 常见问题
-
-### 页面打开后样式异常或功能缺失
-
-通常是目录不完整或资源路径错误。确认以下目录存在并保持相对路径不变：
-
-```text
-css/
-js/bundles/
-assets/
-ReadingPractice/
-```
-
-如果使用发布包，确认压缩包解压完整。不要将 `index.html` 单独复制到其他目录运行。
-
-### 点击练习后没有打开窗口
-
-检查浏览器是否拦截弹窗。练习页需要通过新窗口或新标签打开，主窗口依赖该窗口回传成绩。
-
-处理步骤：
-
-1. 允许当前页面弹窗。
-2. 重新点击练习入口。
-3. 打开开发者工具查看 Console 是否有错误。
-4. 检查目标练习资源是否 404。
-
-### 练习完成后没有保存记录
-
-常见原因包括：
-
-- 浏览器阻止跨窗口通信。
-- 练习页资源加载失败。
-- 用户在隐私模式中运行，存储被限制。
-- IndexedDB 被禁用、配额耗尽或后端事务失败。
-- 使用了不同协议或不同域名，导致查看的是另一份本地数据。
-
-处理步骤：
-
-1. 查看 Console 中是否有 `postMessage`、storage 或资源加载错误。
-2. 在“系统设置”中导出数据，确认当前环境是否已有记录。
-3. 换用 Chrome 或 Edge 最新稳定版复测。
-4. 必要时通过本地静态服务器运行。
-
-### 题库列表为空
-
-检查以下内容：
-
-1. `assets/generated/reading-exams/manifest.js` 是否存在。
-2. `assets/generated/reading-exams/reading-practice-unified.html` 是否存在。
-3. `js/bundles/core-foundation.bundle.js` 是否正常加载。
-4. 是否误删或移动了 `assets/` 目录。
-5. 如使用自定义题库，重新通过“系统设置”中的“加载题库”导入。
-
-### 听力题库不可见
-
-公开仓库和普通发布包默认不包含听力资源。若需要启用听力题库，请检查：
-
-1. 是否已经自行准备本地听力资源。
-2. 是否存在 `assets/generated/listening-exams/manifest.js`。
-3. 是否存在 `assets/generated/listening-exams/listening-index.compat.js`。
-4. 如需本地听力目录，发布时是否设置 `INCLUDE_LOCAL_LISTENING=1`。
-5. `ListeningPractice/P1-P4` 中是否存在实际资源。
-
-### 数据丢失或统计清零
-
-浏览器本地数据可能因清理缓存、隐私模式、协议变化或域名变化而不可见。
-
-处理步骤：
-
-1. 检查当前是否使用了与之前相同的浏览器、路径、协议和域名。
-2. 在设置页查看备份列表。
-3. 使用导入功能恢复之前导出的数据。
-4. 如需长期保存，请定期导出数据文件。
-
-### `file://` 与本地服务器表现不一致
-
-这是浏览器安全策略造成的正常差异。项目要求尽量兼容 `file://`，但部分浏览器会限制音频、PDF、新窗口、跨页面脚本或本地文件访问。遇到差异时，应先在 Chrome 或 Edge 下验证，再使用本地静态服务器定位问题。
-
-## 许可证与内容版权
-
-代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
-
-题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
+Question sources, articles, audio, PDFs, images, and explanations may come from third parties or original exam materials and remain copyrighted by their original owners. This project grants no commercial-use or public-redistribution rights over them. Users bear any legal and platform risks arising from copying, deploying, distributing, or commercializing such content.
 
 ## Star History
 

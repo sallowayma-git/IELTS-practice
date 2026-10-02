@@ -800,16 +800,27 @@
   function processImportPayload(file, mode) {
     const inputFile = file;
     if (!inputFile) {
-      window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
+      try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled'); } catch (_) { }
       return;
     }
+    const operationId = `file-import:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    let importCommitted = false;
+    const reportFailure = (error, operation) => {
+      try { window.AppOperationDiagnostics?.failure({ code: 'DATA_IMPORT_FAILED', module: 'import',
+        action: 'import', error, operation, correlation: { operation: operationId } }); } catch (_) { }
+    };
     const reader = new FileReader();
-    reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
+    reader.onerror = () => {
+      reportFailure(reader.error, 'not-committed');
+      window.showMessage && window.showMessage('文件读取失败', 'error');
+    };
+    reader.onabort = () => { try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled', { operation: operationId }); } catch (_) { } };
     reader.onload = async () => {
       let data;
       try {
         data = JSON.parse(reader.result);
       } catch (error) {
+        reportFailure(error, 'not-committed');
         window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
         return;
       }
@@ -828,22 +839,28 @@
           }
           summary.push('', '是否确认继续？');
           if (!window.confirm(summary.join('\n'))) {
+            try { window.AppOperationDiagnostics?.breadcrumb('import', 'import', 'cancelled', { operation: operationId }); } catch (_) { }
             window.showMessage && window.showMessage('已取消导入，现有数据未改变', 'info');
             return;
           }
         }
         const backup = await window.AppData.backups.create({ type: 'pre-import' });
         const result = await window.AppData.backups.commitImport(preview.id, {
+          operationId,
           confirmDestructive: preview.destructive === true
         });
+        if (!result || result.committed !== true) throw new Error('Import commit was not confirmed', { cause: result?.error });
+        importCommitted = true;
+        try { window.AppOperationDiagnostics?.breadcrumb('import', 'storage-confirmed', 'succeeded', { operation: operationId }); } catch (_) { }
         try { await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup.id, practice: preview.practice }); } catch (historyError) { console.warn('[Fallback] 导入历史记录失败:', historyError); }
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
+        reportFailure(error, importCommitted ? 'committed' : undefined);
         console.error('[importData] failed', error);
         window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
       }
     };
-    reader.readAsText(inputFile, 'utf-8');
+    try { reader.readAsText(inputFile, 'utf-8'); } catch (error) { reportFailure(error, 'not-committed'); }
   }
 
   if (typeof window.exportAllData !== 'function') {
@@ -852,6 +869,8 @@
         await _fallbackExportAllData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
+        try { window.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export',
+          action: 'export', error }); } catch (_) { }
         console.error('[Fallback] 数据导出失败:', error);
         window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
       }

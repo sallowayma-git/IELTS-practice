@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const appDataSource = fs.readFileSync(path.join(root, 'js/data/v2/appData.js'), 'utf8');
+const readingModelSource = fs.readFileSync(path.join(root, 'js/data/v2/readingVocabularyModel.js'), 'utf8');
 const catalogSource = fs.readFileSync(path.join(root, 'js/data/v2/dataCatalog.js'), 'utf8');
 const recordSource = fs.readFileSync(path.join(root, 'js/data/practiceRecordSource.js'), 'utf8');
 const examSessionSource = fs.readFileSync(path.join(root, 'js/app/examSessionMixin.js'), 'utf8');
@@ -49,13 +50,14 @@ function synchronizeStoredBackup(stored, mutate) {
     stored.checksum = data.checksum;
 }
 
-function harness() {
+function harness(options = {}) {
     const catalogSandbox = { structuredClone }; catalogSandbox.globalThis = catalogSandbox;
     vm.runInContext(catalogSource, vm.createContext(catalogSandbox), { filename: 'dataCatalog.js' });
     const catalog = catalogSandbox.__AppDataV2Catalog;
     const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null, beforeInstall: null };
     const envelope = (key, data, state = 'present', revision = 1, operationId = 'seed') => ({ schemaVersion: 2, revision, operationId, updatedAt: new Date().toISOString(), state, data: state === 'cleared' ? null : clone(data), checksum: checksum(state === 'cleared' ? null : data) });
     class Kernel {
+        constructor() { if (options.cacheEpochs) this.getEntityRevisionEpochs = async () => ({ practiceSummaries: shared.counter, practiceDetails: shared.detailEpoch || 0 }); }
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
         async read(key, options = {}) { const entry = catalog.get(key); const value = shared.docs.get(key) || null; const data = !value || value.state === 'cleared' ? entry.defaultValue() : value.data; return options.withMeta ? { data: clone(data), envelope: clone(value) } : clone(data); }
         async mutate(changes, options = {}) { const op = String(options.operationId || `doc-${++shared.counter}`); const revisions = {}; for (const change of changes) { const old = shared.docs.get(change.logicalKey); if (change.expectedRevision !== undefined && Number(change.expectedRevision) !== Number(old && old.revision || 0)) throw new AppDataError('CONFLICT', 'document revision'); const revision = Number(old && old.revision || 0) + 1; shared.docs.set(change.logicalKey, envelope(change.logicalKey, change.data, change.state, revision, op)); revisions[change.logicalKey] = revision; } return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] }; }
@@ -121,7 +123,111 @@ function harness() {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, parseLegacyValue, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)) };
     const sandbox = { console, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(readingModelSource, context, { filename: 'readingVocabularyModel.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox, context };
+}
+
+async function testReadingModelUsesLiveVocabularyOwners() {
+    const { app, sandbox } = harness();
+    await app.ready;
+    const model = app.vocab.readingModel;
+    assert.strictEqual(model, sandbox.ReadingVocabularyModel);
+    await app.vocab.saveWords([{
+        id: 'review-apple', word: 'Apple', meaning: 'existing definition',
+        repetitions: 7, interval: 30, nextReview: '2026-10-08T00:00:00.000Z'
+    }]);
+    const before = await app.vocab.listWords();
+    let snapshot = model.createSnapshot({ words: before, lists: await app.vocab.listCollections() });
+    snapshot = model.collect(snapshot, {
+        source: { kind: 'imported', id: 'library-a' }, article: { examId: 'article-a' },
+        word: { word: 'APPLE', meaning: 'must not replace definition' }, manual: true,
+        at: '2026-09-08T00:00:00.000Z'
+    });
+    assert.deepStrictEqual(await app.vocab.listWords(), before, 'pure operations must not silently commit');
+    assert.deepStrictEqual(snapshot.words, before, 'collection must preserve the complete existing review record');
+    await app.vocab.patchWord({ listId: 'default', wordId: 'review-apple', patch: { repetitions: 8 } });
+    snapshot = model.createSnapshot({ words: await app.vocab.listWords(), lists: await app.vocab.listCollections(), reading: snapshot.reading });
+    const term = model.query(snapshot).terms[0];
+    assert.strictEqual(term.word.repetitions, 8, 'reader queries must resolve the current review owner');
+    assert.strictEqual(term.word.meaning, 'existing definition');
+    assert.deepStrictEqual(term.wordRef, { listId: 'default', wordId: 'review-apple' });
+}
+
+async function testReadingCollectionPresenceMetadata() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const migration = fixture.shared.docs.get('system.migrations').data.readingVocabularyV1;
+    assert.strictEqual(migration.version, 1);
+    assert.strictEqual(migration.completed, true, 'startup commits the reading migration marker with authoritative empty data');
+    const readingCollections = [
+        ['vocab.readingVocabWords', fixture.app.vocab.listReadingWords, fixture.app.vocab.saveReadingWords],
+        ['vocab.readingBookshelfExams', fixture.app.vocab.listReadingBookshelfExams, fixture.app.vocab.saveReadingBookshelfExams]
+    ];
+    for (const [logicalKey] of readingCollections) {
+        assert.strictEqual(fixture.shared.docs.get(logicalKey).operationId, fixture.shared.docs.get('system.migrations').operationId,
+            'the initial empty collections and migration marker share a durable commit');
+    }
+    for (const [logicalKey, list, save] of readingCollections) {
+        assert.deepStrictEqual(await list(), [], 'default reading list callers retain the array API');
+        const migrated = await list({ withMeta: true });
+        assert.deepStrictEqual(migrated.data, []);
+        assert.strictEqual(migrated.envelope.state, 'present', 'migration establishes an authoritative empty collection');
+        await save([], { expectedRevision: migrated.envelope.revision });
+        const empty = await list({ withMeta: true });
+        assert.deepStrictEqual(empty.data, []);
+        assert.strictEqual(empty.envelope.state, 'present');
+        fixture.shared.docs.set(logicalKey, fixture.envelope(logicalKey, null, 'cleared'));
+        const cleared = await list({ withMeta: true });
+        assert.deepStrictEqual(await list(), []);
+        assert.deepStrictEqual(cleared.data, []);
+        assert.strictEqual(cleared.envelope.state, 'cleared', 'cleared collections retain their canonical presence');
+    }
+}
+
+async function testReadingMergeRetainsOwnersAndRelationships() {
+    const local = harness(); const remote = harness();
+    await Promise.all([local.app.ready, remote.app.ready]);
+    const owner = { id: 'retained-review-owner', word: 'Apple', meaning: 'My definition',
+        repetitions: 9, interval: 45, easeFactor: 2.4,
+        reviewHistory: [{ at: '2026-09-01T00:00:00.000Z', grade: 4 }] };
+    await local.app.vocab.saveWords([owner]);
+    const command = (libraryId) => ({
+        source: { kind: 'imported', id: libraryId }, article: { examId: 'same-exam', title: libraryId },
+        word: { word: 'apple', meaning: 'Imported definition' }, at: '2026-09-08T00:00:00.000Z',
+        occurrence: { scopeId: 'passage', contentVersion: 'original', startOffset: 0, endOffset: 5,
+            quote: 'apple', before: '', after: ' grows here' }
+    });
+    await local.app.vocab.mutateReading('collect', command('library-a'));
+    await remote.app.vocab.mutateReading('collect', command('library-b'));
+    await remote.app.vocab.mutateReading('recordVisit', {
+        source: { kind: 'builtin', id: 'default' }, article: { examId: 'zero-words' },
+        at: '2026-09-08T01:00:00.000Z'
+    });
+    const portable = await remote.app.backups.export({ domains: ['vocab'] });
+    const merge = async () => {
+        const plan = await local.app.backups.previewImport(portable, { practiceMode: 'merge' });
+        const receipt = await local.app.backups.commitImport(plan.id);
+        assert.strictEqual(receipt.committed, true);
+        return (await local.app.vocab.getReadingSnapshot()).snapshot;
+    };
+    const first = await merge();
+    assert.deepStrictEqual(first.words, [owner], 'backup merge preserves the complete existing canonical review record');
+    assert.strictEqual(first.reading.terms.length, 1);
+    assert.deepStrictEqual(first.reading.terms[0].wordRef, { listId: 'default', wordId: owner.id });
+    assert.strictEqual(first.reading.associations.length, 2, 'source-qualified A/B associations survive same-term merge');
+    assert.strictEqual(first.reading.occurrences.length, 2, 'both selected occurrences survive');
+    assert.strictEqual(first.reading.visits.length, 3, 'zero-word bookshelf visits also survive');
+    assert.deepStrictEqual(await merge(), first, 'repeated import is idempotent for vocabulary and reading data');
+
+    const model = local.app.vocab.readingModel;
+    const colliding = model.collect(model.createSnapshot({ words: [
+        { id: owner.id, word: 'banana', meaning: 'A different term' }
+    ] }), { ...command('library-c'), word: { word: 'banana' },
+        occurrence: { scopeId: 'passage', contentVersion: 'original', startOffset: 0, endOffset: 6, quote: 'banana' } });
+    const joined = model.merge(first, colliding);
+    assert.strictEqual(joined.words.length, 2);
+    assert.notStrictEqual(joined.words[0].id, joined.words[1].id, 'an unrelated imported ID collision gets a distinct canonical owner');
+    assert.strictEqual(model.query(joined).terms.find((row) => row.term.normalizedTerm === 'banana').word.meaning, 'A different term');
+    assert.deepStrictEqual(clone(model.merge(joined, colliding)), clone(joined), 'owner collision remapping remains idempotent');
 }
 
 async function testVocabPhoneticMutationProtection() {
@@ -277,7 +383,9 @@ async function testAtomicVocabPhoneticBackfill() {
     }, { operationId: 'phonetic-backfill-atomic' });
     assert.strictEqual(receipt.committed, true);
     assert.strictEqual(receipt.updatedCount, 3, 'every stored duplicate with a missing phonetic must be filled');
-    assert.deepStrictEqual(Object.keys(receipt.revisions), ['vocab.words'], 'the backfill must commit as one list-document mutation');
+    assert.deepStrictEqual(Object.keys(receipt.revisions), ['vocab.words', 'vocab.readingState'],
+        'backfill atomically commits the list with the reading owner consistency fence');
+    assert.strictEqual(fixture.shared.docs.get('vocab.readingState').operationId, 'phonetic-backfill-atomic');
     assert.strictEqual(
         fixture.shared.docs.get('vocab.words').revision,
         revisionBefore + 1,
@@ -436,7 +544,9 @@ async function testV2MergeImportPhoneticProtection() {
     snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
 
     const plan = await fixture.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
-    assert.deepStrictEqual(new Set(plan.keys), new Set(['vocab.words', 'vocab.lists']));
+    assert.deepStrictEqual(new Set(plan.keys), new Set([
+        'vocab.words', 'vocab.lists', 'vocab.readingState', 'vocab.readingVocabWords', 'vocab.readingBookshelfExams'
+    ]), 'vocabulary import includes its reading references and compatibility projections in the same commit');
     assert.strictEqual(plan.destructive, false);
     await fixture.app.backups.commitImport(plan.id);
 
@@ -1400,7 +1510,251 @@ async function testLegacyReplayProjectionContract() {
     assert.strictEqual(signedTimestampReplay.endTime, '2026-08-15T10:50:00.000Z');
 }
 
+async function testClearInterruptedRecoveryIsolation() {
+    const { app, shared } = harness();
+    await app.ready;
+    await app.practice.completeAttempt({
+        operationId: 'recovery-clear-canonical',
+        record: {
+            id: 'canonical-to-retain', examId: 'reading-recovery', type: 'reading',
+            totalQuestions: 1, correctAnswers: 1, answers: { 1: 'A' },
+            notes: { 1: 'Retain this annotation' }
+        }
+    });
+    await app.recovery.saveActiveSession({ id: 'active-to-retain', answers: { 1: 'B' } });
+    await app.recovery.saveDraft({ id: 'draft-to-retain', answers: { 1: 'C' } });
+    await app.recovery.saveRejectedCompletion({ id: 'rejected-to-retain', answers: { 1: 'D' } });
+    await app.recovery.saveInterrupted({ id: 'interrupted-one', answers: { 1: 'E' } });
+    await app.recovery.saveInterrupted({ id: 'interrupted-two', answers: { 1: 'F' } });
+
+    const interruptedBefore = clone(shared.docs.get('recovery.interrupted'));
+    const retainedKeys = ['recovery.activeSessions', 'recovery.drafts', 'recovery.rejectedCompletions'];
+    const retainedBefore = retainedKeys.map((key) => clone(shared.docs.get(key)));
+    const canonicalBefore = clone(shared.entities);
+    await assert.rejects(
+        () => app.recovery.clearInterrupted({ expectedRevision: interruptedBefore.revision - 1 }),
+        { code: 'CONFLICT' },
+        'a stale revision must not clear interrupted recovery'
+    );
+    assert.deepStrictEqual(shared.docs.get('recovery.interrupted'), interruptedBefore,
+        'a rejected clear must preserve interrupted data and revision');
+
+    const receipt = await app.recovery.clearInterrupted({
+        expectedRevision: interruptedBefore.revision,
+        operationId: 'clear-only-interrupted'
+    });
+    assert.strictEqual(receipt.committed, true);
+    assert.strictEqual(receipt.operationId, 'clear-only-interrupted');
+    assert.deepStrictEqual(Object.keys(receipt.revisions), ['recovery.interrupted']);
+    assert.strictEqual(shared.docs.get('recovery.interrupted').state, 'cleared');
+    assert.deepStrictEqual(await app.recovery.listInterrupted(), []);
+    assert.strictEqual(await app.recovery.getInterrupted('interrupted-one'), null);
+    assert.deepStrictEqual(retainedKeys.map((key) => shared.docs.get(key)), retainedBefore,
+        'clearing interrupted recovery must leave active sessions, drafts, and rejected completions unchanged');
+    assert.deepStrictEqual(shared.entities, canonicalBefore,
+        'clearing interrupted recovery must leave canonical summaries, details, and annotations unchanged');
+
+    await app.recovery.saveInterrupted({ id: 'interrupted-default-options' });
+    await app.recovery.clearInterrupted();
+    assert.deepStrictEqual(await app.recovery.listInterrupted(), [],
+        'clearInterrupted must also support callers without mutation options');
+}
+
+async function testRecoveryThirtyDayTtlBoundary() {
+    const { app, shared, envelope, sandbox } = harness();
+    await app.ready;
+    const fixedNow = Date.parse('2026-09-07T12:00:00.000Z');
+    const cutoff = fixedNow - 30 * 24 * 60 * 60 * 1000;
+    sandbox.Date = class extends Date { static now() { return fixedNow; } };
+    const recoveryLists = [
+        ['recovery.activeSessions', 'listActiveSessions'],
+        ['recovery.drafts', 'listDrafts'],
+        ['recovery.interrupted', 'listInterrupted'],
+        ['recovery.rejectedCompletions', 'listRejectedCompletions']
+    ];
+    for (const [key, listMethod] of recoveryLists) {
+        shared.docs.set(key, envelope(key, [
+            { id: 'older-than-thirty-days', updatedAt: new Date(cutoff - 1).toISOString() },
+            { id: 'exactly-thirty-days', updatedAt: new Date(cutoff).toISOString() },
+            { id: 'within-thirty-days', updatedAt: new Date(cutoff + 1).toISOString() },
+            { id: 'legacy-timestamp', timestamp: new Date(cutoff + 1).toISOString() },
+            { id: 'unknown-timestamp', updatedAt: 'invalid-date' }
+        ]));
+        assert.deepStrictEqual(
+            (await app.recovery[listMethod]()).map((item) => item.id),
+            ['within-thirty-days', 'legacy-timestamp', 'unknown-timestamp'],
+            `${key} must expire records at the existing 30-day boundary and retain newer or undated recovery`
+        );
+        assert.deepStrictEqual(
+            shared.docs.get(key).data.map((item) => item.id),
+            ['within-thirty-days', 'legacy-timestamp', 'unknown-timestamp'],
+            `${key} must persist TTL cleanup`
+        );
+    }
+}
+
+async function testLegacyBrowseGradingUpgrade() {
+    const fixture = JSON.parse(fs.readFileSync(path.join(root, 'developer/tests/fixtures/browse-legacy-v2.json'), 'utf8'));
+    const upgraded = harness();
+    await upgraded.app.ready;
+    // These are the actual persisted layers from the base revision importer,
+    // installed unchanged to model opening an existing v2 database on upgrade.
+    for (const [store, rows] of Object.entries(fixture.entities)) {
+        for (const data of rows) {
+            const recordId = data.recordId || data.id;
+            upgraded.shared.entities.get(store).set(recordId, {
+                recordId, data: clone(data), revision: 1, checksum: checksum(data),
+                operationId: 'base-import', updatedAt: '2026-09-03T00:00:00Z'
+            });
+        }
+    }
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/services/browseLearningState.js'), 'utf8'), upgraded.context);
+    const state = upgraded.sandbox.BrowseLearningState;
+    const key = id => JSON.stringify([null, 'reading', id]);
+    upgraded.shared.reads = [];
+    const summaries = await upgraded.app.practice.list({ projection: 'light' });
+    const index = state.buildIndex(summaries);
+    assert.strictEqual(index.get(key('p1')).percentage, 100, 'a newer scoreless import must not replace the valid attempt');
+    assert.strictEqual(index.get(key('p10')).percentage, 100,
+        'an older endTime-only attempt must not replace a newer perfect result with its import time');
+    assert.strictEqual(index.get(key('p10')).wrong, false);
+    assert.deepStrictEqual([...index.keys()].sort(), ['p1', 'p5', 'p7', 'p10', 'p11', 'p12', 'p13', 'p14'].map(key).sort());
+    assert.deepStrictEqual(upgraded.shared.reads, ['practiceSummaries', 'practiceDetails'],
+        'old summaries resolve available details in one snapshot without loading annotations');
+    assert.strictEqual(index.get(key('p5')).percentage, 0, 'detail-backed zero scores remain graded');
+    assert.strictEqual(index.get(key('p7')).percentage, 0, 'suite details retain explicit child zero scores');
+    const scoreless = summaries.find(row => row.id === 'scoreless');
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history display counts remain compatible');
+    assert.strictEqual(scoreless.browseScore.earned, null);
+    assert.strictEqual(summaries.find(row => row.id === 'ambiguous-zero').browseScore.earned, null,
+        'irreversibly ambiguous old zeros stay unknown');
+    assert.strictEqual(summaries.find(row => row.id === 'ungradable').gradable, false);
+    assert.strictEqual(summaries.find(row => row.id === 'ungraded').graded, false);
+    assert.strictEqual(summaries.find(row => row.id === 'draft').status, 'draft');
+    assert.strictEqual(Object.hasOwn(scoreless, 'scoreInfo'), false, 'light rows do not expose detail payloads');
+    const submissionTimes = {
+        'end-time-older': '2026-09-01T00:00:00Z',
+        'end-time-newer': '2026-09-02T00:00:00Z',
+        'authored-completion': '2026-09-02T00:00:00Z',
+        'invalid-end-time': '2026-09-02T00:00:00Z',
+        'authored-date': '2026-09-02T00:00:00Z',
+        'end-time-with-timestamp': '2026-09-01T00:00:00Z'
+    };
+    const storedOlder = fixture.entities.practiceSummaries.find(row => row.id === 'end-time-older');
+    assert.strictEqual(storedOlder.completedAt, fixture.importedAt,
+        'the base importer fixture must contain the synthetic completion time from the reported reproduction');
+    for (const projection of ['light', 'summary', 'detail', 'full']) {
+        assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection })).browseScore.earned, null);
+        const projected = await upgraded.app.practice.list({ projection });
+        const projectedIndex = state.buildIndex(projected);
+        assert.strictEqual(projectedIndex.get(key('p1')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).percentage, 100);
+        assert.strictEqual(projectedIndex.get(key('p10')).timestamp, Date.parse(submissionTimes['end-time-newer']));
+        for (const [id, submittedAt] of Object.entries(submissionTimes)) {
+            const expected = Date.parse(submittedAt);
+            assert.strictEqual(projected.find(row => row.id === id).browseScore.submittedAt, expected, `${projection} list: ${id}`);
+            const record = await upgraded.app.practice.get(id, { projection });
+            assert.strictEqual(record.browseScore.submittedAt, expected, `${projection} get: ${id}`);
+            if (id === 'end-time-older') assert.strictEqual(record.completedAt, fixture.importedAt,
+                'Browse compatibility must preserve the existing history fields');
+        }
+    }
+    const fresh = harness();
+    const plan = await fresh.app.backups.previewImport({ practice_records: fixture.sourceRecords });
+    await fresh.app.backups.commitImport(plan.id);
+    const direct = state.buildIndex((await fresh.app.practice.list({ projection: 'light' }))
+        .filter(row => row.id !== 'ambiguous-zero'));
+    assert.deepStrictEqual([...index], [...direct], 'recoverable upgrade evidence agrees with direct import on this head');
+    fresh.shared.reads = [];
+    await fresh.app.practice.list({ projection: 'light' });
+    assert.deepStrictEqual(fresh.shared.reads, [], 'modern summaries keep the cheap summary-only read');
+    assert.strictEqual(upgraded.shared.mutations.length, 0, 'compatibility reads never rewrite historical records');
+
+    // A deleted/missing detail cannot turn an ambiguous display zero into grading.
+    upgraded.shared.entities.get('practiceDetails').delete('scoreless');
+    assert.strictEqual((await upgraded.app.practice.get('scoreless', { projection: 'light' })).browseScore.earned, null);
+    upgraded.shared.entities.get('practiceDetails').delete('end-time-older');
+    assert.strictEqual((await upgraded.app.practice.get('end-time-older', { projection: 'light' })).browseScore.submittedAt,
+        Date.parse(submissionTimes['end-time-older']), 'retained summary endTime remains usable without a detail record');
+}
+
+async function testCompletionEvidenceThroughLightAnalytics() {
+    const { app, sandbox, context } = harness();
+    await app.ready;
+    for (const file of ['js/core/practiceCore.js', 'js/core/practiceRecorder.js', 'js/services/readingAnalytics.js']) {
+        vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
+    }
+    sandbox.resolveActiveLibraryIndex = async () => [];
+    const recorder = Object.create(sandbox.PracticeRecorder.prototype);
+    recorder.activeSessions = new Map();
+    recorder.sessionListeners = new Map();
+    recorder.sessionStartGenerations = new WeakMap();
+    recorder.practiceTypeCache = new Map();
+    recorder.dispatchSessionEvent = () => {};
+    const endTime = '2026-09-19T01:00:00.000Z';
+    for (const [id, fields, attempts, scored, earned, possible] of [
+        ['missing', {}, 1, 0, null, null],
+        ['denominator-only', { totalQuestions: 2 }, 1, 0, null, 2],
+        ['ungradable', { gradable: false, scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['ungraded', { graded: false, scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['interrupted', { status: 'interrupted', scoreInfo: { correct: 1, total: 2 } }, 0, 0, 1, 2],
+        ['graded-zero', { graded: true, correctAnswers: 0, totalQuestions: 2 }, 1, 1, 0, 2],
+        ['fractional', { scoreInfo: { correct: .5, total: 2 },
+            questionTypePerformance: { mcq: { correct: .5, total: 2 } } }, 1, 1, .5, 2],
+        ['weighted', { scoreInfo: { correct: 9, total: 10 } }, 1, 1, 9, 10],
+        ['saved-unknown', { correctAnswers: 0, totalQuestions: 2,
+            browseScore: { earned: null, possible: null, submittedAt: null } }, 1, 0, null, null]
+    ]) {
+        const examId = 'flat-reading';
+        recorder.activeSessions.set(examId, {
+            sessionId: id, startTime: endTime, lastActivity: endTime, progress: {}, answers: {},
+            metadata: { type: 'reading', category: 'P1', libraryConfigurationId: 'A' }
+        });
+        const saved = await recorder.handleSessionCompleted({
+            examId, sessionId: id, answers: { q1: 'A', q2: 'B' }, endTime, ...fields
+        });
+        const light = await app.practice.get(saved.id, { projection: 'light' });
+        assert.strictEqual(light.browseScore.earned, earned, `${id}: earned evidence`);
+        assert.strictEqual(light.browseScore.possible, possible, `${id}: denominator evidence`);
+        assert.strictEqual(light.browseScore.submittedAt, id === 'saved-unknown' ? null : Date.parse(endTime));
+        for (const field of ['status', 'graded', 'gradable']) {
+            if (Object.hasOwn(fields, field)) assert.strictEqual(light[field], fields[field], `${id}: ${field}`);
+        }
+        const result = sandbox.ReadingAnalytics.aggregate([light]);
+        assert.strictEqual(result.total.attempts, attempts, `${id}: eligible submissions`);
+        assert.strictEqual(result.total.scored, scored, `${id}: scored submissions`);
+        assert.strictEqual(result.total.accuracy, scored ? earned / possible : null, `${id}: accuracy`);
+    }
+    const combined = sandbox.ReadingAnalytics.aggregate(await app.practice.list({ projection: 'light' }));
+    assert.strictEqual(combined.total.attempts, 6);
+    assert.strictEqual(combined.total.scored, 3);
+    assert.strictEqual(combined.total.accuracy, 9.5 / 14);
+    assert.strictEqual(combined.questionTypes['multiple-choice'].accuracy, .5 / 2);
+
+    // Legacy records are projected without stamping today's launch provenance.
+    const child = { id: 'embedded', examId: 'legacy-p1', correctAnswers: 1, totalQuestions: 2 };
+    const legacyRecords = [{
+        id: 'legacy-suite', sessionId: 'legacy-suite-session', type: 'reading', suiteMode: true,
+        suiteEntries: [child], metadata: { suiteEntryCount: 2 }
+    }, {
+        ...child, id: 'standalone', type: 'reading', suiteSessionId: 'legacy-suite-session'
+    }];
+    const legacy = sandbox.ReadingAnalytics.aggregate(legacyRecords.map(record => app.practice.projectLight(record)));
+    assert.strictEqual(legacy.total.attempts, 1);
+    assert.strictEqual(legacy.total.earned, 1);
+    assert.strictEqual(legacy.total.possible, 2);
+    assert.strictEqual(legacy.total.distinctPassages, 0);
+    assert.strictEqual(legacy.coverage.missingSuiteChildren, 1);
+}
+
 async function run() {
+    await testCompletionEvidenceThroughLightAnalytics();
+    await testLegacyBrowseGradingUpgrade();
+    await testReadingModelUsesLiveVocabularyOwners();
+    await testReadingCollectionPresenceMetadata();
+    await testReadingMergeRetainsOwnersAndRelationships();
+    await testClearInterruptedRecoveryIsolation();
+    await testRecoveryThirtyDayTtlBoundary();
     await testVocabPhoneticMutationProtection();
     await testAtomicVocabPhoneticBackfill();
     await testReplaceProgressPhoneticProtection();
@@ -1791,6 +2145,25 @@ async function run() {
         app.preferences.setSuite({ autoAdvance: true }),
         app.preferences.setResourceBasePrefix('./')
     ]);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'average'
+    }, 'practice dashboard preferences should expose safe defaults for legacy data');
+    await app.preferences.patchPracticeDashboard({ accuracyMode: 'weighted' });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'weighted'
+    });
+    await app.preferences.patchPracticeDashboard({ summaryCollapsed: true });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: true,
+        accuracyMode: 'weighted'
+    }, 'practice dashboard patches must preserve the other preference');
+    await app.preferences.patchPracticeDashboard({ accuracyMode: 'legacy', summaryCollapsed: 'yes' });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.preferences.getPracticeDashboard())), {
+        summaryCollapsed: false,
+        accuracyMode: 'average'
+    }, 'unknown dashboard values should normalize to defaults');
     const concurrentPreferences = await app.preferences.getAll();
     assert.strictEqual(concurrentPreferences.theme, 'dark');
     assert.strictEqual(concurrentPreferences.consent.accepted, true);
@@ -1949,6 +2322,109 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 52 }));
+    const browseFixture = harness();
+    await browseFixture.app.ready;
+    const browseApi = browseFixture.app.preferences;
+    const favoriteA = JSON.stringify([null, 'reading', 'same-id']);
+    const favoriteB = JSON.stringify(['custom', 'reading', 'same-id']);
+    await browseApi.patchBrowse({ autoScrollEnabled: false, learningState: 'wrong', favoritesOnly: true });
+    await Promise.all([browseApi.setReadingFavorite(favoriteA, true), browseApi.setReadingFavorite(favoriteB, true)]);
+    await browseApi.patchBrowse({ learningState: 'all', favoritesOnly: false });
+    let browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(Object.keys(browseSaved.readingFavorites).length, 2, 'reset and concurrent favorites preserve both sources');
+    assert.strictEqual(browseSaved.autoScrollEnabled, false, 'favorites preserve existing preferences');
+    await browseApi.setReadingFavorite(favoriteA, false);
+    browseSaved = await browseApi.getBrowse();
+    assert.strictEqual(browseSaved.readingFavorites[favoriteA], undefined);
+    assert.strictEqual(browseSaved.readingFavorites[favoriteB], true);
+    const scoreless = browseFixture.app.practice.projectLight({
+        id: 'scoreless-browse', type: 'reading', totalQuestions: 10,
+        metadata: { libraryConfigurationId: null }
+    });
+    assert.strictEqual(scoreless.correctAnswers, 0, 'history retains its existing display default');
+    assert.strictEqual(scoreless.browseScore.earned, null, 'Browse preserves unknown grading instead of inventing a zero score');
+    assert.strictEqual(browseFixture.app.practice.projectLight(scoreless).browseScore.earned, null,
+        'reprojecting or importing a summary must preserve unknown grading');
+    assert.strictEqual(browseFixture.app.practice.projectLight({
+        id: 'answer-key-only', correctAnswers: { 1: 'A' }, totalQuestions: 1
+    }).browseScore.earned, null, 'an answer key without a graded score is not a zero-score submission');
+    const datedBrowse = browseFixture.app.practice.projectLight({
+        id: 'imported-completion-time', type: 'reading', endTime: '2026-08-01T10:00:00Z',
+        correctAnswers: 5, totalQuestions: 10
+    });
+    assert.strictEqual(datedBrowse.browseScore.submittedAt, Date.parse('2026-08-01T10:00:00Z'),
+        'canonical bookkeeping defaults must not replace the actual submission time');
+    assert.strictEqual(scoreless.browseScore.submittedAt, null, 'unknown submission time stays unknown');
+    const sourceSuite = await browseFixture.app.practice.finalizeSuite({ record: {
+        id: 'source-suite', type: 'reading', metadata: { libraryConfigurationId: 'current' },
+        suiteEntries: [{ examId: 'same-id', sessionId: 'analytics-child-session', category: 'P3',
+            questionTypePerformance: { 'multiple-choice': { correct: 5.5, total: 10 } },
+            scoreInfo: { correct: 5.5, total: 10 },
+            rawData: { libraryConfigurationId: 'launch-source', endTime: '2026-09-01T10:00:00Z' } }]
+    } });
+    const sourceSummary = (await browseFixture.app.practice.get(sourceSuite.record.id, { projection: 'light' })).suiteEntrySummaries[0];
+    assert.strictEqual(sourceSummary.metadata.libraryConfigurationId, 'launch-source', 'suite source is captured at passage launch');
+    assert.strictEqual(sourceSummary.browseScore.earned, 5.5);
+    assert.strictEqual(sourceSummary.completedAt, '2026-09-01T10:00:00Z');
+    assert.strictEqual(sourceSummary.browseScore.submittedAt, Date.parse('2026-09-01T10:00:00Z'));
+
+    assert.strictEqual(sourceSummary.sessionId, 'analytics-child-session');
+    assert.strictEqual(sourceSummary.readingAnalytics.category, 'P3');
+    assert.strictEqual(sourceSummary.readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(sourceSummary.readingAnalytics.questionTypes['multiple-choice'].possible, 10);
+    assert.strictEqual(browseFixture.app.practice.projectLight(sourceSuite.record).suiteEntrySummaries[0].readingAnalytics.category, 'P3');
+    const projectedAgain = browseFixture.app.practice.projectLight(await browseFixture.app.practice.get('source-suite', { projection: 'light' }));
+    assert.strictEqual(projectedAgain.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(scoreless.readingAnalytics.category, null);
+    assert.deepStrictEqual(Object.keys(scoreless.readingAnalytics.questionTypes), []);
+    const incompleteTypes = browseFixture.app.practice.projectLight({
+        id: 'analytics-incomplete-types', correctAnswers: 1, totalQuestions: 2,
+        questionTypePerformance: { 'multiple-choice': { correct: .5 }, other: { total: 0 } },
+        questionTypeErrorCounts: { 'multiple-choice': 3 }
+    });
+    assert.strictEqual(incompleteTypes.readingAnalytics.questionTypes['multiple-choice'].possible, null);
+    assert.strictEqual(incompleteTypes.readingAnalytics.questionTypes.other.earned, null);
+    const legacyAnalytics = browseFixture.shared.entities.get('practiceSummaries').get('source-suite');
+    delete legacyAnalytics.data.readingAnalytics;
+    delete legacyAnalytics.data.suiteEntrySummaries[0].readingAnalytics;
+    // The new field must recover from detail without relying on today's library.
+    const recoveredAnalytics = await browseFixture.app.practice.get('source-suite', { projection: 'light' });
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.category, 'P3');
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].readingAnalytics.questionTypes['multiple-choice'].earned, 5.5);
+    assert.strictEqual(recoveredAnalytics.suiteEntrySummaries[0].metadata.libraryConfigurationId, 'launch-source');
+
+    const installation = harness();
+    await installation.app.ready;
+    const beforeIdentity = JSON.parse(JSON.stringify(installation.shared.docs.get('system.migrations').data));
+    const identity = await installation.app.backups.getStorageIdentity();
+    assert.ok(identity);
+    assert.strictEqual(await installation.app.backups.getStorageIdentity(), identity);
+    const metadata = Object.assign({}, installation.shared.docs.get('system.migrations').data);
+    delete metadata.storageIdentity;
+    assert.deepStrictEqual(metadata, beforeIdentity, 'identity creation preserves all migration markers');
+    const portableIdentity = await installation.app.backups.export();
+    assert.ok(!JSON.stringify(portableIdentity).includes(identity), 'installation identity never travels with a snapshot');
+
+    const cached = harness({ cacheEpochs: true });
+    await cached.app.practice.completeAttempt({ record: { id: 'cached-old', type: 'reading', correctAnswers: 2, totalQuestions: 4 } });
+    const oldSummary = cached.shared.entities.get('practiceSummaries').get('cached-old');
+    delete oldSummary.data.readingAnalytics;
+    await cached.app.practice.list({ projection: 'light' });
+    const firstDetailReads = cached.shared.reads.filter(store => store === 'practiceDetails').length;
+    const warm = await cached.app.practice.list({ projection: 'light' });
+    assert.strictEqual(cached.shared.reads.filter(store => store === 'practiceDetails').length, firstDetailReads,
+        'warm old-summary reads reuse derived upgrades without loading details');
+    warm[0].title = 'caller mutation';
+    assert.notStrictEqual((await cached.app.practice.list({ projection: 'light' }))[0].title, 'caller mutation');
+    cached.shared.detailEpoch = 1; // A commit from another tab, without a notification.
+    await cached.app.practice.list({ projection: 'light' });
+    assert.strictEqual(cached.shared.reads.filter(store => store === 'practiceDetails').length, firstDetailReads + 1,
+        'durable detail epoch invalidates upgrades even when notifications are missed');
+    oldSummary.data.title = 'changed-summary'; // Initial summary read raced an epoch observation.
+    assert.strictEqual((await cached.app.practice.list({ projection: 'light' }))[0].title, 'changed-summary');
+    await cached.app.practice.delete('cached-old');
+    assert.strictEqual((await cached.app.practice.list({ projection: 'light' })).length, 0, 'cache cannot resurrect deleted records');
+
+    console.log(JSON.stringify({ status: 'pass', tests: 61 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

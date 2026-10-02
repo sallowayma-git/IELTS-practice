@@ -28,7 +28,9 @@
     const LEGACY_UNPREFIXED_WEB_KEYS = Object.freeze([
         'practice_records',
         'vocab_user_config',
-        'user_achievements'
+        'user_achievements',
+        'ielts_reading_vocab_words_v1',
+        'ielts_reading_bookshelf_exams_v1'
     ]);
 
     function clone(value) { return catalog.clone(value); }
@@ -386,6 +388,14 @@
         compactJournal(journal);
         return journal;
     }
+    function invalidateReadingView(tx, changes, operationIdValue) {
+        if (!changes.some(change => ['vocab.words', 'vocab.lists', 'vocab.readingState'].includes(change.logicalKey))) return;
+        const logicalKey = 'system.readingViewToken';
+        const envelope = makeEnvelope(lookupEntry(logicalKey), { token: randomId('reading-view') },
+            { revision: 1, operationId: operationIdValue });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey, envelope });
+    }
+
     function putJournal(tx, currentRow, journal, spec, receipt) {
         const current = currentRow && currentRow.envelope;
         const envelope = makeEnvelope(lookupEntry('system.operationJournal'), writeJournal(journal, spec, receipt), {
@@ -818,7 +828,7 @@
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
                 const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
-                if (logicalKey === 'system.operationJournal' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
+                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
                     throw validation(`${logicalKey} is managed by DataKernel`);
                 }
                 if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
@@ -859,6 +869,7 @@
                             });
                             tx.objectStore(storeFor(item.change.logicalKey)).put({ logicalKey: item.change.logicalKey, envelope: canonicalizeJson(envelope) }); revisions[item.change.logicalKey] = envelope.revision;
                         }
+                        invalidateReadingView(tx, spec.changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
                         putJournal(tx, journalRow, journal, spec, receipt);
                         done(receipt);
@@ -930,6 +941,10 @@
         async mutateEntities(operations, options = {}) {
             this._assertReady(); if (!Array.isArray(operations) || !operations.length) throw validation('mutateEntities requires operations');
             const opId = operationId(options.operationId); const items = operations.map(normalizeEntityOperation); const seen = new Set();
+            // Optional document updates share the entity transaction (e.g. sealing a
+            // timing writer with its submitted record). Revision fences stay atomic.
+            const documents = options.documentChanges?.length
+                ? this._documentSpec(options.documentChanges, options).changes : [];
             for (const item of items) { const key = `${item.store}/${item.recordId || '*'}`; if (seen.has(key)) throw validation(`Duplicate entity operation: ${key}`); seen.add(key); }
             for (const store of ENTITY_STORES) {
                 const scoped = items.filter((item) => item.store === store);
@@ -943,8 +958,9 @@
                 operationId: opId,
                 warnings,
                 pending: [],
-                fingerprint: requestFingerprint(options, { operations: items, warnings }, warnings),
-                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store))))
+                fingerprint: requestFingerprint(options, { operations: items,
+                    ...(documents.length ? { documents: documents.map(({ entry, ...item }) => item) } : {}), warnings }, warnings),
+                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey)))))
             };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -961,9 +977,23 @@
                                 ? tx.objectStore(item.store).getAll()
                                 : tx.objectStore(item.store).get(item.recordId)
                         }));
-                        let remaining = reads.length;
+                        const documentReads = documents.map(change => ({ change,
+                            request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
+                        let remaining = reads.length + documentReads.length;
                         const finish = () => {
                             const revisions = {};
+                            for (const { change, request } of documentReads) {
+                                const current = request.result?.envelope || null;
+                                if (current && !validateEnvelope(change.entry, current)) throw corruption(`Invalid stored envelope: ${change.logicalKey}`);
+                                const revision = current ? Number(current.revision) : 0;
+                                if (change.expectedRevision !== null && change.expectedRevision !== revision) {
+                                    throw new AppDataError('CONFLICT', `Revision conflict for ${change.logicalKey}`);
+                                }
+                                const envelope = makeEnvelope(change.entry, change.data, { state: change.state,
+                                    revision: incrementCounter(revision, change.logicalKey), operationId: spec.operationId, normalized: true });
+                                tx.objectStore(storeFor(change.logicalKey)).put({ logicalKey: change.logicalKey, envelope: canonicalizeJson(envelope) });
+                                revisions[change.logicalKey] = envelope.revision;
+                            }
                             const affectedStores = new Set();
                             for (const read of reads) {
                                 const item = read.item;
@@ -1011,11 +1041,12 @@
                             }
                             for (const store of affectedStores) bumpEntityEpoch(revisionState, store);
                             putEntityRevisionState(tx, revisionRequest.result || null, revisionState, spec.operationId);
+                            invalidateReadingView(tx, documents, spec.operationId);
                             const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                             putJournal(tx, journalRow, journal, spec, receipt);
                             done(receipt);
                         };
-                        for (const read of reads) {
+                        for (const read of reads.concat(documentReads)) {
                             read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
                             read.request.onsuccess = () => {
                                 remaining -= 1;
@@ -1024,7 +1055,8 @@
                         }
                     };
                 } }));
-                this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type })), receipt); return receipt;
+                this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type }))
+                    .concat(documents.map(change => ({ logicalKey: change.logicalKey }))), receipt); return receipt;
             } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
         }
         async exportSnapshot(options = {}) {
@@ -1240,6 +1272,7 @@
                         if (Object.keys(entityRows).length) {
                             putEntityRevisionState(tx, revisionRead.request.result || null, revisionState, spec.operationId);
                         }
+                        invalidateReadingView(tx, changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                         putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
                         done(receipt);

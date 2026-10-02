@@ -21,6 +21,7 @@
     var LATEST_FILENAME = 'ielts-atlas-backup-latest.json';
     var DATED_GENERATION_PATTERN = /^ielts-atlas-backup-(\d{4}-\d{2}-\d{2})(?:-(\d{9}))?\.json$/;
     var WRITE_DELAY_MS = 8000;
+    var REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
 
@@ -71,6 +72,8 @@
             lastWriteAt: source.lastWriteAt ? String(source.lastWriteAt) : null,
             lastChecksum: source.lastChecksum ? String(source.lastChecksum) : null,
             lastWriteError: source.lastWriteError ? String(source.lastWriteError) : null,
+            lastRemindedAt: source.lastRemindedAt ? String(source.lastRemindedAt) : null,
+            storageIdentity: source.storageIdentity ? String(source.storageIdentity) : null,
             awaitingRestore: source.awaitingRestore === true
         };
     }
@@ -510,6 +513,13 @@
                 }
 
                 var backups = requireBackupApi();
+                var storageIdentity = typeof backups.getStorageIdentity === 'function' ? await backups.getStorageIdentity() : null;
+                if (state.meta.storageIdentity && storageIdentity && state.meta.storageIdentity !== storageIdentity
+                    && opts.allowOverwriteExisting !== true) {
+                    state.meta.awaitingRestore = true;
+                    await persistMeta({ awaitingRestore: true, lastWriteError: 'browser_database_recreated' }, opts);
+                    return { success: false, reason: 'restore_required' };
+                }
                 var snapshot = await backups.export();
                 if (!isValidV2Snapshot(snapshot, V2_SCHEMA_VERSION)) {
                     throw new Error('AppData returned an invalid v2 backup snapshot');
@@ -521,6 +531,9 @@
                         snapshot.schemaVersion
                     );
                     if (latest && latest.checksum === snapshot.checksum) {
+                        if (storageIdentity && state.meta.storageIdentity !== storageIdentity) {
+                            await persistMeta({ storageIdentity: storageIdentity }, opts);
+                        }
                         state.dirty = state.dirtyGeneration !== startedGeneration;
                         state.freshnessUnknown = false;
                         followupNeeded = state.dirty;
@@ -552,6 +565,7 @@
                     directoryName: state.directoryHandle.name || state.meta.directoryName || 'backup',
                     lastWriteAt: nowIso(),
                     lastChecksum: snapshot.checksum,
+                    storageIdentity: storageIdentity,
                     lastWriteError: null
                 }, opts);
                 return {
@@ -580,15 +594,30 @@
             }
     }
 
+    function reportTransfer(action, error, operation, cancelled = false) {
+        try { global.AppOperationDiagnostics?.failure({ code: action === 'import' ? 'DATA_IMPORT_FAILED' : 'DATA_EXPORT_FAILED',
+            module: action, action, error, operation, cancelled }); } catch (_) { }
+    }
+
     async function writeToBoundDirectory(options) {
         var opts = options || {};
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
-        await ensureReady();
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        return withDiskWriteLock(function () {
-            return writeToBoundDirectoryUnlocked(opts);
-        });
+        try {
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
+            await ensureReady();
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            var result = await withDiskWriteLock(function () {
+                return writeToBoundDirectoryUnlocked(opts);
+            });
+            if (opts.interactive === true && result?.success !== true
+                && !['busy', 'unbound', 'restore_required', 'suspended', 'reset_pending'].includes(result?.reason)) {
+                reportTransfer('export', result?.error);
+            }
+            return result;
+        } catch (error) {
+            if (opts.interactive === true) reportTransfer('export', error);
+            throw error;
+        }
     }
 
     async function bindDirectory(options) {
@@ -1139,6 +1168,7 @@
             operationId: opts.operationId || createOperationId('external-restore'),
             confirmDestructive: preview.destructive === true
         });
+        if (!result || result.committed !== true) throw new Error('Import commit was not confirmed', { cause: result?.error });
         try {
             if (typeof backups.recordImport === 'function') {
                 await backups.recordImport({
@@ -1156,73 +1186,107 @@
     }
 
     async function restorePayload(payload, options) {
-        return withDiskWriteLock(function () {
-            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            return restorePayloadUnlocked(payload, options);
-        });
+        var restored = false;
+        try {
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result?.success !== true) reportTransfer('import', result?.error, 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : undefined);
+            throw error;
+        }
     }
 
     async function restoreFromLatest(options) {
-        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-        await ensureReady();
-        return withDiskWriteLock(async function () {
+        var restored = false;
+        try {
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            await refreshStoredBindingForWrite();
-            var payload = await readLatestPayload(true);
-            var result = await restorePayloadUnlocked(payload, options);
-            if (result && result.success) {
-                // The import itself may notify onDataCommitted. Start the
-                // freshness window after that commit so only a later
-                // concurrent change keeps the restored state dirty.
-                var restoreGeneration = state.dirtyGeneration;
-                var backups = requireBackupApi();
-                var currentSnapshot = null;
-                try {
-                    currentSnapshot = await backups.export();
-                } catch (_) {
-                    state.freshnessUnknown = true;
-                }
-                var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
-                var currentMatchesRestore = currentSnapshotValid
-                    && currentSnapshot.checksum === payload.checksum;
-                var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
-                if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
-                    if (!state.dirty) state.dirtyGeneration += 1;
-                    state.dirty = true;
-                    state.freshnessUnknown = !currentSnapshotValid;
-                } else {
-                    state.dirty = false;
-                    state.freshnessUnknown = false;
-                }
-                var metadataPersisted = await persistMeta({
-                    lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
-                    lastWriteError: null,
-                    awaitingRestore: false
-                }, { requireDurable: true });
-                result.metadataPersisted = metadataPersisted;
-                if (!metadataPersisted) {
-                    result.success = false;
-                    result.restored = true;
-                    result.reason = 'metadata_persistence_failed';
-                }
+            await ensureReady();
+            return await withDiskWriteLock(async function () {
+                if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+                await refreshStoredBindingForWrite();
+                var payload = await readLatestPayload(true);
+                var result = await restorePayloadUnlocked(payload, options);
+                restored = result?.result?.committed === true;
+                if (result && result.success) {
+                    // The import itself may notify onDataCommitted. Start the
+                    // freshness window after that commit so only a later
+                    // concurrent change keeps the restored state dirty.
+                    var restoreGeneration = state.dirtyGeneration;
+                    var backups = requireBackupApi();
+                    var currentSnapshot = null;
+                    try {
+                        currentSnapshot = await backups.export();
+                    } catch (_) {
+                        state.freshnessUnknown = true;
+                    }
+                    var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
+                    var currentMatchesRestore = currentSnapshotValid
+                        && currentSnapshot.checksum === payload.checksum;
+                    var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
+                    if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
+                        if (!state.dirty) state.dirtyGeneration += 1;
+                        state.dirty = true;
+                        state.freshnessUnknown = !currentSnapshotValid;
+                    } else {
+                        state.dirty = false;
+                        state.freshnessUnknown = false;
+                    }
+                    // Adopt this installation only after the restore has committed.
+                    // Failure keeps the disk overwrite guard active.
+                    var restoredIdentity;
+                    try {
+                        restoredIdentity = typeof backups.getStorageIdentity === 'function'
+                            ? await backups.getStorageIdentity() : state.meta.storageIdentity;
+                    } catch (error) {
+                        state.meta.awaitingRestore = true;
+                        result.success = false;
+                        result.restored = true;
+                        result.reason = 'storage_identity_unavailable';
+                        reportTransfer('import', error, restored ? 'committed' : 'unconfirmed');
+                        return result;
+                    }
+                    var metadataPersisted = await persistMeta({
+                        lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                        storageIdentity: restoredIdentity,
+                        lastWriteError: null,
+                        awaitingRestore: false
+                    }, { requireDurable: true });
+                    result.metadataPersisted = metadataPersisted;
+                    if (!metadataPersisted) {
+                        result.success = false;
+                        result.restored = true;
+                        result.reason = 'metadata_persistence_failed';
+                    }
 
-                // `scheduleSilentFlush` deliberately refuses to schedule
-                // while awaitingRestore is true. Clear that durable guard
-                // first, then schedule based on the final state. Also retain
-                // a commit that lands while metadata persistence yields.
-                if (state.dirtyGeneration !== restoreGeneration
-                    && !state.dirty) {
-                    state.dirty = true;
-                    state.dirtyGeneration += 1;
+                    // `scheduleSilentFlush` deliberately refuses to schedule
+                    // while awaitingRestore is true. Clear that durable guard
+                    // first, then schedule based on the final state. Also retain
+                    // a commit that lands while metadata persistence yields.
+                    if (state.dirtyGeneration !== restoreGeneration
+                        && !state.dirty) {
+                        state.dirty = true;
+                        state.dirtyGeneration += 1;
+                    }
+                    if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
                 }
-                if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
-            }
-            return result;
-        });
+                if (result?.success !== true) reportTransfer('import', result?.error, restored ? 'committed' : 'not-committed', result?.reason === 'cancelled');
+                return result;
+            });
+
+        } catch (error) {
+            reportTransfer('import', error, restored ? 'committed' : undefined);
+            throw error;
+        }
     }
 
     function scheduleSilentFlush() {
-        if (state.suspended || state.resetPreparing || state.meta.awaitingRestore) return;
+        if (state.suspended || state.resetPreparing || state.meta.awaitingRestore || !state.directoryHandle) return;
         if (state.silentFlushTimer) global.clearTimeout(state.silentFlushTimer);
         state.silentFlushTimer = global.setTimeout(function () {
             state.silentFlushTimer = null;
@@ -1353,7 +1417,7 @@
         panel.className = 'external-backup-panel external-backup-panel--modal';
         var description = global.document.createElement('p');
         description.className = 'external-backup-panel__desc';
-        description.textContent = '绑定本地文件夹后，IELTS Atlas 会写入完整的 v2 数据快照。磁盘文件不会因清理浏览器站点数据而删除；后台写入不会主动请求权限。';
+        description.textContent = '本地文件夹 JSON 副本独立保存在磁盘上，清理浏览器数据后仍可恢复。应用内备份保存在当前浏览器中，可能随站点数据一起丢失。绑定后会自动保存；需要重新授权时，请点击“立即保存到文件夹”。';
         var statusCard = global.document.createElement('div');
         statusCard.className = 'external-backup-status-card';
         var statusLabel = global.document.createElement('div');
@@ -1371,6 +1435,7 @@
         [
             '支持 Chrome / Edge 的安全上下文；其他环境继续使用手动导出',
             '备份文件包含练习、设置、词汇、题库配置等可迁移数据',
+            '距上次保存或提醒满三天后，会在首页或更多页面提醒；关闭提醒不代表已保存',
             '磁盘 JSON 为明文文件，请妥善保管'
         ].forEach(function (text) {
             var item = global.document.createElement('li');
@@ -1381,7 +1446,7 @@
         var actions = global.document.createElement('div');
         actions.className = 'external-backup-panel__actions';
         var bindButton = makeButton('external-backup-bind-btn', '📁 绑定备份文件夹');
-        var writeButton = makeButton('external-backup-write-btn', '💾 立即写入备份');
+        var writeButton = makeButton('external-backup-write-btn', '💾 立即保存到文件夹');
         var restoreButton = makeButton('external-backup-restore-btn', '♻️ 从文件夹恢复');
         var unbindButton = makeButton('external-backup-unbind-btn', '🔓 解除绑定');
         unbindButton.classList.add('external-backup-btn--ghost');
@@ -1415,6 +1480,7 @@
                     notify('已绑定并写入：' + bound.directoryName, 'success');
                 }
             } catch (error) {
+                reportTransfer('export', error, 'not-committed', error?.name === 'AbortError');
                 notify(error && error.name === 'AbortError' ? '已取消选择文件夹' : (error.message || '绑定失败'), error && error.name === 'AbortError' ? 'info' : 'error');
             }
             refreshPanel();
@@ -1544,19 +1610,19 @@
             if (backups && typeof backups.onDataCommitted === 'function' && !state.unsubscribeCommitted) {
                 state.unsubscribeCommitted = backups.onDataCommitted(markDirty);
             }
-            if (state.directoryHandle && backups && typeof backups.export === 'function') {
-                try {
-                    var currentSnapshot = await backups.export();
-                    state.freshnessUnknown = false;
-                    if (!currentSnapshot || currentSnapshot.checksum !== state.meta.lastChecksum) {
-                        state.dirty = true;
-                        state.dirtyGeneration += 1;
+            if (state.directoryHandle) {
+                // Binding readiness must not serialize the entire database.
+                // Reconcile once through the verified write path after the
+                // debounce, and only when permission actually permits writing.
+                state.freshnessUnknown = true;
+                state.dirty = true;
+                state.dirtyGeneration += 1;
+                if (state.meta.storageIdentity && backups && typeof backups.getStorageIdentity === 'function') {
+                    var currentIdentity = await backups.getStorageIdentity();
+                    if (currentIdentity !== state.meta.storageIdentity) {
+                        state.meta.awaitingRestore = true;
+                        await persistMeta({ awaitingRestore: true, lastWriteError: 'browser_database_recreated' });
                     }
-                } catch (error) {
-                    state.freshnessUnknown = true;
-                    state.dirty = true;
-                    state.dirtyGeneration += 1;
-                    if (global.console && console.warn) console.warn('[ExternalBackup v2] freshness check failed:', error);
                 }
             }
             state.ready = true;
@@ -1591,6 +1657,37 @@
         return true;
     }
 
+    async function checkReminder() {
+        function canShow() {
+            if (!global.document || global.document.visibilityState === 'hidden'
+                || state.suspended || state.resetPreparing || state.writing || !supportsFileSystemAccess()) return false;
+            var active = global.document.querySelector('.view.active');
+            return (!active || active.id === 'overview-view' || active.id === 'more-view')
+                && !global.document.querySelector('[role="dialog"].show, .theme-modal.show');
+        }
+        if (!canShow()) return false;
+        await ensureReady();
+        // This is a save/reauthorization reminder for an existing binding.
+        // A new unbound installation must not acquire a blocking modal.
+        if (!state.directoryHandle) return false;
+        var shown = false;
+        await withDiskWriteLock(async function () {
+            if (!canShow()) return;
+            var stored = await readStoredValue(META_KEY);
+            var meta = cloneMeta(stored || state.meta);
+            var last = Math.max(Date.parse(meta.lastWriteAt) || 0, Date.parse(meta.lastRemindedAt) || 0,
+                Date.parse(state.meta.lastRemindedAt) || 0);
+            if (last && Date.now() - last < REMINDER_INTERVAL_MS) return;
+            state.meta = meta;
+            // Persist the reminder, not a successful save. Dismissal never
+            // marks data clean and another tab observes the same cooldown.
+            if (!await persistMeta({ lastRemindedAt: nowIso() })) return;
+            shown = true;
+        });
+        if (shown && canShow()) openModal();
+        return shown;
+    }
+
     global.ExternalBackupService = Object.freeze({
         __v2: true,
         LATEST_FILENAME: LATEST_FILENAME,
@@ -1614,13 +1711,26 @@
         markDirty: markDirty,
         flushSilentlyIfPermitted: flushSilentlyIfPermitted,
         refreshPanel: refreshPanel,
-        requestPersistentStorage: requestPersistentStorage
+        requestPersistentStorage: requestPersistentStorage,
+        checkReminder: checkReminder
     });
 
     function boot() {
-        init().catch(function (error) {
-            if (global.console && console.warn) console.warn('[ExternalBackup v2] boot failed:', error);
-        });
+        function start() {
+            init().then(function (initialized) {
+                if (!initialized || !global.document) return;
+                function poll() {
+                    checkReminder().catch(function (error) {
+                        if (global.console && console.warn) console.warn('[ExternalBackup v2] reminder failed:', error);
+                    }).finally(function () { global.setTimeout(poll, 60000); });
+                }
+                poll();
+            }).catch(function (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] boot failed:', error);
+            });
+        }
+        if (global.document) global.setTimeout(start, 10000);
+        else start();
     }
 
     if (global.document && global.document.readyState === 'loading') {

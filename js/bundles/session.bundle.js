@@ -2,6 +2,21 @@
 
 /* ===== js/app/suitePracticeMixin.js ===== */
 (function(global) {
+    const suiteFailures = new WeakMap();
+    function suiteStep(action, outcome, session, operation) {
+        try { global.AppOperationDiagnostics?.breadcrumb('suite', action, outcome, {
+            suite: session?.id, session: session?.id, submission: session?._finalizeSubmissionId, operation
+        }); } catch (_) { }
+    }
+    function suiteFailure(error, session, action = 'submit', operation) {
+        if (session && typeof session === 'object') suiteFailures.set(session, error);
+        try { global.AppOperationDiagnostics?.failure({ code: action === 'save-recovery'
+            ? 'RECOVERY_SAVE_FAILED' : 'PRACTICE_SAVE_FAILED', module: 'suite', action, error,
+            correlation: { suite: session?.id, session: session?.id,
+                submission: session?._finalizeSubmissionId, operation }
+        }, action === 'submit' && operation && typeof global.AppData?.practice?.getCommitState === 'function'
+            ? () => global.AppData.practice.getCommitState(operation) : undefined); } catch (_) { }
+    }
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -326,13 +341,19 @@
                     this.currentSuiteSession.windowRef = null;
                     this.currentSuiteSession._restoredFromStorage = true;
                     this.currentSuiteSession.lastUpdate = Date.now();
-                    await this._commitSuiteRecovery(this.currentSuiteSession, { notify: false, reason: 'startup-error' });
-                    window.showMessage && window.showMessage('首篇窗口未能打开，套题恢复快照已保留，可稍后重试。', 'warning');
+                    const recoverySaved = await this._commitSuiteRecovery(this.currentSuiteSession, { notify: false, reason: 'startup-error' });
+                    window.showMessage && window.showMessage(recoverySaved
+                        ? '首篇窗口未能打开，套题恢复快照已保留，可稍后重试。'
+                        : '首篇窗口未能打开，恢复快照尚未确认保存，请保留此页面。', 'warning');
                 }
                 return false;
             }
         },
         async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
+            const multiSuiteBaseExamId = data?.suiteId ? this._extractBaseExamId(examId) : null;
+            const failureSession = () => multiSuiteBaseExamId
+                ? this.multiSuiteSessionsMap?.get(multiSuiteBaseExamId) : this.currentSuiteSession;
+            suiteFailures.delete(failureSession());
             const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => {
                 // teardownSession 只在套题已落库并交由子窗口自行收尾时出现，
                 // 此处解除关闭防护可保证早于 PRACTICE_SUBMIT_ACK 回执发出。
@@ -343,6 +364,7 @@
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
+                        error: committed ? undefined : suiteFailures.get(failureSession()),
                         errorCode: errorCode || null
                     }, extra || {})
                     : Boolean(handled);
@@ -367,6 +389,12 @@
                 : '';
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
+            }
+            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+                && String(data.submissionId) !== session._finalizeSubmissionId) {
+                // Only the original snapshot owns this finalization/receipt. A
+                // different ID cannot certify new answers without a new attempt.
+                return withSubmitOutcome(true, false, 'suite_submission_conflict');
             }
             if (session.status === 'finalizing') {
                 session._finalizeSubmissionId = data && data.submissionId
@@ -581,6 +609,7 @@
         },
 
         async resumeSuitePractice(expectedSessionId = '') {
+            suiteStep('suite-navigation', 'started', this.currentSuiteSession);
             await this._ensureSuiteRecoveryReady();
             const session = this.currentSuiteSession;
             const expectedId = String(expectedSessionId || '').trim();
@@ -616,7 +645,25 @@
                 let currentExamIndex = null;
                 if (session._restoredFromStorage === true && typeof this._fetchSuiteExamIndex === 'function') {
                     try {
-                        currentExamIndex = await this._fetchSuiteExamIndex();
+                        const readActiveSource = async () => window.AppData?.library?.getActive
+                            ? window.AppData.library.getActive() : null;
+                        const matchesSavedSource = source => sequence.every(entry =>
+                            !Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                            || entry.exam.libraryConfigurationId === source);
+                        const activeSource = await readActiveSource();
+                        if (!matchesSavedSource(activeSource)) {
+                            window.showMessage && window.showMessage('请切回开始套题时使用的题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
+                        // Bind the lookup itself to the checked source: active
+                        // library reads before/after loading cannot detect A -> B -> A.
+                        currentExamIndex = await this._fetchSuiteExamIndex({ libraryConfigurationId: activeSource });
+                        // The library can change while the index is loading. Never
+                        // replace saved definitions with content from another source.
+                        if (await readActiveSource() !== activeSource) {
+                            window.showMessage && window.showMessage('题库已切换，请切回原题库后继续，未完成套题仍会保留。', 'warning');
+                            return false;
+                        }
                     } catch (validationError) {
                         console.warn('[SuitePractice] 无法验证恢复目标，保留快照供稍后重试:', validationError);
                         window.showMessage && window.showMessage('暂时无法读取当前题库，未完成套题仍会保留。', 'warning');
@@ -637,7 +684,12 @@
                         session.sequence = sequence.map((entry) => {
                             const indexed = byId.get(String(entry.examId));
                             return indexed
-                                ? { ...entry, exam: indexed, title: entry.title || indexed.title, category: entry.category || indexed.category }
+                                ? { ...entry, exam: {
+                                    ...indexed,
+                                    category: entry.category || entry.exam?.category || '',
+                                    ...(Object.prototype.hasOwnProperty.call(entry.exam || {}, 'libraryConfigurationId')
+                                        ? { libraryConfigurationId: entry.exam.libraryConfigurationId } : {})
+                                }, title: entry.title || indexed.title, category: entry.category || entry.exam?.category || '' }
                                 : entry;
                         });
                     }
@@ -713,6 +765,7 @@
         },
 
         async _handleInlineSimulationSuiteSubmit(examId, data, sourceWindow = null) {
+            suiteFailures.delete(this.currentSuiteSession);
             const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => {
                 // 与 handleSuitePracticeComplete 同理：套题已终结时立刻放行子窗口自关闭。
                 if (committed && extra && extra.teardownSession) {
@@ -722,6 +775,7 @@
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
+                        error: committed ? undefined : suiteFailures.get(this.currentSuiteSession),
                         errorCode: errorCode || null
                     }, extra || {})
                     : Boolean(handled);
@@ -735,6 +789,10 @@
                 : '';
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
+            }
+            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+                && String(data.submissionId) !== session._finalizeSubmissionId) {
+                return withSubmitOutcome(true, false, 'suite_submission_conflict');
             }
             if (session.status === 'finalizing') {
                 session._finalizeSubmissionId = data && data.submissionId
@@ -944,6 +1002,7 @@
             );
             return {
                 answers: this._cloneSuiteDraftPlainObject(answerSource),
+                readingTiming: this._cloneSuitePlainObject(draftSource.readingTiming || data.readingTiming || null),
                 highlights: highlightSource.slice(),
                 noteText: noteTextSource,
                 notes: this._cloneSuitePlainObject(notesSource),
@@ -1036,6 +1095,7 @@
             if (!this._persistSuiteDraftSnapshot(session, normalizedExamId, data)) {
                 return false;
             }
+            suiteStep('host-receipt', 'succeeded', session);
             if (Number.isFinite(Number(data.elapsed))) {
                 session.elapsedByExam[normalizedExamId] = typeof this._deriveSuiteExamElapsedSeconds === 'function'
                     ? this._deriveSuiteExamElapsedSeconds(session, normalizedExamId, Number(data.elapsed))
@@ -1049,7 +1109,10 @@
             if (indexedEntry && String(indexedEntry.examId) === normalizedExamId) {
                 session.activeExamId = normalizedExamId;
             }
-            return this._mirrorSessionToStorage(session);
+            const mirrored = this._mirrorSessionToStorage(session);
+            // A window mirror does not confirm the asynchronous durable recovery write.
+            suiteStep('save-draft', mirrored ? 'unconfirmed' : 'failed', session);
+            return mirrored;
         },
 
         _buildSuiteSequencePayload(session) {
@@ -1679,6 +1742,9 @@
                 const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
                 if (!ready) {
                     if (!this._canFallbackSendSuiteContext(targetEntry.examId, targetWindow)) {
+                        try { global.AppOperationDiagnostics?.failure({ code: 'PRACTICE_CHANNEL_TIMEOUT', module: 'suite',
+                            action: 'suite-navigation', error: new Error('Suite navigation handshake timed out'),
+                            correlation: { suite: session.id }, operation: 'unconfirmed' }); } catch (_) { }
                         console.warn('[SuitePractice] 套题切换等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
                         return true;
                     }
@@ -1696,6 +1762,7 @@
         },
 
         async _advanceSuiteToNext(session, completedTitle, skipExamIdForAbort) {
+            suiteStep('suite-navigation', 'started', this.currentSuiteSession);
             if (typeof this.openExam !== 'function') {
                 window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
                 return false;
@@ -1789,6 +1856,9 @@
                 if (!ready) {
                     if (!this._canFallbackSendSuiteContext(nextEntry.examId, session.windowRef)) {
                         window.showMessage && window.showMessage('已完成' + (completedTitle || '上一篇') + '，正在继续：' + nextEntry.exam.title + '。', 'success');
+                        try { global.AppOperationDiagnostics?.failure({ code: 'PRACTICE_CHANNEL_TIMEOUT', module: 'suite',
+                            action: 'suite-navigation', error: new Error('Suite navigation handshake timed out'),
+                            correlation: { suite: session.id }, operation: 'unconfirmed' }); } catch (_) { }
                         console.warn('[SuitePractice] 自动切题等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
                         return true;
                     }
@@ -1841,6 +1911,9 @@
                         : true,
                     results: (session.results || []).map(r => ({
                         examId: r.examId, title: r.title, category: r.category,
+                        sessionId: r.sessionId, metadata: r.metadata, browseScore: r.browseScore,
+                        questionTypePerformance: r.questionTypePerformance,
+                        readingTiming: r.readingTiming,
                         duration: r.duration, scoreInfo: r.scoreInfo,
                         answers: r.answers, answerComparison: r.answerComparison,
                         markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
@@ -1867,11 +1940,17 @@
             }
         },
 
-        _mirrorSuiteRecoverySnapshot(snapshot) {
+        _mirrorSuiteRecoverySnapshot(snapshot, durableConfirmed = false) {
             if (!snapshot || !global.AppData?.recovery?.windowSession) return false;
             try {
-                return global.AppData.recovery.windowSession.save('simulation', snapshot) !== false;
+                const saved = global.AppData.recovery.windowSession.save('simulation', snapshot) !== false;
+                if (!saved) throw new Error('Window recovery mirror was not saved');
+                return true;
             } catch (error) {
+                try { global.AppOperationDiagnostics?.failure({ code: 'RECOVERY_SAVE_FAILED', module: 'suite',
+                    action: 'save-recovery', error, operation: durableConfirmed ? 'committed' : 'not-committed',
+                    correlation: { suite: snapshot.id, operation: `suite-recovery:${snapshot.id}:${snapshot.revision || 0}` }
+                }); } catch (_) { }
                 console.warn('[SuitePractice] Suite recovery window mirror failed:', error);
                 return false;
             }
@@ -1882,6 +1961,7 @@
         },
 
         async _commitSuiteRecovery(session, options = {}) {
+            suiteStep('save-recovery', 'started', session);
             if (!session || !session.id || session._suiteRecoveryClosed === true) return false;
             const previous = session._suiteRecoveryCommitTail && typeof session._suiteRecoveryCommitTail.then === 'function'
                 ? session._suiteRecoveryCommitTail
@@ -1899,15 +1979,17 @@
                     operationId: `suite-recovery:${String(session.id)}:${snapshotRevision}`
                 });
                 if (!receipt || receipt.committed !== true) {
-                    throw new Error('Suite recovery commit was not confirmed');
+                    throw new Error('Suite recovery commit was not confirmed', { cause: receipt?.error });
                 }
-                this._mirrorSuiteRecoverySnapshot(snapshot);
+                suiteStep('save-recovery', 'succeeded', session, receipt.operationId);
+                this._mirrorSuiteRecoverySnapshot(snapshot, true);
                 return true;
             });
             session._suiteRecoveryCommitTail = commit;
             try {
                 return await commit;
             } catch (error) {
+                suiteFailure(error, session, 'save-recovery', `suite-recovery:${String(session.id)}:${Number(session.revision) || 0}`);
                 console.warn('[SuitePractice] Durable suite recovery write failed:', error);
                 if (options.notify !== false) {
                     window.showMessage && window.showMessage('Suite progress could not be saved. This action was paused; allow site storage and try again.', 'error');
@@ -2323,6 +2405,7 @@
         },
 
         async _handleSimulationNavigate(examId, data, sourceWindow) {
+            suiteStep('suite-navigation', 'started', this.currentSuiteSession);
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') return false;
             if (session.flowMode !== 'simulation') return false;
@@ -2439,6 +2522,9 @@
                     const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
                     if (!ready) {
                         if (!this._canFallbackSendSuiteContext(targetEntry.examId, targetWindow)) {
+                            try { global.AppOperationDiagnostics?.failure({ code: 'PRACTICE_CHANNEL_TIMEOUT', module: 'suite',
+                                action: 'suite-navigation', error: new Error('Suite navigation handshake timed out'),
+                                correlation: { suite: session.id }, operation: 'unconfirmed' }); } catch (_) { }
                             console.warn('[SuitePractice] 模拟模式切题等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
                             this._focusSuiteWindow(targetWindow);
                             return true;
@@ -2774,6 +2860,7 @@
                 await this._saveSuitePracticeRecord(record);
                 session.status = 'completed';
             } catch (error) {
+                suiteFailure(error, session, 'submit', record?.operationId);
                 console.error('[MultiSuite] 聚合记录失败:', error);
                 session.status = 'error';
                 try {
@@ -2813,6 +2900,8 @@
                 await callback();
                 return true;
             } catch (error) {
+                try { global.AppOperationDiagnostics?.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'suite',
+                    action: 'submit', error, operation: 'committed' }); } catch (_) { }
                 console.warn(`[SuitePractice] ${label}失败（聚合记录已保存）:`, error);
                 return false;
             }
@@ -3062,6 +3151,11 @@
                         examId: entry.examId,
                         title: entry.title,
                         category: entry.category,
+                        sessionId: entry.sessionId,
+                        metadata: entry.metadata,
+                        browseScore: entry.browseScore,
+                        questionTypePerformance: entry.questionTypePerformance,
+                        readingTiming: entry.readingTiming || draft?.readingTiming || null,
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
@@ -3153,6 +3247,8 @@
                         suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
                         suiteEntryCount: suiteEntries.length,
+                        ...(Object.prototype.hasOwnProperty.call(session.sequence?.[0]?.exam || {}, 'libraryConfigurationId')
+                            ? { libraryConfigurationId: session.sequence[0].exam.libraryConfigurationId } : {}),
                         startedAt: startTimeIso,
                         completedAt: endTimeIso
                     },
@@ -3183,9 +3279,10 @@
                 committed = true;
                 session.status = 'completed';
             } catch (error) {
+                suiteFailure(error, session, 'submit', `practice-suite:${String(session.id)}:finalize`);
                 console.error('[SuitePractice] 保存套题记录失败:', error);
                 try {
-                    window.showMessage && window.showMessage('套题记录保存失败，恢复快照已保留，请稍后重试。', 'error');
+                    window.showMessage && window.showMessage('套题提交尚未确认保存，请保留练习页面并查看诊断详情。', 'error');
                 } catch (notificationError) {
                     console.warn('[SuitePractice] 显示套题保存失败通知时出错:', notificationError);
                 }
@@ -3210,8 +3307,10 @@
             return committed;
         },
 
-        async _fetchSuiteExamIndex() {
-            const list = await window.resolveActiveLibraryIndex();
+        async _fetchSuiteExamIndex(options = {}) {
+            const list = Object.prototype.hasOwnProperty.call(options, 'libraryConfigurationId')
+                ? await window.LibraryManager.getInstance().resolveIndexForConfiguration(options.libraryConfigurationId)
+                : await window.resolveActiveLibraryIndex();
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
@@ -3512,8 +3611,15 @@
                     return false;
                 }
 
+                const launchLibraryId = window.AppData?.library?.getActive
+                    ? await window.AppData.library.getActive() : null;
                 const normalizedSequence = Array.isArray(sequence)
-                    ? sequence.filter(item => item && item.examId && item.exam)
+                    ? sequence.filter(item => item && item.examId && item.exam).map(item => ({
+                        ...item,
+                        exam: { ...item.exam, libraryConfigurationId:
+                            Object.prototype.hasOwnProperty.call(item.exam, 'libraryConfigurationId')
+                                ? item.exam.libraryConfigurationId : launchLibraryId }
+                    }))
                     : [];
                 if (!normalizedSequence.length) {
                     window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
@@ -3693,6 +3799,21 @@
                 examId: exam.id,
                 title: exam.title,
                 category: exam.category,
+                sessionId: rawData?.sessionId || null,
+                metadata: {
+                    libraryConfigurationId: Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')
+                        ? exam.libraryConfigurationId
+                        : (typeof this._readLaunchLibraryConfigurationId === 'function'
+                            ? this._readLaunchLibraryConfigurationId(exam.id, rawData) : null)
+                },
+                // Preserve original scoring evidence before compatibility display fallbacks.
+                browseScore: {
+                    earned: toNumber(score.correct, null),
+                    possible: toNumber(score.total, null),
+                    submittedAt: rawData?.endTime || rawData?.completedAt || null
+                },
+                questionTypePerformance: this._cloneSuitePlainObject(rawData?.questionTypePerformance || {}),
+                readingTiming: this._cloneSuitePlainObject(rawData?.readingTiming || null),
                 duration,
                 scoreInfo: {
                     correct,
@@ -3849,6 +3970,10 @@
         },
 
         async _saveSuitePracticeRecord(record) {
+            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'submit', 'started', {
+                session: record.sessionId, suite: record.suiteSessionId || record.sessionId,
+                submission: record.submissionId, operation: record.operationId
+            }); } catch (_) { }
             const childSessionIds = [];
             (Array.isArray(record && record.suiteEntries) ? record.suiteEntries : []).forEach((entry) => {
                 const raw = entry && entry.rawData || {};
@@ -3861,10 +3986,14 @@
                 operationId: record.operationId
             });
             if (!receipt || receipt.committed !== true) {
-                const error = new Error('Suite aggregate commit was not confirmed');
+                const error = new Error('Suite aggregate commit was not confirmed', { cause: receipt?.error });
                 error.code = 'SUITE_COMMIT_NOT_CONFIRMED';
                 throw error;
             }
+            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'storage-confirmed', 'succeeded', {
+                session: record.sessionId, suite: record.suiteSessionId || record.sessionId,
+                submission: record.submissionId, operation: record.operationId
+            }); } catch (_) { }
             return receipt.record || record;
         },
 

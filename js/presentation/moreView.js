@@ -65,6 +65,7 @@
         }
 
         var clockTrigger = moreView.querySelector('[data-action="open-clock"]');
+        var bookshelfTrigger = moreView.querySelector('[data-action="open-bookshelf"]');
         var vocabTrigger = moreView.querySelector('[data-action="open-vocab"]');
         var memorizeTrigger = moreView.querySelector('[data-action="open-reading-memorize"]');
         var closeTrigger = overlay.querySelector('[data-action="close-clock"]');
@@ -139,11 +140,62 @@
             vocabTrigger.addEventListener('click', handleVocabEntry);
         }
 
+        if (bookshelfTrigger) {
+            bookshelfTrigger.addEventListener('click', handleBookshelfEntry);
+        }
+
         if (memorizeTrigger) {
             memorizeTrigger.addEventListener('click', handleReadingMemorizeEntry);
         }
 
         moreViewInteractionsConfigured = true;
+    }
+
+    function handleBookshelfEntry(event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        if (typeof global.AppActions?.openBookshelf === 'function') {
+            return global.AppActions.openBookshelf({ fromView: 'more' });
+        }
+        var mountView = function () {
+            if (global.BookshelfView && typeof global.BookshelfView.mount === 'function') {
+                global.BookshelfView.mount('#bookshelf-view', { fromView: 'more' });
+            }
+        };
+
+        var bookshelfView = document.getElementById('bookshelf-view');
+        if (bookshelfView) {
+            bookshelfView.removeAttribute('hidden');
+        }
+
+        if (global.app && typeof global.app.navigateToView === 'function') {
+            global.app.navigateToView('bookshelf');
+            var moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+            if (moreNavBtn) {
+                moreNavBtn.classList.add('active');
+            }
+            mountView();
+            return;
+        }
+
+        var moreView = document.getElementById('more-view');
+        if (bookshelfView && moreView) {
+            moreView.classList.remove('active');
+            bookshelfView.classList.add('active');
+            var moreNavBtn2 = document.querySelector('.nav-btn[data-view="more"]');
+            if (moreNavBtn2) {
+                moreNavBtn2.classList.add('active');
+            }
+            mountView();
+            return;
+        }
+
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('未能打开阅读书架，请检查页面结构。', 'warning');
+        } else if (typeof global.alert === 'function') {
+            global.alert('未能打开阅读书架，请检查页面结构。');
+        }
     }
 
     function handleReadingMemorizeEntry(event) {
@@ -161,10 +213,14 @@
         }
     }
 
-    function handleVocabEntry(event) {
+    async function handleVocabEntry(event) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        const navigation = global.__getAppNavigationIntentGeneration?.();
+        try { await global.AppLazyLoader?.ensureGroup('vocabulary-tools'); }
+        catch (error) { global.showMessage?.('词汇模块加载失败，请重试', 'warning'); return; }
+        if (navigation != null && navigation !== global.__getAppNavigationIntentGeneration?.()) return;
         var mountView = function () {
             if (global.VocabSessionView && typeof global.VocabSessionView.mount === 'function') {
                 global.VocabSessionView.mount('#vocab-view');

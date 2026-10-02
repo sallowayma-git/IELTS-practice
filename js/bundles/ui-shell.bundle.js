@@ -656,6 +656,23 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 }
             });
 
+            this.events.delegate('click', `${this.containerSelector} [data-action="open-bookshelf"], ${this.containerSelector} [data-action="open-vocab-book"]`, function (event) {
+                event.preventDefault();
+                if (typeof global.openBookshelfView === 'function') {
+                    global.openBookshelfView({ fromView: 'overview' });
+                    return;
+                }
+                if (global.AppActions && typeof global.AppActions.openBookshelf === 'function') {
+                    global.AppActions.openBookshelf({ fromView: 'overview' });
+                    return;
+                }
+                if (global.app && typeof global.app.navigateToView === 'function') {
+                    global.app.navigateToView('bookshelf');
+                } else if (typeof global.switchView === 'function') {
+                    global.switchView('bookshelf');
+                }
+            });
+
             this.delegatesBound = true;
         }
 
@@ -679,7 +696,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 icon: '📖',
                 entries: stats?.reading || [],
                 style: { gridColumn: '1 / -1' },
-                rightButtons: [this.createEndlessModeButton(), this.createSuiteModeButton()]
+                rightButtons: [this.createBookshelfButton(), this.createEndlessModeButton(), this.createSuiteModeButton()]
             });
 
             fragment.appendChild(readingSection);
@@ -871,6 +888,31 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }
+
+        createBookshelfButton() {
+            return this.dom.create('button', {
+                className: 'shui-glass-btn',
+                type: 'button',
+                id: 'bookshelf-overview-btn',
+                dataset: {
+                    action: 'open-bookshelf',
+                    overviewAction: 'bookshelf'
+                },
+                title: '打开阅读书架',
+                style: {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                }
+            }, [
+                this.createSvgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>'),
+                this.dom.create('span', {}, '书架')
+            ]);
+        }
+
+        createVocabBookButton() {
+            return this.createBookshelfButton();
+        }
     }
 
     global.AppViews = global.AppViews || {};
@@ -918,6 +960,585 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 })(typeof window !== 'undefined' ? window : this);
 
 
+/* ===== js/presentation/incident-center.js ===== */
+(function attachIncidentCenter(global) {
+    'use strict';
+
+    const LIMITS = Object.freeze({ notices: 5, dialogs: 5, groups: 20, identities: 200, aggregationMs: 60000 });
+    const NOTICE = '诊断信息不包含答案，也不是练习备份。关闭提示仅表示已知悉，不代表操作成功。';
+    const ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;
+    const TITLES = { APP_BOOT_FAILED: '应用启动失败', RESOURCE_LOAD_FAILED: '所需资源加载失败',
+        PRACTICE_SAVE_FAILED: '练习保存异常', RECOVERY_SAVE_FAILED: '恢复快照保存异常',
+        PRACTICE_CHANNEL_TIMEOUT: '练习通信超时', DATA_IMPORT_FAILED: '数据导入失败',
+        DATA_EXPORT_FAILED: '数据导出失败', UNEXPECTED_RUNTIME_ERROR: '操作遇到异常' };
+    function field(value, key) {
+        try { return Object.getOwnPropertyDescriptor(value, key)?.value; } catch (_) { return undefined; }
+    }
+    function isSave(event) {
+        return ['PRACTICE_SAVE_FAILED', 'RECOVERY_SAVE_FAILED'].includes(event.code)
+            || ['submit', 'save', 'save-draft', 'save-recovery'].includes(event.action);
+    }
+    function outcome(event, operation = event.persistence.operation) {
+        const subject = event.action === 'save-draft' ? '本次草稿'
+            : event.code === 'RECOVERY_SAVE_FAILED' || event.action === 'save-recovery' ? '本次恢复快照'
+                : event.action === 'submit' || event.code === 'PRACTICE_SAVE_FAILED' ? '本次练习提交' : '本次保存';
+        if (isSave(event)) {
+            if (operation === 'committed') return subject + '已确认保存；相关操作仍有异常，请查看详情。';
+            if (operation === 'not-committed') return subject + '已确认未保存。请保留此页面。';
+            return subject + '尚未确认保存。请保留此页面。';
+        }
+        return operation === 'committed' ? '本次操作已确认提交，但仍有异常需要查看。'
+            : operation === 'not-committed' ? '本次操作已确认未提交。' : '本次操作结果尚未确认。';
+    }
+    function kind(event) {
+        const requested = event.notification.kind;
+        if (requested === 'none' || requested === 'startup') return requested;
+        if (event.notification.requiresDismissal || (isSave(event) && event.persistence.operation === 'unconfirmed')) return 'dialog';
+        return requested;
+    }
+    function groupingKey(event) {
+        return JSON.stringify([event.fingerprint, event.module, event.action, event.windowId,
+            event.correlation, event.persistence.operation, kind(event)]);
+    }
+    function sameOperation(left, right) {
+        return left && right && left.operationAlias === right.operationAlias
+            && left.submissionAlias === right.submissionAlias;
+    }
+    function node(tag, text, className) {
+        const result = global.document.createElement(tag);
+        if (text !== undefined) result.textContent = text;
+        if (className) result.className = className;
+        return result;
+    }
+    function button(label, handler) {
+        const result = node('button', label);
+        result.type = 'button';
+        result.addEventListener('click', () => { try { Promise.resolve(handler()).catch(() => {}); } catch (_) { } });
+        return result;
+    }
+
+    class IncidentCenter {
+        constructor(options = {}) {
+            this.transient = options.transient || (() => {});
+            this.now = options.now || (() => Date.now());
+            this.groups = new Map();
+            this.seen = new Map();
+            this.attempts = new Map();
+            this.queue = [];
+            this.overflow = 0;
+            this.root = null;
+            this.dialog = null;
+            this.returnFocus = null;
+            this.inertNodes = [];
+            this.fallbackText = '';
+            this.normalizer = global.AppDiagnosticContract?.createNormalizer();
+            this.reporter = global.AppDiagnostics || global.AppDiagnosticBootstrap?.current();
+            this.unsubscribe = this.reporter?.subscribe?.((event) => this.show(event));
+            try { this.reporter?.snapshot().events.forEach((event) => this.show(event)); } catch (_) { }
+        }
+
+        report(input, presentation = {}) {
+            try {
+                const data = {};
+                ['code', 'module', 'action', 'error', 'newOccurrence', 'resource', 'correlation', 'correlationAliases',
+                    'persistence', 'retry', 'collection', 'breadcrumbs', 'cancelled'].forEach((key) => { data[key] = field(input, key); });
+                const impact = field(presentation, 'impact');
+                data.notification = { kind: impact === 'expected' || impact === 'recovered' || data.cancelled === true
+                    || (data.code === 'RESOURCE_LOAD_FAILED' && field(data.resource, 'optional') === true) ? 'none'
+                    : data.code === 'APP_BOOT_FAILED' ? 'startup'
+                        : isSave(data) && field(data.persistence, 'operation') !== 'committed'
+                            && field(data.persistence, 'operation') !== 'not-committed' ? 'dialog' : 'persistent' };
+                // The reporter owns identity, privacy and capture before any presentation.
+                const id = this.reporter?.report(data);
+                if (id) this.show(id, presentation);
+                return id || null;
+            } catch (_) { return null; }
+        }
+
+        show(reference, presentation = {}) {
+            let event;
+            try {
+                event = this.normalizer?.sanitizeEvent(typeof reference === 'string' ? this.reporter?.getIncident(reference) : reference);
+                if (!event) return null;
+                const eventKind = kind(event);
+                // Startup has an independent early panel, including export without this UI.
+                if (eventKind === 'none') return event.eventId;
+                if (eventKind === 'startup') { this.deferToStartup(); return event.eventId; }
+                const time = this.now();
+                const previous = this.seen.get(event.eventId);
+                const key = groupingKey(event);
+                let item = previous && this.groups.get(previous.id);
+                let regrouped = false;
+                let dismissed = false;
+                if (item && item.key !== key && item.count > 1) {
+                    dismissed = item.dismissed;
+                    this.detachMember(item, event.eventId);
+                    item = null;
+                    regrouped = true;
+                }
+                if (item) {
+                    if (item.event.eventId === event.eventId) {
+                        if (item.key !== key) { item.operation = undefined; item.actionStatus = ''; }
+                        item.event = event;
+                        item.key = key;
+                    }
+                    item.kind = eventKind;
+                } else if (!previous || regrouped) {
+                    item = Array.from(this.groups.values()).find((candidate) => candidate.key === key
+                        && (!dismissed || candidate.dismissed)
+                        && time >= candidate.started && time - candidate.started < LIMITS.aggregationMs);
+                    if (item) item.count = Math.min(Number.MAX_SAFE_INTEGER, item.count + 1);
+                    else {
+                        if (this.groups.size >= LIMITS.groups) {
+                            const expired = Array.from(this.groups.values()).find((candidate) =>
+                                (candidate.dismissed || candidate.kind === 'transient') && candidate.id !== this.dialog?.item?.id);
+                            if (expired) this.groups.delete(expired.id);
+                        }
+                        if (this.groups.size < LIMITS.groups) {
+                            item = { id: event.eventId, event, key, started: time, kind: eventKind, count: 1,
+                                dismissed, transientShown: false, retry: null, busy: false, actionStatus: '' };
+                            this.groups.set(item.id, item);
+                        } else this.overflow = Math.min(Number.MAX_SAFE_INTEGER, this.overflow + 1);
+                    }
+                }
+                if (item || !previous || regrouped) {
+                    this.seen.set(event.eventId, { id: item?.id || event.eventId, event });
+                    if (this.seen.size > LIMITS.identities) this.seen.delete(this.seen.keys().next().value);
+                }
+                if (item) {
+                    // Functions stay only in bounded page UI state, never diagnostic records.
+                    const retry = field(presentation, 'retry');
+                    if (retry && event.eventId === item.id) item.retry = this.safeRetry(event, retry);
+                    this.refreshRetry(item);
+                    if (!item.dismissed && eventKind === 'transient' && !item.transientShown) {
+                        if (item.count === 1) this.transient(TITLES[event.code] + '。' + outcome(event), 'info');
+                        item.transientShown = true;
+                    }
+                    if (!item.dismissed && eventKind === 'dialog' && item.id !== this.dialog?.item?.id && !this.queue.includes(item.id)) {
+                        if (this.queue.length < LIMITS.dialogs) this.queue.push(item.id);
+                        // All other incidents remain reachable through history, without replay.
+                    }
+                }
+                this.render();
+                this.advance();
+                return item?.id || event.eventId;
+            } catch (_) {
+                this.fallback(event);
+                return event?.eventId || null;
+            }
+        }
+
+        detachMember(item, eventId) {
+            item.count--;
+            if (item.id !== eventId) return;
+            // Keep the old group's reference attached to a remaining observation.
+            // Identity snapshots share the existing bounded 200-entry bookkeeping.
+            const survivor = Array.from(this.seen.values()).find((entry) => entry.id === item.id && entry.event.eventId !== eventId);
+            this.groups.delete(item.id);
+            if (survivor) {
+                item.id = survivor.event.eventId;
+                item.event = survivor.event;
+                item.retry = null;
+                item.operation = undefined;
+                item.actionStatus = '';
+                this.groups.set(item.id, item);
+                for (const entry of this.seen.values()) if (entry.id === eventId) entry.id = item.id;
+                this.queue = this.queue.map((id) => id === eventId ? item.id : id);
+                this.refreshRetry(item);
+            } else {
+                // Old members may have aged out of UI bookkeeping; passive history
+                // retains them without displaying the enriched ID under an old code.
+                this.queue = this.queue.filter((id) => id !== eventId);
+                if (this.dialog?.item === item) this.removeDialog();
+            }
+        }
+
+        safeRetry(event, action) {
+            const run = field(action, 'run');
+            if (!event.retry.available || typeof run !== 'function' || event.persistence.operation === 'committed'
+                || field(action, 'action') !== event.retry.action
+                || field(action, 'operationAlias') !== event.retry.operationAlias
+                || field(action, 'submissionAlias') !== event.retry.submissionAlias) return null;
+            return { run, action: event.retry.action, operationAlias: event.retry.operationAlias,
+                submissionAlias: event.retry.submissionAlias };
+        }
+
+        validatedRetry(item) {
+            if (!item.retry) return null;
+            try {
+                item.retry = this.safeRetry(item.event, item.retry);
+                const current = this.reporter?.getIncident(item.id);
+                if (current) item.retry = this.safeRetry(current, item.retry);
+            } catch (_) { item.retry = null; }
+            if (!item.retry) item.actionStatus = '';
+            return item.retry;
+        }
+
+        refreshRetry(item) {
+            const retry = this.validatedRetry(item);
+            // Attempts belong to incidents/operations, not mutable presentation groups.
+            const busy = this.attempts.has(item.id) || Array.from(this.attempts.values())
+                .some((attempt) => sameOperation(attempt.retry, retry));
+            if (busy) item.actionStatus = '正在检查并重试原操作，请保留此页面。';
+            else if (item.busy) item.actionStatus = '';
+            item.busy = busy;
+            return retry;
+        }
+
+        async retry(item) {
+            const retry = this.refreshRetry(item);
+            if (!retry || item.busy || item.count !== 1 || this.attempts.size >= LIMITS.groups
+                || (item.operation || item.event.persistence.operation) === 'committed') return;
+            const id = item.id;
+            const key = item.key;
+            this.attempts.set(id, { retry });
+            this.refreshRetry(item);
+            let result;
+            let failed = false;
+            try {
+                this.refreshDialog();
+                result = await retry.run();
+            } catch (_) { failed = true; }
+            finally {
+                this.attempts.delete(id);
+                // Clear every replacement control, including a detached/evicted item.
+                for (const current of new Set([item, ...this.groups.values(), this.dialog?.item])) {
+                    if (current) this.refreshRetry(current);
+                }
+                const current = this.groups.get(id);
+                const bound = current && this.validatedRetry(current);
+                if (current?.key === key && current.count === 1 && bound?.run === retry.run
+                    && bound.action === retry.action && sameOperation(bound, retry)) {
+                    const operation = field(result, 'operation');
+                    if (failed) current.actionStatus = '重试未能确认结果，请保留此页面并导出诊断。';
+                    else if (field(result, 'verified') === true && ['committed', 'not-committed', 'unconfirmed'].includes(operation)) {
+                        current.operation = operation;
+                        current.actionStatus = outcome(current.event, operation);
+                    } else current.actionStatus = '重试尚未提供已验证的结果，请保留此页面。';
+                }
+                try { this.render(); } catch (_) { this.fallback(item.event); }
+            }
+        }
+
+        render() {
+            const active = Array.from(this.groups.values()).filter((item) => !item.dismissed && item.kind !== 'transient');
+            if (!active.length && !this.overflow && !this.root) return;
+            if (!this.root || !this.root.isConnected) {
+                this.announcement = null;
+                this.root = node('section', undefined, 'incident-notifications');
+                this.root.id = 'incident-notifications';
+                this.root.setAttribute('aria-label', '操作异常通知');
+                global.document.body.appendChild(this.root);
+                if (this.dialog) this.makeInert(this.root);
+            }
+            // Keep one stable live region; announce text, never a subtree of controls.
+            if (!this.announcement) {
+                this.announcement = node('p', '', 'incident-announcement');
+                this.announcement.setAttribute('role', 'status');
+                this.announcement.setAttribute('aria-live', 'polite');
+                this.root.appendChild(this.announcement);
+                this.cards = node('div');
+                this.root.appendChild(this.cards);
+                this.historyButton = button('查看诊断历史', () => this.openHistory());
+                this.root.appendChild(this.historyButton);
+            }
+            const focused = global.document.activeElement;
+            const focusId = this.cards.contains(focused) ? focused?.getAttribute('data-incident') : null;
+            this.cards.replaceChildren();
+            for (const item of active.slice(0, LIMITS.notices)) {
+                const card = node('article', undefined, 'incident-notice');
+                card.appendChild(node('strong', TITLES[item.event.code]));
+                card.appendChild(node('p', outcome(item.event, item.operation)));
+                card.appendChild(node('p', '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : ''), 'incident-reference'));
+                const details = button('查看详情', () => this.open(item));
+                details.setAttribute('data-incident', item.id);
+                card.appendChild(details);
+                this.cards.appendChild(card);
+                if (focusId === item.id) details.focus();
+            }
+            const hidden = Math.max(0, active.length - LIMITS.notices) + this.overflow;
+            const text = active.length || this.overflow ? '有操作异常需要查看。' + (hidden ? '另有 ' + hidden + ' 项，请查看诊断历史。' : '') : '提示已关闭，诊断历史仍可查看。';
+            if (this.announcement.textContent !== text) this.announcement.textContent = text;
+            this.refreshDialog();
+        }
+
+        advance() {
+            if (this.dialog || this.startupActive()) return;
+            while (this.queue.length) {
+                const item = this.groups.get(this.queue.shift());
+                if (item && !item.dismissed && item.kind === 'dialog') { this.open(item); return; }
+            }
+        }
+
+        startupActive() {
+            return global.document?.getElementById('diagnostic-startup-failure')?.getAttribute('role') === 'alert';
+        }
+
+        deferToStartup() {
+            if (!this.startupActive()) return;
+            const item = this.dialog?.item;
+            if (item && !item.dismissed) {
+                this.queue = [item.id, ...this.queue.filter((id) => id !== item.id)].slice(0, LIMITS.dialogs);
+            }
+            this.removeDialog();
+            // The standalone startup panel must remain keyboard-accessible. Resume
+            // queued dialogs only after the collector explicitly marks startup ready.
+            const panel = global.document.getElementById('diagnostic-startup-failure');
+            if (!this.startupObserver && global.MutationObserver) {
+                this.startupObserver = new global.MutationObserver(() => {
+                    if (this.startupActive()) return;
+                    this.startupObserver.disconnect();
+                    this.startupObserver = null;
+                    try { this.advance(); } catch (_) { this.fallback(item?.event); }
+                });
+                this.startupObserver.observe(panel, { attributes: true, attributeFilter: ['role'] });
+            }
+        }
+
+        makeInert(element) {
+            this.inertNodes.push({ element, inert: element.inert });
+            element.inert = true;
+        }
+
+        shell(title, item) {
+            if (this.dialog) return null;
+            const doc = global.document;
+            if (!this.returnFocus) this.returnFocus = doc.activeElement;
+            const overlay = node('div', undefined, 'incident-backdrop');
+            const panel = node('section', undefined, 'incident-dialog');
+            panel.setAttribute('role', item?.kind === 'dialog' ? 'alertdialog' : 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-labelledby', 'incident-dialog-title');
+            panel.setAttribute('aria-describedby', 'incident-dialog-description');
+            const heading = node('h2', title);
+            heading.id = 'incident-dialog-title';
+            heading.tabIndex = -1;
+            const description = node('p', NOTICE);
+            description.id = 'incident-dialog-description';
+            panel.appendChild(heading);
+            panel.appendChild(description);
+            overlay.appendChild(panel);
+            doc.body.appendChild(overlay);
+            this.dialog = { overlay, panel, heading, item };
+            for (const element of Array.from(doc.body.children)) if (element !== overlay) this.makeInert(element);
+            this.keyHandler = (event) => {
+                if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); return; }
+                if (event.key !== 'Tab') return;
+                const targets = Array.from(panel.querySelectorAll('button:not([disabled]):not([hidden]), textarea:not([hidden]), summary, [tabindex="0"]'));
+                const first = targets[0] || heading;
+                const last = targets[targets.length - 1] || heading;
+                if (event.shiftKey && (doc.activeElement === first || doc.activeElement === heading || !panel.contains(doc.activeElement))) {
+                    event.preventDefault(); last.focus();
+                } else if (!event.shiftKey && (doc.activeElement === last || doc.activeElement === heading || !panel.contains(doc.activeElement))) {
+                    event.preventDefault(); first.focus();
+                }
+            };
+            this.focusHandler = (event) => { if (!panel.contains(event.target)) heading.focus(); };
+            doc.addEventListener('keydown', this.keyHandler, true);
+            doc.addEventListener('focusin', this.focusHandler, true);
+            return this.dialog;
+        }
+
+        open(item) {
+            if (this.dialog || this.startupActive()) return;
+            try {
+                const dialog = this.shell(TITLES[item.event.code], item);
+                dialog.outcome = node('p');
+                dialog.outcome.id = 'incident-dialog-outcome';
+                dialog.panel.setAttribute('aria-describedby', 'incident-dialog-outcome incident-dialog-description');
+                dialog.reference = node('p', undefined, 'incident-reference');
+                dialog.panel.appendChild(dialog.outcome);
+                dialog.panel.appendChild(dialog.reference);
+                dialog.status = node('p');
+                dialog.status.setAttribute('role', 'status');
+                dialog.panel.appendChild(dialog.status);
+                const technical = node('details');
+                technical.appendChild(node('summary', '技术详情（仅文本）'));
+                dialog.technical = node('pre');
+                technical.appendChild(dialog.technical);
+                dialog.panel.appendChild(technical);
+                dialog.text = this.exportTarget(dialog.panel);
+                const actions = node('div', undefined, 'incident-actions');
+                actions.appendChild(button('导出诊断', () => this.deliver(item.id, dialog.text, 'download')));
+                actions.appendChild(button('复制摘要', () => this.deliver(item.id, dialog.text, 'copySummary')));
+                dialog.retryButton = button('安全重试原操作', () => this.retry(item));
+                actions.appendChild(dialog.retryButton);
+                actions.appendChild(button('关闭提示（不代表已保存）', () => this.close()));
+                dialog.panel.appendChild(actions);
+                this.refreshDialog();
+                dialog.heading.focus();
+            } catch (_) { this.removeDialog(); this.fallback(item.event); }
+        }
+
+        refreshDialog() {
+            const dialog = this.dialog;
+            const item = dialog?.item;
+            if (!item || !dialog.outcome) return;
+            dialog.heading.textContent = TITLES[item.event.code];
+            dialog.panel.setAttribute('role', item.kind === 'dialog' ? 'alertdialog' : 'dialog');
+            dialog.technical.textContent = JSON.stringify(item.event, null, 2);
+            dialog.outcome.textContent = outcome(item.event, item.operation);
+            dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
+            dialog.retryButton.hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            dialog.retryButton.disabled = item.busy || this.attempts.size >= LIMITS.groups;
+            dialog.status.textContent = item.actionStatus;
+        }
+
+        exportTarget(parent) {
+            const text = node('textarea');
+            text.readOnly = true;
+            text.rows = 6;
+            text.hidden = true;
+            text.setAttribute('aria-label', '可复制的诊断文本');
+            parent.appendChild(text);
+            return text;
+        }
+
+        async deliver(eventId, text, action) {
+            try {
+                const exporter = global.AppDiagnosticExport;
+                if (typeof exporter?.[action] === 'function') {
+                    // Expose the provided target before the exporter attempts focus/select.
+                    text.hidden = false;
+                    const result = await exporter[action](eventId ? { eventId } : {}, { textTarget: text });
+                    if (result?.report && !result.report.issues?.includes('export-generation-failed')) {
+                        if (result.text) text.value = result.text;
+                        if (result.status === 'text-fallback') { text.focus(); text.select(); }
+                        return result;
+                    }
+                }
+            } catch (_) { }
+            const value = this.minimalText(eventId);
+            this.fallbackText = value;
+            try { text.hidden = false; text.value = value; text.focus(); text.select(); } catch (_) { }
+            return { status: 'text-fallback', text: value };
+        }
+
+        minimalText(eventId) {
+            try { if (this.reporter?.exportText) return this.reporter.exportText(eventId); } catch (_) { }
+            const event = this.groups.get(eventId)?.event;
+            return NOTICE + '\n事件编号：' + (ID.test(eventId) ? eventId : '不可用') + (event ? '\n' + JSON.stringify(event) : '');
+        }
+
+        async openHistory() {
+            if (this.dialog || this.startupActive()) return;
+            try {
+                const dialog = this.shell('诊断历史', null);
+                const info = node('p', '正在读取保留的诊断记录…');
+                dialog.panel.appendChild(info);
+                const list = node('div', undefined, 'incident-history');
+                dialog.panel.appendChild(list);
+                const text = this.exportTarget(dialog.panel);
+                dialog.panel.appendChild(button('导出保留的诊断历史', () => this.deliver(null, text, 'download')));
+                dialog.panel.appendChild(button('关闭历史', () => this.close()));
+                dialog.heading.focus();
+                let snapshot;
+                try { snapshot = await global.AppDiagnosticExport.snapshot(); } catch (_) { snapshot = this.reporter?.snapshot(); }
+                if (this.dialog !== dialog) return;
+                const events = (snapshot?.events || []).map((event) => this.normalizer.sanitizeEvent(event)).filter(Boolean)
+                    .sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+                info.textContent = '保留 ' + events.length + ' 条记录，按记录时间排序，跨窗口时钟可能不同。历史受容量和保留期限限制，可能不完整。关闭提示不会删除诊断记录。';
+                if (snapshot?.transport?.aggregation === 'incomplete') {
+                    info.textContent += ' 跨窗口诊断汇总不完整，可导出本页已保留的记录。';
+                }
+                // Paginate the bounded export snapshot; DOM size stays small even with 2,000 events.
+                let offset = 0;
+                const previous = button('上一页', () => { offset = Math.max(0, offset - 20); renderPage(); });
+                const more = button('下一页', () => { offset += 20; renderPage(); });
+                const renderPage = () => {
+                    list.replaceChildren();
+                    for (const event of events.slice(offset, offset + 20)) {
+                        const entry = button(TITLES[event.code] + ' · ' + event.eventId + ' · ' + outcome(event), () => {
+                            this.removeDialog();
+                            this.open({ id: event.eventId, event, count: 1, kind: kind(event), retry: null, busy: false, actionStatus: '' });
+                        });
+                        list.appendChild(entry);
+                    }
+                    previous.disabled = offset === 0;
+                    more.disabled = offset + 20 >= events.length;
+                };
+                renderPage();
+                dialog.panel.appendChild(previous);
+                dialog.panel.appendChild(more);
+            } catch (_) { this.removeDialog(); this.fallback(); }
+        }
+
+        removeDialog() {
+            if (!this.dialog) return;
+            global.document.removeEventListener('keydown', this.keyHandler, true);
+            global.document.removeEventListener('focusin', this.focusHandler, true);
+            this.dialog.overlay.remove();
+            this.dialog = null;
+            for (const { element, inert } of this.inertNodes) element.inert = inert;
+            this.inertNodes = [];
+        }
+
+        close() {
+            const item = this.dialog?.item;
+            if (item) {
+                item.dismissed = true;
+                const original = this.groups.get(item.id);
+                if (original) original.dismissed = true;
+                this.queue = this.queue.filter((id) => id !== item.id);
+            }
+            this.removeDialog();
+            try { this.render(); this.advance(); } catch (_) { this.fallback(item?.event); }
+            if (!this.dialog) {
+                const target = this.returnFocus;
+                this.returnFocus = null;
+                if (target?.isConnected && !target.inert && typeof target.focus === 'function') target.focus();
+                if (global.document.activeElement === global.document.body) this.historyButton?.focus();
+            }
+        }
+
+        fallback(event) {
+            // Independent DOM/text path: no template, stylesheet, app readiness or logger.
+            const id = event?.eventId;
+            this.fallbackText = (event ? TITLES[event.code] + '\n' + outcome(event) + '\n' : '') + this.minimalText(id);
+            try {
+                this.removeDialog();
+                let root = global.document.getElementById('incident-minimal-fallback');
+                if (!root) { root = node('section'); root.id = 'incident-minimal-fallback'; global.document.body.appendChild(root); }
+                root.setAttribute('role', 'alert');
+                root.style.cssText = 'position:fixed;inset:12px 12px auto;z-index:2147483646;max-height:85vh;overflow:auto;background:white;color:#17202a;padding:16px;border:2px solid #a11;font:16px/1.5 system-ui';
+                root.replaceChildren(node('p', (event ? TITLES[event.code] + '。' + outcome(event) : '诊断界面暂时不可用。') + NOTICE));
+                root.appendChild(node('p', '事件编号：' + (id || '请查看诊断历史')));
+                const text = this.exportTarget(root);
+                text.hidden = false;
+                text.value = this.fallbackText;
+                text.style.cssText = 'display:block;width:100%;color:#17202a;background:white';
+                root.appendChild(button('导出诊断或显示文本', () => this.deliver(id, text, 'download')));
+                root.appendChild(button('导出保留的诊断历史', () => this.deliver(null, text, 'download')));
+                root.appendChild(button('关闭提示（不代表已保存）', () => {
+                    const item = this.groups.get(id);
+                    if (item) item.dismissed = true;
+                    this.queue = this.queue.filter((entry) => entry !== id);
+                    root.remove();
+                    this.returnFocus?.focus?.();
+                    this.returnFocus = null;
+                    try { this.advance(); } catch (_) { }
+                }));
+            } catch (_) {
+                try {
+                    let text = global.document.getElementById('incident-minimal-text');
+                    if (!text) {
+                        text = node('pre');
+                        text.id = 'incident-minimal-text';
+                        text.tabIndex = 0;
+                        text.setAttribute('role', 'alert');
+                        text.style.cssText = 'position:fixed;inset:12px;z-index:2147483646;overflow:auto;white-space:pre-wrap;background:white;color:#17202a;padding:16px';
+                        global.document.body.appendChild(text);
+                    }
+                    text.textContent = this.fallbackText;
+                } catch (_) { }
+            }
+        }
+    }
+    IncidentCenter.LIMITS = LIMITS;
+    global.IncidentCenter = IncidentCenter;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/presentation/message-center.js ===== */
 (function (global) {
     'use strict';
@@ -963,6 +1584,24 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             }, options || {});
             this.activeMessage = null;
             this.activeTimer = null;
+            this.incidents = global.IncidentCenter ? new global.IncidentCenter({ transient: (...args) => this.show(...args) }) : null;
+        }
+
+        showIncident(eventOrId, presentation) {
+            return this.incidents?.show(eventOrId, presentation) || null;
+        }
+
+        reportIncident(input, presentation) {
+            return this.incidents?.report(input, presentation) || null;
+        }
+
+        showIncidentHistory() {
+            return this.incidents?.openHistory();
+        }
+
+        /** Share the notification workflow's bounded export and minimal text fallback. */
+        deliverDiagnostics(eventId, textTarget, action = 'download') {
+            return this.incidents?.deliver(eventId, textTarget, action === 'copySummary' ? action : 'download');
         }
 
         show(message, type = 'info', duration = 4000) {
@@ -1045,6 +1684,294 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     global.showMessage = function showMessage(message, type, duration) {
         return sharedInstance.show(message, type, duration);
     };
+    global.showIncident = (eventOrId, presentation) => sharedInstance.showIncident(eventOrId, presentation);
+})(typeof window !== 'undefined' ? window : this);
+
+
+/* ===== js/components/diagnosticSettingsPanel.js ===== */
+(function defineDiagnosticSettings(global) {
+    'use strict';
+    const root = global.document?.getElementById('diagnostic-settings');
+    if (!root || global.DiagnosticSettingsPanel) return;
+    const content = global.document.getElementById('diagnostic-settings-content');
+    const ID = /^evt_[a-f0-9]{32}_[1-9][0-9]{0,15}$/;
+    const NOTICE = '诊断报告用于排查问题，不包含答案，也不是学习数据备份。';
+    const normalizer = global.AppDiagnosticContract?.createNormalizer();
+    let built = false;
+    let busy = false;
+    let pendingEnabled = null;
+    let events = [];
+    let offset = 0;
+    let selection = null;
+    let readVersion = 0;
+    let lookupVersion = 0;
+    let timer;
+    let lastGeneration;
+    const ui = {};
+
+    function node(tag, text, parent, className) {
+        const element = global.document.createElement(tag);
+        if (text !== undefined) element.textContent = text;
+        if (className) element.className = className;
+        if (parent) parent.appendChild(element);
+        return element;
+    }
+    function button(label, parent, action) {
+        const element = node('button', label, parent, 'btn');
+        element.type = 'button';
+        element.addEventListener('click', () => { try { Promise.resolve(action()).catch(() => notify('操作未完成，请重试或选择诊断文本。')); } catch (_) { notify('操作未完成，请重试或选择诊断文本。'); } });
+        return element;
+    }
+    function notify(text) { if (ui.feedback) ui.feedback.textContent = text; }
+    function state() { try { return global.AppDiagnosticStore?.status(); } catch (_) { return null; } }
+    function clean(rows) {
+        return (Array.isArray(rows) ? rows.slice(0, 2000) : []).map((event) => normalizer?.sanitizeEvent(event)).filter(Boolean);
+    }
+    function renderStatus() {
+        if (!built) return;
+        const status = state();
+        const mode = status?.detailedMode;
+        ui.persistence.checked = pendingEnabled === null ? status?.enabled === true : pendingEnabled;
+        ui.persistence.setAttribute('aria-busy', String(busy));
+        ui.persistence.disabled = busy || !status || status.suspended;
+        ui.clear.disabled = busy || !status || status.suspended;
+        ui.retry.disabled = busy || !status?.enabled || status.suspended || typeof global.AppDiagnosticStore?.retry !== 'function';
+        ui.detailed.disabled = busy || !mode || mode.coordination === 'unavailable';
+        ui.detailed.textContent = mode?.active ? '关闭详细诊断' : '开启详细诊断（15 分钟）';
+        const remaining = Math.ceil((mode?.remainingMs || 0) / 1000);
+        ui.mode.textContent = mode?.active ? '详细诊断已开启，剩余 ' + Math.floor(remaining / 60) + ' 分 ' + (remaining % 60) + ' 秒。'
+            : '详细诊断已关闭或已到期。';
+        ui.mode.setAttribute('role', 'timer');
+        // Countdown updates are visible without announcing every second.
+        ui.mode.setAttribute('aria-live', 'off');
+        ui.storage.textContent = !status ? '诊断存储不可用；仍可查看或导出当前页面可用的诊断信息。'
+            : status.persistence === 'disabled' ? '持久化已关闭。仅保留短期当前页面上下文供即时提示和主动导出。'
+                : status.persistence === 'memory-only' || status.persistence === 'failed' ? '当前为仅内存模式，诊断历史可能无法保存。请在离开页面前导出。'
+                    : status.persistence === 'pending' ? '诊断记录正在保存；尚未确认所有记录已持久化。'
+                        : '诊断历史持久化可用。保留上限：7 天、2,000 条或 2 MiB，以先达到的限制为准。';
+        if (status?.failure) ui.storage.textContent += ' 存储状态：' + status.failure + '。';
+        ui.coordination.textContent = mode?.coordination === 'supported-windows'
+            ? '偏好与模式在支持协调、且共享此站点存储的窗口间同步。不同来源、部分 file:// 环境及未接入的练习窗口可能无法同步；不保证覆盖所有窗口。'
+            : '当前环境无法确认跨窗口协调，相关更改可能不可用。请保留页面并导出当前上下文；不保证覆盖所有窗口。';
+        if (lastGeneration !== undefined && status?.generation !== lastGeneration) {
+            lastGeneration = status?.generation;
+            if (root.open) void refresh();
+        } else lastGeneration = status?.generation;
+    }
+    function selectEvent(event) {
+        selection = normalizer?.sanitizeEvent(event) || null;
+        ui.selected.hidden = false;
+        ui.exportOne.disabled = !selection;
+        ui.copyOne.disabled = !selection;
+        ui.details.textContent = selection ? JSON.stringify(selection, null, 2) : '未找到该事件。它可能已过期、被清理或来自另一个窗口。';
+        ui.selectedTitle.textContent = selection ? '事件编号：' + selection.eventId : '事件不可用';
+        ui.outcome.textContent = selection ? '操作保存状态：' + ({ committed: '已确认保存', 'not-committed': '已确认未保存', unconfirmed: '尚未确认保存，请保留相关页面', 'not-applicable': '不适用' }[selection.persistence.operation] || '未知')
+            + '。诊断记录状态：' + ({ persisted: '已保存', pending: '正在保存', disabled: '已禁用持久化', 'memory-only': '仅当前页面内存', failed: '保存失败' }[selection.persistence.diagnostics] || '未知') + '。' : '';
+    }
+    function renderPage() {
+        ui.list.replaceChildren();
+        for (const event of events.slice(offset, offset + 20)) {
+            button(event.code + ' · ' + new Date(event.timestamp).toLocaleString() + ' · ' + event.eventId, ui.list, () => {
+                lookupVersion += 1;
+                selectEvent(event);
+                ui.selectedTitle.focus();
+            });
+        }
+        ui.previous.disabled = offset === 0;
+        ui.next.disabled = offset + 20 >= events.length;
+        ui.page.textContent = events.length ? '第 ' + (offset + 1) + '–' + Math.min(offset + 20, events.length) + ' 条，共 ' + events.length + ' 条' : '暂无可用事件。';
+    }
+    async function read(query) {
+        try {
+            const report = await global.AppDiagnosticExport.snapshot(query);
+            return { events: clean(report.events), partial: report.issues?.some((issue) => issue !== 'incident-not-retained')
+                || Object.values(report.sources || {}).some((source) => ['failed', 'timed-out', 'unavailable'].includes(source.state))
+                || ['memory-only', 'failed', 'disabled'].includes(report.storage?.persistence), truncated: report.truncated };
+        } catch (_) {
+            let memory;
+            try { memory = global.AppDiagnostics?.snapshot(query); } catch (_) { }
+            return { events: clean(memory?.events), partial: true, truncated: memory?.truncated };
+        }
+    }
+    async function refresh() {
+        if (!built) return;
+        const version = ++readVersion;
+        const selected = selection;
+        const selectedVersion = lookupVersion;
+        ui.historyStatus.textContent = '正在读取诊断历史…';
+        const result = await read({ limit: 2000 });
+        if (version !== readVersion) return;
+        events = result.events.sort((a, b) => b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+        offset = Math.min(offset, Math.max(0, Math.floor((events.length - 1) / 20) * 20));
+        ui.historyStatus.textContent = (result.partial ? '诊断历史未能完整加载；以下是当前可用的记录，可重试诊断存储或直接导出。' : '最近事件与当前页面上下文。')
+            + ' 按记录时间排序，跨窗口时钟可能不同。'
+            + ' 历史受保留期限和容量限制，跨窗口汇总可能不完整。' + (result.truncated ? ' 结果已截断。' : '');
+        renderPage();
+        renderStatus();
+        const stillSelected = () => version === readVersion && selectedVersion === lookupVersion && selection === selected;
+        if (!selected || !stillSelected()) return;
+        let event = events.find((entry) => entry.eventId === selected.eventId);
+        let selectedResult = result;
+        if (!event) {
+            // The history report budgets metadata and context as well as events.
+            // A missing row is not proof that its reference is no longer retained.
+            selectedResult = await read({ eventId: selected.eventId, limit: 1 });
+            if (!stillSelected()) return;
+            event = selectedResult.events.find((entry) => entry.eventId === selected.eventId);
+        }
+        if (event || (!selectedResult.partial && !selectedResult.truncated)) selectEvent(event);
+        else notify('暂时无法重新确认所选事件；保留上次读取的上下文，可重试诊断存储或导出。');
+    }
+    async function lookup() {
+        const version = ++lookupVersion;
+        const id = ui.reference.value.trim();
+        if (!ID.test(id)) { selectEvent(null); notify('请输入完整的有效事件编号。'); return; }
+        notify('正在查找事件…');
+        const result = await read({ eventId: id });
+        if (version !== lookupVersion) return;
+        const event = result.events.find((entry) => entry.eventId === id);
+        selectEvent(event);
+        notify(event ? '已找到事件。' : result.partial ? '暂时无法完整查询诊断历史；未在当前可用记录中找到该事件。可重试或导出当前上下文。' : '未找到该事件；请核对编号、保留期限及窗口来源。');
+        ui.selectedTitle.focus();
+    }
+    async function deliver(eventId, action) {
+        ui.text.hidden = false;
+        let result;
+        try { result = await global.getMessageCenter?.().deliverDiagnostics(eventId, ui.text, action); } catch (_) { }
+        if (!result) {
+            try { result = await global.AppDiagnosticExport[action](eventId ? { eventId } : {}, { textTarget: ui.text }); } catch (_) { }
+        }
+        if (!result) {
+            let text = NOTICE + '\n诊断导出暂不可用，请保留相关页面。';
+            try { text = global.AppDiagnostics?.exportText(eventId) || text; } catch (_) { }
+            result = { status: 'text-fallback', text };
+        }
+        ui.text.value = result.text || NOTICE;
+        notify(result.status === 'download-started' ? '已请求下载诊断报告。' : result.status === 'copied' ? '诊断摘要已复制。' : '文件导出或剪贴板不可用；下方文本已可选择复制。');
+        if (result.status === 'text-fallback') { ui.text.focus(); ui.text.select(); }
+    }
+    async function change(action, value) {
+        if (busy) return;
+        busy = true;
+        if (action === 'setEnabled') pendingEnabled = value;
+        renderStatus();
+        notify('正在更新诊断设置；清理受阻时会等待其他窗口释放诊断数据库。');
+        let result;
+        try { result = await global.AppDiagnosticStore[action](value); } catch (_) { }
+        busy = false;
+        pendingEnabled = null;
+        renderStatus();
+        notify(result?.success ? action === 'clear' ? '保留的诊断历史已清理。学习数据未更改，当前页面上下文仍可导出。'
+            : '诊断设置已更新。学习数据未更改。'
+            : '操作未完成；无法确认诊断历史已移除或设置已生效。请查看存储状态并重试，当前上下文仍可导出。');
+        await refresh();
+    }
+    async function retryStorage() {
+        const status = state();
+        if (busy || !status?.enabled || status.suspended) return;
+        busy = true;
+        renderStatus();
+        notify('正在重试诊断存储…');
+        let result;
+        try { result = await global.AppDiagnosticStore.retry(); } catch (_) { }
+        busy = false;
+        renderStatus();
+        notify(result?.success ? '诊断存储重试成功，正在重新读取历史。'
+            : '诊断存储仍不可用；请稍后重试或导出当前页面上下文。');
+        await refresh();
+    }
+    function build() {
+        content.replaceChildren();
+        ui.feedback = node('p', '', content);
+        ui.feedback.setAttribute('role', 'status');
+        ui.feedback.setAttribute('aria-live', 'polite');
+        ui.storage = node('p', '', content);
+        ui.storage.setAttribute('role', 'status');
+        ui.coordination = node('p', '', content, 'hero-panel__muted');
+        const controls = node('div', undefined, content, 'diagnostic-settings-controls');
+        const label = node('label', undefined, controls);
+        ui.persistence = node('input', undefined, label);
+        ui.persistence.type = 'checkbox';
+        ui.persistence.id = 'diagnostic-persistence';
+        node('span', '在此浏览器保留诊断历史', label);
+        node('p', '关闭持久化会移除已保留的诊断历史。短期当前页面上下文仍用于即时反馈和主动导出；重新开启不会恢复被清理的历史。', controls);
+        ui.persistence.addEventListener('change', () => { void change('setEnabled', ui.persistence.checked); });
+        ui.clear = button('仅清理诊断历史', controls, () => change('clear'));
+        ui.detailed = button('开启详细诊断（15 分钟）', controls, () => change('setDetailedMode', !state()?.detailedMode?.active));
+        ui.mode = node('p', '', controls);
+        node('p', '详细模式额外保留语义操作线索，15 分钟后自动关闭；不记录按键或任意页面交互，不提高脱敏与容量上限。', controls, 'hero-panel__muted');
+        const form = node('form', undefined, content, 'diagnostic-lookup');
+        const referenceLabel = node('label', '事件编号', form);
+        referenceLabel.htmlFor = 'diagnostic-reference';
+        ui.reference = node('input', undefined, form);
+        ui.reference.id = 'diagnostic-reference';
+        ui.reference.type = 'text';
+        ui.reference.maxLength = 70;
+        ui.reference.autocomplete = 'off';
+        ui.reference.spellcheck = false;
+        const submit = node('button', '查找事件', form, 'btn');
+        submit.type = 'submit';
+        form.addEventListener('submit', (event) => { event.preventDefault(); void lookup(); });
+        node('h4', '最近事件', content);
+        ui.historyStatus = node('p', '', content);
+        ui.historyStatus.setAttribute('role', 'status');
+        button('刷新诊断历史', content, refresh);
+        ui.retry = button('重试诊断存储', content, retryStorage);
+        ui.list = node('div', undefined, content, 'diagnostic-event-list');
+        const pages = node('div', undefined, content, 'diagnostic-settings-actions');
+        ui.previous = button('上一页', pages, () => { offset = Math.max(0, offset - 20); renderPage(); });
+        ui.page = node('span', '', pages);
+        ui.page.setAttribute('role', 'status');
+        ui.next = button('下一页', pages, () => { offset += 20; renderPage(); });
+        ui.selected = node('section', undefined, content, 'diagnostic-selected');
+        ui.selected.hidden = true;
+        ui.selectedTitle = node('h4', '', ui.selected);
+        ui.selectedTitle.tabIndex = -1;
+        ui.outcome = node('p', '', ui.selected);
+        const technical = node('details', undefined, ui.selected);
+        node('summary', '技术详情与操作上下文（仅文本）', technical);
+        ui.details = node('pre', '', technical);
+        const selectedActions = node('div', undefined, ui.selected, 'diagnostic-settings-actions');
+        ui.exportOne = button('导出此事件诊断', selectedActions, () => selection && deliver(selection.eventId, 'download'));
+        ui.copyOne = button('复制此事件摘要', selectedActions, () => selection && deliver(selection.eventId, 'copySummary'));
+        const historyActions = node('div', undefined, content, 'diagnostic-settings-actions');
+        button('导出保留的诊断历史', historyActions, () => deliver(null, 'download'));
+        button('复制诊断历史摘要', historyActions, () => deliver(null, 'copySummary'));
+        ui.text = node('textarea', undefined, content);
+        ui.text.readOnly = true;
+        ui.text.rows = 8;
+        ui.text.hidden = true;
+        ui.text.setAttribute('aria-label', '可选择复制的诊断摘要');
+        built = true;
+        global.AppDiagnosticStore?.subscribe?.(renderStatus);
+    }
+    function open() {
+        try {
+            if (!built) build();
+            renderStatus();
+            void refresh();
+            global.clearInterval(timer);
+            timer = global.setInterval(renderStatus, 1000);
+        } catch (_) {
+            content.replaceChildren();
+            node('p', '诊断设置加载失败。可保留页面并使用下方诊断文本；学习数据未更改。', content);
+            const text = node('textarea', undefined, content);
+            text.readOnly = true;
+            text.rows = 8;
+            text.setAttribute('aria-label', '诊断文本');
+            try { text.value = global.AppDiagnostics?.exportText() || NOTICE; } catch (_) { text.value = NOTICE; }
+            built = false;
+        }
+    }
+    root.addEventListener('toggle', () => { if (root.open) open(); else global.clearInterval(timer); });
+    global.addEventListener('pageshow', () => { if (root.open) open(); });
+    global.addEventListener('pagehide', () => global.clearInterval(timer));
+    global.document.addEventListener('visibilitychange', () => { if (!global.document.hidden && root.open) renderStatus(); });
+    global.DiagnosticSettingsPanel = Object.freeze({ open(eventId) {
+        root.open = true;
+        open();
+        if (built && typeof eventId === 'string') { ui.reference.value = eventId; void lookup(); }
+    } });
 })(typeof window !== 'undefined' ? window : this);
 
 
@@ -3738,6 +4665,12 @@ function ensureSettings() {
         if (collapsed && region.contains(global.document.activeElement)) {
             button.focus();
         }
+        if (global.AppData && global.AppData.preferences
+            && typeof global.AppData.preferences.patchPracticeDashboard === 'function') {
+            global.AppData.preferences.patchPracticeDashboard({ summaryCollapsed: collapsed }).catch(function (error) {
+                console.warn('[PracticeDashboard] 折叠偏好保存失败:', error);
+            });
+        }
         refreshPracticeSummaryDependentLayout();
     }
 
@@ -4520,7 +5453,9 @@ function ensureSettings() {
     "js/services/overviewStats.js",
     "js/views/overviewView.js",
     "js/presentation/navigation-controller.js",
+    "js/presentation/incident-center.js",
     "js/presentation/message-center.js",
+    "js/components/diagnosticSettingsPanel.js",
     "js/utils/practiceTimerPreferences.js",
     "js/components/practiceSettingsPanel.js",
     "js/components/libraryManagerPanel.js",

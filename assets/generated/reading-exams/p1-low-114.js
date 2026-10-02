@@ -13,7 +13,8 @@
     "pdfFilename": "28. P1 - Triumph of the City 城市的胜利.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
     "legacyFilename": "28. P1 - Triumph of the City 城市的胜利.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

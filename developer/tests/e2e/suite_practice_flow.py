@@ -871,7 +871,8 @@ async def run() -> bool:
                 "() => {\n"
                 "  const params = new URLSearchParams(window.location.search || '');\n"
                 "  const examId = params.get('dataKey') || params.get('examId') || '';\n"
-                "  const manifest = window.__READING_EXPLANATION_MANIFEST__ || {};\n"
+                "  const manifest = window.__READING_EXPLANATION_MANIFEST__;\n"
+                "  if (!manifest) return false;\n"
                 "  if (!examId || !manifest[examId]) return true;\n"
                 "  return document.querySelectorAll('.reading-explanation-card, .reading-question-explanation-list').length > 0;\n"
                 "}",
@@ -1002,7 +1003,7 @@ async def run() -> bool:
                 raise AssertionError("manual mode P1 submit should show enabled next nav button")
             await manual_suite_page.click(nav_after_p1_submit["nextSelector"])
             await manual_suite_page.wait_for_function(
-                "(oldId) => (document.body.dataset.examId || '') !== oldId",
+                "(oldId) => { const examId = document.body.dataset.examId || ''; return !!examId && examId !== oldId; }",
                 arg=manual_exam1,
                 timeout=30000,
             )
@@ -1051,7 +1052,7 @@ async def run() -> bool:
                 raise AssertionError("manual mode P2 submit should keep next nav enabled")
             await manual_suite_page.click(nav_after_p2_submit["nextSelector"])
             await manual_suite_page.wait_for_function(
-                "(oldId) => (document.body.dataset.examId || '') !== oldId",
+                "(oldId) => { const examId = document.body.dataset.examId || ''; return !!examId && examId !== oldId; }",
                 arg=manual_exam2,
                 timeout=30000,
             )

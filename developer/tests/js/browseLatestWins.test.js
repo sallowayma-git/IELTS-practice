@@ -3337,7 +3337,7 @@ authoritativeSandbox.getPersistedBrowseFilter = () => {
 };
 vm.runInContext(source, authoritativeContext, { filename: 'js/main.js' });
 const authoritativeInitialization = authoritativeSandbox.initializeBrowseView({ skipLoad: true });
-for (let attempt = 0; attempt < 16 && authoritativePreferencePatches.length === 0; attempt += 1) {
+for (let attempt = 0; attempt < 64 && authoritativePreferencePatches.length === 0; attempt += 1) {
     await Promise.resolve();
 }
 assert.strictEqual(

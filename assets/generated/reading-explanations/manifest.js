@@ -1896,6 +1896,38 @@
     "title": "The internal body clock 生物钟",
     "sourceDoc": "PASSAGE-by-ZYZ-IELTS-Reading-2026-09-02-r4.html",
     "matchedTitle": "The internal body clock 生物钟"
+  },
+  "p3-medium-248": {
+    "examId": "p3-medium-248",
+    "dataKey": "p3-medium-248",
+    "script": "../reading-explanations/p3-medium-248.js",
+    "title": "Marketing and Mind Control 营销心理学",
+    "sourceDoc": "PASSAGE-by-ZYZ-IELTS-Reading-2026-10-01-r1.html",
+    "matchedTitle": "Marketing and Mind Control"
+  },
+  "p1-medium-249": {
+    "examId": "p1-medium-249",
+    "dataKey": "p1-medium-249",
+    "script": "../reading-explanations/p1-medium-249.js",
+    "title": "Mystery Drawing 达芬奇画作",
+    "sourceDoc": "PASSAGE-by-ZYZ-IELTS-Reading-2026-10-01-r1.html",
+    "matchedTitle": "Mystery Drawing"
+  },
+  "p2-high-250": {
+    "examId": "p2-high-250",
+    "dataKey": "p2-high-250",
+    "script": "../reading-explanations/p2-high-250.js",
+    "title": "Seeing in the Sea 海中视觉",
+    "sourceDoc": "PASSAGE-by-ZYZ-IELTS-Reading-2026-10-01-r1.html",
+    "matchedTitle": "Seeing in the Sea"
+  },
+  "p1-medium-251": {
+    "examId": "p1-medium-251",
+    "dataKey": "p1-medium-251",
+    "script": "../reading-explanations/p1-medium-251.js",
+    "title": "Learning by example 动物学习",
+    "sourceDoc": "PASSAGE-by-ZYZ-IELTS-Reading-2026-10-01-r1.html",
+    "matchedTitle": "Learning by example"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);

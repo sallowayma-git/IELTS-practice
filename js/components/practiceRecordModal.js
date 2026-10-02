@@ -261,6 +261,7 @@ class PracticeRecordModal {
                             </div>
                         </div>
                         <div class="answer-details">
+                            ${record.type === 'reading' || record.type === 'reading-suite' ? (window.ReadingTimingView?.render(record) || '') : ''}
                             <h5>\u7b54\u9898\u8be6\u60c5</h5>
                             ${answerSection}
                         </div>

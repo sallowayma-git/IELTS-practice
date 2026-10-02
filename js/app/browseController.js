@@ -375,11 +375,13 @@
                 && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
                 return;
             }
-            const filtered = this.filterExamsByFolder(examIndex, filterId);
+            let filtered = this.filterExamsByFolder(examIndex, filterId);
             if (!Array.isArray(filtered)) {
                 console.warn('[BrowseController] 未找到文件夹映射:', filterId);
                 return;
             }
+
+            if (global.BrowseLearningControls) filtered = global.BrowseLearningControls.filter(filtered);
 
             // 活动搜索必须继续约束当前文件夹结果；无查询时在控制器层终止
             // 渲染，避免 main -> ExamActions -> controller -> main 的递归刷新。

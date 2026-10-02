@@ -13,7 +13,8 @@
     "pdfFilename": "228. P3 - On art and artists 艺术与艺术家.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "228. P3 - On art and artists 艺术与艺术家.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -28,7 +29,12 @@
     {
       "groupId": "group-1",
       "kind": "matching",
-      "questionIds": ["q1", "q2", "q3", "q4"],
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n<h4>Questions 27-30</h4>\n<p>Reading Passage 3 has eight paragraphs, A-H.</p>\n<p>Which paragraph contains the following information?</p>\n<p>Write the correct letter, A-H, in boxes 27-30 on your answer sheet.</p>\n<div class=\"question-item\">\n<p><strong>27</strong> a comparison between people's preferences towards language and art</p>\n<div class=\"match-dropzone\" data-question=\"q1\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>28</strong> why people may have misunderstood how a certain animal moves</p>\n<div class=\"match-dropzone\" data-question=\"q2\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>29</strong> a contrast between the techniques used in two pictures</p>\n<div class=\"match-dropzone\" data-question=\"q3\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>30</strong> a possible negative effect of using the term 'art'</p>\n<div class=\"match-dropzone\" data-question=\"q4\"></div>\n</div>\n<div class=\"options-pool\" id=\"paragraph-options-pool\">\n<div class=\"pool-items\">\n<div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"H\">H</div>\n</div>\n</div>\n</div>",
       "allowOptionReuse": true,
       "leadHtml": "<h3>Questions</h3>"
@@ -36,14 +42,26 @@
     {
       "groupId": "group-2",
       "kind": "matching",
-      "questionIds": ["q5", "q6", "q7", "q8", "q9", "q10"],
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-anchor\">\n<h4>Questions 31-36</h4>\n<p>Look at the following statements (Questions 31-36) and the list of subjects below.</p>\n<p>Match each statement with the correct subject, A-G.</p>\n<p>Write the correct letter, A-G, in boxes 31-36 on your answer sheet.</p>\n<div class=\"question-item\">\n<p><strong>31</strong> The artist clearly hoped that we would share his admiration of this subject.</p>\n<div class=\"match-dropzone\" data-question=\"q5\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>32</strong> The artist aims to give a general impression of this subject rather than a detailed one.</p>\n<div class=\"match-dropzone\" data-question=\"q6\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>33</strong> Someone's personal experience may make them consider a painting of this subject unpleasant.</p>\n<div class=\"match-dropzone\" data-question=\"q7\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>34</strong> The way in which this subject was once portrayed was factually wrong.</p>\n<div class=\"match-dropzone\" data-question=\"q8\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>35</strong> The painting is well known for the effort the artist put into creating a very accurate picture of this subject.</p>\n<div class=\"match-dropzone\" data-question=\"q9\"></div>\n</div>\n<div class=\"question-item\">\n<p><strong>36</strong> People may like a painting of this subject for a reason that is external to the painting.</p>\n<div class=\"match-dropzone\" data-question=\"q10\"></div>\n</div>\n<div class=\"options-pool\" id=\"subject-options-pool\">\n<strong>List of Subjects</strong>\n<div class=\"pool-items\">\n<div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A village scene</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B alpine scene</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Rubens's son</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Durer's mother</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E hare</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F elephant</div>\n<div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G horses</div>\n</div>\n</div>\n</div>",
       "allowOptionReuse": false
     },
     {
       "groupId": "group-3",
       "kind": "short_answer",
-      "questionIds": ["q11", "q12", "q13", "q14"],
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
       "bodyHtml": "<div class=\"group\" id=\"q11-12-13-14-anchor\">\n<h4>Questions 37-40</h4>\n<p>Complete the summary below.</p>\n<p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n<div class=\"summary-text\">\n<h5>Beauty and expression</h5>\n<p>Differences in tastes and standards of beauty make it difficult to judge a painting. Durer's painting of his mother is considered significant because it is a <input name=\"q11\" class=\"blank\" data-answer=\"truthful\"> representation of her age and situation. However, we may need to overcome an initial reaction of <input name=\"q12\" class=\"blank\" data-answer=\"shock\"> when we see it. In order to judge the facial expressions of people portrayed in a painting, we need to become familiar with the methods that the artist has used when creating the painting. While some of us are affected by the portrayal of a facial expression that we can <input name=\"q13\" class=\"blank\" data-answer=\"understand\"> without much effort, others prefer expressions that require <input name=\"q14\" class=\"blank\" data-answer=\"interpretation\">.</p>\n</div>\n</div>"
     }
   ],
@@ -74,7 +92,22 @@
     "verifiedAt": "2026-03-31T19:30:00.000Z",
     "notes": "signature:dragdrop,textarea"
   },
-  "questionOrder": ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "q11", "q12", "q13", "q14"],
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
   "questionDisplayMap": {
     "q1": "27",
     "q2": "28",

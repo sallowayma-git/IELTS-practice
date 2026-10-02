@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Art of Deception 欺骗的艺术",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "85. P3 - The Art of Deception 欺骗的艺术【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/85. P3 - The Art of Deception 欺骗的艺术【次】/",
     "legacyFilename": "85. P3 - The Art of Deception 欺骗的艺术【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

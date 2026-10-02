@@ -75,6 +75,9 @@ function createDocumentStub() {
             return [];
         },
         getElementById(id) {
+            if (id === 'question-groups') {
+                return this;
+            }
             return id === 'timer' ? timer : null;
         },
         addEventListener() {},
@@ -175,15 +178,16 @@ function createContext() {
     };
 }
 
-function loadHooks() {
+export function loadHooks(configure = () => {}) {
     const { context, window, document, windowSession, getCloseCount } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
+    configure({ context, window, document, windowSession });
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, document, windowSession, getCloseCount };
+    return { context, hooks, window, document, windowSession, getCloseCount };
 }
 
 function plain(value) {
@@ -390,6 +394,53 @@ async function testInlineReinitSnapshot() {
     const stored = windowSession.get('simulation-draft:suite-1:reading-p1');
     assert(stored, 'reinit snapshot must persist the window-session draft');
     assert.deepStrictEqual(plain(stored.draft.answers), { q1: 'A' }, 'persisted mirror must use the captured draft');
+}
+
+async function testInlineDraftPublication() {
+    const { context, hooks, window } = loadHooks();
+    let clock = 1000;
+    context.Date = class extends Date { static now() { return clock; } };
+    loadScript('js/services/readingTiming.js', context);
+    const messages = [];
+    const dataset = { meta: { title: 'P1' }, questionOrder: ['q1'], questionGroups: [] };
+    const slot = { examId: 'reading-p1', dataset,
+        draft: { answers: {}, updatedAt: 999 }, durationMs: 0 };
+    hooks.setTestState({
+        examId: 'reading-p1', sessionId: 'session-sync', suiteSessionId: 'suite-sync',
+        simulationMode: true, simulationContextReady: true, sessionReadySent: true,
+        parentWindow: { postMessage(message) { messages.push(plain(message)); } },
+        parentOrigin: 'http://localhost', dataset,
+        suite: { inline: true, activeExamId: 'reading-p1', currentIndex: 0,
+            sequence: [{ examId: 'reading-p1' }], slotsByExamId: new Map([['reading-p1', slot]]) }
+    });
+    hooks.syncSimulationDraftSnapshot('activate');
+    assert.strictEqual(messages.length, 1);
+    assert.strictEqual(messages[0].data.draft.readingTiming, null);
+
+    // Timing can become available after the initial acquisition failure without
+    // another edit or timer action. Its first periodic publication must not be
+    // mistaken for a draft already delivered to the host.
+    clock++;
+    slot.draft.readingTiming = new window.ReadingTiming.Meter(dataset, {
+        attemptId: 'timing-sync', examId: 'reading-p1', libraryConfigurationId: null, writer: 'writer'
+    }).snapshot();
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 2, 'new timing must reach the host on the next periodic sync');
+    assert.strictEqual(messages[1].data.draft.readingTiming.attemptId, 'timing-sync');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 2, 'unchanged drafts must still be deduplicated');
+
+    // Keep the wall clock fixed: a local capture followed by publication must
+    // retain the newer edit and pass the host's strict updatedAt fence.
+    window.scrollY = 321;
+    hooks.captureInlineSuiteDraftBeforeReinit('snapshot');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 3, 'a local capture must not mark a draft as published');
+    assert.strictEqual(messages[2].data.draft.scrollY, 321);
+    assert.ok(messages[2].data.draftUpdatedAt > messages[1].data.draftUpdatedAt,
+        'successive draft captures need increasing timestamps even in the same millisecond');
+    hooks.syncSimulationDraftSnapshot();
+    assert.strictEqual(messages.length, 3);
 }
 
 async function testWindowSessionMessageGuard() {
@@ -759,7 +810,7 @@ async function testSubmitAcknowledgementStateMachine() {
     assert.strictEqual(hooks.getTestState().submissionStatus, 'draft', 'late ACK after NACK must not submit the page');
     assert.strictEqual(hooks.getTestState().readOnly, false);
 
-    assert.strictEqual(hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }), true);
+    const retry = hooks.retryPendingSubmission();
     assert.strictEqual(delivered.length, 2);
     assert.strictEqual(delivered[1].data.submissionId, submissionId, 'retry must reuse the idempotency key');
 
@@ -770,6 +821,7 @@ async function testSubmitAcknowledgementStateMachine() {
         windowSessionToken: 'token-submit-current'
     }));
     state = hooks.getTestState();
+    assert.strictEqual((await retry).verified, true);
     assert.strictEqual(state.submissionStatus, 'submitted');
     assert.strictEqual(state.submitted, true);
     assert.strictEqual(state.readOnly, true, 'only a valid ACK may lock the page');
@@ -814,9 +866,7 @@ async function testSubmitAcknowledgementStateMachine() {
     }));
     assert.strictEqual(suiteHarness.getCloseCount(), 0, 'a persistence NACK must keep the final child open for retry');
     assert.strictEqual(suiteHarness.hooks.getTestState().submissionStatus, 'draft');
-    assert.strictEqual(suiteHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
-        suiteSessionId: 'suite-final'
-    }, finalPresentation), true);
+    const suiteRetry = suiteHarness.hooks.retryPendingSubmission();
     assert.strictEqual(
         suiteHarness.hooks.getTestState().submissionId,
         suiteSubmissionId,
@@ -830,6 +880,7 @@ async function testSubmitAcknowledgementStateMachine() {
         windowSessionToken: 'token-suite-final'
     }));
     assert.strictEqual(suiteHarness.getCloseCount(), 1, 'the final suite child must close after its valid ACK');
+    assert.strictEqual((await suiteRetry).verified, true);
 
     const lateHarness = loadHooks();
     const lateParent = { postMessage() {} };
@@ -912,6 +963,7 @@ async function testSubmitAcknowledgementStateMachine() {
 }
 
 async function main() {
+    await testInlineDraftPublication();
     await testDraftArbitration();
     await testSuiteTimerModePrecedence();
     await testInlinePartTimingAccumulatesMillisecondsAndFreezesSubmissionRows();
@@ -928,7 +980,7 @@ async function main() {
     process.exit(0);
 }
 
-main().catch((error) => {
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) main().catch((error) => {
     const detail = error && error.stack ? error.stack : String(error);
     process.stdout.write(JSON.stringify({ status: 'fail', detail }));
     process.exit(1);

@@ -79,6 +79,7 @@
 
     const state = {
         examId: null,
+        libraryConfigurationId: undefined,
         dataKey: null,
         sessionId: null,
         suiteSessionId: null,
@@ -170,6 +171,49 @@
         windowSessionGeneration: 0
     };
 
+    let diagnosticTransport = null;
+    let diagnosticBinding = null;
+    let handshakeDeadline = null;
+    let pendingSubmission = null; // Business-owned snapshot; never given to diagnostics.
+    try { diagnosticTransport = global.AppDiagnosticChannel?.createChild({
+        reporter: global.AppDiagnostics, store: global.AppDiagnosticStore
+    }); } catch (_) { }
+
+    function readingCorrelation(submission = pendingSubmission) {
+        const raw = { session: state.sessionId, suite: state.suiteSessionId,
+            submission: submission?.id || state.submissionId,
+            operation: submission?.operationId };
+        try {
+            const local = global.AppDiagnostics?.correlate(raw);
+            if (local && diagnosticBinding?.sessionId === state.sessionId
+                && diagnosticBinding?.suiteSessionId === state.suiteSessionId) {
+                return { ...local, scopeId: diagnosticBinding.aliases.scopeId,
+                    session: diagnosticBinding.aliases.session, suite: diagnosticBinding.aliases.suite };
+            }
+            return local || raw;
+        } catch (_) { return raw; }
+    }
+
+    function readingStep(action, outcome, correlation = readingCorrelation()) {
+        try { global.AppOperationDiagnostics?.breadcrumb(state.suiteSessionId ? 'suite' : 'reading', action, outcome, correlation); } catch (_) { }
+    }
+
+    function readingFailure(code, action, error, operation = 'unconfirmed', retry, resource, correlation = readingCorrelation()) {
+        try { return global.AppOperationDiagnostics?.failure({ code, module: state.suiteSessionId ? 'suite' : 'reading',
+            action, error, operation, correlation, resource }, retry); } catch (_) { return null; }
+    }
+
+    function connectReadingDiagnostics(data) {
+        try {
+            const aliases = global.AppDiagnostics?.correlate(undefined, data.diagnosticCorrelation);
+            diagnosticBinding = aliases && aliases.scopeId !== 'unknown' && aliases.session !== 'unknown'
+                ? { sessionId: state.sessionId, suiteSessionId: state.suiteSessionId, aliases } : null;
+            diagnosticTransport?.connect({ window: state.parentWindow, origin: state.parentOrigin,
+                allowOpaqueOrigin: state.parentOriginIsOpaque, sessionId: state.sessionId,
+                windowSessionToken: state.windowSessionToken });
+        } catch (_) { }
+    }
+
     const dom = {
         title: null,
         subtitle: null,
@@ -187,6 +231,7 @@
 
     const interaction = {
         timerRunning: true,
+        timerInteractionRevision: 0,
         timerInterval: null,
         lastRange: null,
         currentHighlightNode: null,
@@ -198,6 +243,24 @@
     const testOverrides = {
         renderExplanations: null
     };
+    let readingTimingController = null;
+    function readingTimingContext() {
+        return {
+            sessionId: state.sessionId, parentAttemptId: state.suiteSessionId || null,
+            sequenceIndex: state.suite?.inline ? state.suite.currentIndex : state.simulationCtx?.currentIndex,
+            examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
+            dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
+            timerInteractionRevision: interaction.timerInteractionRevision,
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionUnconfirmed()
+                && state.submissionStatus === 'draft' && !state.suite.activating,
+            restorePause: () => setTimerRunning(false)
+        };
+    }
+    async function activateReadingTiming(draft = null) {
+        if (!global.ReadingTimingController) return;
+        if (!readingTimingController) readingTimingController = new global.ReadingTimingController(readingTimingContext);
+        await readingTimingController.activate(draft);
+    }
 
     function parseOptionalNumber(value) {
         if (value === null || value === undefined) {
@@ -392,14 +455,15 @@
 
     function setTimerLockMode(enabled) {
         const locked = Boolean(enabled);
+        if (locked) readingTimingController?.stop();
         state.timerLocked = locked;
         document.body.classList.toggle('timer-locked-mode', locked);
-        document.querySelectorAll('input, textarea, select').forEach((control) => {
+        getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = locked || state.readOnly;
+                control.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
             }
         });
-        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly;
+        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
         syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
@@ -581,7 +645,10 @@
         ensurePracticeTimerBridge();
         const timer = document.getElementById('timer');
         if (timer) {
-            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+            timer.addEventListener('click', event => {
+                if (event.isTrusted) interaction.timerInteractionRevision++;
+                setTimerRunning(!interaction.timerRunning);
+            });
         }
         if (!interaction.timerInterval) {
             interaction.timerInterval = global.setInterval(() => {
@@ -1068,6 +1135,7 @@
     function getReviewDictionaryContext() {
         return {
             examId: state.examId,
+            libraryConfigurationId: state.libraryConfigurationId,
             dataKey: state.dataKey,
             title: state.dataset?.meta?.title || '',
             category: state.dataset?.meta?.category || '',
@@ -1251,11 +1319,25 @@
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
+            try { global.AppDiagnostics?.declareResource(script, { url: new URL(requestUrl, document.baseURI).href, optional: false }); } catch (_) { }
             script.src = requestUrl;
             script.defer = true;
-            script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${requestUrl}`));
-            document.head.appendChild(script);
+            let settled = false;
+            const finish = (failed) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(deadline);
+                if (!failed) { readingStep('load-resource', 'succeeded'); resolve(true); return; }
+                let error = new Error('Reading resource unavailable');
+                try { error = global.AppDiagnostics?.resourceFailure(script, error) || error; } catch (_) { }
+                readingFailure('RESOURCE_LOAD_FAILED', 'load-resource', error, 'not-committed', undefined,
+                    { url: script.src, optional: false });
+                reject(error);
+            };
+            const deadline = setTimeout(() => finish(true), 15000);
+            script.onload = () => finish(false);
+            script.onerror = () => finish(true);
+            try { document.head.appendChild(script); } catch (_) { finish(true); }
         });
         scriptCache.set(requestUrl, promise);
         return promise;
@@ -1535,6 +1617,7 @@
     function cloneDraftRecord(draft) {
         const source = draft && typeof draft === 'object' ? draft : {};
         return {
+            readingTiming: global.ReadingTiming?.normalize(source.readingTiming) || null,
             answers: source.answers && typeof source.answers === 'object'
                 ? { ...source.answers }
                 : {},
@@ -1576,6 +1659,7 @@
             ? Number(next.updatedAt)
             : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now());
         const merged = Object.assign(buildEmptyDraft(), base, next, {
+            readingTiming: nextDraft?.readingTiming ? next.readingTiming : base.readingTiming,
             answers: next.answers && typeof next.answers === 'object'
                 ? { ...next.answers }
                 : { ...base.answers },
@@ -1696,6 +1780,7 @@
             return null;
         }
         const draft = mergeDraft(slot.draft, {
+            readingTiming: readingTimingController?.snapshot() || slot.draft?.readingTiming || null,
             answers: collectAnswers(),
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -1703,15 +1788,16 @@
             noteOutlines: collectNoteOutlines(),
             markedQuestions: getCurrentMarkedQuestions(),
             scrollY: global.scrollY || 0,
-            updatedAt: Date.now()
+            // The host and mergeDraft reject equal timestamps. Preserve a new
+            // local capture even when acquisition and a timer event share a tick.
+            updatedAt: Math.max(Date.now(), (Number(slot.draft?.updatedAt) || 0) + 1)
         });
         slot.draft = draft;
         slot.navStatus = new Map(navStatus);
         slot.lastResults = state.lastResults || slot.lastResults || null;
         checkpointActiveSuiteDuration(Date.now(), interaction.timerRunning);
-        state.simulationDraftFingerprint = reason === 'activate'
-            ? state.simulationDraftFingerprint
-            : buildDraftFingerprint(draft);
+        // Local capture is not publication. The sync path owns the fingerprint
+        // so a later periodic sync can still deliver newly acquired timing.
         return draft;
     }
 
@@ -1849,9 +1935,9 @@
         );
     }
 
-    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration) {
+    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration, ownsPresentation = () => true) {
         const targetExamId = String(slot?.examId || '').trim();
-        const isCurrentActivation = () => isCurrentSuiteActivation(targetExamId, activationGeneration);
+        const isCurrentActivation = () => ownsPresentation() && isCurrentSuiteActivation(targetExamId, activationGeneration);
         if (!isCurrentActivation()) {
             return false;
         }
@@ -1876,9 +1962,7 @@
             enhanceReviewHighlights();
         }
         updateNavStatuses(shouldShowResults ? slot.lastResults : null);
-        if (state.readOnly) {
-            setReadOnlyMode(true, state.readOnlyReason);
-        }
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
         if (state.timerLocked) {
             setTimerLockMode(true);
         } else {
@@ -1897,6 +1981,7 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        readingTimingController?.stop();
         const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
         state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
@@ -1938,12 +2023,14 @@
         if (!options.skipDraftSync) {
             syncSimulationDraftSnapshot('activate');
         }
+        if (state.sessionReadySent) await activateReadingTiming(slot.draft);
         if (!options.silent) {
             postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
                 examId: targetExamId,
                 currentIndex: state.suite.currentIndex,
                 suiteSequence: state.suite.sequence.map((entry) => ({ ...entry }))
             });
+            readingStep('suite-navigation', 'succeeded');
         }
         return true;
     }
@@ -2491,6 +2578,7 @@
 
     function canEditReadingNotes() {
         if (state.timerLocked) return false;
+        if (isSubmissionUnconfirmed()) return false;
         const activePracticeCanEdit = Boolean(
             !state.readOnly
             && !state.memorizeMode
@@ -3918,6 +4006,7 @@
         if (targetPartKey === currentPartKey) {
             if (questionId) {
                 scrollToQuestion(questionId);
+                readingTimingController?.select(questionId);
             }
             return;
         }
@@ -3928,6 +4017,7 @@
                 activateSuiteSlot(targetExamId).then((activated) => {
                     if (activated && questionId) {
                         scrollToQuestion(questionId);
+                        readingTimingController?.select(questionId);
                     }
                 }).catch((error) => {
                     console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
@@ -4616,6 +4706,10 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
+            if (isSubmissionUnconfirmed()) {
+                event.preventDefault();
+                return;
+            }
             // 已被使用的选项不可拖拽
             if (item.classList.contains('option-consumed') || item.dataset.consumed === '1') {
                 event.preventDefault();
@@ -4656,6 +4750,7 @@
             item.dataset.answerLabel = normalizedLabel;
             item.setAttribute('draggable', 'true');
             item.addEventListener('click', () => {
+                if (isSubmissionUnconfirmed()) return;
                 clearDropzone(dropzone);
                 updateNavStatuses();
             });
@@ -4798,7 +4893,7 @@
                 item.classList.remove('option-consumed');
                 // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
                 // 不允许重新启用选项，否则可绕过锁定继续作答
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
                 item.classList.toggle('drag-item-locked', interactionLocked);
             }
@@ -4892,6 +4987,10 @@
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
+            if (isSubmissionUnconfirmed()) {
+                event.preventDefault();
+                return;
+            }
             const target = event.target instanceof HTMLElement
                 ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
@@ -4913,9 +5012,35 @@
         });
     }
 
+    function getPracticeAnswerRoot() {
+        // The reader and note editor share this document, but only the rendered
+        // practice questions own answer controls. Never fall back to document.
+        return dom.groups || document.getElementById('question-groups');
+    }
+
+    function getPracticeFormControls() {
+        const roots = [
+            getPracticeAnswerRoot(),
+            dom.left || document.getElementById('left'),
+            document.getElementById('notes-panel'),
+            document.getElementById('reading-note-editor'),
+            document.getElementById('reading-note-drawer')
+        ].filter(Boolean);
+        return Array.from(new Set(roots.flatMap((root) => Array.from(root.querySelectorAll('input, textarea, select')))));
+    }
+
+    function isTextualAnswerControl(field) {
+        const tagName = String(field?.tagName || '').toUpperCase();
+        return tagName === 'SELECT'
+            || tagName === 'TEXTAREA'
+            || (tagName === 'INPUT' && String(field.type || 'text').toLowerCase() === 'text');
+    }
+
     function getCheckboxAnswers() {
         const grouped = new Map();
-        document.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
+        const root = getPracticeAnswerRoot();
+        if (!root) return grouped;
+        root.querySelectorAll('input[type="checkbox"][name]').forEach((input) => {
             const name = input.name;
             if (!grouped.has(name)) {
                 grouped.set(name, []);
@@ -4949,11 +5074,13 @@
     }
 
     function getTextualAnswer(questionId) {
+        const root = getPracticeAnswerRoot();
+        if (!root) return '';
         const aliases = resolveAnswerAliases(questionId);
         const fieldMap = new Map();
         aliases.forEach((alias) => {
-            document.querySelectorAll(`[name="${alias}"]`).forEach((field) => {
-                if (!fieldMap.has(field)) {
+            root.querySelectorAll(`[name="${escapeSelector(alias)}"]`).forEach((field) => {
+                if (isTextualAnswerControl(field) && !fieldMap.has(field)) {
                     fieldMap.set(field, true);
                 }
             });
@@ -4961,14 +5088,6 @@
         const fields = Array.from(fieldMap.keys());
         const values = [];
         for (const field of fields) {
-            if (field.type === 'radio') continue;
-            if (field.tagName === 'SELECT') {
-                const value = String(field.value || '').trim();
-                if (value) {
-                    values.push(value);
-                }
-                continue;
-            }
             const value = String(field.value || '').trim();
             if (value) {
                 values.push(value);
@@ -4976,8 +5095,8 @@
         }
         if (!values.length) {
             aliases.forEach((alias) => {
-                const inputById = document.getElementById(`${alias}_input`);
-                if (!inputById || !('value' in inputById)) {
+                const inputById = root.querySelector(`[id="${escapeSelector(`${alias}_input`)}"]`);
+                if (!isTextualAnswerControl(inputById)) {
                     return;
                 }
                 const value = String(inputById.value || '').trim();
@@ -5113,6 +5232,9 @@
     }
 
     function findDropzoneByQuestionId(questionId) {
+        // Matching headings can live beside passage paragraphs in the left pane.
+        const roots = [getPracticeAnswerRoot(), dom.left || document.getElementById('left')].filter(Boolean);
+        if (!roots.length) return null;
         const aliases = resolveAnswerAliases(questionId);
         for (let index = 0; index < aliases.length; index += 1) {
             const alias = aliases[index];
@@ -5130,19 +5252,21 @@
                 `#${escaped}-dropzone`,
                 `#${escaped}-target`
             ].join(', ');
-            let direct = null;
-            try {
-                direct = document.querySelector(selector);
-            } catch (_) {
-                direct = null;
-            }
-            if (direct) {
-                return direct;
-            }
-            const anchor = document.getElementById(`${alias}-anchor`);
-            const paragraphZone = anchor?.parentElement?.querySelector?.('.paragraph-dropzone');
-            if (paragraphZone) {
-                return paragraphZone;
+            for (const root of roots) {
+                let direct = null;
+                try {
+                    direct = root.querySelector(selector);
+                } catch (_) {
+                    direct = null;
+                }
+                if (direct) {
+                    return direct;
+                }
+                const anchor = root.querySelector(`[id="${escapeSelector(`${alias}-anchor`)}"]`);
+                const paragraphZone = anchor?.parentElement?.querySelector?.('.paragraph-dropzone');
+                if (paragraphZone) {
+                    return paragraphZone;
+                }
             }
         }
         return null;
@@ -5198,11 +5322,13 @@
 
     function collectAnswers() {
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        const questionIdsInDataset = new Set(order);
+        const root = getPracticeAnswerRoot();
         const answers = {};
         const checkboxGroups = getCheckboxAnswers();
 
         checkboxGroups.forEach((values, name) => {
-            const questionIds = resolveCheckboxQuestionIds(name);
+            const questionIds = resolveCheckboxQuestionIds(name).filter((questionId) => questionIdsInDataset.has(questionId));
             if (!questionIds.length) {
                 return;
             }
@@ -5220,7 +5346,7 @@
             if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
                 return;
             }
-            const radios = document.querySelectorAll(`input[type="radio"][name="${questionId}"]`);
+            const radios = root?.querySelectorAll(`input[type="radio"][name="${escapeSelector(questionId)}"]`) || [];
             if (radios.length) {
                 const checked = Array.from(radios).find((input) => input.checked);
                 answers[questionId] = checked ? String(checked.value).trim() : '';
@@ -5665,9 +5791,35 @@
         return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
+    function resultEntryOrderNumber(entry) {
+        const number = questionNumberFromId(entry && entry.questionId);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    // 结果表格必须按题号（显示题号，已通过 questionDisplayMap 换算）升序展示。
+    // answerComparison 的键顺序在持久化/回放等环节可能被规范化为字符串字典序
+    // （如 q1,q10,q11,…,q2），直接 Object.values 会让 q10–q13（显示 23–26）
+    // 排到 q2（显示 15）之前，因此这里在展示层统一做一次稳定的数字排序兜底。
+    function orderResultEntries(entries) {
+        return entries.slice().sort((left, right) => {
+            const leftNumber = resultEntryOrderNumber(left);
+            const rightNumber = resultEntryOrderNumber(right);
+            if (leftNumber != null && rightNumber != null) {
+                if (leftNumber !== rightNumber) {
+                    return leftNumber - rightNumber;
+                }
+            } else if (leftNumber != null) {
+                return -1;
+            } else if (rightNumber != null) {
+                return 1;
+            }
+            return String(left?.questionId || '').localeCompare(String(right?.questionId || ''), 'en');
+        });
+    }
+
     function renderResults(results) {
         if (!dom.results) return;
-        const rows = Object.values(results.answerComparison).map((entry) => {
+        const rows = orderResultEntries(Object.values(results.answerComparison || {})).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
             const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
@@ -5691,8 +5843,12 @@
             `;
         }).join('');
         dom.results.innerHTML = `
-            <h4>答题结果</h4>
-            <p>得分 ${results.scoreInfo.correct} / ${results.scoreInfo.totalQuestions} · ${results.scoreInfo.percentage}%</p>
+            <div class="results-header-bar">
+                <div class="results-header-summary">
+                    <h4>答题结果</h4>
+                    <p class="results-score-text">得分 ${results.scoreInfo.correct} / ${results.scoreInfo.totalQuestions} · ${results.scoreInfo.percentage}%</p>
+                </div>
+            </div>
             <table class="results-table">
                 <thead>
                     <tr>
@@ -5847,15 +6003,17 @@
     }
 
     function collectChoiceInputsForQuestion(questionId) {
+        const root = getPracticeAnswerRoot();
+        if (!root) return [];
         const normalizedTarget = normalizeQuestionId(questionId);
         // 直接匹配
-        let inputs = document.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
+        let inputs = root.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
         if (inputs.length) {
             return Array.from(inputs);
         }
         // 扫描所有 checkbox/radio 组，匹配 name 展开后的题目序列
         const matched = [];
-        document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+        root.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
             const name = input.name || '';
             const ids = expandQuestionSequence(name);
             if (ids.some((id) => normalizeQuestionId(id) === normalizedTarget)) {
@@ -6046,10 +6204,12 @@
         if (!answers || typeof answers !== 'object') {
             return;
         }
+        const root = getPracticeAnswerRoot();
+        if (!root) return;
 
         const groupedHandledQuestionIds = new Set();
         const groupedChoiceInputs = new Map();
-        document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
+        root.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
             const groupName = String(input.getAttribute('name') || '').trim();
             if (!groupName) return;
             const expandedQuestionIds = expandQuestionSequence(groupName);
@@ -6105,10 +6265,10 @@
             const selectFields = new Set();
             aliases.forEach((alias) => {
                 const escapedAlias = escapeSelector(alias);
-                document.querySelectorAll(
+                root.querySelectorAll(
                     `input[type="radio"][name="${escapedAlias}"], input[type="checkbox"][name="${escapedAlias}"]`
                 ).forEach((field) => choiceFields.add(field));
-                document.querySelectorAll([
+                root.querySelectorAll([
                     `input[name="${escapedAlias}"]`,
                     `textarea[name="${escapedAlias}"]`,
                     `input[id="${escapedAlias}"]`,
@@ -6116,11 +6276,11 @@
                     `input[data-question-id="${escapedAlias}"]`,
                     `textarea[data-question-id="${escapedAlias}"]`
                 ].join(', ')).forEach((field) => {
-                    if (field.type !== 'radio' && field.type !== 'checkbox') {
+                    if (isTextualAnswerControl(field)) {
                         textFields.add(field);
                     }
                 });
-                document.querySelectorAll([
+                root.querySelectorAll([
                     `select[name="${escapedAlias}"]`,
                     `select[id="${escapedAlias}"]`,
                     `select[data-question-id="${escapedAlias}"]`
@@ -6160,11 +6320,15 @@
     }
 
     function setReadOnlyMode(enabled, reason = '') {
+        if (enabled) readingTimingController?.stop();
         state.readOnly = Boolean(enabled);
         state.readOnlyReason = state.readOnly
             ? (reason || state.readOnlyReason || 'readonly')
             : '';
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
+        // Pending confirmation locks answer editing without presenting saved results.
+        const answerRoot = getPracticeAnswerRoot();
+        if (answerRoot) answerRoot.inert = isSubmissionUnconfirmed();
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
                 dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
@@ -6185,7 +6349,7 @@
         if (dom.resetBtn) {
             dom.resetBtn.disabled = state.readOnly;
         }
-        const controls = document.querySelectorAll('input, textarea, select');
+        const controls = getPracticeFormControls();
         controls.forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 // review、普通进行中练习、以及已回传 recordId 的结果页允许编辑笔记；
@@ -6199,7 +6363,7 @@
                     control.disabled = false;
                     return;
                 }
-                control.disabled = state.readOnly || state.timerLocked;
+                control.disabled = state.readOnly || state.timerLocked || isSubmissionUnconfirmed();
             }
         });
         renderNotesDrawer();
@@ -6209,7 +6373,7 @@
     }
 
     function disableDragInteractions() {
-        const locked = Boolean(state.readOnly || state.timerLocked);
+        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
             // 如果选项已被使用（option-consumed），始终保持不可拖拽
@@ -6275,31 +6439,85 @@
         if (state.submissionStatus !== 'submitting') {
             return false;
         }
-        return restoreDraftSubmissionState(submissionId || state.submissionId);
+        if (!restoreDraftSubmissionState(submissionId || state.submissionId)) return false;
+        settleSubmissionRetry('unconfirmed');
+        reportSubmissionFailure(new Error('Submission acknowledgement timed out'));
+        return true;
+    }
+
+    function ownsPendingSubmission(submission) {
+        return Boolean(submission && submission === pendingSubmission && submission.id === state.submissionId
+            && submission.sessionId === state.sessionId && submission.suiteSessionId === state.suiteSessionId
+            && submission.parentWindow === state.parentWindow && submission.token === state.windowSessionToken
+            && submission.generation === state.windowSessionGeneration);
+    }
+
+    function isSubmissionUnconfirmed() {
+        return ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted';
+    }
+
+    function settleSubmissionRetry(operation) {
+        const settle = pendingSubmission?.settle;
+        if (pendingSubmission) pendingSubmission.settle = null;
+        settle?.({ verified: operation === 'committed', operation });
+    }
+
+    function reportSubmissionFailure(error, code = 'PRACTICE_CHANNEL_TIMEOUT', operation = 'unconfirmed', submission = pendingSubmission) {
+        if (operation === 'unconfirmed' && ownsPendingSubmission(submission)) submission.hasUnconfirmedOutcome = true;
+        readingFailure(code, 'submit', error, operation, ownsPendingSubmission(submission)
+            ? () => retryPendingSubmission(submission) : undefined, undefined, readingCorrelation(submission));
+    }
+
+    function dispatchPendingSubmission(submission) {
+        if (!ownsPendingSubmission(submission) || state.submissionStatus === 'submitted') return false;
+        state.submissionStatus = 'submitting';
+        state.pendingSubmissionPresentation = submission.presentation;
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
+        disableDragInteractions();
+        readingStep('submit', 'started', readingCorrelation(submission));
+        const delivered = postMessage(submission.type, Object.assign({}, submission.payload, {
+            examId: submission.examId, sessionId: submission.sessionId, suiteSessionId: submission.suiteSessionId,
+            submissionId: submission.id
+        }));
+        if (!delivered) {
+            restoreDraftSubmissionState(submission.id);
+            settleSubmissionRetry('unconfirmed');
+            reportSubmissionFailure(new Error('Submission target unavailable'));
+            return false;
+        }
+        clearSubmissionAckTimer();
+        state.submissionAckTimer = setTimeout(() => expirePendingSubmission(submission.id), SUBMIT_ACK_TIMEOUT_MS);
+        return true;
+    }
+
+    function retryPendingSubmission(submission) {
+        if (!ownsPendingSubmission(submission)) return Promise.resolve({ verified: false, operation: 'unconfirmed' });
+        if (state.submissionStatus === 'submitted') return Promise.resolve({ verified: true, operation: 'committed' });
+        if (state.submissionStatus === 'submitting' || submission.settle) return Promise.resolve({ verified: false, operation: 'unconfirmed' });
+        // Only a user action resends this immutable business snapshot. The host's
+        // existing receipt/idempotency path reconciles it under the original ID.
+        return new Promise((resolve) => {
+            submission.settle = resolve;
+            if (!dispatchPendingSubmission(submission)) settleSubmissionRetry('unconfirmed');
+        });
     }
 
     function beginSubmission(messageType, payload, presentation = null) {
         if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
             return false;
         }
-        if (!state.submissionId) {
-            state.submissionId = createSubmissionId();
-        }
-        state.submissionStatus = 'submitting';
-        state.pendingSubmissionPresentation = presentation;
-        syncPrimaryActionButtons();
-        const delivered = postMessage(messageType, Object.assign({}, payload || {}, {
-            submissionId: state.submissionId
-        }));
-        if (!delivered) {
-            restoreDraftSubmissionState(state.submissionId);
-            return false;
-        }
-        clearSubmissionAckTimer();
-        state.submissionAckTimer = setTimeout(() => {
-            expirePendingSubmission(state.submissionId);
-        }, SUBMIT_ACK_TIMEOUT_MS);
-        return true;
+        // A timeout/NACK is not evidence of a failed write. Preserve the receipt
+        // key until the host confirms either the original commit or no commit.
+        if (ownsPendingSubmission(pendingSubmission)) return dispatchPendingSubmission(pendingSubmission);
+        settleSubmissionRetry('unconfirmed');
+        state.submissionId = createSubmissionId();
+        pendingSubmission = { id: state.submissionId, sessionId: state.sessionId, suiteSessionId: state.suiteSessionId,
+            examId: state.examId, parentWindow: state.parentWindow, token: state.windowSessionToken,
+            generation: state.windowSessionGeneration, type: messageType,
+            finalSuiteSubmission: Boolean(state.simulationMode && state.simulationCtx?.isLast && state.suiteSessionId),
+            operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
+            payload: JSON.parse(JSON.stringify(payload || {})), presentation };
+        return dispatchPendingSubmission(pendingSubmission);
     }
 
     function matchesPendingSubmission(data = {}) {
@@ -6310,7 +6528,7 @@
         const suiteSessionId = data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
         if (!submissionId || submissionId !== state.submissionId) return false;
         if (!sessionId || !state.sessionId || sessionId !== String(state.sessionId)) return false;
-        if (!examId || !state.examId || examId !== String(state.examId)) return false;
+        if (!examId || examId !== String(pendingSubmission?.examId || state.examId || '')) return false;
         if (state.suiteSessionId && suiteSessionId !== String(state.suiteSessionId)) return false;
         if (!state.suiteSessionId && suiteSessionId) return false;
         return true;
@@ -6321,18 +6539,13 @@
         const generation = Number(state.windowSessionGeneration);
         return {
             parentWindow: state.parentWindow || null,
-            examId: String(state.examId || ''),
+            examId: String(pendingSubmission.examId || ''),
             sessionId: String(state.sessionId || ''),
             suiteSessionId: String(state.suiteSessionId || ''),
             windowSessionToken: normalizeWindowSessionToken(state.windowSessionToken),
             windowSessionGeneration: Number.isInteger(generation) && generation > 0 ? generation : 0,
             submissionId: String(state.submissionId || ''),
-            finalSuiteSubmission: Boolean(
-                state.simulationMode
-                && state.simulationCtx
-                && state.simulationCtx.isLast
-                && state.suiteSessionId
-            )
+            finalSuiteSubmission: pendingSubmission.finalSuiteSubmission
         };
     }
 
@@ -6342,7 +6555,7 @@
         const currentGeneration = Number.isInteger(generation) && generation > 0 ? generation : 0;
         return Boolean(
             state.parentWindow === ownership.parentWindow
-            && String(state.examId || '') === ownership.examId
+            && String(pendingSubmission?.examId || '') === ownership.examId
             && String(state.sessionId || '') === ownership.sessionId
             && String(state.suiteSessionId || '') === ownership.suiteSessionId
             && normalizeWindowSessionToken(state.windowSessionToken) === ownership.windowSessionToken
@@ -6359,10 +6572,19 @@
         const presentation = state.pendingSubmissionPresentation;
         clearSubmissionAckTimer();
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
-        if (presentation && presentation.results) {
+        readingStep('acknowledgement', 'succeeded');
+        readingStep('storage-confirmed', 'succeeded');
+        settleSubmissionRetry('committed');
+        if (state.suite?.inline) {
+            // Navigation can finish before or during ACK presentation. Each slot
+            // owns its results; activation guards protect asynchronous explanations.
+            const slot = getActiveSuiteSlot();
+            if (slot) await restoreActiveSuiteSlotPresentation(slot, state.suite.activationGeneration,
+                () => retainsSubmissionOwnership(ownership));
+        } else if (presentation && presentation.results) {
             state.lastResults = presentation.results;
             renderResults(presentation.results);
-            await renderExplanations();
+            await renderExplanations({ isCurrent: () => retainsSubmissionOwnership(ownership) });
             if (!retainsSubmissionOwnership(ownership)) {
                 return false;
             }
@@ -6413,6 +6635,11 @@
                 initializeInlineSimulationSuite,
                 activateSuiteSlot,
                 buildResultsFromAnswers,
+                collectAnswers,
+                collectCurrentDraft,
+                syncSimulationDraftSnapshot,
+                setTimerLockMode,
+                setReadOnlyMode,
                 applyAnswersToDom,
                 applyReplayAnswersToDom,
                 captureDom,
@@ -6438,11 +6665,28 @@
                 beginSubmission,
                 acceptSubmissionAcknowledgement,
                 expirePendingSubmission,
+                retryPendingSubmission() { return retryPendingSubmission(pendingSubmission); },
+                persistSimulationDraftMirror,
+                loadScript,
+                startInitLoop,
+                stopInitLoop,
                 restoreDraftSubmissionState,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
                 attachActionListeners,
                 syncPrimaryActionButtons,
+                getReadingTimingState() {
+                    return readingTimingController && {
+                        context: { ...readingTimingContext(), dataset: null },
+                        active: readingTimingController.active?.key,
+                        entries: [...readingTimingController.entries.keys()],
+                        loading: [...readingTimingController.loading.keys()],
+                        error: readingTimingController.error
+                    };
+                },
+                retryReadingTiming() {
+                    return readingTimingController?.retry();
+                },
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -6471,6 +6715,7 @@
                         reviewMode: state.reviewMode,
                         timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
+                        submissionEditingLocked: isSubmissionUnconfirmed(),
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
                         parentOriginIsOpaque: state.parentOriginIsOpaque,
@@ -6550,6 +6795,7 @@
     function canClearDraftAnswers() {
         return Boolean(
             state.submissionStatus === 'draft'
+            && !isSubmissionUnconfirmed()
             && !state.readOnly
             && !state.submitted
             && !state.reviewMode
@@ -6604,6 +6850,17 @@
                 dom.submitBtn.textContent = label;
             }
         };
+
+        if (isSubmissionUnconfirmed()) {
+            if (dom.submitBtn) {
+                dom.submitBtn.style.display = '';
+                dom.submitBtn.setAttribute('type', 'button');
+                setSubmitLabel(state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交');
+                dom.submitBtn.disabled = state.submissionStatus === 'submitting';
+            }
+            if (dom.resetBtn) dom.resetBtn.style.display = 'none';
+            return;
+        }
 
         if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
             if (dom.submitBtn) {
@@ -6733,6 +6990,8 @@
     }
 
     function resetToAnsweringPresentation() {
+        settleSubmissionRetry('unconfirmed');
+        pendingSubmission = null;
         clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
@@ -6761,7 +7020,7 @@
             }
         });
         enhanceReviewHighlights();
-        document.querySelectorAll('input, textarea, select').forEach((control) => {
+        getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 control.disabled = false;
             }
@@ -7055,8 +7314,9 @@
 
     function postMessage(type, payload) {
         const envelope = buildEnvelope(type, payload);
+        try { envelope.data.diagnosticCorrelation = readingCorrelation(); } catch (_) { }
         const target = state.parentWindow;
-        if (!target || target === global || typeof target.postMessage !== 'function') return false;
+        if (!target || target === global || target.closed || typeof target.postMessage !== 'function') return false;
         const targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
             ? state.parentOrigin
             : (state.expectedParentOrigin || (global.location.protocol === 'file:' ? '*' : ''));
@@ -7069,6 +7329,7 @@
     }
 
     function stopInitLoop() {
+        if (handshakeDeadline) { clearTimeout(handshakeDeadline); handshakeDeadline = null; }
         if (state.initTimer) {
             clearInterval(state.initTimer);
             state.initTimer = null;
@@ -7076,7 +7337,7 @@
     }
 
     function sendSessionReady() {
-        postMessage('SESSION_READY', {
+        const delivered = postMessage('SESSION_READY', {
             url: global.location.href,
             pageType: 'unified-reading',
             title: state.dataset?.meta?.title || document.title,
@@ -7090,7 +7351,9 @@
             suiteTimerMode: state.suiteTimerMode,
             suiteTimerLimitSeconds: state.suiteTimerLimitSeconds
         });
-        state.sessionReadySent = true;
+        state.sessionReadySent = delivered;
+        if (delivered) readingStep('handshake', 'succeeded');
+        else readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', new Error('Reading readiness target unavailable'));
     }
 
     function buildInitSignature(data = {}) {
@@ -7134,6 +7397,8 @@
     }
 
     function restartInitHandshake() {
+        settleSubmissionRetry('unconfirmed');
+        pendingSubmission = null;
         clearSubmissionAckTimer();
         state.submissionStatus = 'draft';
         state.submissionId = '';
@@ -7180,9 +7445,15 @@
 
     function startInitLoop() {
         stopInitLoop();
+        readingStep('handshake', 'started');
+        handshakeDeadline = setTimeout(() => {
+            handshakeDeadline = null;
+            if (!state.sessionReadySent) readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', new Error('Reading host handshake timed out'));
+        }, SUBMIT_ACK_TIMEOUT_MS);
         state.initTimer = setInterval(() => {
             if (state.sessionId) {
-                stopInitLoop();
+                clearInterval(state.initTimer);
+                state.initTimer = null; // Keep the readiness deadline until INIT finishes.
                 return;
             }
             dispatchReady();
@@ -7235,16 +7506,20 @@
 
     function persistSimulationDraftMirror(draft) {
         const name = getSimulationDraftSessionName();
-        if (!name || !global.AppData?.recovery?.windowSession || !draft) {
-            return;
-        }
+        if (!name || !draft) return false;
+        readingStep('save-recovery', 'started');
         try {
-            global.AppData.recovery.windowSession.save(name, {
+            if (!global.AppData?.recovery?.windowSession) throw Object.assign(new Error('Recovery backend unavailable'), { name: 'AppDataError', code: 'BACKEND_UNAVAILABLE' });
+            const saved = global.AppData.recovery.windowSession.save(name, {
                 draft,
                 updatedAt: Date.now()
             });
-        } catch (_) {
-            // AppData v2 recovery is best-effort during page teardown.
+            if (saved !== true) throw new Error('Recovery mirror was not confirmed');
+            readingStep('save-recovery', 'succeeded');
+            return true;
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-recovery', error, 'not-committed');
+            return false;
         }
     }
 
@@ -7261,7 +7536,8 @@
             return parsed.draft && typeof parsed.draft === 'object'
                 ? parsed.draft
                 : null;
-        } catch (_) {
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-recovery', error);
             return null;
         }
     }
@@ -7289,6 +7565,7 @@
         const answers = collectAnswers();
         const updatedAt = Date.now();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             answers,
             highlights: collectHighlights(),
             noteText: getNotesText(),
@@ -7323,12 +7600,11 @@
         if (reason === 'periodic' && fingerprint && fingerprint === state.readingDraftFingerprint) {
             return;
         }
-        state.readingDraftFingerprint = fingerprint;
         const mirroredDraft = cloneDraftSafely(draft);
         if (!mirroredDraft) {
             return;
         }
-        postMessage('READING_DRAFT_SYNC', {
+        const delivered = postMessage('READING_DRAFT_SYNC', {
             examId: state.examId,
             sessionId: state.sessionId || null,
             windowSessionToken: state.windowSessionToken || null,
@@ -7338,6 +7614,8 @@
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
         });
+        if (delivered) { state.readingDraftFingerprint = fingerprint; readingStep('save-draft', 'unconfirmed'); }
+        else readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', new Error('Draft host unavailable'));
     }
 
     function stopReadingDraftSync() {
@@ -7394,15 +7672,12 @@
         if (reason === 'periodic' && fingerprint && fingerprint === state.simulationDraftFingerprint) {
             return;
         }
-        state.simulationDraftFingerprint = fingerprint;
         const mirroredDraft = cloneDraftSafely(draft);
         if (!mirroredDraft) {
             return;
         }
-        if (!state.suite?.inline) {
-            persistSimulationDraftMirror(mirroredDraft);
-        }
-        postMessage('SIMULATION_DRAFT_SYNC', {
+        const mirrored = state.suite?.inline || persistSimulationDraftMirror(mirroredDraft);
+        const delivered = postMessage('SIMULATION_DRAFT_SYNC', {
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
@@ -7410,6 +7685,9 @@
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
         });
+        if (delivered && mirrored) state.simulationDraftFingerprint = fingerprint;
+        if (delivered) readingStep('save-draft', 'unconfirmed');
+        else readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', new Error('Suite draft host unavailable'));
     }
 
     function refreshSimulationDraftSyncLifecycle() {
@@ -7497,6 +7775,7 @@
         const results = buildResults();
         const timerSnapshot = getPracticeTimerSnapshot();
         return {
+            readingTiming: readingTimingController?.snapshot() || null,
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
@@ -7574,6 +7853,7 @@
             Object.assign(aggregatedQuestionTypeMap, prefixSuiteMap(entry.examId, results.questionTypeMap || {}));
             mergeQuestionTypePerformance(aggregatedQuestionTypePerformance, results.questionTypePerformance || {});
             suiteEntries.push({
+                readingTiming: readingTimingController?.snapshot(entry.examId) || draft.readingTiming || null,
                 examId: entry.examId,
                 title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
                 category: slot.category || entry.category || slot.dataset?.meta?.category || '',
@@ -7640,22 +7920,22 @@
             if (item.dataset.consumed || item.classList.contains('option-consumed')) {
                 delete item.dataset.consumed;
                 item.classList.remove('option-consumed');
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
             }
         });
     }
 
     function clearCurrentAnswers() {
-        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
-            input.checked = false;
-        });
-        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
+        getPracticeFormControls().forEach((input) => {
             if (input.closest('#notes-panel, #reading-note-editor, #reading-note-drawer')) return;
-            input.value = '';
-        });
-        document.querySelectorAll('select').forEach((select) => {
-            select.selectedIndex = 0;
+            if (input.type === 'radio' || input.type === 'checkbox') {
+                input.checked = false;
+            } else if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            } else if (isTextualAnswerControl(input)) {
+                input.value = '';
+            }
         });
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
@@ -7686,6 +7966,7 @@
             const targetEntry = state.suite.sequence[targetIndex];
             if (targetEntry && targetEntry.examId) {
                 activateSuiteSlot(targetEntry.examId, { skipSave: true }).catch((error) => {
+                    readingFailure('UNEXPECTED_RUNTIME_ERROR', 'suite-navigation', error);
                     console.warn('[UnifiedReadingPage] inline simulation navigation failed:', error);
                 });
             }
@@ -7694,6 +7975,7 @@
         const payload = {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
+                readingTiming: snapshot.readingTiming || null,
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
                 noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -7704,7 +7986,7 @@
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
             draftUpdatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
-            resultSnapshot: snapshot.results,
+            resultSnapshot: { ...snapshot.results, readingTiming: snapshot.readingTiming || null },
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
             noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
@@ -7721,16 +8003,36 @@
         if (typeof options.targetPartKey === 'string' && options.targetPartKey) {
             payload.targetPartKey = options.targetPartKey;
         }
-        postMessage('SIMULATION_NAVIGATE', payload);
+        if (postMessage('SIMULATION_NAVIGATE', payload)) readingStep('suite-navigation', 'started');
+        else readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'suite-navigation', new Error('Suite navigation host unavailable'));
     }
     async function handleSubmit() {
         if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
             handleExitClick();
             return;
         }
-        if (state.readOnly || state.submissionStatus !== 'draft') {
+        if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
             return;
         }
+        if (ownsPendingSubmission(pendingSubmission)) {
+            // Reconciliation must precede timing writes: a committed attempt's
+            // timing has already been sealed and cannot be frozen as a new save.
+            dispatchPendingSubmission(pendingSubmission);
+            return;
+        }
+        state.timingSubmitPending = true;
+        try {
+            const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
+                const slot = getSuiteSlot(entry.examId);
+                return { context: { ...readingTimingContext(), examId: entry.examId, sequenceIndex,
+                    dataset: slot?.dataset }, draft: slot?.draft };
+            }) : [];
+            await readingTimingController?.freezeAll(passages);
+        } catch (error) {
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error);
+            global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
+            return;
+        } finally { state.timingSubmitPending = false; }
         const submissionSnapshot = state.suite?.inline
             ? buildInlineSuiteSubmissionSnapshot()
             : buildSubmissionSnapshot();
@@ -7749,6 +8051,7 @@
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         beginSubmission(messageType, Object.assign({
+            readingTiming: submissionSnapshot.readingTiming || null,
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
@@ -7919,6 +8222,7 @@
         if (!payload || typeof payload !== 'object') {
             return;
         }
+        if (payload.type === 'IELTS_DIAGNOSTIC_V1') return;
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
         const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
@@ -7945,14 +8249,23 @@
             if (shouldIgnoreInlineSuiteEnvelope(data || {})) {
                 return;
             }
-            if (isDuplicateInit && state.sessionReadySent) {
+            if (isDuplicateInit && state.sessionReadySent
+                && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) {
                 return;
+            }
+            if (pendingSubmission && normalizeWindowSessionToken(data.windowSessionToken) !== state.windowSessionToken) {
+                settleSubmissionRetry('unconfirmed');
+                pendingSubmission = { ...pendingSubmission, token: normalizeWindowSessionToken(data.windowSessionToken),
+                    generation: Number(data.windowSessionGeneration) || 0, settle: null };
+                restoreDraftSubmissionState();
             }
             adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
             }
             if (data.sessionId && state.sessionId && String(data.sessionId) !== String(state.sessionId)) {
+                settleSubmissionRetry('unconfirmed');
+                pendingSubmission = null;
                 clearSubmissionAckTimer();
                 state.submissionStatus = 'draft';
                 state.submissionId = '';
@@ -7961,9 +8274,13 @@
             if (data.sessionId) {
                 state.sessionId = data.sessionId;
             }
+            if (Object.prototype.hasOwnProperty.call(data, 'libraryConfigurationId')) {
+                state.libraryConfigurationId = data.libraryConfigurationId;
+            }
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            connectReadingDiagnostics(data);
             applyPracticeMode(data.practiceMode || data.mode || '');
             const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
             if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
@@ -8054,6 +8371,7 @@
                 applyDraftToDom(singleDraft);
                 state.readingDraftFingerprint = buildDraftFingerprint(singleDraft);
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : singleDraft);
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
             refreshReadingDraftSyncLifecycle();
@@ -8088,7 +8406,21 @@
         }
         if (type === 'PRACTICE_SUBMIT_FAILED') {
             if (matchesPendingSubmission(data || {})) {
+                const submission = pendingSubmission;
+                // A retry's rejected write cannot disprove an earlier, lost ACK.
+                const operation = data.operation === 'not-committed' && !submission.hasUnconfirmedOutcome
+                    ? 'not-committed' : 'unconfirmed';
                 restoreDraftSubmissionState(String(data.submissionId || ''));
+                settleSubmissionRetry(operation);
+                if (operation === 'not-committed') {
+                    pendingSubmission = null;
+                    state.submissionId = '';
+                    state.pendingSubmissionPresentation = null;
+                    setReadOnlyMode(false);
+                    disableDragInteractions();
+                }
+                reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }),
+                    'PRACTICE_SAVE_FAILED', operation, submission);
             }
             return;
         }
@@ -8114,6 +8446,7 @@
             }
             const recordId = data && data.recordId != null ? String(data.recordId).trim() : '';
             state.submittedRecordId = recordId;
+            if (recordId) readingStep('storage-confirmed', 'succeeded');
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
@@ -8122,6 +8455,7 @@
             if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
                 return;
             }
+            readingStep('suite-navigation', 'started');
             global.location.href = data.url;
             return;
         }
@@ -8224,6 +8558,7 @@
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);
                 persistSimulationDraftMirror(cloneDraftSafely(draft));
             }
+            await activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : draft);
             refreshSimulationDraftSyncLifecycle();
             updateNavStatuses();
             return;
@@ -8269,7 +8604,11 @@
     }
 
     function attachMessageBridge() {
-        global.addEventListener('message', handleIncoming);
+        global.addEventListener('message', (event) => {
+            handleIncoming(event).catch((error) => {
+                readingFailure('UNEXPECTED_RUNTIME_ERROR', 'handshake', error);
+            });
+        });
     }
 
     function attachReadingDraftLifecycleHooks() {
@@ -8307,10 +8646,27 @@
             syncActiveSuiteTimer(detail.running, Date.now());
             interaction.timerRunning = detail.running;
             syncPagePauseState(detail.running);
+            readingTimingController?.refresh();
+            readingTimingController?.save().catch(() => {});
+            if (state.simulationMode && state.simulationContextReady && state.suiteSessionId) {
+                // A reload requests the host's timer state. Publish pause/resume
+                // with its draft now instead of relying on an unload message.
+                syncSimulationDraftSnapshot('timer');
+            }
         });
     }
 
     async function bootstrap() {
+        try {
+            global.AppDiagnostics?.subscribe((event) => {
+                if (event.notification.kind === 'dialog' || event.notification.kind === 'startup') closeFloatingPanels();
+            });
+            global.getMessageCenter?.();
+            const showHistory = () => { closeFloatingPanels(); global.getMessageCenter?.()?.showIncidentHistory(); };
+            document.getElementById('reading-diagnostics-btn')?.addEventListener('click', showHistory);
+            document.getElementById('messages-indicator')?.addEventListener('click', showHistory);
+        } catch (_) { }
+        readingStep('initialize', 'started');
         await loadReadingCandidateCodePreferences();
         if (global.PracticeTimerPreferences?.ready) await global.PracticeTimerPreferences.ready;
         parseQuery();
@@ -8347,13 +8703,16 @@
         refreshSimulationDraftSyncLifecycle();
         refreshReadingDraftSyncLifecycle();
         startInitLoop();
+        readingStep('initialize', 'succeeded');
+        try { global.AppDiagnostics?.markReady(); } catch (_) { }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         bootstrap().catch((error) => {
+            readingFailure('APP_BOOT_FAILED', 'initialize', error, 'not-committed');
             console.error('[UnifiedReadingPage] 初始化失败:', error);
             if (dom.groups) {
-                dom.groups.innerHTML = `<div class="group"><h4>加载失败</h4><p>${error.message}</p></div>`;
+                dom.groups.textContent = '加载失败。请保留页面并导出诊断信息。';
             }
         });
     });
