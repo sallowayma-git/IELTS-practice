@@ -1657,6 +1657,13 @@ globalThis.AppDiagnosticBootstrap.install({"context":"reading","requiredResource
             scroll-margin-block: 24px 110px;
         }
 
+        /* Long multiple-choice options must wrap instead of being clipped by the pane. */
+        .options,
+        .choice-item {
+            width: 100%;
+            min-width: 0;
+        }
+
         .question-item:last-child,
         .match-question-item:last-child,
         .choice-item:last-child,
@@ -1689,14 +1696,18 @@ globalThis.AppDiagnosticBootstrap.install({"context":"reading","requiredResource
         .true-false-ng label {
             position: relative;
             display: flex;
-            width: fit-content;
+            width: 100%;
             max-width: 100%;
+            min-width: 0;
             min-height: 29px;
             align-items: flex-start;
             gap: 0;
             margin: 0 0 14px;
             padding: 2px 4px 2px 0;
             line-height: 24px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
             cursor: pointer;
         }
 
