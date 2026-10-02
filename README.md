@@ -2,6 +2,8 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+[v0.6.3.1 Release Notes](RELEASE_NOTE-0.6.3.1.md)
+
 [![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
 ## Important Usage Notice
