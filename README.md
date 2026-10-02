@@ -38,7 +38,7 @@ The system provides question-bank browsing, reading practice, optional listening
 
 ## Quick Start
 
-![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
+![Quick start demo: first-run notice, learning overview, and library browsing](assets/images/demos/quick-start.gif)
 
 **Requirements:** a recent stable version of Chrome or Edge. Allow pop-ups when prompted — practice pages open in a new window.
 
@@ -134,7 +134,7 @@ Open **Settings → Errors and diagnostics (错误与诊断)** to look up failur
 
 Diagnostic history retains at most 7 days, 2,000 events, or about 2 MiB, whichever limit is reached first. You can clear diagnostics separately, disable persistence, retry diagnostic storage, or enable detailed diagnostics for 15 minutes. With persistence disabled, short-lived page context remains available for immediate notifications and exports. Clearing all site data also clears learning data.
 
-Capture cannot be guaranteed when JavaScript is disabled, the page is closed, the browser crashes, the main thread is fully blocked, or cross-origin error details are inaccessible. See the [diagnostic acceptance guide](developer/docs/diagnostic-acceptance.md) for hosting modes, verified scenarios, and release qualification.
+Capture cannot be guaranteed when JavaScript is disabled, the page is closed, the browser crashes, the main thread is fully blocked, or cross-origin error details are inaccessible. See the [diagnostic acceptance guide](https://github.com/sallowayma-git/IELTS-practice/blob/opensource/developer/docs/diagnostic-acceptance.md) for hosting modes, verified scenarios, and release qualification.
 
 ### More Tools & Themes
 
@@ -149,7 +149,7 @@ The demos below were captured from a live session with real data.
 
 ### Run a practice
 
-![Reading practice demo: drag answers into place, submit, and study the analysis view](.github/assets/reading-practice.gif)
+![Reading practice demo: drag answers into place, submit, and study the analysis view](assets/images/demos/reading-practice.gif)
 
 As shown: locate an item in **Library (题库浏览)** and click its practice button, complete and submit in the new window — explanations, passage highlighting, and answer comparison appear immediately, and the result lands in **Practice Records (练习记录)**.
 
@@ -164,7 +164,7 @@ Avoid running the same set in parallel windows — it complicates window trackin
 
 ### View and export records
 
-![Practice records demo: stat cards, trends, heatmap, and history list](.github/assets/practice-records.gif)
+![Practice records demo: stat cards, trends, heatmap, and history list](assets/images/demos/practice-records.gif)
 
 Stat cards, trends, the heatmap, and the history list are shown above; filter by All / Reading / Listening, open a record for details, export a Markdown report, or batch-delete records.
 
@@ -196,63 +196,7 @@ assets/
 ReadingPractice/
 ```
 
-Key source directories:
-
-```text
-js/app/            App entry, state bridge, library browsing, sessions, test sets
-js/core/           Practice, records, storage, vocabulary
-js/data/           Repositories and data sources
-js/runtime/        Lazy loading, startup screen, unified reading runtime
-js/services/       Bank discovery and management, statistics, achievements
-js/components/     Settings, diagnostics, record dialogs, bank status UI
-js/presentation/   Navigation, themes, More Tools, home interactions
-js/utils/          Storage, answer matching, import/export, DOM helpers
-js/plugins/        Themes and extension bridges
-assets/generated/  Generated reading bank pages and explanations; optional listening index
-developer/         Docs, tests, and build/release scripts
-```
-
-Release packages should contain only the files users need at runtime — no source directories, dev docs, test tooling, or `node_modules/`.
-
-## Build & Release
-
-`index.html` loads prebuilt `js/bundles/*.bundle.js`. After editing any source file, rebuild the bundles — never edit them by hand:
-
-```bash
-node scripts/build-bundles.mjs
-```
-
-Create a release package (the script rebuilds bundles first, then packs the runtime files into a zip that opens via `index.html` after extraction):
-
-```bash
-# Linux / Git Bash
-bash developer/release.sh 0.6.2-fix
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
-```
-
-Output: `dist/ielts-practice-{version}.zip`.
-
-Standard packages exclude your local `ListeningPractice/` directory and listening assets. To bundle self-prepared listening resources into a personal-use package, first make sure `assets/generated/listening-exams/manifest.js` and `listening-index.compat.js` exist, then build with:
-
-```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
-# PowerShell: set $env:INCLUDE_LOCAL_LISTENING = "1" before running release.ps1
-```
-
-The script then includes whichever of `ListeningPractice/P1` through `P4` exist locally.
-
-## Testing
-
-After functional or optimization changes, run in order:
-
-```bash
-python developer/tests/ci/run_static_suite.py    # writes developer/tests/e2e/reports/static-ci-report.json
-python developer/tests/e2e/full_reset_flow.py
-python developer/tests/e2e/suite_practice_flow.py
-```
-
-These are mandatory after changes to runtime code, bank indexes, asset paths, practice records, test-set flow, or release scripts. Documentation-only changes may skip the browser flows, but should still verify that referenced paths and commands exist. New QA, test, or verification scripts belong under `developer/tests/` so release packages stay clean.
+The `release` branch contains prebuilt runtime files and user documentation. Open `index.html` directly; no build tools are required. Source code, build scripts, and tests are maintained on the [opensource branch](https://github.com/sallowayma-git/IELTS-practice/tree/opensource).
 
 ## Technical Notes
 

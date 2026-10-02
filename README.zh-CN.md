@@ -38,7 +38,7 @@ IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩�
 
 ## 快速开始
 
-![首次启动、学习总览与题库浏览的实际画面](.github/assets/quick-start.gif)
+![首次启动、学习总览与题库浏览的实际画面](assets/images/demos/quick-start.gif)
 
 ### 系统要求
 
@@ -172,12 +172,12 @@ assets/generated/listening-exams/listening-index.compat.js
 - 练习热力图：按日期展示练习频率。
 - 中高频进度：展示重点题库或优先级题目的练习进度。
 - 阅读错题雷达：根据最近阅读记录统计错题题型分布。
-- 阅读专项统计：按总得分 / 总分展示题型与 P1/P2/P3 加权正确率，区分篇章提交次数和已识别的不同篇章数；支持全部历史及近 7/30/90 天，遵循记录类型和历史搜索范围。重复提交均计入，套题按子篇去重，缺失分母、题型、分类或来源时显示数据覆盖情况。详细口径见 [Reading Analytics contract](developer/doc/Reading-Analytics-Contract.md)。
+- 阅读专项统计：按总得分 / 总分展示题型与 P1/P2/P3 加权正确率，区分篇章提交次数和已识别的不同篇章数；支持全部历史及近 7/30/90 天，遵循记录类型和历史搜索范围。重复提交均计入，套题按子篇去重，缺失分母、题型、分类或来源时显示数据覆盖情况。详细口径见 [Reading Analytics contract](https://github.com/sallowayma-git/IELTS-practice/blob/opensource/developer/doc/Reading-Analytics-Contract.md)。
 - 历史列表：按全部、阅读、听力等维度筛选记录。
 - 批量管理：支持选择多条记录并批量删除。
 - Markdown 导出：支持将练习历史导出为 Markdown 报告。
 - 详情查看：支持打开单条练习记录，查看分数、耗时、答案对比和原始结果信息。
-- 阅读前台关联时长：按当前选择的题目或源题组累计可见且有焦点的练习时间，未选择时单独记为未分配。暂停、后台和复盘不计入；共享题组不拆成精确分题时间。草稿恢复保留已保存累计值并提示覆盖限制，旧记录显示不可用。口径与恢复边界见 [Reading Timing contract](developer/doc/Reading-Timing-Contract.md)。
+- 阅读前台关联时长：按当前选择的题目或源题组累计可见且有焦点的练习时间，未选择时单独记为未分配。暂停、后台和复盘不计入；共享题组不拆成精确分题时间。草稿恢复保留已保存累计值并提示覆盖限制，旧记录显示不可用。口径与恢复边界见 [Reading Timing contract](https://github.com/sallowayma-git/IELTS-practice/blob/opensource/developer/doc/Reading-Timing-Contract.md)。
 
 “未完成 / 中断”区域单独显示已保存的中断记录，可展开查看该条记录实际保存的作答或单独删除。此类记录不参与正式练习总数、正确率、趋势、成就和题库完成度，也不参与正式记录的批量选择。清空练习记录会同时清除正式记录和中断记录，保留阅读草稿、活动会话及其他恢复数据；若部分操作失败，页面会回读当前记录并提示失败范围。
 
@@ -220,7 +220,7 @@ assets/generated/listening-exams/listening-index.compat.js
 可单独清除诊断、关闭持久化、重试诊断存储，或开启 15 分钟的详细诊断。
 关闭持久化后，当前页面的短期上下文仍可用于即时提示和导出；清除全部站点数据会同时清除学习数据。
 JavaScript 被禁用、页面未打开、浏览器崩溃、主线程完全阻塞及不可访问的跨域错误无法保证被捕获。
-运行模式、已验证场景与发布验收方法见 [诊断验收说明](developer/docs/diagnostic-acceptance.md)。
+运行模式、已验证场景与发布验收方法见 [诊断验收说明](https://github.com/sallowayma-git/IELTS-practice/blob/opensource/developer/docs/diagnostic-acceptance.md)。
 
 ### 更多工具
 
@@ -242,7 +242,7 @@ JavaScript 被禁用、页面未打开、浏览器崩溃、主线程完全阻塞
 
 ### 开始单篇练习
 
-![阅读练习完整作答链路：定位题目、拖拽作答、提交后查看解析与答案对比](.github/assets/reading-practice.gif)
+![阅读练习完整作答链路：定位题目、拖拽作答、提交后查看解析与答案对比](assets/images/demos/reading-practice.gif)
 
 如上所示：在“题库浏览”定位题目并点击练习入口，在新窗口中完成答题并提交，解析、定位高亮和答案对比会在提交后直接呈现。
 
@@ -260,7 +260,7 @@ JavaScript 被禁用、页面未打开、浏览器崩溃、主线程完全阻塞
 
 ### 查看与导出练习记录
 
-![练习记录页面：统计卡片、趋势热力图与历史列表](.github/assets/practice-records.gif)
+![练习记录页面：统计卡片、趋势热力图与历史列表](assets/images/demos/practice-records.gif)
 
 统计卡片、趋势、热力图和历史列表如上；支持按“全部 / 阅读 / 听力”筛选历史记录，点击单条查看详情，使用“导出 Markdown”生成学习报告，或批量选择删除。
 
@@ -299,106 +299,7 @@ assets/
 ReadingPractice/
 ```
 
-主要源码目录：
-
-```text
-js/app/              应用入口、状态桥、题库浏览、练习会话和套题逻辑
-js/core/             练习、记录、存储、词汇等核心能力
-js/data/             repository 与数据源封装
-js/runtime/          懒加载、启动屏、统一阅读页运行时
-js/services/         题库发现、题库管理、统计、成就等服务
-js/components/       设置、诊断、记录弹窗、题库状态等 UI 组件
-js/presentation/     导航、主题、更多工具、首页交互
-js/utils/            存储、答案匹配、导入导出、性能和 DOM 工具
-js/plugins/          主题和扩展桥接
-assets/generated/    生成后的阅读题库索引、页面、解析资产，以及可选听力扩展索引
-assets/wordlists/    词汇数据
-developer/doc/Wiki/  架构文档、历史决策和模块说明
-developer/tests/     静态回归、E2E、工具脚本和测试报告
-scripts/             构建脚本
-```
-
-发布包只应包含用户运行所需文件。源码目录、开发文档、测试工具和 `node_modules/` 不应进入普通分发包。
-
-## 构建与发布
-
-### 生成 bundle
-
-`index.html` 当前加载 `js/bundles/*.bundle.js`。修改源码后必须重新生成 bundle：
-
-```bash
-node scripts/build-bundles.mjs
-```
-
-不要手动编辑 `js/bundles/*.bundle.js`。这些文件是构建产物，应由脚本生成。
-
-### 生成发布包
-
-Linux / Git Bash：
-
-```bash
-bash developer/release.sh 0.6.2-fix
-```
-
-Windows PowerShell：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
-```
-
-输出位置：
-
-```text
-dist/ielts-practice-{version}.zip
-```
-
-发布脚本会先运行 `node scripts/build-bundles.mjs`，再创建只包含运行时文件的压缩包。用户解压后可直接打开 `index.html` 使用。
-
-### 包含本地听力资源
-
-普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
-
-```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
-```
-
-PowerShell：
-
-```powershell
-$env:INCLUDE_LOCAL_LISTENING = "1"
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
-```
-
-该模式要求存在：
-
-```text
-assets/generated/listening-exams/manifest.js
-assets/generated/listening-exams/listening-index.compat.js
-```
-
-并会按脚本规则包含 `ListeningPractice/P1` 至 `ListeningPractice/P4` 中存在的目录。
-
-## 测试要求
-
-功能或优化改动后，按顺序运行：
-
-```bash
-python developer/tests/ci/run_static_suite.py
-python developer/tests/e2e/full_reset_flow.py
-python developer/tests/e2e/suite_practice_flow.py
-```
-
-第一条会生成：
-
-```text
-developer/tests/e2e/reports/static-ci-report.json
-```
-
-测试原则：
-
-- 修改运行时代码、题库索引、资源路径、练习记录、套题流程或发布脚本后，必须运行上述测试。
-- 修改 README、说明文档或纯文本材料时，可不运行浏览器流程，但仍应检查路径和命令是否真实存在。
-- 新增 QA、测试工具或验证脚本应放在 `developer/tests/` 下，避免污染发布包。
+`release` 分支仅包含预构建运行文件和使用说明。直接打开 `index.html` 即可使用，无需构建工具。源码、构建脚本和测试请参阅 [opensource 分支](https://github.com/sallowayma-git/IELTS-practice/tree/opensource)。
 
 ## 技术说明
 
