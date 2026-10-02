@@ -17,6 +17,7 @@
                 onStartEndless: null
             };
             this.delegatesBound = false;
+            this.lastRender = null;
         }
 
         setActions(actions = {}) {
@@ -105,11 +106,25 @@
 
             this.ensureDelegates();
 
+            // Practice progress refreshes frequently, while these cards only
+            // display category/type/count. Keep their DOM (and focus) when the
+            // displayed values are unchanged, including in-place index edits.
+            const entries = stats?.reading || [];
+            const signature = JSON.stringify(entries.map((entry) => [
+                String(entry.category), String(entry.type), String(entry.total)
+            ]));
+            const previous = this.lastRender;
+            if (previous && previous.container === container && previous.signature === signature
+                && previous.nodes.length === container.childNodes.length
+                && previous.nodes.every((node, index) => node === container.childNodes[index])) {
+                return;
+            }
+
             const fragment = document.createDocumentFragment();
             const readingSection = this.createSection({
                 title: '阅读',
                 icon: '📖',
-                entries: stats?.reading || [],
+                entries,
                 style: { gridColumn: '1 / -1' },
                 rightButtons: [this.createBookshelfButton(), this.createEndlessModeButton(), this.createSuiteModeButton()]
             });
@@ -140,6 +155,11 @@
             // }
 
             this.dom.replaceContent(container, fragment);
+            this.lastRender = {
+                container,
+                signature,
+                nodes: Array.from(container.childNodes)
+            };
         }
 
         createSection({ title, icon, entries, style, rightButton, rightButtons, isSpecial = false }) {

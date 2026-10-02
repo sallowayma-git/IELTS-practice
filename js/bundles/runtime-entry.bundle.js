@@ -416,9 +416,22 @@
 
         let rafId = 0;
         let lastFrame = 0;
-        let paused = false;
+        let destroyed = false;
+        const motionQuery = typeof global.matchMedia === 'function'
+            ? global.matchMedia('(prefers-reduced-motion: reduce)') : null;
+        // Floral bloom has no time uniform in its shader: redraw only on resize
+        // or refresh rather than spending GPU time on identical frames.
+        const animated = /uniform\s+float\s+uTime\s*;/.test(fragmentShader);
         const startedAt = performance.now();
         const frameInterval = 1000 / 24;
+
+        function canAnimate() {
+            return !destroyed && animated && !document.hidden && !(motionQuery && motionQuery.matches);
+        }
+
+        function scheduleFrame() {
+            if (!rafId && canAnimate()) rafId = global.requestAnimationFrame(render);
+        }
 
         function resize() {
             const width = Math.max(1, global.innerWidth || 1);
@@ -431,34 +444,36 @@
         }
 
         function render(now, force) {
-            if (paused && !force) {
-                rafId = global.requestAnimationFrame(render);
-                return;
-            }
+            if (!force) rafId = 0;
+            if (destroyed || (!force && !canAnimate())) return;
             if (!force && now - lastFrame < frameInterval) {
-                rafId = global.requestAnimationFrame(render);
+                scheduleFrame();
                 return;
             }
             lastFrame = now;
             uniforms.uTime.value = (now - startedAt) / 1000;
             renderer.render(scene, camera);
-            if (!force) {
-                rafId = global.requestAnimationFrame(render);
-            }
+            if (!force) scheduleFrame();
         }
 
         function handleVisibility() {
-            paused = document.hidden;
-            if (!paused) {
+            if (rafId) {
+                global.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            if (!document.hidden) {
                 render(performance.now(), true);
+                scheduleFrame();
             }
         }
 
         resize();
         global.addEventListener('resize', resize);
         document.addEventListener('visibilitychange', handleVisibility);
-        render(performance.now(), true);
-        rafId = global.requestAnimationFrame(render);
+        if (motionQuery && typeof motionQuery.addEventListener === 'function') {
+            motionQuery.addEventListener('change', handleVisibility);
+        }
+        scheduleFrame();
 
         document.body.classList.add('three-bg-active');
 
@@ -466,12 +481,16 @@
             renderer,
             refresh: () => render(performance.now(), true),
             destroy() {
+                destroyed = true;
                 if (rafId) {
                     global.cancelAnimationFrame(rafId);
                     rafId = 0;
                 }
                 global.removeEventListener('resize', resize);
                 document.removeEventListener('visibilitychange', handleVisibility);
+                if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
+                    motionQuery.removeEventListener('change', handleVisibility);
+                }
                 renderer.dispose();
                 material.dispose();
                 mesh.geometry.dispose();
@@ -784,6 +803,8 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
+    var normalizedUrls = Object.create(null);
+    var preloadedScripts = new Set();
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
@@ -885,11 +906,50 @@
         if (!url) {
             return '';
         }
+        if (normalizedUrls[url]) {
+            return normalizedUrls[url];
+        }
         try {
-            return new URL(versionScriptUrl(url), document.baseURI).href;
+            return normalizedUrls[url] = new URL(versionScriptUrl(url), document.baseURI).href;
         } catch (_) {
             return String(url);
         }
+    }
+
+    function preloadGroup(groupName) {
+        var visited = new Set();
+        var count = 0;
+        // Local packages need script injection, not network resource hints.
+        // Preloads only fetch bytes; dependency execution remains sequential.
+        if (!global.location || !/^https?:$/.test(global.location.protocol || '')) {
+            return count;
+        }
+        function visit(name) {
+            if (visited.has(name) || !manifest[name]) return;
+            visited.add(name);
+            (dependencies[name] || []).forEach(visit);
+            manifest[name].forEach(function preload(url) {
+                var normalized = normalizeScriptUrl(url);
+                if (!normalized || isProvided(url) || preloadedScripts.has(normalized)) return;
+                try {
+                    var link = document.createElement('link');
+                    // Unsupported engines retain the normal script-loading path.
+                    if (!link.relList || typeof link.relList.supports !== 'function'
+                        || !link.relList.supports('preload')) return;
+                    link.rel = 'preload';
+                    link.as = 'script';
+                    link.href = normalized;
+                    preloadedScripts.add(normalized);
+                    try { document.head.appendChild(link); } catch (error) {
+                        preloadedScripts.delete(normalized);
+                        throw error;
+                    }
+                    count += 1;
+                } catch (_) { }
+            });
+        }
+        visit(groupName);
+        return count;
     }
 
     function findExistingScriptTag(url) {
@@ -944,22 +1004,24 @@
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
         }
-        if (scriptStatus[url] === 'loaded') {
-            return Promise.resolve();
-        }
-        if (scriptStatus[url] && scriptStatus[url].then) {
-            return scriptStatus[url];
+        var normalized = normalizeScriptUrl(url);
+        var status = scriptStatus[normalized] || scriptStatus[url];
+        if (status && status.then) {
+            return status;
         }
 
         var requestUrl = versionScriptUrl(url);
         var existing = findExistingScriptTag(requestUrl);
         if (existing) {
             scriptStatus[url] = 'loaded';
+            scriptStatus[normalized] = 'loaded';
             return Promise.resolve();
         }
 
-        scriptStatus[url] = new Promise(function inject(resolve, reject) {
+        var scriptNode;
+        var pending = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
+            scriptNode = script;
             var settled = false;
             var timer = null;
             var diagnostics = global.AppDiagnostics;
@@ -974,6 +1036,7 @@
                 settled = true;
                 try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = 'loaded';
+                scriptStatus[normalized] = 'loaded';
                 resolve();
             };
             script.onerror = function handleError(error) {
@@ -981,6 +1044,7 @@
                 settled = true;
                 try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = null;
+                scriptStatus[normalized] = null;
                 var failure = new Error('加载脚本失败: ' + url);
                 try {
                     if (diagnostics) failure = diagnostics.resourceFailure(script, failure) || failure;
@@ -998,10 +1062,15 @@
                 reject(failure);
             };
             try { timer = global.setTimeout?.(function () { script.onerror(); }, 15000); } catch (_) { }
-            try { document.head.appendChild(script); } catch (error) { script.onerror(error); }
         });
-
-        return scriptStatus[url];
+        scriptStatus[url] = pending;
+        scriptStatus[normalized] = pending;
+        // Publish the in-flight request before insertion: a synchronous DOM
+        // failure must clear it so the next request can retry.
+        try { document.head.appendChild(scriptNode); } catch (error) {
+            if (scriptNode && scriptNode.onerror) scriptNode.onerror(error);
+        }
+        return pending;
     }
 
     function loadOptionalScript(url, label) {
@@ -1151,6 +1220,7 @@
         }
 
         var required = dependencies[groupName] || [];
+        preloadGroup(groupName);
         groupStatus[groupName] = Promise.all(required.map(ensureGroup))
             .then(function () {
                 return loadGroup(groupName, manifest[groupName]);
@@ -1191,6 +1261,7 @@
 
     global.AppLazyLoader = global.AppLazyLoader || {};
     global.AppLazyLoader.ensureGroup = ensureGroup;
+    global.AppLazyLoader.preloadGroup = preloadGroup;
     global.AppLazyLoader.registerGroup = registerGroup;
     global.AppLazyLoader.markProvided = markProvided;
     global.AppLazyLoader.getStatus = getStatus;
@@ -1537,24 +1608,35 @@
         }
         attachedPrefetchHandlers = true;
 
+        function hintGroup(name) {
+            return function onNavigationIntent() {
+                // Intent warms bytes without running view initialization before
+                // navigation. Explicit preload APIs retain their ready semantics.
+                if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
+                if (global.AppLazyLoader && typeof global.AppLazyLoader.preloadGroup === 'function') {
+                    global.AppLazyLoader.preloadGroup(name);
+                }
+            };
+        }
+
         var practiceButton = document.querySelector('.main-nav [data-view="practice"]');
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                practiceButton.addEventListener(eventName, triggerPrefetch, { once: true });
+                practiceButton.addEventListener(eventName, hintGroup('practice-suite'), { once: true });
             });
         }
 
         var browseButton = document.querySelector('.main-nav [data-view="browse"]');
         if (browseButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                browseButton.addEventListener(eventName, triggerBrowsePrefetch, { once: true });
+                browseButton.addEventListener(eventName, hintGroup('browse-runtime'), { once: true });
             });
         }
 
         var moreButton = document.querySelector('.main-nav [data-view="more"]');
         if (moreButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                moreButton.addEventListener(eventName, triggerMorePrefetch, { once: true });
+                moreButton.addEventListener(eventName, hintGroup('more-tools'), { once: true });
             });
         }
 

@@ -602,6 +602,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 onStartEndless: null
             };
             this.delegatesBound = false;
+            this.lastRender = null;
         }
 
         setActions(actions = {}) {
@@ -690,11 +691,25 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
             this.ensureDelegates();
 
+            // Practice progress refreshes frequently, while these cards only
+            // display category/type/count. Keep their DOM (and focus) when the
+            // displayed values are unchanged, including in-place index edits.
+            const entries = stats?.reading || [];
+            const signature = JSON.stringify(entries.map((entry) => [
+                String(entry.category), String(entry.type), String(entry.total)
+            ]));
+            const previous = this.lastRender;
+            if (previous && previous.container === container && previous.signature === signature
+                && previous.nodes.length === container.childNodes.length
+                && previous.nodes.every((node, index) => node === container.childNodes[index])) {
+                return;
+            }
+
             const fragment = document.createDocumentFragment();
             const readingSection = this.createSection({
                 title: '阅读',
                 icon: '📖',
-                entries: stats?.reading || [],
+                entries,
                 style: { gridColumn: '1 / -1' },
                 rightButtons: [this.createBookshelfButton(), this.createEndlessModeButton(), this.createSuiteModeButton()]
             });
@@ -725,6 +740,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             // }
 
             this.dom.replaceContent(container, fragment);
+            this.lastRender = {
+                container,
+                signature,
+                nodes: Array.from(container.childNodes)
+            };
         }
 
         createSection({ title, icon, entries, style, rightButton, rightButtons, isSpecial = false }) {
@@ -2672,6 +2692,75 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
+    var pendingViewActivations = new Set();
+
+    function scheduleViewActivation(viewName, activate, isCurrent) {
+        // DOM visibility changes belong to the click task. Expensive hydration
+        // runs in a task after the next animation frame, letting that shell paint.
+        if (typeof global.requestAnimationFrame !== 'function') {
+            return activate();
+        }
+        var navigationGeneration = appNavigationIntentGeneration;
+        var resetGeneration = browseResetIntentGeneration;
+        var resultsGeneration = browseResultsProxyGeneration;
+        var resultsRequestId = viewName === 'browse' ? getCurrentBrowseResultsRequest() : null;
+        var pendingFilter = viewName === 'browse' ? global.__pendingBrowseFilter : null;
+        var frameId = null;
+        var timerId = null;
+        var resolveTask;
+        var rejectTask;
+        var task = new Promise(function (resolve, reject) {
+            resolveTask = resolve;
+            rejectTask = reject;
+        });
+        var job = {
+            cancel: function () {
+                if (frameId !== null && typeof global.cancelAnimationFrame === 'function') {
+                    global.cancelAnimationFrame(frameId);
+                }
+                if (timerId !== null && typeof global.clearTimeout === 'function') {
+                    global.clearTimeout(timerId);
+                }
+                pendingViewActivations.delete(job);
+                resolveTask(false);
+            }
+        };
+        function run() {
+            pendingViewActivations.delete(job);
+            var currentResultsRequestId = viewName === 'browse' ? getCurrentBrowseResultsRequest() : null;
+            // A cold runtime publishes its initial counter (0) when main.js
+            // loads. That creates an ID getter, not a newer results request.
+            // Every foreground request increments the counter above zero and
+            // remains subject to the original freshness checks below.
+            var resultsRequestChanged = resultsRequestId !== currentResultsRequestId
+                && !(resultsRequestId == null && currentResultsRequestId === 0);
+            if (navigationGeneration !== appNavigationIntentGeneration
+                || getActiveViewName() !== viewName
+                || (typeof isCurrent === 'function' && !isCurrent())
+                || (viewName === 'browse' && (resetGeneration !== browseResetIntentGeneration
+                    || resultsGeneration !== browseResultsProxyGeneration
+                    || resultsRequestChanged
+                    || pendingFilter !== global.__pendingBrowseFilter))) {
+                resolveTask(false);
+                return;
+            }
+            try {
+                resolveTask(activate());
+            } catch (error) {
+                rejectTask(error);
+            }
+        }
+        pendingViewActivations.add(job);
+        if (document.hidden) {
+            timerId = global.setTimeout(run, 0);
+        } else {
+            frameId = global.requestAnimationFrame(function () {
+                frameId = null;
+                timerId = global.setTimeout(run, 0);
+            });
+        }
+        return task;
+    }
 
     function getOrCreateBrowsePendingFilterIntent(pendingFilter, navigationGeneration) {
         if (!pendingFilter || typeof pendingFilter !== 'object') {
@@ -3496,6 +3585,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             return appNavigationIntentGeneration;
         }
         appNavigationIntentGeneration += 1;
+        pendingViewActivations.forEach(function (job) { job.cancel(); });
         cancelCurrentBrowseFunctionalResetForSupersedingIntent();
         if (event) {
             try {
@@ -4320,6 +4410,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     global.AppEntry = Object.assign({}, global.AppEntry || {}, {
         STRICT_ON_DEMAND: STRICT_ON_DEMAND,
+        scheduleViewActivation: scheduleViewActivation,
         ensureBrowseGroup: ensureBrowseGroup,
         ensureBrowseRuntimeGroup: ensureBrowseRuntimeGroup,
         ensureBrowseRuntime: ensureBrowseGroup,
@@ -4819,8 +4910,7 @@ function ensureSettings() {
         if (!indicator || !rect) {
             return;
         }
-        indicator.style.left = rect.left + 'px';
-        indicator.style.top = rect.top + 'px';
+        indicator.style.transform = 'translate3d(' + rect.left + 'px, ' + rect.top + 'px, 0)';
         indicator.style.width = rect.width + 'px';
         indicator.style.height = rect.height + 'px';
     }
@@ -4842,12 +4932,8 @@ function ensureSettings() {
 
         applyHeroNavIndicatorRect(indicator, targetRect);
 
-        // 强制浏览器重排以便 none 立即生效后再恢复
-        if (immediate || shouldReduceMotion) {
-            void indicator.offsetWidth;
-            indicator.style.transition = '';
-        }
-
+        // The next animated update restores the CSS transition. Keeping it
+        // disabled here avoids a forced layout during initialization/resize.
         state.lastRect = targetRect;
         state.ready = true;
     }
@@ -4884,7 +4970,9 @@ function ensureSettings() {
                 return;
             }
             animateHeroNavIndicator(state, targetRect, !!immediate);
-            nav.classList.add('hero-nav--liquid-ready');
+            if (!nav.classList.contains('hero-nav--liquid-ready')) {
+                nav.classList.add('hero-nav--liquid-ready');
+            }
         };
 
         var resizeToken = 0;
@@ -4909,7 +4997,9 @@ function ensureSettings() {
             var shouldSync = false;
             for (var i = 0; i < mutations.length; i += 1) {
                 var mutation = mutations[i];
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class'
+                    && mutation.target && mutation.target.classList
+                    && mutation.target.classList.contains('hero-nav__btn')) {
                     shouldSync = true;
                     break;
                 }
@@ -5263,6 +5353,11 @@ function ensureSettings() {
     };
 
     var observer = null;
+    var pendingRoots = new Set();
+    var activeWalker = null;
+    var activeNode = null;
+    var scheduled = false;
+    var disconnected = false;
 
     function normalizeEmojiToken(token) {
         return String(token || '').replace(/[\uFE0E\uFE0F]/g, '');
@@ -5272,7 +5367,7 @@ function ensureSettings() {
         if (!node || node.nodeType !== 1) {
             return false;
         }
-        if (SKIP_TAGS[node.nodeName]) {
+        if (SKIP_TAGS[node.nodeName] || String(node.nodeName).toUpperCase() === 'SVG') {
             return true;
         }
         if (node.classList && (node.classList.contains('ui-emoji-icon') || node.classList.contains('achievement-icon'))) {
@@ -5326,13 +5421,16 @@ function ensureSettings() {
     }
 
     function replaceEmojiInTextNode(textNode) {
-        if (!textNode || !textNode.nodeValue || shouldSkipTextNode(textNode)) {
+        if (!textNode || !textNode.nodeValue) {
             return false;
         }
 
         var text = textNode.nodeValue;
         EMOJI_PATTERN.lastIndex = 0;
         if (!EMOJI_PATTERN.test(text)) {
+            return false;
+        }
+        if (shouldSkipTextNode(textNode)) {
             return false;
         }
 
@@ -5374,7 +5472,7 @@ function ensureSettings() {
             return;
         }
 
-        var walker = document.createTreeWalker(root, 4, null, false);
+        var walker = createPrunedWalker(root);
         var candidates = [];
         var current = walker.nextNode();
         while (current) {
@@ -5390,6 +5488,76 @@ function ensureSettings() {
         }
     }
 
+    function createPrunedWalker(root) {
+        // Include elements in the filter so excluded subtrees are rejected,
+        // rather than walking every text node inside code, editors and SVGs.
+        return document.createTreeWalker(root, 5, {
+            acceptNode: function (node) {
+                return node.nodeType === 1 ? (isSkippableElement(node) ? 2 : 3) : 1;
+            }
+        });
+    }
+
+    function scheduleWork() {
+        if (scheduled || disconnected || (!pendingRoots.size && !activeNode)) return;
+        scheduled = true;
+        if (typeof global.requestIdleCallback === 'function') {
+            global.requestIdleCallback(flushWork, { timeout: 250 });
+        } else {
+            global.setTimeout(flushWork, 16);
+        }
+    }
+
+    function enqueue(root) {
+        if (!root || disconnected || (root.nodeType !== 1 && root.nodeType !== 3)) return;
+        if (root.nodeType === 1 && isSkippableElement(root)) return;
+        pendingRoots.add(root);
+        scheduleWork();
+    }
+
+    function flushWork() {
+        scheduled = false;
+        if (disconnected) return;
+        var now = global.performance && typeof global.performance.now === 'function'
+            ? function () { return global.performance.now(); } : Date.now;
+        var started = now();
+        var visited = 0;
+        while (visited < 150 && now() - started < 4) {
+            if (!activeNode) {
+                activeWalker = null;
+                if (!pendingRoots.size) break;
+                var root = pendingRoots.values().next().value;
+                pendingRoots.delete(root);
+                visited += 1;
+                if (root.isConnected === false) continue;
+                var parent = root.parentNode;
+                var covered = false;
+                while (parent) {
+                    if (pendingRoots.has(parent) || isSkippableElement(parent)) {
+                        covered = true;
+                        break;
+                    }
+                    parent = parent.parentNode;
+                }
+                if (covered) continue;
+                if (root.nodeType === 3) {
+                    replaceEmojiInTextNode(root);
+                    continue;
+                }
+                activeWalker = createPrunedWalker(root);
+                activeNode = activeWalker.nextNode();
+                if (!activeNode) continue;
+            }
+            var node = activeNode;
+            // Advance before replacement so the walker survives removing its
+            // previous current node, including across idle slices.
+            activeNode = activeWalker.nextNode();
+            visited += 1;
+            if (node.isConnected !== false) replaceEmojiInTextNode(node);
+        }
+        scheduleWork();
+    }
+
     function observeDynamicContent() {
         if (!global.MutationObserver || !document.body) {
             return;
@@ -5401,14 +5569,14 @@ function ensureSettings() {
             for (i = 0; i < mutations.length; i++) {
                 var mutation = mutations[i];
                 if (mutation.type === 'characterData') {
-                    replaceEmojiInTextNode(mutation.target);
+                    enqueue(mutation.target);
                     continue;
                 }
                 if (mutation.type !== 'childList' || !mutation.addedNodes || !mutation.addedNodes.length) {
                     continue;
                 }
                 for (j = 0; j < mutation.addedNodes.length; j++) {
-                    walkAndReplace(mutation.addedNodes[j]);
+                    enqueue(mutation.addedNodes[j]);
                 }
             }
         });
@@ -5421,7 +5589,7 @@ function ensureSettings() {
     }
 
     function bootstrap() {
-        walkAndReplace(document.body);
+        enqueue(document.body);
         observeDynamicContent();
     }
 
@@ -5437,6 +5605,10 @@ function ensureSettings() {
             walkAndReplace(node || document.body);
         },
         disconnect: function disconnect() {
+            disconnected = true;
+            pendingRoots.clear();
+            activeWalker = null;
+            activeNode = null;
             if (observer && typeof observer.disconnect === 'function') {
                 observer.disconnect();
             }

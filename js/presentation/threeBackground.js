@@ -349,9 +349,22 @@
 
         let rafId = 0;
         let lastFrame = 0;
-        let paused = false;
+        let destroyed = false;
+        const motionQuery = typeof global.matchMedia === 'function'
+            ? global.matchMedia('(prefers-reduced-motion: reduce)') : null;
+        // Floral bloom has no time uniform in its shader: redraw only on resize
+        // or refresh rather than spending GPU time on identical frames.
+        const animated = /uniform\s+float\s+uTime\s*;/.test(fragmentShader);
         const startedAt = performance.now();
         const frameInterval = 1000 / 24;
+
+        function canAnimate() {
+            return !destroyed && animated && !document.hidden && !(motionQuery && motionQuery.matches);
+        }
+
+        function scheduleFrame() {
+            if (!rafId && canAnimate()) rafId = global.requestAnimationFrame(render);
+        }
 
         function resize() {
             const width = Math.max(1, global.innerWidth || 1);
@@ -364,34 +377,36 @@
         }
 
         function render(now, force) {
-            if (paused && !force) {
-                rafId = global.requestAnimationFrame(render);
-                return;
-            }
+            if (!force) rafId = 0;
+            if (destroyed || (!force && !canAnimate())) return;
             if (!force && now - lastFrame < frameInterval) {
-                rafId = global.requestAnimationFrame(render);
+                scheduleFrame();
                 return;
             }
             lastFrame = now;
             uniforms.uTime.value = (now - startedAt) / 1000;
             renderer.render(scene, camera);
-            if (!force) {
-                rafId = global.requestAnimationFrame(render);
-            }
+            if (!force) scheduleFrame();
         }
 
         function handleVisibility() {
-            paused = document.hidden;
-            if (!paused) {
+            if (rafId) {
+                global.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            if (!document.hidden) {
                 render(performance.now(), true);
+                scheduleFrame();
             }
         }
 
         resize();
         global.addEventListener('resize', resize);
         document.addEventListener('visibilitychange', handleVisibility);
-        render(performance.now(), true);
-        rafId = global.requestAnimationFrame(render);
+        if (motionQuery && typeof motionQuery.addEventListener === 'function') {
+            motionQuery.addEventListener('change', handleVisibility);
+        }
+        scheduleFrame();
 
         document.body.classList.add('three-bg-active');
 
@@ -399,12 +414,16 @@
             renderer,
             refresh: () => render(performance.now(), true),
             destroy() {
+                destroyed = true;
                 if (rafId) {
                     global.cancelAnimationFrame(rafId);
                     rafId = 0;
                 }
                 global.removeEventListener('resize', resize);
                 document.removeEventListener('visibilitychange', handleVisibility);
+                if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
+                    motionQuery.removeEventListener('change', handleVisibility);
+                }
                 renderer.dispose();
                 material.dispose();
                 mesh.geometry.dispose();

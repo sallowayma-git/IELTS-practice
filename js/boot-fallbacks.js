@@ -277,6 +277,12 @@
         }
       }
       var browseRefresh = null;
+      var scheduleActivation = function (activate) {
+        if (window.AppEntry && typeof window.AppEntry.scheduleViewActivation === 'function') {
+          return window.AppEntry.scheduleViewActivation(normalized, activate);
+        }
+        return activate();
+      };
       if (normalized === 'browse') {
         var runBrowseRefresh = function runBrowseRefresh() {
           if (resetCategory === false && typeof window.activateBrowseView === 'function') {
@@ -313,28 +319,30 @@
               && browseResetBarrierRegistered
               && window.AppEntry
               && typeof window.AppEntry.ensureBrowseGroup === 'function') {
-              var groupRefresh = window.AppEntry.ensureBrowseGroup();
-              if (typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
-                window.AppEntry.updateBrowseFunctionalResetResultsRequest(
-                  browseFunctionalResetBarrier
-                );
-              }
+              var groupRefresh = scheduleActivation(function () {
+                var refresh = window.AppEntry.ensureBrowseGroup();
+                if (typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
+                  window.AppEntry.updateBrowseFunctionalResetResultsRequest(browseFunctionalResetBarrier);
+                }
+                return refresh;
+              });
               return Promise.resolve(groupRefresh).then(function (result) {
                 return result !== false;
               });
             }
-            var refreshResult = runBrowseRefresh();
-            if (browseFunctionalResetBarrier
-              && window.AppEntry
-              && typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
-              window.AppEntry.updateBrowseFunctionalResetResultsRequest(
-                browseFunctionalResetBarrier
-              );
-            }
+            var refreshResult = scheduleActivation(function () {
+              var refresh = runBrowseRefresh();
+              if (browseFunctionalResetBarrier
+                && window.AppEntry
+                && typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
+                window.AppEntry.updateBrowseFunctionalResetResultsRequest(browseFunctionalResetBarrier);
+              }
+              return refresh;
+            });
             return refreshResult;
           });
         } else {
-          browseRefresh = runBrowseRefresh();
+          browseRefresh = scheduleActivation(runBrowseRefresh);
         }
         if (browseRefresh && typeof browseRefresh.then === 'function') {
           browseRefresh = Promise.resolve(browseRefresh).catch(function (error) {
@@ -354,13 +362,19 @@
           });
         }
       }
-      if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
-        window.AppActions.ensurePracticeSuite();
-      }
-      if (normalized === 'practice' && typeof window.startPracticeRecordsSyncInBackground === 'function') {
-        window.startPracticeRecordsSyncInBackground('practice-view');
-      } else if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
-        window.ensurePracticeRecordsSync('practice-view').catch(function () { });
+      if (normalized === 'practice') {
+        Promise.resolve(scheduleActivation(function () {
+          if (window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+            window.AppActions.ensurePracticeSuite();
+          }
+          if (typeof window.startPracticeRecordsSyncInBackground === 'function') {
+            return window.startPracticeRecordsSyncInBackground('practice-view');
+          }
+          if (typeof window.ensurePracticeRecordsSync === 'function') {
+            return window.ensurePracticeRecordsSync('practice-view');
+          }
+          return null;
+        })).catch(function (error) { console.warn('[Fallback] 激活练习视图失败:', error); });
       }
       return browseRefresh;
     };

@@ -288,6 +288,75 @@
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
+    var pendingViewActivations = new Set();
+
+    function scheduleViewActivation(viewName, activate, isCurrent) {
+        // DOM visibility changes belong to the click task. Expensive hydration
+        // runs in a task after the next animation frame, letting that shell paint.
+        if (typeof global.requestAnimationFrame !== 'function') {
+            return activate();
+        }
+        var navigationGeneration = appNavigationIntentGeneration;
+        var resetGeneration = browseResetIntentGeneration;
+        var resultsGeneration = browseResultsProxyGeneration;
+        var resultsRequestId = viewName === 'browse' ? getCurrentBrowseResultsRequest() : null;
+        var pendingFilter = viewName === 'browse' ? global.__pendingBrowseFilter : null;
+        var frameId = null;
+        var timerId = null;
+        var resolveTask;
+        var rejectTask;
+        var task = new Promise(function (resolve, reject) {
+            resolveTask = resolve;
+            rejectTask = reject;
+        });
+        var job = {
+            cancel: function () {
+                if (frameId !== null && typeof global.cancelAnimationFrame === 'function') {
+                    global.cancelAnimationFrame(frameId);
+                }
+                if (timerId !== null && typeof global.clearTimeout === 'function') {
+                    global.clearTimeout(timerId);
+                }
+                pendingViewActivations.delete(job);
+                resolveTask(false);
+            }
+        };
+        function run() {
+            pendingViewActivations.delete(job);
+            var currentResultsRequestId = viewName === 'browse' ? getCurrentBrowseResultsRequest() : null;
+            // A cold runtime publishes its initial counter (0) when main.js
+            // loads. That creates an ID getter, not a newer results request.
+            // Every foreground request increments the counter above zero and
+            // remains subject to the original freshness checks below.
+            var resultsRequestChanged = resultsRequestId !== currentResultsRequestId
+                && !(resultsRequestId == null && currentResultsRequestId === 0);
+            if (navigationGeneration !== appNavigationIntentGeneration
+                || getActiveViewName() !== viewName
+                || (typeof isCurrent === 'function' && !isCurrent())
+                || (viewName === 'browse' && (resetGeneration !== browseResetIntentGeneration
+                    || resultsGeneration !== browseResultsProxyGeneration
+                    || resultsRequestChanged
+                    || pendingFilter !== global.__pendingBrowseFilter))) {
+                resolveTask(false);
+                return;
+            }
+            try {
+                resolveTask(activate());
+            } catch (error) {
+                rejectTask(error);
+            }
+        }
+        pendingViewActivations.add(job);
+        if (document.hidden) {
+            timerId = global.setTimeout(run, 0);
+        } else {
+            frameId = global.requestAnimationFrame(function () {
+                frameId = null;
+                timerId = global.setTimeout(run, 0);
+            });
+        }
+        return task;
+    }
 
     function getOrCreateBrowsePendingFilterIntent(pendingFilter, navigationGeneration) {
         if (!pendingFilter || typeof pendingFilter !== 'object') {
@@ -1112,6 +1181,7 @@
             return appNavigationIntentGeneration;
         }
         appNavigationIntentGeneration += 1;
+        pendingViewActivations.forEach(function (job) { job.cancel(); });
         cancelCurrentBrowseFunctionalResetForSupersedingIntent();
         if (event) {
             try {
@@ -1936,6 +2006,7 @@
 
     global.AppEntry = Object.assign({}, global.AppEntry || {}, {
         STRICT_ON_DEMAND: STRICT_ON_DEMAND,
+        scheduleViewActivation: scheduleViewActivation,
         ensureBrowseGroup: ensureBrowseGroup,
         ensureBrowseRuntimeGroup: ensureBrowseRuntimeGroup,
         ensureBrowseRuntime: ensureBrowseGroup,

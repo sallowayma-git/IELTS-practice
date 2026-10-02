@@ -12,9 +12,9 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
 const results = [];
 
-function loadHistoryRenderer() {
-    const windowStub = {};
-    const documentStub = {
+function loadHistoryRenderer(environment = {}) {
+    const windowStub = environment.window || {};
+    const documentStub = environment.document || {
         createElement() {
             return {
                 className: '',
@@ -33,7 +33,7 @@ function loadHistoryRenderer() {
     const sandbox = {
         window: windowStub,
         document: documentStub,
-        Node: function Node() {},
+        Node: environment.Node || function Node() {},
         console
     };
     sandbox.globalThis = sandbox.window;
@@ -96,11 +96,50 @@ async function testUpdatedAtChangesAffectSignature() {
     recordResult('practice history signature tracks updatedAt changes', true, { oldSig, newSig });
 }
 
+async function testHistoryMeasurementBatchesWritesBeforeReads() {
+    const events = [];
+    const wrappers = [];
+    class FakeNode {
+        constructor(height = 0) { this.style = {}; this.height = height; }
+        appendChild(node) { events.push(['append', node.height]); }
+        remove() { events.push(['remove']); }
+        get offsetHeight() { events.push(['read', this.height]); return this.height; }
+    }
+    const container = { clientWidth: 1000, appendChild() {} };
+    const renderer = loadHistoryRenderer({
+        window: {
+            innerWidth: 1200,
+            VirtualScroller: class VirtualScroller {
+                constructor(container, records, factory, options) { this.options = options; }
+            }
+        },
+        document: { createElement() { const node = new FakeNode(); wrappers.push(node); return node; } },
+        Node: FakeNode
+    });
+    const scroller = renderer.renderList(container, Array.from({ length: 35 }, (_, i) => i), {
+        itemFactory(record) { return new FakeNode(100 + record); }
+    });
+    const firstRead = events.findIndex(event => event[0] === 'read');
+    assert.strictEqual(firstRead, 30, 'All sample insertions must precede geometry reads');
+    assert.strictEqual(events.slice(firstRead, -1).every(event => event[0] === 'read'), true,
+        'Geometry reads must not interleave DOM mutations');
+    assert.strictEqual(scroller.options.itemHeight, 137, 'Tallest sample plus safety margin must be retained');
+    assert.deepStrictEqual(events.at(-1), ['remove']);
+    assert.strictEqual(wrappers[0].style.visibility, 'hidden');
+    events.length = 0;
+    assert.throws(() => renderer.renderList(container, [1, 2], {
+        itemFactory() { throw new Error('sample failed'); }
+    }), /sample failed/);
+    assert.deepStrictEqual(events.at(-1), ['remove'], 'Failed sampling must remove its hidden wrapper');
+    recordResult('history samples batch DOM writes before geometry reads and clean up after errors', true, {});
+}
+
 async function runAllTests() {
     const tests = [
         testTitleChangesAffectSignature,
         testSuiteEntriesChangesAffectSignature,
-        testUpdatedAtChangesAffectSignature
+        testUpdatedAtChangesAffectSignature,
+        testHistoryMeasurementBatchesWritesBeforeReads
     ];
     for (const testFn of tests) {
         try {
