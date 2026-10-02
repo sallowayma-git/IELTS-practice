@@ -188,6 +188,8 @@ try {
         assert.equal(await panel.evaluate(element => element.getBoundingClientRect().right <= innerWidth + 1), true);
         await page.evaluate(() => window.AppData.practice.clear());
         await sync(page);
+        // The refresh promise publishes records before deferred accuracy rendering.
+        await page.waitForFunction(() => document.getElementById('avg-score')?.textContent === '—');
         assert.equal(await page.locator('#avg-score').innerText(), '—');
         assert.doesNotMatch(await panel.innerText(), /NaN|Infinity/);
         assert.deepEqual(errors, []);

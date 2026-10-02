@@ -33,6 +33,15 @@ const server = http.createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const results = [];
+// Business completion and diagnostic capture intentionally precede ordinary
+// notice DOM work. Keep assertions against the eventual visible presentation.
+async function waitForIncidentPresentation(page, result) {
+    const event = result.events.find(event => ['persistent', 'dialog'].includes(event.notification.kind));
+    if (event) {
+        await page.waitForFunction(id => document.body.textContent.includes(id), event.eventId);
+        result.text = await page.locator('body').textContent();
+    }
+}
 let browser;
 try {
     browser = await chromium.launch({ headless: true });
@@ -51,7 +60,9 @@ try {
                         await page.addScriptTag({ path: path.join(root, 'js/core/externalBackupService.js') });
                         await page.addScriptTag({ path: path.join(root, 'js/boot-fallbacks.js') });
                     }
-                    assertReviewScenario(scenario, await page.evaluate(exerciseReviewScenario, scenario));
+                    const result = await page.evaluate(exerciseReviewScenario, scenario);
+                    await waitForIncidentPresentation(page, result);
+                    assertReviewScenario(scenario, result);
                     results.push({ mode, scenario, passed: true });
                     continue;
                 }
@@ -149,6 +160,7 @@ try {
                     result.text = document.body.textContent;
                     return result;
                 }, scenario);
+                await waitForIncidentPresentation(page, result);
                 assert.doesNotMatch(JSON.stringify(result.events), /PRIVATE_|original-operation|original-submission|original-session/);
                 if (['quota', 'aborted-transaction', 'backend-unavailable', 'timeout'].includes(scenario)) {
                     assert.equal(result.caught, true);
