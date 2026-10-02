@@ -5,6 +5,7 @@
     const DATABASE_NAME = 'IELTSAtlasDiagnosticsV1';
     const CONTROL_KEY = 'ielts-atlas-diagnostics-control-v1';
     const LOCK_NAME = 'ielts-atlas-diagnostics-lifecycle-v1';
+    const INDEX_KEY = '__diagnostic_retention_revision__';
     const ZERO = 'dg-' + '0'.repeat(32);
     const GENERATION = /^dg-[a-f0-9]{32}$/;
     const DETAILED_MODE_MS = 15 * 60 * 1000;
@@ -41,6 +42,10 @@
         let dropped = 0;
         let channel;
         let expiredDetailedUntil = 0;
+        // The reserved control record's write token fences caches across windows.
+        // Only a committed transaction can publish a new local retention index.
+        let historyToken = null;
+        let retentionIndex = null;
 
         function detailedMode() {
             const timestamp = now();
@@ -68,6 +73,7 @@
             // Coordination can fail after an unrelated IDB failure has latched.
             // Do not let that earlier failure hide an unsafe/stale mode lease.
             if (code === 'COORDINATION_UNAVAILABLE') { coordinationFailed = true; coordinationReady = false; }
+            retentionIndex = null;
             if (!failure) { failure = code; emit('status'); }
         }
         function failureCode(error) {
@@ -78,7 +84,7 @@
         }
         function readControl() {
             const raw = global.localStorage.getItem(controlKey);
-            if (raw === null) return { ...defaults };
+            if (raw === null) { historyToken = null; return { ...defaults }; }
             const value = JSON.parse(raw);
             if (!value || !GENERATION.test(value.generation) || !GENERATION.test(value.resetGeneration)
                 || !Number.isSafeInteger(value.cutoff) || value.cutoff < -1 || typeof value.enabled !== 'boolean'
@@ -88,6 +94,7 @@
             const validMode = Number.isSafeInteger(value.detailedStartedAt) && value.detailedStartedAt > 0
                 && Number.isSafeInteger(value.detailedUntil) && value.detailedUntil > value.detailedStartedAt
                 && value.detailedUntil - value.detailedStartedAt <= DETAILED_MODE_MS;
+            historyToken = raw;
             return { generation: value.generation, resetGeneration: value.resetGeneration,
                 cutoff: value.cutoff, enabled: value.enabled, phase: value.phase,
                 detailedStartedAt: validMode ? value.detailedStartedAt : 0, detailedUntil: validMode ? value.detailedUntil : 0 };
@@ -100,7 +107,7 @@
                 const changed = next.generation !== control.generation || next.phase !== control.phase;
                 const modeChanged = next.detailedUntil !== control.detailedUntil || next.detailedStartedAt !== control.detailedStartedAt;
                 control = next;
-                if (changed) emit('barrier');
+                if (changed) { retentionIndex = null; emit('barrier'); }
                 else if (modeChanged) emit('status');
             } catch (_) { fail('COORDINATION_UNAVAILABLE'); }
             return control;
@@ -120,6 +127,7 @@
                 const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(384, ' ');
                 global.localStorage.setItem(controlKey, serialized);
                 if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
+                historyToken = serialized;
                 coordinationReady = true;
             } catch (error) {
                 coordinationReady = false;
@@ -131,6 +139,7 @@
             // All control mutations and IDB operations share one cross-window lock.
             writeControl(next);
             control = next;
+            retentionIndex = null;
             try { channel?.postMessage({ type: 'control-changed' }); } catch (_) { }
             emit('barrier');
         }
@@ -186,7 +195,7 @@
                 };
             });
         }
-        async function transaction(mode, action, createDatabase = false) {
+        async function transaction(mode, action, createDatabase = false, read = 'all') {
             // Every caller holds the lifecycle lock and has synchronized control.
             if (!coordinationReady) writeControl(control);
             const db = await open(createDatabase);
@@ -205,11 +214,20 @@
                         tx.oncomplete = () => { global.clearTimeout(timer); resolve(result); };
                         tx.onabort = tx.onerror = () => { global.clearTimeout(timer); reject(thrown || tx.error || new Error('Diagnostic transaction failed')); };
                         const store = tx.objectStore('events');
-                        const request = store.getAll();
-                        request.onsuccess = () => {
-                            try { result = action(store, request.result); }
+                        const guard = (callback) => {
+                            try { return callback(); }
                             catch (error) { thrown = error; tx.abort(); }
                         };
+                        const apply = (rows) => guard(() => { result = action(store, rows, guard); });
+                        if (read === null) apply([]);
+                        else {
+                            const paged = typeof read === 'object';
+                            const request = read === 'all' ? store.getAll()
+                                : paged ? store.getAll(read.after === undefined ? null : global.IDBKeyRange.lowerBound(read.after, true), 100)
+                                    : store.get(read);
+                            request.onsuccess = () => apply(read === 'all' || paged ? request.result
+                                : request.result ? [request.result] : []);
+                        }
                     } catch (error) { global.clearTimeout(timer); reject(error); }
                 });
             } finally { db.close(); }
@@ -218,33 +236,123 @@
             return event && event.persistence.generation === control.generation
                 && event.timestamp > control.cutoff && event.timestamp >= now() - limits.ageMs;
         }
-        function retained(rows) {
-            return rows.map((row) => normalizer.sanitizeEvent(row.event)).filter(eligible);
+        function eventBytes(event) {
+            return contract.eventBytes?.(event) ?? contract.utf8Bytes(JSON.stringify(event));
         }
-        function select(events) {
-            const ordered = events.sort((a, b) => priority(b) - priority(a)
-                || b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+        async function retained(rows) {
+            const entries = new Map();
+            let started = global.performance?.now?.() ?? 0;
+            for (let index = 0; index < rows.length; index += 1) {
+                const row = rows[index];
+                if (row.eventId === INDEX_KEY) continue;
+                const event = normalizer.sanitizeEvent(row.event);
+                // A mismatched key cannot confirm or overwrite another incident.
+                if (eligible(event) && row.eventId === event.eventId) {
+                    entries.set(event.eventId, { eventId: event.eventId, event, bytes: eventBytes(event) });
+                }
+                if (typeof global.requestAnimationFrame === 'function' && index + 1 < rows.length
+                    && ((index + 1) % 50 === 0 || (global.performance.now() - started) >= 4)) {
+                    // No IDB transaction remains open while preprocessing yields.
+                    // A timer relinquishes continuation priority so rendering
+                    // can run even during a long cold-history normalization.
+                    if (global.document?.hidden) {
+                        // Background timer clamping must not keep the shared
+                        // lifecycle lock occupied for seconds per chunk.
+                        if (global.scheduler?.yield) await global.scheduler.yield();
+                        else if (global.MessageChannel) await new Promise((resolve) => {
+                            const channel = new global.MessageChannel();
+                            channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
+                            channel.port2.postMessage(null);
+                        });
+                    } else await new Promise((resolve) => global.setTimeout(resolve, 0));
+                    started = global.performance.now();
+                }
+            }
+            return entries;
+        }
+        function select(entries) {
+            const ordered = Array.from(entries.values()).filter((row) => eligible(row.event))
+                .sort((a, b) => priority(b.event) - priority(a.event)
+                    || b.event.timestamp - a.event.timestamp || b.event.sequence - a.event.sequence
+                    || a.eventId.localeCompare(b.eventId));
             const keep = new Map();
             let total = 0;
-            for (const event of ordered) {
-                const size = contract.utf8Bytes(JSON.stringify(event));
-                if (keep.size < limits.events && total + size <= limits.bytes) {
-                    keep.set(event.eventId, { eventId: event.eventId, event, bytes: size });
-                    total += size;
+            for (const row of ordered) {
+                if (keep.size < limits.events && total + row.bytes <= limits.bytes) {
+                    keep.set(row.eventId, row);
+                    total += row.bytes;
                 }
             }
             return keep;
         }
+        async function readRows() {
+            // Bound structured-clone delivery, too: a whole-table getAll can
+            // stall a frame before our sanitizer gets its first yield.
+            if (!global.IDBKeyRange) return transaction('readonly', (_store, values) => values);
+            const rows = [];
+            let after;
+            while (true) {
+                const page = await transaction('readonly', (_store, values) => values, false, { after });
+                rows.push(...page);
+                if (page.length < 100 || failure || suspended || closed) return rows;
+                after = page[page.length - 1].eventId;
+            }
+        }
+        async function loadIndex() {
+            if (retentionIndex && retentionIndex.token === historyToken) return retentionIndex;
+            const rows = await readRows();
+            const entries = await retained(rows);
+            return { token: historyToken, entries, revision: rows.find((row) => row.eventId === INDEX_KEY)?.revision ?? null,
+                keys: new Set(rows.filter((row) => row.eventId !== INDEX_KEY).map((row) => row.eventId)) };
+        }
+        async function commitIndex(index, keep, writes = []) {
+            // Rotate BEFORE writing. An abort leaves every old cache invalidated;
+            // successful writers install their cache only after oncomplete.
+            writeControl(control);
+            const token = historyToken;
+            const revision = keep.size ? generation() : null;
+            const committed = await transaction('readwrite', (store, rows, guard) => {
+                const result = { matched: false };
+                // The revision is committed with the payload. Older releases
+                // prune this non-event row, so their writes invalidate our cache
+                // even when they do not rotate the new control write token.
+                if ((rows[0]?.revision ?? null) !== index.revision) return result;
+                const apply = () => {
+                    result.matched = true;
+                    for (const id of index.keys) if (!keep.has(id)) store.delete(id);
+                    for (const id of writes) if (keep.has(id)) store.put(keep.get(id));
+                    if (revision) store.put({ eventId: INDEX_KEY, revision });
+                    else store.delete(INDEX_KEY);
+                };
+                if (index.revision !== null) apply();
+                else {
+                    // An unmarked empty/legacy database also needs a count
+                    // fence, before installing its first revision marker.
+                    const count = store.count();
+                    count.onsuccess = () => guard(() => {
+                        if (count.result === index.keys.size + rows.length) apply();
+                    });
+                }
+                return result;
+            }, true, INDEX_KEY);
+            if (!committed.matched) { retentionIndex = null; return false; }
+            retentionIndex = { token, revision, entries: keep, keys: new Set(keep.keys()) };
+            return true;
+        }
+
         async function prune() {
             if (!capabilities() || suspended || !control.enabled) return;
             try {
                 await locked(async () => {
                     if (failure || suspended || closed || !control.enabled) return;
-                    await transaction('readwrite', (store, rows) => {
-                        const keep = select(retained(rows));
-                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
-                        dropped += rows.length - keep.size;
-                    });
+                    const index = await loadIndex();
+                    sync();
+                    if (failure || suspended || closed || !control.enabled || index.token !== historyToken) return;
+                    const keep = select(index.entries);
+                    if (index.keys.size !== keep.size || (keep.size && index.revision === null) || (!keep.size && index.revision !== null)) {
+                        if (!await commitIndex(index, keep)) return;
+                    } else retentionIndex = { ...index, entries: keep };
+                    dropped += index.keys.size - keep.size;
                 });
             } catch (error) { fail(failureCode(error)); }
         }
@@ -262,7 +370,7 @@
                 const event = normalizer.sanitizeEvent(input[index]);
                 if (eligible(event)) events.push(event);
             }
-            const bytes = events.reduce((sum, event) => sum + contract.utf8Bytes(JSON.stringify(event)), 0);
+            const bytes = events.reduce((sum, event) => sum + eventBytes(event), 0);
             if (pendingEvents + events.length > LIMITS.pendingEvents || pendingBytes + bytes > LIMITS.pendingBytes) {
                 dropped += events.length;
                 return Object.freeze({ persistence: 'memory-only', persistedEventIds: Object.freeze([]), status: view() });
@@ -276,21 +384,27 @@
                     if (failure || suspended || closed || !control.enabled) return [];
                     const batch = events.filter(eligible);
                     if (!batch.length) return [];
-                    return transaction('readwrite', (store, rows) => {
-                        const merged = new Map(retained(rows).map((event) => [event.eventId, event]));
-                        for (const event of batch) {
-                            const previous = merged.get(event.eventId);
+                    for (let attempt = 0; attempt < 2; attempt += 1) {
+                        const index = await loadIndex();
+                        sync();
+                        if (failure || suspended || closed || !control.enabled || index.token !== historyToken) return [];
+                        const currentBatch = batch.filter(eligible);
+                        if (!currentBatch.length) return [];
+                        const merged = new Map(Array.from(index.entries).filter(([, row]) => eligible(row.event)));
+                        for (const event of currentBatch) {
+                            const previous = merged.get(event.eventId)?.event;
                             if (!previous || priority(event) >= priority(previous)) {
-                                merged.set(event.eventId, normalizer.sanitizeEvent({ ...event,
-                                    persistence: { ...event.persistence, diagnostics: 'persisted' } }));
+                                const persisted = normalizer.sanitizeEvent({ ...event,
+                                    persistence: { ...event.persistence, diagnostics: 'persisted' } });
+                                merged.set(event.eventId, { eventId: event.eventId, event: persisted, bytes: eventBytes(persisted) });
                             }
                         }
-                        const keep = select(Array.from(merged.values()));
-                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
-                        for (const event of batch) if (keep.has(event.eventId)) store.put(keep.get(event.eventId));
+                        const keep = select(merged);
+                        if (!await commitIndex(index, keep, currentBatch.map((event) => event.eventId))) continue;
                         dropped += merged.size - keep.size;
-                        return batch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
-                    }, true);
+                        return currentBatch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
+                    }
+                    return [];
                 });
             } catch (error) { fail(failureCode(error)); }
             finally { pendingEvents -= events.length; pendingBytes -= bytes; }
@@ -304,7 +418,10 @@
                 try {
                     events = await locked(async () => {
                         if (failure || suspended || closed || !control.enabled) return [];
-                        return transaction('readonly', (_store, rows) => retained(rows));
+                        const rows = query.eventId
+                            ? await transaction('readonly', (_store, values) => values, false, query.eventId)
+                            : await readRows();
+                        return Array.from((await retained(rows)).values(), (row) => row.event).filter(eligible);
                     });
                 } catch (error) { fail(failureCode(error)); }
             }
@@ -354,7 +471,7 @@
                         await transaction('readwrite', (store) => {
                             store.put({ eventId: '__retry_probe__' });
                             store.delete('__retry_probe__');
-                        }, true);
+                        }, true, null);
                     });
                 } catch (error) { fail(failureCode(error)); }
             }
@@ -408,7 +525,7 @@
             clear: () => clearHistory(), setEnabled: (enabled) => clearHistory(enabled === true),
             status() { sync(); return view(); },
             subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-            close() { closed = true; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
+            close() { closed = true; retentionIndex = null; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
         });
         return api;
     }

@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:146bd19fc8636903ee6cd7daa3c67ee576e717423d88f3f650ce7c0a989794ec","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:0a1b927961421f5cb5a0df7efad0968610b21a28442de8923fceaf6cf292c79c","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -83,6 +83,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     const ALIAS_ID = /^alias_(session|suite|submission|operation)_[a-f0-9]{32}$/;
     const scopeInternals = new WeakMap();
     const identityInternals = new WeakMap();
+    // Membership is provenance: only code-owned, fully projected and deeply
+    // frozen events enter this cache. Frozen external inputs are still untrusted.
+    const validatedEvents = new WeakMap();
     const readingResourcePaths = new Set();
     try {
         const resources = Object.getOwnPropertyDescriptor(global.AppDiagnosticBuild, 'readingResources')?.value;
@@ -363,7 +366,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
     function bound(event, context) {
         event.collection.issues = Array.from(context.issues).sort();
-        const size = () => utf8Bytes(JSON.stringify(event));
+        let bytes;
+        const size = () => {
+            bytes = utf8Bytes(JSON.stringify(event));
+            return bytes;
+        };
         if (size() > LIMITS.eventBytes) {
             context.issues.add('event-truncated');
             context.issues.add('breadcrumbs-truncated');
@@ -383,8 +390,18 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 }
                 event.collection.issues = Array.from(context.issues).sort();
             }
+            // The final issue list can change after the last trimming check.
+            size();
         }
-        return freeze(event);
+        const immutable = freeze(event);
+        validatedEvents.set(immutable, { bytes });
+        return immutable;
+    }
+
+    function eventBytes(input) {
+        // Do not serialize unknown caller objects: even a frozen object may
+        // contain getters, mutable children, or a hostile toJSON callback.
+        return validatedEvents.get(input)?.bytes ?? null;
     }
 
     function createNormalizer(options = {}) {
@@ -506,6 +523,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             }
         }
         function sanitizeEvent(input) {
+            if (validatedEvents.has(input)) return input;
             const context = state();
             try {
                 if (field(input, 'schemaVersion', context) !== SCHEMA_VERSION) return null;
@@ -545,7 +563,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
 
     const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
-        PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes });
+        PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes, eventBytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -700,6 +718,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
 
         function updatePersistence(item, status) {
+            if (item.event.persistence.diagnostics === status) return;
             const event = normalizer.sanitizeEvent({ ...item.event,
                 persistence: { ...item.event.persistence, diagnostics: status } });
             replaceEvent(item, event);
@@ -708,7 +727,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         function replaceEvent(item, event) {
             bytes -= item.bytes;
             item.event = event;
-            item.bytes = contract.utf8Bytes(JSON.stringify(event));
+            item.bytes = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
             bytes += item.bytes;
         }
 
@@ -774,7 +793,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 }
                 const existing = records.get(event.eventId);
                 if (!existing) {
-                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    const size = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
                     records.set(event.eventId, { event, bytes: size, revision: 0, delivered: memoryOnlyConsole, inFlight: false });
                     bytes += size;
                 } else if (classificationPriority(event) > classificationPriority(existing.event)) {
@@ -837,7 +856,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 const existing = records.get(event.eventId);
                 if (existing && existing.event.timestamp !== event.timestamp) return false;
                 if (!existing) {
-                    const size = contract.utf8Bytes(JSON.stringify(event));
+                    const size = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
                     records.set(event.eventId, { event, bytes: size, revision: 0, delivered: false, inFlight: false, originPriority });
                     bytes += size;
                 } else if (originPriority > (existing.originPriority ?? classificationPriority(existing.event))) {
@@ -945,13 +964,19 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     truncated: current.truncated, ...(current.storage ? { storage: current.storage } : {}),
                     ...(current.transport ? { transport: current.transport } : {}),
                     notice: 'Local diagnostics; not an answer backup.', events: [] };
+                // JSON event payloads are immutable and already sized by the
+                // contract. Account for array commas without serializing the
+                // growing report once per event.
+                let outputBytes = contract.utf8Bytes(JSON.stringify(output));
                 for (const event of ordered) {
-                    output.events.push(event);
-                    if (contract.utf8Bytes(JSON.stringify(output)) > TEXT_BYTES - 32) {
-                        output.events.pop();
+                    const eventSize = contract.eventBytes(event) ?? contract.utf8Bytes(JSON.stringify(event));
+                    const nextBytes = outputBytes + eventSize + (output.events.length ? 1 : 0);
+                    if (nextBytes > TEXT_BYTES - 32) {
                         output.truncated = true;
                         break;
                     }
+                    output.events.push(event);
+                    outputBytes = nextBytes;
                 }
                 return JSON.stringify(output);
             } catch (_) { return 'Local diagnostic export unavailable. No practice data was changed.'; }
@@ -1179,6 +1204,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     const DATABASE_NAME = 'IELTSAtlasDiagnosticsV1';
     const CONTROL_KEY = 'ielts-atlas-diagnostics-control-v1';
     const LOCK_NAME = 'ielts-atlas-diagnostics-lifecycle-v1';
+    const INDEX_KEY = '__diagnostic_retention_revision__';
     const ZERO = 'dg-' + '0'.repeat(32);
     const GENERATION = /^dg-[a-f0-9]{32}$/;
     const DETAILED_MODE_MS = 15 * 60 * 1000;
@@ -1215,6 +1241,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         let dropped = 0;
         let channel;
         let expiredDetailedUntil = 0;
+        // The reserved control record's write token fences caches across windows.
+        // Only a committed transaction can publish a new local retention index.
+        let historyToken = null;
+        let retentionIndex = null;
 
         function detailedMode() {
             const timestamp = now();
@@ -1242,6 +1272,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             // Coordination can fail after an unrelated IDB failure has latched.
             // Do not let that earlier failure hide an unsafe/stale mode lease.
             if (code === 'COORDINATION_UNAVAILABLE') { coordinationFailed = true; coordinationReady = false; }
+            retentionIndex = null;
             if (!failure) { failure = code; emit('status'); }
         }
         function failureCode(error) {
@@ -1252,7 +1283,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
         function readControl() {
             const raw = global.localStorage.getItem(controlKey);
-            if (raw === null) return { ...defaults };
+            if (raw === null) { historyToken = null; return { ...defaults }; }
             const value = JSON.parse(raw);
             if (!value || !GENERATION.test(value.generation) || !GENERATION.test(value.resetGeneration)
                 || !Number.isSafeInteger(value.cutoff) || value.cutoff < -1 || typeof value.enabled !== 'boolean'
@@ -1262,6 +1293,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             const validMode = Number.isSafeInteger(value.detailedStartedAt) && value.detailedStartedAt > 0
                 && Number.isSafeInteger(value.detailedUntil) && value.detailedUntil > value.detailedStartedAt
                 && value.detailedUntil - value.detailedStartedAt <= DETAILED_MODE_MS;
+            historyToken = raw;
             return { generation: value.generation, resetGeneration: value.resetGeneration,
                 cutoff: value.cutoff, enabled: value.enabled, phase: value.phase,
                 detailedStartedAt: validMode ? value.detailedStartedAt : 0, detailedUntil: validMode ? value.detailedUntil : 0 };
@@ -1274,7 +1306,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 const changed = next.generation !== control.generation || next.phase !== control.phase;
                 const modeChanged = next.detailedUntil !== control.detailedUntil || next.detailedStartedAt !== control.detailedStartedAt;
                 control = next;
-                if (changed) emit('barrier');
+                if (changed) { retentionIndex = null; emit('barrier'); }
                 else if (modeChanged) emit('status');
             } catch (_) { fail('COORDINATION_UNAVAILABLE'); }
             return control;
@@ -1294,6 +1326,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 const serialized = JSON.stringify({ ...next, writeToken: generation() }).padEnd(384, ' ');
                 global.localStorage.setItem(controlKey, serialized);
                 if (global.localStorage.getItem(controlKey) !== serialized) throw new Error('Diagnostic control write failed');
+                historyToken = serialized;
                 coordinationReady = true;
             } catch (error) {
                 coordinationReady = false;
@@ -1305,6 +1338,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             // All control mutations and IDB operations share one cross-window lock.
             writeControl(next);
             control = next;
+            retentionIndex = null;
             try { channel?.postMessage({ type: 'control-changed' }); } catch (_) { }
             emit('barrier');
         }
@@ -1360,7 +1394,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 };
             });
         }
-        async function transaction(mode, action, createDatabase = false) {
+        async function transaction(mode, action, createDatabase = false, read = 'all') {
             // Every caller holds the lifecycle lock and has synchronized control.
             if (!coordinationReady) writeControl(control);
             const db = await open(createDatabase);
@@ -1379,11 +1413,20 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                         tx.oncomplete = () => { global.clearTimeout(timer); resolve(result); };
                         tx.onabort = tx.onerror = () => { global.clearTimeout(timer); reject(thrown || tx.error || new Error('Diagnostic transaction failed')); };
                         const store = tx.objectStore('events');
-                        const request = store.getAll();
-                        request.onsuccess = () => {
-                            try { result = action(store, request.result); }
+                        const guard = (callback) => {
+                            try { return callback(); }
                             catch (error) { thrown = error; tx.abort(); }
                         };
+                        const apply = (rows) => guard(() => { result = action(store, rows, guard); });
+                        if (read === null) apply([]);
+                        else {
+                            const paged = typeof read === 'object';
+                            const request = read === 'all' ? store.getAll()
+                                : paged ? store.getAll(read.after === undefined ? null : global.IDBKeyRange.lowerBound(read.after, true), 100)
+                                    : store.get(read);
+                            request.onsuccess = () => apply(read === 'all' || paged ? request.result
+                                : request.result ? [request.result] : []);
+                        }
                     } catch (error) { global.clearTimeout(timer); reject(error); }
                 });
             } finally { db.close(); }
@@ -1392,33 +1435,123 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             return event && event.persistence.generation === control.generation
                 && event.timestamp > control.cutoff && event.timestamp >= now() - limits.ageMs;
         }
-        function retained(rows) {
-            return rows.map((row) => normalizer.sanitizeEvent(row.event)).filter(eligible);
+        function eventBytes(event) {
+            return contract.eventBytes?.(event) ?? contract.utf8Bytes(JSON.stringify(event));
         }
-        function select(events) {
-            const ordered = events.sort((a, b) => priority(b) - priority(a)
-                || b.timestamp - a.timestamp || b.sequence - a.sequence || a.eventId.localeCompare(b.eventId));
+        async function retained(rows) {
+            const entries = new Map();
+            let started = global.performance?.now?.() ?? 0;
+            for (let index = 0; index < rows.length; index += 1) {
+                const row = rows[index];
+                if (row.eventId === INDEX_KEY) continue;
+                const event = normalizer.sanitizeEvent(row.event);
+                // A mismatched key cannot confirm or overwrite another incident.
+                if (eligible(event) && row.eventId === event.eventId) {
+                    entries.set(event.eventId, { eventId: event.eventId, event, bytes: eventBytes(event) });
+                }
+                if (typeof global.requestAnimationFrame === 'function' && index + 1 < rows.length
+                    && ((index + 1) % 50 === 0 || (global.performance.now() - started) >= 4)) {
+                    // No IDB transaction remains open while preprocessing yields.
+                    // A timer relinquishes continuation priority so rendering
+                    // can run even during a long cold-history normalization.
+                    if (global.document?.hidden) {
+                        // Background timer clamping must not keep the shared
+                        // lifecycle lock occupied for seconds per chunk.
+                        if (global.scheduler?.yield) await global.scheduler.yield();
+                        else if (global.MessageChannel) await new Promise((resolve) => {
+                            const channel = new global.MessageChannel();
+                            channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
+                            channel.port2.postMessage(null);
+                        });
+                    } else await new Promise((resolve) => global.setTimeout(resolve, 0));
+                    started = global.performance.now();
+                }
+            }
+            return entries;
+        }
+        function select(entries) {
+            const ordered = Array.from(entries.values()).filter((row) => eligible(row.event))
+                .sort((a, b) => priority(b.event) - priority(a.event)
+                    || b.event.timestamp - a.event.timestamp || b.event.sequence - a.event.sequence
+                    || a.eventId.localeCompare(b.eventId));
             const keep = new Map();
             let total = 0;
-            for (const event of ordered) {
-                const size = contract.utf8Bytes(JSON.stringify(event));
-                if (keep.size < limits.events && total + size <= limits.bytes) {
-                    keep.set(event.eventId, { eventId: event.eventId, event, bytes: size });
-                    total += size;
+            for (const row of ordered) {
+                if (keep.size < limits.events && total + row.bytes <= limits.bytes) {
+                    keep.set(row.eventId, row);
+                    total += row.bytes;
                 }
             }
             return keep;
         }
+        async function readRows() {
+            // Bound structured-clone delivery, too: a whole-table getAll can
+            // stall a frame before our sanitizer gets its first yield.
+            if (!global.IDBKeyRange) return transaction('readonly', (_store, values) => values);
+            const rows = [];
+            let after;
+            while (true) {
+                const page = await transaction('readonly', (_store, values) => values, false, { after });
+                rows.push(...page);
+                if (page.length < 100 || failure || suspended || closed) return rows;
+                after = page[page.length - 1].eventId;
+            }
+        }
+        async function loadIndex() {
+            if (retentionIndex && retentionIndex.token === historyToken) return retentionIndex;
+            const rows = await readRows();
+            const entries = await retained(rows);
+            return { token: historyToken, entries, revision: rows.find((row) => row.eventId === INDEX_KEY)?.revision ?? null,
+                keys: new Set(rows.filter((row) => row.eventId !== INDEX_KEY).map((row) => row.eventId)) };
+        }
+        async function commitIndex(index, keep, writes = []) {
+            // Rotate BEFORE writing. An abort leaves every old cache invalidated;
+            // successful writers install their cache only after oncomplete.
+            writeControl(control);
+            const token = historyToken;
+            const revision = keep.size ? generation() : null;
+            const committed = await transaction('readwrite', (store, rows, guard) => {
+                const result = { matched: false };
+                // The revision is committed with the payload. Older releases
+                // prune this non-event row, so their writes invalidate our cache
+                // even when they do not rotate the new control write token.
+                if ((rows[0]?.revision ?? null) !== index.revision) return result;
+                const apply = () => {
+                    result.matched = true;
+                    for (const id of index.keys) if (!keep.has(id)) store.delete(id);
+                    for (const id of writes) if (keep.has(id)) store.put(keep.get(id));
+                    if (revision) store.put({ eventId: INDEX_KEY, revision });
+                    else store.delete(INDEX_KEY);
+                };
+                if (index.revision !== null) apply();
+                else {
+                    // An unmarked empty/legacy database also needs a count
+                    // fence, before installing its first revision marker.
+                    const count = store.count();
+                    count.onsuccess = () => guard(() => {
+                        if (count.result === index.keys.size + rows.length) apply();
+                    });
+                }
+                return result;
+            }, true, INDEX_KEY);
+            if (!committed.matched) { retentionIndex = null; return false; }
+            retentionIndex = { token, revision, entries: keep, keys: new Set(keep.keys()) };
+            return true;
+        }
+
         async function prune() {
             if (!capabilities() || suspended || !control.enabled) return;
             try {
                 await locked(async () => {
                     if (failure || suspended || closed || !control.enabled) return;
-                    await transaction('readwrite', (store, rows) => {
-                        const keep = select(retained(rows));
-                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
-                        dropped += rows.length - keep.size;
-                    });
+                    const index = await loadIndex();
+                    sync();
+                    if (failure || suspended || closed || !control.enabled || index.token !== historyToken) return;
+                    const keep = select(index.entries);
+                    if (index.keys.size !== keep.size || (keep.size && index.revision === null) || (!keep.size && index.revision !== null)) {
+                        if (!await commitIndex(index, keep)) return;
+                    } else retentionIndex = { ...index, entries: keep };
+                    dropped += index.keys.size - keep.size;
                 });
             } catch (error) { fail(failureCode(error)); }
         }
@@ -1436,7 +1569,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 const event = normalizer.sanitizeEvent(input[index]);
                 if (eligible(event)) events.push(event);
             }
-            const bytes = events.reduce((sum, event) => sum + contract.utf8Bytes(JSON.stringify(event)), 0);
+            const bytes = events.reduce((sum, event) => sum + eventBytes(event), 0);
             if (pendingEvents + events.length > LIMITS.pendingEvents || pendingBytes + bytes > LIMITS.pendingBytes) {
                 dropped += events.length;
                 return Object.freeze({ persistence: 'memory-only', persistedEventIds: Object.freeze([]), status: view() });
@@ -1450,21 +1583,27 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     if (failure || suspended || closed || !control.enabled) return [];
                     const batch = events.filter(eligible);
                     if (!batch.length) return [];
-                    return transaction('readwrite', (store, rows) => {
-                        const merged = new Map(retained(rows).map((event) => [event.eventId, event]));
-                        for (const event of batch) {
-                            const previous = merged.get(event.eventId);
+                    for (let attempt = 0; attempt < 2; attempt += 1) {
+                        const index = await loadIndex();
+                        sync();
+                        if (failure || suspended || closed || !control.enabled || index.token !== historyToken) return [];
+                        const currentBatch = batch.filter(eligible);
+                        if (!currentBatch.length) return [];
+                        const merged = new Map(Array.from(index.entries).filter(([, row]) => eligible(row.event)));
+                        for (const event of currentBatch) {
+                            const previous = merged.get(event.eventId)?.event;
                             if (!previous || priority(event) >= priority(previous)) {
-                                merged.set(event.eventId, normalizer.sanitizeEvent({ ...event,
-                                    persistence: { ...event.persistence, diagnostics: 'persisted' } }));
+                                const persisted = normalizer.sanitizeEvent({ ...event,
+                                    persistence: { ...event.persistence, diagnostics: 'persisted' } });
+                                merged.set(event.eventId, { eventId: event.eventId, event: persisted, bytes: eventBytes(persisted) });
                             }
                         }
-                        const keep = select(Array.from(merged.values()));
-                        for (const row of rows) if (!keep.has(row.eventId)) store.delete(row.eventId);
-                        for (const event of batch) if (keep.has(event.eventId)) store.put(keep.get(event.eventId));
+                        const keep = select(merged);
+                        if (!await commitIndex(index, keep, currentBatch.map((event) => event.eventId))) continue;
                         dropped += merged.size - keep.size;
-                        return batch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
-                    }, true);
+                        return currentBatch.filter((event) => keep.has(event.eventId)).map((event) => event.eventId);
+                    }
+                    return [];
                 });
             } catch (error) { fail(failureCode(error)); }
             finally { pendingEvents -= events.length; pendingBytes -= bytes; }
@@ -1478,7 +1617,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 try {
                     events = await locked(async () => {
                         if (failure || suspended || closed || !control.enabled) return [];
-                        return transaction('readonly', (_store, rows) => retained(rows));
+                        const rows = query.eventId
+                            ? await transaction('readonly', (_store, values) => values, false, query.eventId)
+                            : await readRows();
+                        return Array.from((await retained(rows)).values(), (row) => row.event).filter(eligible);
                     });
                 } catch (error) { fail(failureCode(error)); }
             }
@@ -1528,7 +1670,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                         await transaction('readwrite', (store) => {
                             store.put({ eventId: '__retry_probe__' });
                             store.delete('__retry_probe__');
-                        }, true);
+                        }, true, null);
                     });
                 } catch (error) { fail(failureCode(error)); }
             }
@@ -1582,7 +1724,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             clear: () => clearHistory(), setEnabled: (enabled) => clearHistory(enabled === true),
             status() { sync(); return view(); },
             subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-            close() { closed = true; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
+            close() { closed = true; retentionIndex = null; channel?.close(); global.removeEventListener?.('storage', onStorage); listeners.clear(); }
         });
         return api;
     }
@@ -2368,6 +2510,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         result.addEventListener('click', () => { try { Promise.resolve(handler()).catch(() => {}); } catch (_) { } });
         return result;
     }
+    function setText(target, value) {
+        if (target.textContent !== value) target.textContent = value;
+    }
 
     class IncidentCenter {
         constructor(options = {}) {
@@ -2379,6 +2524,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             this.queue = [];
             this.overflow = 0;
             this.root = null;
+            this.cardNodes = new Map();
+            this.renderTask = null;
             this.dialog = null;
             this.returnFocus = null;
             this.inertNodes = [];
@@ -2471,13 +2618,35 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                         // All other incidents remain reachable through history, without replay.
                     }
                 }
-                this.render();
+                // Capture, grouping and retry bindings stay synchronous. Only
+                // ordinary notice DOM work waits for the next rendering frame.
+                if (this.dialog?.item === item) this.refreshDialog();
+                this.scheduleRender(event);
                 this.advance();
                 return item?.id || event.eventId;
             } catch (_) {
                 this.fallback(event);
                 return event?.eventId || null;
             }
+        }
+
+        scheduleRender(event) {
+            if (this.renderTask) { this.renderTask.event = event; return; }
+            const task = { frame: null, timer: null, event };
+            this.renderTask = task;
+            const flush = () => {
+                if (this.renderTask !== task) return;
+                this.renderTask = null;
+                if (task.frame !== null) global.cancelAnimationFrame?.(task.frame);
+                if (task.timer !== null) global.clearTimeout?.(task.timer);
+                try { this.render(); } catch (_) { this.fallback(this.dialog?.item?.event || task.event); }
+            };
+            if (typeof global.requestAnimationFrame === 'function') {
+                task.frame = global.requestAnimationFrame(flush);
+                // Background windows may pause animation frames; a timer keeps
+                // notices deliverable subject to the browser's timer throttling.
+                task.timer = global.setTimeout(flush, 100);
+            } else task.timer = global.setTimeout(flush, 16);
         }
 
         detachMember(item, eventId) {
@@ -2573,10 +2742,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
 
         render() {
+            if (this.renderTask) {
+                if (this.renderTask.frame !== null) global.cancelAnimationFrame?.(this.renderTask.frame);
+                if (this.renderTask.timer !== null) global.clearTimeout?.(this.renderTask.timer);
+                this.renderTask = null;
+            }
             const active = Array.from(this.groups.values()).filter((item) => !item.dismissed && item.kind !== 'transient');
             if (!active.length && !this.overflow && !this.root) return;
             if (!this.root || !this.root.isConnected) {
                 this.announcement = null;
+                this.cardNodes.clear();
                 this.root = node('section', undefined, 'incident-notifications');
                 this.root.id = 'incident-notifications';
                 this.root.setAttribute('aria-label', '操作异常通知');
@@ -2596,17 +2771,32 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             }
             const focused = global.document.activeElement;
             const focusId = this.cards.contains(focused) ? focused?.getAttribute('data-incident') : null;
-            this.cards.replaceChildren();
-            for (const item of active.slice(0, LIMITS.notices)) {
-                const card = node('article', undefined, 'incident-notice');
-                card.appendChild(node('strong', TITLES[item.event.code]));
-                card.appendChild(node('p', outcome(item.event, item.operation)));
-                card.appendChild(node('p', '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : ''), 'incident-reference'));
-                const details = button('查看详情', () => this.open(item));
-                details.setAttribute('data-incident', item.id);
-                card.appendChild(details);
-                this.cards.appendChild(card);
-                if (focusId === item.id) details.focus();
+            const visible = active.slice(0, LIMITS.notices);
+            const ids = new Set(visible.map((item) => item.id));
+            for (const [id, entry] of this.cardNodes) {
+                if (!ids.has(id)) { entry.card.remove(); this.cardNodes.delete(id); }
+            }
+            for (let index = 0; index < visible.length; index++) {
+                const item = visible[index];
+                let entry = this.cardNodes.get(item.id);
+                if (!entry) {
+                    entry = { card: node('article', undefined, 'incident-notice'),
+                        title: node('strong'), outcome: node('p'), reference: node('p', undefined, 'incident-reference'), item };
+                    entry.details = button('查看详情', () => this.open(entry.item));
+                    entry.details.setAttribute('data-incident', item.id);
+                    [entry.title, entry.outcome, entry.reference, entry.details].forEach((child) => entry.card.appendChild(child));
+                    this.cardNodes.set(item.id, entry);
+                }
+                entry.item = item;
+                const values = [TITLES[item.event.code], outcome(item.event, item.operation),
+                    '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : '')];
+                [entry.title, entry.outcome, entry.reference].forEach((child, index) => {
+                    if (child.textContent !== values[index]) child.textContent = values[index];
+                });
+                if (this.cards.children[index] !== entry.card) {
+                    this.cards.insertBefore(entry.card, this.cards.children[index] || null);
+                }
+                if (focusId === item.id && global.document.activeElement !== entry.details) entry.details.focus();
             }
             const hidden = Math.max(0, active.length - LIMITS.notices) + this.overflow;
             const text = active.length || this.overflow ? '有操作异常需要查看。' + (hidden ? '另有 ' + hidden + ' 项，请查看诊断历史。' : '') : '提示已关闭，诊断历史仍可查看。';
@@ -2726,14 +2916,21 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             const dialog = this.dialog;
             const item = dialog?.item;
             if (!item || !dialog.outcome) return;
-            dialog.heading.textContent = TITLES[item.event.code];
-            dialog.panel.setAttribute('role', item.kind === 'dialog' ? 'alertdialog' : 'dialog');
-            dialog.technical.textContent = JSON.stringify(item.event, null, 2);
-            dialog.outcome.textContent = outcome(item.event, item.operation);
-            dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
-            dialog.retryButton.hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
-            dialog.retryButton.disabled = item.busy || this.attempts.size >= LIMITS.groups;
-            dialog.status.textContent = item.actionStatus;
+            setText(dialog.heading, TITLES[item.event.code]);
+            const role = item.kind === 'dialog' ? 'alertdialog' : 'dialog';
+            if (dialog.panel.getAttribute('role') !== role) dialog.panel.setAttribute('role', role);
+            if (dialog.technicalEvent !== item.event) {
+                dialog.technicalText = JSON.stringify(item.event, null, 2);
+                dialog.technicalEvent = item.event;
+            }
+            setText(dialog.technical, dialog.technicalText);
+            setText(dialog.outcome, outcome(item.event, item.operation));
+            setText(dialog.reference, '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : ''));
+            const hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            const disabled = item.busy || this.attempts.size >= LIMITS.groups;
+            if (dialog.retryButton.hidden !== hidden) dialog.retryButton.hidden = hidden;
+            if (dialog.retryButton.disabled !== disabled) dialog.retryButton.disabled = disabled;
+            setText(dialog.status, item.actionStatus);
         }
 
         exportTarget(parent) {

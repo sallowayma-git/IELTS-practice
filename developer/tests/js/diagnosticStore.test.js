@@ -172,6 +172,141 @@ test('diagnostic IndexedDB retention and lifecycle in isolated browser databases
         assert.deepEqual(snapshots[0].events, snapshots[1].events);
     });
 
+    await t.test('warm appends and exact incident lookup avoid scanning retained payloads', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            await persist(makeEvents(120));
+            const getAll = IDBObjectStore.prototype.getAll;
+            let scans = 0;
+            IDBObjectStore.prototype.getAll = function (...args) { scans += 1; return getAll.apply(this, args); };
+            try {
+                const batch = makeEvents(20);
+                const receipt = await AppDiagnosticStore.append(batch);
+                const event = await AppDiagnosticStore.getIncident(batch[0].eventId);
+                const missing = await AppDiagnosticStore.getIncident('evt_' + '0'.repeat(32) + '_1');
+                return { scans, ids: receipt.persistedEventIds, expected: batch.map((event) => event.eventId),
+                    event, missing, bytes: AppDiagnosticStore.status().pendingBytes };
+            } finally { IDBObjectStore.prototype.getAll = getAll; }
+        });
+        assert.equal(result.scans, 0);
+        assert.deepEqual(result.ids, result.expected);
+        assert.equal(result.event.eventId, result.expected[0]);
+        assert.equal(result.event.persistence.diagnostics, 'persisted');
+        assert.equal(result.missing, null);
+        assert.equal(result.bytes, 0);
+    });
+
+    await t.test('cache reconciliation sees another writer even when change notifications are missed', async (t) => {
+        const { pages: [a, b] } = await fixture(t, 2, { limits: { events: 25 } });
+        const event = await a.evaluate(async () => {
+            const events = makeEvents(20);
+            await persist(events);
+            return events[0];
+        });
+        // Warm b's index, then prevent notification hints from updating a's state.
+        await b.evaluate(() => persist(makeEvents(1)));
+        await a.evaluate(() => {
+            // Read-time token reconciliation must work regardless of storage hint delivery.
+            window.addEventListener('storage', (event) => event.stopImmediatePropagation(), true);
+        });
+        await b.evaluate(async (event) => {
+            await persist([{ ...event, code: 'PRACTICE_SAVE_FAILED', notification: { kind: 'dialog' } }, ...makeEvents(4)]);
+        }, event);
+        const result = await a.evaluate(async (event) => {
+            await persist([event, ...makeEvents(20)]);
+            return AppDiagnosticStore.snapshot();
+        }, event);
+        assert.equal(result.events.length, 25);
+        const preserved = result.events.find((item) => item.eventId === event.eventId);
+        assert.equal(preserved.code, 'PRACTICE_SAVE_FAILED');
+        assert.equal(preserved.notification.kind, 'dialog');
+    });
+
+    await t.test('cold history hydration yields rendering opportunities and retains all evidence', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            await persist(makeEvents(600));
+            AppDiagnosticStore.close();
+            let frames = 0, done = false;
+            const frame = () => { if (!done) { frames += 1; requestAnimationFrame(frame); } };
+            requestAnimationFrame(frame);
+            window.AppDiagnosticStore = AppDiagnosticStorage.create();
+            await AppDiagnosticStore.ready;
+            done = true;
+            return { frames, snapshot: await AppDiagnosticStore.snapshot({ limit: 2000 }) };
+        });
+        assert.ok(result.frames > 0, 'history preprocessing must let the page render before completing');
+        assert.equal(result.snapshot.events.length, 600);
+        assert.equal(result.snapshot.storage.failure, null);
+    });
+
+    await t.test('a legacy writer removing the revision marker cannot leave a stale retention cache', async (t) => {
+        const { pages: [page] } = await fixture(t, 1, { limits: { events: 25 } });
+        const result = await page.evaluate(async () => {
+            const event = makeEvents(1)[0];
+            await persist([event, ...makeEvents(24)]);
+            const enriched = normalizer.sanitizeEvent({ ...event, code: 'PRACTICE_SAVE_FAILED',
+                notification: { kind: 'dialog' }, persistence: { ...event.persistence, diagnostics: 'persisted' } });
+            await navigator.locks.request(AppDiagnosticStorage.LOCK_NAME, async () => {
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open(AppDiagnosticStorage.DATABASE_NAME);
+                    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('events', 'readwrite');
+                    // Previous releases remove non-event rows during retention.
+                    tx.objectStore('events').delete('__diagnostic_retention_revision__');
+                    tx.objectStore('events').put({ eventId: enriched.eventId, event: enriched });
+                    tx.oncomplete = () => { db.close(); resolve(); };
+                    tx.onabort = () => { db.close(); reject(tx.error); };
+                });
+            });
+            await persist([event, ...makeEvents(20)]);
+            return { id: event.eventId, snapshot: await AppDiagnosticStore.snapshot() };
+        });
+        assert.equal(result.snapshot.events.length, 25);
+        assert.equal(result.snapshot.events.find((event) => event.eventId === result.id).code, 'PRACTICE_SAVE_FAILED');
+    });
+
+    await t.test('events expiring during a yielded snapshot are excluded before returning', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            await persist(makeEvents(60));
+            clock += 7 * 86400000 - 1;
+            const timer = window.setTimeout;
+            let advanced = false;
+            window.setTimeout = (callback, delay, ...args) => timer(() => {
+                if (delay === 0 && !advanced) { advanced = true; clock += 2; }
+                callback(...args);
+            }, delay);
+            try { return { snapshot: await AppDiagnosticStore.snapshot(), advanced }; }
+            finally { window.setTimeout = timer; }
+        });
+        assert.equal(result.advanced, true);
+        assert.equal(result.snapshot.events.length, 0);
+        assert.equal(result.snapshot.storage.failure, null);
+    });
+
+    await t.test('hidden history processing avoids clamped timers while holding the lifecycle lock', async (t) => {
+        const { pages: [page] } = await fixture(t);
+        const result = await page.evaluate(async () => {
+            await persist(makeEvents(120));
+            Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+            Object.defineProperty(window, 'scheduler', { value: undefined, configurable: true });
+            const timer = window.setTimeout;
+            let immediateTimers = 0;
+            window.setTimeout = (callback, delay, ...args) => {
+                if (delay === 0) immediateTimers += 1;
+                return timer(callback, delay, ...args);
+            };
+            try { return { snapshot: await AppDiagnosticStore.snapshot(), immediateTimers }; }
+            finally { window.setTimeout = timer; }
+        });
+        assert.equal(result.snapshot.events.length, 120);
+        assert.equal(result.immediateTimers, 0, 'hidden chunks must not use nested zero-delay timers');
+        assert.equal(result.snapshot.storage.failure, null);
+    });
+
     for (const fault of ['unavailable', 'quota', 'abort', 'blocked']) {
         await t.test(`${fault} switches to bounded memory, stops write storms and supports explicit retry`, async (t) => {
             const { pages: [page] } = await fixture(t);

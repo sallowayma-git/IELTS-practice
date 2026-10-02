@@ -94,7 +94,7 @@ try {
             assert.equal(await page.locator('[aria-modal="true"]').count(), 1);
             assert.equal(await page.evaluate(() => center.queue.length), 5);
             assert.equal(await page.evaluate(() => center.groups.size), 20);
-            assert.equal(await page.locator('.incident-notice').count(), 5);
+            await page.waitForFunction(() => document.querySelectorAll('.incident-notice').length === 5);
             assert.equal(await page.evaluate(async () => (await AppDiagnosticExport.snapshot()).events.length), 30);
             for (let i = 0; i < 6; i++) await page.keyboard.press('Escape');
             await page.getByRole('button', { name: '查看诊断历史', exact: true }).click();
@@ -223,7 +223,7 @@ try {
                 assert.equal(event.eventId, references.enriched);
                 assert.equal(event.code, 'PRACTICE_SAVE_FAILED');
                 assert.equal(event.action, 'submit');
-                assert.equal(await page.locator('.incident-notice').count(), 2);
+                await page.waitForFunction(() => document.querySelectorAll('.incident-notice').length === 2);
                 const generic = page.locator('.incident-notice').filter({ hasText: references.other });
                 assert.match(await generic.innerText(), /操作遇到异常/);
                 assert.doesNotMatch(await generic.innerText(), /同类事件/);
@@ -238,7 +238,7 @@ try {
             assert.equal(await page.locator('.incident-notice, .incident-dialog').count(), 0);
             await page.evaluate(() => reportFailure({ error: transientFailure }));
             assert.equal(await page.locator('[role="alertdialog"]').count(), 1);
-            assert.equal(await page.locator('.incident-notice').count(), 1);
+            await page.waitForFunction(() => document.querySelectorAll('.incident-notice').length === 1);
             assert.ok((await page.locator('.incident-dialog').innerText()).includes(escalated));
             assert.match(await page.locator('.incident-dialog').innerText(), /尚未确认保存。请保留此页面/);
             await page.keyboard.press('Escape');
@@ -313,14 +313,57 @@ try {
             record('startup-export-has-priority-and-recovery-resumes-unresolved-dialog');
 
             await fresh();
+            await page.evaluate(() => reportFailure({ persistence: { operation: 'not-committed' } }));
+            await page.locator('#incident-notifications').waitFor();
             await page.evaluate(() => {
-                reportFailure({ persistence: { operation: 'not-committed' } });
                 document.getElementById('incident-notifications').remove();
                 reportFailure({ correlation: { operation: 'next' }, persistence: { operation: 'not-committed' } });
             });
+            await page.waitForFunction(() => document.querySelectorAll('.incident-notice').length === 2);
             assert.equal(await page.locator('.incident-notice').count(), 2);
             assert.equal(await page.getByRole('button', { name: '查看诊断历史', exact: true }).count(), 1);
             record('replaced-notification-container-restores-details-and-history');
+
+            await fresh();
+            const storm = await page.evaluate(() => {
+                window.noticeRenders = 0;
+                const render = center.render.bind(center);
+                center.render = () => { noticeRenders++; return render(); };
+                window.sameNoticeError = new Error('PRIVATE_NOTICE');
+                window.stableNoticeId = reportFailure({ error: sameNoticeError, persistence: { operation: 'not-committed' } });
+                for (let i = 0; i < 60; i++) center.show(stableNoticeId);
+                return { renders: noticeRenders, events: AppDiagnostics.snapshot().events.length,
+                    groups: center.groups.size, incident: AppDiagnostics.getIncident(stableNoticeId).eventId };
+            });
+            assert.equal(storm.renders, 0, 'persistent notice DOM waits until the next frame');
+            assert.equal(storm.events, 1);
+            assert.equal(storm.groups, 1);
+            await page.locator('.incident-notice').waitFor();
+            assert.equal(await page.evaluate(() => noticeRenders), 1);
+            await page.locator('.incident-notice button').focus();
+            await page.evaluate(() => {
+                window.savedNoticeButton = document.activeElement;
+                window.noticeMutations = 0;
+                const cards = center.cards;
+                window.noticeObserver = new MutationObserver(records => { noticeMutations += records.length; });
+                noticeObserver.observe(cards, { childList: true, subtree: true, characterData: true });
+                for (let i = 0; i < 60; i++) center.show(stableNoticeId);
+            });
+            await page.waitForFunction(() => noticeRenders === 2);
+            const reused = await page.evaluate(() => ({
+                same: document.querySelector('.incident-notice button') === savedNoticeButton,
+                focus: document.activeElement === savedNoticeButton,
+                mutations: noticeMutations,
+                announcementCount: document.querySelectorAll('.incident-announcement[aria-live="polite"]').length
+            }));
+            assert.deepEqual(reused, { same: true, focus: true, mutations: 0, announcementCount: 1 });
+            await page.keyboard.press('Enter');
+            await page.locator('.incident-dialog').waitFor();
+            assert.ok((await page.locator('.incident-dialog').innerText()).includes(storm.incident));
+            await page.keyboard.press('Escape');
+            assert.equal(await page.evaluate(() => document.activeElement === center.historyButton), true,
+                'dismissed card is removed and keyboard focus returns to diagnostic history');
+            record('notice-bursts-batch-dom-and-reuse-focused-accessible-controls');
 
             await fresh();
             await page.evaluate(() => {

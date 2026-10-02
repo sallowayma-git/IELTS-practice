@@ -1154,8 +1154,16 @@ class ExamSystemApp {
                 // Browse intent is hydrated once by initializeBrowseView from
                 // the canonical lastFilter preference. Data refreshes must not
                 // replay an older durable scope into the live state service.
-                await this.loadUserStats();
-                await this.updateOverviewStats();
+                // Both reads use AppData's canonical projections independently.
+                // Wait for both even on failure so readiness cannot race a still
+                // running stats read; preserve the former stats-first error order.
+                const results = await Promise.allSettled([
+                    this.loadUserStats(),
+                    this.updateOverviewStats()
+                ]);
+                for (const result of results) {
+                    if (result.status === 'rejected') throw result.reason;
+                }
             } catch (error) {
                 console.error('Failed to load initial data:', error);
             }

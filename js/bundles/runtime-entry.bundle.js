@@ -69,6 +69,64 @@
     'use strict';
 
     const THREE = global.THREE;
+    let themeIntentGeneration = 0;
+    let pendingInitialBackground = null;
+
+    function cancelInitialBackground() {
+        if (!pendingInitialBackground) return;
+        const pending = pendingInitialBackground;
+        pendingInitialBackground = null;
+        pending.cancel();
+        if (global.SHUIThreeBackground === pending.controller) global.SHUIThreeBackground = null;
+    }
+
+    function startInitialBackgroundAfterPaint(themeName, generation) {
+        if (themeName === 'newjeans' || themeName === 'ascii-flower'
+            || typeof global.requestAnimationFrame !== 'function' || typeof global.setTimeout !== 'function') {
+            start(themeName);
+            return;
+        }
+        let frameId = null;
+        let timerId = null;
+        const controller = {
+            refresh() {},
+            destroy() {
+                themeIntentGeneration += 1;
+                cancelInitialBackground();
+            }
+        };
+        const pending = {
+            controller,
+            cancel() {
+                if (frameId !== null) global.cancelAnimationFrame(frameId);
+                if (timerId !== null) global.clearTimeout(timerId);
+            }
+        };
+        pendingInitialBackground = pending;
+        // Keep cancellation available while the optional renderer waits for a
+        // painted shell. Explicit theme switches remain immediate.
+        global.SHUIThreeBackground = controller;
+        const initializeRenderer = () => {
+            if (pendingInitialBackground !== pending) return;
+            if (themeIntentGeneration !== generation || global.SHUIThreeBackground !== controller) {
+                cancelInitialBackground();
+                return;
+            }
+            pendingInitialBackground = null;
+            global.SHUIThreeBackground = null;
+            start(themeName);
+        };
+        if (document.hidden) {
+            timerId = global.setTimeout(initializeRenderer, 0);
+        } else {
+            frameId = global.requestAnimationFrame(() => {
+                frameId = null;
+                // Constructing a WebGL context and its shader is substantial
+                // synchronous work; perform it after the frame can paint.
+                timerId = global.setTimeout(initializeRenderer, 0);
+            });
+        }
+    }
 
     const vertexShader = `
         varying vec2 vUv;
@@ -618,6 +676,7 @@
     }
 
     function start(themeName = null) {
+        cancelInitialBackground();
         if (!themeName) {
             themeName = 'floral-bloom';
         }
@@ -662,6 +721,7 @@
     }
 
     global.switchBgTheme = function(themeName) {
+        themeIntentGeneration += 1;
         if (global.AppData && global.AppData.preferences) {
             global.AppData.preferences.setThreeBackground(themeName).catch((error) => console.warn('[SHUI Three Background] preference save failed:', error));
         }
@@ -669,13 +729,16 @@
     };
 
     async function init() {
+        if (themeIntentGeneration > 0) return;
+        const generation = themeIntentGeneration;
+        let saved = 'floral-bloom';
         try {
             await global.AppData.ready;
-            const saved = await global.AppData.preferences.getThreeBackground();
-            start(saved || 'floral-bloom');
-        } catch (_) {
-            start('floral-bloom');
-        }
+            saved = await global.AppData.preferences.getThreeBackground() || 'floral-bloom';
+        } catch (_) { }
+        // A theme selected while preferences load is newer than this startup
+        // read, including when that read fails and falls back to the default.
+        if (generation === themeIntentGeneration) startInitialBackgroundAfterPaint(saved, generation);
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

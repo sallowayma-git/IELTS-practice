@@ -53,6 +53,9 @@
         result.addEventListener('click', () => { try { Promise.resolve(handler()).catch(() => {}); } catch (_) { } });
         return result;
     }
+    function setText(target, value) {
+        if (target.textContent !== value) target.textContent = value;
+    }
 
     class IncidentCenter {
         constructor(options = {}) {
@@ -64,6 +67,8 @@
             this.queue = [];
             this.overflow = 0;
             this.root = null;
+            this.cardNodes = new Map();
+            this.renderTask = null;
             this.dialog = null;
             this.returnFocus = null;
             this.inertNodes = [];
@@ -156,13 +161,35 @@
                         // All other incidents remain reachable through history, without replay.
                     }
                 }
-                this.render();
+                // Capture, grouping and retry bindings stay synchronous. Only
+                // ordinary notice DOM work waits for the next rendering frame.
+                if (this.dialog?.item === item) this.refreshDialog();
+                this.scheduleRender(event);
                 this.advance();
                 return item?.id || event.eventId;
             } catch (_) {
                 this.fallback(event);
                 return event?.eventId || null;
             }
+        }
+
+        scheduleRender(event) {
+            if (this.renderTask) { this.renderTask.event = event; return; }
+            const task = { frame: null, timer: null, event };
+            this.renderTask = task;
+            const flush = () => {
+                if (this.renderTask !== task) return;
+                this.renderTask = null;
+                if (task.frame !== null) global.cancelAnimationFrame?.(task.frame);
+                if (task.timer !== null) global.clearTimeout?.(task.timer);
+                try { this.render(); } catch (_) { this.fallback(this.dialog?.item?.event || task.event); }
+            };
+            if (typeof global.requestAnimationFrame === 'function') {
+                task.frame = global.requestAnimationFrame(flush);
+                // Background windows may pause animation frames; a timer keeps
+                // notices deliverable subject to the browser's timer throttling.
+                task.timer = global.setTimeout(flush, 100);
+            } else task.timer = global.setTimeout(flush, 16);
         }
 
         detachMember(item, eventId) {
@@ -258,10 +285,16 @@
         }
 
         render() {
+            if (this.renderTask) {
+                if (this.renderTask.frame !== null) global.cancelAnimationFrame?.(this.renderTask.frame);
+                if (this.renderTask.timer !== null) global.clearTimeout?.(this.renderTask.timer);
+                this.renderTask = null;
+            }
             const active = Array.from(this.groups.values()).filter((item) => !item.dismissed && item.kind !== 'transient');
             if (!active.length && !this.overflow && !this.root) return;
             if (!this.root || !this.root.isConnected) {
                 this.announcement = null;
+                this.cardNodes.clear();
                 this.root = node('section', undefined, 'incident-notifications');
                 this.root.id = 'incident-notifications';
                 this.root.setAttribute('aria-label', '操作异常通知');
@@ -281,17 +314,32 @@
             }
             const focused = global.document.activeElement;
             const focusId = this.cards.contains(focused) ? focused?.getAttribute('data-incident') : null;
-            this.cards.replaceChildren();
-            for (const item of active.slice(0, LIMITS.notices)) {
-                const card = node('article', undefined, 'incident-notice');
-                card.appendChild(node('strong', TITLES[item.event.code]));
-                card.appendChild(node('p', outcome(item.event, item.operation)));
-                card.appendChild(node('p', '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : ''), 'incident-reference'));
-                const details = button('查看详情', () => this.open(item));
-                details.setAttribute('data-incident', item.id);
-                card.appendChild(details);
-                this.cards.appendChild(card);
-                if (focusId === item.id) details.focus();
+            const visible = active.slice(0, LIMITS.notices);
+            const ids = new Set(visible.map((item) => item.id));
+            for (const [id, entry] of this.cardNodes) {
+                if (!ids.has(id)) { entry.card.remove(); this.cardNodes.delete(id); }
+            }
+            for (let index = 0; index < visible.length; index++) {
+                const item = visible[index];
+                let entry = this.cardNodes.get(item.id);
+                if (!entry) {
+                    entry = { card: node('article', undefined, 'incident-notice'),
+                        title: node('strong'), outcome: node('p'), reference: node('p', undefined, 'incident-reference'), item };
+                    entry.details = button('查看详情', () => this.open(entry.item));
+                    entry.details.setAttribute('data-incident', item.id);
+                    [entry.title, entry.outcome, entry.reference, entry.details].forEach((child) => entry.card.appendChild(child));
+                    this.cardNodes.set(item.id, entry);
+                }
+                entry.item = item;
+                const values = [TITLES[item.event.code], outcome(item.event, item.operation),
+                    '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次' : '')];
+                [entry.title, entry.outcome, entry.reference].forEach((child, index) => {
+                    if (child.textContent !== values[index]) child.textContent = values[index];
+                });
+                if (this.cards.children[index] !== entry.card) {
+                    this.cards.insertBefore(entry.card, this.cards.children[index] || null);
+                }
+                if (focusId === item.id && global.document.activeElement !== entry.details) entry.details.focus();
             }
             const hidden = Math.max(0, active.length - LIMITS.notices) + this.overflow;
             const text = active.length || this.overflow ? '有操作异常需要查看。' + (hidden ? '另有 ' + hidden + ' 项，请查看诊断历史。' : '') : '提示已关闭，诊断历史仍可查看。';
@@ -411,14 +459,21 @@
             const dialog = this.dialog;
             const item = dialog?.item;
             if (!item || !dialog.outcome) return;
-            dialog.heading.textContent = TITLES[item.event.code];
-            dialog.panel.setAttribute('role', item.kind === 'dialog' ? 'alertdialog' : 'dialog');
-            dialog.technical.textContent = JSON.stringify(item.event, null, 2);
-            dialog.outcome.textContent = outcome(item.event, item.operation);
-            dialog.reference.textContent = '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : '');
-            dialog.retryButton.hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
-            dialog.retryButton.disabled = item.busy || this.attempts.size >= LIMITS.groups;
-            dialog.status.textContent = item.actionStatus;
+            setText(dialog.heading, TITLES[item.event.code]);
+            const role = item.kind === 'dialog' ? 'alertdialog' : 'dialog';
+            if (dialog.panel.getAttribute('role') !== role) dialog.panel.setAttribute('role', role);
+            if (dialog.technicalEvent !== item.event) {
+                dialog.technicalText = JSON.stringify(item.event, null, 2);
+                dialog.technicalEvent = item.event;
+            }
+            setText(dialog.technical, dialog.technicalText);
+            setText(dialog.outcome, outcome(item.event, item.operation));
+            setText(dialog.reference, '事件编号：' + item.id + (item.count > 1 ? ' · 同类事件 ' + item.count + ' 次；各事件保留在诊断历史中。' : ''));
+            const hidden = !this.refreshRetry(item) || item.count !== 1 || (item.operation || item.event.persistence.operation) === 'committed';
+            const disabled = item.busy || this.attempts.size >= LIMITS.groups;
+            if (dialog.retryButton.hidden !== hidden) dialog.retryButton.hidden = hidden;
+            if (dialog.retryButton.disabled !== disabled) dialog.retryButton.disabled = disabled;
+            setText(dialog.status, item.actionStatus);
         }
 
         exportTarget(parent) {
