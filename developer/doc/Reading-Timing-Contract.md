@@ -250,8 +250,8 @@ switcher, or changes to Reading review / SM2 scheduling belong in this slice.
 ## 7. Acceptance examples and implementation validation
 
 The values below use a controllable clock with no unobserved heartbeat gaps.
-They define acceptance semantics. Executed checks and environment limits are
-recorded separately in [Reading-Timing-Validation.md](Reading-Timing-Validation.md).
+They define acceptance semantics. Run the [timing unit tests](../tests/js/readingTiming.test.js)
+and [browser regression suite](../tests/e2e/reading_timing.node.js) for current validation.
 
 | Scenario | Required outcome |
 | --- | --- |
