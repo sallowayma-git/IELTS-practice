@@ -9,11 +9,12 @@
   "meta": {
     "title": "Marketing and the information age 信息时代营销",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "77. P3 - Marketing and the information age 信息时代营销【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
     "legacyFilename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

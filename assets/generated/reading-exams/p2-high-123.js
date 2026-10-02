@@ -9,11 +9,12 @@
   "meta": {
     "title": "Bird Migration 鸟类迁徙",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "36. P2 - Bird Migration 鸟类迁徙.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
     "legacyFilename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

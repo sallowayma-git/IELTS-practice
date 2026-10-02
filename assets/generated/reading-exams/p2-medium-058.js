@@ -9,7 +9,8 @@
   "meta": {
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "medium"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

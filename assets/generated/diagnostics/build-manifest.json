@@ -1,0 +1,1936 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.6.2-fix",
+  "buildId": "sha256:c440c3fe51770e9f99e988ce67ebfa78de84cb99498a513bc5bb1cfac18671f5",
+  "mappingPath": "assets/generated/diagnostics/build-manifest.json",
+  "readingResources": [
+    "assets/generated/reading-exams/p1-high-01.js",
+    "assets/generated/reading-exams/p1-high-05.js",
+    "assets/generated/reading-exams/p1-high-101.js",
+    "assets/generated/reading-exams/p1-high-105.js",
+    "assets/generated/reading-exams/p1-high-110.js",
+    "assets/generated/reading-exams/p1-high-118.js",
+    "assets/generated/reading-exams/p1-high-171.js",
+    "assets/generated/reading-exams/p1-high-194.js",
+    "assets/generated/reading-exams/p1-high-200.js",
+    "assets/generated/reading-exams/p1-high-211.js",
+    "assets/generated/reading-exams/p1-high-216.js",
+    "assets/generated/reading-exams/p1-high-227.js",
+    "assets/generated/reading-exams/p1-high-229.js",
+    "assets/generated/reading-exams/p1-high-230.js",
+    "assets/generated/reading-exams/p1-high-231.js",
+    "assets/generated/reading-exams/p1-high-24.js",
+    "assets/generated/reading-exams/p1-high-240.js",
+    "assets/generated/reading-exams/p1-high-27.js",
+    "assets/generated/reading-exams/p1-high-31.js",
+    "assets/generated/reading-exams/p1-high-79.js",
+    "assets/generated/reading-exams/p1-high-82.js",
+    "assets/generated/reading-exams/p1-high-90.js",
+    "assets/generated/reading-exams/p1-high-92.js",
+    "assets/generated/reading-exams/p1-low-02.js",
+    "assets/generated/reading-exams/p1-low-106.js",
+    "assets/generated/reading-exams/p1-low-107.js",
+    "assets/generated/reading-exams/p1-low-108.js",
+    "assets/generated/reading-exams/p1-low-109.js",
+    "assets/generated/reading-exams/p1-low-11.js",
+    "assets/generated/reading-exams/p1-low-111.js",
+    "assets/generated/reading-exams/p1-low-112.js",
+    "assets/generated/reading-exams/p1-low-113.js",
+    "assets/generated/reading-exams/p1-low-114.js",
+    "assets/generated/reading-exams/p1-low-116.js",
+    "assets/generated/reading-exams/p1-low-127.js",
+    "assets/generated/reading-exams/p1-low-13.js",
+    "assets/generated/reading-exams/p1-low-138.js",
+    "assets/generated/reading-exams/p1-low-149.js",
+    "assets/generated/reading-exams/p1-low-160.js",
+    "assets/generated/reading-exams/p1-low-223.js",
+    "assets/generated/reading-exams/p1-low-30.js",
+    "assets/generated/reading-exams/p1-low-34.js",
+    "assets/generated/reading-exams/p1-low-35.js",
+    "assets/generated/reading-exams/p1-low-40.js",
+    "assets/generated/reading-exams/p1-low-45.js",
+    "assets/generated/reading-exams/p1-low-46.js",
+    "assets/generated/reading-exams/p1-low-47.js",
+    "assets/generated/reading-exams/p1-low-48.js",
+    "assets/generated/reading-exams/p1-low-52.js",
+    "assets/generated/reading-exams/p1-low-53.js",
+    "assets/generated/reading-exams/p1-low-61.js",
+    "assets/generated/reading-exams/p1-low-67.js",
+    "assets/generated/reading-exams/p1-low-68.js",
+    "assets/generated/reading-exams/p1-low-69.js",
+    "assets/generated/reading-exams/p1-low-70.js",
+    "assets/generated/reading-exams/p1-low-72.js",
+    "assets/generated/reading-exams/p1-low-80.js",
+    "assets/generated/reading-exams/p1-low-81.js",
+    "assets/generated/reading-exams/p1-low-84.js",
+    "assets/generated/reading-exams/p1-low-99.js",
+    "assets/generated/reading-exams/p1-medium-115.js",
+    "assets/generated/reading-exams/p1-medium-117.js",
+    "assets/generated/reading-exams/p1-medium-119.js",
+    "assets/generated/reading-exams/p1-medium-182.js",
+    "assets/generated/reading-exams/p1-medium-20.js",
+    "assets/generated/reading-exams/p1-medium-246.js",
+    "assets/generated/reading-exams/p1-medium-247.js",
+    "assets/generated/reading-exams/p1-medium-249.js",
+    "assets/generated/reading-exams/p1-medium-251.js",
+    "assets/generated/reading-exams/p1-medium-29.js",
+    "assets/generated/reading-exams/p1-medium-33.js",
+    "assets/generated/reading-exams/p1-medium-57.js",
+    "assets/generated/reading-exams/p1-medium-60.js",
+    "assets/generated/reading-exams/p1-medium-63.js",
+    "assets/generated/reading-exams/p2-high-09.js",
+    "assets/generated/reading-exams/p2-high-120.js",
+    "assets/generated/reading-exams/p2-high-123.js",
+    "assets/generated/reading-exams/p2-high-124.js",
+    "assets/generated/reading-exams/p2-high-128.js",
+    "assets/generated/reading-exams/p2-high-130.js",
+    "assets/generated/reading-exams/p2-high-131.js",
+    "assets/generated/reading-exams/p2-high-133.js",
+    "assets/generated/reading-exams/p2-high-134.js",
+    "assets/generated/reading-exams/p2-high-136.js",
+    "assets/generated/reading-exams/p2-high-137.js",
+    "assets/generated/reading-exams/p2-high-139.js",
+    "assets/generated/reading-exams/p2-high-14.js",
+    "assets/generated/reading-exams/p2-high-141.js",
+    "assets/generated/reading-exams/p2-high-145.js",
+    "assets/generated/reading-exams/p2-high-16.js",
+    "assets/generated/reading-exams/p2-high-17.js",
+    "assets/generated/reading-exams/p2-high-19.js",
+    "assets/generated/reading-exams/p2-high-192.js",
+    "assets/generated/reading-exams/p2-high-201.js",
+    "assets/generated/reading-exams/p2-high-21.js",
+    "assets/generated/reading-exams/p2-high-225.js",
+    "assets/generated/reading-exams/p2-high-23.js",
+    "assets/generated/reading-exams/p2-high-232.js",
+    "assets/generated/reading-exams/p2-high-233.js",
+    "assets/generated/reading-exams/p2-high-234.js",
+    "assets/generated/reading-exams/p2-high-235.js",
+    "assets/generated/reading-exams/p2-high-236.js",
+    "assets/generated/reading-exams/p2-high-239.js",
+    "assets/generated/reading-exams/p2-high-25.js",
+    "assets/generated/reading-exams/p2-high-250.js",
+    "assets/generated/reading-exams/p2-high-91.js",
+    "assets/generated/reading-exams/p2-low-051.js",
+    "assets/generated/reading-exams/p2-low-06.js",
+    "assets/generated/reading-exams/p2-low-08.js",
+    "assets/generated/reading-exams/p2-low-102.js",
+    "assets/generated/reading-exams/p2-low-103.js",
+    "assets/generated/reading-exams/p2-low-104.js",
+    "assets/generated/reading-exams/p2-low-122.js",
+    "assets/generated/reading-exams/p2-low-125.js",
+    "assets/generated/reading-exams/p2-low-132.js",
+    "assets/generated/reading-exams/p2-low-135.js",
+    "assets/generated/reading-exams/p2-low-140.js",
+    "assets/generated/reading-exams/p2-low-142.js",
+    "assets/generated/reading-exams/p2-low-143.js",
+    "assets/generated/reading-exams/p2-low-147.js",
+    "assets/generated/reading-exams/p2-low-148.js",
+    "assets/generated/reading-exams/p2-low-222.js",
+    "assets/generated/reading-exams/p2-low-240.js",
+    "assets/generated/reading-exams/p2-low-242.js",
+    "assets/generated/reading-exams/p2-low-37.js",
+    "assets/generated/reading-exams/p2-low-39.js",
+    "assets/generated/reading-exams/p2-low-41.js",
+    "assets/generated/reading-exams/p2-low-49.js",
+    "assets/generated/reading-exams/p2-low-50.js",
+    "assets/generated/reading-exams/p2-low-51.js",
+    "assets/generated/reading-exams/p2-low-62.js",
+    "assets/generated/reading-exams/p2-low-64.js",
+    "assets/generated/reading-exams/p2-low-65.js",
+    "assets/generated/reading-exams/p2-low-73.js",
+    "assets/generated/reading-exams/p2-low-75.js",
+    "assets/generated/reading-exams/p2-low-77.js",
+    "assets/generated/reading-exams/p2-low-87.js",
+    "assets/generated/reading-exams/p2-low-94.js",
+    "assets/generated/reading-exams/p2-low-96.js",
+    "assets/generated/reading-exams/p2-medium-058.js",
+    "assets/generated/reading-exams/p2-medium-10.js",
+    "assets/generated/reading-exams/p2-medium-121.js",
+    "assets/generated/reading-exams/p2-medium-126.js",
+    "assets/generated/reading-exams/p2-medium-129.js",
+    "assets/generated/reading-exams/p2-medium-144.js",
+    "assets/generated/reading-exams/p2-medium-146.js",
+    "assets/generated/reading-exams/p2-medium-209.js",
+    "assets/generated/reading-exams/p2-medium-213.js",
+    "assets/generated/reading-exams/p2-medium-217.js",
+    "assets/generated/reading-exams/p2-medium-243.js",
+    "assets/generated/reading-exams/p2-medium-245.js",
+    "assets/generated/reading-exams/p2-medium-248.js",
+    "assets/generated/reading-exams/p2-medium-58.js",
+    "assets/generated/reading-exams/p2-medium-86.js",
+    "assets/generated/reading-exams/p2-medium-93.js",
+    "assets/generated/reading-exams/p3-high-03.js",
+    "assets/generated/reading-exams/p3-high-04.js",
+    "assets/generated/reading-exams/p3-high-15.js",
+    "assets/generated/reading-exams/p3-high-150.js",
+    "assets/generated/reading-exams/p3-high-156.js",
+    "assets/generated/reading-exams/p3-high-157.js",
+    "assets/generated/reading-exams/p3-high-159.js",
+    "assets/generated/reading-exams/p3-high-161.js",
+    "assets/generated/reading-exams/p3-high-164.js",
+    "assets/generated/reading-exams/p3-high-167.js",
+    "assets/generated/reading-exams/p3-high-170.js",
+    "assets/generated/reading-exams/p3-high-173.js",
+    "assets/generated/reading-exams/p3-high-174.js",
+    "assets/generated/reading-exams/p3-high-178.js",
+    "assets/generated/reading-exams/p3-high-180.js",
+    "assets/generated/reading-exams/p3-high-181.js",
+    "assets/generated/reading-exams/p3-high-184.js",
+    "assets/generated/reading-exams/p3-high-189.js",
+    "assets/generated/reading-exams/p3-high-192.js",
+    "assets/generated/reading-exams/p3-high-204.js",
+    "assets/generated/reading-exams/p3-high-206.js",
+    "assets/generated/reading-exams/p3-high-212.js",
+    "assets/generated/reading-exams/p3-high-218.js",
+    "assets/generated/reading-exams/p3-high-221.js",
+    "assets/generated/reading-exams/p3-high-228.js",
+    "assets/generated/reading-exams/p3-high-229.js",
+    "assets/generated/reading-exams/p3-high-32.js",
+    "assets/generated/reading-exams/p3-high-89.js",
+    "assets/generated/reading-exams/p3-low-07.js",
+    "assets/generated/reading-exams/p3-low-078.js",
+    "assets/generated/reading-exams/p3-low-100.js",
+    "assets/generated/reading-exams/p3-low-12.js",
+    "assets/generated/reading-exams/p3-low-151.js",
+    "assets/generated/reading-exams/p3-low-153.js",
+    "assets/generated/reading-exams/p3-low-158.js",
+    "assets/generated/reading-exams/p3-low-163.js",
+    "assets/generated/reading-exams/p3-low-165.js",
+    "assets/generated/reading-exams/p3-low-166.js",
+    "assets/generated/reading-exams/p3-low-172.js",
+    "assets/generated/reading-exams/p3-low-175.js",
+    "assets/generated/reading-exams/p3-low-186.js",
+    "assets/generated/reading-exams/p3-low-187.js",
+    "assets/generated/reading-exams/p3-low-190.js",
+    "assets/generated/reading-exams/p3-low-198.js",
+    "assets/generated/reading-exams/p3-low-219.js",
+    "assets/generated/reading-exams/p3-low-240.js",
+    "assets/generated/reading-exams/p3-low-28.js",
+    "assets/generated/reading-exams/p3-low-36.js",
+    "assets/generated/reading-exams/p3-low-38.js",
+    "assets/generated/reading-exams/p3-low-42.js",
+    "assets/generated/reading-exams/p3-low-43.js",
+    "assets/generated/reading-exams/p3-low-44.js",
+    "assets/generated/reading-exams/p3-low-54.js",
+    "assets/generated/reading-exams/p3-low-55.js",
+    "assets/generated/reading-exams/p3-low-56.js",
+    "assets/generated/reading-exams/p3-low-59.js",
+    "assets/generated/reading-exams/p3-low-71.js",
+    "assets/generated/reading-exams/p3-low-74.js",
+    "assets/generated/reading-exams/p3-low-76.js",
+    "assets/generated/reading-exams/p3-low-78.js",
+    "assets/generated/reading-exams/p3-low-83.js",
+    "assets/generated/reading-exams/p3-low-85.js",
+    "assets/generated/reading-exams/p3-low-88.js",
+    "assets/generated/reading-exams/p3-low-95.js",
+    "assets/generated/reading-exams/p3-low-97.js",
+    "assets/generated/reading-exams/p3-low-98.js",
+    "assets/generated/reading-exams/p3-low-999.js",
+    "assets/generated/reading-exams/p3-medium-152.js",
+    "assets/generated/reading-exams/p3-medium-154.js",
+    "assets/generated/reading-exams/p3-medium-155.js",
+    "assets/generated/reading-exams/p3-medium-162.js",
+    "assets/generated/reading-exams/p3-medium-168.js",
+    "assets/generated/reading-exams/p3-medium-169.js",
+    "assets/generated/reading-exams/p3-medium-176.js",
+    "assets/generated/reading-exams/p3-medium-177.js",
+    "assets/generated/reading-exams/p3-medium-179.js",
+    "assets/generated/reading-exams/p3-medium-18.js",
+    "assets/generated/reading-exams/p3-medium-183.js",
+    "assets/generated/reading-exams/p3-medium-185.js",
+    "assets/generated/reading-exams/p3-medium-188.js",
+    "assets/generated/reading-exams/p3-medium-191.js",
+    "assets/generated/reading-exams/p3-medium-197.js",
+    "assets/generated/reading-exams/p3-medium-22.js",
+    "assets/generated/reading-exams/p3-medium-241.js",
+    "assets/generated/reading-exams/p3-medium-244.js",
+    "assets/generated/reading-exams/p3-medium-248.js",
+    "assets/generated/reading-exams/p3-medium-66.js",
+    "assets/generated/reading-explanations/p1-high-01.js",
+    "assets/generated/reading-explanations/p1-high-05.js",
+    "assets/generated/reading-explanations/p1-high-101.js",
+    "assets/generated/reading-explanations/p1-high-105.js",
+    "assets/generated/reading-explanations/p1-high-110.js",
+    "assets/generated/reading-explanations/p1-high-118.js",
+    "assets/generated/reading-explanations/p1-high-171.js",
+    "assets/generated/reading-explanations/p1-high-194.js",
+    "assets/generated/reading-explanations/p1-high-200.js",
+    "assets/generated/reading-explanations/p1-high-211.js",
+    "assets/generated/reading-explanations/p1-high-216.js",
+    "assets/generated/reading-explanations/p1-high-227.js",
+    "assets/generated/reading-explanations/p1-high-229.js",
+    "assets/generated/reading-explanations/p1-high-230.js",
+    "assets/generated/reading-explanations/p1-high-231.js",
+    "assets/generated/reading-explanations/p1-high-24.js",
+    "assets/generated/reading-explanations/p1-high-240.js",
+    "assets/generated/reading-explanations/p1-high-27.js",
+    "assets/generated/reading-explanations/p1-high-31.js",
+    "assets/generated/reading-explanations/p1-high-79.js",
+    "assets/generated/reading-explanations/p1-high-82.js",
+    "assets/generated/reading-explanations/p1-high-90.js",
+    "assets/generated/reading-explanations/p1-high-92.js",
+    "assets/generated/reading-explanations/p1-low-02.js",
+    "assets/generated/reading-explanations/p1-low-106.js",
+    "assets/generated/reading-explanations/p1-low-107.js",
+    "assets/generated/reading-explanations/p1-low-108.js",
+    "assets/generated/reading-explanations/p1-low-109.js",
+    "assets/generated/reading-explanations/p1-low-11.js",
+    "assets/generated/reading-explanations/p1-low-111.js",
+    "assets/generated/reading-explanations/p1-low-112.js",
+    "assets/generated/reading-explanations/p1-low-113.js",
+    "assets/generated/reading-explanations/p1-low-114.js",
+    "assets/generated/reading-explanations/p1-low-116.js",
+    "assets/generated/reading-explanations/p1-low-127.js",
+    "assets/generated/reading-explanations/p1-low-13.js",
+    "assets/generated/reading-explanations/p1-low-138.js",
+    "assets/generated/reading-explanations/p1-low-149.js",
+    "assets/generated/reading-explanations/p1-low-160.js",
+    "assets/generated/reading-explanations/p1-low-223.js",
+    "assets/generated/reading-explanations/p1-low-30.js",
+    "assets/generated/reading-explanations/p1-low-34.js",
+    "assets/generated/reading-explanations/p1-low-35.js",
+    "assets/generated/reading-explanations/p1-low-40.js",
+    "assets/generated/reading-explanations/p1-low-45.js",
+    "assets/generated/reading-explanations/p1-low-46.js",
+    "assets/generated/reading-explanations/p1-low-47.js",
+    "assets/generated/reading-explanations/p1-low-48.js",
+    "assets/generated/reading-explanations/p1-low-52.js",
+    "assets/generated/reading-explanations/p1-low-53.js",
+    "assets/generated/reading-explanations/p1-low-61.js",
+    "assets/generated/reading-explanations/p1-low-67.js",
+    "assets/generated/reading-explanations/p1-low-68.js",
+    "assets/generated/reading-explanations/p1-low-69.js",
+    "assets/generated/reading-explanations/p1-low-70.js",
+    "assets/generated/reading-explanations/p1-low-72.js",
+    "assets/generated/reading-explanations/p1-low-80.js",
+    "assets/generated/reading-explanations/p1-low-81.js",
+    "assets/generated/reading-explanations/p1-low-84.js",
+    "assets/generated/reading-explanations/p1-low-99.js",
+    "assets/generated/reading-explanations/p1-medium-115.js",
+    "assets/generated/reading-explanations/p1-medium-117.js",
+    "assets/generated/reading-explanations/p1-medium-119.js",
+    "assets/generated/reading-explanations/p1-medium-182.js",
+    "assets/generated/reading-explanations/p1-medium-20.js",
+    "assets/generated/reading-explanations/p1-medium-246.js",
+    "assets/generated/reading-explanations/p1-medium-247.js",
+    "assets/generated/reading-explanations/p1-medium-249.js",
+    "assets/generated/reading-explanations/p1-medium-251.js",
+    "assets/generated/reading-explanations/p1-medium-29.js",
+    "assets/generated/reading-explanations/p1-medium-33.js",
+    "assets/generated/reading-explanations/p1-medium-57.js",
+    "assets/generated/reading-explanations/p1-medium-60.js",
+    "assets/generated/reading-explanations/p1-medium-63.js",
+    "assets/generated/reading-explanations/p2-high-09.js",
+    "assets/generated/reading-explanations/p2-high-120.js",
+    "assets/generated/reading-explanations/p2-high-123.js",
+    "assets/generated/reading-explanations/p2-high-124.js",
+    "assets/generated/reading-explanations/p2-high-128.js",
+    "assets/generated/reading-explanations/p2-high-130.js",
+    "assets/generated/reading-explanations/p2-high-131.js",
+    "assets/generated/reading-explanations/p2-high-133.js",
+    "assets/generated/reading-explanations/p2-high-134.js",
+    "assets/generated/reading-explanations/p2-high-136.js",
+    "assets/generated/reading-explanations/p2-high-137.js",
+    "assets/generated/reading-explanations/p2-high-139.js",
+    "assets/generated/reading-explanations/p2-high-14.js",
+    "assets/generated/reading-explanations/p2-high-141.js",
+    "assets/generated/reading-explanations/p2-high-145.js",
+    "assets/generated/reading-explanations/p2-high-16.js",
+    "assets/generated/reading-explanations/p2-high-17.js",
+    "assets/generated/reading-explanations/p2-high-19.js",
+    "assets/generated/reading-explanations/p2-high-192.js",
+    "assets/generated/reading-explanations/p2-high-201.js",
+    "assets/generated/reading-explanations/p2-high-21.js",
+    "assets/generated/reading-explanations/p2-high-225.js",
+    "assets/generated/reading-explanations/p2-high-23.js",
+    "assets/generated/reading-explanations/p2-high-232.js",
+    "assets/generated/reading-explanations/p2-high-233.js",
+    "assets/generated/reading-explanations/p2-high-234.js",
+    "assets/generated/reading-explanations/p2-high-235.js",
+    "assets/generated/reading-explanations/p2-high-236.js",
+    "assets/generated/reading-explanations/p2-high-239.js",
+    "assets/generated/reading-explanations/p2-high-25.js",
+    "assets/generated/reading-explanations/p2-high-250.js",
+    "assets/generated/reading-explanations/p2-high-91.js",
+    "assets/generated/reading-explanations/p2-low-051.js",
+    "assets/generated/reading-explanations/p2-low-06.js",
+    "assets/generated/reading-explanations/p2-low-08.js",
+    "assets/generated/reading-explanations/p2-low-102.js",
+    "assets/generated/reading-explanations/p2-low-103.js",
+    "assets/generated/reading-explanations/p2-low-104.js",
+    "assets/generated/reading-explanations/p2-low-122.js",
+    "assets/generated/reading-explanations/p2-low-125.js",
+    "assets/generated/reading-explanations/p2-low-132.js",
+    "assets/generated/reading-explanations/p2-low-135.js",
+    "assets/generated/reading-explanations/p2-low-140.js",
+    "assets/generated/reading-explanations/p2-low-142.js",
+    "assets/generated/reading-explanations/p2-low-143.js",
+    "assets/generated/reading-explanations/p2-low-147.js",
+    "assets/generated/reading-explanations/p2-low-148.js",
+    "assets/generated/reading-explanations/p2-low-222.js",
+    "assets/generated/reading-explanations/p2-low-240.js",
+    "assets/generated/reading-explanations/p2-low-242.js",
+    "assets/generated/reading-explanations/p2-low-37.js",
+    "assets/generated/reading-explanations/p2-low-39.js",
+    "assets/generated/reading-explanations/p2-low-41.js",
+    "assets/generated/reading-explanations/p2-low-49.js",
+    "assets/generated/reading-explanations/p2-low-50.js",
+    "assets/generated/reading-explanations/p2-low-51.js",
+    "assets/generated/reading-explanations/p2-low-62.js",
+    "assets/generated/reading-explanations/p2-low-64.js",
+    "assets/generated/reading-explanations/p2-low-65.js",
+    "assets/generated/reading-explanations/p2-low-73.js",
+    "assets/generated/reading-explanations/p2-low-75.js",
+    "assets/generated/reading-explanations/p2-low-77.js",
+    "assets/generated/reading-explanations/p2-low-87.js",
+    "assets/generated/reading-explanations/p2-low-94.js",
+    "assets/generated/reading-explanations/p2-low-96.js",
+    "assets/generated/reading-explanations/p2-medium-058.js",
+    "assets/generated/reading-explanations/p2-medium-10.js",
+    "assets/generated/reading-explanations/p2-medium-121.js",
+    "assets/generated/reading-explanations/p2-medium-126.js",
+    "assets/generated/reading-explanations/p2-medium-129.js",
+    "assets/generated/reading-explanations/p2-medium-144.js",
+    "assets/generated/reading-explanations/p2-medium-146.js",
+    "assets/generated/reading-explanations/p2-medium-209.js",
+    "assets/generated/reading-explanations/p2-medium-213.js",
+    "assets/generated/reading-explanations/p2-medium-217.js",
+    "assets/generated/reading-explanations/p2-medium-243.js",
+    "assets/generated/reading-explanations/p2-medium-245.js",
+    "assets/generated/reading-explanations/p2-medium-248.js",
+    "assets/generated/reading-explanations/p2-medium-58.js",
+    "assets/generated/reading-explanations/p2-medium-86.js",
+    "assets/generated/reading-explanations/p2-medium-93.js",
+    "assets/generated/reading-explanations/p3-high-03.js",
+    "assets/generated/reading-explanations/p3-high-04.js",
+    "assets/generated/reading-explanations/p3-high-15.js",
+    "assets/generated/reading-explanations/p3-high-150.js",
+    "assets/generated/reading-explanations/p3-high-156.js",
+    "assets/generated/reading-explanations/p3-high-157.js",
+    "assets/generated/reading-explanations/p3-high-159.js",
+    "assets/generated/reading-explanations/p3-high-161.js",
+    "assets/generated/reading-explanations/p3-high-164.js",
+    "assets/generated/reading-explanations/p3-high-167.js",
+    "assets/generated/reading-explanations/p3-high-170.js",
+    "assets/generated/reading-explanations/p3-high-173.js",
+    "assets/generated/reading-explanations/p3-high-174.js",
+    "assets/generated/reading-explanations/p3-high-178.js",
+    "assets/generated/reading-explanations/p3-high-180.js",
+    "assets/generated/reading-explanations/p3-high-181.js",
+    "assets/generated/reading-explanations/p3-high-184.js",
+    "assets/generated/reading-explanations/p3-high-189.js",
+    "assets/generated/reading-explanations/p3-high-192.js",
+    "assets/generated/reading-explanations/p3-high-204.js",
+    "assets/generated/reading-explanations/p3-high-206.js",
+    "assets/generated/reading-explanations/p3-high-212.js",
+    "assets/generated/reading-explanations/p3-high-218.js",
+    "assets/generated/reading-explanations/p3-high-221.js",
+    "assets/generated/reading-explanations/p3-high-228.js",
+    "assets/generated/reading-explanations/p3-high-229.js",
+    "assets/generated/reading-explanations/p3-high-32.js",
+    "assets/generated/reading-explanations/p3-high-89.js",
+    "assets/generated/reading-explanations/p3-low-07.js",
+    "assets/generated/reading-explanations/p3-low-078.js",
+    "assets/generated/reading-explanations/p3-low-100.js",
+    "assets/generated/reading-explanations/p3-low-12.js",
+    "assets/generated/reading-explanations/p3-low-151.js",
+    "assets/generated/reading-explanations/p3-low-153.js",
+    "assets/generated/reading-explanations/p3-low-158.js",
+    "assets/generated/reading-explanations/p3-low-163.js",
+    "assets/generated/reading-explanations/p3-low-165.js",
+    "assets/generated/reading-explanations/p3-low-166.js",
+    "assets/generated/reading-explanations/p3-low-172.js",
+    "assets/generated/reading-explanations/p3-low-175.js",
+    "assets/generated/reading-explanations/p3-low-186.js",
+    "assets/generated/reading-explanations/p3-low-187.js",
+    "assets/generated/reading-explanations/p3-low-190.js",
+    "assets/generated/reading-explanations/p3-low-198.js",
+    "assets/generated/reading-explanations/p3-low-219.js",
+    "assets/generated/reading-explanations/p3-low-28.js",
+    "assets/generated/reading-explanations/p3-low-36.js",
+    "assets/generated/reading-explanations/p3-low-38.js",
+    "assets/generated/reading-explanations/p3-low-42.js",
+    "assets/generated/reading-explanations/p3-low-43.js",
+    "assets/generated/reading-explanations/p3-low-44.js",
+    "assets/generated/reading-explanations/p3-low-54.js",
+    "assets/generated/reading-explanations/p3-low-55.js",
+    "assets/generated/reading-explanations/p3-low-56.js",
+    "assets/generated/reading-explanations/p3-low-59.js",
+    "assets/generated/reading-explanations/p3-low-71.js",
+    "assets/generated/reading-explanations/p3-low-74.js",
+    "assets/generated/reading-explanations/p3-low-76.js",
+    "assets/generated/reading-explanations/p3-low-78.js",
+    "assets/generated/reading-explanations/p3-low-83.js",
+    "assets/generated/reading-explanations/p3-low-85.js",
+    "assets/generated/reading-explanations/p3-low-88.js",
+    "assets/generated/reading-explanations/p3-low-95.js",
+    "assets/generated/reading-explanations/p3-low-97.js",
+    "assets/generated/reading-explanations/p3-low-98.js",
+    "assets/generated/reading-explanations/p3-low-999.js",
+    "assets/generated/reading-explanations/p3-medium-152.js",
+    "assets/generated/reading-explanations/p3-medium-154.js",
+    "assets/generated/reading-explanations/p3-medium-155.js",
+    "assets/generated/reading-explanations/p3-medium-162.js",
+    "assets/generated/reading-explanations/p3-medium-168.js",
+    "assets/generated/reading-explanations/p3-medium-169.js",
+    "assets/generated/reading-explanations/p3-medium-176.js",
+    "assets/generated/reading-explanations/p3-medium-177.js",
+    "assets/generated/reading-explanations/p3-medium-179.js",
+    "assets/generated/reading-explanations/p3-medium-18.js",
+    "assets/generated/reading-explanations/p3-medium-183.js",
+    "assets/generated/reading-explanations/p3-medium-185.js",
+    "assets/generated/reading-explanations/p3-medium-188.js",
+    "assets/generated/reading-explanations/p3-medium-191.js",
+    "assets/generated/reading-explanations/p3-medium-197.js",
+    "assets/generated/reading-explanations/p3-medium-22.js",
+    "assets/generated/reading-explanations/p3-medium-241.js",
+    "assets/generated/reading-explanations/p3-medium-244.js",
+    "assets/generated/reading-explanations/p3-medium-248.js",
+    "assets/generated/reading-explanations/p3-medium-66.js"
+  ],
+  "identity": "sha256 of sorted path/content-hash pairs; normalized unstamped bundles, bootstrap sources, entry skeleton, styles, vendor, images and build recipes",
+  "inputs": [
+    {
+      "path": "assets/generated/listening-exams/listening-practice-unified.html",
+      "sha256": "c359dd8aabf85547d999f5c0f0d3e89daa4c7751dd56d831ec9fa250accb6d0d"
+    },
+    {
+      "path": "assets/generated/reading-exams/manifest.js",
+      "sha256": "bda30fa8c2fad55774a1d8dbed4d872cdb5885f730a6eeab6a15da9083bee1eb"
+    },
+    {
+      "path": "assets/generated/reading-exams/reading-practice-unified.html",
+      "sha256": "4712e1488a1791325d7f75bc3d52dab8eb5d03e681e01c6a1e7ddda57fa5fd53"
+    },
+    {
+      "path": "assets/generated/reading-explanations/manifest.js",
+      "sha256": "16a47a835d9e9b26aa78223546502703e5f2d082ce7aeedd07e63f823f3970b2"
+    },
+    {
+      "path": "assets/images/favicon.svg",
+      "sha256": "1c063c869c39aceec6d0b24e5f2ce63ee8b965fcf94478bde5cd38ca9ae4ca63"
+    },
+    {
+      "path": "assets/images/logo.svg",
+      "sha256": "4b63ef11ed50206b4e5ee2056c875448ae0d3b7c37b9ef7d923c87a51eefe1d6"
+    },
+    {
+      "path": "assets/vendor/three.min.js",
+      "sha256": "170c6789f43217c96b3170f4b42fafe135de7f7cd48497a4218f9757ee1d49fa"
+    },
+    {
+      "path": "css/heroui-bridge.css",
+      "sha256": "2381fc82d4129414adbaa5cb3985dd5daf62d1e29966b521061a64e7bbdb4cb7"
+    },
+    {
+      "path": "css/incident-center.css",
+      "sha256": "7179fd2b1c5f463e9ec95d957ce13d2445aa213364e3d82fb3bb9aea0fd35117"
+    },
+    {
+      "path": "css/main.css",
+      "sha256": "d275358e43d6998daca2d0153cbaf2de7ed05adf53ee049c928752608a535214"
+    },
+    {
+      "path": "css/onboarding.css",
+      "sha256": "284de22fed667abbf661dc2d3c072e57a1133490324cfacfd7ec399f2179417e"
+    },
+    {
+      "path": "css/theme-switcher-scroll.css",
+      "sha256": "e53cec5cd0747fb86bea5fbc07bd81ace4c0d28c54290266c832c0b08f5699a9"
+    },
+    {
+      "path": "css/vocab-reader.css",
+      "sha256": "ea5a727724dda0b0cae93a5de0b5d1bf73d58b26de77d74c922e5c90b30f26b3"
+    },
+    {
+      "path": "developer/package.json",
+      "sha256": "8f0d8c2b46b2e2353f71247044f9aabe7f279ce16c698c7f18e134bf46b3e2f7"
+    },
+    {
+      "path": "index.html",
+      "sha256": "8199998421ea3951208779f5dd20a49c972962bbf30d3a89de3040f083f19e08"
+    },
+    {
+      "path": "js/bundles/browse.bundle.js",
+      "sha256": "5ff14491248f23e79ecfcb079e376e79051d591dc77735fdbee11ec1a326571c"
+    },
+    {
+      "path": "js/bundles/core-foundation.bundle.js",
+      "sha256": "b1a23f8853084b186fa2f5960d9cab96583e316ad3328f24e48be2f85baa2527"
+    },
+    {
+      "path": "js/bundles/diagnostics.bundle.js",
+      "sha256": "b01442e051c98a916bbbed89229fff18fbd17bfc73a398e5a25495e27c48c083"
+    },
+    {
+      "path": "js/bundles/dictionary.bundle.js",
+      "sha256": "1ff77b25eb938450af632278ec643bf71cf515433c408ebc8751a37de65b9aa9"
+    },
+    {
+      "path": "js/bundles/legacy-app.bundle.js",
+      "sha256": "7849297662a4521e6577f15b04c92fa0e5922f6802c6e1cfb7c1a8fa3e17fe47"
+    },
+    {
+      "path": "js/bundles/listening-record-bridge.bundle.js",
+      "sha256": "a311ae30892f4a4860f543db6bd84f3df51c672e20dfb664da9dc6139cb5387a"
+    },
+    {
+      "path": "js/bundles/listening-wrapper.bundle.js",
+      "sha256": "98e27de0c8355fff9d218c117aeceb2683a4fdec21d3f73eb6a8325bb32e2db0"
+    },
+    {
+      "path": "js/bundles/more.bundle.js",
+      "sha256": "abd87ccb368ebd78aa4f16f692ca452da2dcfcc17609a68d9b178584ca02d5d5"
+    },
+    {
+      "path": "js/bundles/practice-page-enhancer.bundle.js",
+      "sha256": "f47dd55c48dfb519e929e39761dff6e1c280acb1068c56a7d1adc8bf7b35553e"
+    },
+    {
+      "path": "js/bundles/practice.bundle.js",
+      "sha256": "26927bffd7b3aae233a3bd82d1d44368c0ffb2690542ba5bf706598dc5ae765e"
+    },
+    {
+      "path": "js/bundles/reading-library.bundle.js",
+      "sha256": "8e1f3ca9a6ab93b3dbc9ab4d7076aecd0d75a2f1910551000052e8c7619d4eb0"
+    },
+    {
+      "path": "js/bundles/reading-page.bundle.js",
+      "sha256": "51304f83cacc93f24525bf8e2fb418f76d9097c5aee30ffac2099db57cbc6c33"
+    },
+    {
+      "path": "js/bundles/reading-tools.bundle.js",
+      "sha256": "fe5090a349cbc4c4229b24e0a6bf7dfe4ba4af526d45ad0740adb00c72508896"
+    },
+    {
+      "path": "js/bundles/runtime-entry.bundle.js",
+      "sha256": "a25c4560c4e256fd2429c5e44b17b7a535c6df7acdd9ce1b808e519b5e140239"
+    },
+    {
+      "path": "js/bundles/session.bundle.js",
+      "sha256": "d04570aa179a434b55eea4db55b2d5334ad36ddbeb157aa4e0677a1599728fdc"
+    },
+    {
+      "path": "js/bundles/theme.bundle.js",
+      "sha256": "f6d6719fff71eea90a4c6113bda48f42bdc16ec0fa30b3208d5a6436c1d64b88"
+    },
+    {
+      "path": "js/bundles/ui-shell.bundle.js",
+      "sha256": "903611ec4a563301d8afa0b5d59b507d6f852a5a401d0fd1e9aba02c8f2e4027"
+    },
+    {
+      "path": "js/bundles/vocabulary.bundle.js",
+      "sha256": "2f560a15c8e5141c327babcfb9dd13faefaaa337b245f293c1e6784019d32300"
+    },
+    {
+      "path": "js/diagnostics/bootstrapCollector.js",
+      "sha256": "308f2aae2383d0f7cebe8d04b767c7e4f20206ecc6d81fd8cdffee7a7abc665f"
+    },
+    {
+      "path": "js/diagnostics/diagnosticContract.js",
+      "sha256": "c6e757387b7a9aa03dfa3ca64b42e97ed28c7b09ffba3ead10882ac84c46937a"
+    },
+    {
+      "path": "scripts/build-bundles.mjs",
+      "sha256": "5bd2623a8fc5928cb5335d98a59e24beec8f5cc62f633c7e836ab7c0d5f39002"
+    },
+    {
+      "path": "scripts/diagnostic-build.mjs",
+      "sha256": "43d9c2e916da90c257e4341477e88e9bad325bf01f378771be40d282aef0cb6b"
+    },
+    {
+      "path": "templates/template_base.html",
+      "sha256": "f7e3fddbfa9668c857293dc778a44b11f46b27378f1fb6af31c909af0ed6cf3a"
+    }
+  ],
+  "mappings": {
+    "js/bundles/runtime-entry.bundle.js": [
+      {
+        "source": "js/diagnostics/operationDiagnostics.js",
+        "startLine": 4,
+        "endLine": 64,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/threeBackground.js",
+        "startLine": 68,
+        "endLine": 749,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/bootScreen.js",
+        "startLine": 753,
+        "endLine": 857,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/lazyLoader.js",
+        "startLine": 861,
+        "endLine": 1331,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/suitePreference.js",
+        "startLine": 1335,
+        "endLine": 1573,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/app-actions.js",
+        "startLine": 1577,
+        "endLine": 2733,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/core-foundation.bundle.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 5,
+        "endLine": 569,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 573,
+        "endLine": 1196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticStore.js",
+        "startLine": 1200,
+        "endLine": 1733,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticReporter.js",
+        "startLine": 1737,
+        "endLine": 1745,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticExport.js",
+        "startLine": 1749,
+        "endLine": 2095,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticChannel.js",
+        "startLine": 2099,
+        "endLine": 2390,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/environmentDetector.js",
+        "startLine": 2394,
+        "endLine": 2434,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/logger.js",
+        "startLine": 2438,
+        "endLine": 2732,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 2736,
+        "endLine": 2934,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataCatalog.js",
+        "startLine": 2938,
+        "endLine": 3201,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataKernel.js",
+        "startLine": 3205,
+        "endLine": 4526,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 4530,
+        "endLine": 4889,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceReviewScheduler.js",
+        "startLine": 4893,
+        "endLine": 5060,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingVocabularyModel.js",
+        "startLine": 5064,
+        "endLine": 5747,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingTiming.js",
+        "startLine": 5751,
+        "endLine": 5979,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingViewCache.js",
+        "startLine": 5983,
+        "endLine": 6136,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/appData.js",
+        "startLine": 6140,
+        "endLine": 10015,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/externalBackupService.js",
+        "startLine": 10019,
+        "endLine": 11759,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/siteDataReset.js",
+        "startLine": 11763,
+        "endLine": 12116,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceCore.js",
+        "startLine": 12120,
+        "endLine": 13624,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/resourceCore.js",
+        "startLine": 13628,
+        "endLine": 14280,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "assets/generated/reading-exams/manifest.js",
+        "startLine": 14284,
+        "endLine": 21911,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingExamRegistry.js",
+        "startLine": 21915,
+        "endLine": 21952,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingExplanationRegistry.js",
+        "startLine": 21956,
+        "endLine": 21993,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/state-service.js",
+        "startLine": 21997,
+        "endLine": 22663,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/libraryDiscovery.js",
+        "startLine": 22667,
+        "endLine": 23381,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/libraryManager.js",
+        "startLine": 23385,
+        "endLine": 24313,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/ui-shell.bundle.js": [
+      {
+        "source": "js/utils/dom.js",
+        "startLine": 4,
+        "endLine": 451,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/overviewStats.js",
+        "startLine": 455,
+        "endLine": 582,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/views/overviewView.js",
+        "startLine": 586,
+        "endLine": 940,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/navigation-controller.js",
+        "startLine": 944,
+        "endLine": 980,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/incident-center.js",
+        "startLine": 984,
+        "endLine": 1614,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/message-center.js",
+        "startLine": 1618,
+        "endLine": 1763,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/diagnosticSettingsPanel.js",
+        "startLine": 1767,
+        "endLine": 2050,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/practiceTimerPreferences.js",
+        "startLine": 2054,
+        "endLine": 2142,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/practiceSettingsPanel.js",
+        "startLine": 2146,
+        "endLine": 2288,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/libraryManagerPanel.js",
+        "startLine": 2292,
+        "endLine": 2456,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/main-entry.js",
+        "startLine": 2460,
+        "endLine": 4495,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/indexInteractions.js",
+        "startLine": 4499,
+        "endLine": 5288,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/emojiIconizer.js",
+        "startLine": 5292,
+        "endLine": 5672,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/legacy-app.bundle.js": [
+      {
+        "source": "js/boot-fallbacks.js",
+        "startLine": 4,
+        "endLine": 1927,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app.js",
+        "startLine": 1931,
+        "endLine": 3467,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/onboardingTour.js",
+        "startLine": 3471,
+        "endLine": 5130,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/browse.bundle.js": [
+      {
+        "source": "js/services/browseLearningState.js",
+        "startLine": 4,
+        "endLine": 123,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingAnalytics.js",
+        "startLine": 127,
+        "endLine": 396,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/virtualScroller.js",
+        "startLine": 400,
+        "endLine": 735,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/views/legacyViewBundle.js",
+        "startLine": 739,
+        "endLine": 4971,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 4975,
+        "endLine": 5173,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/examActions.js",
+        "startLine": 5177,
+        "endLine": 7280,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/spellingErrorCollector.js",
+        "startLine": 7284,
+        "endLine": 8594,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/examSessionMixin.js",
+        "startLine": 8598,
+        "endLine": 15630,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/browseController.js",
+        "startLine": 15634,
+        "endLine": 16304,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/PDFHandler.js",
+        "startLine": 16308,
+        "endLine": 16702,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/BrowseStateManager.js",
+        "startLine": 16706,
+        "endLine": 17268,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/suiteBackGuard.js",
+        "startLine": 17272,
+        "endLine": 17441,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerMatchCore.js",
+        "startLine": 17445,
+        "endLine": 17659,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerComparisonUtils.js",
+        "startLine": 17663,
+        "endLine": 18434,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/BrowsePreferencesUtils.js",
+        "startLine": 18438,
+        "endLine": 19470,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/browseLearningControls.js",
+        "startLine": 19474,
+        "endLine": 19723,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/interruptedPracticeHistory.js",
+        "startLine": 19727,
+        "endLine": 19932,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/main.js",
+        "startLine": 19936,
+        "endLine": 25201,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/diagnostics.bundle.js": [
+      {
+        "source": "js/components/SystemDiagnostics.js",
+        "startLine": 4,
+        "endLine": 708,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/virtualScroller.js",
+        "startLine": 712,
+        "endLine": 1047,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/PerformanceOptimizer.js",
+        "startLine": 1051,
+        "endLine": 1446,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/dataConsistencyManager.js",
+        "startLine": 1450,
+        "endLine": 1929,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/performance.js",
+        "startLine": 1933,
+        "endLine": 2383,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/practice.bundle.js": [
+      {
+        "source": "js/app/spellingErrorCollector.js",
+        "startLine": 4,
+        "endLine": 1314,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/markdownExporter.js",
+        "startLine": 1318,
+        "endLine": 2174,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/practiceRecordModal.js",
+        "startLine": 2178,
+        "endLine": 3437,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/practiceHistoryEnhancer.js",
+        "startLine": 3441,
+        "endLine": 3789,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerSanitizer.js",
+        "startLine": 3793,
+        "endLine": 3942,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceRecorder.js",
+        "startLine": 3946,
+        "endLine": 6773,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/session.bundle.js": [
+      {
+        "source": "js/app/suitePracticeMixin.js",
+        "startLine": 4,
+        "endLine": 4668,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/reading-page.bundle.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 5,
+        "endLine": 569,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 573,
+        "endLine": 1196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticStore.js",
+        "startLine": 1200,
+        "endLine": 1733,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticReporter.js",
+        "startLine": 1737,
+        "endLine": 1745,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticExport.js",
+        "startLine": 1749,
+        "endLine": 2095,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticChannel.js",
+        "startLine": 2099,
+        "endLine": 2390,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/operationDiagnostics.js",
+        "startLine": 2394,
+        "endLine": 2454,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/incident-center.js",
+        "startLine": 2458,
+        "endLine": 3088,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/message-center.js",
+        "startLine": 3092,
+        "endLine": 3237,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 3241,
+        "endLine": 3439,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataCatalog.js",
+        "startLine": 3443,
+        "endLine": 3706,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataKernel.js",
+        "startLine": 3710,
+        "endLine": 5031,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 5035,
+        "endLine": 5394,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceReviewScheduler.js",
+        "startLine": 5398,
+        "endLine": 5565,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingVocabularyModel.js",
+        "startLine": 5569,
+        "endLine": 6252,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingTiming.js",
+        "startLine": 6256,
+        "endLine": 6484,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingViewCache.js",
+        "startLine": 6488,
+        "endLine": 6641,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/appData.js",
+        "startLine": 6645,
+        "endLine": 10520,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingExamRegistry.js",
+        "startLine": 10524,
+        "endLine": 10561,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingExplanationRegistry.js",
+        "startLine": 10565,
+        "endLine": 10602,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingHighlightShared.js",
+        "startLine": 10606,
+        "endLine": 11096,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerSanitizer.js",
+        "startLine": 11100,
+        "endLine": 11249,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerMatchCore.js",
+        "startLine": 11253,
+        "endLine": 11467,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/dictionaryLoader.js",
+        "startLine": 11471,
+        "endLine": 11502,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/reviewHighlightDictionary.js",
+        "startLine": 11506,
+        "endLine": 12138,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/practiceTimerPreferences.js",
+        "startLine": 12142,
+        "endLine": 12230,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingVocabContent.js",
+        "startLine": 12234,
+        "endLine": 12426,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingVocabAnchors.js",
+        "startLine": 12430,
+        "endLine": 12691,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingVocabReader.js",
+        "startLine": 12695,
+        "endLine": 14695,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/readingTimingController.js",
+        "startLine": 14699,
+        "endLine": 14983,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/runtime/unifiedReadingPage.js",
+        "startLine": 14987,
+        "endLine": 23705,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/practice-page-enhancer.bundle.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 5,
+        "endLine": 569,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 573,
+        "endLine": 1196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnosticBootstrap.js",
+        "startLine": 1200,
+        "endLine": 1210,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticStore.js",
+        "startLine": 1214,
+        "endLine": 1747,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticReporter.js",
+        "startLine": 1751,
+        "endLine": 1759,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticExport.js",
+        "startLine": 1763,
+        "endLine": 2109,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticChannel.js",
+        "startLine": 2113,
+        "endLine": 2404,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/operationDiagnostics.js",
+        "startLine": 2408,
+        "endLine": 2468,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnostics.js",
+        "startLine": 2472,
+        "endLine": 2631,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/incident-center.js",
+        "startLine": 2635,
+        "endLine": 3265,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/message-center.js",
+        "startLine": 3269,
+        "endLine": 3414,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 3418,
+        "endLine": 3616,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataCatalog.js",
+        "startLine": 3620,
+        "endLine": 3883,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataKernel.js",
+        "startLine": 3887,
+        "endLine": 5208,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 5212,
+        "endLine": 5571,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceReviewScheduler.js",
+        "startLine": 5575,
+        "endLine": 5742,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingVocabularyModel.js",
+        "startLine": 5746,
+        "endLine": 6429,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingTiming.js",
+        "startLine": 6433,
+        "endLine": 6661,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingViewCache.js",
+        "startLine": 6665,
+        "endLine": 6818,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/appData.js",
+        "startLine": 6822,
+        "endLine": 10697,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/suiteBackGuard.js",
+        "startLine": 10701,
+        "endLine": 10870,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerMatchCore.js",
+        "startLine": 10874,
+        "endLine": 11088,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/spellingErrorCollector.js",
+        "startLine": 11092,
+        "endLine": 12402,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/practice-page-enhancer.js",
+        "startLine": 12406,
+        "endLine": 17047,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/listening-record-bridge.bundle.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 5,
+        "endLine": 569,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 573,
+        "endLine": 1196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnosticBootstrap.js",
+        "startLine": 1200,
+        "endLine": 1210,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticStore.js",
+        "startLine": 1214,
+        "endLine": 1747,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticReporter.js",
+        "startLine": 1751,
+        "endLine": 1759,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticExport.js",
+        "startLine": 1763,
+        "endLine": 2109,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticChannel.js",
+        "startLine": 2113,
+        "endLine": 2404,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/operationDiagnostics.js",
+        "startLine": 2408,
+        "endLine": 2468,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnostics.js",
+        "startLine": 2472,
+        "endLine": 2631,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/incident-center.js",
+        "startLine": 2635,
+        "endLine": 3265,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/message-center.js",
+        "startLine": 3269,
+        "endLine": 3414,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 3418,
+        "endLine": 3616,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataCatalog.js",
+        "startLine": 3620,
+        "endLine": 3883,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataKernel.js",
+        "startLine": 3887,
+        "endLine": 5208,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 5212,
+        "endLine": 5571,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceReviewScheduler.js",
+        "startLine": 5575,
+        "endLine": 5742,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingVocabularyModel.js",
+        "startLine": 5746,
+        "endLine": 6429,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingTiming.js",
+        "startLine": 6433,
+        "endLine": 6661,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingViewCache.js",
+        "startLine": 6665,
+        "endLine": 6818,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/appData.js",
+        "startLine": 6822,
+        "endLine": 10697,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/answerMatchCore.js",
+        "startLine": 10701,
+        "endLine": 10915,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/spellingErrorCollector.js",
+        "startLine": 10919,
+        "endLine": 12229,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/safeObjectLiteralParser.js",
+        "startLine": 12233,
+        "endLine": 12532,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/listeningRecordBridge.js",
+        "startLine": 12536,
+        "endLine": 13943,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/listening-wrapper.bundle.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 5,
+        "endLine": 569,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 573,
+        "endLine": 1196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnosticBootstrap.js",
+        "startLine": 1200,
+        "endLine": 1210,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticStore.js",
+        "startLine": 1214,
+        "endLine": 1747,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticReporter.js",
+        "startLine": 1751,
+        "endLine": 1759,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticExport.js",
+        "startLine": 1763,
+        "endLine": 2109,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/diagnosticChannel.js",
+        "startLine": 2113,
+        "endLine": 2404,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/operationDiagnostics.js",
+        "startLine": 2408,
+        "endLine": 2468,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/practiceDiagnostics.js",
+        "startLine": 2472,
+        "endLine": 2631,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/incident-center.js",
+        "startLine": 2635,
+        "endLine": 3265,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/message-center.js",
+        "startLine": 3269,
+        "endLine": 3414,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/practiceRecordSource.js",
+        "startLine": 3418,
+        "endLine": 3616,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataCatalog.js",
+        "startLine": 3620,
+        "endLine": 3883,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/dataKernel.js",
+        "startLine": 3887,
+        "endLine": 5208,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 5212,
+        "endLine": 5571,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/practiceReviewScheduler.js",
+        "startLine": 5575,
+        "endLine": 5742,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingVocabularyModel.js",
+        "startLine": 5746,
+        "endLine": 6429,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/readingTiming.js",
+        "startLine": 6433,
+        "endLine": 6661,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/readingViewCache.js",
+        "startLine": 6665,
+        "endLine": 6818,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/data/v2/appData.js",
+        "startLine": 6822,
+        "endLine": 10697,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/practiceTimerPreferences.js",
+        "startLine": 10701,
+        "endLine": 10789,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/listeningUnifiedWrapper.js",
+        "startLine": 10793,
+        "endLine": 11888,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/vocabulary.bundle.js": [
+      {
+        "source": "assets/wordlists/ielts_core.bundle.js",
+        "startLine": 4,
+        "endLine": 10,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/utils/vocabDataIO.js",
+        "startLine": 14,
+        "endLine": 446,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabScheduler.js",
+        "startLine": 450,
+        "endLine": 809,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/core/vocabStore.js",
+        "startLine": 813,
+        "endLine": 2003,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/vocabListSwitcher.js",
+        "startLine": 2007,
+        "endLine": 2573,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/vocabDashboardCards.js",
+        "startLine": 2577,
+        "endLine": 2645,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/vocabSessionView.js",
+        "startLine": 2649,
+        "endLine": 5188,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/reading-tools.bundle.js": [
+      {
+        "source": "js/components/readingVocabContent.js",
+        "startLine": 4,
+        "endLine": 196,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingVocabAnchors.js",
+        "startLine": 200,
+        "endLine": 461,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingVocabReader.js",
+        "startLine": 465,
+        "endLine": 2465,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/reading-library.bundle.js": [
+      {
+        "source": "js/components/bookshelfView.js",
+        "startLine": 4,
+        "endLine": 1191,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/components/readingNotebookView.js",
+        "startLine": 1195,
+        "endLine": 1665,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/dictionary.bundle.js": [
+      {
+        "source": "js/core/dictionaryService.js",
+        "startLine": 4,
+        "endLine": 341,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/more.bundle.js": [
+      {
+        "source": "js/presentation/moreView.js",
+        "startLine": 4,
+        "endLine": 1113,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/presentation/miniGames.js",
+        "startLine": 1117,
+        "endLine": 1641,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/services/achievementManager.js",
+        "startLine": 1645,
+        "endLine": 2246,
+        "sourceStartLine": 1
+      }
+    ],
+    "js/bundles/theme.bundle.js": [
+      {
+        "source": "js/theme-switcher.js",
+        "startLine": 4,
+        "endLine": 179,
+        "sourceStartLine": 1
+      }
+    ],
+    "assets/generated/diagnostics/bootstrap-inline.js": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 4,
+        "endLine": 568,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 571,
+        "endLine": 1194,
+        "sourceStartLine": 1
+      }
+    ],
+    "index.html": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 12,
+        "endLine": 576,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 579,
+        "endLine": 1202,
+        "sourceStartLine": 1
+      }
+    ],
+    "assets/generated/reading-exams/reading-practice-unified.html": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 15,
+        "endLine": 579,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 582,
+        "endLine": 1205,
+        "sourceStartLine": 1
+      }
+    ],
+    "assets/generated/listening-exams/listening-practice-unified.html": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 10,
+        "endLine": 574,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 577,
+        "endLine": 1200,
+        "sourceStartLine": 1
+      }
+    ],
+    "templates/template_base.html": [
+      {
+        "source": "js/diagnostics/diagnosticContract.js",
+        "startLine": 11,
+        "endLine": 575,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/diagnostics/bootstrapCollector.js",
+        "startLine": 578,
+        "endLine": 1201,
+        "sourceStartLine": 1
+      }
+    ]
+  }
+}

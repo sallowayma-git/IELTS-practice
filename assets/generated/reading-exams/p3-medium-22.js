@@ -9,11 +9,12 @@
   "meta": {
     "title": "Neanderthal Technology 尼安德特人的生存技艺",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
     "legacyFilename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

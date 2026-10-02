@@ -9,11 +9,12 @@
   "meta": {
     "title": "Flower Power 鲜花的力量(花之力)",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
     "legacyFilename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

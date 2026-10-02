@@ -9,11 +9,12 @@
   "meta": {
     "title": "Whale Culture 鲸鱼文化",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "111. P3 - Whale Culture 鲸鱼文化【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/111. P3 - Whale Culture 鲸鱼文化【高】/",
     "legacyFilename": "111. P3 - Whale Culture 鲸鱼文化【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

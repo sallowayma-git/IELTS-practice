@@ -9,11 +9,12 @@
   "meta": {
     "title": "Look who was talking",
     "category": "P3",
-    "frequency": "次高频",
+    "frequency": "medium",
     "pdfFilename": "",
     "legacyPath": "",
     "legacyFilename": "",
-    "questionIntroHtml": "<h3>Questions 27–32</h3>"
+    "questionIntroHtml": "<h3>Questions 27–32</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

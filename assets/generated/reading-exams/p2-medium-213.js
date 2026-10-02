@@ -9,7 +9,8 @@
   "meta": {
     "title": "Growing more for less 卫星农业",
     "category": "P2",
-    "frequency": "medium"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

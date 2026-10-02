@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Burgess Shale fossils 伯吉斯页岩",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/",
     "legacyFilename": "140. P1 - The Burgess Shale fossils 伯吉斯页岩.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

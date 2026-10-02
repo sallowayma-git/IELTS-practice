@@ -9,11 +9,12 @@
   "meta": {
     "title": "Who looks after the children in today's Britain? 育儿分工",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "P3 - Who looks after the children in today's Britain.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "P3 - Who looks after the children in today's Britain.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

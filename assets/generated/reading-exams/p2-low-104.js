@@ -9,11 +9,12 @@
   "meta": {
     "title": "1115纸笔Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
     "legacyFilename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

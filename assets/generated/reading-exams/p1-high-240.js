@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Origins of Weather Forecasting 天气预报",
     "category": "P1",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

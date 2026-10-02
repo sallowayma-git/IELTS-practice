@@ -13,7 +13,8 @@
     "pdfFilename": "221. P3 - The Animal Connection 动物联结.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "221. P3 - The Animal Connection 动物联结.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

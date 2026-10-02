@@ -1,0 +1,91 @@
+import { createHash } from 'node:crypto';
+
+const START = '<!-- DIAGNOSTIC_BOOTSTRAP_START -->';
+const END = '<!-- DIAGNOSTIC_BOOTSTRAP_END -->';
+const BLOCK = /<!-- DIAGNOSTIC_BOOTSTRAP_START -->[\s\S]*?<!-- DIAGNOSTIC_BOOTSTRAP_END -->/;
+const CONTRACT = 'js/diagnostics/diagnosticContract.js';
+const COLLECTOR = 'js/diagnostics/bootstrapCollector.js';
+const PAYLOAD = 'assets/generated/diagnostics/bootstrap-inline.js';
+const MANIFEST = 'assets/generated/diagnostics/build-manifest.json';
+const FOUNDATION = 'js/bundles/core-foundation.bundle.js';
+const READING = 'assets/generated/reading-exams/reading-practice-unified.html';
+const LISTENING = 'assets/generated/listening-exams/listening-practice-unified.html';
+const requiredResources = [
+    'css/main.css', 'js/bundles/runtime-entry.bundle.js', FOUNDATION,
+    'js/bundles/ui-shell.bundle.js', 'js/bundles/legacy-app.bundle.js'
+];
+const optionalResources = [
+    'assets/vendor/three.min.js', 'assets/images/favicon.svg', 'assets/images/logo.svg',
+    'css/heroui-bridge.css', 'css/theme-switcher-scroll.css', 'css/onboarding.css', 'css/vocab-reader.css',
+    'assets/generated/listening-exams/manifest.js', 'assets/generated/listening-exams/listening-index.compat.js'
+];
+const digest = (text) => createHash('sha256').update(text).digest('hex');
+const entryOptions = {
+    'index.html': { context: 'main', requiredResources, optionalResources },
+    [READING]: { context: 'reading', requiredResources: [
+        'js/bundles/reading-page.bundle.js', 'assets/generated/reading-exams/manifest.js', 'css/incident-center.css'
+    ], optionalResources: [] },
+    [LISTENING]: { context: 'listening', entryCoverage: { entry: 'listening-wrapper', capture: 'before-dependencies' },
+        optionalMedia: true, requiredResources: ['js/bundles/listening-wrapper.bundle.js', 'css/incident-center.css'],
+        optionalResources: ['assets/generated/listening-exams/manifest.js', 'assets/generated/listening-exams/listening-index.compat.js'] },
+    'templates/template_base.html': { context: 'legacy', entryCoverage: { entry: 'legacy-enhancer', capture: 'before-dependencies' },
+        optionalMedia: true, requiredResources: ['js/bundles/practice-page-enhancer.bundle.js', 'css/incident-center.css'], optionalResources: [] }
+};
+
+function mapSections(content, paths, readSource) {
+    return paths.map((source) => {
+        const marker = `/* ===== ${source} ===== */\n`;
+        const offset = content.indexOf(marker);
+        if (offset < 0) throw new Error(`Missing source marker: ${source}`);
+        const startLine = content.slice(0, offset + marker.length).split('\n').length;
+        return { source, startLine, endLine: startLine + readSource(source).split('\n').length - 2, sourceStartLine: 1 };
+    });
+}
+
+// All inputs are content-derived and project-relative. No Git/worktree paths, clock,
+// cache query, environment variable, generated stamp or generated mapping enters identity.
+export function buildDiagnosticArtifacts({ renderedBundles, bundleInputs, readSource }) {
+    const entries = Object.fromEntries(Object.keys(entryOptions).map((file) => {
+        const html = readSource(file);
+        if (!BLOCK.test(html)) throw new Error(`Missing diagnostic bootstrap markers in ${file}`);
+        return [file, html];
+    }));
+    const inputs = { ...renderedBundles, ...Object.fromEntries(Object.entries(entries)
+        .map(([file, html]) => [file, html.replace(BLOCK, START + '\n' + END)])) };
+    for (const source of [CONTRACT, COLLECTOR, 'scripts/build-bundles.mjs', 'scripts/diagnostic-build.mjs',
+        'developer/package.json', 'assets/vendor/three.min.js', 'assets/images/favicon.svg', 'assets/images/logo.svg',
+        'assets/generated/reading-exams/manifest.js', 'assets/generated/reading-explanations/manifest.js',
+        'css/incident-center.css',
+        ...requiredResources.filter((value) => value.endsWith('.css')), ...optionalResources.filter((value) => value.endsWith('.css'))]) {
+        inputs[source] = readSource(source);
+    }
+    const hashes = Object.keys(inputs).sort().map((path) => ({ path, sha256: digest(inputs[path]) }));
+    const buildId = 'sha256:' + digest(JSON.stringify(hashes));
+    const appVersion = JSON.parse(readSource('developer/package.json')).version;
+    // Only exact, code-owned numeric asset names enter the early privacy allowlist.
+    // Titles, source documents and arbitrary manifest metadata are never embedded.
+    const readingResources = [...new Set(['reading-exams', 'reading-explanations'].flatMap((directory) =>
+        [...readSource(`assets/generated/${directory}/manifest.js`).matchAll(/"script"\s*:\s*"[^"\n]*\/(p[123]-(?:high|medium|low)-[0-9]{2,3}\.js)"/g)]
+            .map((match) => `assets/generated/${directory}/${match[1]}`)))].sort();
+    const metadata = { appVersion, buildId, mappingPath: MANIFEST, readingResources };
+    const stamp = `globalThis.AppDiagnosticBuild = Object.freeze(${JSON.stringify(metadata)});\n`;
+    const payload = '/* Generated by scripts/build-bundles.mjs. Embed before external resources. */\n'
+        + stamp + [CONTRACT, COLLECTOR].map((source) => `/* ===== ${source} ===== */\n${readSource(source)}`).join('\n');
+    if (/<\/script/i.test(payload)) throw new Error('Unsafe closing script tag in bootstrap source');
+    const generatedEntries = Object.fromEntries(Object.entries(entries).map(([file, html]) => {
+        const hook = `globalThis.AppDiagnosticBootstrap.install(${JSON.stringify(entryOptions[file])});`;
+        return [file, html.replace(BLOCK, () => `${START}\n<script>\n${payload}\n${hook}\n</script>\n        ${END}`)];
+    }));
+    const stampedBundles = Object.fromEntries(Object.entries(renderedBundles).map(([output, content]) =>
+        [output, bundleInputs[output].includes(CONTRACT) ? stamp + content : content]));
+    const mappings = Object.fromEntries(Object.entries(stampedBundles).map(([output, content]) =>
+        [output, mapSections(content, bundleInputs[output], readSource)]));
+    mappings[PAYLOAD] = mapSections(payload, [CONTRACT, COLLECTOR], readSource);
+    for (const [file, html] of Object.entries(generatedEntries)) mappings[file] = mapSections(html, [CONTRACT, COLLECTOR], readSource);
+    const manifest = { schemaVersion: 1, ...metadata,
+        identity: 'sha256 of sorted path/content-hash pairs; normalized unstamped bundles, bootstrap sources, entry skeleton, styles, vendor, images and build recipes',
+        inputs: hashes, mappings };
+    return { bundles: stampedBundles, generated: {
+        ...generatedEntries, [PAYLOAD]: payload, [MANIFEST]: JSON.stringify(manifest, null, 2) + '\n'
+    }, metadata };
+}

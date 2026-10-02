@@ -9,11 +9,12 @@
   "meta": {
     "title": "New filter promises clean water for millions 新型泥土净水器",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/",
     "legacyFilename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

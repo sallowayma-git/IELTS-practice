@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDiagnosticArtifacts } from './diagnostic-build.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,7 @@ const checkOnly = process.argv.includes('--check');
 
 const bundles = {
     'js/bundles/runtime-entry.bundle.js': [
+        'js/diagnostics/operationDiagnostics.js',
         'js/presentation/threeBackground.js',
         'js/runtime/bootScreen.js',
         'js/runtime/lazyLoader.js',
@@ -16,17 +18,30 @@ const bundles = {
         'js/presentation/app-actions.js'
     ],
     'js/bundles/core-foundation.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticChannel.js',
         'js/utils/environmentDetector.js',
         'js/utils/logger.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
+        'js/core/vocabScheduler.js',
+        'js/core/practiceReviewScheduler.js',
+        'js/data/v2/readingVocabularyModel.js',
+        'js/services/readingTiming.js',
+        'js/data/v2/readingViewCache.js',
         'js/data/v2/appData.js',
         'js/core/externalBackupService.js',
         'js/core/siteDataReset.js',
         'js/core/practiceCore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
+        'js/runtime/readingExamRegistry.js',
+        'js/runtime/readingExplanationRegistry.js',
         'js/app/state-service.js',
         'js/services/libraryDiscovery.js',
         'js/services/libraryManager.js'
@@ -36,7 +51,9 @@ const bundles = {
         'js/services/overviewStats.js',
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
+        'js/presentation/incident-center.js',
         'js/presentation/message-center.js',
+        'js/components/diagnosticSettingsPanel.js',
         'js/utils/practiceTimerPreferences.js',
         'js/components/practiceSettingsPanel.js',
         'js/components/libraryManagerPanel.js',
@@ -50,6 +67,9 @@ const bundles = {
         'js/components/onboardingTour.js'
     ],
     'js/bundles/browse.bundle.js': [
+        'js/services/browseLearningState.js',
+        'js/services/readingAnalytics.js',
+        'js/components/virtualScroller.js',
         'js/views/legacyViewBundle.js',
         'js/data/practiceRecordSource.js',
         'js/app/examActions.js',
@@ -62,10 +82,13 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/utils/answerComparisonUtils.js',
         'js/utils/BrowsePreferencesUtils.js',
+        'js/components/browseLearningControls.js',
+        'js/components/interruptedPracticeHistory.js',
         'js/main.js'
     ],
     'js/bundles/diagnostics.bundle.js': [
         'js/components/SystemDiagnostics.js',
+        'js/components/virtualScroller.js',
         'js/components/PerformanceOptimizer.js',
         'js/utils/dataConsistencyManager.js',
         'js/utils/performance.js'
@@ -82,26 +105,58 @@ const bundles = {
         'js/app/suitePracticeMixin.js'
     ],
     'js/bundles/reading-page.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticChannel.js',
+        'js/diagnostics/operationDiagnostics.js',
+        'js/presentation/incident-center.js',
+        'js/presentation/message-center.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
+        'js/core/vocabScheduler.js',
+        'js/core/practiceReviewScheduler.js',
+        'js/data/v2/readingVocabularyModel.js',
+        'js/services/readingTiming.js',
+        'js/data/v2/readingViewCache.js',
         'js/data/v2/appData.js',
         'js/runtime/readingExamRegistry.js',
         'js/runtime/readingExplanationRegistry.js',
         'js/runtime/readingHighlightShared.js',
         'js/utils/answerSanitizer.js',
         'js/utils/answerMatchCore.js',
-        'assets/wordlists/ielts_core.bundle.js',
-        'assets/wordlists/ecdict_reading.bundle.js',
-        'js/core/dictionaryService.js',
+        'js/runtime/dictionaryLoader.js',
         'js/runtime/reviewHighlightDictionary.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/components/readingVocabContent.js',
+        'js/components/readingVocabAnchors.js',
+        'js/components/readingVocabReader.js',
+        'js/runtime/readingTimingController.js',
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js',
+        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticChannel.js',
+        'js/diagnostics/operationDiagnostics.js',
+        'js/diagnostics/practiceDiagnostics.js',
+        'js/presentation/incident-center.js',
+        'js/presentation/message-center.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
+        'js/core/vocabScheduler.js',
+        'js/core/practiceReviewScheduler.js',
+        'js/data/v2/readingVocabularyModel.js',
+        'js/services/readingTiming.js',
+        'js/data/v2/readingViewCache.js',
         'js/data/v2/appData.js',
         'js/utils/suiteBackGuard.js',
         'js/utils/answerMatchCore.js',
@@ -109,31 +164,75 @@ const bundles = {
         'js/practice-page-enhancer.js'
     ],
     'js/bundles/listening-record-bridge.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js',
+        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticChannel.js',
+        'js/diagnostics/operationDiagnostics.js',
+        'js/diagnostics/practiceDiagnostics.js',
+        'js/presentation/incident-center.js',
+        'js/presentation/message-center.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
-         'js/data/v2/appData.js',
+        'js/core/vocabScheduler.js',
+        'js/core/practiceReviewScheduler.js',
+        'js/data/v2/readingVocabularyModel.js',
+        'js/services/readingTiming.js',
+        'js/data/v2/readingViewCache.js',
+        'js/data/v2/appData.js',
          'js/utils/answerMatchCore.js',
          'js/app/spellingErrorCollector.js',
          'js/utils/safeObjectLiteralParser.js',
          'js/listeningRecordBridge.js'
      ],
     'js/bundles/listening-wrapper.bundle.js': [
+        'js/diagnostics/diagnosticContract.js',
+        'js/diagnostics/bootstrapCollector.js',
+        'js/diagnostics/practiceDiagnosticBootstrap.js',
+        'js/diagnostics/diagnosticStore.js',
+        'js/diagnostics/diagnosticReporter.js',
+        'js/diagnostics/diagnosticExport.js',
+        'js/diagnostics/diagnosticChannel.js',
+        'js/diagnostics/operationDiagnostics.js',
+        'js/diagnostics/practiceDiagnostics.js',
+        'js/presentation/incident-center.js',
+        'js/presentation/message-center.js',
         'js/data/practiceRecordSource.js',
         'js/data/v2/dataCatalog.js',
         'js/data/v2/dataKernel.js',
+        'js/core/vocabScheduler.js',
+        'js/core/practiceReviewScheduler.js',
+        'js/data/v2/readingVocabularyModel.js',
+        'js/services/readingTiming.js',
+        'js/data/v2/readingViewCache.js',
         'js/data/v2/appData.js',
         'js/utils/practiceTimerPreferences.js',
         'js/listeningUnifiedWrapper.js'
     ],
-    'js/bundles/more.bundle.js': [
+    'js/bundles/vocabulary.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',
         'js/utils/vocabDataIO.js',
         'js/core/vocabScheduler.js',
         'js/core/vocabStore.js',
         'js/app/vocabListSwitcher.js',
         'js/components/vocabDashboardCards.js',
-        'js/components/vocabSessionView.js',
+        'js/components/vocabSessionView.js'
+    ],
+    'js/bundles/reading-tools.bundle.js': [
+        'js/components/readingVocabContent.js',
+        'js/components/readingVocabAnchors.js',
+        'js/components/readingVocabReader.js'
+    ],
+    'js/bundles/reading-library.bundle.js': [
+        'js/components/bookshelfView.js',
+        'js/components/readingNotebookView.js'
+    ],
+    'js/bundles/dictionary.bundle.js': ['js/core/dictionaryService.js'],
+    'js/bundles/more.bundle.js': [
         'js/presentation/moreView.js',
         'js/presentation/miniGames.js',
         'js/services/achievementManager.js'
@@ -499,9 +598,13 @@ function renderBundle(outputPath, inputs) {
 assertNoNewSymbolConflicts(bundles);
 
 const staleOutputs = [];
-for (const [outputPath, inputs] of Object.entries(bundles)) {
+const artifacts = buildDiagnosticArtifacts({
+    renderedBundles: Object.fromEntries(Object.entries(bundles).map(([output, inputs]) => [output, renderBundle(output, inputs)])),
+    bundleInputs: bundles,
+    readSource
+});
+for (const [outputPath, expected] of Object.entries({ ...artifacts.bundles, ...artifacts.generated })) {
     const absoluteOutput = path.join(root, outputPath);
-    const expected = renderBundle(outputPath, inputs);
     if (checkOnly) {
         const actual = fs.existsSync(absoluteOutput) ? fs.readFileSync(absoluteOutput, 'utf8') : null;
         if (actual !== expected) staleOutputs.push(outputPath);
@@ -509,7 +612,7 @@ for (const [outputPath, inputs] of Object.entries(bundles)) {
     }
     fs.mkdirSync(path.dirname(absoluteOutput), { recursive: true });
     fs.writeFileSync(absoluteOutput, expected, 'utf8');
-    console.log(`${outputPath}: ${inputs.length} files`);
+    console.log(`${outputPath}: generated`);
 }
 
 const expectedOutputs = new Set(Object.keys(bundles).map((outputPath) => outputPath.replace(/\\/g, '/')));
