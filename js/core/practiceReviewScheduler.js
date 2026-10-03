@@ -156,9 +156,19 @@
         };
     }
 
+    function qualityFromScore(correct, total) {
+        const c = Number(correct), t = Number(total);
+        if (!Number.isFinite(c) || !Number.isFinite(t) || t <= 0 || c < 0 || c > t) {
+            throw new TypeError('A reliable correct/total score is required');
+        }
+        // Compare counts directly: 60% and 80% both belong to good.
+        return c * 100 < t * 60 ? 'hard' : c * 100 <= t * 80 ? 'good' : 'easy';
+    }
+
     global.PracticeReviewScheduler = Object.freeze({
         __v1: true,
         __v2: true,
+        qualityFromScore,
         QUALITY_VALUES,
         VALID_QUALITIES,
         createInitialState,

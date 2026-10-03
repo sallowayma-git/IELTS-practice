@@ -1883,7 +1883,7 @@ function setupPracticeHistoryInteractions() {
 
             const reviewTarget = event.target.closest('[data-record-action="review"]');
             if (reviewTarget && container.contains(reviewTarget)) {
-                handleReview(reviewTarget.dataset.recordId, event);
+                handleReview(reviewTarget.dataset.reviewTaskId || reviewTarget.dataset.recordId, event);
                 return;
             }
 
@@ -1982,6 +1982,7 @@ function filterRealPracticeRecordsForView(records) {
 // ---------------------------------------------------------------------------
 const practiceReviewQueueState = {
     generatedAt: null,
+    records: [],
     byRecordId: new Map(),
     order: new Map(),
     stats: null,
@@ -1994,6 +1995,7 @@ let practiceReviewViewSnapshot = null;
 function getPracticeReviewQueueSnapshot() {
     return {
         generatedAt: practiceReviewQueueState.generatedAt,
+        records: practiceReviewQueueState.records,
         byRecordId: practiceReviewQueueState.byRecordId,
         order: practiceReviewQueueState.order,
         stats: practiceReviewQueueState.stats
@@ -2013,7 +2015,13 @@ async function loadPracticeReviewQueue() {
     const records = Array.isArray(queue && queue.records) ? queue.records : [];
     practiceReviewQueueState.generatedAt = queue && queue.generatedAt ? queue.generatedAt : null;
     practiceReviewQueueState.stats = queue && queue.stats ? queue.stats : null;
-    practiceReviewQueueState.byRecordId = new Map(records.map((record) => [String(record.id), record]));
+    practiceReviewQueueState.records = records;
+    practiceReviewQueueState.byRecordId = new Map();
+    records.forEach(record => {
+        practiceReviewQueueState.byRecordId.set(String(record.id), record);
+        const parentId = String(record.recordId || record.id);
+        if (!practiceReviewQueueState.byRecordId.has(parentId)) practiceReviewQueueState.byRecordId.set(parentId, record);
+    });
     practiceReviewQueueState.order = new Map(records.map((record, index) => [String(record.id), index]));
     return queue;
 }
@@ -2234,14 +2242,11 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
     const reviewMode = isPracticeReviewModeEnabled();
     let recordsForList = recordsToShow;
     if (reviewMode) {
-        recordsForList = recordsToShow
-            .filter((record) => record && reviewQueue.byRecordId.has(String(record.id)))
-            .sort((left, right) => {
-                const leftOrder = reviewQueue.order.get(String(left.id));
-                const rightOrder = reviewQueue.order.get(String(right.id));
-                return (Number.isFinite(leftOrder) ? leftOrder : Number.MAX_SAFE_INTEGER)
-                    - (Number.isFinite(rightOrder) ? rightOrder : Number.MAX_SAFE_INTEGER);
-            });
+        const originals = new Map(records.map(record => [String(record.id), record]));
+        recordsForList = reviewQueue.records.map(task => Object.assign({}, originals.get(String(task.recordId || task.id)), task))
+            .filter(record => examType === 'all' || recordMatchesExamType(record, examType, examIndex))
+            .filter(record => !historyQuery || [record.title, record.examId, record.date]
+                .some(value => String(value || '').toLowerCase().includes(historyQuery)));
     }
 
     const renderResult = typeof renderer.renderView === 'function'

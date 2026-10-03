@@ -609,3 +609,22 @@ test('复盘刷新复用已发布的历史摘要，每次刷新只读取一次�
     await h.sandbox.refreshPracticeReviewQueue('mode', { forceRender: true });
     assert.equal(reads, 2);
 });
+
+test('文章任务只回放套题的目标篇，评分关联该篇计划', async () => {
+    const h = loadReviewFlow({ record: { id: 'parent', examId: 'suite-parent', type: 'reading', suiteEntries: [
+        { examId: 'reading-a', title: 'A', notes: [{ body: 'A note' }] },
+        { examId: 'reading-b', title: 'B', notes: [{ body: 'B note' }], answers: { q1: 'B' } }
+    ] } });
+    h.windowStub.AppData.practice.getReviewTask = async () => ({ id: 'reading-b', recordId: 'parent',
+        unit: 'article', examId: 'reading-b', entryIndex: 1, reviewState: reviewState('2026-09-05T00:00:00.000Z') });
+    const session = await h.flow.start('article:reading-b');
+    const record = h.windowStub.__replayCalls[0].record;
+    assert.equal(record.id, 'parent');
+    assert.equal(record.examId, 'reading-b');
+    assert.equal(record.notes[0].body, 'B note');
+    assert.equal(record.suiteEntries.length, 0);
+    h.flow.notifyAttemptApplied({ recordId: 'parent', reviewAttemptId: session.reviewAttemptId, entryCount: 1 });
+    await h.flow.submit('good');
+    assert.equal(h.outcomes[0].reviewPlanId, 'reading-b');
+    assert.equal(h.outcomes[0].recordId, 'parent');
+});

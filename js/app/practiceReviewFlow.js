@@ -27,7 +27,8 @@
         pending: null,
         launching: false,
         submitting: false,
-        listeners: []
+        listeners: [],
+        attempts: new Map()
     };
 
     function notify(message, type) {
@@ -88,18 +89,27 @@
         }
         state.launching = true;
         try {
-            const reviewState = typeof global.AppData?.practice?.getReviewState === 'function'
+            const task = typeof global.AppData?.practice?.getReviewTask === 'function'
+                ? await global.AppData.practice.getReviewTask(id) : null;
+            const reviewState = task ? task.reviewState : typeof global.AppData?.practice?.getReviewState === 'function'
                 ? await global.AppData.practice.getReviewState(id)
                 : null;
             if (!reviewState) {
                 notify('该记录未加入复盘计划', 'warning');
                 return null;
             }
-            const record = await loadFullRecord(id);
+            let record = await loadFullRecord(task ? task.recordId : id);
+            if (task && task.unit === 'article' && task.entryIndex !== null) {
+                const entry = record.suiteEntries && record.suiteEntries[task.entryIndex];
+                if (!entry || String(entry.examId) !== task.examId) throw new Error('复盘文章与最新记录不匹配');
+                record = Object.assign({}, record, entry, { id: record.id, examId: task.examId,
+                    suiteEntries: [], suiteEntrySummaries: [], suite: null, mode: 'single' });
+            }
             const reviewAttemptId = generateAttemptId();
+            state.attempts.set(reviewAttemptId, task);
             // 换一轮 attempt 就作废上一轮尚未评分的待评分条：同一条记录不可能同时
             // 有两轮待评分，否则用户的评分会记到已经作废的那一轮上。
-            if (state.pending && String(state.pending.recordId) === id) {
+            if (state.pending && (task ? state.pending.reviewPlanId === task.id : String(state.pending.recordId) === id)) {
                 state.pending = null;
                 render();
                 emit();
@@ -119,7 +129,9 @@
         const recordId = info && info.recordId != null ? String(info.recordId).trim() : '';
         const reviewAttemptId = info && info.reviewAttemptId != null ? String(info.reviewAttemptId).trim() : '';
         if (!recordId || !reviewAttemptId) return false;
+        const task = state.attempts.get(reviewAttemptId);
         state.pending = {
+            ...(task ? { reviewPlanId: task.id } : {}),
             recordId,
             reviewAttemptId,
             reviewSessionId: info.reviewSessionId != null ? String(info.reviewSessionId) : '',
@@ -154,6 +166,7 @@
         try {
             const receipt = await global.AppData.practice.recordReviewOutcome({
                 recordId: pending.recordId,
+                ...(pending.reviewPlanId ? { reviewPlanId: pending.reviewPlanId } : {}),
                 reviewAttemptId: pending.reviewAttemptId,
                 quality: normalized,
                 reviewedAt: new Date().toISOString()

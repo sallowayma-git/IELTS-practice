@@ -2671,6 +2671,8 @@
             recordId = String(record.realData.timestamp);
         }
 
+        var taskId = recordId;
+        if (record && record.recordId) recordId = String(record.recordId);
         var item = createNode('div', {
             className: 'history-item history-record-item',
             dataset: { recordId: recordId }
@@ -2727,7 +2729,7 @@
         var reviewQueue = options.reviewQueue;
         var reviewEntry = null;
         if (recordId && reviewQueue && reviewQueue.byRecordId && typeof reviewQueue.byRecordId.get === 'function') {
-            reviewEntry = reviewQueue.byRecordId.get(String(recordId)) || null;
+            reviewEntry = reviewQueue.byRecordId.get(taskId) || reviewQueue.byRecordId.get(String(recordId)) || null;
         }
         var reviewBadge = historyRenderer.resolveReviewBadge(reviewEntry);
         if (reviewBadge) {
@@ -2760,7 +2762,7 @@
                     type: 'button',
                     className: 'review-record-btn',
                     title: reviewBadge.state === 'scheduled' ? '提前复盘这条记录' : '开始复盘',
-                    dataset: { recordAction: 'review', recordId: recordId }
+                    dataset: { recordAction: 'review', recordId: recordId, reviewTaskId: reviewEntry.id }
                 }, '🔁'));
             }
             actionChildren.push(createNode('button', {

@@ -136,6 +136,7 @@ function harness() {
                 rows.set(row.recordId, row);
                 revisions[item.store + '/' + item.recordId] = row.revision;
             }
+            if (options.documentChanges?.length) await this.mutate(options.documentChanges, options);
             shared.entities = next;
             return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] };
         }
@@ -227,27 +228,16 @@ async function expectFailure(task, message) {
     return error;
 }
 
-test('新完成的阅读错题记录自动初始化 reviewState，且只落在 annotations 根级', async () => {
-    const { app, shared } = harness();
-    await app.ready;
+test('新完成阅读将自动评分写入轻量文章计划，不复制到练习事实或标注', async () => {
+    const { app, shared } = harness(); await app.ready;
     await app.practice.completeAttempt({ operationId: 'op-init', record: readingRecord() });
-
-    const annotations = storedLayer(shared, 'practiceAnnotations', 'reading-wrong');
-    const summary = storedLayer(shared, 'practiceSummaries', 'reading-wrong');
-    const detail = storedLayer(shared, 'practiceDetails', 'reading-wrong');
-    assert(annotations.reviewState, 'annotations 根级必须持有 reviewState');
-    assert.strictEqual(summary.reviewState, undefined, 'summary 不得携带 reviewState');
-    assert.strictEqual(detail.reviewState, undefined, 'detail 不得携带 reviewState');
-    assert.strictEqual(annotations.reviewState.schemaVersion, 1);
-    assert.strictEqual(annotations.reviewState.algorithm, 'sm2-practice');
-    assert.strictEqual(annotations.reviewState.easeFactor, 2.5);
-    assert.strictEqual(annotations.reviewState.interval, 0);
-    assert.strictEqual(annotations.reviewState.repetitions, 0);
-    assert.strictEqual(annotations.reviewState.reviewCount, 0);
-    assert.strictEqual(annotations.reviewState.lastReviewed, null);
-    assert.strictEqual(annotations.reviewState.lastReviewAttemptId, null);
-    assert.strictEqual(annotations.reviewState.nextReview, '2026-09-01T00:20:00.000Z',
-        'nextReview 必须锚定 completedAt，使记录立即到期');
+    const state = await app.practice.getReviewState('reading-wrong');
+    assert.equal(state.lastQuality, 'good');
+    assert.equal(state.reviewCount, 1);
+    assert.equal(state.interval, 1);
+    assert.equal(state.nextReview, '2026-09-02T00:20:00.000Z');
+    for (const store of ENTITY_STORES) assert.equal(storedLayer(shared, store, 'reading-wrong').reviewState, undefined);
+    assert.equal(shared.docs.get('practice.reviewPlans').data[0].examId, 'p1-reading-01');
 });
 
 test('满分 / 听力 / 演示记录不自动入队', async () => {
@@ -294,11 +284,11 @@ test('既有记录再次落库既不新建也不重置 reviewState', async () =>
     const scheduled = await app.practice.recordReviewOutcome({
         recordId: 'reading-wrong', reviewAttemptId: 'attempt-1', quality: 'good', reviewedAt: '2026-09-02T00:00:00.000Z'
     });
-    assert.strictEqual(scheduled.reviewState.reviewCount, 1);
+    assert.strictEqual(scheduled.reviewState.reviewCount, 2);
     // 重新落库同一条记录（例如合并重试）不得把已推进的间隔打回初始值。
     await app.practice.completeAttempt({ operationId: 'op-live-2', record: readingRecord({ correctAnswers: 6 }) });
     const afterResave = await app.practice.getReviewState('reading-wrong');
-    assert.strictEqual(afterResave.reviewCount, 1, '重新落库不得重置 reviewCount');
+    assert.strictEqual(afterResave.reviewCount, 2, '重新落库不得重置 reviewCount');
     assert.strictEqual(afterResave.nextReview, scheduled.reviewState.nextReview, '重新落库不得重置 nextReview');
 });
 
@@ -320,7 +310,7 @@ test('导入数据里合法的 reviewState 被保留，非法的被丢弃且不�
 
     await app.practice.completeAttempt({
         operationId: 'op-broken',
-        record: readingRecord({ id: 'broken', sessionId: 's-broken', reviewState: { schemaVersion: 99, easeFactor: 'nope' } })
+        record: readingRecord({ id: 'broken', examId: 'reading-broken', sessionId: 's-broken', reviewState: { schemaVersion: 99, easeFactor: 'nope' } })
     });
     const broken = storedLayer(shared, 'practiceAnnotations', 'broken');
     assert(broken, '非法 reviewState 不得阻断练习记录落库');
@@ -330,7 +320,7 @@ test('导入数据里合法的 reviewState 被保留，非法的被丢弃且不�
     assert(queue.records.some((record) => record.id === 'imported'), '导入的合法状态应参与队列');
 });
 
-test('套题的 reviewState 只在 annotations 根级，不进 suiteEntries', async () => {
+test('新套题每篇独立调度，状态不复制到套题或子篇标注', async () => {
     const { app, shared } = harness();
     await app.ready;
     await app.practice.finalizeSuite({
@@ -351,7 +341,10 @@ test('套题的 reviewState 只在 annotations 根级，不进 suiteEntries', as
     });
     const annotations = storedLayer(shared, 'practiceAnnotations', 'suite-record');
     const detail = storedLayer(shared, 'practiceDetails', 'suite-record');
-    assert(annotations.reviewState, '套题根记录必须持有唯一的 reviewState');
+    assert.equal(annotations.reviewState, undefined);
+    const tasks = (await app.practice.listReviewQueue()).records;
+    assert.equal(tasks.length, 2, '套题每篇独立入队');
+    assert.deepEqual(Array.from(tasks, row => row.reviewState.lastQuality).sort(), ['easy', 'hard']);
     for (const entry of Object.values(annotations.suiteEntries || {})) {
         assert.strictEqual(entry.reviewState, undefined, 'suiteEntries 标注不得携带 reviewState');
     }
@@ -360,7 +353,7 @@ test('套题的 reviewState 只在 annotations 根级，不进 suiteEntries', as
     }
     // full 投影回灌（回放路径会这么做）不得把状态复制到子篇。
     const full = await app.practice.get('suite-record', { projection: 'full' });
-    assert(full.reviewState, 'full 投影应在根级暴露 reviewState');
+    assert.equal(full.reviewState, undefined, '文章计划不复制到套题根级');
     for (const entry of full.suiteEntries) {
         assert.strictEqual(entry.reviewState, undefined, 'full 投影的子篇不得出现 reviewState');
     }
@@ -370,6 +363,13 @@ test('套题的 reviewState 只在 annotations 根级，不进 suiteEntries', as
         assert.strictEqual(entry.reviewState, undefined, 'full 投影回灌后子篇仍不得出现 reviewState');
     }
 });
+
+function initialReviewState() {
+    return { schemaVersion: 1, algorithm: 'sm2-practice', algorithmVersion: 1, easeFactor: 2.5,
+        interval: 0, repetitions: 0, reviewCount: 0, lapseCount: 0, lastReviewed: null,
+        nextReview: '2026-09-01T00:20:00.000Z', lastQuality: null, lastReviewAttemptId: null,
+        updatedAt: '2026-09-01T00:20:00.000Z' };
+}
 
 function daysBetween(fromIso, toIso) {
     return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000);
@@ -393,7 +393,7 @@ test('listReviewQueue 只读 summaries + annotations，且按到期/计划/错�
 
     shared.snapshotStoreReads.length = 0;
     const queue = await app.practice.listReviewQueue({ now: '2026-09-05T12:00:00.000Z' });
-    assert(shared.snapshotStoreReads.length > 0, '队列必须真的读了一次快照');
+    assert.equal(shared.snapshotStoreReads.length, 0, '已初始化的队列不得扫描标注或详情');
     for (const stores of shared.snapshotStoreReads) {
         assert(!stores.includes('practiceDetails'), '复盘队列投影不得加载 practiceDetails: ' + JSON.stringify(stores));
     }
@@ -413,9 +413,9 @@ test('listReviewQueue 只读 summaries + annotations，且按到期/计划/错�
 test('三档评分的状态迁移、首次间隔与 EF 下限', async () => {
     const { app } = harness();
     await app.ready;
-    await app.practice.completeAttempt({ operationId: 'grade-good', record: readingRecord({ id: 'good', sessionId: 'g1' }) });
-    await app.practice.completeAttempt({ operationId: 'grade-easy', record: readingRecord({ id: 'easy', sessionId: 'g2' }) });
-    await app.practice.completeAttempt({ operationId: 'grade-hard', record: readingRecord({ id: 'hard', sessionId: 'g3' }) });
+    await app.practice.completeAttempt({ operationId: 'grade-good', record: readingRecord({ id: 'good', examId: 'reading-good', sessionId: 'g1', reviewState: initialReviewState() }) });
+    await app.practice.completeAttempt({ operationId: 'grade-easy', record: readingRecord({ id: 'easy', examId: 'reading-easy', sessionId: 'g2', reviewState: initialReviewState() }) });
+    await app.practice.completeAttempt({ operationId: 'grade-hard', record: readingRecord({ id: 'hard', examId: 'reading-hard', sessionId: 'g3', reviewState: initialReviewState() }) });
 
     const good1 = (await app.practice.recordReviewOutcome({ recordId: 'good', reviewAttemptId: 'a1', quality: 'good', reviewedAt: '2026-09-02T01:00:00.000Z' })).reviewState;
     assert.strictEqual(good1.repetitions, 1);
@@ -460,7 +460,7 @@ test('三档评分的状态迁移、首次间隔与 EF 下限', async () => {
 test('同一 reviewAttemptId 只生效一次，冲突会重试而不重复推进', async () => {
     const { app, shared } = harness();
     await app.ready;
-    await app.practice.completeAttempt({ operationId: 'idem-seed', record: readingRecord() });
+    await app.practice.completeAttempt({ operationId: 'idem-seed', record: readingRecord({ reviewState: initialReviewState() }) });
 
     const first = await app.practice.recordReviewOutcome({
         recordId: 'reading-wrong', reviewAttemptId: 'attempt-x', quality: 'good', reviewedAt: '2026-09-02T01:00:00.000Z'
@@ -492,7 +492,7 @@ test('复盘结果的输入校验与显式 revision 冲突', async () => {
     await app.practice.completeAttempt({ operationId: 'valid-seed', record: readingRecord() });
     await app.practice.completeAttempt({
         operationId: 'unscheduled-seed',
-        record: readingRecord({ id: 'unscheduled', sessionId: 's-unscheduled', correctAnswers: 10 })
+        record: readingRecord({ id: 'unscheduled', examId: 'reading-unscheduled', sessionId: 's-unscheduled', correctAnswers: 10 })
     });
 
     await expectFailure(() => app.practice.recordReviewOutcome({ recordId: '', reviewAttemptId: 'a', quality: 'good' }), '缺 recordId 必须失败');
@@ -563,5 +563,67 @@ test('导出/导入完整 round-trip 复盘状态', async () => {
         '导入必须完整还原 reviewState');
     const queue = await app.practice.listReviewQueue({ now: '2026-09-30T00:00:00.000Z' });
     assert.strictEqual(queue.records.length, 1);
-    assert.strictEqual(queue.records[0].reviewState.reviewCount, 1);
+    assert.strictEqual(queue.records[0].reviewState.reviewCount, 2);
+});
+
+
+test('自动评分的 60% 和 80% 边界，非法成绩不能推进调度', () => {
+    const { sandbox } = harness();
+    const grade = sandbox.PracticeReviewScheduler.qualityFromScore;
+    assert.equal(grade(59, 100), 'hard');
+    assert.equal(grade(60, 100), 'good');
+    assert.equal(grade(80, 100), 'good');
+    assert.equal(grade(81, 100), 'easy');
+    assert.equal(grade(4, 5), 'good');
+    for (const [c, t] of [[-1, 10], [11, 10], [0, 0], [NaN, 10]]) assert.throws(() => grade(c, t));
+});
+
+test('同一考试 ID 去重，重做自动评分，满分重做仍推进已有计划', async () => {
+    const { app, shared } = harness(); await app.ready;
+    for (const [id, correct, day] of [['first', 5, '01'], ['second', 8, '02'], ['third', 10, '03']]) {
+        await app.practice.completeAttempt({ operationId: id, record: readingRecord({ id, sessionId: id,
+            correctAnswers: correct, completedAt: `2026-09-${day}T00:00:00.000Z`, date: `2026-09-${day}T00:00:00.000Z` }) });
+    }
+    let queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records.length, 1);
+    assert.equal(queue.records[0].recordId, 'third');
+    assert.equal(queue.records[0].correctAnswers, 10);
+    assert.equal(queue.records[0].reviewState.reviewCount, 3);
+    assert.equal(queue.records[0].reviewState.lastQuality, 'easy');
+    await app.practice.completeAttempt({ operationId: 'third-resave', record: readingRecord({ id: 'third', sessionId: 'third' }) });
+    assert.equal((await app.practice.getReviewState('third')).reviewCount, 3);
+    shared.snapshotStoreReads.length = 0;
+    queue = await app.practice.listReviewQueue();
+    assert.equal(shared.snapshotStoreReads.length, 0, 'steady queue reads no entity snapshots');
+    await app.practice.delete({ recordId: 'first' });
+    assert.equal((await app.practice.listReviewQueue()).records.length, 1, '删除旧历史不删最新计划');
+    await app.practice.delete({ recordId: 'third' });
+    assert.equal((await app.practice.listReviewQueue()).records.length, 0, '删除最新记录同步删除计划');
+});
+
+test('迟到的旧作答和旧回放评分不能替换或推进最新计划', async () => {
+    const { app } = harness(); await app.ready;
+    await app.practice.completeAttempt({ record: readingRecord({ id: 'newest', completedAt: '2026-09-10T00:00:00.000Z' }) });
+    await app.practice.completeAttempt({ record: readingRecord({ id: 'older', completedAt: '2026-09-01T00:00:00.000Z' }) });
+    const queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records[0].recordId, 'newest');
+    const error = await expectFailure(() => app.practice.recordReviewOutcome({ recordId: 'older',
+        reviewPlanId: 'p1-reading-01', reviewAttemptId: 'stale', quality: 'easy' }), '旧回放评分必须拒绝');
+    assert.equal(error.code, 'CONFLICT');
+    assert.equal((await app.practice.getReviewState('newest')).reviewCount, 1);
+});
+
+test('套题汇总只迁移最新记录引用，子篇作答不重复计数', async () => {
+    const { app } = harness(); await app.ready;
+    const child = readingRecord({ id: 'child', sessionId: 'child', correctAnswers: 8 });
+    await app.practice.completeAttempt({ record: child });
+    const before = await app.practice.getReviewState('child');
+    await app.practice.finalizeSuite({ childRecordIds: ['child'], record: { id: 'parent', type: 'reading',
+        completedAt: child.completedAt, totalQuestions: 10, correctAnswers: 8, suiteEntries: [child] } });
+    const queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records.length, 1);
+    assert.equal(queue.records[0].recordId, 'parent');
+    assert.equal(queue.records[0].reviewEntryIndex, 0);
+    assert.equal(queue.records[0].reviewState.reviewCount, before.reviewCount);
+    assert.equal(await app.practice.get('child'), null);
 });

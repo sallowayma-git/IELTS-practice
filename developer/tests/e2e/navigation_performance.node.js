@@ -196,19 +196,20 @@ try {
                     answers: { q1: 'A' }, correctAnswerMap: { q1: 'B' } }))
             } });
         });
-        const suitePopupPromise = page.waitForEvent('popup');
-        const suiteAttempt = await page.evaluate(() => PracticeReviewFlow.start('review-suite'));
-        assert.ok(suiteAttempt?.reviewAttemptId);
-        const suiteReplay = await suitePopupPromise;
-        await suiteReplay.waitForSelector('[data-review-dir="next"]');
-        await page.waitForFunction(() => [...window.app._ensureReviewReplayStore().values()].some(s => s.recordId === 'review-suite' && s.appliedEntryKeys.length === 1));
-        assert.equal(await page.evaluate(() => PracticeReviewFlow.getPending()), null, 'one suite article is insufficient for legacy suite grading');
-        await suiteReplay.locator('[data-review-dir="next"]').click();
-        await page.waitForFunction(() => PracticeReviewFlow.getPending()?.recordId === 'review-suite');
-        await page.locator('[data-review-quality="hard"]').click();
-        await page.waitForFunction(() => !PracticeReviewFlow.getPending());
-        assert.equal(await page.evaluate(async () => (await AppData.practice.getReviewState('review-suite')).reviewCount), 1);
-        await suiteReplay.close();
+        const tasks = await page.evaluate(async () => (await AppData.practice.listReviewQueue()).records.filter(row => row.recordId === 'review-suite'));
+        assert.equal(tasks.length, 2, 'new suite has two independent article tasks');
+        for (const task of tasks) {
+            const suitePopupPromise = page.waitForEvent('popup');
+            const suiteAttempt = await page.evaluate(id => PracticeReviewFlow.start(id), task.id);
+            assert.ok(suiteAttempt?.reviewAttemptId);
+            const suiteReplay = await suitePopupPromise;
+            await page.waitForFunction(id => PracticeReviewFlow.getPending()?.reviewPlanId === id, task.reviewPlanId);
+            assert.equal(await page.evaluate(() => PracticeReviewFlow.getPending().entryCount), 1);
+            await page.locator('[data-review-quality="hard"]').click();
+            await page.waitForFunction(() => !PracticeReviewFlow.getPending());
+            assert.equal(await page.evaluate(async id => (await AppData.practice.getReviewTask(id)).reviewState.reviewCount, task.id), task.reviewState.reviewCount + 1);
+            await suiteReplay.close();
+        }
         result.review.suiteReplay = 'pass';
     }
     result.missingResources = missingResources;

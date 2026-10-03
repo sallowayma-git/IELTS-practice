@@ -3409,6 +3409,8 @@ class VirtualScroller {
             recordId = String(record.realData.timestamp);
         }
 
+        var taskId = recordId;
+        if (record && record.recordId) recordId = String(record.recordId);
         var item = createNode('div', {
             className: 'history-item history-record-item',
             dataset: { recordId: recordId }
@@ -3465,7 +3467,7 @@ class VirtualScroller {
         var reviewQueue = options.reviewQueue;
         var reviewEntry = null;
         if (recordId && reviewQueue && reviewQueue.byRecordId && typeof reviewQueue.byRecordId.get === 'function') {
-            reviewEntry = reviewQueue.byRecordId.get(String(recordId)) || null;
+            reviewEntry = reviewQueue.byRecordId.get(taskId) || reviewQueue.byRecordId.get(String(recordId)) || null;
         }
         var reviewBadge = historyRenderer.resolveReviewBadge(reviewEntry);
         if (reviewBadge) {
@@ -3498,7 +3500,7 @@ class VirtualScroller {
                     type: 'button',
                     className: 'review-record-btn',
                     title: reviewBadge.state === 'scheduled' ? '提前复盘这条记录' : '开始复盘',
-                    dataset: { recordAction: 'review', recordId: recordId }
+                    dataset: { recordAction: 'review', recordId: recordId, reviewTaskId: reviewEntry.id }
                 }, '🔁'));
             }
             actionChildren.push(createNode('button', {
@@ -15966,7 +15968,8 @@ class VirtualScroller {
         pending: null,
         launching: false,
         submitting: false,
-        listeners: []
+        listeners: [],
+        attempts: new Map()
     };
 
     function notify(message, type) {
@@ -16027,18 +16030,27 @@ class VirtualScroller {
         }
         state.launching = true;
         try {
-            const reviewState = typeof global.AppData?.practice?.getReviewState === 'function'
+            const task = typeof global.AppData?.practice?.getReviewTask === 'function'
+                ? await global.AppData.practice.getReviewTask(id) : null;
+            const reviewState = task ? task.reviewState : typeof global.AppData?.practice?.getReviewState === 'function'
                 ? await global.AppData.practice.getReviewState(id)
                 : null;
             if (!reviewState) {
                 notify('该记录未加入复盘计划', 'warning');
                 return null;
             }
-            const record = await loadFullRecord(id);
+            let record = await loadFullRecord(task ? task.recordId : id);
+            if (task && task.unit === 'article' && task.entryIndex !== null) {
+                const entry = record.suiteEntries && record.suiteEntries[task.entryIndex];
+                if (!entry || String(entry.examId) !== task.examId) throw new Error('复盘文章与最新记录不匹配');
+                record = Object.assign({}, record, entry, { id: record.id, examId: task.examId,
+                    suiteEntries: [], suiteEntrySummaries: [], suite: null, mode: 'single' });
+            }
             const reviewAttemptId = generateAttemptId();
+            state.attempts.set(reviewAttemptId, task);
             // 换一轮 attempt 就作废上一轮尚未评分的待评分条：同一条记录不可能同时
             // 有两轮待评分，否则用户的评分会记到已经作废的那一轮上。
-            if (state.pending && String(state.pending.recordId) === id) {
+            if (state.pending && (task ? state.pending.reviewPlanId === task.id : String(state.pending.recordId) === id)) {
                 state.pending = null;
                 render();
                 emit();
@@ -16058,7 +16070,9 @@ class VirtualScroller {
         const recordId = info && info.recordId != null ? String(info.recordId).trim() : '';
         const reviewAttemptId = info && info.reviewAttemptId != null ? String(info.reviewAttemptId).trim() : '';
         if (!recordId || !reviewAttemptId) return false;
+        const task = state.attempts.get(reviewAttemptId);
         state.pending = {
+            ...(task ? { reviewPlanId: task.id } : {}),
             recordId,
             reviewAttemptId,
             reviewSessionId: info.reviewSessionId != null ? String(info.reviewSessionId) : '',
@@ -16093,6 +16107,7 @@ class VirtualScroller {
         try {
             const receipt = await global.AppData.practice.recordReviewOutcome({
                 recordId: pending.recordId,
+                ...(pending.reviewPlanId ? { reviewPlanId: pending.reviewPlanId } : {}),
                 reviewAttemptId: pending.reviewAttemptId,
                 quality: normalized,
                 reviewedAt: new Date().toISOString()
@@ -22394,7 +22409,7 @@ function setupPracticeHistoryInteractions() {
 
             const reviewTarget = event.target.closest('[data-record-action="review"]');
             if (reviewTarget && container.contains(reviewTarget)) {
-                handleReview(reviewTarget.dataset.recordId, event);
+                handleReview(reviewTarget.dataset.reviewTaskId || reviewTarget.dataset.recordId, event);
                 return;
             }
 
@@ -22493,6 +22508,7 @@ function filterRealPracticeRecordsForView(records) {
 // ---------------------------------------------------------------------------
 const practiceReviewQueueState = {
     generatedAt: null,
+    records: [],
     byRecordId: new Map(),
     order: new Map(),
     stats: null,
@@ -22505,6 +22521,7 @@ let practiceReviewViewSnapshot = null;
 function getPracticeReviewQueueSnapshot() {
     return {
         generatedAt: practiceReviewQueueState.generatedAt,
+        records: practiceReviewQueueState.records,
         byRecordId: practiceReviewQueueState.byRecordId,
         order: practiceReviewQueueState.order,
         stats: practiceReviewQueueState.stats
@@ -22524,7 +22541,13 @@ async function loadPracticeReviewQueue() {
     const records = Array.isArray(queue && queue.records) ? queue.records : [];
     practiceReviewQueueState.generatedAt = queue && queue.generatedAt ? queue.generatedAt : null;
     practiceReviewQueueState.stats = queue && queue.stats ? queue.stats : null;
-    practiceReviewQueueState.byRecordId = new Map(records.map((record) => [String(record.id), record]));
+    practiceReviewQueueState.records = records;
+    practiceReviewQueueState.byRecordId = new Map();
+    records.forEach(record => {
+        practiceReviewQueueState.byRecordId.set(String(record.id), record);
+        const parentId = String(record.recordId || record.id);
+        if (!practiceReviewQueueState.byRecordId.has(parentId)) practiceReviewQueueState.byRecordId.set(parentId, record);
+    });
     practiceReviewQueueState.order = new Map(records.map((record, index) => [String(record.id), index]));
     return queue;
 }
@@ -22745,14 +22768,11 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
     const reviewMode = isPracticeReviewModeEnabled();
     let recordsForList = recordsToShow;
     if (reviewMode) {
-        recordsForList = recordsToShow
-            .filter((record) => record && reviewQueue.byRecordId.has(String(record.id)))
-            .sort((left, right) => {
-                const leftOrder = reviewQueue.order.get(String(left.id));
-                const rightOrder = reviewQueue.order.get(String(right.id));
-                return (Number.isFinite(leftOrder) ? leftOrder : Number.MAX_SAFE_INTEGER)
-                    - (Number.isFinite(rightOrder) ? rightOrder : Number.MAX_SAFE_INTEGER);
-            });
+        const originals = new Map(records.map(record => [String(record.id), record]));
+        recordsForList = reviewQueue.records.map(task => Object.assign({}, originals.get(String(task.recordId || task.id)), task))
+            .filter(record => examType === 'all' || recordMatchesExamType(record, examType, examIndex))
+            .filter(record => !historyQuery || [record.title, record.examId, record.date]
+                .some(value => String(value || '').toLowerCase().includes(historyQuery)));
     }
 
     const renderResult = typeof renderer.renderView === 'function'

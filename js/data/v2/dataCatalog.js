@@ -58,6 +58,11 @@
     // not as document keys. import merge identity is resolved in AppData, not here.
     const definitions = [
         {
+            logicalKey: 'practice.reviewPlans', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'settings.values', classification: 'authoritative',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'
