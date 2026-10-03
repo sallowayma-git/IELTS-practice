@@ -62,3 +62,43 @@ class QualificationEvidenceTest(unittest.TestCase):
             [row], 0, partial=True, script='reading_diagnostics')[0])
         self.assertNotIn('submitCheckpoint', qualification.evidence_rows(
             [{**row, 'passed': True}], 0, partial=True, script='listening_diagnostics')[0])
+
+    def test_snapshot_failure_retains_safe_cause_timing_and_page_state(self):
+        snapshot = {'phase': 'before-export', 'kind': 'practice-list-error',
+                    'errorName': 'AppDataError', 'errorCode': 'BACKEND_UNAVAILABLE',
+                    'reason': 'timeout', 'durationMs': 30005, 'pageClosed': False,
+                    'visibilityBefore': 'visible', 'visibilityAfter': 'hidden',
+                    'backendBefore': 'ready', 'backendAfter': 'ready'}
+        row = {**self.rows()[0], 'scenario': 'coordination-unavailable', 'passed': False,
+               'snapshotEvidence': {**snapshot, 'message': 'PRIVATE_ANSWER',
+                                    'stack': 'C:/PRIVATE', 'cause': 'PRIVATE_SESSION'}}
+        result = qualification.evidence_rows([row], 0, partial=True, script='listening_diagnostics')
+        self.assertEqual(result[0]['snapshotEvidence'], snapshot)
+        self.assertNotIn('PRIVATE', str(result))
+        for update, script in [({'passed': True}, 'listening_diagnostics'),
+                               ({'scenario': 'lost-ack'}, 'listening_diagnostics'),
+                               ({}, 'reading_diagnostics')]:
+            with self.subTest(update=update, script=script):
+                self.assertNotIn('snapshotEvidence', qualification.evidence_rows(
+                    [{**row, **update}], 0, partial=True, script=script)[0])
+
+    def test_snapshot_failure_rejects_hostile_types_values_and_unbounded_timing(self):
+        snapshot = {'phase': 'after-export', 'kind': 'page-evaluation-error',
+                    'errorName': 'PRIVATE_TOKEN', 'errorCode': ['BACKEND_UNAVAILABLE'],
+                    'reason': {'timeout': 'PRIVATE'}, 'durationMs': True,
+                    'pageClosed': 'false', 'visibilityBefore': 'C:/PRIVATE',
+                    'backendAfter': 'PRIVATE_ANSWER'}
+        row = {**self.rows()[0], 'scenario': 'disabled-persistence', 'passed': False,
+               'snapshotEvidence': snapshot}
+        for duration in (True, -1, 240001, 30.5, '30000', None):
+            with self.subTest(duration=duration):
+                result = qualification.evidence_rows(
+                    [{**row, 'snapshotEvidence': {**snapshot, 'durationMs': duration}}],
+                    0, partial=True, script='listening_diagnostics')
+                self.assertEqual(result[0]['snapshotEvidence'],
+                                 {'phase': 'after-export', 'kind': 'page-evaluation-error'})
+        for evidence in (None, [], {'phase': 'PRIVATE', 'kind': 'practice-list-error'},
+                         {'phase': 'before-export', 'kind': ['PRIVATE']}):
+            self.assertNotIn('snapshotEvidence', qualification.evidence_rows(
+                [{**row, 'snapshotEvidence': evidence}], 0, partial=True,
+                script='listening_diagnostics')[0])

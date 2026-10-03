@@ -35,6 +35,23 @@ LIMITATIONS = ['javascript-disabled', 'page-not-opened', 'process-crash', 'block
               'legacy-child-draft-recovery', 'different-origin-or-unavailable-storage-coordination',
               'chromium-only-automated-browser-evidence']
 
+# Exact values only: exception messages, causes, URLs and arbitrary browser
+# properties must never become published CI evidence.
+SNAPSHOT_ENUMS = {
+    'phase': {'before-export', 'after-export'},
+    'kind': {'practice-list-error', 'page-evaluation-error'},
+    'errorName': {'Error', 'AppDataError', 'TypeError', 'ReferenceError', 'TimeoutError',
+                  'InvalidStateError', 'AbortError', 'UnknownError', 'QuotaExceededError',
+                  'DataError', 'TransactionInactiveError', 'SecurityError', 'NotFoundError'},
+    'errorCode': {'BACKEND_UNAVAILABLE', 'INITIALIZATION_BLOCKED', 'CORRUPT_RECORD',
+                  'VALIDATION', 'QUOTA_EXCEEDED'},
+    'reason': {'timeout', 'watchdog-unavailable'},
+    'visibilityBefore': {'visible', 'hidden', 'prerender'},
+    'visibilityAfter': {'visible', 'hidden', 'prerender'},
+    'backendBefore': {'created', 'initializing', 'ready', 'failed', 'closed', 'unavailable'},
+    'backendAfter': {'created', 'initializing', 'ready', 'failed', 'closed', 'unavailable'},
+}
+
 
 def evidence_rows(payload, minimum: int, partial: bool = False, script: str | None = None) -> list[dict]:
     """Fail closed on partial/duplicate/unknown output; never retain error payloads."""
@@ -69,6 +86,19 @@ def evidence_rows(payload, minimum: int, partial: bool = False, script: str | No
                                if isinstance(checkpoint.get(key), bool)}
             if safe_checkpoint:
                 item['submitCheckpoint'] = safe_checkpoint
+        snapshot = row.get('snapshotEvidence')
+        if (failed and script == 'listening_diagnostics'
+                and scenario in ('disabled-persistence', 'coordination-unavailable')
+                and isinstance(snapshot, dict)):
+            safe_snapshot = {key: snapshot[key] for key, allowed in SNAPSHOT_ENUMS.items()
+                             if isinstance(snapshot.get(key), str) and snapshot[key] in allowed}
+            duration = snapshot.get('durationMs')
+            if type(duration) is int and 0 <= duration <= 240_000:
+                safe_snapshot['durationMs'] = duration
+            if isinstance(snapshot.get('pageClosed'), bool):
+                safe_snapshot['pageClosed'] = snapshot['pageClosed']
+            if {'phase', 'kind'} <= safe_snapshot.keys():
+                item['snapshotEvidence'] = safe_snapshot
         evidence.append(item)
     scenarios = [{row['scenario'] for row in evidence if row['mode'] == mode} for mode in MODES]
     if not partial and (any(len(items) < minimum for items in scenarios) or not all(items == scenarios[0] for items in scenarios)):

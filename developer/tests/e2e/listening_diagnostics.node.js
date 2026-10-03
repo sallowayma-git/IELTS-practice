@@ -110,6 +110,42 @@ async function exported(practice) {
     return report.report;
 }
 
+async function readPracticeSnapshot(host, phase) {
+    const started = Date.now();
+    let outcome;
+    try {
+        outcome = await host.evaluate(async () => {
+            const backend = () => window.AppData?.status?.().state || 'unavailable';
+            const visibilityBefore = document.visibilityState;
+            const backendBefore = backend();
+            try {
+                return { records: await AppData.practice.list() };
+            } catch (error) {
+                // The qualification gate publishes only fixed enum values and
+                // bounded timing. Keep the exception itself transient as before.
+                return { failure: {
+                    kind: 'practice-list-error', errorName: error?.name, errorCode: error?.code,
+                    reason: error?.details?.reason, visibilityBefore, backendBefore,
+                    visibilityAfter: document.visibilityState, backendAfter: backend()
+                }, stack: error?.stack };
+            }
+        });
+    } catch (error) {
+        error.snapshotEvidence = { phase, kind: 'page-evaluation-error', errorName: error.name,
+            durationMs: Date.now() - started, pageClosed: host.isClosed() };
+        throw error;
+    }
+    if (outcome.failure) {
+        const error = new Error('Practice snapshot read failed');
+        error.snapshotEvidence = { ...outcome.failure, phase, durationMs: Date.now() - started,
+            pageClosed: host.isClosed() };
+        // Preserve the caller location and the original transient browser stack.
+        if (outcome.stack) error.stack += '\n' + outcome.stack;
+        throw error;
+    }
+    return outcome.records;
+}
+
 async function verifyLocalExport(host, child, practice, scenario) {
     const storage = await practice.evaluate(async scenario => {
         if (scenario === 'disabled-persistence') {
@@ -135,7 +171,7 @@ async function verifyLocalExport(host, child, practice, scenario) {
 
     // Keep IndexedDB snapshot reads in the foreground while the popup is open.
     await host.bringToFront();
-    const records = await host.evaluate(() => AppData.practice.list());
+    const records = await readPracticeSnapshot(host, 'before-export');
     await child.bringToFront();
     const access = practice.getByRole('button', { name: /^Errors and diagnostics/ });
     assert.equal(await access.count(), 1, 'Locally retained errors need a frame-local history/export entry');
@@ -158,7 +194,7 @@ async function verifyLocalExport(host, child, practice, scenario) {
     assert.ok(JSON.parse(text).events.some(candidate => candidate.eventId === event.eventId));
     assert.doesNotMatch(text, /PRIVATE_|windowSessionToken|sourceUrl=/);
     await host.bringToFront();
-    assert.deepEqual(await host.evaluate(() => AppData.practice.list()), records);
+    assert.deepEqual(await readPracticeSnapshot(host, 'after-export'), records);
     await child.bringToFront();
     assert.equal(await practice.locator('[name="q1"]').inputValue(), 'PRIVATE_ANSWER');
     const after = await practice.evaluate(() => AppDiagnosticStore.status());
@@ -261,10 +297,13 @@ try {
             } catch (error) {
                 const submitCheckpoint = scenario.includes('lost-ack') && !host.isClosed()
                     ? await host.evaluate(() => window.__submitCheckpoint).catch(() => null) : null;
-                results.push({ mode, scenario, status: 'fail', error: error.stack, submitCheckpoint });
+                results.push({ mode, scenario, status: 'fail', error: error.stack, submitCheckpoint,
+                    snapshotEvidence: error.snapshotEvidence });
                 console.error(`FAIL ${mode} ${scenario}: ${error.stack}`);
                 console.error('Runtime errors', runtimeErrors);
-                if (!host.isClosed()) console.error('Host state', await host.evaluate(async () => ({
+                // A failed snapshot already has bounded evidence. Repeating the
+                // same database read here can consume a second watchdog period.
+                if (!host.isClosed() && !error.snapshotEvidence) console.error('Host state', await host.evaluate(async () => ({
                     backend: AppData.status(),
                     records: await AppData.practice.list().then(records => records.map(record => ({ submissionId: record.submissionId, sessionId: record.sessionId }))).catch(error => ({ error: error.message, details: error.details })),
                     incidents: AppDiagnostics.snapshot().events.map(event => ({ code: event.code, action: event.action, cause: event.causeCode })),
