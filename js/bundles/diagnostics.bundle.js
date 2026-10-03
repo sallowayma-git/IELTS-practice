@@ -708,11 +708,12 @@ class SystemDiagnostics {
 window.SystemDiagnostics = SystemDiagnostics;
 
 
-/* ===== js/components/PerformanceOptimizer.js ===== */
-/**
- * 虚拟滚动器组件
- * 用于处理大量数据的高性能渲染
- */
+/* ===== js/components/virtualScroller.js ===== */
+/** Shared virtual scrolling runtime; available without performance diagnostics. */
+(function (global) {
+    'use strict';
+    if (global.VirtualScroller) return;
+
 class VirtualScroller {
     constructor(container, items, renderer, options = {}) {
         this.container = container;
@@ -732,6 +733,8 @@ class VirtualScroller {
         this.itemsPerRow = 1;
         this.layoutMetrics = null;
         this.gap = 0;
+        this.scrollTimer = null;
+        this.destroyed = false;
 
         this.handleResize = this.recalculateLayout.bind(this);
 
@@ -861,15 +864,16 @@ class VirtualScroller {
      * 设置滚动监听器
      */
     setupScrollListener() {
-        let scrollTimer = null;
-
         const onScroll = () => {
             // 使用防抖优化滚动性能
-            if (scrollTimer) {
-                clearTimeout(scrollTimer);
+            if (this.destroyed) return;
+            if (this.scrollTimer !== null) {
+                clearTimeout(this.scrollTimer);
             }
 
-            scrollTimer = setTimeout(() => {
+            this.scrollTimer = setTimeout(() => {
+                this.scrollTimer = null;
+                if (this.destroyed) return;
                 this.calculateVisibleRange();
                 this.renderVisible();
             }, 10);
@@ -885,10 +889,12 @@ class VirtualScroller {
      * 更新数据
      */
     updateItems(newItems) {
+        if (this.destroyed) return;
         this.items = newItems;
         this.updateLayoutMetrics();
         this.totalHeight = this.getTotalHeight();
         this.viewport.style.height = `${this.totalHeight}px`;
+        this.container.scrollTop = Math.min(this.container.scrollTop, Math.max(0, this.totalHeight - this.containerHeight));
 
         // 清除所有渲染的元素
         this.renderedItems.forEach(element => element.remove());
@@ -903,6 +909,7 @@ class VirtualScroller {
      * 重新计算布局
      */
     recalculateLayout() {
+        if (this.destroyed) return;
         this.updateLayoutMetrics();
         this.totalHeight = this.getTotalHeight();
         if (this.viewport) {
@@ -923,8 +930,15 @@ class VirtualScroller {
      * 滚动到指定索引
      */
     scrollToIndex(index) {
-        const targetScrollTop = index * this.itemHeight;
-        this.container.scrollTop = targetScrollTop;
+        if (this.destroyed || this.items.length === 0) return;
+        const targetIndex = Math.max(0, Math.min(this.items.length - 1, Math.floor(Number(index) || 0)));
+        const position = this.getItemPosition(targetIndex);
+        const targetScrollTop = typeof position.top === 'number'
+            ? position.top
+            : Math.floor(targetIndex / this.itemsPerRow) * this.itemHeight;
+        this.container.scrollTop = Math.min(targetScrollTop, Math.max(0, this.totalHeight - this.containerHeight));
+        this.calculateVisibleRange();
+        this.renderVisible();
     }
 
     /**
@@ -940,6 +954,12 @@ class VirtualScroller {
      * 销毁虚拟滚动器
      */
     destroy() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        if (this.scrollTimer !== null) {
+            clearTimeout(this.scrollTimer);
+            this.scrollTimer = null;
+        }
         console.log('[VirtualScroller] 销毁虚拟滚动器');
 
         // 清除所有渲染的元素
@@ -1022,6 +1042,12 @@ class VirtualScroller {
     }
 }
 
+
+    global.VirtualScroller = VirtualScroller;
+})(window);
+
+
+/* ===== js/components/PerformanceOptimizer.js ===== */
 /**
  * 性能优化器
  * 提供各种性能优化功能
@@ -1193,7 +1219,7 @@ class PerformanceOptimizer {
      * 创建虚拟滚动器
      */
     createVirtualScroller(container, items, renderer, options) {
-        return new VirtualScroller(container, items, renderer, options);
+        return new window.VirtualScroller(container, items, renderer, options);
     }
 
     /**
@@ -1417,7 +1443,6 @@ class PerformanceOptimizer {
 }
 
 // 导出到全局
-window.VirtualScroller = VirtualScroller;
 window.PerformanceOptimizer = PerformanceOptimizer;
 
 
@@ -1462,6 +1487,10 @@ class DataConsistencyManager {
 
     isAnswerMap(value) {
         return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    hasAnswerComparison(value) {
+        return this.isAnswerMap(value) && Object.keys(value).length > 0;
     }
 
     getCorrectAnswerMap(record) {
@@ -1519,7 +1548,7 @@ class DataConsistencyManager {
         }
 
         // 检查答案比较数据
-        if (!target.answerComparison && target.answers && Object.keys(correctAnswerMap).length > 0) {
+        if (!this.hasAnswerComparison(target.answerComparison) && target.answers && Object.keys(correctAnswerMap).length > 0) {
             validation.warnings.push('缺少答案比较数据，将自动生成');
         }
 
@@ -1554,8 +1583,14 @@ class DataConsistencyManager {
 
         const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
+        // Reuse persisted nested comparisons before generating display-only data.
+        if (!this.hasAnswerComparison(enriched.answerComparison) && enriched.realData
+            && this.hasAnswerComparison(enriched.realData.answerComparison)) {
+            enriched.answerComparison = enriched.realData.answerComparison;
+        }
+
         // 生成缺失的答案比较数据
-        if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
+        if (!this.hasAnswerComparison(enriched.answerComparison) && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
                 enriched.answers,
                 correctAnswerMap
@@ -1564,7 +1599,7 @@ class DataConsistencyManager {
         }
 
         // 修复分数信息
-        if (!enriched.scoreInfo && enriched.answerComparison) {
+        if (!enriched.scoreInfo && this.hasAnswerComparison(enriched.answerComparison)) {
             enriched.scoreInfo = this.calculateScoreFromComparison(enriched.answerComparison);
             console.log('[DataConsistencyManager] 从答案比较计算分数');
         }
@@ -1648,7 +1683,8 @@ class DataConsistencyManager {
             enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
                 ? correctAnswerMap
                 : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
-            enriched.realData.answerComparison = enriched.answerComparison || enriched.realData.answerComparison || {};
+            enriched.realData.answerComparison = this.hasAnswerComparison(enriched.realData.answerComparison)
+                ? enriched.realData.answerComparison : (enriched.answerComparison || {});
         }
 
         console.log('[DataConsistencyManager] 数据补充完成');
@@ -1752,7 +1788,9 @@ class DataConsistencyManager {
             comparison[key] = {
                 userAnswer: userAnswer || null,
                 correctAnswer: correctAnswer || null,
-                isCorrect: this.compareAnswers(userAnswer, correctAnswer)
+                isCorrect: this.compareAnswers(userAnswer, correctAnswer),
+                // This verdict supports display enrichment, not submission replay.
+                isCorrectSource: 'display'
             };
         });
 
@@ -2350,6 +2388,7 @@ console.log('[AppPerformance] 性能工具库已加载，统一缓存、防抖�
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
         global.AppLazyLoader.markProvided([
     "js/components/SystemDiagnostics.js",
+    "js/components/virtualScroller.js",
     "js/components/PerformanceOptimizer.js",
     "js/utils/dataConsistencyManager.js",
     "js/utils/performance.js"

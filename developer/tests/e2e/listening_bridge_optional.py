@@ -60,6 +60,20 @@ def collect_console(page: Page, store: List[ConsoleEntry]) -> None:
 
 
 async def inject_bridge_fixture_scripts(page: Page) -> None:
+    # These parser fixtures use a stub parent; native transport is exercised by
+    # listening_diagnostics.node.js. Give INIT the same authenticated boundary
+    # as production instead of relying on a self-posted untrusted message.
+    await page.evaluate("""() => {
+        Object.defineProperty(document, 'referrer', { configurable: true, value: 'https://fixture.invalid/' });
+        window.__sendBridgeInit = message => {
+            const event = new Event('message');
+            Object.assign(event, { source: window.opener, origin: 'https://fixture.invalid', data: {
+                ...message, source: 'exam_host', data: { ...message.data,
+                    parentOrigin: 'https://fixture.invalid', windowSessionToken: 'fixture-token' }
+            } });
+            window.dispatchEvent(event);
+        };
+    }""")
     await page.add_script_tag(path=str(SPELLING_COLLECTOR_PATH))
     await page.add_script_tag(path=str(SAFE_OBJECT_LITERAL_PARSER_PATH))
     await page.add_script_tag(path=str(BRIDGE_PATH))
@@ -241,7 +255,7 @@ async def validate_bridge_completion(page: Page) -> dict[str, Any]:
     await bridge_page.evaluate(
         """
         () => {
-            window.postMessage({
+            window.__sendBridgeInit({
                 type: 'INIT_SESSION',
                 data: {
                     examId: 'listening-p1-optional-e2e',
@@ -331,7 +345,7 @@ async def validate_bridge_finish_dom_capture(page: Page) -> dict[str, Any]:
     await bridge_page.evaluate(
         """
         () => {
-            window.postMessage({
+            window.__sendBridgeInit({
                 type: 'INIT_SESSION',
                 data: {
                     examId: 'custom-listening-finish-dom',
@@ -410,7 +424,7 @@ async def validate_bridge_three_column_results_table(page: Page) -> dict[str, An
     await bridge_page.evaluate(
         """
         () => {
-            window.postMessage({
+            window.__sendBridgeInit({
                 type: 'INIT_SESSION',
                 data: {
                     examId: 'listening-p1-three-column',
@@ -482,7 +496,7 @@ async def validate_bridge_data_q_input_capture(page: Page) -> dict[str, Any]:
     await bridge_page.evaluate(
         """
         () => {
-            window.postMessage({
+            window.__sendBridgeInit({
                 type: 'INIT_SESSION',
                 data: {
                     examId: 'listening-p1-data-q',
@@ -554,7 +568,7 @@ async def validate_bridge_delayed_finish_hook(page: Page) -> dict[str, Any]:
     await bridge_page.evaluate(
         """
         () => {
-            window.postMessage({
+            window.__sendBridgeInit({
                 type: 'INIT_SESSION',
                 data: {
                     examId: 'custom-listening-delayed-hook',
@@ -1123,6 +1137,14 @@ async def run() -> int:
 
 
 if __name__ == "__main__":
+    # Open-source checkouts intentionally omit the optional private library.
+    # Qualify the shipped runtime with synthetic content instead of requiring it.
+    if not (REPO_ROOT / "ListeningPractice").exists():
+        completed = subprocess.run(["node", str(REPO_ROOT / "developer/tests/e2e/listening_diagnostics.node.js")], cwd=REPO_ROOT)
+        REPORT_FILE.write_text(json.dumps({"status": "pass" if completed.returncode == 0 else "fail",
+            "coverage": "synthetic-listening-and-legacy", "privateLibrary": "unavailable",
+            "evidence": "listening-diagnostics-report.json"}, indent=2) + "\n", encoding="utf-8")
+        raise SystemExit(completed.returncode)
     completed = asyncio.run(run())
     print(f"Listening optional E2E report: {REPORT_FILE}")
     raise SystemExit(completed)

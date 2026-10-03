@@ -391,6 +391,31 @@ class ExamSystemApp {
     };
 
     const integratedFallbackMixin = {
+        showRecoveryUI(content) {
+            const appContainer = document.getElementById('app');
+            if (!appContainer) {
+                return;
+            }
+            if (!this._recoveryUI) {
+                const container = document.createElement('div');
+                container.id = 'app-recovery';
+                container.className = appContainer.className;
+                appContainer.parentNode.insertBefore(container, appContainer);
+                this._recoveryUI = { container, appContainer, display: appContainer.style.display };
+            }
+            // Keep the live shell and its listeners available to the next initialization.
+            this._recoveryUI.container.replaceChildren(content);
+            appContainer.style.display = 'none';
+        },
+        restoreApplicationUI() {
+            if (!this._recoveryUI) {
+                return;
+            }
+            const { container, appContainer, display } = this._recoveryUI;
+            appContainer.style.display = display;
+            container.remove();
+            this._recoveryUI = null;
+        },
         showLoading(show) {
             const loading = document.getElementById('loading');
             if (!loading) {
@@ -453,18 +478,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const solutionList = createNode('ul', { className: 'solution-list' }, [
                 createNode('li', null, '🔄 刷新页面重新加载系统'),
                 createNode('li', null, '🧹 清除浏览器缓存和Cookie'),
@@ -494,9 +507,9 @@ class ExamSystemApp {
                     createNode('div', { className: 'fallback-footer' }, [createNode('p', null, '如果问题持续存在，请联系技术支持并提供系统信息。')])
                 ])
             ]);
-            replaceContent(appContainer, fallbackRoot);
+            this.showRecoveryUI(fallbackRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = fallbackRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -569,18 +582,6 @@ class ExamSystemApp {
                 });
                 return element;
             };
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
             const featuresList = createNode('ul', null, [
                 createNode('li', null, '基本题库浏览'),
                 createNode('li', null, '简单练习记录'),
@@ -597,9 +598,9 @@ class ExamSystemApp {
                     ])
                 ])
             ]);
-            replaceContent(appContainer, safeModeRoot);
+            this.showRecoveryUI(safeModeRoot);
             const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
+                const node = safeModeRoot.querySelector(selector);
                 if (!node) {
                     return;
                 }
@@ -633,7 +634,7 @@ class ExamSystemApp {
             if (viewName !== 'browse' && window.__pendingBrowseFilter) {
                 delete window.__pendingBrowseFilter;
             }
-            if (this.currentView === viewName) {
+            if (this.currentView === viewName && !this._pendingViewActivation) {
                 return { navigationIntentGeneration, sharedNavigationIntentGeneration };
             }
             document.querySelectorAll('.view').forEach((view) => {
@@ -642,6 +643,7 @@ class ExamSystemApp {
             const targetView = document.getElementById(`${viewName}-view`);
             if (targetView) {
                 targetView.classList.add('active');
+                targetView.removeAttribute('hidden');
                 this.currentView = viewName;
                 document.querySelectorAll('.nav-btn').forEach((btn) => {
                     btn.classList.remove('active');
@@ -649,15 +651,30 @@ class ExamSystemApp {
                 const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
                 if (activeNavBtn) {
                     activeNavBtn.classList.add('active');
+                } else if (viewName === 'bookshelf' || viewName === 'vocab' || viewName === 'reading-notebook') {
+                    const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+                    if (moreNavBtn) {
+                        moreNavBtn.classList.add('active');
+                    }
                 }
                 const url = new URL(window.location);
                 url.searchParams.set('view', viewName);
                 window.history.replaceState({}, '', url);
-                this.onViewActivated(
-                    viewName,
-                    navigationIntentGeneration,
-                    sharedNavigationIntentGeneration
+                const activate = () => this.onViewActivated(
+                    viewName, navigationIntentGeneration, sharedNavigationIntentGeneration
                 );
+                if (window.AppEntry && typeof window.AppEntry.scheduleViewActivation === 'function') {
+                    const pendingActivation = { viewName, navigationIntentGeneration };
+                    this._pendingViewActivation = pendingActivation;
+                    Promise.resolve(window.AppEntry.scheduleViewActivation(viewName, activate, () =>
+                        this.currentView === viewName
+                        && this._navigationIntentGeneration === navigationIntentGeneration
+                    )).catch((error) => console.warn('[App] 激活视图失败:', error)).finally(() => {
+                        if (this._pendingViewActivation === pendingActivation) this._pendingViewActivation = null;
+                    });
+                } else {
+                    activate();
+                }
             }
             return { navigationIntentGeneration, sharedNavigationIntentGeneration };
         },
@@ -797,10 +814,17 @@ class ExamSystemApp {
                     break;
                 case 'practice':
                     console.log('[App] 练习视图已激活，开始加载练习记录模块');
-                    Promise.resolve()
+                    return Promise.resolve()
                         .then(() => (typeof window.ensureBrowseGroup === 'function' ? window.ensureBrowseGroup() : null))
                         .then(() => (typeof window.ensurePracticeSuiteReady === 'function' ? window.ensurePracticeSuiteReady() : null))
                         .then(() => {
+                            if (this.currentView !== 'practice'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) {
+                                return false;
+                            }
                             if (typeof window.ensurePracticeRecordsSync === 'function') {
                                 return window.ensurePracticeRecordsSync('practice-view');
                             }
@@ -815,7 +839,6 @@ class ExamSystemApp {
                         .catch((error) => {
                             console.error('[App] 激活练习视图失败:', error);
                         });
-                    break;
                 case 'more':
                     Promise.resolve()
                         .then(() => {
@@ -829,6 +852,54 @@ class ExamSystemApp {
                         })
                         .catch((error) => {
                             console.warn('[App] 激活更多视图时加载工具模块失败:', error);
+                        });
+                    break;
+                case 'bookshelf':
+                    Promise.resolve()
+                        .then(() => {
+                            if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                                return window.AppLazyLoader.ensureGroup('reading-library');
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            if (this.currentView !== 'bookshelf'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) return;
+                            const bookshelfView = document.getElementById('bookshelf-view');
+                            if (bookshelfView) {
+                                bookshelfView.removeAttribute('hidden');
+                            }
+                            if (window.BookshelfView && typeof window.BookshelfView.mount === 'function') {
+                                window.BookshelfView.mount('#bookshelf-view');
+                            }
+                        })
+                        .catch((error) => {
+                            console.warn('[App] 激活书架视图时加载工具模块失败:', error);
+                        });
+                    break;
+                case 'reading-notebook':
+                    Promise.resolve()
+                        .then(() => {
+                            if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                                return window.AppLazyLoader.ensureGroup('reading-library');
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            if (this.currentView !== 'reading-notebook'
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && sharedNavigationIntentGeneration !== window.__getAppNavigationIntentGeneration())) return;
+                            if (window.ReadingNotebookView && typeof window.ReadingNotebookView.mount === 'function') {
+                                window.ReadingNotebookView.mount('#reading-notebook-view');
+                            }
+                        })
+                        .catch((error) => {
+                            console.warn('[App] 激活我的生词本视图时加载工具模块失败:', error);
                         });
                     break;
                 default:
@@ -890,8 +961,10 @@ class ExamSystemApp {
 
     const integratedLifecycleMixin = {
         async initialize() {
+            try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'started'); } catch (_) { }
             try {
                 this.showLoading(true);
+                this.restoreApplicationUI();
                 this.updateLoadingMessage('正在检查系统依赖...');
                 this.checkDependencies();
                 this.updateLoadingMessage('正在初始化状态管理...');
@@ -920,69 +993,37 @@ class ExamSystemApp {
                 this.isInitialized = true;
                 this.showLoading(false);
                 this.showUserMessage('系统初始化完成', 'success');
+                try { window.AppOperationDiagnostics?.breadcrumb('main', 'initialize', 'succeeded'); } catch (_) { }
+                try { window.AppDiagnostics?.markReady(); } catch (_) { }
             } catch (error) {
-                this.showLoading(false);
                 this.handleInitializationError(error);
+                try { this.showLoading(false); } catch (_) { }
             }
         },
         handleInitializationError(error) {
-            console.error('[App] 系统初始化失败:', error);
-            let userMessage = '系统初始化失败';
+            // Capture before console or optional UI so the operation keeps its identity.
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
+            try { console.error('[App] 系统初始化失败:', error); } catch (_) { }
+            try { this.showUserMessage('系统初始化失败，请导出诊断信息以便排查。', 'error'); } catch (_) { }
             let canRecover = false;
-            if (error.message.includes('组件加载超时')) {
-                userMessage = '系统组件加载超时，请刷新页面重试';
-                canRecover = true;
-            } else if (error.message.includes('依赖')) {
-                userMessage = '系统依赖检查失败，请确保所有必需文件已正确加载';
-            } else if (error.message.includes('网络')) {
-                userMessage = '网络连接问题，请检查网络连接后重试';
-                canRecover = true;
-            } else {
-                userMessage = '系统遇到未知错误，请联系技术支持';
-            }
-            this.showUserMessage(userMessage, 'error');
-            if (window.handleError) {
-                window.handleError(error, 'App Initialization');
-            }
-            this.showFallbackUI(canRecover);
+            try {
+                const message = Object.getOwnPropertyDescriptor(error, 'message')?.value;
+                canRecover = typeof message === 'string' && (message.includes('组件加载超时')
+                    || (!message.includes('依赖') && message.includes('网络')));
+            } catch (_) { }
+            try { this.showFallbackUI(canRecover); } catch (_) { }
         },
         setupGlobalErrorHandling() {
-            window.addEventListener('unhandledrejection', (event) => {
-                console.error('[App] 未处理的Promise拒绝:', event.reason);
-                this.handleGlobalError(event.reason, 'Promise拒绝');
-                event.preventDefault();
-            });
-            window.addEventListener('error', (event) => {
-                console.error('[App] JavaScript错误:', event.error);
-                this.handleGlobalError(event.error, 'JavaScript错误');
-            });
+            // The inline collector owns listeners for the entire page lifetime.
+            try { window.AppDiagnosticBootstrap?.install({ context: 'main' }); } catch (_) { }
         },
-        handleGlobalError(error, context) {
+        handleGlobalError(error) {
             try {
-                const normalizedError = error && typeof error === 'object'
-                    ? error
-                    : { message: String(error || 'Unknown error'), stack: undefined };
-                if (!this.globalErrors) {
-                    this.globalErrors = [];
-                }
-                this.globalErrors.push({
-                    error: normalizedError.message || String(error),
-                    context,
-                    timestamp: Date.now(),
-                    stack: normalizedError.stack
+                return window.AppDiagnostics?.report({
+                    code: 'UNEXPECTED_RUNTIME_ERROR', module: 'main', action: 'report', error,
+                    collection: { source: 'global', coverage: 'partial', aggregation: 'local' }
                 });
-                if (this.globalErrors.length > 100) {
-                    this.globalErrors = this.globalErrors.slice(-50);
-                }
-                const recentErrors = this.globalErrors.filter((e) => Date.now() - e.timestamp < 60000);
-                if (recentErrors.length > 5) {
-                    this.showUserMessage('系统遇到多个错误，建议刷新页面', 'warning');
-                } else if (!normalizedError.message || !normalizedError.message.includes('Script error')) {
-                    this.showUserMessage('系统遇到错误，但仍可继续使用', 'warning');
-                }
-            } catch (handlingError) {
-                console.error('[App] 错误处理失败:', handlingError);
-            }
+            } catch (_) { }
         },
         updateLoadingMessage(message) {
             const loadingText = document.querySelector('.loading-text');
@@ -1113,8 +1154,16 @@ class ExamSystemApp {
                 // Browse intent is hydrated once by initializeBrowseView from
                 // the canonical lastFilter preference. Data refreshes must not
                 // replay an older durable scope into the live state service.
-                await this.loadUserStats();
-                await this.updateOverviewStats();
+                // Both reads use AppData's canonical projections independently.
+                // Wait for both even on failure so readiness cannot race a still
+                // running stats read; preserve the former stats-first error order.
+                const results = await Promise.allSettled([
+                    this.loadUserStats(),
+                    this.updateOverviewStats()
+                ]);
+                for (const result of results) {
+                    if (result.status === 'rejected') throw result.reason;
+                }
             } catch (error) {
                 console.error('Failed to load initial data:', error);
             }
@@ -1177,14 +1226,29 @@ class ExamSystemApp {
         updateCategoryStats(examIndex, practiceRecords) {
             const categories = ['P1', 'P2', 'P3'];
             const list = Array.isArray(examIndex) ? examIndex : [];
+            const categoryTotals = new Map(categories.map((category) => [category, 0]));
+            const completedByCategory = new Map(categories.map((category) => [category, new Set()]));
+            const firstExamCategoryById = new Map();
+            list.forEach((exam) => {
+                if (categoryTotals.has(exam.category)) {
+                    categoryTotals.set(exam.category, categoryTotals.get(exam.category) + 1);
+                }
+                // Preserve Array.find's first-match behavior for duplicate IDs.
+                // NaN never matched the former strict-equality lookup.
+                const id = exam.id;
+                if (id === id && !firstExamCategoryById.has(id)) {
+                    firstExamCategoryById.set(id, exam.category);
+                }
+            });
+            practiceRecords.forEach((record) => {
+                const category = firstExamCategoryById.get(record.examId);
+                if (completedByCategory.has(category)) {
+                    completedByCategory.get(category).add(record.examId);
+                }
+            });
             categories.forEach((category) => {
-                const categoryExams = list.filter((exam) => exam.category === category);
-                const categoryRecords = practiceRecords.filter((record) => {
-                    const exam = list.find((e) => e.id === record.examId);
-                    return exam && exam.category === category;
-                });
-                const completed = new Set(categoryRecords.map((r) => r.examId)).size;
-                const total = categoryExams.length;
+                const completed = completedByCategory.get(category).size;
+                const total = categoryTotals.get(category);
                 const progress = total > 0 ? (completed / total) * 100 : 0;
                 const progressBar = document.querySelector(`[data-category="${category}"] .progress-fill`);
                 if (progressBar) {
@@ -1315,7 +1379,7 @@ class ExamSystemApp {
                 console.error('Failed to refresh data:', error);
             }
         },
-        destroy() {
+        destroy(options = {}) {
             window.removeEventListener('resize', this.handleResize);
             if (this.sessionMonitorInterval) {
                 clearInterval(this.sessionMonitorInterval);
@@ -1326,6 +1390,21 @@ class ExamSystemApp {
             }
             if (this.examWindows) {
                 this.examWindows.forEach((windowData, examId) => {
+                    // A departing host leaves supported practice pages available
+                    // for unconfirmed work and local diagnostic export. Explicit
+                    // session closure still uses the normal cleanup path below.
+                    let preserveReading = false;
+                    if (options.preserveReadingWindows === true) {
+                        try { preserveReading = new URL(windowData.expectedUrl, window.location.href).pathname
+                            .endsWith('/assets/generated/reading-exams/reading-practice-unified.html'); } catch (_) { }
+                    }
+                    if (options.preservePracticeWindows === true) preserveReading = true;
+                    if (preserveReading) {
+                        try { this._diagnosticChannels?.get(examId)?.dispose(); } catch (_) { }
+                        const handler = this.messageHandlers?.get(examId);
+                        if (handler) window.removeEventListener('message', handler);
+                        return; // Keep the existing interrupted-session/recovery data.
+                    }
                     if (windowData.window && !windowData.window.closed) {
                         windowData.window.close();
                     }
@@ -1412,17 +1491,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.app = new ExamSystemApp();
                     Promise.resolve(window.app.initialize())
                         .catch((error) => {
+                            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
                             console.error('[App] 初始化失败:', error);
                         })
                         .finally(() => {
                             signalAppCoreReady();
                         });
                 } catch (e) {
+                    try { window.AppDiagnostics?.startupFailed(e); } catch (_) { }
                     console.error('[App] 初始化失败:', e);
                     signalAppCoreReady();
                 }
             })();
         } catch (error) {
+            try { window.AppDiagnostics?.startupFailed(error); } catch (_) { }
             console.error('Failed to start application:', error);
             if (window.handleError) {
                 window.handleError(error, 'Application Startup');
@@ -1450,6 +1532,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 页面卸载时清理
 window.addEventListener('beforeunload', () => {
     if (window.app) {
-        window.app.destroy();
+        window.app.destroy({ preserveReadingWindows: true, preservePracticeWindows: true });
     }
 });

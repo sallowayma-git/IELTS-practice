@@ -65,7 +65,8 @@
         setTimeout(hideOverlay, 480);
     }
 
-    function fail(errorMessage) {
+    function fail(errorMessage, error) {
+        try { global.AppDiagnostics?.startupFailed(error || new Error('Application startup failed.')); } catch (_) { }
         setStage(errorMessage || '启动异常，已启用降级模式', 100);
         setTimeout(hideOverlay, 800);
     }

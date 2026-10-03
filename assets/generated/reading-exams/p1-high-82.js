@@ -9,11 +9,12 @@
   "meta": {
     "title": "Think Small 微观科学",
     "category": "P1",
-    "frequency": "high",
+    "frequency": "low",
     "pdfFilename": "172. P1 - Think Small 微观科学.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
     "legacyFilename": "172. P1 - Think Small 微观科学.html",
-    "questionIntroHtml": "<h3>Questions 1–7</h3>"
+    "questionIntroHtml": "<h3>Questions 1–7</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

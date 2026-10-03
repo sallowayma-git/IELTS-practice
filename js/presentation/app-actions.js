@@ -6,6 +6,15 @@
     var browsePrefetchPromise = null;
     var morePrefetchTriggered = false;
 
+    function openDiagnosticsSettings(eventId) {
+        if (typeof global.showView === 'function') global.showView('settings', false);
+        if (global.DiagnosticSettingsPanel) global.DiagnosticSettingsPanel.open(eventId);
+        else {
+            var diagnostics = global.document?.getElementById('diagnostic-settings');
+            if (diagnostics) diagnostics.open = true;
+        }
+    }
+
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
@@ -14,7 +23,7 @@
     }
 
     function exportPracticeMarkdown() {
-        ensurePracticeSuite().then(function handleExportReady() {
+        return ensurePracticeSuite().then(function handleExportReady() {
             if (!global.markdownExporter || typeof global.markdownExporter.exportToMarkdown !== 'function') {
                 if (typeof global.MarkdownExporter === 'function') {
                     try {
@@ -26,14 +35,14 @@
             }
 
             if (global.markdownExporter && typeof global.markdownExporter.exportToMarkdown === 'function') {
-                global.markdownExporter.exportToMarkdown();
-                return;
+                return global.markdownExporter.exportToMarkdown();
             }
 
             if (typeof global.showMessage === 'function') {
                 global.showMessage('Markdown 导出模块未就绪', 'warning');
             }
         }).catch(function handleExportError(error) {
+            try { global.AppOperationDiagnostics?.failure({ code: 'DATA_EXPORT_FAILED', module: 'export', action: 'export', error }); } catch (_) { }
             console.error('[AppActions] 导出失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('导出失败，请稍后重试', 'error');
@@ -86,24 +95,35 @@
         }
         attachedPrefetchHandlers = true;
 
+        function hintGroup(name) {
+            return function onNavigationIntent() {
+                // Intent warms bytes without running view initialization before
+                // navigation. Explicit preload APIs retain their ready semantics.
+                if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
+                if (global.AppLazyLoader && typeof global.AppLazyLoader.preloadGroup === 'function') {
+                    global.AppLazyLoader.preloadGroup(name);
+                }
+            };
+        }
+
         var practiceButton = document.querySelector('.main-nav [data-view="practice"]');
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                practiceButton.addEventListener(eventName, triggerPrefetch, { once: true });
+                practiceButton.addEventListener(eventName, hintGroup('practice-suite'), { once: true });
             });
         }
 
         var browseButton = document.querySelector('.main-nav [data-view="browse"]');
         if (browseButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                browseButton.addEventListener(eventName, triggerBrowsePrefetch, { once: true });
+                browseButton.addEventListener(eventName, hintGroup('browse-runtime'), { once: true });
             });
         }
 
         var moreButton = document.querySelector('.main-nav [data-view="more"]');
         if (moreButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                moreButton.addEventListener(eventName, triggerMorePrefetch, { once: true });
+                moreButton.addEventListener(eventName, hintGroup('more-tools'), { once: true });
             });
         }
 
@@ -1025,6 +1045,7 @@
     }
 
     global.AppActions = Object.assign({}, global.AppActions, {
+        openDiagnosticsSettings: openDiagnosticsSettings,
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
         preloadPracticeSuite: triggerPrefetch,
@@ -1040,10 +1061,86 @@
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
-        stopEndlessPractice: stopEndlessPractice
+        stopEndlessPractice: stopEndlessPractice,
+        openBookshelf: openBookshelf
     });
 
+    var bookshelfOpenSequence = 0;
+
+    function openBookshelf(options) {
+        var sequence = ++bookshelfOpenSequence;
+        var fromView = (options && options.fromView) || global.app?.currentView || 'overview';
+        var navigation = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration() : null;
+        var isCurrent = function () {
+            return sequence === bookshelfOpenSequence && (navigation == null
+                || navigation === global.__getAppNavigationIntentGeneration());
+        };
+        return Promise.resolve().then(function () {
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return global.AppLazyLoader.ensureGroup('reading-library');
+            }
+            return null;
+        }).then(function () {
+            if (!isCurrent()) return;
+            if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+                return global.AppLazyLoader.ensureGroup('exam-data');
+            }
+        }).then(function () {
+            if (!isCurrent()) return;
+            if (!global.BookshelfView || typeof global.BookshelfView.mount !== 'function') {
+                throw new Error('Bookshelf component is unavailable');
+            }
+            var bookshelfView = document.getElementById('bookshelf-view');
+            if (bookshelfView) {
+                bookshelfView.removeAttribute('hidden');
+            }
+            if (global.BookshelfView && typeof global.BookshelfView.mount === 'function') {
+                global.BookshelfView.mount('#bookshelf-view', { fromView: fromView });
+            }
+            if (global.app && typeof global.app.navigateToView === 'function') {
+                global.app.navigateToView('bookshelf');
+            } else if (typeof global.switchView === 'function') {
+                global.switchView('bookshelf');
+            }
+            var allViews = document.querySelectorAll('.view');
+            for (var i = 0; i < allViews.length; i++) {
+                allViews[i].classList.remove('active');
+            }
+            if (bookshelfView) {
+                bookshelfView.classList.add('active');
+            }
+            var allNavBtns = document.querySelectorAll('.nav-btn');
+            for (var j = 0; j < allNavBtns.length; j++) {
+                allNavBtns[j].classList.remove('active');
+            }
+            var moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+            if (moreNavBtn) {
+                moreNavBtn.classList.add('active');
+            }
+        }).catch(function (error) {
+            if (!isCurrent()) return;
+            console.warn('[AppActions] 打开书架失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('未能打开阅读书架，请稍后重试。', 'warning');
+            }
+        });
+    }
+
     // 挂载到全局（向后兼容）
+    global.openBookshelfView = openBookshelf;
+    // The More card is visible before more-tools has finished loading. Accept
+    // that first click in the resident runtime; the mounted handler prevents
+    // default itself, so warm clicks still have exactly one owner.
+    if (typeof document !== 'undefined') {
+        document.addEventListener('click', function (event) {
+            if (event.defaultPrevented) return;
+            var target = event.target?.closest?.('[data-action="open-bookshelf"]');
+            if (!target || !target.closest('#more-view')) return;
+            event.preventDefault();
+            openBookshelf({ fromView: 'more' });
+        });
+    }
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;

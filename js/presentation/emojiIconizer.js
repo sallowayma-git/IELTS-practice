@@ -117,6 +117,11 @@
     };
 
     var observer = null;
+    var pendingRoots = new Set();
+    var activeWalker = null;
+    var activeNode = null;
+    var scheduled = false;
+    var disconnected = false;
 
     function normalizeEmojiToken(token) {
         return String(token || '').replace(/[\uFE0E\uFE0F]/g, '');
@@ -126,7 +131,7 @@
         if (!node || node.nodeType !== 1) {
             return false;
         }
-        if (SKIP_TAGS[node.nodeName]) {
+        if (SKIP_TAGS[node.nodeName] || String(node.nodeName).toUpperCase() === 'SVG') {
             return true;
         }
         if (node.classList && (node.classList.contains('ui-emoji-icon') || node.classList.contains('achievement-icon'))) {
@@ -180,13 +185,16 @@
     }
 
     function replaceEmojiInTextNode(textNode) {
-        if (!textNode || !textNode.nodeValue || shouldSkipTextNode(textNode)) {
+        if (!textNode || !textNode.nodeValue) {
             return false;
         }
 
         var text = textNode.nodeValue;
         EMOJI_PATTERN.lastIndex = 0;
         if (!EMOJI_PATTERN.test(text)) {
+            return false;
+        }
+        if (shouldSkipTextNode(textNode)) {
             return false;
         }
 
@@ -228,7 +236,7 @@
             return;
         }
 
-        var walker = document.createTreeWalker(root, 4, null, false);
+        var walker = createPrunedWalker(root);
         var candidates = [];
         var current = walker.nextNode();
         while (current) {
@@ -244,6 +252,76 @@
         }
     }
 
+    function createPrunedWalker(root) {
+        // Include elements in the filter so excluded subtrees are rejected,
+        // rather than walking every text node inside code, editors and SVGs.
+        return document.createTreeWalker(root, 5, {
+            acceptNode: function (node) {
+                return node.nodeType === 1 ? (isSkippableElement(node) ? 2 : 3) : 1;
+            }
+        });
+    }
+
+    function scheduleWork() {
+        if (scheduled || disconnected || (!pendingRoots.size && !activeNode)) return;
+        scheduled = true;
+        if (typeof global.requestIdleCallback === 'function') {
+            global.requestIdleCallback(flushWork, { timeout: 250 });
+        } else {
+            global.setTimeout(flushWork, 16);
+        }
+    }
+
+    function enqueue(root) {
+        if (!root || disconnected || (root.nodeType !== 1 && root.nodeType !== 3)) return;
+        if (root.nodeType === 1 && isSkippableElement(root)) return;
+        pendingRoots.add(root);
+        scheduleWork();
+    }
+
+    function flushWork() {
+        scheduled = false;
+        if (disconnected) return;
+        var now = global.performance && typeof global.performance.now === 'function'
+            ? function () { return global.performance.now(); } : Date.now;
+        var started = now();
+        var visited = 0;
+        while (visited < 150 && now() - started < 4) {
+            if (!activeNode) {
+                activeWalker = null;
+                if (!pendingRoots.size) break;
+                var root = pendingRoots.values().next().value;
+                pendingRoots.delete(root);
+                visited += 1;
+                if (root.isConnected === false) continue;
+                var parent = root.parentNode;
+                var covered = false;
+                while (parent) {
+                    if (pendingRoots.has(parent) || isSkippableElement(parent)) {
+                        covered = true;
+                        break;
+                    }
+                    parent = parent.parentNode;
+                }
+                if (covered) continue;
+                if (root.nodeType === 3) {
+                    replaceEmojiInTextNode(root);
+                    continue;
+                }
+                activeWalker = createPrunedWalker(root);
+                activeNode = activeWalker.nextNode();
+                if (!activeNode) continue;
+            }
+            var node = activeNode;
+            // Advance before replacement so the walker survives removing its
+            // previous current node, including across idle slices.
+            activeNode = activeWalker.nextNode();
+            visited += 1;
+            if (node.isConnected !== false) replaceEmojiInTextNode(node);
+        }
+        scheduleWork();
+    }
+
     function observeDynamicContent() {
         if (!global.MutationObserver || !document.body) {
             return;
@@ -255,14 +333,14 @@
             for (i = 0; i < mutations.length; i++) {
                 var mutation = mutations[i];
                 if (mutation.type === 'characterData') {
-                    replaceEmojiInTextNode(mutation.target);
+                    enqueue(mutation.target);
                     continue;
                 }
                 if (mutation.type !== 'childList' || !mutation.addedNodes || !mutation.addedNodes.length) {
                     continue;
                 }
                 for (j = 0; j < mutation.addedNodes.length; j++) {
-                    walkAndReplace(mutation.addedNodes[j]);
+                    enqueue(mutation.addedNodes[j]);
                 }
             }
         });
@@ -275,7 +353,7 @@
     }
 
     function bootstrap() {
-        walkAndReplace(document.body);
+        enqueue(document.body);
         observeDynamicContent();
     }
 
@@ -291,6 +369,10 @@
             walkAndReplace(node || document.body);
         },
         disconnect: function disconnect() {
+            disconnected = true;
+            pendingRoots.clear();
+            activeWalker = null;
+            activeNode = null;
             if (observer && typeof observer.disconnect === 'function') {
                 observer.disconnect();
             }

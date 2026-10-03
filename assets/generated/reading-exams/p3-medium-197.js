@@ -4,7 +4,8 @@
   "meta": {
     "title": "Australia’s Megafauna Controversy 巨兽灭绝【次】",
     "category": "P3",
-    "frequency": "medium"
+    "frequency": "medium",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

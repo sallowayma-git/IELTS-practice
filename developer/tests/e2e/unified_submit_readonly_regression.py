@@ -93,13 +93,13 @@ def require(condition: bool, detail: str) -> None:
         raise RuntimeError(detail)
 
 
-async def open_practice(page: Page, session_id: str, token: str):
-    url = f"{UNIFIED_HTML.as_uri()}?examId={TARGET_EXAM}&dataKey={TARGET_EXAM}&test_env=1"
+async def open_practice(page: Page, session_id: str, token: str, exam_id: str = TARGET_EXAM):
+    url = f"{UNIFIED_HTML.as_uri()}?examId={exam_id}&dataKey={exam_id}&test_env=1"
     await page.goto(HOST_FIXTURE.as_uri(), wait_until="load")
     await page.set_content(HOST_HTML, wait_until="load")
     await page.evaluate(
         "config => window.__hostConfigure(config)",
-        {"url": url, "examId": TARGET_EXAM, "sessionId": session_id, "token": token},
+        {"url": url, "examId": exam_id, "sessionId": session_id, "token": token},
     )
     await page.wait_for_selector("#practice-frame")
     frame = page.frame(name="practice")
@@ -239,7 +239,7 @@ async def assert_pending(frame, detail: str) -> Dict[str, Any]:
     require(not state.get("readOnly"), f"{detail}:readonly_before_ack:{state}")
     require(not state.get("readOnlyClass"), f"{detail}:readonly_class_before_ack:{state}")
     require(not state.get("resetVisible"), f"{detail}:pending_reset_visible:{state}")
-    require(not state.get("inputDisabled"), f"{detail}:input_disabled_before_ack:{state}")
+    require(state.get("inputDisabled"), f"{detail}:pending_answers_editable:{state}")
     require(bool(state.get("submitDisabled")), f"{detail}:submit_not_guarded:{state}")
     require(not state.get("resultsVisible"), f"{detail}:results_visible_before_ack:{state}")
     return state
@@ -258,15 +258,7 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(corr.get("suiteSessionId") is None, f"unexpected_suite_session:{corr}")
     pending = await assert_pending(frame, "initial_delivery")
 
-    await frame.evaluate(
-        """() => {
-            const input = document.querySelector('input[type="text"], textarea');
-            input.value = 'edited_while_submitting';
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }"""
-    )
-    pending_after_edit = await assert_pending(frame, "editable_while_submitting")
-    require(pending_after_edit.get("inputValue") == "edited_while_submitting", "input_not_editable_while_submitting")
+    require(await frame.locator('#question-groups').evaluate("root => root.inert"), "pending_answer_root_not_locked")
 
     await send_host(page, "PRACTICE_SUBMIT_ACK", corr, token="forged-token")
     await assert_pending(frame, "forged_token_ack")
@@ -281,7 +273,7 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
         await send_host(page, "PRACTICE_SUBMIT_ACK", mismatch)
         await assert_pending(frame, f"mismatched_{field}_ack")
 
-    await send_host(page, "PRACTICE_SUBMIT_FAILED", corr)
+    await send_host(page, "PRACTICE_SUBMIT_FAILED", {**corr, "operation": "not-committed"})
     await frame.wait_for_function(
         "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'draft'"
     )
@@ -290,6 +282,14 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(not after_nack.get("inputDisabled"), f"nack_disabled_input:{after_nack}")
     require(not after_nack.get("submitDisabled"), f"nack_not_retryable:{after_nack}")
     require(not after_nack.get("resultsVisible"), f"nack_showed_results:{after_nack}")
+    await frame.locator('.incident-notice').first.wait_for(state="visible")
+    require(not await frame.locator('#question-groups').evaluate("root => root.inert"), "proven_rejection_kept_answers_locked")
+    require(await frame.evaluate("""() => {
+        const notice = document.querySelector('.incident-notifications').getBoundingClientRect();
+        const submit = document.getElementById('submit-btn').getBoundingClientRect();
+        return notice.bottom <= submit.top || notice.top >= submit.bottom
+            || notice.right <= submit.left || notice.left >= submit.right;
+    }"""), "dismissed_incident_covers_submit_control")
 
     await send_host(page, "PRACTICE_SUBMIT_ACK", corr)
     await frame.wait_for_timeout(120)
@@ -297,13 +297,15 @@ async def run_ack_and_nack_scenario(context) -> Dict[str, Any]:
     require(late_after_nack.get("submissionStatus") == "draft", f"late_ack_after_nack_accepted:{late_after_nack}")
     require(not late_after_nack.get("readOnly"), f"late_ack_after_nack_locked:{late_after_nack}")
 
+    await frame.locator('#question-groups input[name="q1"][value="B"]').check()
     await frame.click("#submit-btn")
     await wait_for_submission_count(page, 2)
     retry = (await submissions(page))[1]
     require(
-        retry.get("data", {}).get("submissionId") == corr.get("submissionId"),
-        f"retry_changed_idempotency_key:{retry.get('data')}",
+        retry.get("data", {}).get("submissionId") != corr.get("submissionId"),
+        f"ordinary_submit_reused_idempotency_key:{retry.get('data')}",
     )
+    require(retry.get("data", {}).get("answers", {}).get("q1") == "B", "nack_resubmit_lost_edited_answer")
     await assert_pending(frame, "retry_delivery")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(retry))
     await frame.wait_for_function(
@@ -345,7 +347,7 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     )
     after_timeout = await get_state(frame)
     require(not after_timeout.get("readOnly"), f"timeout_locked_page:{after_timeout}")
-    require(not after_timeout.get("inputDisabled"), f"timeout_disabled_input:{after_timeout}")
+    require(after_timeout.get("inputDisabled"), f"timeout_answers_editable:{after_timeout}")
     require(not after_timeout.get("submitDisabled"), f"timeout_not_retryable:{after_timeout}")
     require(not after_timeout.get("resultsVisible"), f"timeout_showed_results:{after_timeout}")
 
@@ -355,13 +357,15 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     require(late_after_timeout.get("submissionStatus") == "draft", f"late_ack_after_timeout_accepted:{late_after_timeout}")
     require(not late_after_timeout.get("readOnly"), f"late_ack_after_timeout_locked:{late_after_timeout}")
 
-    await frame.click("#submit-btn")
+    # The explicit incident action owns the safe replay of the original snapshot.
+    await frame.get_by_role("button", name="安全重试原操作", exact=True).click()
     await wait_for_submission_count(page, 2)
     retry = (await submissions(page))[1]
     require(
         retry.get("data", {}).get("submissionId") == corr.get("submissionId"),
         f"timeout_retry_changed_idempotency_key:{retry.get('data')}",
     )
+    require(retry.get("data", {}).get("answers") == first.get("data", {}).get("answers"), "timeout_retry_changed_original_answers")
     await assert_pending(frame, "timeout_retry_delivery")
     await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(retry))
     await frame.wait_for_function(
@@ -373,12 +377,52 @@ async def run_timeout_scenario(context) -> Dict[str, Any]:
     return {"afterTimeout": after_timeout, "lateAfterTimeout": late_after_timeout, "afterRetryAck": after_retry_ack}
 
 
+async def run_vocab_entry_isolation_scenario(context) -> Dict[str, Any]:
+    page = await context.new_page()
+    frame = await open_practice(page, "session-vocab-isolation", "token-vocab-isolation", "p2-low-08")
+    await frame.check('#question-groups input[name="q1"][value="A"]')
+    before_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    require(await frame.locator("#reading-vocab-header-btn").count() == 0, "practice_vocab_entry_still_visible")
+    await frame.evaluate("() => ReadingVocabReader.open('p2-low-08', { fromPractice: true })")
+    await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
+    require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_available")
+    require(await frame.locator('#question-groups input[name="q1"][value="A"]').is_checked(), "practice_answer_changed")
+    during_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    require(during_answers == before_answers, "reader_changed_answer_payload")
+
+    await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerLockMode(true)")
+    require(await frame.locator('#question-groups input[name="q1"][value="A"]').is_disabled(), "timer_lock_did_not_lock_practice_answer")
+    require(await frame.locator("#reading-note-editor [data-note-body]").is_disabled(), "timer_lock_did_not_lock_practice_notes")
+    require(await frame.locator("#vocab-manual-input").is_enabled(), "timer_lock_disabled_reader_input")
+    await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.setTimerLockMode(false)")
+    await frame.click("#vocab-reader-back-btn")
+
+    await frame.click("#submit-btn")
+    await wait_for_submission_count(page, 1)
+    submission = (await submissions(page))[0]
+    require(submission.get("data", {}).get("answers") == before_answers, f"practice_payload_changed:{submission}")
+    await send_host(page, "PRACTICE_SUBMIT_ACK", correlation(submission))
+    await frame.wait_for_function(
+        "() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitted'"
+    )
+    await frame.evaluate("() => ReadingVocabReader.open('p2-low-08', { fromPractice: true })")
+    await frame.locator("#vocab-questions-content .vocab-question-group").first.wait_for(state="attached")
+    require(await frame.locator("#vocab-manual-input").is_enabled(), "submitted_readonly_disabled_reader_input")
+    require(await frame.locator("#vocab-questions-content input, #vocab-questions-content textarea, #vocab-questions-content select").count() == 0, "reader_question_controls_after_submit")
+    after_answers = await frame.evaluate("() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectAnswers()")
+    require(after_answers == before_answers, "reader_after_submit_changed_answers")
+    await frame.click("#vocab-reader-back-btn")
+    await page.close()
+    return {"examId": "p2-low-08", "entryAvailable": False, "readerAvailableByApi": True, "submittedAnswer": "A", "readerInputSurvivesPracticeLocks": True}
+
+
 async def run() -> Dict[str, Any]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--allow-file-access-from-files"])
         context = await browser.new_context(viewport={"width": 1440, "height": 1000})
         await context.add_init_script(script="window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;")
         try:
+            vocab_entry_isolation = await run_vocab_entry_isolation_scenario(context)
             ack_and_nack = await run_ack_and_nack_scenario(context)
             timeout = await run_timeout_scenario(context)
         finally:
@@ -387,7 +431,7 @@ async def run() -> Dict[str, Any]:
     return {
         "status": "pass",
         "detail": "unified reliable submit acknowledgement regression passed",
-        "data": {"ackAndNack": ack_and_nack, "timeout": timeout},
+        "data": {"vocabEntryIsolation": vocab_entry_isolation, "ackAndNack": ack_and_nack, "timeout": timeout},
     }
 
 

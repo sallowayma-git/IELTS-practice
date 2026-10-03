@@ -13,7 +13,8 @@
     "pdfFilename": "60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/",
     "legacyFilename": "60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

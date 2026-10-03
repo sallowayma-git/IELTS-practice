@@ -13,7 +13,8 @@
     "pdfFilename": "102. P1 - Katherine Mansfield 新西兰作家.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/102. P1 - Katherine Mansfield 新西兰作家【高】/",
     "legacyFilename": "102. P1 - Katherine Mansfield 新西兰作家【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

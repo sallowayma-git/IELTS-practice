@@ -19,6 +19,21 @@ def load_tool(name: str):
 
 
 class ListeningMigrationContractTest(unittest.TestCase):
+    def test_early_capture_keeps_encoding_before_the_large_bootstrap(self):
+        contract = load_tool("listening_bridge_contract")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            html_path = workspace / "ListeningPractice" / "exam.html"
+            bridge = workspace / "js" / "bundles" / contract.BRIDGE_FILENAME
+            for meta in ('<meta charset="UTF-8">', '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">', ''):
+                original = f'<html><head>\n<title>听力</title>{meta}<script src="content.js"></script></head><body>答案</body></html>'
+                updated, _, _ = contract.ensure_static_bridge(original, html_path, bridge)
+                self.assertLess(updated.index('charset='), 1024)
+                self.assertLess(updated.index('charset='), updated.index('LISTENING_DIAGNOSTICS_START'))
+                self.assertLess(updated.index('AppDiagnosticBootstrap.install'), updated.index('src="content.js"'))
+                self.assertIn('<body>答案', updated)
+                self.assertEqual(contract.ensure_static_bridge(updated, html_path, bridge)[0], updated)
+
     def test_static_bridge_replacement_is_relative_and_idempotent(self):
         contract = load_tool("listening_bridge_contract")
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -41,9 +56,13 @@ class ListeningMigrationContractTest(unittest.TestCase):
             self.assertEqual(repeated, updated)
             self.assertEqual(repeated_src, src)
             self.assertEqual(src, "../../../../js/bundles/listening-record-bridge.bundle.js")
-            self.assertEqual(updated.count("listening-record-bridge.bundle.js"), 1)
+            self.assertEqual(updated.count('data-listening-record-bridge="true"'), 1)
+            self.assertEqual(updated.count("LISTENING_DIAGNOSTICS_START"), 1)
+            self.assertLess(updated.index("AppDiagnosticBootstrap.install"), updated.index('<script src='))
+            self.assertIn('"capture": "before-dependencies"', updated)
+            self.assertIn('"optionalMedia": true', updated)
             self.assertIn('data-listening-record-bridge="true"', updated)
-            self.assertNotIn("practice-page-enhancer.js", updated)
+            self.assertNotRegex(updated, r'''<script\b[^>]*\bsrc=["'][^"']*practice-page-enhancer\.js''')
             self.assertLess(updated.index("listening-record-bridge.bundle.js"), updated.lower().index("</body>"))
 
     def test_normalize_absolute_root_writes_backup_below_backup_dir(self):
@@ -140,8 +159,8 @@ class ListeningMigrationContractTest(unittest.TestCase):
                 'data-listening-record-bridge="true"></script>',
                 html,
             )
-            self.assertEqual(html.count("listening-record-bridge.bundle.js"), 1)
-            self.assertNotIn("practice-page-enhancer.js", html)
+            self.assertEqual(html.count('data-listening-record-bridge="true"'), 1)
+            self.assertNotRegex(html, r'''<script\b[^>]*\bsrc=["'][^"']*practice-page-enhancer\.js''')
 
 
 if __name__ == "__main__":

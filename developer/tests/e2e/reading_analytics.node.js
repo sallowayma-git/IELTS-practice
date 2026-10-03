@@ -1,0 +1,208 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium } from 'playwright';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const reports = path.join(root, 'developer/tests/e2e/reports');
+fs.mkdirSync(reports, { recursive: true });
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
+function serve(request, response) {
+    const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).replace(/^\/IELTS-practice\//, '/');
+    const filename = path.resolve(root, `.${pathname}`);
+    if (!filename.startsWith(root + path.sep)) return response.writeHead(403).end();
+    try {
+        const body = fs.readFileSync(filename);
+        response.writeHead(200, { 'Content-Type': mime[path.extname(filename)] || 'application/octet-stream' });
+        response.end(body);
+    }
+    catch { response.writeHead(404).end(); }
+}
+let openssl = process.env.OPENSSL_EXECUTABLE_PATH || 'openssl';
+if (process.platform === 'win32' && !process.env.OPENSSL_EXECUTABLE_PATH) {
+    const git = execFileSync('where.exe', ['git'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0];
+    const bundled = path.resolve(path.dirname(git), '../usr/bin/openssl.exe');
+    if (fs.existsSync(bundled)) openssl = bundled;
+}
+const certificate = path.join(reports, 'issue152-localhost-cert.pem');
+const privateKey = path.join(reports, 'issue152-localhost-key.pem');
+execFileSync(openssl, ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', privateKey,
+    '-out', certificate, '-days', '1', '-subj', '/CN=localhost'], { stdio: 'pipe' });
+const server = http.createServer(serve);
+const secureServer = https.createServer({ key: fs.readFileSync(privateKey), cert: fs.readFileSync(certificate) }, serve);
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+await new Promise(resolve => secureServer.listen(0, '127.0.0.1', resolve));
+let browser;
+const report = { status: 'running', cases: [], hosting: 'Isolated local HTTPS static hosting under /IELTS-practice/; no production deployment.' };
+
+async function sync(page) {
+    await page.evaluate(() => ensurePracticeRecordsSync('reading-analytics-e2e', { forceRender: true, requirePostCommitRead: true }));
+}
+
+async function readReadingAnalyticsMetrics(page) {
+    return page.evaluate(() => {
+        const text = id => document.getElementById(id)?.textContent?.trim() || '';
+        return {
+            weightedAccuracy: text('avg-score'),
+            weightedLabel: text('practice-accuracy-label'),
+            weightedMeta: text('practice-accuracy-meta'),
+            parts: {
+                p1: text('practice-parts-p1-accuracy'),
+                p2: text('practice-parts-p2-accuracy'),
+                p3: text('practice-parts-p3-accuracy')
+            }
+        };
+    });
+}
+
+try {
+    browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'],
+        ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
+    const modes = [
+        ['file', pathToFileURL(path.join(root, 'index.html')).href],
+        ['http', `http://127.0.0.1:${server.address().port}/index.html`],
+        ['https-subpath', `https://127.0.0.1:${secureServer.address().port}/IELTS-practice/index.html`]
+    ];
+    for (const [mode, url] of modes) {
+        console.log(`[${mode}] Reading analytics acceptance`);
+        const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1365, height: 1000 } });
+        const page = await context.newPage();
+        page.setDefaultTimeout(15000);
+        const errors = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await page.goto(`${url}?test_env=1`);
+        await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
+        await page.evaluate(async () => { await window.AppData.ready; await window.LicenseModal.accept(); });
+        const close = page.locator('[data-library-action="close"]');
+        if (await close.isVisible()) await close.click();
+        await page.locator('nav button[data-view="practice"]').click();
+        await page.waitForSelector('#practice-view.active');
+        await page.waitForFunction(() => !!window.ReadingAnalytics);
+        await page.evaluate(async () => {
+            await window.AppData.practice.clear();
+            const now = new Date().toISOString();
+            const row = (id, examId, earned, possible, category, extra = {}) => ({
+                id, sessionId: id, examId, title: examId === 'a' ? 'Alpha passage' : `Passage ${examId}`,
+                type: 'reading', status: 'completed', date: now, correctAnswers: earned, totalQuestions: possible,
+                metadata: { libraryConfigurationId: 'analytics-a', category },
+                questionTypePerformance: { 'multiple-choice': { correct: earned, total: possible } }, ...extra
+            });
+            const save = record => window.AppData.practice.completeAttempt({ record });
+            await save(row('a1', 'a', 1, 2, 'P1', { date: new Date(Date.now() - 40 * 86400000).toISOString() }));
+            await save(row('a2', 'a', 9, 10, 'P1'));
+            await save(row('fraction', 'b', 1.5, 3, 'P2'));
+            const child = row('child', 'c', 2, 4, 'P3');
+            await window.AppData.practice.finalizeSuite({ record: row('suite', 'suite', 3, 5, null, {
+                suiteMode: true, suiteEntries: [child, row('suite-a', 'a', 1, 1, 'P1')]
+            }) });
+            await save(child);
+            await save(row('unknown', '', 0, 0, null, { date: undefined, questionTypePerformance: {} }));
+            await save(row('parent-only', 'old-suite', 9, 10, null, { suiteMode: true }));
+            for (const [id, extra] of Object.entries({ listening: { type: 'listening' }, draft: { status: 'draft' },
+                interrupted: { status: 'interrupted' }, ungradable: { gradable: false }, demo: { dataSource: 'demo' } })) {
+                await save(row(id, id, 100, 100, 'P3', extra));
+            }
+        });
+        await sync(page);
+        const panel = page.locator('#practice-view');
+        assert.equal(await page.locator('.reading-analytics').count(), 0, '旧阅读专项统计卡片应被移除');
+        assert.equal(await page.locator('#reading-analytics-range').count(), 0, '旧日期筛选控件应被移除');
+        await page.locator('#practice-accuracy-card').click();
+        await page.locator('[data-practice-accuracy-mode="weighted"]').click();
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-label')?.textContent === '加权平均正确率');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
+        assert.equal(await page.locator('#practice-accuracy-meta').innerText(), '总得分 ÷ 总分');
+        assert.equal(await page.locator('[data-widget-type="parts"]').count(), 1, 'P1/P2/P3 组件应存在');
+        await panel.screenshot({ path: path.join(reports, `reading-analytics-${mode}-desktop.png`) });
+        await page.locator('#record-type-filter-buttons [data-filter-type="listening"]').click();
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-meta')?.textContent === '仅适用于阅读');
+        assert.equal(await page.locator('#avg-score').innerText(), '—');
+        await page.locator('#record-type-filter-buttons [data-filter-type="reading"]').click();
+        await page.waitForFunction(() => document.getElementById('practice-accuracy-meta')?.textContent === '总得分 ÷ 总分');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
+        await page.evaluate(() => searchPracticeHistory('Alpha'));
+        await page.waitForFunction(() => document.getElementById('avg-score')?.textContent === '72.5%');
+        await page.evaluate(() => searchPracticeHistory(''));
+        await sync(page);
+        // The trend, heatmap and history list are intentionally asynchronous
+        // projections of the active library and may change while the shared
+        // reading metrics remain stable. Select the parts widget explicitly,
+        // then compare only the product invariants required across a library
+        // switch.
+        await page.locator('#practice-custom-card [aria-label="配置自定义组件"]').click();
+        await page.locator('#practice-custom-card [data-practice-widget="parts"]').click();
+        // Regression (PR #192 review): the author display:grid rule used to
+        // beat the UA [hidden] rule, so listening kept all three score rows
+        // visible (with stale reading scores) beside the reading-only
+        // message. The rows must actually disappear and must come back with
+        // the reading filter restored.
+        const readPartsRows = () => page.evaluate(() => Array.from(
+            document.querySelectorAll('.practice-parts-widget__row'),
+            row => ({ hidden: row.hidden, display: getComputedStyle(row).display })
+        ));
+        await page.locator('#record-type-filter-buttons [data-filter-type="listening"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === false && rows.length === 3
+                && Array.from(rows).every(row => row.hidden);
+        }, null, { timeout: 15000 });
+        const listeningRows = await readPartsRows();
+        assert.ok(listeningRows.every(row => row.display === 'none'),
+            `listening view must hide the parts rows, got ${JSON.stringify(listeningRows)}`);
+        await page.locator('#record-type-filter-buttons [data-filter-type="reading"]').click();
+        await page.waitForFunction(() => {
+            const unavailable = document.getElementById('practice-parts-unavailable');
+            const rows = document.querySelectorAll('.practice-parts-widget__row');
+            return unavailable?.hidden === true && rows.length === 3
+                && Array.from(rows).every(row => !row.hidden);
+        }, null, { timeout: 15000 });
+        const restoredRows = await readPartsRows();
+        assert.ok(restoredRows.every(row => row.display !== 'none'),
+            `reading view must restore the parts rows, got ${JSON.stringify(restoredRows)}`);
+        const beforeSwitch = await readReadingAnalyticsMetrics(page);
+        await page.evaluate(async () => {
+            const source = (await window.resolveActiveLibraryIndex()).filter(exam => exam.type === 'reading').slice(0, 3);
+            const index = source.map((exam, i) => ({ ...exam, id: ['a', 'b', 'c'][i], category: 'P2' }));
+            await window.AppData.library.import({ id: 'analytics-b', configuration: { name: 'Analytics B' }, index });
+            await window.LibraryManager.switchLibraryConfig('analytics-b');
+        });
+        await page.locator('nav button[data-view="practice"]').click();
+        await sync(page);
+        assert.deepEqual(await readReadingAnalyticsMetrics(page), beforeSwitch,
+            'weighted accuracy and P1/P2/P3 metrics must survive a library switch');
+        await page.reload();
+        await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
+        const closeAfterReload = page.locator('[data-library-action="close"]');
+        if (await closeAfterReload.isVisible()) await closeAfterReload.click();
+        await page.locator('nav button[data-view="practice"]').click();
+        await sync(page);
+        assert.equal(await page.locator('#practice-accuracy-label').innerText(), '加权平均正确率');
+        assert.equal(await page.locator('#avg-score').innerText(), '72.5%');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await panel.screenshot({ path: path.join(reports, `reading-analytics-${mode}-mobile.png`) });
+        assert.equal(await panel.evaluate(element => element.getBoundingClientRect().right <= innerWidth + 1), true);
+        await page.evaluate(() => window.AppData.practice.clear());
+        await sync(page);
+        // The refresh promise publishes records before deferred accuracy rendering.
+        await page.waitForFunction(() => document.getElementById('avg-score')?.textContent === '—');
+        assert.equal(await page.locator('#avg-score').innerText(), '—');
+        assert.doesNotMatch(await panel.innerText(), /NaN|Infinity/);
+        assert.deepEqual(errors, []);
+        report.cases.push({ mode, status: 'pass', checks: 'weighted/fractional scores, suite dedup/fallback, window and record/search filters, library switch, reload, mobile, empty state' });
+        await context.close();
+    }
+    report.status = 'pass';
+} catch (error) {
+    report.status = 'fail'; report.error = error.stack; process.exitCode = 1;
+    console.error(error);
+} finally {
+    fs.writeFileSync(path.join(reports, 'reading-analytics-report.json'), JSON.stringify(report, null, 2));
+    await browser?.close();
+    await new Promise(resolve => server.close(resolve));
+    await new Promise(resolve => secureServer.close(resolve));
+}

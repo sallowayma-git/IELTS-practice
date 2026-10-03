@@ -23,6 +23,29 @@ For exam data structure, see [Exam Index & Metadata Structure](/sallowayma-git/I
 
 ## Architecture Overview
 
+### Reading learning states and favorites (#151)
+
+Reading Browse has a compact **筛选** popover alongside search, frequency, and sorting. It offers one learning state (All, Unattempted / **未完成**, Completed, or Wrong / **需复习**) and an independent Favorites checkbox. The two dimensions combine with AND. Activating either dimension limits results to Reading; the default selection leaves the existing Reading/Listening behavior intact. Difficulty remains a sort order, and category scope still comes from the current entry point.
+
+- **Completed:** a real, valid graded submission with a positive question/possible-score denominator and a finite earned score between zero and that denominator. Fractional earned scores retain partial credit. Draft, interrupted, started, explicitly ungraded/ungradable, demo, and missing-score records do not qualify.
+- **Unattempted:** no qualifying completed submission. The UI says **未完成** and explains that this includes draft-only and interrupted-only passages; it does not claim there has been no interaction.
+- **Wrong:** the latest qualifying result has an exact earned/possible percentage below 60. This reuses the red completion-dot band. A perfect retake clears Wrong while retaining Completed. Invalid later records do not displace a valid result.
+- **Latest:** use the first valid `completedAt`, `endTime`, `date`, or `timestamp`, in that order. Equal timestamps use a stable record/session ID tie-break. Migration/update timestamps do not displace completion times. A result with no usable submission time does not qualify.
+- **Identity:** the explicit library configuration (`null` for the built-in library), Reading type, and passage exam ID. Neither titles nor a bare exam ID join records across libraries. Legacy records without sufficient provenance remain unattempted in Browse; their history is preserved.
+- **Suites:** only passage entries contribute state. Each entry uses its own score, launch provenance, and completion time, with explicit parent provenance/time as the fallback. Aggregate totals never substitute for a missing passage score. A map per passage prevents duplicate state from suite parents or retained child records.
+- **Existing v2 data:** summaries without grading evidence read their matching details in a consistent snapshot before Browse indexes them. This recovers grading/status flags and suite-entry scores without loading annotations or rewriting history. For submission time, a distinct authored `completedAt`, retained `endTime`, or distinct authored `date` takes precedence over aliases copied by the old normalizer, so an import timestamp cannot override a recoverable submission time. If no distinct evidence survives, existing time aliases remain the fallback. Old root-only zeros with no corroborating score detail are indistinguishable from display defaults and remain unknown; positive scores and detail-backed zeros still qualify.
+- **Restored preferences:** committed preference changes invalidate the favorite projection in the current page. Stars and Favorites-only results refresh after backup restore, while an explicit filter reset still wins delayed reads. Active controls and reset text use the theme surface/text tokens, including ASCII Flower.
+
+Favorites and learning-filter preferences are stored additively in `AppData.preferences` under the existing Browse preference object. Favorites are keyed by the complete passage identity; `setReadingFavorite` merges one change against current persisted data under the existing revision/transaction queue. Learning preferences are browser-profile-wide, like the existing frequency/sort preferences, and apply to the current library and inherited category without replacing either scope. Existing scroll preferences, anchors, history, and drafts remain intact. Backups include these preferences through the existing preference store.
+
+Returning through a category entry restores the saved controls. The existing top-level Browse navigation/reset route and the popover's **重置筛选** explicitly clear category/type, search, frequency, learning state, and Favorites-only selection, persist the cleared selections, and keep the favorite passages. The existing sort preference is retained. A reset wins over an in-flight preference hydration, so a cleared selection cannot reappear from that older read.
+
+The popover uses native radio/checkbox controls: Enter/Space opens the button, arrow keys select a learning state, Tab moves between controls, and Escape closes the popover and returns focus. Its trigger displays the active selections. Each Reading card has a keyboard-accessible favorite button with `aria-pressed`; removal under Favorites-only returns focus to the filter control when the card disappears.
+
+Implementation: `js/services/browseLearningState.js` derives the state; `js/components/browseLearningControls.js` owns the UI and favorites. The existing accepted completion projection in `legacyViewBundle.js` drives both Reading card dots and learning filters. Lightweight practice summaries retain missing-versus-zero scores and passage provenance without loading full answer details.
+
+Validation: `developer/tests/js/browseLearningState.test.js`, the Browse/AppData regression suites, and `developer/tests/e2e/browse_learning_state.node.js`. The browser regression exercises real persisted fixtures and UI controls under `file://`, local HTTP, and a local HTTPS static host at `/IELTS-practice/`, including narrow layouts. This HTTPS check validates static-host protocol/path behavior; it is not a smoke test of a separately deployed site.
+
 The Browse View is structured around two primary controllers that collaborate to manage exam browsing:
 
 **BrowseController and ExamActions Collaboration:**

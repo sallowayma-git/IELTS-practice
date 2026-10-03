@@ -11,7 +11,9 @@
         'IELTSAtlasDataV2',
         'ExamSystemDB',
         'ExamSystemExternalBackup',
-        'IELTSAtlasExternalBackupV2'
+        'IELTSAtlasExternalBackupV2',
+        'IELTSAtlasDiagnosticsV1',
+        'IELTSAtlasReadingViewCache'
     ]);
     let resetPromise = null;
 
@@ -128,7 +130,13 @@
                     });
                     continue;
                 }
-                storage.clear();
+                // Keep only the diagnostic lifecycle tombstone. Removing it even
+                // briefly must not allow a surviving writer to adopt a fresh epoch.
+                const controlKey = global.AppDiagnosticStore && global.AppDiagnosticStore.controlKey;
+                if (name === 'localStorage' && controlKey && typeof storage.key === 'function') {
+                    const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
+                    for (const key of keys) if (key !== controlKey) storage.removeItem(key);
+                } else storage.clear();
             } catch (error) {
                 errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
@@ -167,6 +175,22 @@
             return result;
         }
 
+        try {
+            const diagnostics = global.AppDiagnosticStore;
+            if (!diagnostics || typeof diagnostics.withFullReset !== 'function') {
+                throw new Error('诊断存储跨标签清理协调不可用');
+            }
+            return await diagnostics.withFullReset(() => deleteAndCommit(service));
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify('诊断存储未能安全停止写入，本次清理需要重试。', 'error');
+            return { success: false, reason: 'diagnostic_reset_failed', terminal: false, retryable: true,
+                errors: [{ stage: 'diagnostic-reset', error }].concat(rollbackErrors),
+                databases: DATABASE_NAMES.slice(), externalBackupFilesPreserved: true };
+        }
+    }
+
+    async function deleteAndCommit(service) {
         const errors = [];
         let deletionResults;
         try {

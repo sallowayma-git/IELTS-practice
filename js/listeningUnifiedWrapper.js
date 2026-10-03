@@ -1,5 +1,10 @@
 (function initListeningUnifiedWrapper(global) {
     'use strict';
+    var diagnostics;
+    var frameDiagnostics;
+    var bridgeDeadline;
+    var sourceDeadline;
+    try { diagnostics = global.AppPracticeDiagnostics?.create('listening'); } catch (_) { }
 
     function resolveBridgeScriptUrl() {
         var doc = global.document;
@@ -872,6 +877,12 @@
 
     function injectBridge(scriptUrl) {
         var doc = getFrameDocument();
+        if (!doc) {
+            diagnostics?.failure('RESOURCE_LOAD_FAILED', 'load-resource', 'not-committed', null, null, null,
+                { url: 'js/bundles/listening-record-bridge.bundle.js', optional: false });
+            setStatus('Listening content is inaccessible. Local diagnostics remain available.', false);
+            return;
+        }
         if (!doc || (!doc.head && !doc.body) || state.bridgeInjected || iframeBridgeReady()) {
             return;
         }
@@ -880,13 +891,23 @@
         script.defer = true;
         script.dataset.listeningRecordBridge = 'true';
         script.src = scriptUrl || BRIDGE_SCRIPT_URL;
+        global.clearTimeout(bridgeDeadline);
+        bridgeDeadline = global.setTimeout(function bridgeTimedOut() {
+            if (iframeBridgeReady()) return;
+            diagnostics?.failure('PRACTICE_CHANNEL_TIMEOUT', 'handshake', 'not-committed');
+            setStatus('Listening bridge readiness was not confirmed.', false);
+        }, 10000);
         script.onload = function onBridgeLoad() {
-            state.bridgeReady = true;
+            state.bridgeReady = iframeBridgeReady();
+            if (state.bridgeReady) global.clearTimeout(bridgeDeadline);
             flushPendingMessages();
             adaptFrameUi();
         };
         script.onerror = function onBridgeError() {
+            global.clearTimeout(bridgeDeadline);
             state.bridgeInjected = false;
+            diagnostics?.failure('RESOURCE_LOAD_FAILED', 'load-resource', 'not-committed', null, null, null,
+                { url: 'js/bundles/listening-record-bridge.bundle.js', optional: false });
             setStatus('Listening bridge failed to load.', false);
         };
         (doc.head || doc.body).appendChild(script);
@@ -930,6 +951,7 @@
             state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
+            diagnostics?.connect(state, payload);
         } else {
             var messagePayload = message && message.data || {};
             var messageOrigin = typeof event.origin === 'string' ? event.origin : '';
@@ -941,6 +963,7 @@
                 || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) return;
         }
         forwardToIframe(message);
+        if (type === 'SUITE_NAVIGATE') diagnostics?.step('suite-navigation', 'succeeded');
     }
 
     function handleMessage(event) {
@@ -948,6 +971,13 @@
             return;
         }
         var frameWindow = getFrameWindow();
+        // The iframe has its own validated one-hop receiver. Relayed events
+        // remain local/shared-store evidence; never tunnel them through business
+        // forwarding or forward them a second time to the app host.
+        if (event.data.type === 'IELTS_DIAGNOSTIC_V1') {
+            try { if (event.source === frameWindow) frameDiagnostics?.receive(event); } catch (_) { }
+            return;
+        }
         if (event.source && frameWindow && event.source === frameWindow) {
             var frameOrigin = sameOrigin();
             if (frameOrigin === '*') {
@@ -962,6 +992,11 @@
                 !state.windowSessionToken
                 || framePayload.windowSessionToken !== state.windowSessionToken
             )) return;
+            if (event.data.type === 'SESSION_READY' && framePayload.initialized === true) {
+                state.bridgeReady = true;
+                global.clearTimeout(bridgeDeadline);
+                diagnostics?.step('handshake', 'succeeded');
+            }
             forwardToParent(event.data);
             return;
         }
@@ -1006,34 +1041,56 @@
     }
 
     async function init() {
+        diagnostics?.access();
+        diagnostics?.step('initialize', 'started');
         await loadCandidateCodePreferences();
         if (global.PracticeTimerPreferences && global.PracticeTimerPreferences.ready) await global.PracticeTimerPreferences.ready;
         var root = getRoot();
         var frame = getFrame();
         if (!root || !frame) {
+            diagnostics?.failure('APP_BOOT_FAILED', 'initialize', 'not-committed');
             return;
         }
         var launchConfig = readLaunchConfig();
         state.examId = normalizeSafeId(root.dataset.examId || launchConfig.examId, 'listening-unknown');
         state.sourceUrl = resolveSourceUrl(root.dataset.sourceUrl || launchConfig.sourceUrl);
         exposeCompatibilityApi();
+        try { frameDiagnostics = global.AppDiagnosticChannel?.createHost({ getBinding: function () {
+            return { window: getFrameWindow(), origin: sameOrigin() === '*' ? 'null' : sameOrigin(),
+                allowOpaqueOrigin: sameOrigin() === '*', sessionId: state.sessionId,
+                windowSessionToken: state.windowSessionToken };
+        } }); } catch (_) { }
         global.addEventListener('message', handleMessage);
+        diagnostics?.ready(state.parentWindow);
         if (!state.sourceUrl) {
+            diagnostics?.failure('RESOURCE_LOAD_FAILED', 'open-practice', 'not-committed', null, null, null,
+                { optional: true });
             setStatus('Listening source is unavailable.', false);
             return;
         }
         frame.addEventListener('load', function onFrameLoad() {
+            global.clearTimeout(sourceDeadline);
             setStatus('', true);
             state.bridgeInjected = false;
             injectBridge(BRIDGE_SCRIPT_URL);
             adaptFrameUi();
+            if (iframeBridgeReady()) { state.bridgeReady = true; flushPendingMessages(); }
         });
+        try { global.AppDiagnostics?.declareResource(frame, { url: state.sourceUrl, optional: false }); } catch (_) { }
+        sourceDeadline = global.setTimeout(function sourceTimedOut() {
+            diagnostics?.failure('RESOURCE_LOAD_FAILED', 'open-practice', 'not-committed', null, null, null, { optional: false });
+            setStatus('Listening content loading was not confirmed.', false);
+        }, 15000);
         frame.src = state.sourceUrl;
     }
 
+    function startWrapper() {
+        init().catch(function (error) { diagnostics?.failure('APP_BOOT_FAILED', 'initialize', 'not-committed', null, null, error); });
+    }
+
     if (global.document.readyState === 'loading') {
-        global.document.addEventListener('DOMContentLoaded', init);
+        global.document.addEventListener('DOMContentLoaded', startWrapper);
     } else {
-        init();
+        startWrapper();
     }
 })(typeof window !== 'undefined' ? window : globalThis);

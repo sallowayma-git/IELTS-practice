@@ -310,6 +310,91 @@ let lastPracticeRecordsSignature = null;
 // the Practice-history single-flight contract below.
 let browsePracticeProjectionInvocationSequence = 0;
 let browsePracticeProjectionGeneration = 0;
+let interruptedPracticeHistoryRenderGeneration = 0;
+let interruptedPracticeHistoryReadError = null;
+
+function resolveInterruptedPracticeType(record) {
+    const metadata = record && record.metadata || {};
+    const candidates = record ? [record.type, record.examType, record.practiceType,
+        metadata.type, metadata.examType, metadata.practiceType, record.pageType, metadata.pageType] : [];
+    for (const candidate of candidates) {
+        const type = normalizeRecordType(candidate);
+        if (type === 'reading' || type === 'listening') return type;
+    }
+    return null;
+}
+
+async function loadInterruptedPracticeHistory() {
+    try {
+        const records = await window.AppData.recovery.listInterrupted();
+        const libraryReads = new Map();
+        const manager = getLibraryManager();
+        const resolvedRecords = await Promise.all((Array.isArray(records) ? records : []).map(async (record) => {
+            if (!record || resolveInterruptedPracticeType(record)) return record;
+            if (!manager || typeof manager.resolveIndexForRecord !== 'function') return record;
+            // Older snapshots may have provenance but no type. Resolve only the
+            // saved source library, using the shared default/unknown-source policy.
+            // A different active library can reuse the same exam IDs.
+            const provenance = manager.getRecordLibraryProvenance(record);
+            const key = JSON.stringify(provenance);
+            if (!libraryReads.has(key)) {
+                libraryReads.set(key, Promise.resolve().then(() => manager.resolveIndexForRecord(record))
+                    .catch((error) => {
+                        console.warn('[PracticeHistory] 读取中断记录来源题库失败:', error);
+                        return [];
+                    }));
+            }
+            const sourceIndex = await libraryReads.get(key);
+            const exam = (Array.isArray(sourceIndex) ? sourceIndex : [])
+                .find((entry) => entry && String(entry.id) === String(record.examId));
+            const type = resolveInterruptedPracticeType(exam);
+            return type ? Object.assign({}, record, { type }) : record;
+        }));
+        return { records: resolvedRecords, error: null };
+    } catch (error) {
+        console.warn('[PracticeHistory] 读取中断记录失败:', error);
+        return { records: [], error };
+    }
+}
+
+function interruptedRecordMatchesExamType(record, targetType) {
+    const target = normalizeRecordType(targetType);
+    if (!target || target === 'all') return true;
+    // Unidentifiable legacy attempts remain in All, rather than being presented
+    // as both reading and listening. Canonical history keeps its existing policy.
+    return resolveInterruptedPracticeType(record) === target;
+}
+
+function updateInterruptedPracticeHistory(snapshot, examIndex) {
+    const container = document.getElementById('interrupted-practice-history');
+    const renderer = window.InterruptedPracticeHistory;
+    if (!container || !renderer) return;
+
+    const examType = getCurrentExamType();
+    const query = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
+    const records = snapshot.records.filter((record) => {
+        if (!record) return false;
+        if (examType !== 'all' && !interruptedRecordMatchesExamType(record, examType)) return false;
+        if (!query) return true;
+        return [record.title, record.examId, record.category, record.frequency,
+            record.metadata && record.metadata.examTitle, record.startTime,
+            record.endTime, record.date].some((field) => String(field || '').toLowerCase().includes(query));
+    }).sort((left, right) =>
+        (Date.parse(right.endTime || right.createdAt || right.startTime) || 0)
+        - (Date.parse(left.endTime || left.createdAt || left.startTime) || 0));
+    renderer.render({
+        container,
+        records,
+        error: snapshot.error,
+        onLoadDetails: (recordId) => window.AppData.recovery.getInterrupted(recordId),
+        onDelete: deleteInterruptedRecord,
+        onRetry: () => ensurePracticeRecordsSync('interrupted-retry', {
+            forceRender: true,
+            requirePostCommitRead: true
+        })
+    });
+}
+
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
@@ -319,10 +404,11 @@ async function syncPracticeRecords(options = {}) {
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
-    let [records, insightRecords, examIndex] = await Promise.all([
+    let [records, insightRecords, examIndex, interruptedSnapshot] = await Promise.all([
         listCanonicalPracticeRecordSummaries(),
         window.AppData.practice.listInsights({ limit: 10 }),
-        resolveActiveExamIndex()
+        resolveActiveExamIndex(),
+        loadInterruptedPracticeHistory()
     ]);
     const insightsById = new Map((Array.isArray(insightRecords) ? insightRecords : [])
         .filter((record) => record && record.id)
@@ -419,6 +505,20 @@ async function syncPracticeRecords(options = {}) {
             console.warn('[Review] 同步复盘队列失败:', error);
         }
         updatePracticeView(records, examIndex);
+    } else if (typeof flushPracticeInsightsRender === 'function') {
+        // A hidden-view sync may leave insights waiting. Activation must resume
+        // them even when the authoritative records signature did not change.
+        if (typeof flushPracticeViewSnapshot === 'function') {
+            flushPracticeViewSnapshot();
+        }
+        flushPracticeInsightsRender();
+    }
+    // Recovery is a separate view, never a formal score or completion projection.
+    // Always render its fresh read, even when canonical history has not changed.
+    if (practiceProjectionInvocation >= interruptedPracticeHistoryRenderGeneration) {
+        interruptedPracticeHistoryRenderGeneration = practiceProjectionInvocation;
+        interruptedPracticeHistoryReadError = interruptedSnapshot.error;
+        updateInterruptedPracticeHistory(interruptedSnapshot, examIndex);
     }
     return records;
 }
@@ -731,7 +831,7 @@ async function saveReadingHighlightVocab(payload) {
     }
     try {
         if (!window.VocabStore && window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-            await window.AppLazyLoader.ensureGroup('more-tools');
+            await window.AppLazyLoader.ensureGroup('vocabulary-tools');
         }
         if (!window.VocabStore || typeof window.VocabStore.upsertReadingHighlightWord !== 'function') {
             throw new Error('VocabStore 未就绪');
@@ -744,9 +844,11 @@ async function saveReadingHighlightVocab(payload) {
     } catch (error) {
         console.warn('[VocabStore] 阅读高亮生词保存失败:', error);
         if (typeof showMessage === 'function') {
-            showMessage('高亮生词已在阅读页本地缓存，主词表稍后同步', 'warning');
+            showMessage(error && error.code === 'BACKEND_UNAVAILABLE'
+                ? '高亮生词保存失败，请刷新主页并重新打开阅读页后重试'
+                : '高亮生词保存失败，请在阅读页重试', 'warning');
         }
-        return null;
+        throw error;
     }
 }
 
@@ -919,11 +1021,19 @@ function setupMessageListener() {
             const payload = data.data && typeof data.data === 'object' ? data.data : data;
             const requestId = payload && payload.requestId != null ? String(payload.requestId).trim() : '';
             if (!requestId) return;
-            saveReadingHighlightVocab(payload).then((saved) => {
+            const launchContext = matched.rec.initPayload || matched.rec;
+            const savePayload = Object.assign({}, payload, {
+                context: Object.assign({}, payload.context || {}, {
+                    examId: matched.rec.examId,
+                    libraryConfigurationId: launchContext.libraryConfigurationId == null
+                        ? null : launchContext.libraryConfigurationId
+                })
+            });
+            saveReadingHighlightVocab(savePayload).then((saved) => {
                 sendFallbackVocabOutcome(matched.rec, payload, Boolean(saved), saved ? '' : 'save_failed');
             }).catch((error) => {
                 console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
-                sendFallbackVocabOutcome(matched.rec, payload, false, 'save_failed');
+                sendFallbackVocabOutcome(matched.rec, payload, false, error && error.code || 'save_failed');
             });
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
@@ -1879,6 +1989,7 @@ const practiceReviewQueueState = {
     pending: null
 };
 let practiceReviewModeEnabled = false;
+let practiceReviewViewSnapshot = null;
 
 function getPracticeReviewQueueSnapshot() {
     return {
@@ -1919,7 +2030,11 @@ function refreshPracticeReviewQueue(trigger = 'default', options = {}) {
     practiceReviewQueueState.loading = loadPracticeReviewQueue()
         .then(() => {
             if (options && options.forceRender) {
-                startPracticeRecordsSyncInBackground('review-queue:' + trigger, { forceRender: true });
+                if (practiceReviewViewSnapshot) {
+                    updatePracticeView(practiceReviewViewSnapshot.records, practiceReviewViewSnapshot.examIndex);
+                } else {
+                    startPracticeRecordsSyncInBackground('review-queue:' + trigger, { forceRender: true });
+                }
             }
         })
         .catch((error) => {
@@ -1956,8 +2071,94 @@ if (typeof window !== 'undefined') {
     window.getPracticeReviewQueueSnapshot = getPracticeReviewQueueSnapshot;
 }
 
+// Dashboard charts are independent of the history list. Yield a paint before
+// computing them, then give each section its own task. Keep the latest work for
+// a later Practice activation, rather than painting a hidden or stale view.
+let pendingPracticeViewSnapshot = null;
+let pendingPracticeInsightsRender = null;
+let practiceInsightsFrame = null;
+let practiceInsightsTimer = null;
+
+function isPracticeInsightsViewActive() {
+    const view = document.getElementById('practice-view');
+    return !view || !view.classList || typeof view.classList.contains !== 'function'
+        || view.classList.contains('active');
+}
+
+function cancelPracticeInsightsRender() {
+    if (practiceInsightsFrame !== null && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(practiceInsightsFrame);
+    }
+    if (practiceInsightsTimer !== null) {
+        clearTimeout(practiceInsightsTimer);
+    }
+    practiceInsightsFrame = null;
+    practiceInsightsTimer = null;
+    pendingPracticeInsightsRender = null;
+}
+
+function queuePracticeInsightsRender(tasks) {
+    cancelPracticeInsightsRender();
+    pendingPracticeInsightsRender = { tasks };
+    flushPracticeInsightsRender();
+}
+
+function flushPracticeViewSnapshot() {
+    if (!pendingPracticeViewSnapshot || !isPracticeInsightsViewActive()) return;
+    const snapshot = pendingPracticeViewSnapshot;
+    pendingPracticeViewSnapshot = null;
+    updatePracticeView(snapshot.records, snapshot.examIndex);
+}
+
+function flushPracticeInsightsRender() {
+    const job = pendingPracticeInsightsRender;
+    if (!job || practiceInsightsFrame !== null || practiceInsightsTimer !== null
+        || !isPracticeInsightsViewActive()) return;
+
+    // Keep non-browser consumers synchronous (including the contract harness).
+    if (typeof window.requestAnimationFrame !== 'function') {
+        pendingPracticeInsightsRender = null;
+        job.tasks.forEach(task => task());
+        return;
+    }
+    const navigationGeneration = readBrowseProgressGeneration('__getAppNavigationIntentGeneration');
+    let index = 0;
+    const runSection = () => {
+        practiceInsightsTimer = null;
+        if (pendingPracticeInsightsRender !== job || !isPracticeInsightsViewActive()
+            || (navigationGeneration !== null && navigationGeneration !== readBrowseProgressGeneration('__getAppNavigationIntentGeneration'))) {
+            return;
+        }
+        try {
+            job.tasks[index++]();
+        } catch (error) {
+            console.warn('[PracticeHistory] 更新练习洞察失败:', error);
+        }
+        if (index < job.tasks.length) {
+            practiceInsightsTimer = setTimeout(runSection, 0);
+        } else {
+            pendingPracticeInsightsRender = null;
+        }
+    };
+    practiceInsightsFrame = window.requestAnimationFrame(() => {
+        practiceInsightsFrame = null;
+        practiceInsightsTimer = setTimeout(runSection, 0);
+    });
+}
+
 // Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
 function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
+    // Ratings change scheduling, not practice facts. Reuse the published light
+    // history snapshot so a mode toggle need not reload insights/details.
+    practiceReviewViewSnapshot = { records: recordsSnapshot, examIndex: examIndexSnapshot };
+    if (typeof window.requestAnimationFrame === 'function' && !isPracticeInsightsViewActive()) {
+        // Data publication still happens in syncPracticeRecords. Only the
+        // hidden Practice DOM/calculations wait until this view is activated.
+        pendingPracticeViewSnapshot = { records: recordsSnapshot, examIndex: examIndexSnapshot };
+        cancelPracticeInsightsRender();
+        return;
+    }
+    pendingPracticeViewSnapshot = null;
     const rawRecords = Array.isArray(recordsSnapshot) ? recordsSnapshot : [];
     const examIndex = Array.isArray(examIndexSnapshot) ? examIndexSnapshot : [];
     // 排除演示/种子记录。判定必须与 practice.stats / achievements.progress 两个投影器
@@ -2020,17 +2221,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
-    const trendRenderer = ensurePracticeTrendRenderer();
-    if (trendRenderer && typeof trendRenderer.update === 'function') {
-        trendRenderer.update(recordsToShow);
-    }
-
     const reviewQueue = getPracticeReviewQueueSnapshot();
-    const priorityRenderer = ensurePracticePriorityRenderer();
-    if (priorityRenderer && typeof priorityRenderer.update === 'function') {
-        priorityRenderer.update(recordsForInsights, examIndex, { examType, reviewStats: reviewQueue.stats });
-    }
-
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
     if (!renderer) {
@@ -2069,6 +2260,25 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         practiceListScroller = renderResult.scroller;
     }
     refreshBulkDeleteButton();
+    queuePracticeInsightsRender([
+        () => {
+            if (dashboard && typeof dashboard.updateAccuracy === 'function') {
+                dashboard.updateAccuracy(records, examType);
+            }
+        },
+        () => {
+            const trendRenderer = ensurePracticeTrendRenderer();
+            if (trendRenderer && typeof trendRenderer.update === 'function') {
+                trendRenderer.update(recordsToShow);
+            }
+        },
+        () => {
+            const priorityRenderer = ensurePracticePriorityRenderer();
+            if (priorityRenderer && typeof priorityRenderer.update === 'function') {
+                priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records, reviewStats: reviewQueue.stats });
+            }
+        }
+    ]);
 }
 
 function searchPracticeHistory(query) {
@@ -2336,6 +2546,19 @@ function ensurePracticeSessionSyncListener() {
             forceRender: true
         });
     });
+    const refreshInterruptedHistory = (event) => {
+        const detail = event && event.detail;
+        if (!detail || detail.reason === 'completed' || detail.interruptedRecordSaved !== true) return;
+        startPracticeRecordsSyncInBackground('session-interrupted', {
+            mode: 'summary',
+            forceRender: true,
+            requirePostCommitRead: true
+        });
+    };
+    document.addEventListener('practiceSessionEnded', refreshInterruptedHistory);
+    // A saved old attempt must refresh history even if a replacement session
+    // owns the exam and therefore must not receive a session-ended event.
+    document.addEventListener('practiceInterruptedRecordSaved', refreshInterruptedHistory);
 }
 
 // Phase 3: 练习统计计算 - 保留在 main.js（数据处理逻辑，暂不迁移）
@@ -3077,7 +3300,6 @@ async function initializeBrowseView(options = {}) {
             }
         }
 
-        setupBrowseSortControl();
         setupBrowseFrequencyFilterControl();
         if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
@@ -3259,11 +3481,10 @@ async function setupBrowseControls(options = {}) {
             return setupBrowseControls(options);
         }
         if (!browseControlsSeeded) {
-            // A user frequency/sort intent that happened while storage was being
+            // A user frequency intent that happened while storage was being
             // read owns the controls. The older preference snapshot must not
             // overwrite it when the await settles.
             if (browseControlsSeedReadRevision === browseControlsMutationRevision && browse) {
-                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
                 updateBrowseFrequencyButtons(
                     browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
                 );
@@ -3276,8 +3497,12 @@ async function setupBrowseControls(options = {}) {
     if (!isBrowseControlsSetupCurrent(options)) {
         return false;
     }
-    setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
+    if (window.BrowseLearningControls) {
+        await window.BrowseLearningControls.ready();
+        if (!isBrowseControlsSetupCurrent(options)) return false;
+        window.BrowseLearningControls.setup();
+    }
     return true;
 }
 
@@ -3289,28 +3514,6 @@ async function persistBrowsePreference(patch) {
     }
     const current = await window.AppData.preferences.getBrowse() || {};
     await window.AppData.preferences.setBrowse(Object.assign({}, current, patch));
-}
-
-function setupBrowseSortControl() {
-    const sortSelect = document.getElementById('browse-sort-select');
-    if (!sortSelect || sortSelect.dataset.bound === 'true') {
-        return;
-    }
-    const normalizeSortMode = (value) => {
-        const mode = String(value || 'default').trim().toLowerCase();
-        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
-    };
-    let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
-    if (!savedMode) savedMode = 'default';
-    sortSelect.value = normalizeSortMode(savedMode);
-    window.__browseSortMode = sortSelect.value;
-    sortSelect.addEventListener('change', () => {
-        browseControlsMutationRevision += 1;
-        window.__browseSortMode = normalizeSortMode(sortSelect.value);
-        persistBrowsePreference({ sortMode: window.__browseSortMode }).catch(console.warn);
-        refreshBrowseResults({ foreground: true });
-    });
-    sortSelect.dataset.bound = 'true';
 }
 
 function updateBrowseFrequencyButtons(filter) {
@@ -3620,6 +3823,55 @@ function createFallbackExamCard(exam, options = {}) {
             viewPDF(exam.id);
         });
         actions.appendChild(pdfBtn);
+
+        const isReading = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        if (isReading && exam && exam.id) {
+            const vocabBtn = document.createElement('button');
+            vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
+            vocabBtn.type = 'button';
+            vocabBtn.dataset.action = 'vocab-book';
+            vocabBtn.dataset.examTitle = exam.title || exam.name || '';
+            vocabBtn.dataset.examId = exam.id;
+            if (Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')) {
+                vocabBtn.dataset.libraryConfigurationId = exam.libraryConfigurationId || '';
+                if (exam.libraryConfigurationId && window.AppData?.vocab?.readingModel?.contentRef) {
+                    vocabBtn.dataset.contentRef = window.AppData.vocab.readingModel.contentRef(exam);
+                }
+            }
+            vocabBtn.textContent = '精读';
+            vocabBtn.title = '打开该题全文精读与生词本';
+            vocabBtn.addEventListener('click', async function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const navigation = window.__getAppNavigationIntentGeneration?.();
+                try {
+                    if (!Object.prototype.hasOwnProperty.call(vocabBtn.dataset, 'libraryConfigurationId')) {
+                        vocabBtn.dataset.libraryConfigurationId = await window.AppData.library.getActive() || '';
+                    }
+                    if (typeof window.launchBrowseReadingVocab !== 'function'
+                        && window.AppLazyLoader?.ensureGroup) {
+                        await window.AppLazyLoader.ensureGroup('browse-runtime');
+                    }
+                    if (navigation != null && navigation !== window.__getAppNavigationIntentGeneration()) return;
+                    if (typeof window.launchBrowseReadingVocab === 'function') {
+                        await window.launchBrowseReadingVocab(exam.id, vocabBtn);
+                    } else if (typeof window.ReadingVocabReader?.open === 'function') {
+                        await window.ReadingVocabReader.open(exam.id, {
+                            returnFocus: vocabBtn, fromView: 'browse', title: exam.title || exam.name || '',
+                            contentRef: vocabBtn.dataset.contentRef || '',
+                            libraryConfigurationId: vocabBtn.dataset.libraryConfigurationId || null
+                        });
+                    } else {
+                        throw new Error('Reading vocabulary reader is unavailable');
+                    }
+                } catch (error) {
+                    console.warn('[Browse] Opening intensive reading failed:', error);
+                    if (typeof window.showMessage === 'function') window.showMessage('未能打开精读，请重试。', 'warning');
+                }
+            });
+            actions.appendChild(vocabBtn);
+            actions.classList.add('has-vocab-btn');
+        }
     }
 
     item.appendChild(info);
@@ -4236,6 +4488,7 @@ async function performSearch(
     if (!isCurrent()) {
         return false;
     }
+    if (await setupBrowseControls({ isCurrent }) === false || !isCurrent()) return false;
     const searchBase = getBrowseFilteredExamBase(examIndexSnapshot);
     console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
@@ -4361,19 +4614,68 @@ async function deleteRecord(recordId) {
     }
 }
 
+async function refreshPracticeHistoryAfterMutation(trigger) {
+    try {
+        await ensurePracticeRecordsSync(trigger, { forceRender: true, requirePostCommitRead: true });
+        return !interruptedPracticeHistoryReadError;
+    } catch (error) {
+        console.warn('[PracticeHistory] 操作后刷新失败:', error);
+        return false;
+    }
+}
+
+async function deleteInterruptedRecord(recordId) {
+    if (!recordId) return false;
+    if (!confirm('确定要删除这条未完成 / 中断记录及其中保存的作答吗？阅读草稿将保留。此操作不可恢复。')) return false;
+    let mutationError = null;
+    try {
+        const result = await window.AppData.recovery.discardInterrupted(recordId);
+        if (result && result.committed === false) throw new Error('Interrupted deletion was not committed');
+    } catch (error) {
+        mutationError = error;
+        console.warn('[PracticeHistory] 删除中断记录失败:', error);
+    }
+    const refreshed = await refreshPracticeHistoryAfterMutation('interrupted-delete');
+    if (mutationError) {
+        showMessage(refreshed
+            ? '未能确认中断记录已删除，请查看刷新后的记录并重试。'
+            : '未能确认中断记录已删除，且记录刷新失败，请重试。', 'error');
+    } else {
+        showMessage(refreshed ? '中断记录已删除' : '中断记录已删除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return !mutationError && refreshed;
+}
+
 async function clearPracticeData() {
-    if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        await window.AppData.practice.clear();
-        await syncPracticeRecords({ forceRender: true, trigger: 'clear-all' });
-        if (window.AppData && window.AppData.recovery && typeof window.AppData.recovery.clear === 'function') {
-            await window.AppData.recovery.clear();
+    if (!confirm('确定要清除所有正式练习记录和未完成 / 中断记录吗？阅读草稿、活动会话及其他恢复数据将保留。此操作不可恢复。')) return false;
+
+    // Both scopes are explicitly selected by this history action. A failure in
+    // one must not hide a committed change in the other, or clear unrelated recovery.
+    const scopes = ['正式练习记录', '未完成 / 中断记录'];
+    const results = await Promise.allSettled([
+        Promise.resolve().then(() => window.AppData.practice.clear()),
+        Promise.resolve().then(() => window.AppData.recovery.clearInterrupted())
+    ]);
+    const failedScopes = [];
+    results.forEach((result, index) => {
+        if (result.status === 'rejected' || (result.value && result.value.committed === false)) {
+            failedScopes.push(scopes[index]);
+            console.warn(`[PracticeHistory] 清除${scopes[index]}失败:`, result.reason || result.value);
         }
+    });
+    if (!failedScopes.includes(scopes[0])) {
         processedSessions.clear();
         clearSelectedRecordsState();
         setBulkDeleteModeState(false);
         refreshBulkDeleteButton();
-        showMessage('练习记录已清除', 'success');
     }
+    const refreshed = await refreshPracticeHistoryAfterMutation('clear-all');
+    if (failedScopes.length) {
+        showMessage(`未能确认清除：${failedScopes.join('、')}。${refreshed ? '已刷新当前记录，请重试。' : '记录刷新也失败，请重试。'}`, 'error');
+    } else {
+        showMessage(refreshed ? '正式练习记录和中断记录已清除' : '练习记录已清除，但记录刷新失败，请重试。', refreshed ? 'success' : 'warning');
+    }
+    return failedScopes.length === 0 && refreshed;
 }
 
 async function clearCache() {

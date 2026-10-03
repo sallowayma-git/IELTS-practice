@@ -1,8 +1,11 @@
 (function () {
   'use strict';
+  if (window.__listeningBridgeGetState) return;
 
   var TAG = '[ListeningBridge]';
   var HOST_MESSAGE_SOURCE = 'exam_host';
+  var diagnostics;
+  try { diagnostics = window.AppPracticeDiagnostics?.create('listening'); } catch (_) { }
 
   function deriveParentOriginFromReferrer() {
     try {
@@ -101,6 +104,7 @@
       var secureData = Object.assign({}, data || {}, {
         windowSessionToken: state.windowSessionToken || null
       });
+      try { secureData.diagnosticCorrelation = diagnostics?.correlation(data && data.submissionId); } catch (_) { }
       pw.postMessage({ type: type, data: secureData, source: 'listening_record_bridge', timestamp: Date.now() }, targetOrigin);
       return true;
     } catch (e) {
@@ -912,11 +916,17 @@
       pending.payload = buildBridgePayload(pending.details, pending);
       pending.payload.submissionId = pending.submissionId;
     }
+    diagnostics?.watch(pending.submissionId, function retryOriginalCompletion() {
+      if (state.pendingCompletions[key] !== pending) return false;
+      return sendPendingCompletion('manual_retry', key);
+    });
     log(
       'sending PRACTICE_COMPLETE, submissionId=' + pending.submissionId
       + ' correct=' + pending.payload.scoreInfo.correct + '/' + pending.payload.scoreInfo.total
     );
-    return sendMessage('PRACTICE_COMPLETE', pending.payload);
+    var delivered = sendMessage('PRACTICE_COMPLETE', pending.payload);
+    if (!delivered) diagnostics?.failure('PRACTICE_CHANNEL_TIMEOUT', 'submit', 'unconfirmed', pending.submissionId);
+    return delivered;
   }
 
   function onComplete(options) {
@@ -924,6 +934,7 @@
     var suiteId = resolveCompletionSuiteId(options);
     if (suiteId) options.suiteId = suiteId;
     var completionKey = completionKeyForSuite(suiteId);
+    if (suiteId) diagnostics?.step('suite-navigation', 'started');
     if (isCompletionSettled(completionKey)) {
       log('already completed, skipping key=' + completionKey);
       return true;
@@ -946,6 +957,7 @@
       }
     }
     if (!details.length) {
+      diagnostics?.step('submit', 'cancelled');
       warn('no details extracted, cannot complete');
       return false;
     }
@@ -960,6 +972,9 @@
       payload: null
     };
     syncLegacyCompletionState();
+    diagnostics?.watch(state.pendingCompletions[completionKey].submissionId, function retryPendingCompletion() {
+      return sendPendingCompletion('manual_retry', completionKey);
+    });
     sendPendingCompletion(state.initialized ? 'completion_created' : 'complete_before_init', completionKey);
     scheduleCompletionRetries(options);
     return true;
@@ -1239,6 +1254,7 @@
     window.addEventListener('message', function (event) {
       if (!event || !event.data) return;
       var data = event.data;
+      if (data.type === 'IELTS_DIAGNOSTIC_V1') return;
       var type = data.type;
 
       if (type === 'INIT_SESSION' || type === 'init_exam_session') {
@@ -1279,6 +1295,7 @@
         state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
+        diagnostics?.connect(state, payload);
         stopInitRequestLoop();
         if (String(previousSessionId || '') !== String(state.sessionId || '')) {
           Object.keys(state.pendingCompletions).forEach(function (completionKey) {
@@ -1304,6 +1321,7 @@
         if (!pending
           || String(outcome.sessionId || '') !== String(state.sessionId || '')) return;
         if (type === 'PRACTICE_SUBMIT_ACK') {
+          diagnostics?.outcome(pending.submissionId, true);
           state.completedCompletions[pendingKey] = {
             submissionId: pending.submissionId,
             suiteId: pending.suiteId || null,
@@ -1314,6 +1332,9 @@
           syncLegacyCompletionState();
           log('PRACTICE_COMPLETE persisted, submissionId=' + outcome.submissionId);
         } else {
+          // Existing retries may already have committed; a rejection cannot
+          // establish that every attempt failed to persist.
+          diagnostics?.outcome(pending.submissionId, false, 'unconfirmed', outcome.errorCode);
           warn('PRACTICE_COMPLETE persistence failed, retrying submissionId=' + outcome.submissionId);
           scheduleCompletionRetries(pending.options || {});
         }
@@ -1369,14 +1390,19 @@
 
     sendSessionReady('bootstrapped');
     startInitRequestLoop();
+    diagnostics?.ready(state.parentWindow);
   }
 
   window.__listeningBridgeComplete = onComplete;
   window.__listeningBridgeGetState = function () { return state; };
 
+  function startBridge() {
+    try { bootstrap(); }
+    catch (error) { diagnostics?.failure('APP_BOOT_FAILED', 'initialize', 'not-committed', null, null, error); }
+  }
   if (window.document.readyState === 'complete' || window.document.readyState === 'interactive') {
-    bootstrap();
+    startBridge();
   } else {
-    window.document.addEventListener('DOMContentLoaded', bootstrap);
+    window.document.addEventListener('DOMContentLoaded', startBridge);
   }
 })();

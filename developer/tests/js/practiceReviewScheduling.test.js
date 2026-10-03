@@ -309,7 +309,7 @@ test('导入数据里合法的 reviewState 被保留，非法的被丢弃且不�
         schemaVersion: 1, algorithm: 'sm2-practice', algorithmVersion: 1,
         easeFactor: 2.36, interval: 6, repetitions: 2, reviewCount: 2, lapseCount: 1,
         lastReviewed: '2026-08-20T00:00:00.000Z', nextReview: '2026-08-26T00:00:00.000Z',
-        lastQuality: 'good', lastReviewAttemptId: 'legacy-attempt', updatedAt: '2026-08-20T00:00:00.000Z'
+        lastQuality: 'good', lastReviewAttemptId: 'legacy-attempt', appliedReviewAttemptIds: ['legacy-attempt'], updatedAt: '2026-08-20T00:00:00.000Z'
     };
     await app.practice.completeAttempt({
         operationId: 'op-imported',

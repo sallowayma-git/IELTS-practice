@@ -9,11 +9,12 @@
   "meta": {
     "title": "The internal body clock",
     "category": "P2",
-    "frequency": "次高频",
+    "frequency": "low",
     "pdfFilename": "",
     "legacyPath": "",
     "legacyFilename": "",
-    "questionIntroHtml": "<h3>Questions 14–26</h3>"
+    "questionIntroHtml": "<h3>Questions 14–26</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

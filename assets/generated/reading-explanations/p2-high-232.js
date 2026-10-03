@@ -98,19 +98,19 @@
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（1）题目 21：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：A（D — Claqueurs were divided into different categories.）\n原文：定位句：“The claque also underwent a kind of classification: the rieurs... the pleureurs... the commissaires...” 译：claque 也经历了一种分类：rieurs 会在笑话处大声笑；pleureurs 会假装流泪；commissaires 会背熟戏剧或音乐作品，然后提醒观众注意其中最精彩的部分。\n\n解析：D 对应原文的 classification。原文明确列举了不同类型的 claqueurs：负责笑的、负责哭的、负责引导观众注意精彩部分的。因此 D 正确。"
+            "text": "（1）题目 21：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：A（As a practice in France, it first appeared in the 16th century.）\n定位：正文 Paragraph E\n原文：16th-century French poet Jean Daurat is credited with bringing back the Roman practice of hiring professional applauders. In France, this group became known as a ‘claque’.\n译文：16 世纪的法国诗人让·多拉被认为重新带回了罗马时期雇用职业鼓掌者的做法；在法国，这一群体被称为“claque”。\n\n解析：原文以 16th-century French poet 明确交代这种做法在法国出现的时代，并说明它在法国被称为 claque，因此 A 正确。"
           },
           {
             "questionNumber": 22,
             "questionId": "q9",
-            "text": "（2）题目 22：（题干见题目区）\n答案：D"
+            "text": "（2）题目 22：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：D（Claqueurs were divided into different categories.）\n定位：正文 Paragraph E\n原文：The claque also underwent a kind of classification: the rieurs (laughers) would laugh loudly at the jokes; the pleureurs (criers) would feign tears in reaction to performances; the commissaires (officers) would learn a play or a piece of music by heart and then call attention to its best parts.\n译文：claque 也经历了一种分类：rieurs 会在笑话处大声笑，pleureurs 会假装流泪，commissaires 会背熟戏剧或音乐作品并提醒观众注意其中最精彩的部分。\n\n解析：classification 直接对应 different categories，随后列出的 rieurs、pleureurs 和 commissaires 是不同类型的职业捧场者，因此 D 正确。"
           }
         ],
         "questionRange": {
           "start": 21,
           "end": 22
         },
-        "text": "（1）题目 21：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：A（D — Claqueurs were divided into different categories.）\n原文：定位句：“The claque also underwent a kind of classification: the rieurs... the pleureurs... the commissaires...” 译：claque 也经历了一种分类：rieurs 会在笑话处大声笑；pleureurs 会假装流泪；commissaires 会背熟戏剧或音乐作品，然后提醒观众注意其中最精彩的部分。\n\n解析：D 对应原文的 classification。原文明确列举了不同类型的 claqueurs：负责笑的、负责哭的、负责引导观众注意精彩部分的。因此 D 正确。\n\n（2）题目 22：（题干见题目区）\n答案：D"
+        "text": "（1）题目 21：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：A（As a practice in France, it first appeared in the 16th century.）\n定位：正文 Paragraph E\n原文：16th-century French poet Jean Daurat is credited with bringing back the Roman practice of hiring professional applauders. In France, this group became known as a ‘claque’.\n译文：16 世纪的法国诗人让·多拉被认为重新带回了罗马时期雇用职业鼓掌者的做法；在法国，这一群体被称为“claque”。\n\n解析：原文以 16th-century French poet 明确交代这种做法在法国出现的时代，并说明它在法国被称为 claque，因此 A 正确。\n\n（2）题目 22：（题干见题目区）\n题目翻译：下列关于法国“职业捧场团”（claque）的陈述中，哪两项正确？\n答案：D（Claqueurs were divided into different categories.）\n定位：正文 Paragraph E\n原文：The claque also underwent a kind of classification: the rieurs (laughers) would laugh loudly at the jokes; the pleureurs (criers) would feign tears in reaction to performances; the commissaires (officers) would learn a play or a piece of music by heart and then call attention to its best parts.\n译文：claque 也经历了一种分类：rieurs 会在笑话处大声笑，pleureurs 会假装流泪，commissaires 会背熟戏剧或音乐作品并提醒观众注意其中最精彩的部分。\n\n解析：classification 直接对应 different categories，随后列出的 rieurs、pleureurs 和 commissaires 是不同类型的职业捧场者，因此 D 正确。"
       },
       {
         "sectionTitle": "3. Summary Completion（Questions 23–26）",

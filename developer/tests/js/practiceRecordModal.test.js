@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
 const results = [];
 
-function loadModal() {
+function loadModal(utilsOverride = {}) {
     const windowStub = {
         AnswerComparisonUtils: {
             getNormalizedEntries(record) {
@@ -44,6 +44,7 @@ function loadModal() {
             }
         }
     };
+    Object.assign(windowStub.AnswerComparisonUtils, utilsOverride);
     const sandbox = {
         window: windowStub,
         document: {
@@ -253,13 +254,65 @@ async function testCanonicalCorrectAnswerMapWinsInModalHelpers() {
     });
 }
 
+async function testRenderReusesDerivedEntriesAndRefreshesAfterMutation() {
+    let normalizationCount = 0;
+    let enrichmentCount = 0;
+    const modal = loadModal({
+        withEnrichedMetadata(record) {
+            enrichmentCount += 1;
+            return { ...record, metadata: { ...(record.metadata || {}) } };
+        },
+        getNormalizedEntries(record) {
+            normalizationCount += 1;
+            return (record.__entries || []).map(entry => ({ ...entry }));
+        }
+    });
+    const makeEntry = examId => ({
+        examId,
+        __entries: [{ canonicalKey: 'q1', displayNumber: '1', userAnswer: 'ORIGINAL',
+            correctAnswer: 'A', isCorrect: false, hasUserAnswer: true }]
+    });
+    const record = { id: 'render-cache-suite', suiteEntries: [makeEntry('p1'), makeEntry('p2')] };
+    const firstHtml = modal.createModalHtml(record);
+    assert.strictEqual(normalizationCount, 2, 'Summary and table should share one normalization per passage');
+    assert.strictEqual(enrichmentCount, 3, 'Each record should be enriched once per render');
+    assert.ok(firstHtml.includes('ORIGINAL'));
+    assert.strictEqual(modal.displayRenderCache, undefined, 'Derived data must be released after rendering');
+
+    record.suiteEntries[0].__entries[0].userAnswer = 'UPDATED';
+    const secondHtml = modal.createModalHtml(record);
+    assert.ok(secondHtml.includes('UPDATED'), 'Reopening must reflect in-place canonical data changes');
+    assert.strictEqual(normalizationCount, 4, 'Later renders must normalize fresh data');
+    assert.strictEqual(record.metadata, undefined, 'Rendering must not enrich the canonical input');
+    recordResult('modal reuses normalized entries within render without stale reopen data', true, {
+        normalizationCount, enrichmentCount
+    });
+}
+
+async function testRenderCacheReleasedAfterFailure() {
+    let fail = true;
+    const modal = loadModal({
+        getNormalizedEntries() {
+            if (fail) throw new Error('normalization failed');
+            return [];
+        }
+    });
+    assert.throws(() => modal.createModalHtml({ id: 'failed' }), /normalization failed/);
+    assert.strictEqual(modal.displayRenderCache, undefined);
+    fail = false;
+    assert.ok(modal.createModalHtml({ id: 'recovered' }).includes('practice-record-modal'));
+    recordResult('modal discards render cache after errors', true, {});
+}
+
 async function runAllTests() {
     const tests = [
         testSuiteEntriesDoNotCollapseAcrossPassages,
         testDuplicateRowsStillCollapseInsideSamePassage,
         testReplayKeepsCanonicalRecordSnapshot,
         testNumericCorrectAnswersAreNotAnswerMaps,
-        testCanonicalCorrectAnswerMapWinsInModalHelpers
+        testCanonicalCorrectAnswerMapWinsInModalHelpers,
+        testRenderReusesDerivedEntriesAndRefreshesAfterMutation,
+        testRenderCacheReleasedAfterFailure
     ];
     for (const testFn of tests) {
         try {

@@ -313,6 +313,7 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
         examId: 'listening-alt',
         type: 'listening',
         title: 'Alt Listening',
+        libraryConfigurationId: 'previous-library',
         category: 'P1',
         path: 'Alt/',
         filename: 'alt.html'
@@ -324,9 +325,11 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const before = await window.AppData.practice.list();
     const revisionBeforeSwitch = window.getBrowseFilterMutationRevision();
     const publicationOrder = [];
+    let publishedIndex;
     window.dispatchEvent = function dispatchEvent(event) {
         if (event && event.type === 'examIndexLoaded') {
             publicationOrder.push('index-publication');
+            publishedIndex = event.detail.index;
         }
         return true;
     };
@@ -339,6 +342,8 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const applied = await manager.applyLibraryConfiguration('alt_config');
 
     assert.strictEqual(applied, true, '配置切换应该成功');
+    assert.strictEqual(publishedIndex[0].libraryConfigurationId, 'alt_config', 'switching configurations overrides inherited card provenance');
+    assert.strictEqual(seed.library.importedIndexes.alt_config[0].libraryConfigurationId, 'previous-library', 'render provenance must not mutate the stored source dataset');
     assert.strictEqual(await window.AppData.library.getActive(), 'alt_config', '活动配置应切换到目标配置');
     assert.deepStrictEqual(await window.AppData.practice.list(), before, '配置切换不能触碰练习记录');
     assert.strictEqual(
@@ -504,6 +509,7 @@ async function testBrokenLegacyActiveLibraryFallsBackToReadingManifest() {
 
     assert.deepStrictEqual(loaded.map((exam) => exam.id), ['default-reading-after-repair'], 'a broken v1 active key must not hide the generated Reading manifest');
     assert.strictEqual(getActiveId(), 'exam_index', 'display fallback must not rewrite persistent selection state');
+    assert.strictEqual(loaded[0].libraryConfigurationId, null, 'fallback cards must retain builtin provenance despite the stale active configuration');
     recordResult('错误迁移的 v1 活动题库回退 Reading manifest', { loadedCount: loaded.length });
 }
 
@@ -529,6 +535,7 @@ async function testForceReloadKeepsHealthyCustomLibraryActive() {
 
     assert.deepStrictEqual(loaded.map((exam) => exam.id), ['healthy-custom-reading']);
     assert.strictEqual(getActiveId(), 'healthy-custom', 'force reload must not switch a healthy custom library to default');
+    assert.strictEqual(loaded[0].libraryConfigurationId, 'healthy-custom', 'cards must retain the configuration that produced their content');
     recordResult('强制刷新保留健康自定义题库', { loadedCount: loaded.length });
 }
 

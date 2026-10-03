@@ -60,19 +60,19 @@
           {
             "questionNumber": 27,
             "questionId": "q1",
-            "text": "（1）题目 27：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：A（They received clothes that identified the group they belonged to.）\n定位：正文第3段，末句\n原文：The groups were given a set of caps and T-shirts, and gave themselves names: the ‘Eagles’ and the ‘Rattlers’\n译文：两组人都拿到了一套帽子和T恤，并给自己取名为“老鹰队”和“响尾蛇队”。\n\n解析：caps and T-shirts 是服装，配合各自的组名构成小组身份标识，对应 received clothes that identified the group，因此 E 正确。"
+            "text": "（1）题目 27：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：A（They had approximately the same number of friends.）\n定位：正文第2段，第3句\n原文：The groups were roughly matched in terms of sporting ability, camping experience and general popularity among their peers.\n译文：两组在运动能力、露营经验以及同伴中的总体受欢迎程度方面大致相当。\n\n解析：roughly matched 对应 approximately the same，general popularity among their peers 对应男孩们的朋友/同伴情况，所以选 A。"
           },
           {
             "questionNumber": 28,
             "questionId": "q2",
-            "text": "（2）题目 28：（题干见题目区）\n答案：E"
+            "text": "（2）题目 28：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：E（They received clothes that identified the group they belonged to.）\n定位：正文第3段，末句\n原文：The groups were given a set of caps and T-shirts, and gave themselves names: the ‘Eagles’ and the ‘Rattlers’\n译文：两组人都拿到了一套帽子和T恤，并给自己取名为“老鹰队”和“响尾蛇队”。\n\n解析：caps and T-shirts 是收到的服装，结合 Eagles 和 Rattlers 两个组名可识别各自所属小组，所以选 E。"
           }
         ],
         "questionRange": {
           "start": 27,
           "end": 28
         },
-        "text": "（1）题目 27：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：A（They received clothes that identified the group they belonged to.）\n定位：正文第3段，末句\n原文：The groups were given a set of caps and T-shirts, and gave themselves names: the ‘Eagles’ and the ‘Rattlers’\n译文：两组人都拿到了一套帽子和T恤，并给自己取名为“老鹰队”和“响尾蛇队”。\n\n解析：caps and T-shirts 是服装，配合各自的组名构成小组身份标识，对应 received clothes that identified the group，因此 E 正确。\n\n（2）题目 28：（题干见题目区）\n答案：E"
+        "text": "（1）题目 27：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：A（They had approximately the same number of friends.）\n定位：正文第2段，第3句\n原文：The groups were roughly matched in terms of sporting ability, camping experience and general popularity among their peers.\n译文：两组在运动能力、露营经验以及同伴中的总体受欢迎程度方面大致相当。\n\n解析：roughly matched 对应 approximately the same，general popularity among their peers 对应男孩们的朋友/同伴情况，所以选 A。\n\n（2）题目 28：（题干见题目区）\n题目翻译：作者对参与该研究的男孩作出了以下哪两项陈述？\n答案：E（They received clothes that identified the group they belonged to.）\n定位：正文第3段，末句\n原文：The groups were given a set of caps and T-shirts, and gave themselves names: the ‘Eagles’ and the ‘Rattlers’\n译文：两组人都拿到了一套帽子和T恤，并给自己取名为“老鹰队”和“响尾蛇队”。\n\n解析：caps and T-shirts 是收到的服装，结合 Eagles 和 Rattlers 两个组名可识别各自所属小组，所以选 E。"
       },
       {
         "sectionTitle": "2. Summary Completion（Questions 29–34）",
@@ -153,19 +153,19 @@
           {
             "questionNumber": 39,
             "questionId": "q13",
-            "text": "（1）题目 39：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：C（They secretly altered some of the results of the tournament.）\n定位：正文第5段，末句\n原文：Needless to say, these scores were manipulated by the experimenters.\n译文：不用说，这些分数被实验人员操纵了。\n\n解析：manipulated the scores 与 secretly altered some of the results 同义，因此 E 正确。"
+            "text": "（1）题目 39：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：C（They used a rating exercise to assess the amount of in-group bias.）\n定位：正文第6段，第1句\n原文：In order to check how high the levels of group self-centredness were in the groups at this time, a number of tasks were set up which involved the groups rating their own members and members of the other group.\n译文：为了检查当时各组的群体自我中心程度，研究人员设置了若干任务，让各组评价本组成员和另一组成员。\n\n解析：the groups rating their own members and members of the other group 对应 rating exercise，check how high the levels of group self-centredness were 对应 assess the amount of in-group bias，所以选 C。"
           },
           {
             "questionNumber": 40,
             "questionId": "q14",
-            "text": "（2）题目 40：（题干见题目区）\n答案：E"
+            "text": "（2）题目 40：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：E（They secretly altered some of the results of the tournament.）\n定位：正文第5段，末句\n原文：Needless to say, these scores were manipulated by the experimenters.\n译文：不用说，这些分数被实验人员操纵了。\n\n解析：the scores 指锦标赛期间展示并计入结果的分数，were manipulated by the experimenters 对应实验人员暗中 altered some of the results，所以选 E。"
           }
         ],
         "questionRange": {
           "start": 39,
           "end": 40
         },
-        "text": "（1）题目 39：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：C（They secretly altered some of the results of the tournament.）\n定位：正文第5段，末句\n原文：Needless to say, these scores were manipulated by the experimenters.\n译文：不用说，这些分数被实验人员操纵了。\n\n解析：manipulated the scores 与 secretly altered some of the results 同义，因此 E 正确。\n\n（2）题目 40：（题干见题目区）\n答案：E"
+        "text": "（1）题目 39：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：C（They used a rating exercise to assess the amount of in-group bias.）\n定位：正文第6段，第1句\n原文：In order to check how high the levels of group self-centredness were in the groups at this time, a number of tasks were set up which involved the groups rating their own members and members of the other group.\n译文：为了检查当时各组的群体自我中心程度，研究人员设置了若干任务，让各组评价本组成员和另一组成员。\n\n解析：the groups rating their own members and members of the other group 对应 rating exercise，check how high the levels of group self-centredness were 对应 assess the amount of in-group bias，所以选 C。\n\n（2）题目 40：（题干见题目区）\n题目翻译：下列关于主持该研究的实验人员的陈述中，哪两项是正确的？\n答案：E（They secretly altered some of the results of the tournament.）\n定位：正文第5段，末句\n原文：Needless to say, these scores were manipulated by the experimenters.\n译文：不用说，这些分数被实验人员操纵了。\n\n解析：the scores 指锦标赛期间展示并计入结果的分数，were manipulated by the experimenters 对应实验人员暗中 altered some of the results，所以选 E。"
       }
     ]
   });

@@ -89,19 +89,19 @@
           {
             "questionNumber": 20,
             "questionId": "q7",
-            "text": "（1）题目 20：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：B（It lay at the heart of the reunited city.）\n定位：正文 B 段，末句\n原文：the unification of the formerly divided city gave the zone more centrality, at which point it became imperative to identify a purpose for it.\n译文：原本分裂的城市统一后，这一区域变得更具中心性，于是为它确定用途成为迫切任务。\n\n解析：unification 与 more centrality 分别对应 reunited city 和 at the heart，故该项正确。"
+            "text": "（1）题目 20：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：B（It contained a particular tourist attraction.）\n定位：正文 B 段，倒数第2句\n原文：Shortly before the fall of the Berlin Wall, however, the German Museum of Technology was established there, attracting large numbers of visitors and giving visibility to the site.\n译文：然而，在柏林墙倒塌前不久，德国科技博物馆在此建立，吸引了大量游客，也提升了该地的知名度。\n\n解析：German Museum of Technology 是场地内的 particular tourist attraction，attracting large numbers of visitors 说明它具有游客吸引力，所以选 B。"
           },
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（2）题目 21：（题干见题目区）\n答案：C"
+            "text": "（2）题目 21：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：C（It lay at the heart of the reunited city.）\n定位：正文 B 段，末句\n原文：the unification of the formerly divided city gave the zone more centrality, at which point it became imperative to identify a purpose for it.\n译文：原本分裂的城市统一后，这一区域变得更具中心性，于是为它确定用途成为迫切任务。\n\n解析：unification 对应 reunited city，more centrality 对应 lay at the heart，因此选 C。"
           }
         ],
         "questionRange": {
           "start": 20,
           "end": 21
         },
-        "text": "（1）题目 20：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：B（It lay at the heart of the reunited city.）\n定位：正文 B 段，末句\n原文：the unification of the formerly divided city gave the zone more centrality, at which point it became imperative to identify a purpose for it.\n译文：原本分裂的城市统一后，这一区域变得更具中心性，于是为它确定用途成为迫切任务。\n\n解析：unification 与 more centrality 分别对应 reunited city 和 at the heart，故该项正确。\n\n（2）题目 21：（题干见题目区）\n答案：C"
+        "text": "（1）题目 20：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：B（It contained a particular tourist attraction.）\n定位：正文 B 段，倒数第2句\n原文：Shortly before the fall of the Berlin Wall, however, the German Museum of Technology was established there, attracting large numbers of visitors and giving visibility to the site.\n译文：然而，在柏林墙倒塌前不久，德国科技博物馆在此建立，吸引了大量游客，也提升了该地的知名度。\n\n解析：German Museum of Technology 是场地内的 particular tourist attraction，attracting large numbers of visitors 说明它具有游客吸引力，所以选 B。\n\n（2）题目 21：（题干见题目区）\n题目翻译：选择 Gleisdreieck 作为公园所在地的哪两个理由被提及？\n答案：C（It lay at the heart of the reunited city.）\n定位：正文 B 段，末句\n原文：the unification of the formerly divided city gave the zone more centrality, at which point it became imperative to identify a purpose for it.\n译文：原本分裂的城市统一后，这一区域变得更具中心性，于是为它确定用途成为迫切任务。\n\n解析：unification 对应 reunited city，more centrality 对应 lay at the heart，因此选 C。"
       },
       {
         "sectionTitle": "3. Multiple Choice（多选）（Questions 22–23）",
@@ -110,19 +110,19 @@
           {
             "questionNumber": 22,
             "questionId": "q9",
-            "text": "（1）题目 22：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：A（to preserve industrial remains）\n定位：正文 C 段，末句\n原文：the need to reconcile these goals with the conservation of railway heritage also emerged.\n译文：同时也出现了把这些目标与铁路遗产保护协调起来的需要。\n\n解析：conservation of railway heritage 对应 preserve industrial remains，因此该项正确。"
+            "text": "（1）题目 22：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：A（to bring people of different ages together）\n定位：正文 C 段，第4句\n原文：It was necessary to stimulate the development of sixteen new hectares of local amenities that would be capable of integrating different generations and social groups in a sustainable way\n译文：有必要推动开发十六公顷新的本地设施，以可持续的方式融合不同代际和社会群体。\n\n解析：integrating different generations 对应 bring people of different ages together，所以选 A。"
           },
           {
             "questionNumber": 23,
             "questionId": "q10",
-            "text": "（2）题目 23：（题干见题目区）\n答案：D"
+            "text": "（2）题目 23：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：D（to preserve industrial remains）\n定位：正文 C 段，末句\n原文：the need to reconcile these goals with the conservation of railway heritage also emerged.\n译文：同时也出现了把这些目标与铁路遗产保护协调起来的需要。\n\n解析：conservation of railway heritage 对应 preserve industrial remains，所以选 D。"
           }
         ],
         "questionRange": {
           "start": 22,
           "end": 23
         },
-        "text": "（1）题目 22：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：A（to preserve industrial remains）\n定位：正文 C 段，末句\n原文：the need to reconcile these goals with the conservation of railway heritage also emerged.\n译文：同时也出现了把这些目标与铁路遗产保护协调起来的需要。\n\n解析：conservation of railway heritage 对应 preserve industrial remains，因此该项正确。\n\n（2）题目 23：（题干见题目区）\n答案：D"
+        "text": "（1）题目 22：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：A（to bring people of different ages together）\n定位：正文 C 段，第4句\n原文：It was necessary to stimulate the development of sixteen new hectares of local amenities that would be capable of integrating different generations and social groups in a sustainable way\n译文：有必要推动开发十六公顷新的本地设施，以可持续的方式融合不同代际和社会群体。\n\n解析：integrating different generations 对应 bring people of different ages together，所以选 A。\n\n（2）题目 23：（题干见题目区）\n题目翻译：柏林州希望通过 Gleisdreieck 的开发实现哪两个目标？\n答案：D（to preserve industrial remains）\n定位：正文 C 段，末句\n原文：the need to reconcile these goals with the conservation of railway heritage also emerged.\n译文：同时也出现了把这些目标与铁路遗产保护协调起来的需要。\n\n解析：conservation of railway heritage 对应 preserve industrial remains，所以选 D。"
       },
       {
         "sectionTitle": "4. Summary Completion（Questions 24–26）",

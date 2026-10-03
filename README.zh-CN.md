@@ -1,0 +1,572 @@
+# IELTS Atlas / IELTS Practice
+
+[English](README.md) | **简体中文**
+
+[v0.6.3.1 更新说明](RELEASE_NOTE-0.6.3.1.md)
+
+[![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
+
+## 重要使用声明
+
+本项目允许个人基于学习、研究和自用目的进行本地运行、私人部署或在个人控制的网页环境中使用。使用者可以将项目部署到自己的电脑、私人服务器、NAS 或个人网页空间，但应确保访问范围和传播范围可控。
+
+请勿将包含题源、音频、PDF、解析、二次修改页面或打包产物的网站、镜像站、压缩包继续公开分发给更多人；请勿将本项目用于商业售卖、付费社群、引流推广、公开宣传或其他盈利行为。项目涉及的题源和部分素材存在第三方版权风险，机考网页形式的公开部署也可能触及相关从业者利益。大规模传播会显著增加被投诉、举报、删除仓库或关闭页面的风险，最终影响所有使用者。
+
+为保证项目能够长期稳定存在，请遵循以下原则：**自行部署，个人使用，控制传播范围，不以项目或其题源牟利。**
+
+代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
+
+## 分支概览
+
+本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+
+| 分支 | 说明 | 状态 | 完成度 | 技术特征 |
+|------|------|------|--------|----------|
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版（当前分支），纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
+| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
+| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
+
+| 关联仓库 | 说明 | 状态 | 技术特征 |
+|:--------:|------|------|----------|
+| [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![技术：Docker Compose、PostgreSQL](assets/images/ieltmps-tech.svg) |
+
+## 项目概述
+
+IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
+
+系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
+
+## 快速开始
+
+![首次启动、学习总览与题库浏览的实际画面](.github/assets/quick-start.gif)
+
+### 系统要求
+
+- 推荐浏览器：Chrome 或 Edge 最新稳定版。
+- 基础能力：支持 ES6、IndexedDB、localStorage、sessionStorage、`window.open` 和 `postMessage`。
+- 运行方式：支持直接通过 `file://` 打开，也支持通过本地静态服务器或静态网页托管访问。
+- 浏览器设置：首次练习时需要允许弹窗，否则练习窗口可能无法打开。
+
+Firefox、Safari 和移动浏览器可以使用，但对 `file://`、PDF、音频、跨窗口通信和弹窗策略的限制可能更严格。
+
+### 本地直接运行
+
+1. 下载或解压完整项目目录。
+2. 保持目录结构完整，不要只复制 `index.html`。
+3. 双击打开根目录下的 `index.html`。
+4. 进入“题库浏览”确认题库列表是否正常显示。
+5. 点击任意练习项时，如浏览器提示弹窗拦截，请允许该页面打开新窗口。
+
+当前入口只有 `index.html`。旧文档中出现过的 `improved-working-system.html` 不再是有效入口。
+
+### 本地静态服务器运行
+
+如果浏览器对 `file://` 的资源访问限制较多，可以在项目根目录启动静态服务器：
+
+```bash
+python -m http.server 8000
+```
+
+然后访问：
+
+```text
+http://localhost:8000/
+```
+
+本地服务器适合调试资源路径、浏览器控制台错误、PDF 或音频加载问题。正式分发给个人用户时，发布包仍应保持解压后可直接打开 `index.html` 使用。
+
+### 静态网页部署
+
+可以将运行时文件部署到静态网页空间，但应仅用于个人或小范围自用场景。部署时必须保留目录层级，避免 bundle、题库、字体、图片、PDF、音频或生成资产出现 404。
+
+公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
+
+## 功能说明
+
+### 学习总览
+
+总览页面用于展示学习状态和练习概况。系统会根据本地练习记录汇总已练习题目、平均表现、学习时长、连续学习状态和分类进度等信息。该页面适合作为每日打开应用后的入口，用于判断后续应继续刷题、复盘错题还是切换到词汇辅助。
+
+### 题库浏览与管理
+
+题库浏览是系统的核心入口。当前实现默认支持阅读资源；听力资源作为可选本地扩展接入，并按题目元数据生成可检索、可筛选的题库列表。
+
+主要能力包括：
+
+- 类型筛选：支持“全部”“阅读”“听力”等过滤方式；未配置听力扩展资源时，听力列表可能为空。
+- 分类筛选：支持按 P1、P2、P3 等分类查看题目。
+- 关键词搜索：支持按题目标题、文件名或元数据关键字检索。
+- 排序与状态：支持题库排序、练习状态展示和进度回显。
+- 资源区分：阅读资源主要来自生成后的阅读题库资产；听力资源来自用户自行配置的本地扩展索引或本地听力目录。
+- 题库导入：设置页提供“加载题库”入口，可通过文件夹选择器导入自定义阅读或听力资源。
+- 配置切换：设置页提供“题库配置切换”，用于在默认题库和导入题库配置之间切换。
+- 强制刷新：设置页提供“强制刷新题库”，用于重新同步当前题库索引和界面状态。
+
+题库索引不应手写维护。默认阅读索引来自 `assets/generated/` 下的生成资产；听力索引属于可选本地扩展资源，用户导入题库时由浏览器侧扫描和标准化流程生成配置。
+
+### 阅读练习
+
+阅读练习使用统一阅读页面运行，核心资产位于：
+
+```text
+assets/generated/reading-exams/
+assets/generated/reading-explanations/
+```
+
+当前实现支持：
+
+- 通过题库卡片打开阅读练习窗口。
+- 在统一阅读页中完成答题、提交和查看结果。
+- 回传用户答案、正确答案、得分信息和题目上下文。
+- 支持解析内容、定位高亮和答案对比。
+- 与练习记录系统同步，完成后自动写入本地历史。
+- 支持阅读背题模式，复用统一阅读页查看答案、解析和定位信息。
+
+阅读练习依赖浏览器新窗口和跨窗口通信。若练习页能打开但成绩没有保存，应优先检查弹窗权限、控制台错误和 `postMessage` 通信状态。
+
+### 听力练习
+
+听力练习通过听力索引和记录桥接模块接入。出于版权合规考虑，公开仓库和普通发布包默认不包含听力音频、配套题源、PDF、完整 `ListeningPractice/` 目录或预生成听力索引。
+
+如需在个人本地环境启用听力练习，可自行准备听力资源，并按可选扩展路径放置生成索引：
+
+```text
+assets/generated/listening-exams/manifest.js
+assets/generated/listening-exams/listening-index.compat.js
+```
+
+主要能力包括：
+
+- 支持从本地扩展听力索引加载听力题目。
+- 支持用户通过题库加载流程导入自备本地听力资源。
+- 支持 P1-P4 听力目录结构。
+- 通过 `listening-record-bridge` 将听力练习结果转换为统一练习记录。
+- 在练习记录和统计系统中与阅读记录使用同一套数据管理流程。
+
+这些路径只表示扩展资源的约定位置。若公开包中不存在上述文件，这是预期行为，不代表仓库缺失。需要随个人自用发布包包含 `ListeningPractice/P1-P4` 时，应先在本地准备资源并使用 `INCLUDE_LOCAL_LISTENING=1` 进行打包。
+
+### 套题练习模式
+
+套题模式用于连续完成多个练习单元，并将结果聚合为套题记录。该模式适合模拟完整练习流程，减少单篇练习之间的手动跳转。
+
+当前支持：
+
+- 创建套题会话。
+- 顺序打开和切换题目。
+- 跟踪当前套题窗口和当前题目。
+- 聚合每个子题目的得分、耗时和结果。
+- 保存完整套题记录。
+- 在异常关闭、中断或部分完成时尽量保留已完成记录。
+- 清理套题子记录，避免历史列表重复展示。
+
+套题模式依赖更严格的窗口管理和通信流程。如果浏览器阻止弹窗或用户手动关闭练习窗口，系统会进入降级保存路径。
+
+### 练习记录与统计
+
+练习记录页面用于查看、筛选、导出和管理历史记录。记录来源包括阅读练习、听力练习、套题练习和部分降级保存流程。
+
+主要能力包括：
+
+- 统计卡片：展示已练习题目、平均正确率、学习时长等核心指标。
+- 趋势分析：展示近期练习趋势，可按时间范围切换。
+- 练习热力图：按日期展示练习频率。
+- 中高频进度：展示重点题库或优先级题目的练习进度。
+- 阅读错题雷达：根据最近阅读记录统计错题题型分布。
+- 阅读专项统计：按总得分 / 总分展示题型与 P1/P2/P3 加权正确率，区分篇章提交次数和已识别的不同篇章数；支持全部历史及近 7/30/90 天，遵循记录类型和历史搜索范围。重复提交均计入，套题按子篇去重，缺失分母、题型、分类或来源时显示数据覆盖情况。详细口径见 [Reading Analytics contract](developer/doc/Reading-Analytics-Contract.md)。
+- 历史列表：按全部、阅读、听力等维度筛选记录。
+- 批量管理：支持选择多条记录并批量删除。
+- Markdown 导出：支持将练习历史导出为 Markdown 报告。
+- 详情查看：支持打开单条练习记录，查看分数、耗时、答案对比和原始结果信息。
+- 阅读前台关联时长：按当前选择的题目或源题组累计可见且有焦点的练习时间，未选择时单独记为未分配。暂停、后台和复盘不计入；共享题组不拆成精确分题时间。草稿恢复保留已保存累计值并提示覆盖限制，旧记录显示不可用。口径与恢复边界见 [Reading Timing contract](developer/doc/Reading-Timing-Contract.md)。
+
+“未完成 / 中断”区域单独显示已保存的中断记录，可展开查看该条记录实际保存的作答或单独删除。此类记录不参与正式练习总数、正确率、趋势、成就和题库完成度，也不参与正式记录的批量选择。清空练习记录会同时清除正式记录和中断记录，保留阅读草稿、活动会话及其他恢复数据；若部分操作失败，页面会回读当前记录并提示失败范围。
+
+展开中断记录时会重新读取已保存作答，记录已删除、过期或读取失败时会明确提示。阅读/听力筛选优先使用该次练习保存的类型；旧记录可根据保存的页面类型或原题库来源识别，仍无法识别类型的记录只在“全部”中显示。
+
+中断记录与阅读草稿是不同的数据来源：普通关闭阅读窗口可能只保存草稿，重新打开同一篇阅读可恢复该草稿；超时等结束流程保存的中断记录可能不包含答案，此时页面会明确提示。中断区域不把当前草稿拼接到旧会话，不提供续答或正式成绩。恢复数据沿用 30 天过期规则，记录器保存中断记录时最多保留最近 100 条。
+
+练习记录是本系统的核心用户数据。清理缓存、切换浏览器、隐私模式和浏览器自动清理站点数据都可能影响记录持久性，建议定期使用设置页的数据导出或备份功能。
+
+### 系统设置与数据管理
+
+设置页集中放置系统维护、题库管理和数据管理功能。
+
+系统管理能力：
+
+- 清除全部本地数据：删除浏览器中的练习、题库、词汇、设置、应用内备份和本地文件夹绑定，刷新后回到首次启动并重新显示 GPL 协议；外部文件夹中的 JSON 备份不会删除。
+- 加载题库：导入阅读或听力题库目录。
+- 主题切换：切换当前界面的背景与视觉主题。
+- 题库配置切换：查看、切换或管理题库配置。
+- 强制刷新题库：重新同步题库索引、统计和界面状态。
+
+数据管理能力：
+
+- 创建备份：将当前练习数据、统计数据和相关配置保存为备份。
+- 备份列表：查看已有备份并选择恢复。
+- 导出数据：导出当前本地数据，便于迁移或长期保存。
+- 导入数据：从外部 JSON 数据恢复或合并历史记录。
+- 完整性检查：对导入数据和本地数据进行基础校验。
+
+核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
+
+### 错误与诊断
+
+在“设置 → 错误与诊断”中可按事件编号查看故障、导出本地 JSON 报告或复制摘要。
+诊断报告经过脱敏，不包含答案，也不能替代学习数据备份；导出不会重新提交练习或启动主动诊断。
+剪贴板或文件下载不可用时，可选择页面中的诊断文本。练习窗口与主页断开后，应在该窗口内导出，
+报告会说明跨窗口汇总不完整。
+
+诊断历史最多保留 7 天、2,000 条或约 2 MiB，以先达到的限制为准。
+可单独清除诊断、关闭持久化、重试诊断存储，或开启 15 分钟的详细诊断。
+关闭持久化后，当前页面的短期上下文仍可用于即时提示和导出；清除全部站点数据会同时清除学习数据。
+JavaScript 被禁用、页面未打开、浏览器崩溃、主线程完全阻塞及不可访问的跨域错误无法保证被捕获。
+运行模式、已验证场景与发布验收方法见 [诊断验收说明](developer/docs/diagnostic-acceptance.md)。
+
+### 更多工具
+
+“更多工具”页面提供练习以外的辅助能力：
+
+- 词汇练习：使用内置词表和记忆调度能力辅助复习。
+- 阅读背题：复用统一阅读页，直接查看答案、解析和定位高亮。
+- 成就系统：根据练习和使用行为展示已解锁徽章。
+
+这些功能共享主应用的数据层和界面状态，不需要额外后端服务。
+
+### 主题与界面
+
+当前主界面为 HeroUI 风格，包含动态背景、主导航、题库面板、练习记录面板、设置面板和更多工具面板。项目保留了主题适配基础设施，主题相关逻辑位于 `js/plugins/themes/` 和 `js/presentation/`。
+
+主题切换主要影响视觉呈现，不应改变练习记录、题库索引或数据存储格式。
+
+## 详细使用指南
+
+### 开始单篇练习
+
+![阅读练习完整作答链路：定位题目、拖拽作答、提交后查看解析与答案对比](.github/assets/reading-practice.gif)
+
+如上所示：在“题库浏览”定位题目并点击练习入口，在新窗口中完成答题并提交，解析、定位高亮和答案对比会在提交后直接呈现。
+
+如果练习窗口未打开，请先允许浏览器弹窗。如果练习完成后没有记录，请检查控制台是否存在资源加载失败或通信错误。
+
+### 使用套题模式
+
+1. 在题库或相关练习入口中选择套题练习。
+2. 系统创建套题会话并打开练习窗口。
+3. 按顺序完成每个题目。
+4. 套题结束后，系统聚合子题目结果并保存为套题记录。
+5. 在“练习记录”中查看套题结果。
+
+套题模式不适合在多个浏览器窗口中并行操作同一套题。并行操作会增加窗口引用、状态同步和记录归并的复杂度。
+
+### 查看与导出练习记录
+
+![练习记录页面：统计卡片、趋势热力图与历史列表](.github/assets/practice-records.gif)
+
+统计卡片、趋势、热力图和历史列表如上；支持按“全部 / 阅读 / 听力”筛选历史记录，点击单条查看详情，使用“导出 Markdown”生成学习报告，或批量选择删除。
+
+删除记录前建议先导出或创建备份。删除后的数据是否可恢复取决于是否存在可用备份。
+
+### 导入自定义题库
+
+1. 进入“系统设置”。
+2. 点击“加载题库”。
+3. 选择阅读或听力资源目录。
+4. 根据界面提示选择全量或增量导入。
+5. 导入完成后返回“题库浏览”检查列表。
+6. 如有多个配置，通过“题库配置切换”选择当前使用的题库配置。
+
+自定义题库应保持稳定的目录结构。频繁移动文件、重命名目录或混合不同来源题库，可能导致记录与题目索引无法准确匹配。
+
+### 备份、恢复与迁移
+
+1. 进入“系统设置”。
+2. 使用“创建备份”保存当前数据快照。
+3. 使用“导出数据”生成外部文件，用于跨浏览器或跨设备迁移。
+4. 在新环境中使用“导入数据”恢复记录。
+5. 导入后检查练习记录、统计卡片和题库状态。
+
+浏览器本地存储与协议和域名绑定。例如，`file://` 打开的数据与 `http://localhost:8000/` 下的数据不一定共享。
+
+## 项目结构
+
+运行时文件：
+
+```text
+index.html
+css/
+js/bundles/
+assets/
+ReadingPractice/
+```
+
+主要源码目录：
+
+```text
+js/app/              应用入口、状态桥、题库浏览、练习会话和套题逻辑
+js/core/             练习、记录、存储、词汇等核心能力
+js/data/             repository 与数据源封装
+js/runtime/          懒加载、启动屏、统一阅读页运行时
+js/services/         题库发现、题库管理、统计、成就等服务
+js/components/       设置、诊断、记录弹窗、题库状态等 UI 组件
+js/presentation/     导航、主题、更多工具、首页交互
+js/utils/            存储、答案匹配、导入导出、性能和 DOM 工具
+js/plugins/          主题和扩展桥接
+assets/generated/    生成后的阅读题库索引、页面、解析资产，以及可选听力扩展索引
+assets/wordlists/    词汇数据
+developer/doc/Wiki/  架构文档、历史决策和模块说明
+developer/tests/     静态回归、E2E、工具脚本和测试报告
+scripts/             构建脚本
+```
+
+发布包只应包含用户运行所需文件。源码目录、开发文档、测试工具和 `node_modules/` 不应进入普通分发包。
+
+## 构建与发布
+
+### 生成 bundle
+
+`index.html` 当前加载 `js/bundles/*.bundle.js`。修改源码后必须重新生成 bundle：
+
+```bash
+node scripts/build-bundles.mjs
+```
+
+不要手动编辑 `js/bundles/*.bundle.js`。这些文件是构建产物，应由脚本生成。
+
+### 生成发布包
+
+Linux / Git Bash：
+
+```bash
+bash developer/release.sh 0.6.2-fix
+```
+
+Windows PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+```
+
+输出位置：
+
+```text
+dist/ielts-practice-{version}.zip
+```
+
+发布脚本会先运行 `node scripts/build-bundles.mjs`，再创建只包含运行时文件的压缩包。用户解压后可直接打开 `index.html` 使用。
+
+### 包含本地听力资源
+
+普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
+
+```bash
+INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
+```
+
+PowerShell：
+
+```powershell
+$env:INCLUDE_LOCAL_LISTENING = "1"
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+```
+
+该模式要求存在：
+
+```text
+assets/generated/listening-exams/manifest.js
+assets/generated/listening-exams/listening-index.compat.js
+```
+
+并会按脚本规则包含 `ListeningPractice/P1` 至 `ListeningPractice/P4` 中存在的目录。
+
+## 测试要求
+
+功能或优化改动后，按顺序运行：
+
+```bash
+python developer/tests/ci/run_static_suite.py
+python developer/tests/e2e/full_reset_flow.py
+python developer/tests/e2e/suite_practice_flow.py
+```
+
+第一条会生成：
+
+```text
+developer/tests/e2e/reports/static-ci-report.json
+```
+
+测试原则：
+
+- 修改运行时代码、题库索引、资源路径、练习记录、套题流程或发布脚本后，必须运行上述测试。
+- 修改 README、说明文档或纯文本材料时，可不运行浏览器流程，但仍应检查路径和命令是否真实存在。
+- 新增 QA、测试工具或验证脚本应放在 `developer/tests/` 下，避免污染发布包。
+
+## 技术说明
+
+### 启动流程
+
+应用启动由 `index.html` 加载 bundle 完成。核心 bundle 包括：
+
+```text
+js/bundles/runtime-entry.bundle.js
+js/bundles/core-foundation.bundle.js
+js/bundles/ui-shell.bundle.js
+js/bundles/legacy-app.bundle.js
+```
+
+初始化过程包括：
+
+1. 启动屏和基础运行时加载。
+2. 存储命名空间初始化。
+3. 应用实例创建。
+4. 题库索引和练习记录加载。
+5. 导航、题库、记录、设置等视图初始化。
+6. 按需加载题库浏览、练习记录、套题、设置、更多工具等功能 bundle。
+
+### 数据存储
+
+系统按数据用途使用本地存储：
+
+- IndexedDB：存储练习记录、词汇、设置、题库配置和备份等核心持久化数据，并提供事务与修订冲突检测。
+- localStorage：仅保留旧版数据迁移和少量兼容状态。
+- sessionStorage：存储会话级草稿，不作为核心数据降级后端。
+
+主要数据包括：
+
+- 题库索引。
+- 练习记录。
+- 用户设置。
+- 备份数据。
+- 统计和派生状态。
+
+不同浏览器、不同域名、不同协议下的数据隔离。迁移数据时应使用导出和导入功能，不要直接复制浏览器内部存储。
+
+### 练习通信
+
+练习窗口与主窗口通过 `postMessage` 通信。典型流程如下：
+
+1. 主窗口打开练习页面。
+2. 主窗口创建练习会话。
+3. 练习页加载增强或桥接脚本。
+4. 用户提交答案。
+5. 练习页发送完成消息。
+6. 主窗口标准化成绩并保存记录。
+
+相关运行时包括：
+
+```text
+js/bundles/practice-page-enhancer.bundle.js
+js/bundles/listening-record-bridge.bundle.js
+js/bundles/session.bundle.js
+js/bundles/practice.bundle.js
+```
+
+### 题库资产
+
+阅读生成资产位于：
+
+```text
+assets/generated/reading-exams/
+assets/generated/reading-explanations/
+```
+
+可选听力扩展生成资产位于：
+
+```text
+assets/generated/listening-exams/
+```
+
+公开仓库和普通发布包可能不包含该目录。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
+
+## 常见问题
+
+### 页面打开后样式异常或功能缺失
+
+通常是目录不完整或资源路径错误。确认以下目录存在并保持相对路径不变：
+
+```text
+css/
+js/bundles/
+assets/
+ReadingPractice/
+```
+
+如果使用发布包，确认压缩包解压完整。不要将 `index.html` 单独复制到其他目录运行。
+
+### 点击练习后没有打开窗口
+
+检查浏览器是否拦截弹窗。练习页需要通过新窗口或新标签打开，主窗口依赖该窗口回传成绩。
+
+处理步骤：
+
+1. 允许当前页面弹窗。
+2. 重新点击练习入口。
+3. 打开开发者工具查看 Console 是否有错误。
+4. 检查目标练习资源是否 404。
+
+### 练习完成后没有保存记录
+
+常见原因包括：
+
+- 浏览器阻止跨窗口通信。
+- 练习页资源加载失败。
+- 用户在隐私模式中运行，存储被限制。
+- IndexedDB 被禁用、配额耗尽或后端事务失败。
+- 使用了不同协议或不同域名，导致查看的是另一份本地数据。
+
+处理步骤：
+
+1. 查看 Console 中是否有 `postMessage`、storage 或资源加载错误。
+2. 在“系统设置”中导出数据，确认当前环境是否已有记录。
+3. 换用 Chrome 或 Edge 最新稳定版复测。
+4. 必要时通过本地静态服务器运行。
+
+### 题库列表为空
+
+检查以下内容：
+
+1. `assets/generated/reading-exams/manifest.js` 是否存在。
+2. `assets/generated/reading-exams/reading-practice-unified.html` 是否存在。
+3. `js/bundles/core-foundation.bundle.js` 是否正常加载。
+4. 是否误删或移动了 `assets/` 目录。
+5. 如使用自定义题库，重新通过“系统设置”中的“加载题库”导入。
+
+### 听力题库不可见
+
+公开仓库和普通发布包默认不包含听力资源。若需要启用听力题库，请检查：
+
+1. 是否已经自行准备本地听力资源。
+2. 是否存在 `assets/generated/listening-exams/manifest.js`。
+3. 是否存在 `assets/generated/listening-exams/listening-index.compat.js`。
+4. 如需本地听力目录，发布时是否设置 `INCLUDE_LOCAL_LISTENING=1`。
+5. `ListeningPractice/P1-P4` 中是否存在实际资源。
+
+### 数据丢失或统计清零
+
+浏览器本地数据可能因清理缓存、隐私模式、协议变化或域名变化而不可见。
+
+处理步骤：
+
+1. 检查当前是否使用了与之前相同的浏览器、路径、协议和域名。
+2. 在设置页查看备份列表。
+3. 使用导入功能恢复之前导出的数据。
+4. 如需长期保存，请定期导出数据文件。
+
+### `file://` 与本地服务器表现不一致
+
+这是浏览器安全策略造成的正常差异。项目要求尽量兼容 `file://`，但部分浏览器会限制音频、PDF、新窗口、跨页面脚本或本地文件访问。遇到差异时，应先在 Chrome 或 Edge 下验证，再使用本地静态服务器定位问题。
+
+## 许可证与内容版权
+
+代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
+
+题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=sallowayma-git%2Fielts-practice&type=date&logscale=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sallowayma-git/ielts-practice&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sallowayma-git/ielts-practice&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sallowayma-git/ielts-practice&type=date&legend=top-left" />
+ </picture>
+</a>

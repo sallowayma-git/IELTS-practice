@@ -9,11 +9,12 @@
   "meta": {
     "title": "Investment in shares versus investment in other assets 回报数据分析",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "low",
     "pdfFilename": "42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】/",
     "legacyFilename": "42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

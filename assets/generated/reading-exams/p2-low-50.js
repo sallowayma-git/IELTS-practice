@@ -9,11 +9,12 @@
   "meta": {
     "title": "Jellyfish – The Dominant Species 水母·海洋中的优势物种",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/",
     "legacyFilename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

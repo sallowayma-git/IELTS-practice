@@ -90,19 +90,19 @@
           {
             "questionNumber": 23,
             "questionId": "q10",
-            "text": "（1）题目 23：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：B（an increase in casualties on the roads at specific times of day）\n定位：正文 B 段，末句\n原文：traffic accident statistics show two deadly peaks, at 4 a.m. and again twelve hours later when people are at their least alert.\n译文：交通事故统计显示有两个致命高峰：凌晨四点，以及十二小时后人们警觉性最低之时。\n\n解析：deadly peaks in traffic accidents 对应特定时间道路伤亡增加，所以选 C。"
+            "text": "（1）题目 23：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：B（a failure among workers on night-shifts to perform tasks）\n定位：正文 B 段，第4句\n原文：When an individual’s ‘clock’ is knocked out of synchronization through having to work at night or go on long-haul flights, that person can be left utterly unable to think or act.\n译文：当一个人因夜间工作或长途飞行而导致其“时钟”失去同步时，这个人可能会完全无法思考或行动。\n\n解析：work at night 对应 workers on night-shifts，utterly unable to think or act 对应 failure to perform tasks，所以选 B。"
           },
           {
             "questionNumber": 24,
             "questionId": "q11",
-            "text": "（2）题目 24：（题干见题目区）\n答案：C"
+            "text": "（2）题目 24：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：C（an increase in casualties on the roads at specific times of day）\n定位：正文 B 段，末句\n原文：traffic accident statistics show two deadly peaks, at 4 a.m. and again twelve hours later when people are at their least alert.\n译文：交通事故统计显示有两个致命高峰：凌晨四点，以及十二小时后人们警觉性最低之时。\n\n解析：traffic accident statistics 和 deadly peaks 对应道路伤亡增加，4 a.m. 及十二小时后的两个时点对应 specific times of day，所以选 C。"
           }
         ],
         "questionRange": {
           "start": 23,
           "end": 24
         },
-        "text": "（1）题目 23：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：B（an increase in casualties on the roads at specific times of day）\n定位：正文 B 段，末句\n原文：traffic accident statistics show two deadly peaks, at 4 a.m. and again twelve hours later when people are at their least alert.\n译文：交通事故统计显示有两个致命高峰：凌晨四点，以及十二小时后人们警觉性最低之时。\n\n解析：deadly peaks in traffic accidents 对应特定时间道路伤亡增加，所以选 C。\n\n（2）题目 24：（题干见题目区）\n答案：C"
+        "text": "（1）题目 23：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：B（a failure among workers on night-shifts to perform tasks）\n定位：正文 B 段，第4句\n原文：When an individual’s ‘clock’ is knocked out of synchronization through having to work at night or go on long-haul flights, that person can be left utterly unable to think or act.\n译文：当一个人因夜间工作或长途飞行而导致其“时钟”失去同步时，这个人可能会完全无法思考或行动。\n\n解析：work at night 对应 workers on night-shifts，utterly unable to think or act 对应 failure to perform tasks，所以选 B。\n\n（2）题目 24：（题干见题目区）\n题目翻译：下列哪两项是文章明确指出与人体内部时钟有关的问题？\n答案：C（an increase in casualties on the roads at specific times of day）\n定位：正文 B 段，末句\n原文：traffic accident statistics show two deadly peaks, at 4 a.m. and again twelve hours later when people are at their least alert.\n译文：交通事故统计显示有两个致命高峰：凌晨四点，以及十二小时后人们警觉性最低之时。\n\n解析：traffic accident statistics 和 deadly peaks 对应道路伤亡增加，4 a.m. 及十二小时后的两个时点对应 specific times of day，所以选 C。"
       },
       {
         "sectionTitle": "4. Multiple Choice（多选）（Questions 25–26）",
@@ -111,19 +111,19 @@
           {
             "questionNumber": 25,
             "questionId": "q12",
-            "text": "（1）题目 25：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：C（the way in which all ‘clocks’ in a single organism are able to stay in step with one another）\n定位：正文 G 段，第3句\n原文：But how do all the biochemical ‘clocks’ inside their cells stay in synchronization\n译文：但是，细胞内部的所有生化“时钟”究竟如何保持同步？\n\n解析：stay in synchronization 对应 stay in step with one another；文章随后说明尚无人知道，所以选 D。"
+            "text": "（1）题目 25：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：C（the reason for living beings forming a connection with the Sun’s rhythms）\n定位：正文 G 段，第3至4句\n原文：why did organisms bother to acquire a link with sunlight? So far, no-one knows\n译文：生物为什么要形成与阳光的联系？到目前为止，没有人知道。\n\n解析：organisms 对应 living beings，a link with sunlight 对应 a connection with the Sun’s rhythms；So far, no-one knows 明确说明原因仍未解决，所以选 C。"
           },
           {
             "questionNumber": 26,
             "questionId": "q13",
-            "text": "（2）题目 26：（题干见题目区）\n答案：D"
+            "text": "（2）题目 26：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：D（the way in which all ‘clocks’ in a single organism are able to stay in step with one another）\n定位：正文 G 段，第3至4句\n原文：But how do all the biochemical ‘clocks’ inside their cells stay in synchronization and why did organisms bother to acquire a link with sunlight? So far, no-one knows\n译文：但是，细胞内部的所有生化“时钟”如何保持同步？生物又为什么要形成与阳光的联系？到目前为止，没有人知道。\n\n解析：all the biochemical ‘clocks’ inside their cells 对应 all ‘clocks’ in a single organism，stay in synchronization 对应 stay in step with one another；no-one knows 表明该机制仍未解决，所以选 D。"
           }
         ],
         "questionRange": {
           "start": 25,
           "end": 26
         },
-        "text": "（1）题目 25：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：C（the way in which all ‘clocks’ in a single organism are able to stay in step with one another）\n定位：正文 G 段，第3句\n原文：But how do all the biochemical ‘clocks’ inside their cells stay in synchronization\n译文：但是，细胞内部的所有生化“时钟”究竟如何保持同步？\n\n解析：stay in synchronization 对应 stay in step with one another；文章随后说明尚无人知道，所以选 D。\n\n（2）题目 26：（题干见题目区）\n答案：D"
+        "text": "（1）题目 25：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：C（the reason for living beings forming a connection with the Sun’s rhythms）\n定位：正文 G 段，第3至4句\n原文：why did organisms bother to acquire a link with sunlight? So far, no-one knows\n译文：生物为什么要形成与阳光的联系？到目前为止，没有人知道。\n\n解析：organisms 对应 living beings，a link with sunlight 对应 a connection with the Sun’s rhythms；So far, no-one knows 明确说明原因仍未解决，所以选 C。\n\n（2）题目 26：（题干见题目区）\n题目翻译：根据文章，下列哪两个有关内部时钟的问题仍未解决？\n答案：D（the way in which all ‘clocks’ in a single organism are able to stay in step with one another）\n定位：正文 G 段，第3至4句\n原文：But how do all the biochemical ‘clocks’ inside their cells stay in synchronization and why did organisms bother to acquire a link with sunlight? So far, no-one knows\n译文：但是，细胞内部的所有生化“时钟”如何保持同步？生物又为什么要形成与阳光的联系？到目前为止，没有人知道。\n\n解析：all the biochemical ‘clocks’ inside their cells 对应 all ‘clocks’ in a single organism，stay in synchronization 对应 stay in step with one another；no-one knows 表明该机制仍未解决，所以选 D。"
       }
     ]
   });

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Diagram of a termite mound</title>
+  <desc id="desc">A cross-section of a termite mound showing tunnels, an underground cellar and ventilation paths, with four numbered blanks.</desc>
+  <rect width="900" height="520" fill="#fffdf8"/>
+  <path d="M90 430H820" stroke="#7c6f62" stroke-width="3"/>
+  <path d="M120 430C145 365 205 292 260 250C320 204 375 188 450 188C525 188 580 204 640 250C695 292 755 365 780 430Z" fill="#d9b37b" stroke="#594735" stroke-width="4"/>
+  <path d="M260 250C305 302 340 345 355 430M640 250C595 302 560 345 545 430M330 214C365 270 390 322 400 430M570 214C535 270 510 322 500 430M450 188V430" fill="none" stroke="#80613f" stroke-width="9" stroke-linecap="round"/>
+  <path d="M260 250C330 265 385 274 450 274C515 274 570 265 640 250M220 310C300 325 365 334 450 334C535 334 600 325 680 310M180 370C285 382 350 390 450 390C550 390 615 382 720 370" fill="none" stroke="#80613f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M450 188V105M450 105C420 84 405 60 412 35M450 105C480 84 495 60 488 35" fill="none" stroke="#4e8b78" stroke-width="5" marker-end="url(#arrow)"/>
+  <path d="M450 430V470" fill="none" stroke="#4e8b78" stroke-width="5" marker-end="url(#arrow)"/>
+  <ellipse cx="450" cy="414" rx="92" ry="34" fill="#b8d3df" stroke="#476b79" stroke-width="3"/>
+  <text x="450" y="422" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" fill="#243b43">35</text>
+  <g font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#3d3025">
+    <circle cx="226" cy="307" r="22" fill="#fff" stroke="#594735" stroke-width="3"/><text x="226" y="315" text-anchor="middle">34</text>
+    <circle cx="674" cy="307" r="22" fill="#fff" stroke="#594735" stroke-width="3"/><text x="674" y="315" text-anchor="middle">36</text>
+    <circle cx="450" cy="115" r="22" fill="#fff" stroke="#594735" stroke-width="3"/><text x="450" y="123" text-anchor="middle">37</text>
+  </g>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#4e8b78"/></marker></defs>
+</svg>

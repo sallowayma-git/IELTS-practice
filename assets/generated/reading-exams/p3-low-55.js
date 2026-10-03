@@ -9,11 +9,12 @@
   "meta": {
     "title": "Improving Patient Safety 药品包装设计",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
     "legacyFilename": "148. P3 - Improving Patient Safety 药品包装设计.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

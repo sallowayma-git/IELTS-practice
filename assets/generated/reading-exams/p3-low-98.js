@@ -9,11 +9,12 @@
   "meta": {
     "title": "Petrol power an eco-revolution 交通的革命",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
     "legacyFilename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
-    "questionIntroHtml": "<h3>Questions 27–40</h3>"
+    "questionIntroHtml": "<h3>Questions 27–40</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

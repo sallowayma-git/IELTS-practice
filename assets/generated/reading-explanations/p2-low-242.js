@@ -69,19 +69,19 @@
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（1）题目 21：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：A（Wealthy men’s shoes set the wearer apart from other groups.）\n定位：正文 F 段，第4至5句\n原文：The shoe of an upper-class man also acted as a type of sign which emphasised the difference between the wearer and young boys and women. The shoe also distinguished him from working men\n译文：上层男性的鞋也是一种身份标志，强调穿着者与年轻男孩及女性的区别，也把他与劳动男性区分开来。\n\n解析：wealthy men 对应 upper-class man，set the wearer apart from other groups 对应 emphasised the difference 和 distinguished him from working men，因此D正确。"
+            "text": "（1）题目 21：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：A（Shoes for rich women were designed to match their dress in various ways.）\n定位：正文 F 段，第1至2句\n原文：Wealthy women's footwear harmonised with their other garments, a harmony that could be effected through matching textiles, general colour, embroidered detail or buckles.\n译文：富裕女性的鞋履与其他服装相协调，这种协调可以通过匹配面料、整体颜色、刺绣细节或鞋扣来实现。\n\n解析：rich women 对应 wealthy women，match their dress 对应 harmonised with their other garments；原文列出的面料、颜色、刺绣和鞋扣正是 various ways，因此 A 正确。"
           },
           {
             "questionNumber": 22,
             "questionId": "q9",
-            "text": "（2）题目 22：（题干见题目区）\n答案：D"
+            "text": "（2）题目 22：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：D（Wealthy men's shoes set the wearer apart from other groups.）\n定位：正文 F 段，第4至5句\n原文：The shoe of an upper-class man also acted as a type of sign which emphasised the difference between the wearer and young boys and women. The shoe also distinguished him from working men.\n译文：上层男性的鞋也是一种身份标志，强调穿着者与年轻男孩及女性的区别，也把他与劳动男性区分开来。\n\n解析：wealthy men 对应 upper-class man，set the wearer apart from other groups 对应 emphasised the difference 和 distinguished him from working men，因此 D 正确。"
           }
         ],
         "questionRange": {
           "start": 21,
           "end": 22
         },
-        "text": "（1）题目 21：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：A（Wealthy men’s shoes set the wearer apart from other groups.）\n定位：正文 F 段，第4至5句\n原文：The shoe of an upper-class man also acted as a type of sign which emphasised the difference between the wearer and young boys and women. The shoe also distinguished him from working men\n译文：上层男性的鞋也是一种身份标志，强调穿着者与年轻男孩及女性的区别，也把他与劳动男性区分开来。\n\n解析：wealthy men 对应 upper-class man，set the wearer apart from other groups 对应 emphasised the difference 和 distinguished him from working men，因此D正确。\n\n（2）题目 22：（题干见题目区）\n答案：D"
+        "text": "（1）题目 21：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：A（Shoes for rich women were designed to match their dress in various ways.）\n定位：正文 F 段，第1至2句\n原文：Wealthy women's footwear harmonised with their other garments, a harmony that could be effected through matching textiles, general colour, embroidered detail or buckles.\n译文：富裕女性的鞋履与其他服装相协调，这种协调可以通过匹配面料、整体颜色、刺绣细节或鞋扣来实现。\n\n解析：rich women 对应 wealthy women，match their dress 对应 harmonised with their other garments；原文列出的面料、颜色、刺绣和鞋扣正是 various ways，因此 A 正确。\n\n（2）题目 22：（题干见题目区）\n题目翻译：关于鞋与其他服装之间的关系，作者提到了以下哪两项？\n答案：D（Wealthy men's shoes set the wearer apart from other groups.）\n定位：正文 F 段，第4至5句\n原文：The shoe of an upper-class man also acted as a type of sign which emphasised the difference between the wearer and young boys and women. The shoe also distinguished him from working men.\n译文：上层男性的鞋也是一种身份标志，强调穿着者与年轻男孩及女性的区别，也把他与劳动男性区分开来。\n\n解析：wealthy men 对应 upper-class man，set the wearer apart from other groups 对应 emphasised the difference 和 distinguished him from working men，因此 D 正确。"
       },
       {
         "sectionTitle": "3. Summary Completion（Questions 23–26）",

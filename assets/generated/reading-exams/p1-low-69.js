@@ -13,7 +13,8 @@
     "pdfFilename": "160. P1 - An important language development 楔形文字.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
     "legacyFilename": "160. P1 - An important language development 楔形文字.html",
-    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+    "questionIntroHtml": "<h3>Questions 1–5</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

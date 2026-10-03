@@ -13,7 +13,8 @@
     "pdfFilename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/",
     "legacyFilename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

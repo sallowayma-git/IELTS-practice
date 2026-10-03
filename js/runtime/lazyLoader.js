@@ -6,6 +6,8 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
+    var normalizedUrls = Object.create(null);
+    var preloadedScripts = new Set();
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
@@ -70,6 +72,9 @@
         ];
 
         manifest['settings-tools'] = [];
+        manifest['reading-tools'] = ['js/bundles/reading-tools.bundle.js'];
+        manifest['reading-library'] = ['js/bundles/reading-library.bundle.js'];
+        manifest['vocabulary-tools'] = ['js/bundles/vocabulary.bundle.js'];
 
         manifest['diagnostics-tools'] = [
             'js/bundles/diagnostics.bundle.js'
@@ -85,6 +90,9 @@
         dependencies['browse-view'] = ['state-core', 'practice-suite'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['settings-tools'] = ['state-core'];
+        dependencies['reading-tools'] = ['state-core'];
+        dependencies['reading-library'] = ['state-core'];
+        dependencies['vocabulary-tools'] = ['state-core'];
         dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
         dependencies['diagnostics-tools'] = ['state-core'];
@@ -101,11 +109,50 @@
         if (!url) {
             return '';
         }
+        if (normalizedUrls[url]) {
+            return normalizedUrls[url];
+        }
         try {
-            return new URL(versionScriptUrl(url), document.baseURI).href;
+            return normalizedUrls[url] = new URL(versionScriptUrl(url), document.baseURI).href;
         } catch (_) {
             return String(url);
         }
+    }
+
+    function preloadGroup(groupName) {
+        var visited = new Set();
+        var count = 0;
+        // Local packages need script injection, not network resource hints.
+        // Preloads only fetch bytes; dependency execution remains sequential.
+        if (!global.location || !/^https?:$/.test(global.location.protocol || '')) {
+            return count;
+        }
+        function visit(name) {
+            if (visited.has(name) || !manifest[name]) return;
+            visited.add(name);
+            (dependencies[name] || []).forEach(visit);
+            manifest[name].forEach(function preload(url) {
+                var normalized = normalizeScriptUrl(url);
+                if (!normalized || isProvided(url) || preloadedScripts.has(normalized)) return;
+                try {
+                    var link = document.createElement('link');
+                    // Unsupported engines retain the normal script-loading path.
+                    if (!link.relList || typeof link.relList.supports !== 'function'
+                        || !link.relList.supports('preload')) return;
+                    link.rel = 'preload';
+                    link.as = 'script';
+                    link.href = normalized;
+                    preloadedScripts.add(normalized);
+                    try { document.head.appendChild(link); } catch (error) {
+                        preloadedScripts.delete(normalized);
+                        throw error;
+                    }
+                    count += 1;
+                } catch (_) { }
+            });
+        }
+        visit(groupName);
+        return count;
     }
 
     function findExistingScriptTag(url) {
@@ -152,7 +199,7 @@
         return providedScripts.has(normalized) || scriptStatus[url] === 'loaded' || scriptStatus[normalized] === 'loaded';
     }
 
-    function loadScript(url) {
+    function loadScript(url, options) {
         if (!url) {
             return Promise.resolve();
         }
@@ -160,45 +207,77 @@
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
         }
-        if (scriptStatus[url] === 'loaded') {
-            return Promise.resolve();
-        }
-        if (scriptStatus[url] && scriptStatus[url].then) {
-            return scriptStatus[url];
+        var normalized = normalizeScriptUrl(url);
+        var status = scriptStatus[normalized] || scriptStatus[url];
+        if (status && status.then) {
+            return status;
         }
 
         var requestUrl = versionScriptUrl(url);
         var existing = findExistingScriptTag(requestUrl);
         if (existing) {
             scriptStatus[url] = 'loaded';
+            scriptStatus[normalized] = 'loaded';
             return Promise.resolve();
         }
 
-        scriptStatus[url] = new Promise(function inject(resolve, reject) {
+        var scriptNode;
+        var pending = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
+            scriptNode = script;
+            var settled = false;
+            var timer = null;
+            var diagnostics = global.AppDiagnostics;
+            // Declare before setting src or inserting the element: capture listeners run first.
+            try {
+                if (diagnostics) diagnostics.declareResource(script, { url: url, optional: !!(options && options.optional) });
+            } catch (_) { }
             script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = 'loaded';
+                scriptStatus[normalized] = 'loaded';
                 resolve();
             };
             script.onerror = function handleError(error) {
+                if (settled) return;
+                settled = true;
+                try { global.clearTimeout?.(timer); } catch (_) { }
                 scriptStatus[url] = null;
+                scriptStatus[normalized] = null;
+                var failure = new Error('加载脚本失败: ' + url);
+                try {
+                    if (diagnostics) failure = diagnostics.resourceFailure(script, failure) || failure;
+                } catch (_) { }
                 try {
                     if (script.parentNode) {
                         script.parentNode.removeChild(script);
                     }
                 } catch (_) { }
-                reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
+                try {
+                    global.AppOperationDiagnostics?.failure({ code: 'RESOURCE_LOAD_FAILED', module: 'main',
+                        action: 'load-resource', error: failure, operation: 'not-committed',
+                        resource: { url: url, optional: !!(options && options.optional) } });
+                } catch (_) { }
+                reject(failure);
             };
-            document.head.appendChild(script);
+            try { timer = global.setTimeout?.(function () { script.onerror(); }, 15000); } catch (_) { }
         });
-
-        return scriptStatus[url];
+        scriptStatus[url] = pending;
+        scriptStatus[normalized] = pending;
+        // Publish the in-flight request before insertion: a synchronous DOM
+        // failure must clear it so the next request can retry.
+        try { document.head.appendChild(scriptNode); } catch (error) {
+            if (scriptNode && scriptNode.onerror) scriptNode.onerror(error);
+        }
+        return pending;
     }
 
     function loadOptionalScript(url, label) {
-        return loadScript(url).then(function onOptionalLoaded() {
+        return loadScript(url, { optional: true }).then(function onOptionalLoaded() {
             return true;
         }).catch(function onOptionalFailed(error) {
             scriptStatus[url] = null;
@@ -250,7 +329,7 @@
         if (batch.length === 1) {
             return loadScript(batch[0]);
         }
-        return Promise.all(batch.map(loadScript)).then(function () {
+        return Promise.all(batch.map(function (url) { return loadScript(url); })).then(function () {
             return undefined;
         });
     }
@@ -344,6 +423,7 @@
         }
 
         var required = dependencies[groupName] || [];
+        preloadGroup(groupName);
         groupStatus[groupName] = Promise.all(required.map(ensureGroup))
             .then(function () {
                 return loadGroup(groupName, manifest[groupName]);
@@ -384,6 +464,7 @@
 
     global.AppLazyLoader = global.AppLazyLoader || {};
     global.AppLazyLoader.ensureGroup = ensureGroup;
+    global.AppLazyLoader.preloadGroup = preloadGroup;
     global.AppLazyLoader.registerGroup = registerGroup;
     global.AppLazyLoader.markProvided = markProvided;
     global.AppLazyLoader.getStatus = getStatus;

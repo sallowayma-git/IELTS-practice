@@ -155,6 +155,15 @@ function createHarness(options = {}) {
         localStorage,
         sessionStorage,
         ExternalBackupService: options.missingExternalBackupService ? undefined : externalBackup,
+        AppDiagnosticStore: options.missingDiagnosticStore ? undefined : {
+            async withFullReset(callback) {
+                if (options.diagnosticResetError) throw new Error('diagnostic coordination failed');
+                events.push('diagnostics:suspended');
+                const result = await callback();
+                events.push('diagnostics:completed');
+                return result;
+            }
+        },
         confirm: () => options.confirmed !== false,
         showMessage(message, type) { messages.push({ message, type }); },
         console: Object.assign({}, console, { error() {} }),
@@ -216,7 +225,9 @@ async function testSuccessfulReset() {
         'IELTSAtlasDataV2',
         'ExamSystemDB',
         'ExamSystemExternalBackup',
-        'IELTSAtlasExternalBackupV2'
+        'IELTSAtlasExternalBackupV2',
+        'IELTSAtlasDiagnosticsV1',
+        'IELTSAtlasReadingViewCache'
     ]);
     assert.equal(result.databases.includes('ExamSystemExternalBackup'), true,
         'full reset must remove the legacy directory handle so old data cannot auto-migrate on reload');
@@ -229,7 +240,7 @@ async function testSuccessfulReset() {
 }
 
 async function testBlockedDeletionKeepsWaiting() {
-    const harness = createHarness({ deleteModes: { IELTSAtlasDataV2: 'blocked' } });
+    const harness = createHarness({ deleteModes: { IELTSAtlasReadingViewCache: 'blocked' } });
     const pending = harness.windowStub.SiteDataReset.perform({ reload: false });
     let settled = false;
     pending.finally(() => { settled = true; });
@@ -237,7 +248,7 @@ async function testBlockedDeletionKeepsWaiting() {
     assert.equal(settled, false);
     assert.equal(harness.localStorage.clearCalls, 0, 'storage clears only after every database is deleted');
     assert.ok(harness.messages.some((entry) => entry.type === 'warning' && /关闭其他标签页/.test(entry.message)));
-    harness.complete('IELTSAtlasDataV2');
+    harness.complete('IELTSAtlasReadingViewCache');
     const result = await pending;
     assert.equal(result.success, true);
     assert.equal(harness.localStorage.values.size, 0);
@@ -296,10 +307,36 @@ async function testDeletionFailureIsVisible() {
     const result = await harness.windowStub.clearCache();
     assert.equal(result.success, false);
     assert.equal(result.reason, 'partial_reset');
+    assert.equal(result.retryable, true);
     assert.equal(result.terminal, false);
+    assert.equal(result.externalBackupFilesPreserved, true);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].stage, 'delete-database');
+    assert.equal(result.errors[0].database, 'ExamSystemDB');
+    assert.match(result.errors[0].error.message, /delete failed: ExamSystemDB/);
+    assert.deepEqual(
+        harness.events.filter((entry) => entry.startsWith('deleted:')).sort(),
+        [
+            'deleted:ExamSystemExternalBackup',
+            'deleted:IELTSAtlasDataV2',
+            'deleted:IELTSAtlasDiagnosticsV1',
+            'deleted:IELTSAtlasExternalBackupV2',
+            'deleted:IELTSAtlasReadingViewCache'
+        ],
+        'a failed database deletion does not undo the other completed deletions'
+    );
+    assert.equal(harness.externalBackup.rollbackCalls, 1);
+    assert.equal(harness.externalBackup.commitCalls, 0);
     assert.equal(harness.windowStub.location.reloadCalls, 0);
     assert.equal(harness.localStorage.clearCalls, 1);
-    assert.ok(harness.messages.some((entry) => entry.type === 'error'));
+    assert.equal(harness.sessionStorage.clearCalls, 1);
+    assert.equal(harness.localStorage.values.size, 0,
+        'rolling back backup preparation does not restore cleared local storage');
+    assert.equal(harness.sessionStorage.values.size, 0,
+        'rolling back backup preparation does not restore cleared session storage');
+    assert.ok(harness.messages.some((entry) => entry.type === 'error'
+        && /仅部分清除/.test(entry.message)));
+    assert.equal(harness.messages.some((entry) => entry.type === 'success'), false);
 }
 
 async function testRejectedDatabaseDeletionRollsBackPreparation() {
@@ -360,6 +397,38 @@ async function testExternalFailureStopsBeforeDeletion() {
     assert.equal(harness.localStorage.clearCalls, 0);
     assert.equal(harness.sessionStorage.clearCalls, 0);
     assert.equal(harness.windowStub.location.reloadCalls, 0);
+}
+
+async function testFullResetLockFailureStopsBeforeDestructiveCleanup() {
+    const lockError = new Error('cross-tab lock rejected');
+    const cases = [
+        async () => { throw lockError; },
+        async () => undefined
+    ];
+    for (const withFullResetLock of cases) {
+        const harness = createHarness();
+        harness.externalBackup.withFullResetLock = withFullResetLock;
+        const result = await harness.windowStub.clearCache();
+        assert.equal(result.success, false);
+        assert.equal(result.reason, 'external_backup_busy');
+        assert.equal(result.retryable, true);
+        assert.equal(result.terminal, false);
+        assert.ok(result.error instanceof Error);
+        assert.equal(harness.externalBackup.prepareCalls, 0);
+        assert.equal(harness.externalBackup.commitCalls, 0);
+        assert.equal(harness.externalBackup.rollbackCalls, 0);
+        assert.deepEqual(harness.events, []);
+        assert.equal(harness.requests.length, 0);
+        assert.equal(harness.localStorage.clearCalls, 0);
+        assert.equal(harness.sessionStorage.clearCalls, 0);
+        assert.equal(harness.localStorage.values.get('consent'), 'yes');
+        assert.equal(harness.sessionStorage.values.get('recovery'), 'active');
+        assert.equal(harness.externalBackup.status.suspended, false);
+        assert.equal(harness.externalBackup.status.bound, true);
+        assert.equal(harness.windowStub.location.reloadCalls, 0);
+        assert.ok(harness.messages.some((entry) => entry.type === 'error'));
+        assert.equal(harness.messages.some((entry) => entry.type === 'success'), false);
+    }
 }
 
 async function testMissingExternalBackupServiceFailsClosed() {
@@ -438,7 +507,7 @@ async function testConcurrentCallsShareOneRun() {
     const second = harness.windowStub.SiteDataReset.perform({ reload: false });
     assert.equal(first, second);
     await flush();
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 4);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 6);
     assert.equal(harness.externalBackup.calls, 1);
     harness.complete('IELTSAtlasDataV2');
     const [left, right] = await Promise.all([first, second]);
@@ -449,10 +518,23 @@ async function testFinishedNonTerminalRunCanRepeat() {
     const harness = createHarness();
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 8);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 12);
     assert.equal(harness.localStorage.clearCalls, 2);
 }
 
+async function testDiagnosticCoordinationFailsClosed() {
+    for (const options of [{ missingDiagnosticStore: true }, { diagnosticResetError: true }]) {
+        const harness = createHarness(options);
+        const result = await harness.windowStub.SiteDataReset.perform({ reload: false });
+        assert.equal(result.success, false);
+        assert.equal(result.reason, 'diagnostic_reset_failed');
+        assert.equal(harness.externalBackup.rollbackCalls, 1);
+        assert.equal(harness.requests.length, 0);
+        assert.equal(harness.localStorage.clearCalls, 0);
+    }
+}
+
+await testDiagnosticCoordinationFailsClosed();
 await testCancelledReset();
 await testSuccessfulReset();
 await testBlockedDeletionKeepsWaiting();
@@ -464,6 +546,7 @@ await testSkippedDatabaseDeletionRollsBackPreparation();
 await testStorageClearFailureRollsBackPreparation();
 await testPartialDeletionRetryRestoresPreparationState();
 await testExternalFailureStopsBeforeDeletion();
+await testFullResetLockFailureStopsBeforeDestructiveCleanup();
 await testExternalFailureResultStopsBeforeDeletion();
 await testBindingCleanupFailureStopsBeforeDeletion();
 await testMissingExternalBackupServiceFailsClosed();

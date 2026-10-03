@@ -595,3 +595,17 @@ test('重新发起同一记录后旧评分条立即消失，新回执才恢复�
     await h.flow.submit('good');
     assert.equal(h.outcomes[0].reviewAttemptId, session.reviewAttemptId);
 });
+
+
+test('复盘刷新复用已发布的历史摘要，每次刷新只读取一次队列', async () => {
+    const h = loadPracticeView(VIEW_QUEUE);
+    h.sandbox.updatePracticeView(VIEW_RECORDS, []);
+    let reads = 0;
+    const original = h.sandbox.AppData.practice.listReviewQueue;
+    h.sandbox.AppData.practice.listReviewQueue = async () => { reads++; return original(); };
+    await h.sandbox.refreshPracticeReviewQueue('rating', { forceRender: true });
+    assert.equal(reads, 1);
+    assert.deepEqual(h.lastRender().ids, ['read-clean', 'read-due', 'listen-1', 'read-late']);
+    await h.sandbox.refreshPracticeReviewQueue('mode', { forceRender: true });
+    assert.equal(reads, 2);
+});

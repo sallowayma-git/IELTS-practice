@@ -1,0 +1,158 @@
+[
+  {
+    "schemaVersion": 1,
+    "appVersion": "0.6.3",
+    "buildId": "unknown",
+    "eventId": "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_1",
+    "windowId": "win_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sequence": 1,
+    "timestamp": 1700000000000,
+    "fingerprint": "fp_b39cf197",
+    "code": "PRACTICE_SAVE_FAILED",
+    "causeCode": "QUOTA_EXCEEDED",
+    "module": "practice",
+    "action": "submit",
+    "repetitionCount": 1,
+    "error": {
+      "name": "AppDataError",
+      "message": "Practice persistence failed.",
+      "code": "QUOTA_EXCEEDED",
+      "kind": "object",
+      "stack": [
+        {
+          "path": "js/data/v2/dataKernel.js",
+          "line": 757,
+          "column": 12
+        }
+      ],
+      "cause": null
+    },
+    "resource": {
+      "path": "unknown",
+      "line": null,
+      "column": null,
+      "status": "unknown",
+      "optional": "unknown"
+    },
+    "correlation": {
+      "scopeId": "scope_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "session": "alias_session_cccccccccccccccccccccccccccccccc",
+      "suite": "unknown",
+      "submission": "alias_submission_cccccccccccccccccccccccccccccccc",
+      "operation": "alias_operation_cccccccccccccccccccccccccccccccc"
+    },
+    "environment": {
+      "runMode": "file",
+      "browser": "unknown",
+      "browserVersion": "unknown",
+      "platform": "unknown",
+      "online": "unknown",
+      "context": "main"
+    },
+    "persistence": {
+      "operation": "unconfirmed",
+      "diagnostics": "memory-only",
+      "generation": "unknown"
+    },
+    "notification": {
+      "kind": "dialog",
+      "requiresDismissal": true
+    },
+    "retry": {
+      "available": true,
+      "action": "submit",
+      "operationAlias": "alias_operation_cccccccccccccccccccccccccccccccc",
+      "submissionAlias": "alias_submission_cccccccccccccccccccccccccccccccc"
+    },
+    "breadcrumbs": [],
+    "collection": {
+      "source": "business",
+      "coverage": "partial",
+      "aggregation": "local",
+      "redaction": "allowlist-v1",
+      "limitations": [
+        "javascript-disabled",
+        "page-not-opened",
+        "process-crash",
+        "blocked-main-thread",
+        "cross-origin-details"
+      ],
+      "issues": []
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "appVersion": "0.6.3",
+    "buildId": "unknown",
+    "eventId": "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_2",
+    "windowId": "win_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sequence": 2,
+    "timestamp": 1700000000001,
+    "fingerprint": "fp_03893b98",
+    "code": "RESOURCE_LOAD_FAILED",
+    "causeCode": "unknown",
+    "module": "bootstrap",
+    "action": "load-resource",
+    "repetitionCount": 1,
+    "error": {
+      "name": "unknown",
+      "message": "[redacted]",
+      "code": "unknown",
+      "kind": "undefined",
+      "stack": [],
+      "cause": null
+    },
+    "resource": {
+      "path": "js/bundles/core-foundation.bundle.js",
+      "line": null,
+      "column": null,
+      "status": "unknown",
+      "optional": false
+    },
+    "correlation": {
+      "scopeId": "scope_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "session": "unknown",
+      "suite": "unknown",
+      "submission": "unknown",
+      "operation": "unknown"
+    },
+    "environment": {
+      "runMode": "file",
+      "browser": "unknown",
+      "browserVersion": "unknown",
+      "platform": "unknown",
+      "online": "unknown",
+      "context": "main"
+    },
+    "persistence": {
+      "operation": "unconfirmed",
+      "diagnostics": "memory-only",
+      "generation": "unknown"
+    },
+    "notification": {
+      "kind": "startup",
+      "requiresDismissal": true
+    },
+    "retry": {
+      "available": false,
+      "action": "unknown",
+      "operationAlias": "unknown",
+      "submissionAlias": "unknown"
+    },
+    "breadcrumbs": [],
+    "collection": {
+      "source": "bootstrap",
+      "coverage": "partial",
+      "aggregation": "incomplete",
+      "redaction": "allowlist-v1",
+      "limitations": [
+        "javascript-disabled",
+        "page-not-opened",
+        "process-crash",
+        "blocked-main-thread",
+        "cross-origin-details"
+      ],
+      "issues": []
+    }
+  }
+]

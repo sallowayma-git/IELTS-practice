@@ -69,19 +69,19 @@
           {
             "questionNumber": 21,
             "questionId": "q8",
-            "text": "（1）题目 21：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：A（Coins with the same design often looked quite different.）\n定位：正文 Paragraph E\n原文：This explains the endless variety encountered in coins with the same designs because the moulds had to be remade repeatedly, by many different artisans.\n译文：这解释了为何采用同一设计的硬币仍呈现无穷差异：模具必须由许多不同工匠反复重制。\n\n解析：原文直接说同一设计的硬币存在 endless variety，原因是模具反复由不同工匠重制，所以 C 正确。"
+            "text": "（1）题目 21：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：A（There is no record of the names of the coin makers.）\n定位：正文 Paragraph E\n原文：One of the distinctive features of coins, in fact, is that they are the work of anonymous craftsmen, and yet each coin is an intimate reflection of the character of its city of origin.\n译文：事实上，硬币的一个显著特点是它们出自无名工匠之手，但每枚硬币又都细致地反映了其来源城市的特征。\n\n解析：coin makers 对应 craftsmen，anonymous 表明这些工匠的姓名没有留下记录，因此 A 正确。"
           },
           {
             "questionNumber": 22,
             "questionId": "q9",
-            "text": "（2）题目 22：（题干见题目区）\n答案：C"
+            "text": "（2）题目 22：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：C（Coins with the same design often looked quite different.）\n定位：正文 Paragraph E\n原文：This explains the endless variety encountered in coins with the same designs because the moulds had to be remade repeatedly, by many different artisans.\n译文：这解释了为何采用同一设计的硬币仍呈现无穷差异：模具必须由许多不同工匠反复重制。\n\n解析：原文直接说同一设计的硬币存在 endless variety，原因是模具由不同工匠反复重制，因此同样设计的硬币外观常有差异，C 正确。"
           }
         ],
         "questionRange": {
           "start": 21,
           "end": 22
         },
-        "text": "（1）题目 21：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：A（Coins with the same design often looked quite different.）\n定位：正文 Paragraph E\n原文：This explains the endless variety encountered in coins with the same designs because the moulds had to be remade repeatedly, by many different artisans.\n译文：这解释了为何采用同一设计的硬币仍呈现无穷差异：模具必须由许多不同工匠反复重制。\n\n解析：原文直接说同一设计的硬币存在 endless variety，原因是模具反复由不同工匠重制，所以 C 正确。\n\n（2）题目 22：（题干见题目区）\n答案：C"
+        "text": "（1）题目 21：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：A（There is no record of the names of the coin makers.）\n定位：正文 Paragraph E\n原文：One of the distinctive features of coins, in fact, is that they are the work of anonymous craftsmen, and yet each coin is an intimate reflection of the character of its city of origin.\n译文：事实上，硬币的一个显著特点是它们出自无名工匠之手，但每枚硬币又都细致地反映了其来源城市的特征。\n\n解析：coin makers 对应 craftsmen，anonymous 表明这些工匠的姓名没有留下记录，因此 A 正确。\n\n（2）题目 22：（题干见题目区）\n题目翻译：作者在文中对古代硬币提出了以下哪两项评论？\n答案：C（Coins with the same design often looked quite different.）\n定位：正文 Paragraph E\n原文：This explains the endless variety encountered in coins with the same designs because the moulds had to be remade repeatedly, by many different artisans.\n译文：这解释了为何采用同一设计的硬币仍呈现无穷差异：模具必须由许多不同工匠反复重制。\n\n解析：原文直接说同一设计的硬币存在 endless variety，原因是模具由不同工匠反复重制，因此同样设计的硬币外观常有差异，C 正确。"
       },
       {
         "sectionTitle": "3. Summary Completion（Questions 23–26）",

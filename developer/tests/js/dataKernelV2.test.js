@@ -338,6 +338,22 @@ async function main() {
             await kernel.initialize();
             const remoteKernel = new DataKernel();
             await remoteKernel.initialize();
+            // The view token must follow owner changes atomically, including
+            // snapshot installs, without changing for preferences or replay.
+            await kernel.mutate([{ logicalKey: 'vocab.words', data: [], expectedRevision: 0 }], { operationId: 'view-token-first' });
+            const token = (await remoteKernel.read('system.readingViewToken')).token;
+            if (!token) throw new Error('Canonical mutation did not invalidate reading view');
+            await kernel.mutate([{ logicalKey: 'vocab.words', data: [], expectedRevision: 0 }], { operationId: 'view-token-first' });
+            if ((await kernel.read('system.readingViewToken')).token !== token) throw new Error('Replay invalidated cache');
+            try {
+                await kernel.mutate([{ logicalKey: 'vocab.words', data: [], expectedRevision: 0 }], { operationId: 'view-token-conflict' });
+                throw new Error('Expected owner conflict');
+            } catch (error) { if (error.code !== 'CONFLICT') throw error; }
+            if ((await kernel.read('system.readingViewToken')).token !== token) throw new Error('Aborted write invalidated cache');
+            const viewSnapshot = await kernel.exportSnapshot({ logicalKeys: ['vocab.words'] });
+            if (viewSnapshot.envelopes['system.readingViewToken']) throw new Error('View token exported');
+            await kernel.installSnapshot(viewSnapshot, { operationId: 'view-token-restore' });
+            if ((await remoteKernel.read('system.readingViewToken')).token === token) throw new Error('Restore did not invalidate cache');
             const stores = Array.from(kernel.driver.db.objectStoreNames);
             const remoteCommitPromise = new Promise((resolve, reject) => {
                 const timer = setTimeout(() => reject(new Error('cross-realm commit notification timed out')), 3000);
@@ -393,6 +409,12 @@ async function main() {
                 { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { recordId: 'r1', notes: ['review'] }, expectedRevision: 0 }
             ], { operationId: 'entity-1' });
             const practiceProjection = await kernel.readPracticeSnapshot(['r1']);
+            const reviewProjection = await kernel.readPracticeSnapshot(['r1'], {
+                stores: ['practiceSummaries', 'practiceAnnotations'], annotationProjection: 'reviewState'
+            });
+            if (JSON.stringify(reviewProjection.practiceAnnotations) !== JSON.stringify([{ recordId: 'r1' }])) {
+                throw new Error('Review projection must exclude notes and details');
+            }
             let detailsListCode = null;
             try { await kernel.listEntities('practiceDetails'); } catch (error) { detailsListCode = error.code; }
             const snapshot = await kernel.exportSnapshot({ includeSystem: true });

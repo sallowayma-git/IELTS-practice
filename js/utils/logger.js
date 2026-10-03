@@ -32,7 +32,14 @@
 
     class AppLogger {
         constructor(config = {}) {
-            this.nativeConsole = { ...global.console }; // Backup native methods
+            this.nativeConsole = {};
+            ['log', 'info', 'warn', 'error', 'debug', 'trace'].forEach((method) => {
+                try {
+                    if (typeof global.console[method] === 'function') {
+                        this.nativeConsole[method] = global.console[method].bind(global.console);
+                    }
+                } catch (_) { }
+            });
             this.config = this.loadConfig(config);
 
             // Bind methods to ensure 'this' context
@@ -76,7 +83,7 @@
                     categories: { ...this.config.categories, ...(storedConfig.categories || {}) }
                 };
             } catch (error) {
-                this.nativeConsole.warn('[AppLogger] 无法读取日志配置:', error);
+                this.internalLog('warn', '无法读取日志配置');
             }
         }
 
@@ -91,7 +98,7 @@
                     categories: this.config.categories
                 })
             ).then(() => true).catch((error) => {
-                this.nativeConsole.warn('[AppLogger] 无法保存日志配置:', error);
+                this.internalLog('warn', '无法保存日志配置');
                 return false;
             });
         }
@@ -115,7 +122,8 @@
                             this.output(categoryInfo.category, level, categoryInfo.args);
                         } else {
                             // It's a raw console log, pass through to native
-                            this.nativeConsole[method].apply(global.console, args);
+                            this.captureDiagnostic(method, args);
+                            try { this.nativeConsole[method](...args); } catch (_) { }
                         }
                     };
                 }
@@ -171,18 +179,23 @@
          * Core output method
          */
         output(category, level, args) {
-            if (!this.shouldLog(category, level)) {
-                return;
-            }
+            this.captureDiagnostic(level, args);
+            try {
+                if (!this.shouldLog(category, level)) return;
 
-            const timestamp = new Date().toLocaleTimeString();
-            const prefix = `[${timestamp}] [${category}]`;
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = `[${timestamp}] [${category}]`;
 
-            // Map our levels to console methods
-            const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
+                // Map our levels to console methods.
+                const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
 
-            // Use native console to print, preserving object inspection capabilities
-            consoleMethod.call(global.console, prefix, ...args);
+                // Preserve native object inspection; console failures cannot escape.
+                if (consoleMethod) consoleMethod(prefix, ...args);
+            } catch (_) { }
+        }
+
+        captureDiagnostic(level, args) {
+            try { global.AppDiagnostics?.captureConsole(level, args); } catch (_) { }
         }
 
         /**
@@ -190,11 +203,9 @@
          */
         internalLog(level, message, data) {
             const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
-            if (data) {
-                consoleMethod.call(global.console, `[Logger] ${message}`, data);
-            } else {
-                consoleMethod.call(global.console, `[Logger] ${message}`);
-            }
+            try {
+                if (consoleMethod) consoleMethod(`[Logger] ${message}`, ...(data ? [data] : []));
+            } catch (_) { }
         }
 
         // --- Public API ---

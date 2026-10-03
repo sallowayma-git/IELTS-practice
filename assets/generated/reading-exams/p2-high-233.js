@@ -13,7 +13,8 @@
     "pdfFilename": "233. P2 - Why don’t we sleep 失眠的原因.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "233. P2 - Why don’t we sleep 失眠的原因.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

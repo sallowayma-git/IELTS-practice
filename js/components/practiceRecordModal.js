@@ -25,8 +25,6 @@ class PracticeRecordModal {
                 console.log('[PracticeRecordModal] \u6570\u636e\u4e00\u81f4\u6027\u68c0\u67e5\u5b8c\u6210');
             }
 
-            processedRecord = this.prepareRecordForDisplay(processedRecord);
-
             const modalHtml = this.createModalHtml(processedRecord);
 
             this.hide();
@@ -188,6 +186,21 @@ class PracticeRecordModal {
     }
 
     createModalHtml(record) {
+        // Share derived display data between the summary and answer tables for
+        // this render only. Later opens must read current answers and metadata.
+        const previousCache = this.displayRenderCache;
+        this.displayRenderCache = {
+            preparedRecords: new WeakMap(),
+            normalizedEntries: new WeakMap()
+        };
+        try {
+            return this.buildModalHtml(this.prepareRecordForDisplay(record));
+        } finally {
+            this.displayRenderCache = previousCache;
+        }
+    }
+
+    buildModalHtml(record) {
         const metadata = record.metadata || {};
         const examTitle = metadata.examTitle || record.title || record.examId || '\u672a\u77e5\u9898\u76ee';
         const category = record.category || metadata.category || '\u672a\u77e5\u5206\u7c7b';
@@ -261,6 +274,7 @@ class PracticeRecordModal {
                             </div>
                         </div>
                         <div class="answer-details">
+                            ${record.type === 'reading' || record.type === 'reading-suite' ? (window.ReadingTimingView?.render(record) || '') : ''}
                             <h5>\u7b54\u9898\u8be6\u60c5</h5>
                             ${answerSection}
                         </div>
@@ -274,10 +288,20 @@ class PracticeRecordModal {
         if (!record) {
             return record;
         }
-        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.withEnrichedMetadata === 'function') {
-            return window.AnswerComparisonUtils.withEnrichedMetadata(record, examDefinition);
+        const cache = !examDefinition && this.displayRenderCache?.preparedRecords;
+        if (cache && typeof record === 'object' && cache.has(record)) {
+            return cache.get(record);
         }
-        return record;
+        const prepared = window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.withEnrichedMetadata === 'function'
+            ? window.AnswerComparisonUtils.withEnrichedMetadata(record, examDefinition)
+            : record;
+        if (cache && typeof record === 'object') {
+            cache.set(record, prepared);
+            if (prepared && typeof prepared === 'object') {
+                cache.set(prepared, prepared);
+            }
+        }
+        return prepared;
     }
 
     getFrequencyLabel(record) {
@@ -480,11 +504,18 @@ class PracticeRecordModal {
     }
 
     getNormalizedEntries(record) {
-        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.getNormalizedEntries === 'function') {
-            const entries = window.AnswerComparisonUtils.getNormalizedEntries(record);
-            return Array.isArray(entries) ? entries : [];
+        const cache = this.displayRenderCache?.normalizedEntries;
+        if (cache && record && typeof record === 'object' && cache.has(record)) {
+            return cache.get(record);
         }
-        return [];
+        const entries = window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.getNormalizedEntries === 'function'
+            ? window.AnswerComparisonUtils.getNormalizedEntries(record)
+            : [];
+        const normalized = Array.isArray(entries) ? entries : [];
+        if (cache && record && typeof record === 'object') {
+            cache.set(record, normalized);
+        }
+        return normalized;
     }
 
     hasNormalizedEntries(entries) {
@@ -503,18 +534,18 @@ class PracticeRecordModal {
 
         // 套题详情优先使用分篇数据，避免顶层聚合数据导致错题数固定或重复统计。
         if (!hasSuites) {
-            entries = utils.getNormalizedEntries(record) || [];
+            entries = this.getNormalizedEntries(this.prepareRecordForDisplay(record));
         }
 
         if (hasSuites) {
             suites.forEach((entry, index) => {
-                const subset = utils.getNormalizedEntries(entry) || [];
-                if (subset.length > 0) {
-                    entries = entries.concat(subset.map((item) => ({
+                const subset = this.getNormalizedEntries(this.prepareRecordForDisplay(entry));
+                for (const item of subset) {
+                    entries.push({
                         ...item,
                         sourceEntryKey: item.sourceEntryKey || entry.examId || entry.id || `suite-entry-${index}`,
                         examId: item.examId || entry.examId || entry.id || `suite-entry-${index}`
-                    })));
+                    });
                 }
             });
         }
