@@ -101,6 +101,7 @@
             // 有两轮待评分，否则用户的评分会记到已经作废的那一轮上。
             if (state.pending && String(state.pending.recordId) === id) {
                 state.pending = null;
+                render();
                 emit();
             }
             const session = await app.openPracticeRecordReplay(record, { reviewAttemptId });
@@ -157,7 +158,8 @@
                 quality: normalized,
                 reviewedAt: new Date().toISOString()
             });
-            state.pending = null;
+            // A newer replay may become ready while this write is in flight.
+            if (state.pending === pending) state.pending = null;
             const nextReview = receipt && receipt.reviewState ? receipt.reviewState.nextReview : null;
             notify(nextReview
                 ? '已记录复盘，下次复盘：' + new Date(nextReview).toLocaleDateString()

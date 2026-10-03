@@ -557,3 +557,41 @@ test('未入队记录不能发起复盘', async () => {
     assert.strictEqual(ok.windowStub.__replayCalls[0].opts.reviewAttemptId, session.reviewAttemptId,
         'attempt 必须随回放下发');
 });
+
+
+test('保存旧评分不会清除写库期间新到的待评分记录', async () => {
+    const h = loadReviewFlow();
+    let finish;
+    const commands = [];
+    h.windowStub.AppData.practice.recordReviewOutcome = command => {
+        commands.push(command);
+        return new Promise(resolve => { finish = resolve; });
+    };
+    h.flow.notifyAttemptApplied({ recordId: 'A', reviewAttemptId: 'A-1' });
+    const saving = h.flow.submit('good');
+    h.flow.notifyAttemptApplied({ recordId: 'B', reviewAttemptId: 'B-1' });
+    finish({ committed: true });
+    await saving;
+    assert.equal(commands[0].recordId, 'A');
+    assert.equal(h.flow.getPending().recordId, 'B');
+    const buttons = h.documentStub.getElementById('practice-review-pending-bar').querySelectorAll('[data-review-quality]');
+    assert.ok(buttons.every(button => !button.disabled), '新记录在旧评分保存后可以评分');
+    const savingB = h.flow.submit('easy');
+    assert.equal(commands[1].recordId, 'B');
+    finish({ committed: true });
+    await savingB;
+    assert.equal(h.flow.getPending(), null);
+});
+
+test('重新发起同一记录后旧评分条立即消失，新回执才恢复评分', async () => {
+    const h = loadReviewFlow();
+    h.flow.notifyAttemptApplied({ recordId: 'record-1', reviewAttemptId: 'old' });
+    const session = await h.flow.start('record-1');
+    assert.equal(h.flow.getPending(), null);
+    assert.equal(h.documentStub.getElementById('practice-review-pending-bar'), null);
+    assert.equal(await h.flow.submit('good'), null);
+    assert.equal(h.outcomes.length, 0);
+    h.flow.notifyAttemptApplied({ recordId: 'record-1', reviewAttemptId: session.reviewAttemptId });
+    await h.flow.submit('good');
+    assert.equal(h.outcomes[0].reviewAttemptId, session.reviewAttemptId);
+});
