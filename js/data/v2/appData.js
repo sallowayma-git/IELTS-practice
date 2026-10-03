@@ -563,7 +563,12 @@
     }
 
     const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'readingAnalytics', 'readingTimingSummary']);
-    const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
+    const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations', 'reviewState']);
+    // 复盘调度状态按“一条练习记录一个状态”建模：套题也只有根级一个 reviewState。
+    // 套题子篇的标注（highlights/notes/...）会拆进 annotations.suiteEntries[examId]，
+    // 但 reviewState 绝不能跟着进去——否则一套题会出现 N 份互相矛盾的调度状态，
+    // 且 full 投影回灌时会把子篇状态覆盖回根级。
+    const SUITE_ENTRY_ANNOTATION_FIELDS = new Set(Array.from(ANNOTATION_FIELDS).filter((field) => field !== 'reviewState'));
 
     function withoutRawData(value) {
         if (Array.isArray(value)) return value.map(withoutRawData);
@@ -600,11 +605,16 @@
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
                 }
                 const annotation = {};
-                for (const annotationKey of ANNOTATION_FIELDS) {
+                for (const annotationKey of SUITE_ENTRY_ANNOTATION_FIELDS) {
                     if (hasOwn(next, annotationKey)) { annotation[annotationKey] = next[annotationKey]; delete next[annotationKey]; }
                     if (next.realData && hasOwn(next.realData, annotationKey)) delete next.realData[annotationKey];
                     if (next.rawData && hasOwn(next.rawData, annotationKey)) delete next.rawData[annotationKey];
                 }
+                // 子篇上出现的 reviewState 一律丢弃（旧格式导入 / full 投影回灌都可能带上它），
+                // 既不进 detail 也不进 annotations.suiteEntries。
+                delete next.reviewState;
+                if (next.realData) delete next.realData.reviewState;
+                if (next.rawData) delete next.rawData.reviewState;
                 delete next.realData; delete next.rawData;
                 if (Object.keys(annotation).length) {
                     if (!annotations.suiteEntries) annotations.suiteEntries = {};
@@ -655,6 +665,12 @@
         throw new Error('AppData v2 requires PracticeRecordSource (js/data/practiceRecordSource.js)');
     }
     const isRealPracticeRecord = practiceRecordSource.isRealPracticeRecord;
+    const practiceReviewScheduler = global.PracticeReviewScheduler;
+    if (!practiceReviewScheduler
+        || typeof practiceReviewScheduler.createInitialState !== 'function'
+        || typeof practiceReviewScheduler.scheduleOutcome !== 'function') {
+        throw new Error('AppData v2 requires PracticeReviewScheduler (js/core/practiceReviewScheduler.js)');
+    }
 
     function computeStats(records) {
         const stats = defaultStats();
@@ -688,6 +704,191 @@
         if (hints.includes('listen') || hints.includes('audio') || hints.includes('hearing')) return 'listening';
         if (hints.includes('read')) return 'reading';
         return null;
+    }
+
+    function reviewReferenceTime(summary) {
+        return validIso(summary.completedAt || summary.timestamp || summary.date) || nowIso();
+    }
+
+    // 复盘状态不是练习事实：它既不能被一次重新落库覆盖，也不能因为自身损坏而
+    // 阻断练习记录保存（那等于用调度元数据换掉用户真实成绩）。非法状态一律按“没有状态”
+    // 处理——listReviewQueue 同样会跳过它，用户重新完成一次练习即可重新入队。
+    function safeReviewState(value) {
+        if (!value) return null;
+        try { return practiceReviewScheduler.normalizeState(value); }
+        catch (_) { return null; }
+    }
+
+    function reviewWrongCount(summary) {
+        const total = Number(summary && summary.totalQuestions);
+        const correct = Number(summary && summary.correctAnswers);
+        if (!Number.isFinite(total) || !Number.isFinite(correct)) return 0;
+        return Math.max(0, total - correct);
+    }
+
+    function prepareReviewLayersForUpsert(layers, existing) {
+        const next = clone(layers);
+        // 已存在的持久化状态优先级最高：同一 recordId 再次落库（补写/合并重试）
+        // 不得重置用户已经复盘出来的间隔。
+        const persistedState = safeReviewState(asObject(existing && existing.annotations && existing.annotations.data).reviewState);
+        if (persistedState) {
+            next.annotations.reviewState = persistedState;
+            return next;
+        }
+        const importedState = safeReviewState(next.annotations.reviewState);
+        if (importedState) {
+            next.annotations.reviewState = importedState;
+            return next;
+        }
+        delete next.annotations.reviewState;
+        return next;
+    }
+
+    const REVIEW_PLANS_KEY = 'practice.reviewPlans';
+    async function readReviewPlans() {
+        const current = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
+        if (current.envelope) return current;
+        // One-time compatibility import; existing record/suite schedules retain
+        // their original unit. Subsequent queue reads never load annotations.
+        const snapshot = await kernel.readPracticeSnapshot(null, {
+            stores: ['practiceSummaries', 'practiceAnnotations'], annotationProjection: 'reviewState'
+        });
+        const annotations = new Map(asArray(snapshot.practiceAnnotations).map(row => [practiceLayerId(row), row]));
+        const data = [];
+        for (const summary of asArray(snapshot.practiceSummaries)) {
+            const state = safeReviewState(asObject(annotations.get(practiceLayerId(summary))).reviewState);
+            if (state && isRealPracticeRecord(summary) && practiceType(summary) === 'reading') {
+                data.push({ id: 'legacy:' + summary.id, unit: 'legacy', recordId: summary.id,
+                    examId: summary.examId || null, entryIndex: null, summary: clone(summary), reviewState: state,
+                    latestCompletedAt: reviewReferenceTime(summary) });
+            }
+        }
+        return { data, envelope: null };
+    }
+
+    async function reviewPlanChange(layers, source, existing, foldedChildIds = []) {
+        const current = await readReviewPlans();
+        const plans = asArray(current.data).map(clone);
+        const summary = layers.summary;
+        // An annotation resave of the same historical record is not a new attempt.
+        const isNew = !(existing && existing.summary && existing.summary.data);
+        if (isNew && isRealPracticeRecord(summary) && practiceType(summary) === 'reading'
+            && !safeReviewState(layers.annotations.reviewState)) {
+            const entries = asArray(source.suiteEntries);
+            const candidates = entries.length ? entries : [source];
+            candidates.forEach((raw, index) => {
+                const entry = Object.assign({}, asObject(raw.realData), asObject(raw), {
+                    metadata: Object.assign({}, asObject(source.metadata), asObject(raw.metadata))
+                });
+                const examId = String(entry.examId || entry.metadata.examId || '').trim();
+                if (!examId) return;
+                const grading = entries.length ? lightSuiteEntry(raw, 'reading') : summary;
+                const correct = grading.correctAnswers;
+                const total = grading.totalQuestions;
+                let quality;
+                try { quality = practiceReviewScheduler.qualityFromScore(correct, total); } catch (_) { return; }
+                const position = plans.findIndex(plan => plan.unit === 'article' && plan.examId === examId);
+                const legacyPosition = plans.findIndex(plan => plan.unit === 'legacy' && plan.examId === examId
+                    && !asArray(plan.summary?.suiteEntrySummaries).length);
+                const previous = position >= 0 ? plans[position] : legacyPosition >= 0 ? plans[legacyPosition] : null;
+                const completedAt = validIso(entry.completedAt || entry.timestamp || entry.date) || reviewReferenceTime(summary);
+                if (previous && (previous.recordId === summary.id || completedAt < previous.latestCompletedAt)) return;
+                // Perfect first attempts do not create a task. An existing task
+                // still advances when its latest reattempt reaches full marks.
+                if (!previous && Number(correct) === Number(total)) return;
+                const state = safeReviewState(previous?.reviewState) || practiceReviewScheduler.createInitialState(completedAt);
+                const compact = Object.fromEntries(['id', 'type', 'title', 'date', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'metadata']
+                    .filter(key => summary[key] !== undefined).map(key => [key, clone(summary[key])]));
+                const recordSummary = Object.assign({}, compact, {
+                    examId, title: entry.title || entry.metadata.examTitle || summary.title,
+                    totalQuestions: Number(total), correctAnswers: Number(correct),
+                    accuracy: Number(correct) / Number(total), percentage: Number(correct) * 100 / Number(total),
+                    date: completedAt, duration: Number(entry.duration) || summary.duration
+                });
+                delete recordSummary.suiteEntrySummaries;
+                const plan = { id: examId, unit: 'article', examId, recordId: summary.id,
+                    entryIndex: entries.length ? index : null, summary: recordSummary, latestCompletedAt: completedAt,
+                    reviewState: foldedChildIds.includes(previous?.recordId) ? state
+                        : practiceReviewScheduler.scheduleOutcome(state, quality, completedAt,
+                            'completion:' + summary.id + ':' + examId) };
+                if (position >= 0) plans[position] = plan;
+                else plans.push(plan);
+                if (legacyPosition >= 0) plans.splice(legacyPosition, 1);
+            });
+        }
+        // Explicit old-format imports retain their original schedule.
+        const legacyState = safeReviewState(layers.annotations.reviewState);
+        if (legacyState && !plans.some(plan => plan.recordId === summary.id)) {
+            plans.push({ id: 'legacy:' + summary.id, unit: 'legacy', examId: summary.examId || null,
+                recordId: summary.id, entryIndex: null, summary: clone(summary), reviewState: legacyState,
+                latestCompletedAt: reviewReferenceTime(summary) });
+        }
+        return { logicalKey: REVIEW_PLANS_KEY, data: plans,
+            expectedRevision: current.envelope ? current.envelope.revision : 0 };
+    }
+
+    function practiceTimeValue(record) {
+        const raw = record && (record.date || record.completedAt || record.timestamp);
+        const parsed = Date.parse(raw);
+        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    }
+
+    // 队列顺序是产品承诺的一部分（先到期、再按计划时间、错题多的先做），
+    // 最后必须落到一个稳定键，否则同分记录在两次渲染间会互换位置。
+    function reviewQueueComparator(left, right) {
+        if (left.isDue !== right.isDue) return left.isDue ? -1 : 1;
+        const dueOrder = String(left.reviewState.nextReview).localeCompare(String(right.reviewState.nextReview));
+        if (dueOrder) return dueOrder;
+        if (left.wrongCount !== right.wrongCount) return right.wrongCount - left.wrongCount;
+        const leftTime = practiceTimeValue(left);
+        const rightTime = practiceTimeValue(right);
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return String(left.id || '').localeCompare(String(right.id || ''));
+    }
+
+    function localDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // “未来 7 天负荷”只由当前 reviewState 推导：今日格子额外吃下所有逾期任务，
+    // 因为它们就是用户今天真正要做的量。这里不生产任何无法从状态还原的分母
+    // （例如“原计划 N / 已完成 M”），避免 UI 承诺数据层无法保证的口径。
+    function buildReviewQueueStats(records, now) {
+        const start = new Date(now); start.setHours(0, 0, 0, 0);
+        const buckets = Array.from({ length: 7 }, (_unused, index) => {
+            const date = new Date(start); date.setDate(date.getDate() + index);
+            return { date: date.toISOString(), dateKey: localDateKey(date), count: 0, includesOverdue: index === 0 };
+        });
+        const dayMs = 24 * 60 * 60 * 1000;
+        let dueToday = 0;
+        let overdue = 0;
+        let completedToday = 0;
+        for (const record of records) {
+            const due = new Date(record.reviewState.nextReview);
+            const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            const dayOffset = Math.round((dueDay.getTime() - start.getTime()) / dayMs);
+            if (dayOffset < 0) {
+                overdue += 1;
+                buckets[0].count += 1;
+            } else if (dayOffset < buckets.length) {
+                if (dayOffset === 0) dueToday += 1;
+                buckets[dayOffset].count += 1;
+            }
+            const reviewed = record.reviewState.lastReviewed ? new Date(record.reviewState.lastReviewed) : null;
+            if (reviewed && localDateKey(reviewed) === localDateKey(start)) completedToday += 1;
+        }
+        return {
+            dueToday,
+            overdue,
+            dueNow: dueToday + overdue,
+            completedToday,
+            total: records.length,
+            futureSevenDayTotal: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+            buckets
+        };
     }
 
     function accuracyRatio(record) {
@@ -1044,8 +1245,8 @@
                 attempted = true;
                 receipt = await retryMergeConflict(command || {}, async () => {
                     const existing = await practiceLayersForUpsert(recordId);
-                    return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
-                        { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+                    return kernel.mutateEntities(practiceUpserts(recordId, prepareReviewLayersForUpsert(layers, existing), existing),
+                        { ...mutation, documentChanges: [await reviewPlanChange(layers, recordInput, existing), ...await sealReadingTiming(recordInput, recordId, existing.detail?.data)] });
                 });
                 return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
 
@@ -1072,8 +1273,8 @@
                 receipt = await retryMergeConflict(command, async () => {
                     const existing = await practiceLayersForUpsert(recordId);
                     const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
-                    return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
-                        { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
+                    return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, prepareReviewLayersForUpsert(layers, existing), existing)),
+                        { ...mutation, documentChanges: [await reviewPlanChange(layers, input, existing, Array.from(children)), ...await sealReadingTiming(input, recordId, existing.detail?.data, children)] });
                 });
                 return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
 
@@ -1082,20 +1283,106 @@
                 throw error;
             }
         },
+        async listReviewQueue(options = {}) {
+            await ready;
+            const nowIsoValue = validIso(options.now) || nowIso();
+            const now = new Date(nowIsoValue);
+            const current = await readReviewPlans();
+            if (!current.envelope) {
+                try { await kernel.mutate([{ logicalKey: REVIEW_PLANS_KEY, data: current.data, expectedRevision: 0 }],
+                    optionsMutationOptions({}, 'review-plan-migration', current.data)); }
+                catch (error) { if (error.code !== 'CONFLICT') throw error; return practice.listReviewQueue(options); }
+            }
+            const records = [];
+            for (const plan of asArray(current.data)) {
+                const reviewState = safeReviewState(plan.reviewState);
+                if (!reviewState || !plan.recordId || !plan.summary) continue;
+                records.push(Object.assign({}, clone(plan.summary), {
+                    id: plan.unit === 'article' ? 'article:' + encodeURIComponent(plan.examId) : plan.recordId,
+                    recordId: plan.recordId, reviewPlanId: plan.id, reviewUnit: plan.unit,
+                    reviewExamId: plan.examId, reviewEntryIndex: plan.entryIndex,
+                    reviewState, wrongCount: reviewWrongCount(plan.summary), isDue: new Date(reviewState.nextReview) <= now
+                }));
+            }
+            records.sort(reviewQueueComparator);
+            return {
+                generatedAt: nowIsoValue,
+                records,
+                stats: buildReviewQueueStats(records, now)
+            };
+        },
+        async getReviewTask(taskId) {
+            await ready;
+            const { data } = await readReviewPlans();
+            const id = String(taskId || '');
+            const plan = asArray(data).find(row => row.id === id || row.recordId === id
+                || (row.unit === 'article' && 'article:' + encodeURIComponent(row.examId) === id));
+            return plan ? clone(plan) : null;
+        },
+        async getReviewState(recordId) {
+            const task = await practice.getReviewTask(recordId);
+            if (task) return safeReviewState(task.reviewState);
+            const id = String(recordId || '').trim();
+            if (!id || !(await kernel.readEntity('practiceSummaries', id))) throw new AppDataError('VALIDATION', 'Unknown practice record');
+            return null;
+        },
+        async recordReviewOutcome(command) {
+            await ready; assertObject(command, 'recordReviewOutcome command is required');
+            const recordId = String(command.recordId || '').trim();
+            const attemptId = String(command.reviewAttemptId || '').trim();
+            const quality = String(command.quality || '').toLowerCase();
+            const reviewedAt = validIso(command.reviewedAt || nowIso());
+            if (!recordId || !attemptId || !reviewedAt || !practiceReviewScheduler.VALID_QUALITIES.includes(quality)) {
+                throw new AppDataError('VALIDATION', 'Valid recordId, reviewAttemptId, quality and reviewedAt are required');
+            }
+            const mutation = mutationOptions(command, 'practice-review-outcome', command);
+            let resultState;
+            const receipt = await retryMergeConflict(command, async () => {
+                const current = await readReviewPlans();
+                const plans = asArray(current.data).map(clone);
+                const task = plans.find(row => command.reviewPlanId ? row.id === command.reviewPlanId : row.recordId === recordId);
+                if (!task) throw new AppDataError(command.reviewPlanId ? 'CONFLICT' : 'VALIDATION', 'Review task is not scheduled');
+                if (task.recordId !== recordId) throw new AppDataError('CONFLICT', 'Review task was replaced by a newer attempt');
+                if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== Number(current.envelope?.revision || 0)) {
+                    throw new AppDataError('CONFLICT', 'Review plan revision conflict');
+                }
+                const normalized = safeReviewState(task.reviewState);
+                if (!normalized) throw new AppDataError('VALIDATION', 'Invalid review state');
+                if (normalized.appliedReviewAttemptIds.includes(attemptId)) {
+                    resultState = normalized;
+                    return Object.assign(await kernel.journalNoop(mutation), { noop: true, duplicate: true });
+                }
+                resultState = practiceReviewScheduler.scheduleOutcome(normalized, quality, reviewedAt, attemptId);
+                task.reviewState = resultState;
+                const documentChanges = [{ logicalKey: REVIEW_PLANS_KEY, data: plans,
+                    expectedRevision: current.envelope?.revision || 0 }];
+                if (task.unit === 'legacy') {
+                    const row = await kernel.readEntity('practiceAnnotations', recordId, { withMeta: true });
+                    return kernel.mutateEntities([{ type: 'upsert', store: 'practiceAnnotations', recordId,
+                        data: Object.assign({}, row.data, { reviewState: resultState }), expectedRevision: row.revision }],
+                        Object.assign({}, mutation, { documentChanges }));
+                }
+                return kernel.mutate(documentChanges, mutation);
+            });
+            return Object.assign({}, receipt, { reviewState: resultState });
+        },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
             return retryMergeConflict(command, async () => {
                 const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
                 if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
+                // 标注补丁只承载内容（highlights/notes/marks/scrollY）。复盘调度状态的唯一
+                // 写入口是 recordReviewOutcome：否则题目页可以借标注同步伪造复盘进度。
+                const patch = clone(asObject(command.patch)); delete patch.reviewState;
                 const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
                 if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
                     if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
-                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(asObject(command.patch))) });
+                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(patch)) });
                 } else {
                     if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
-                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
-                    Object.assign(annotations, clone(asObject(command.patch)));
+                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(patch)) });
+                    Object.assign(annotations, clone(patch));
                 }
                 return kernel.mutateEntities([{
                     type: 'upsert',
@@ -1107,18 +1394,35 @@
             });
         },
         async delete(command) {
-            await ready; const recordId = String(command && (command.recordId || command.id) || command || ''); if (!recordId) throw new AppDataError('VALIDATION', 'practice record id is required');
-            const found = await kernel.readEntity('practiceSummaries', recordId); if (!found) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete', { recordId })), { deletedCount: 0, noop: true });
-            const receipt = await kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId })), mutationOptions(command, 'practice-delete', { recordId }));
-            return Object.assign({}, receipt, { deletedCount: 1 });
+            const id = String(command && (command.recordId || command.id) || command || '');
+            return practice.deleteMany(Object.assign({}, typeof command === 'object' ? command : {}, { recordIds: [id] }));
         },
         async deleteMany(command) {
-            await ready; assertObject(command, 'practice.deleteMany command is required'); const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
-            if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds'); const summaries = await kernel.listEntities('practiceSummaries'); const ids = recordIds.filter((id) => summaries.some((item) => practiceRecordMatches(item, [id])));
-            if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
-            const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds })); return Object.assign({}, receipt, { deletedCount: ids.length });
+            await ready; assertObject(command, 'practice.deleteMany command is required');
+            const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
+            if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds');
+            return retryMergeConflict(command, async () => {
+                const summaries = await kernel.listEntities('practiceSummaries');
+                const ids = recordIds.filter(id => summaries.some(item => practiceRecordMatches(item, [id])));
+                if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
+                const current = await readReviewPlans();
+                const documentChanges = [{ logicalKey: REVIEW_PLANS_KEY,
+                    data: asArray(current.data).filter(plan => !ids.includes(plan.recordId)), expectedRevision: current.envelope?.revision || 0 }];
+                const receipt = await kernel.mutateEntities(ids.flatMap(recordId => PRACTICE_ENTITY_STORES.map(store => ({ type: 'delete', store, recordId }))),
+                    Object.assign({}, mutationOptions(command, 'practice-delete-many', { recordIds }), { documentChanges }));
+                return Object.assign({}, receipt, { deletedCount: ids.length });
+            });
         },
-        async clear(command = {}) { await ready; return kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true })); },
+        async clear(command = {}) {
+            await ready;
+            return retryMergeConflict(command, async () => {
+                const current = await readReviewPlans();
+                return kernel.mutateEntities(PRACTICE_ENTITY_STORES.map(store => ({ type: 'clear', store })),
+                    Object.assign({}, mutationOptions(command, 'practice-clear', { all: true }), { documentChanges: [{
+                        logicalKey: REVIEW_PLANS_KEY, data: [], expectedRevision: current.envelope?.revision || 0
+                    }] }));
+            });
+        },
         async listInsights(options = {}) {
             await ready;
             const limit = Math.max(1, Math.min(50, Number(options.limit) || 10));
@@ -1988,6 +2292,8 @@
                     updatedAt: Math.max(Number(existingWord.updatedAt) || 0, Number(item.updatedAt) || 0)
                 });
             }
+            if (logicalKey === REVIEW_PLANS_KEY && position !== undefined
+                && String(result[position].reviewState?.updatedAt || '') > String(item.reviewState?.updatedAt || '')) continue;
             if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
@@ -2145,6 +2451,25 @@
                 snapshot.entities[store] = rows;
             }
             assertPracticeEntitySetsMatch(snapshot.entities);
+            // Reconcile plans with the reviewed final record set, including old
+            // backups which predate the compact scheduling collection.
+            const planCurrent = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
+            revisionToken.documents[REVIEW_PLANS_KEY] = planCurrent.envelope?.revision || 0;
+            const importedPlans = snapshot.envelopes[REVIEW_PLANS_KEY]?.data;
+            const plans = asArray(importedPlans === undefined ? (replacePractice ? [] : planCurrent.data) : importedPlans).map(clone);
+            const ownerIds = new Set(snapshot.entities.practiceSummaries.map(row => row.recordId));
+            const annotations = new Map(snapshot.entities.practiceAnnotations.map(row => [row.recordId, row.data]));
+            const validPlans = plans.filter(plan => ownerIds.has(plan.recordId) && safeReviewState(plan.reviewState));
+            for (const row of snapshot.entities.practiceSummaries) {
+                const state = safeReviewState(asObject(annotations.get(row.recordId)).reviewState);
+                if (!state || validPlans.some(plan => plan.recordId === row.recordId)
+                    || practiceType(row.data) !== 'reading' || !isRealPracticeRecord(row.data)) continue;
+                validPlans.push({ id: 'legacy:' + row.recordId, unit: 'legacy', recordId: row.recordId,
+                    examId: row.data.examId || null, entryIndex: null, summary: clone(row.data), reviewState: state,
+                    latestCompletedAt: reviewReferenceTime(row.data) });
+            }
+            snapshot.envelopes[REVIEW_PLANS_KEY] = internals.makeEnvelope(catalog.get(REVIEW_PLANS_KEY), validPlans, { operationId: randomId('review-import') });
+            if (!keys.includes(REVIEW_PLANS_KEY)) keys.push(REVIEW_PLANS_KEY);
         }
 
         snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });

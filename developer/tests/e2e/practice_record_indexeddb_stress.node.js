@@ -13,7 +13,7 @@ const scriptPaths = [
     'js/data/practiceRecordSource.js',
     'js/data/v2/dataCatalog.js',
     'js/data/v2/dataKernel.js',
-    'js/data/v2/appData.js'
+    'js/core/vocabScheduler.js', 'js/core/practiceReviewScheduler.js', 'js/data/v2/appData.js'
 ];
 
 async function bootstrap(page) {

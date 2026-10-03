@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:c440c3fe51770e9f99e988ce67ebfa78de84cb99498a513bc5bb1cfac18671f5",
+  "buildId": "sha256:4c57edb53ac8f3e1d57c93190dded04839bee06e0efb977630f83e7b37f489d4",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -528,7 +528,7 @@
     },
     {
       "path": "css/main.css",
-      "sha256": "d275358e43d6998daca2d0153cbaf2de7ed05adf53ee049c928752608a535214"
+      "sha256": "100f46f7b00f3dd9320f7fd792f818e55c181efaf5b05e48dff81deab79d02b8"
     },
     {
       "path": "css/onboarding.css",
@@ -548,15 +548,15 @@
     },
     {
       "path": "index.html",
-      "sha256": "8199998421ea3951208779f5dd20a49c972962bbf30d3a89de3040f083f19e08"
+      "sha256": "b3d20ce0bfa7a83d5f3d0a5dedd7547c3690bc7e20fd3959ed4b34cc29859b7c"
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "5ff14491248f23e79ecfcb079e376e79051d591dc77735fdbee11ec1a326571c"
+      "sha256": "3223c2e454e7159e8bfd89ccedd8a3d77a036bac7e1e6dcc16d67281971b26bf"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "b1a23f8853084b186fa2f5960d9cab96583e316ad3328f24e48be2f85baa2527"
+      "sha256": "bedb81daeea2c90dfc9a414f86753bf9b16d23d24b9e573e13b930e65bedca86"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -572,11 +572,11 @@
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
-      "sha256": "a311ae30892f4a4860f543db6bd84f3df51c672e20dfb664da9dc6139cb5387a"
+      "sha256": "f4d88c7393adff71fabd3e5338c4d5bb12fe87382d2d2975ad93e65e3527a37b"
     },
     {
       "path": "js/bundles/listening-wrapper.bundle.js",
-      "sha256": "98e27de0c8355fff9d218c117aeceb2683a4fdec21d3f73eb6a8325bb32e2db0"
+      "sha256": "45f18a040d9f1ea530893fd585501a889e64017fac3c66cbf3b8f48480e9e20b"
     },
     {
       "path": "js/bundles/more.bundle.js",
@@ -584,7 +584,7 @@
     },
     {
       "path": "js/bundles/practice-page-enhancer.bundle.js",
-      "sha256": "f47dd55c48dfb519e929e39761dff6e1c280acb1068c56a7d1adc8bf7b35553e"
+      "sha256": "dde6f57ebf7cbc547697a3330c68b582b5b05776adfc08ba75e690b72d767e11"
     },
     {
       "path": "js/bundles/practice.bundle.js",
@@ -596,7 +596,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "51304f83cacc93f24525bf8e2fb418f76d9097c5aee30ffac2099db57cbc6c33"
+      "sha256": "5e1f6cbe4b4e13f537e02a181b07e785c8007c681fd299f44aa2341fbb77faaf"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -616,7 +616,7 @@
     },
     {
       "path": "js/bundles/ui-shell.bundle.js",
-      "sha256": "903611ec4a563301d8afa0b5d59b507d6f852a5a401d0fd1e9aba02c8f2e4027"
+      "sha256": "a5aca6fb2d199d2cc368cc5b7672205b498b6010f9740100338561de1fa0115b"
     },
     {
       "path": "js/bundles/vocabulary.bundle.js",
@@ -632,7 +632,7 @@
     },
     {
       "path": "scripts/build-bundles.mjs",
-      "sha256": "5bd2623a8fc5928cb5335d98a59e24beec8f5cc62f633c7e836ab7c0d5f39002"
+      "sha256": "aa80defc91190811091bc47c9532aae418a3144cbadb3522f70c8fc613aad9dd"
     },
     {
       "path": "scripts/diagnostic-build.mjs",
@@ -740,109 +740,109 @@
       {
         "source": "js/data/v2/dataCatalog.js",
         "startLine": 2938,
-        "endLine": 3201,
+        "endLine": 3206,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 3205,
-        "endLine": 4526,
+        "startLine": 3210,
+        "endLine": 4549,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 4530,
-        "endLine": 4889,
+        "startLine": 4553,
+        "endLine": 4912,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 4893,
-        "endLine": 5060,
+        "startLine": 4916,
+        "endLine": 5093,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 5064,
-        "endLine": 5747,
+        "startLine": 5097,
+        "endLine": 5780,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 5751,
-        "endLine": 5979,
+        "startLine": 5784,
+        "endLine": 6012,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingViewCache.js",
-        "startLine": 5983,
-        "endLine": 6136,
+        "startLine": 6016,
+        "endLine": 6169,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 6140,
-        "endLine": 10015,
+        "startLine": 6173,
+        "endLine": 10373,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/externalBackupService.js",
-        "startLine": 10019,
-        "endLine": 11759,
+        "startLine": 10377,
+        "endLine": 12299,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/siteDataReset.js",
-        "startLine": 11763,
-        "endLine": 12116,
+        "startLine": 12303,
+        "endLine": 12656,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceCore.js",
-        "startLine": 12120,
-        "endLine": 13624,
+        "startLine": 12660,
+        "endLine": 14164,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/resourceCore.js",
-        "startLine": 13628,
-        "endLine": 14280,
+        "startLine": 14168,
+        "endLine": 14820,
         "sourceStartLine": 1
       },
       {
         "source": "assets/generated/reading-exams/manifest.js",
-        "startLine": 14284,
-        "endLine": 21911,
+        "startLine": 14824,
+        "endLine": 22451,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 21915,
-        "endLine": 21952,
+        "startLine": 22455,
+        "endLine": 22492,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 21956,
-        "endLine": 21993,
+        "startLine": 22496,
+        "endLine": 22533,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/state-service.js",
-        "startLine": 21997,
-        "endLine": 22663,
+        "startLine": 22537,
+        "endLine": 23203,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryDiscovery.js",
-        "startLine": 22667,
-        "endLine": 23381,
+        "startLine": 23207,
+        "endLine": 23921,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryManager.js",
-        "startLine": 23385,
-        "endLine": 24313,
+        "startLine": 23925,
+        "endLine": 24853,
         "sourceStartLine": 1
       }
     ],
@@ -916,13 +916,13 @@
       {
         "source": "js/presentation/indexInteractions.js",
         "startLine": 4499,
-        "endLine": 5288,
+        "endLine": 5290,
         "sourceStartLine": 1
       },
       {
         "source": "js/presentation/emojiIconizer.js",
-        "startLine": 5292,
-        "endLine": 5672,
+        "startLine": 5294,
+        "endLine": 5674,
         "sourceStartLine": 1
       }
     ],
@@ -968,91 +968,97 @@
       {
         "source": "js/views/legacyViewBundle.js",
         "startLine": 739,
-        "endLine": 4971,
+        "endLine": 5167,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/practiceRecordSource.js",
-        "startLine": 4975,
-        "endLine": 5173,
+        "startLine": 5171,
+        "endLine": 5369,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examActions.js",
-        "startLine": 5177,
-        "endLine": 7280,
+        "startLine": 5373,
+        "endLine": 7476,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 7284,
-        "endLine": 8594,
+        "startLine": 7480,
+        "endLine": 8790,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examSessionMixin.js",
-        "startLine": 8598,
-        "endLine": 15630,
+        "startLine": 8794,
+        "endLine": 15938,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/app/practiceReviewFlow.js",
+        "startLine": 15942,
+        "endLine": 16221,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 15634,
-        "endLine": 16304,
+        "startLine": 16225,
+        "endLine": 16895,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 16308,
-        "endLine": 16702,
+        "startLine": 16899,
+        "endLine": 17293,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 16706,
-        "endLine": 17268,
+        "startLine": 17297,
+        "endLine": 17859,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 17272,
-        "endLine": 17441,
+        "startLine": 17863,
+        "endLine": 18032,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 17445,
-        "endLine": 17659,
+        "startLine": 18036,
+        "endLine": 18250,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 17663,
-        "endLine": 18434,
+        "startLine": 18254,
+        "endLine": 19025,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 18438,
-        "endLine": 19470,
+        "startLine": 19029,
+        "endLine": 20061,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 19474,
-        "endLine": 19723,
+        "startLine": 20065,
+        "endLine": 20314,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 19727,
-        "endLine": 19932,
+        "startLine": 20318,
+        "endLine": 20523,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 19936,
-        "endLine": 25201,
+        "startLine": 20527,
+        "endLine": 25947,
         "sourceStartLine": 1
       }
     ],
@@ -1198,127 +1204,127 @@
       {
         "source": "js/data/v2/dataCatalog.js",
         "startLine": 3443,
-        "endLine": 3706,
+        "endLine": 3711,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 3710,
-        "endLine": 5031,
+        "startLine": 3715,
+        "endLine": 5054,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 5035,
-        "endLine": 5394,
+        "startLine": 5058,
+        "endLine": 5417,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 5398,
-        "endLine": 5565,
+        "startLine": 5421,
+        "endLine": 5598,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 5569,
-        "endLine": 6252,
+        "startLine": 5602,
+        "endLine": 6285,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 6256,
-        "endLine": 6484,
+        "startLine": 6289,
+        "endLine": 6517,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingViewCache.js",
-        "startLine": 6488,
-        "endLine": 6641,
+        "startLine": 6521,
+        "endLine": 6674,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 6645,
-        "endLine": 10520,
+        "startLine": 6678,
+        "endLine": 10878,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 10524,
-        "endLine": 10561,
+        "startLine": 10882,
+        "endLine": 10919,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 10565,
-        "endLine": 10602,
+        "startLine": 10923,
+        "endLine": 10960,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingHighlightShared.js",
-        "startLine": 10606,
-        "endLine": 11096,
+        "startLine": 10964,
+        "endLine": 11454,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerSanitizer.js",
-        "startLine": 11100,
-        "endLine": 11249,
+        "startLine": 11458,
+        "endLine": 11607,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 11253,
-        "endLine": 11467,
+        "startLine": 11611,
+        "endLine": 11825,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/dictionaryLoader.js",
-        "startLine": 11471,
-        "endLine": 11502,
+        "startLine": 11829,
+        "endLine": 11860,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/reviewHighlightDictionary.js",
-        "startLine": 11506,
-        "endLine": 12138,
+        "startLine": 11864,
+        "endLine": 12496,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/practiceTimerPreferences.js",
-        "startLine": 12142,
-        "endLine": 12230,
+        "startLine": 12500,
+        "endLine": 12588,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabContent.js",
-        "startLine": 12234,
-        "endLine": 12426,
+        "startLine": 12592,
+        "endLine": 12784,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabAnchors.js",
-        "startLine": 12430,
-        "endLine": 12691,
+        "startLine": 12788,
+        "endLine": 13049,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabReader.js",
-        "startLine": 12695,
-        "endLine": 14695,
+        "startLine": 13053,
+        "endLine": 15053,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingTimingController.js",
-        "startLine": 14699,
-        "endLine": 14983,
+        "startLine": 15057,
+        "endLine": 15341,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/unifiedReadingPage.js",
-        "startLine": 14987,
-        "endLine": 23705,
+        "startLine": 15345,
+        "endLine": 24085,
         "sourceStartLine": 1
       }
     ],
@@ -1398,73 +1404,73 @@
       {
         "source": "js/data/v2/dataCatalog.js",
         "startLine": 3620,
-        "endLine": 3883,
+        "endLine": 3888,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 3887,
-        "endLine": 5208,
+        "startLine": 3892,
+        "endLine": 5231,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 5212,
-        "endLine": 5571,
+        "startLine": 5235,
+        "endLine": 5594,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 5575,
-        "endLine": 5742,
+        "startLine": 5598,
+        "endLine": 5775,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 5746,
-        "endLine": 6429,
+        "startLine": 5779,
+        "endLine": 6462,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 6433,
-        "endLine": 6661,
+        "startLine": 6466,
+        "endLine": 6694,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingViewCache.js",
-        "startLine": 6665,
-        "endLine": 6818,
+        "startLine": 6698,
+        "endLine": 6851,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 6822,
-        "endLine": 10697,
+        "startLine": 6855,
+        "endLine": 11055,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 10701,
-        "endLine": 10870,
+        "startLine": 11059,
+        "endLine": 11228,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 10874,
-        "endLine": 11088,
+        "startLine": 11232,
+        "endLine": 11446,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 11092,
-        "endLine": 12402,
+        "startLine": 11450,
+        "endLine": 12760,
         "sourceStartLine": 1
       },
       {
         "source": "js/practice-page-enhancer.js",
-        "startLine": 12406,
-        "endLine": 17047,
+        "startLine": 12764,
+        "endLine": 17431,
         "sourceStartLine": 1
       }
     ],
@@ -1544,73 +1550,73 @@
       {
         "source": "js/data/v2/dataCatalog.js",
         "startLine": 3620,
-        "endLine": 3883,
+        "endLine": 3888,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 3887,
-        "endLine": 5208,
+        "startLine": 3892,
+        "endLine": 5231,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 5212,
-        "endLine": 5571,
+        "startLine": 5235,
+        "endLine": 5594,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 5575,
-        "endLine": 5742,
+        "startLine": 5598,
+        "endLine": 5775,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 5746,
-        "endLine": 6429,
+        "startLine": 5779,
+        "endLine": 6462,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 6433,
-        "endLine": 6661,
+        "startLine": 6466,
+        "endLine": 6694,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingViewCache.js",
-        "startLine": 6665,
-        "endLine": 6818,
+        "startLine": 6698,
+        "endLine": 6851,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 6822,
-        "endLine": 10697,
+        "startLine": 6855,
+        "endLine": 11055,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 10701,
-        "endLine": 10915,
+        "startLine": 11059,
+        "endLine": 11273,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 10919,
-        "endLine": 12229,
+        "startLine": 11277,
+        "endLine": 12587,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/safeObjectLiteralParser.js",
-        "startLine": 12233,
-        "endLine": 12532,
+        "startLine": 12591,
+        "endLine": 12890,
         "sourceStartLine": 1
       },
       {
         "source": "js/listeningRecordBridge.js",
-        "startLine": 12536,
-        "endLine": 13943,
+        "startLine": 12894,
+        "endLine": 14301,
         "sourceStartLine": 1
       }
     ],
@@ -1690,61 +1696,61 @@
       {
         "source": "js/data/v2/dataCatalog.js",
         "startLine": 3620,
-        "endLine": 3883,
+        "endLine": 3888,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/dataKernel.js",
-        "startLine": 3887,
-        "endLine": 5208,
+        "startLine": 3892,
+        "endLine": 5231,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/vocabScheduler.js",
-        "startLine": 5212,
-        "endLine": 5571,
+        "startLine": 5235,
+        "endLine": 5594,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceReviewScheduler.js",
-        "startLine": 5575,
-        "endLine": 5742,
+        "startLine": 5598,
+        "endLine": 5775,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingVocabularyModel.js",
-        "startLine": 5746,
-        "endLine": 6429,
+        "startLine": 5779,
+        "endLine": 6462,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingTiming.js",
-        "startLine": 6433,
-        "endLine": 6661,
+        "startLine": 6466,
+        "endLine": 6694,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/readingViewCache.js",
-        "startLine": 6665,
-        "endLine": 6818,
+        "startLine": 6698,
+        "endLine": 6851,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/v2/appData.js",
-        "startLine": 6822,
-        "endLine": 10697,
+        "startLine": 6855,
+        "endLine": 11055,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/practiceTimerPreferences.js",
-        "startLine": 10701,
-        "endLine": 10789,
+        "startLine": 11059,
+        "endLine": 11147,
         "sourceStartLine": 1
       },
       {
         "source": "js/listeningUnifiedWrapper.js",
-        "startLine": 10793,
-        "endLine": 11888,
+        "startLine": 11151,
+        "endLine": 12246,
         "sourceStartLine": 1
       }
     ],

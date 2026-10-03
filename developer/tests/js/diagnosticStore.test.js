@@ -583,7 +583,7 @@ test('diagnostic IndexedDB retention and lifecycle in isolated browser databases
     await t.test('diagnostic clear leaves learning data intact; backup/restore cannot restore diagnostics', async (t) => {
         const { pages: [page] } = await fixture(t);
         for (const name of ['data/v2/dataCatalog.js', 'data/v2/dataKernel.js', 'data/practiceRecordSource.js',
-            'data/v2/readingVocabularyModel.js', 'data/v2/appData.js']) await page.addScriptTag({ content: source(name) });
+            'data/v2/readingVocabularyModel.js', 'core/vocabScheduler.js', 'core/practiceReviewScheduler.js', 'data/v2/appData.js']) await page.addScriptTag({ content: source(name) });
         const result = await page.evaluate(async () => {
             await AppData.ready;
             await AppData.preferences.setTheme('diagnostic-learning-fixture');

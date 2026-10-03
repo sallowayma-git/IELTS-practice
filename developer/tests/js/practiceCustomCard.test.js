@@ -136,7 +136,7 @@ try {
     assertContains(source, "questionTypeAliases[compact] || questionTypeAliases[token] || 'other'", '未知题型必须归入固定 other 枚举，不能生成不可渲染分类');
     assertContains(source, "event.target.closest('.practice-custom-card__flip-btn')", '翻转只应绑定右上角按钮');
     assertContains(source, 'event.stopPropagation();', '整卡其他区域点击应阻止冒泡且不翻转');
-    assertContains(source, "var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'parts']", '组件偏好应支持 P1/P2/P3 表现');
+    assertContains(source, "var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar', 'parts', 'review']", '组件偏好应支持 P1/P2/P3 表现');
     assertContains(source, 'PracticePriorityRenderer.prototype._renderParts', '组件渲染器应提供 P1/P2/P3 表现渲染');
     assertContains(source, "global.ReadingAnalytics.aggregate(this.partsRecords, { recordType: 'all' })", 'P1/P2/P3 表现应基于完整正式阅读记录复用阅读加权统计服务');
     assertContains(source, 'this.partsRecords = Array.isArray(options.partsRecords)', 'P1/P2/P3 表现应与历史搜索结果解耦');

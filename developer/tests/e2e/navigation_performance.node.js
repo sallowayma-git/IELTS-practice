@@ -67,6 +67,7 @@ try {
     if (process.env.READING_STRESS === '1') {
         await readingScenario(page, result, measure, baseline);
     } else {
+    await page.evaluate(enabled => { window.__reviewStress = enabled; }, process.env.REVIEW_STRESS === '1');
     await measure('seedImportMs', () => page.evaluate(async count => {
         const index = await window.resolveActiveLibraryIndex();
         const exams = index.filter(exam => exam.type === 'reading');
@@ -76,6 +77,7 @@ try {
             date: new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
             totalQuestions: 40, correctAnswers: i % 41,
             metadata: { libraryConfigurationId: null, category: `P${i % 3 + 1}` },
+            ...(window.__reviewStress ? { reviewState: PracticeReviewScheduler.createInitialState(new Date(Date.now() + (i % 7 - 3) * 86400000)) } : {}),
             answers: { q1: 'A' }, notes: Array.from({ length: 20 }, (_, n) => ({ id: `${i}-${n}`, body: 'note '.repeat(100) })),
             highlights: Array.from({ length: 20 }, (_, n) => ({ id: `${i}-h-${n}`, text: 'selected text', start: n * 20, end: n * 20 + 13 }))
         }));
@@ -130,6 +132,30 @@ try {
         });
         await page.waitForSelector(`.practice-history-list [data-record-id="perf-${count - 1}"]`);
     }
+    if (process.env.REVIEW_STRESS === '1') {
+        const before = await page.evaluate(() => ({ details: __detailReads, tasks: __perfTasks.length }));
+        await measure('reviewToggleMs', async () => {
+            await page.evaluate(async () => {
+                togglePracticeReviewMode(true);
+                await refreshPracticeReviewQueue('review-performance', { forceRender: true });
+            });
+            await settle();
+        });
+        result.review = await page.evaluate(() => ({
+            total: getPracticeReviewQueueSnapshot().byRecordId.size,
+            details: __detailReads, tasks: __perfTasks.slice()
+        }));
+        assert.equal(result.review.total, count, 'every scheduled article must remain in the queue');
+        assert.equal(result.review.details, before.details, 'review toggle must not read practiceDetails');
+        result.review.longTasks = result.review.tasks.slice(before.tasks);
+        delete result.review.tasks;
+        result.review.renderedNodes = await page.locator('.practice-history-list .history-record-item').count();
+        assert.ok(result.review.renderedNodes > 0 && result.review.renderedNodes < 100);
+        await page.evaluate(async () => {
+            togglePracticeReviewMode(false);
+            await refreshPracticeReviewQueue('review-performance-exit', { forceRender: true });
+        });
+    }
     for (let i = 0; i < 3; i++) await measure(`summaryRead${i}Ms`, () => page.evaluate(async count => {
         const rows = await AppData.practice.list({ projection: 'light' });
         if (rows.length !== count) throw new Error(`Lost records: ${rows.length}/${count}`);
@@ -149,6 +175,43 @@ try {
         });
     }
     }
+    if (process.env.REVIEW_STRESS === '1') {
+        const popupPromise = page.waitForEvent('popup');
+        const attempt = await page.evaluate(() => PracticeReviewFlow.start('perf-0'));
+        assert.ok(attempt?.reviewAttemptId, 'scheduled single record opens a replay attempt');
+        const replay = await popupPromise;
+        await page.waitForFunction(() => PracticeReviewFlow.getPending()?.recordId === 'perf-0');
+        await page.locator('[data-review-quality="good"]').click();
+        await page.waitForFunction(() => !PracticeReviewFlow.getPending());
+        assert.equal(await page.evaluate(async () => (await AppData.practice.getReviewState('perf-0')).reviewCount), 1);
+        await replay.close();
+        result.review.singleReplay = 'pass';
+        await page.evaluate(async () => {
+            const exams = (await resolveActiveLibraryIndex()).filter(exam => exam.type === 'reading').slice(0, 2);
+            await AppData.practice.completeAttempt({ operationId: 'review-suite-seed', record: {
+                id: 'review-suite', sessionId: 'review-suite', type: 'reading', mode: 'suite', status: 'completed',
+                totalQuestions: 20, correctAnswers: 10, date: new Date().toISOString(),
+                suiteEntries: exams.map(exam => ({ examId: exam.id, title: exam.title,
+                    type: 'reading', totalQuestions: 10, correctAnswers: 5,
+                    answers: { q1: 'A' }, correctAnswerMap: { q1: 'B' } }))
+            } });
+        });
+        const tasks = await page.evaluate(async () => (await AppData.practice.listReviewQueue()).records.filter(row => row.recordId === 'review-suite'));
+        assert.equal(tasks.length, 2, 'new suite has two independent article tasks');
+        for (const task of tasks) {
+            const suitePopupPromise = page.waitForEvent('popup');
+            const suiteAttempt = await page.evaluate(id => PracticeReviewFlow.start(id), task.id);
+            assert.ok(suiteAttempt?.reviewAttemptId);
+            const suiteReplay = await suitePopupPromise;
+            await page.waitForFunction(id => PracticeReviewFlow.getPending()?.reviewPlanId === id, task.reviewPlanId);
+            assert.equal(await page.evaluate(() => PracticeReviewFlow.getPending().entryCount), 1);
+            await page.locator('[data-review-quality="hard"]').click();
+            await page.waitForFunction(() => !PracticeReviewFlow.getPending());
+            assert.equal(await page.evaluate(async id => (await AppData.practice.getReviewTask(id)).reviewState.reviewCount, task.id), task.reviewState.reviewCount + 1);
+            await suiteReplay.close();
+        }
+        result.review.suiteReplay = 'pass';
+    }
     result.missingResources = missingResources;
     assert.equal(missingResources.filter(url => new URL(url).pathname.startsWith('/js/')).length, 0,
         'release bundles must not depend on unpackaged JavaScript sources');
@@ -159,7 +222,7 @@ try {
     result.status = 'pass';
 } catch (error) { result.status = 'fail'; result.failure = error.stack; process.exitCode = 1; }
 finally {
-    const output = path.join(root, `developer/tests/e2e/reports/${process.env.READING_STRESS === '1' ? 'reading-performance' : 'navigation-performance'}-${baseline ? 'baseline' : 'optimized'}-${process.env.READING_STRESS === '1' ? process.env.WORDS || 1000 : count}.json`);
+    const output = path.join(root, `developer/tests/e2e/reports/${process.env.REVIEW_STRESS === '1' ? 'review-performance' : process.env.READING_STRESS === '1' ? 'reading-performance' : 'navigation-performance'}-${baseline ? 'baseline' : 'optimized'}-${process.env.READING_STRESS === '1' ? process.env.WORDS || 1000 : count}.json`);
     fs.mkdirSync(path.dirname(output), { recursive: true }); fs.writeFileSync(output, JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result, null, 2));
     await browser.close(); await new Promise(resolve => server.close(resolve));

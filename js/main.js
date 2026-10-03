@@ -497,6 +497,13 @@ async function syncPracticeRecords(options = {}) {
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
+        // 复盘徽标与复盘模式排序必须与这批记录同批读取，否则首屏会先画一遍无徽标的列表，
+        // 再被异步回填时"跳"一次。失败时按"没有复盘状态"渲染，不阻断练习历史。
+        try {
+            await loadPracticeReviewQueue();
+        } catch (error) {
+            console.warn('[Review] 同步复盘队列失败:', error);
+        }
         updatePracticeView(records, examIndex);
     } else if (typeof flushPracticeInsightsRender === 'function') {
         // A hidden-view sync may leave insights waiting. Activation must resume
@@ -1802,6 +1809,20 @@ function setupPracticeHistoryInteractions() {
         }
     };
 
+    const handleReview = (recordId, event) => {
+        if (!recordId) return;
+        if (event) {
+            event.preventDefault();
+            if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        }
+        const flow = window.PracticeReviewFlow;
+        if (!flow || typeof flow.start !== 'function') {
+            if (typeof showMessage === 'function') showMessage('复盘功能尚未初始化', 'warning');
+            return;
+        }
+        flow.start(recordId);
+    };
+
     const handleSelection = (recordId, event) => {
         if (!getBulkDeleteModeState() || !recordId) return;
         if (event) event.preventDefault();
@@ -1830,6 +1851,10 @@ function setupPracticeHistoryInteractions() {
             handleDelete(this.dataset.recordId, event);
         });
 
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="review"], #history-list [data-record-action="review"]', function (event) {
+            handleReview(this.dataset.recordId, event);
+        });
+
         window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function (event) {
             const actionTarget = event.target.closest('[data-record-action]');
             if (actionTarget) return;
@@ -1853,6 +1878,12 @@ function setupPracticeHistoryInteractions() {
             const deleteTarget = event.target.closest('[data-record-action="delete"]');
             if (deleteTarget && container.contains(deleteTarget)) {
                 handleDelete(deleteTarget.dataset.recordId, event);
+                return;
+            }
+
+            const reviewTarget = event.target.closest('[data-record-action="review"]');
+            if (reviewTarget && container.contains(reviewTarget)) {
+                handleReview(reviewTarget.dataset.reviewTaskId || reviewTarget.dataset.recordId, event);
                 return;
             }
 
@@ -1942,6 +1973,112 @@ function filterRealPracticeRecordsForView(records) {
     return classifier.filterRecordsForHistoryView(list);
 }
 
+// ---------------------------------------------------------------------------
+// 复盘队列（阅读）
+//
+// 队列本身不是第二份真相：它是 AppData.practice.listReviewQueue 在读取时形成的投影，
+// 这里只缓存最近一次快照，用于给历史列表加徽标、给复盘模式排序、给"复盘节奏"卡片供数。
+// 任何评分/落库之后都必须重新取一次，绝不本地推演状态。
+// ---------------------------------------------------------------------------
+const practiceReviewQueueState = {
+    generatedAt: null,
+    records: [],
+    byRecordId: new Map(),
+    order: new Map(),
+    stats: null,
+    loading: false,
+    pending: null
+};
+let practiceReviewModeEnabled = false;
+let practiceReviewViewSnapshot = null;
+
+function getPracticeReviewQueueSnapshot() {
+    return {
+        generatedAt: practiceReviewQueueState.generatedAt,
+        records: practiceReviewQueueState.records,
+        byRecordId: practiceReviewQueueState.byRecordId,
+        order: practiceReviewQueueState.order,
+        stats: practiceReviewQueueState.stats
+    };
+}
+
+function isPracticeReviewModeEnabled() {
+    return practiceReviewModeEnabled === true;
+}
+
+async function loadPracticeReviewQueue() {
+    const practice = window.AppData && window.AppData.practice;
+    if (!practice || typeof practice.listReviewQueue !== 'function') {
+        return null;
+    }
+    const queue = await practice.listReviewQueue();
+    const records = Array.isArray(queue && queue.records) ? queue.records : [];
+    practiceReviewQueueState.generatedAt = queue && queue.generatedAt ? queue.generatedAt : null;
+    practiceReviewQueueState.stats = queue && queue.stats ? queue.stats : null;
+    practiceReviewQueueState.records = records;
+    practiceReviewQueueState.byRecordId = new Map();
+    records.forEach(record => {
+        practiceReviewQueueState.byRecordId.set(String(record.id), record);
+        const parentId = String(record.recordId || record.id);
+        if (!practiceReviewQueueState.byRecordId.has(parentId)) practiceReviewQueueState.byRecordId.set(parentId, record);
+    });
+    practiceReviewQueueState.order = new Map(records.map((record, index) => [String(record.id), index]));
+    return queue;
+}
+
+function refreshPracticeReviewQueue(trigger = 'default', options = {}) {
+    if (practiceReviewQueueState.loading) {
+        // 合并并发请求：最后一个 forceRender 意图胜出，避免连点评分时排队重复渲染。
+        practiceReviewQueueState.pending = {
+            trigger,
+            options: Object.assign({}, practiceReviewQueueState.pending && practiceReviewQueueState.pending.options, options)
+        };
+        return practiceReviewQueueState.loading;
+    }
+    practiceReviewQueueState.loading = loadPracticeReviewQueue()
+        .then(() => {
+            if (options && options.forceRender) {
+                if (practiceReviewViewSnapshot) {
+                    updatePracticeView(practiceReviewViewSnapshot.records, practiceReviewViewSnapshot.examIndex);
+                } else {
+                    startPracticeRecordsSyncInBackground('review-queue:' + trigger, { forceRender: true });
+                }
+            }
+        })
+        .catch((error) => {
+            console.warn(`[Review] 读取复盘队列失败(${trigger}):`, error);
+        })
+        .finally(() => {
+            practiceReviewQueueState.loading = false;
+            const next = practiceReviewQueueState.pending;
+            practiceReviewQueueState.pending = null;
+            if (next) refreshPracticeReviewQueue(next.trigger, next.options);
+        });
+    return practiceReviewQueueState.loading;
+}
+
+function togglePracticeReviewMode(force = null) {
+    const next = force === null || force === undefined ? !practiceReviewModeEnabled : Boolean(force);
+    practiceReviewModeEnabled = next;
+    const button = document.getElementById('practice-review-mode-toggle');
+    if (button) {
+        button.classList.toggle('active', next);
+        button.setAttribute('aria-pressed', next ? 'true' : 'false');
+    }
+    refreshPracticeReviewQueue('review-mode-toggle', { forceRender: true });
+    if (typeof showMessage === 'function') {
+        showMessage(next ? '已进入复盘模式，仅显示需要复盘的阅读记录' : '已退出复盘模式', 'info');
+    }
+    return next;
+}
+
+if (typeof window !== 'undefined') {
+    window.refreshPracticeReviewQueue = refreshPracticeReviewQueue;
+    window.togglePracticeReviewMode = togglePracticeReviewMode;
+    window.isPracticeReviewModeEnabled = isPracticeReviewModeEnabled;
+    window.getPracticeReviewQueueSnapshot = getPracticeReviewQueueSnapshot;
+}
+
 // Dashboard charts are independent of the history list. Yield a paint before
 // computing them, then give each section its own task. Keep the latest work for
 // a later Practice activation, rather than painting a hidden or stale view.
@@ -2019,6 +2156,9 @@ function flushPracticeInsightsRender() {
 
 // Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
 function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
+    // Ratings change scheduling, not practice facts. Reuse the published light
+    // history snapshot so a mode toggle need not reload insights/details.
+    practiceReviewViewSnapshot = { records: recordsSnapshot, examIndex: examIndexSnapshot };
     if (typeof window.requestAnimationFrame === 'function' && !isPracticeInsightsViewActive()) {
         // Data publication still happens in syncPracticeRecords. Only the
         // hidden Practice DOM/calculations wait until this view is activated.
@@ -2089,6 +2229,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         });
     }
 
+    const reviewQueue = getPracticeReviewQueueSnapshot();
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
     if (!renderer) {
@@ -2096,12 +2237,26 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         return;
     }
 
+    // 复盘模式只收窄"显示哪些记录"，不改变上面的统计/趋势/洞察输入，
+    // 也不改变普通模式下练习历史的任何行为。
+    const reviewMode = isPracticeReviewModeEnabled();
+    let recordsForList = recordsToShow;
+    if (reviewMode) {
+        const originals = new Map(records.map(record => [String(record.id), record]));
+        recordsForList = reviewQueue.records.map(task => Object.assign({}, originals.get(String(task.recordId || task.id)), task))
+            .filter(record => examType === 'all' || recordMatchesExamType(record, examType, examIndex))
+            .filter(record => !historyQuery || [record.title, record.examId, record.date]
+                .some(value => String(value || '').toLowerCase().includes(historyQuery)));
+    }
+
     const renderResult = typeof renderer.renderView === 'function'
         ? renderer.renderView({
             container: historyContainer,
-            records: recordsToShow,
+            records: recordsForList,
             bulkDeleteMode: getBulkDeleteModeState(),
             selectedRecords: getSelectedRecordsState(),
+            reviewMode,
+            reviewQueue,
             scrollerOptions: { itemHeight: 100, containerHeight: 650 },
             scroller: practiceListScroller
         })
@@ -2125,7 +2280,7 @@ function updatePracticeView(recordsSnapshot = [], examIndexSnapshot = []) {
         () => {
             const priorityRenderer = ensurePracticePriorityRenderer();
             if (priorityRenderer && typeof priorityRenderer.update === 'function') {
-                priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records });
+                priorityRenderer.update(recordsForInsights, examIndex, { examType, partsRecords: records, reviewStats: reviewQueue.stats });
             }
         }
     ]);

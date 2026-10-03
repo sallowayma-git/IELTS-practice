@@ -909,17 +909,35 @@
                     ? Array.from(new Set(options.stores.map((store) => entityStore(store))))
                     : ENTITY_STORES;
                 for (const store of stores) {
-                    const validRows = (snapshot && Array.isArray(snapshot[store]) ? snapshot[store] : [])
-                        .filter((row) => {
-                            try { validateEntityRow(store, row); return true; }
-                            catch (error) {
-                                if (error instanceof AppDataError && error.code === 'CORRUPT_RECORD') return false;
-                                throw error;
-                            }
-                        });
-                    result[store] = options.withMeta
-                        ? clone(validRows)
-                        : validRows.map((row) => clone(row.data));
+                    const rows = snapshot && Array.isArray(snapshot[store]) ? snapshot[store] : [];
+                    const validRows = [];
+                    let sliceStarted = Date.now();
+                    for (const row of rows) {
+                        try { validateEntityRow(store, row); validRows.push(row); }
+                        catch (error) {
+                            if (!(error instanceof AppDataError && error.code === 'CORRUPT_RECORD')) throw error;
+                        }
+                        // The IndexedDB snapshot is already complete and consistent.
+                        // Yield while checking large review snapshots so input/paint
+                        // can run between batches without weakening checksum checks.
+                        if (options.annotationProjection === 'reviewState'
+                            && typeof global.setTimeout === 'function' && Date.now() - sliceStarted >= 8) {
+                            await new Promise(resolve => global.setTimeout(resolve, 0));
+                            sliceStarted = Date.now();
+                        }
+                    }
+                    // Validate the complete authoritative row first, then avoid cloning
+                    // large notes/highlights for the scheduling projection.
+                    if (!options.withMeta && store === 'practiceAnnotations' && options.annotationProjection === 'reviewState') {
+                        result[store] = validRows.map(row => ({
+                            recordId: row.recordId,
+                            reviewState: clone(row.data.reviewState)
+                        }));
+                    } else {
+                        result[store] = options.withMeta
+                            ? clone(validRows)
+                            : validRows.map((row) => clone(row.data));
+                    }
                 }
                 return result;
             }
