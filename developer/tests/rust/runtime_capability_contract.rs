@@ -12,7 +12,7 @@ fn full_handshake() -> RuntimeHandshake {
             ("runtime.shutdown".into(), "1".into()),
             ("memory.candidates.extract".into(), "1".into()),
             ("memory.candidates.generate".into(), "1".into()),
-            ("dream.daily".into(), "1".into()),
+            ("dream.weekly".into(), "1".into()),
             ("planner.study_plan".into(), "1".into()),
         ]),
         required_host_capabilities: BTreeMap::from([
