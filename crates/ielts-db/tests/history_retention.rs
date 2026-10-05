@@ -6,15 +6,40 @@ use serde_json::json;
 use tempfile::tempdir;
 
 use ielts_db::{
-    delete_attempt, get_history_retention_policy, import_asset_payload_file, migrate,
-    open_connection, restore_legacy_history_retention_policy, set_history_retention_policy,
-    submit_reading_attempt, upsert_attempt, DbOpenOptions, ReadingSubmitCommand,
+    clear_history, delete_attempt, delete_history_attempts, get_history_retention_policy,
+    import_asset_payload_file, migrate, open_connection, restore_legacy_history_retention_policy,
+    set_history_retention_policy, submit_reading_attempt, upsert_attempt, DbOpenOptions,
+    ReadingSubmitCommand,
 };
 
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
     let dir = tempdir().unwrap();
     let mut conn = open_connection(&DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
     migrate(&mut conn).unwrap();
+    (dir, conn)
+}
+
+fn open_v7() -> (tempfile::TempDir, rusqlite::Connection) {
+    let dir = tempdir().unwrap();
+    let conn = open_connection(&DbOpenOptions::create(dir.path().join("v7.db"))).unwrap();
+    ielts_db::current_version(&conn).unwrap();
+    let migrations = [
+        include_str!("../migrations/0001_v2_core.sql"),
+        include_str!("../migrations/0002_writing_eval_sessions.sql"),
+        include_str!("../migrations/0003_eval_lineage_multi.sql"),
+        include_str!("../migrations/0004_modes_timer.sql"),
+        include_str!("../migrations/0005_annotations_vocab_coach.sql"),
+        include_str!("../migrations/0006_writing_topics.sql"),
+        include_str!("../migrations/0007_attempt_writing_task_type.sql"),
+    ];
+    for (index, sql) in migrations.iter().enumerate() {
+        conn.execute_batch(sql).unwrap();
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?1, 'fixture', '2026-01-01T00:00:00Z')",
+            [(index + 1) as i64],
+        )
+        .unwrap();
+    }
     (dir, conn)
 }
 
@@ -161,14 +186,10 @@ fn unlimited_policy_disables_automatic_cleanup_and_rejects_invalid_finite_limits
 
 #[test]
 fn v8_migration_moves_the_legacy_history_limit_without_leaving_a_mirror() {
-    let (_dir, mut conn) = open_db();
-    // Rewind only v8 on an otherwise genuine v7-shaped database. This proves
-    // upgrade behavior without duplicating seven migration fixtures.
+    let (_dir, mut conn) = open_v7();
+    // A real historical schema, not the latest database with its version erased.
     conn.execute_batch(
-        "DROP TABLE writing_prompts;
-         DROP TABLE history_retention_policy;
-         DELETE FROM schema_migrations WHERE version >= 8;
-         INSERT INTO settings(namespace, key, value_json, updated_at)
+        "INSERT INTO settings(namespace, key, value_json, updated_at)
          VALUES ('app', 'history_limit', '\"150\"', '2026-01-01T00:00:00Z');",
     )
     .unwrap();
@@ -194,13 +215,7 @@ fn v8_migration_moves_the_legacy_history_limit_without_leaving_a_mirror() {
 #[test]
 fn v8_migration_rejects_lossy_legacy_history_limits() {
     for raw_limit in [r#""150abc""#, r#""150.5""#, r#"" 150 ""#, "150abc", "150.5"] {
-        let (_dir, mut conn) = open_db();
-        conn.execute_batch(
-            "DROP TABLE writing_prompts;
-             DROP TABLE history_retention_policy;
-             DELETE FROM schema_migrations WHERE version >= 8;",
-        )
-        .unwrap();
+        let (_dir, mut conn) = open_v7();
         conn.execute(
             "INSERT INTO settings(namespace, key, value_json, updated_at)
              VALUES ('app', 'history_limit', ?1, '2026-01-01T00:00:00Z')",
@@ -307,6 +322,250 @@ fn deleting_an_attempt_only_invalidates_exact_mode_replays() {
         "timer.pause",
         "unknown-scope-session"
     ));
+}
+
+fn insert_coach_request(conn: &rusqlite::Connection, attempt_id: &str, suffix: &str) {
+    let thread = format!("thread-{suffix}");
+    let run = format!("run-{suffix}");
+    let snapshot = format!("snapshot-{suffix}");
+    let message = format!("message-{suffix}");
+    let secret = format!("ANSWER-SECRET-{suffix}");
+    conn.execute(
+        "INSERT INTO coach_threads (id, attempt_id, status, created_at, updated_at)
+         VALUES (?1, ?2, 'active', '2026-01-01', '2026-01-01')",
+        rusqlite::params![thread, attempt_id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO coach_messages (id, thread_id, role, content, status, created_at)
+         VALUES (?1, ?2, 'user', ?3, 'completed', '2026-01-01')",
+        rusqlite::params![message, thread, format!("transcript {suffix}")],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO agent_runs (id, provider_id, model, status, result_json, created_at, updated_at)
+         VALUES (?1, 'fixture', 'fixture', 'completed', ?2, '2026-01-01', '2026-01-01')",
+        rusqlite::params![run, json!({"runKind":"coach", "threadId":thread}).to_string()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO agent_context_snapshots
+         (id, run_id, planner_version, scope, query_plan_json, token_budget,
+          used_tokens, rendered_context, content_hash, created_at)
+         VALUES (?1, ?2, 'canonical-coach-v1', ?3, ?4, 100, 10, ?5, 'original-hash', '2026-01-01')",
+        rusqlite::params![
+            snapshot,
+            run,
+            format!("coach:{thread}"),
+            json!({"kind":"canonical_coach", "threadId":thread}).to_string(),
+            secret
+        ],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO agent_context_items
+         (snapshot_id, item_type, item_id, rank, score, estimated_tokens, inclusion_reason, provenance_json)
+         VALUES (?1, 'CURRENT_TASK', ?2, 0, 1, 10, ?3, ?4)",
+        rusqlite::params![snapshot, message, format!("request {secret}"),
+            json!({"sourceId":message, "contentHash":"original-hash", "answer":secret}).to_string()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO llm_invocations (id, run_id, kind, request_hash, created_at)
+         VALUES (?1, ?2, 'completion', 'original-hash', '2026-01-01')",
+        rusqlite::params![format!("invocation-{suffix}"), run],
+    )
+    .unwrap();
+}
+
+fn assert_coach_request(conn: &rusqlite::Connection, suffix: &str, redacted: bool) {
+    let thread = format!("thread-{suffix}");
+    let snapshot = format!("snapshot-{suffix}");
+    let (attempt_id, transcript): (Option<String>, String) = conn
+        .query_row(
+            "SELECT t.attempt_id, m.content FROM coach_threads t
+             JOIN coach_messages m ON m.thread_id = t.id WHERE t.id = ?1",
+            [&thread],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(transcript, format!("transcript {suffix}"));
+    assert_eq!(attempt_id.is_none(), redacted);
+    let (rendered, hash, plan, reason, provenance, request_hash): (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+    ) = conn
+        .query_row(
+            "SELECT s.rendered_context, s.content_hash, s.query_plan_json,
+                    i.inclusion_reason, i.provenance_json, v.request_hash
+             FROM agent_context_snapshots s
+             JOIN agent_context_items i ON i.snapshot_id = s.id
+             JOIN llm_invocations v ON v.run_id = s.run_id
+             WHERE s.id = ?1",
+            [&snapshot],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .unwrap();
+    if redacted {
+        assert_eq!(rendered, "[redacted: deleted attempt]");
+        assert_eq!(hash, "redacted");
+        assert_eq!(request_hash, "redacted");
+        assert_eq!(reason, "redacted");
+        assert_eq!(json!({"redacted":true}).to_string(), provenance);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&plan).unwrap()["redacted"],
+            true
+        );
+    } else {
+        assert_eq!(rendered, format!("ANSWER-SECRET-{suffix}"));
+        assert_eq!(hash, "original-hash");
+        assert_eq!(request_hash, "original-hash");
+        assert!(reason.contains(&rendered));
+        assert!(provenance.contains(&rendered));
+    }
+}
+
+#[test]
+fn single_delete_redacts_only_its_bound_coach_requests() {
+    let (_dir, conn) = open_db();
+    for suffix in ["deleted", "kept"] {
+        upsert_attempt(&conn, &terminal_attempt(suffix)).unwrap();
+        insert_coach_request(&conn, suffix, suffix);
+    }
+    insert_coach_request(&conn, "deleted", "deleted-second-thread");
+    assert!(delete_attempt(&conn, "deleted").unwrap());
+    assert_coach_request(&conn, "deleted", true);
+    assert_coach_request(&conn, "deleted-second-thread", true);
+    assert_coach_request(&conn, "kept", false);
+    assert!(attempt_exists(&conn, "kept"));
+}
+
+#[test]
+fn deleted_run_set_null_snapshot_is_still_redacted_by_thread_scope() {
+    let (_dir, conn) = open_db();
+    upsert_attempt(&conn, &terminal_attempt("orphan")).unwrap();
+    insert_coach_request(&conn, "orphan", "orphan");
+    conn.execute("DELETE FROM agent_runs WHERE id = 'run-orphan'", [])
+        .unwrap();
+    let run_id: Option<String> = conn
+        .query_row(
+            "SELECT run_id FROM agent_context_snapshots WHERE id = 'snapshot-orphan'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(run_id, None);
+    assert!(delete_attempt(&conn, "orphan").unwrap());
+    let (rendered, hash, plan, reason, provenance): (String, String, String, String, String) = conn
+        .query_row(
+            "SELECT s.rendered_context, s.content_hash, s.query_plan_json,
+                    i.inclusion_reason, i.provenance_json
+             FROM agent_context_snapshots s
+             JOIN agent_context_items i ON i.snapshot_id = s.id
+             WHERE s.id = 'snapshot-orphan'",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .unwrap();
+    assert_eq!(rendered, "[redacted: deleted attempt]");
+    assert_eq!(hash, "redacted");
+    assert_eq!(plan, "{\"redacted\":true}");
+    assert_eq!(reason, "redacted");
+    assert_eq!(provenance, "{\"redacted\":true}");
+}
+
+#[test]
+fn coach_run_receipt_redacts_snapshot_with_noncanonical_scope() {
+    let (_dir, conn) = open_db();
+    upsert_attempt(&conn, &terminal_attempt("receipt")).unwrap();
+    insert_coach_request(&conn, "receipt", "receipt");
+    conn.execute(
+        "INSERT INTO agent_context_snapshots
+         (id, run_id, planner_version, scope, query_plan_json, token_budget,
+          used_tokens, rendered_context, content_hash, created_at)
+         VALUES ('extra-receipt', 'run-receipt', 'fixture', 'other-scope',
+                 '{\"secret\":\"ANSWER-SECRET-receipt\"}', 100, 10,
+                 'ANSWER-SECRET-receipt', 'original-hash', '2026-01-01')",
+        [],
+    )
+    .unwrap();
+    assert!(delete_attempt(&conn, "receipt").unwrap());
+    let (rendered, plan): (String, String) = conn
+        .query_row(
+            "SELECT rendered_context, query_plan_json FROM agent_context_snapshots
+             WHERE id = 'extra-receipt'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(rendered, "[redacted: deleted attempt]");
+    assert_eq!(plan, "{\"redacted\":true}");
+}
+
+#[test]
+fn bulk_clear_and_prune_redact_coach_requests() {
+    for operation in ["bulk", "clear", "prune"] {
+        let (_dir, conn) = open_db();
+        upsert_attempt(&conn, &terminal_attempt("old")).unwrap();
+        insert_coach_request(&conn, "old", "old");
+        match operation {
+            "bulk" => assert_eq!(delete_history_attempts(&conn, &["old".into()]).unwrap(), 1),
+            "clear" => assert_eq!(clear_history(&conn, None).unwrap(), 1),
+            "prune" => {
+                for index in 0..50 {
+                    let mut attempt = terminal_attempt(&format!("new-{index:02}"));
+                    attempt.started_at = "2026-01-01T00:00:00Z".into();
+                    attempt.completed_at = Some("2026-01-01T00:00:00Z".into());
+                    upsert_attempt(&conn, &attempt).unwrap();
+                }
+                assert_eq!(
+                    set_history_retention_policy(&conn, Some(50))
+                        .unwrap()
+                        .pruned_attempt_count,
+                    1
+                );
+            }
+            _ => unreachable!(),
+        }
+        assert!(!attempt_exists(&conn, "old"));
+        assert_coach_request(&conn, "old", true);
+    }
+}
+
+#[test]
+fn failed_delete_rolls_back_coach_redaction_and_unlink() {
+    let (_dir, conn) = open_db();
+    upsert_attempt(&conn, &terminal_attempt("blocked")).unwrap();
+    insert_coach_request(&conn, "blocked", "blocked");
+    conn.execute_batch(
+        "CREATE TRIGGER block_attempt_delete BEFORE DELETE ON attempts
+         WHEN OLD.id = 'blocked' BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+    )
+    .unwrap();
+    assert!(delete_attempt(&conn, "blocked").is_err());
+    assert!(attempt_exists(&conn, "blocked"));
+    assert_coach_request(&conn, "blocked", false);
 }
 
 fn mode_idempotency_exists(conn: &rusqlite::Connection, scope: &str, key: &str) -> bool {

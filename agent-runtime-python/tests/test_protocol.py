@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
 from ielts_agent.framing import FrameError, encode_frame, read_frame
-from ielts_agent.protocol import PROTOCOL_VERSION
+from ielts_agent.protocol import PROTOCOL_VERSION, SUPPORTED_CAPABILITIES
 from ielts_agent.runtime import RuntimeServer, serve
 
 
@@ -81,7 +81,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(
             handshake["result"]["capabilities"],
             {
-                "dream.daily": "1",
+                "dream.weekly": "1",
                 "memory.candidates.extract": "1",
                 "memory.candidates.generate": "1",
                 "planner.study_plan": "1",
@@ -166,25 +166,8 @@ class RuntimeTests(unittest.TestCase):
 
 
 
-def _journal_facts_wire() -> dict:
-    return {
-        "journalDate": "2026-08-16",
-        "attemptsCount": 3,
-        "sourceHash": "sha-abc123",
-        "todayObservationIds": ["obs-1"],
-        "memoryEvents": [
-            {
-                "memoryId": "mem-1",
-                "namespace": "strategy",
-                "canonicalKey": "strategy.reading",
-                "changeKind": "reinforced",
-            }
-        ],
-    }
-
-
 class DreamDispatchBridge:
-    """In-memory host bridge for the dream.daily / planner.study_plan dispatch."""
+    """In-memory host bridge for the dream.weekly / planner.study_plan dispatch."""
 
     def __init__(self, *, fail_methods: frozenset[str] | None = None) -> None:
         self.calls: list[tuple[str, dict]] = []
@@ -194,12 +177,22 @@ class DreamDispatchBridge:
         self.calls.append((method, dict(params)))
         if method in self._fail_methods:
             raise RuntimeError(f"simulated failure for {method}")
-        if method == "journal.build_daily":
-            return _journal_facts_wire()
-        if method == "dream.run_daily":
-            return {"runId": "dream-run-1", "accepted": 1, "rejected": 0, "failed": 0}
         if method == "study_plan.create":
             return {"planId": "plan-1", "accepted": 1, "rejected": 0}
+        if method == "memory.candidate_pool":
+            return {"candidates": [
+                {"memoryId": "mem-a", "summary": "rushes tfng", "scope": "reading"},
+                {"memoryId": "mem-b", "summary": "rushes task 2 conclusions", "scope": "writing"},
+            ], "truncated": False}
+        if method == "model.invoke":
+            return {"content": json.dumps({"patterns": [{
+                "statement": "Rushes the final check across reading and writing.",
+                "supportingMemoryIds": ["mem-a", "mem-b"],
+                "patternKind": "cross_skill_strategy",
+                "confidenceProposal": 0.6,
+            }]})}
+        if method == "dream.run_weekly":
+            return {"runId": "weekly-run-1", "validated": 1, "rejected": 0, "accepted": 1}
         if method == "learning.learner_skill_state":
             return {
                 "needs": [
@@ -226,12 +219,12 @@ class DispatchTests(unittest.TestCase):
                 "runtime.handshake",
                 {
                     "hostProtocolVersion": 1,
-                    "requestedCapabilities": ["dream.daily", "planner.study_plan"],
+                    "requestedCapabilities": ["dream.weekly", "planner.study_plan"],
                     "hostCapabilities": {
                         "model.invoke": "1",
                         "tool.invoke": "1",
-                        "journal.build_daily": "1",
-                        "dream.run_daily": "1",
+                        "dream.run_weekly": "1",
+                        "memory.candidate_pool": "1",
                         "learning.learner_skill_state": "1",
                         "memory.search_active": "1",
                         "study_plan.create": "1",
@@ -242,34 +235,48 @@ class DispatchTests(unittest.TestCase):
         assert handshake["ok"], handshake
         return server
 
-    def test_dream_daily_dispatch_runs_orchestrator(self) -> None:
+    def test_there_is_no_daily_dream(self) -> None:
+        # The daily journal is a deterministic summary built by the host; the
+        # sidecar neither advertises nor serves a daily pass.
         bridge = DreamDispatchBridge()
         server = self._handshaken_server(bridge)
         response = server.handle(request("dream.daily", {"day": "2026-08-16"}))
+        self.assertFalse(response["ok"])
+        self.assertEqual(bridge.calls, [])
+        self.assertNotIn("dream.daily", SUPPORTED_CAPABILITIES)
+
+    def test_dream_weekly_dispatch_makes_one_bounded_model_call(self) -> None:
+        bridge = DreamDispatchBridge()
+        server = self._handshaken_server(bridge)
+        response = server.handle(request("dream.weekly", {"window": "2026-W40"}))
         self.assertTrue(response["ok"], response)
         result = response["result"]["result"]
-        self.assertEqual(result["runId"], "dream-run-1")
+        self.assertEqual(result["runId"], "weekly-run-1")
         self.assertEqual(result["accepted"], 1)
         self.assertIsNone(result["fallbackReason"])
         methods = [call[0] for call in bridge.calls]
-        self.assertEqual(methods, ["journal.build_daily", "dream.run_daily"])
+        self.assertEqual(methods, ["memory.candidate_pool", "model.invoke", "dream.run_weekly"])
+        model_request = bridge.calls[1][1]["request"]
+        self.assertEqual(model_request["maxTokens"], 1500)
+        self.assertEqual(bridge.calls[0][1], {"window": "2026-W40"})
 
-    def test_dream_daily_requires_exactly_day(self) -> None:
+    def test_dream_weekly_requires_exactly_window(self) -> None:
         server = self._handshaken_server(DreamDispatchBridge())
-        response = server.handle(request("dream.daily", {"day": "2026-08-16", "extra": 1}))
-        self.assertFalse(response["ok"])
-        self.assertEqual(response["error"]["code"], "schema_invalid_fields")
+        for params in ({}, {"window": "2026-W40", "extra": 1}):
+            response = server.handle(request("dream.weekly", params))
+            self.assertFalse(response["ok"])
+            self.assertEqual(response["error"]["code"], "schema_invalid_fields")
+        response = server.handle(request("dream.weekly", {"window": ""}))
+        self.assertEqual(response["error"]["code"], "schema_type_error")
 
-    def test_dream_daily_reports_fallback_not_fatal(self) -> None:
-        bridge = DreamDispatchBridge(fail_methods=frozenset({"journal.build_daily"}))
+    def test_dream_weekly_reports_fallback_not_fatal(self) -> None:
+        bridge = DreamDispatchBridge(fail_methods=frozenset({"memory.candidate_pool"}))
         server = self._handshaken_server(bridge)
-        response = server.handle(request("dream.daily", {"day": "2026-08-16"}))
-        # Host failure stays inside the orchestrator: an ok response whose
-        # result carries a fallbackReason (never a protocol error).
+        response = server.handle(request("dream.weekly", {"window": "2026-W40"}))
         self.assertTrue(response["ok"], response)
         result = response["result"]["result"]
         self.assertEqual(result["runId"], "")
-        self.assertIn("journal_build_daily_unavailable", result["fallbackReason"])
+        self.assertIn("candidate_pool_unavailable", result["fallbackReason"])
 
     def test_planner_dispatch_submits_proposal(self) -> None:
         bridge = DreamDispatchBridge()
@@ -300,28 +307,29 @@ class DispatchTests(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertEqual(response["error"]["code"], "planner_input_invalid")
 
-    def test_dream_daily_requires_handshake(self) -> None:
+    def test_dream_weekly_requires_handshake(self) -> None:
         server = RuntimeServer(build_id="test-build", host_bridge=DreamDispatchBridge())
-        response = server.handle(request("dream.daily", {"day": "2026-08-16"}))
+        response = server.handle(request("dream.weekly", {"window": "2026-W40"}))
         self.assertFalse(response["ok"])
         self.assertEqual(response["error"]["code"], "handshake_required")
 
-    def test_dream_daily_without_bridge_rejected(self) -> None:
+    def test_dream_weekly_without_bridge_rejected(self) -> None:
         server = RuntimeServer(build_id="test-build")
         handshake = server.handle(
             request(
                 "runtime.handshake",
                 {
                     "hostProtocolVersion": 1,
-                    "requestedCapabilities": ["dream.daily"],
+                    "requestedCapabilities": ["dream.weekly"],
                     "hostCapabilities": {"model.invoke": "1", "tool.invoke": "1"},
                 },
             )
         )
         self.assertTrue(handshake["ok"])
-        response = server.handle(request("dream.daily", {"day": "2026-08-16"}))
+        response = server.handle(request("dream.weekly", {"window": "2026-W40"}))
         self.assertFalse(response["ok"])
         self.assertEqual(response["error"]["code"], "host_bridge_unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

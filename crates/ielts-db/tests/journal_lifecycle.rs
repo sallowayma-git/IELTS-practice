@@ -53,7 +53,7 @@ fn duplicate_day_dedupe_does_not_requeue() {
 fn claim_is_atomic_only_one_worker_wins() {
     let (_dir, conn) = open_db();
     seed_user(&conn, "u1");
-    enqueue_job(&conn, "daily_dream", "u1", NOW, 4, None, None).unwrap();
+    enqueue_job(&conn, "daily_journal", "u1", NOW, 4, None, None).unwrap();
     let first = claim_job(&conn, NOW, WORKER).unwrap();
     let second = claim_job(&conn, NOW, "worker-2").unwrap();
     assert!(first.is_some(), "first claim should win the job");
@@ -64,7 +64,7 @@ fn claim_is_atomic_only_one_worker_wins() {
 fn lease_recovery_returns_running_to_interrupted() {
     let (_dir, conn) = open_db();
     seed_user(&conn, "u1");
-    let id = enqueue_job(&conn, "daily_dream", "u1", NOW, 4, None, None).unwrap();
+    let id = enqueue_job(&conn, "daily_journal", "u1", NOW, 4, None, None).unwrap();
     claim_job(&conn, NOW, WORKER).unwrap();
     // Heartbeat is stale: simulate elapsed time past the lease window.
     heartbeat(&conn, &id, WORKER, "2026-08-16T09:00:00+00:00").unwrap();
@@ -78,7 +78,7 @@ fn lease_recovery_returns_running_to_interrupted() {
 fn startup_recovery_requeues_interrupted_with_retries_left() {
     let (_dir, conn) = open_db();
     seed_user(&conn, "u1");
-    let id = enqueue_job(&conn, "daily_dream", "u1", NOW, 4, None, None).unwrap();
+    let id = enqueue_job(&conn, "daily_journal", "u1", NOW, 4, None, None).unwrap();
     claim_job(&conn, NOW, WORKER).unwrap();
     heartbeat(&conn, &id, WORKER, "2026-08-16T09:00:00+00:00").unwrap();
     // App restart: startup_recovery should requeue interrupted jobs with retries remaining.
@@ -92,7 +92,7 @@ fn startup_recovery_requeues_interrupted_with_retries_left() {
 fn startup_recovery_leaves_exhausted_jobs_interrupted() {
     let (_dir, conn) = open_db();
     seed_user(&conn, "u1");
-    let id = enqueue_job(&conn, "daily_dream", "u1", NOW, 4, None, None).unwrap();
+    let id = enqueue_job(&conn, "daily_journal", "u1", NOW, 4, None, None).unwrap();
     // Burn all attempts: claim increments attempts, fail_job reschedules while
     // attempts < max_attempts, then marks the job failed on the final attempt.
     loop {

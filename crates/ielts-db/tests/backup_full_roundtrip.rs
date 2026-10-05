@@ -66,6 +66,8 @@ const M11_TABLES: &[&str] = &[
     "eval_runs",
     "eval_results",
     "shadow_runs",
+    "prompt_skill_releases",
+    "prompt_skill_release_heads",
 ];
 
 const M12_TABLES: &[&str] = &[
@@ -529,7 +531,7 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
         .unwrap();
 
     let package = create_backup_package(&source, "roundtrip-test").unwrap();
-    assert_eq!(package.manifest.schema_version, 16);
+    assert_eq!(package.manifest.schema_version, 17);
     assert_eq!(
         package.manifest.table_count as usize,
         package.database.len()

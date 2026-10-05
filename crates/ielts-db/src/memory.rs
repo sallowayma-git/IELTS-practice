@@ -378,6 +378,7 @@ pub fn promote_memory_candidate(
     verify_candidate_evidence(&tx, &candidate.evidence_snapshot)?;
     let proposal: MemoryMutationProposal = serde_json::from_str(&candidate.proposal_json)
         .map_err(|error| DbError::Validation(format!("candidate proposal is invalid: {error}")))?;
+    let new_evidence_ids = verify_new_lifecycle_evidence(&tx, &proposal, &candidate.evidence_snapshot)?;
     let now = chrono::Utc::now().to_rfc3339();
     let (memory_id, memory_status, memory_version, before, after) = apply_proposal(
         &tx,
@@ -386,7 +387,7 @@ pub fn promote_memory_candidate(
         command,
         &now,
     )?;
-    attach_evidence(&tx, &memory_id, &proposal, &candidate.evidence_snapshot, &now)?;
+    attach_evidence(&tx, &memory_id, &proposal, &candidate.evidence_snapshot, &new_evidence_ids, &now)?;
     let changed = tx.execute(
         "UPDATE memory_candidates
          SET disposition='promoted',resolved_memory_id=?1,version=version+1,updated_at=?2
@@ -642,7 +643,9 @@ pub fn forget_memory(conn: &Connection, command: &MemoryForgetCommand) -> DbResu
         &tx, &command.memory_id, "deleted", &now)?;
     tx.execute(
         "UPDATE memory_candidates
-         SET proposed_statement=NULL, proposal_json=NULL,
+         SET canonical_key=CASE WHEN COALESCE(resolved_memory_id,target_memory_id)=?2 THEN NULL ELSE canonical_key END,
+             normalized_label=CASE WHEN COALESCE(resolved_memory_id,target_memory_id)=?2 THEN NULL ELSE normalized_label END,
+             proposed_statement=NULL, proposal_json=NULL,
              evidence_observation_ids_json='[]',evidence_snapshot_json='[]',updated_at=?1
          WHERE target_memory_id=?2 OR resolved_memory_id=?2",
         params![now, command.memory_id],
@@ -1033,6 +1036,77 @@ fn verify_candidate_evidence(tx: &Transaction<'_>, evidence: &[Value]) -> DbResu
     Ok(())
 }
 
+fn requires_new_lifecycle_evidence(proposal: &MemoryMutationProposal) -> bool {
+    matches!(proposal, MemoryMutationProposal::Reinforce { .. }
+        | MemoryMutationProposal::Improve { .. } | MemoryMutationProposal::Regress { .. })
+}
+
+fn evidence_observed_at(value: &str) -> DbResult<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map_err(|_| DbError::Validation("invalid lifecycle evidence observedAt".into()))
+}
+
+fn verify_new_lifecycle_evidence(
+    tx: &Transaction<'_>,
+    proposal: &MemoryMutationProposal,
+    evidence: &[Value],
+) -> DbResult<Vec<String>> {
+    if !requires_new_lifecycle_evidence(proposal) {
+        return Ok(Vec::new());
+    }
+    let target_id = proposal.target_memory_id()
+        .ok_or_else(|| DbError::Validation("lifecycle proposal has no target memory".into()))?;
+    // Compare observation times, never promotion wall-clock times. Evidence
+    // already attached under any role cannot become a new lifecycle fact.
+    let mut statement = tx.prepare(
+        "SELECT o.observed_at FROM memory_evidence e
+         LEFT JOIN learner_observations o ON o.id=e.observation_id
+           AND o.source_fingerprint=e.source_fingerprint
+           AND o.projector_key=e.projector_key AND o.projector_version=e.projector_version
+         WHERE e.memory_id=?1",
+    )?;
+    let prior_times = statement.query_map([target_id], |row| row.get::<_, Option<String>>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let latest = prior_times.into_iter().map(|value| {
+        let value = value.ok_or_else(|| DbError::Validation(
+            "previous lifecycle evidence is unavailable; rebuild the projection".into()))?;
+        evidence_observed_at(&value)
+    }).collect::<DbResult<Vec<_>>>()?.into_iter().max()
+        .ok_or_else(|| DbError::Validation("target memory has no lifecycle evidence".into()))?;
+
+    let mut new_evidence_ids = Vec::new();
+    for item in evidence {
+        let id = json_text(item, "id")?;
+        let observed_at: Option<String> = tx.query_row(
+            "SELECT o.observed_at FROM learner_observations o
+             JOIN memory_items m ON m.id=?1 AND m.user_id=o.user_id
+             WHERE o.id=?2
+               AND NOT EXISTS (SELECT 1 FROM memory_evidence e
+                               WHERE e.memory_id=?1 AND e.observation_id=o.id)
+               AND EXISTS (SELECT 1 FROM learner_observation_evidence oe
+                           JOIN learning_events le ON le.id=oe.event_id
+                           WHERE oe.observation_id=o.id AND le.user_id=o.user_id
+                             AND le.sensitivity='normal')
+               AND NOT EXISTS (SELECT 1 FROM learner_observation_evidence oe
+                               JOIN learning_events le ON le.id=oe.event_id
+                               WHERE oe.observation_id=o.id AND le.sensitivity!='normal')",
+            params![target_id, id], |row| row.get(0),
+        ).optional()?;
+        if observed_at.map(|value| evidence_observed_at(&value))
+            .transpose()?.is_some_and(|value| value > latest)
+        {
+            new_evidence_ids.push(id.to_owned());
+        }
+    }
+    if new_evidence_ids.is_empty() {
+        return Err(DbError::Validation(format!(
+            "{} requires new evidence observed after the previous lifecycle evidence",
+            proposal.action(),
+        )));
+    }
+    Ok(new_evidence_ids)
+}
+
 fn apply_proposal(
     tx: &Transaction<'_>,
     proposal: &MemoryMutationProposal,
@@ -1257,6 +1331,7 @@ fn attach_evidence(
     memory_id: &str,
     proposal: &MemoryMutationProposal,
     evidence: &[Value],
+    new_evidence_ids: &[String],
     now: &str,
 ) -> DbResult<()> {
     let role = match proposal {
@@ -1279,7 +1354,7 @@ fn attach_evidence(
             .unwrap_or_else(|| Value::Array(Vec::new()));
         let event_ids_json = serde_json::to_string(&event_ids)?;
         let evidence_hash = hash_json(item)?;
-        inserted += tx.execute(
+        let changed = tx.execute(
             "INSERT OR IGNORE INTO memory_evidence (
                memory_id,observation_id,source_fingerprint,projector_key,projector_version,
                evidence_role,event_ids_json,evidence_hash,created_at
@@ -1296,11 +1371,14 @@ fn attach_evidence(
                 now,
             ],
         )?;
+        if new_evidence_ids.iter().any(|id| id == observation_id) {
+            inserted += changed;
+        }
     }
-    if matches!(proposal, MemoryMutationProposal::Reinforce { .. }) && inserted == 0 {
-        return Err(DbError::Validation(
-            "reinforce requires at least one new independent evidence item".into(),
-        ));
+    if requires_new_lifecycle_evidence(proposal) && inserted == 0 {
+        return Err(DbError::Validation(format!(
+            "{} requires at least one new independent evidence item", proposal.action(),
+        )));
     }
     Ok(())
 }

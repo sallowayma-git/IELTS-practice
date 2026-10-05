@@ -244,9 +244,14 @@ impl MemoryProposalValidator {
             }
         }
         if let Some(identity) = identity {
+            let superseded_target_id = match proposal {
+                MemoryMutationProposal::Supersede { .. } => target.map(|target| target.id.as_str()),
+                _ => None,
+            };
             duplicate = !seen_identity.insert(identity.clone())
                 || active_memory.values().any(|memory| {
                     memory.status == MemoryStatus::Active
+                        && Some(memory.id.as_str()) != superseded_target_id
                         && identity_key(memory.namespace, &memory.canonical_key, memory.scope)
                             == identity
                 });

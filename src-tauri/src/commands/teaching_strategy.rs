@@ -1,8 +1,8 @@
 //! M10 Teaching Strategy Evolution Tauri commands.
 //!
-//! Feature-gated on `daily-dream-v1` (the evolution layer sits above the
-//! context/journal/dream surface). These commands wrap the
-//! `TeachingStrategyService` use cases for the IPC boundary.
+//! Compiled only with the `developer-tools` feature (and `daily-dream-v1`): the
+//! shipped handler does not register these commands and no UI calls them. They
+//! wrap the `TeachingStrategyService` use cases for engineering tooling.
 
 #[cfg(feature = "daily-dream-v1")]
 use ielts_application::TeachingStrategyService;

@@ -11,7 +11,10 @@ from pydantic import ValidationError
 from .memory_extractor import MemoryCandidateInput, extract_memory_candidates
 from .host_bridge import FramedHostBridge
 from .memory_manager import HostBridge, run_memory_candidate_generation
-from .dream import DailyDreamOrchestrator, DreamRunInput
+from .dream import (
+    WeeklyDreamInput,
+    WeeklyDreamOrchestrator,
+)
 from .planner import PlannerRunInput, StudyPlannerOrchestrator
 from .planner.types import PlannerInput
 
@@ -86,8 +89,8 @@ class RuntimeServer:
             return self._extract_memory_candidates(request.params)
         if request.method == "memory.candidates.generate":
             return self._generate_memory_candidates(request)
-        if request.method == "dream.daily":
-            return self._run_daily_dream(request)
+        if request.method == "dream.weekly":
+            return self._run_weekly_dream(request)
         if request.method == "planner.study_plan":
             return self._run_study_planner(request)
         raise ProtocolError("method_not_found", f"unsupported method: {request.method}")
@@ -167,29 +170,29 @@ class RuntimeServer:
         self.handshaken = True
         return self.metadata.as_dict()
 
-    def _run_daily_dream(self, request: RequestEnvelope) -> dict[str, Any]:
-        """M7-06: drive one bounded daily-dream consolidation pass.
+    def _run_weekly_dream(self, request: RequestEnvelope) -> dict[str, Any]:
+        """Weekly consolidation: one model call over the host-bounded pool.
 
-        Rust stays the authority: facts come from ``journal.build_daily``,
-        proposals are persisted via ``dream.run_daily``. Host failures stay
-        inside the orchestrator's fail-closed fallback result (``runId=""`` +
-        ``fallbackReason``) — they are never a fatal protocol error.
+        Rust stays the authority: the pool comes from ``memory.candidate_pool``
+        and patterns are submitted via ``dream.run_weekly`` for re-validation by
+        stable memory id. Host failures stay inside the orchestrator's
+        fail-closed fallback result; an empty result is a success.
         """
         if self.host_bridge is None:
             raise ProtocolError("host_bridge_unavailable", "trusted Rust host bridge is unavailable")
-        if set(request.params) != {"day"}:
+        if set(request.params) != {"window"}:
             raise ProtocolError(
                 "schema_invalid_fields",
-                "dream.daily requires exactly day",
+                "dream.weekly requires exactly window",
             )
-        day = request.params["day"]
-        if not isinstance(day, str) or not day.strip():
-            raise ProtocolError("schema_type_error", "day must be a non-empty string")
-        orchestrator = DailyDreamOrchestrator(self.host_bridge)
-        result = orchestrator.run_daily(
-            DreamRunInput(
+        window = request.params["window"]
+        if not isinstance(window, str) or not window.strip():
+            raise ProtocolError("schema_type_error", "window must be a non-empty string")
+        orchestrator = WeeklyDreamOrchestrator(self.host_bridge)
+        result = orchestrator.run_weekly(
+            WeeklyDreamInput(
                 trace_id=request.trace_id,
-                day=day,
+                window=window,
                 available_host_capabilities=dict(self.host_capabilities),
             )
         )

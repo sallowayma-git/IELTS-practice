@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
 
 use ielts_db::{
-    current_version, learner_model_rebuild, learner_model_verify, learning_observations_rebuild,
-    migrate, open_connection, verify_idempotent, DbOpenOptions,
+    current_version, import_asset_payload_file, learner_model_rebuild, learner_model_verify,
+    learning_observations_rebuild, migrate, open_connection, submit_reading_attempt,
+    verify_idempotent, DbOpenOptions, ReadingSubmitCommand,
 };
 use ielts_domain::{LearnerStateQuery, SkillReviewNeedsQuery};
 use rusqlite::{params, Connection};
@@ -41,11 +42,11 @@ fn v11_database_upgrade_applies_m4_after_m3_without_skipping_versions() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
     );
     assert!(
-        current_version(&conn).unwrap() >= 23,
-        "migration 0023 was not applied"
+        current_version(&conn).unwrap() == 26,
+        "latest migration 0026 was not applied"
     );
     verify_idempotent(&mut conn).unwrap();
     for table in [
@@ -516,4 +517,735 @@ fn observation_ids(conn: &Connection) -> BTreeSet<String> {
 
 fn sha256_hex(value: &str) -> String {
     hex::encode(Sha256::digest(value.as_bytes()))
+}
+
+fn submit_fixture(dir: &std::path::Path, conn: &Connection, ordinal: u32) {
+    let path = dir.join("freshness-asset.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&json!({
+            "examId": "freshness-asset", "meta": {"title": "Freshness", "category": "P1"},
+            "questionCount": 2, "questionOrder": ["q1", "q2"],
+            "answerKey": {"q1": "TRUE", "q2": "B"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]},
+                               {"kind": "mcq", "questionIds": ["q2"]}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let asset = import_asset_payload_file(conn, &path).unwrap();
+    submit_reading_attempt(
+        conn,
+        &ReadingSubmitCommand {
+            attempt_id: format!("freshness-attempt-{ordinal}"),
+            asset_id: "freshness-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint),
+            answers: if ordinal == 1 {
+                json!({"q1":"FALSE", "q2":"B"})
+            } else {
+                json!({"q1":"TRUE", "q2":"A"})
+            },
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(900),
+            title_snapshot: Some("Freshness".into()),
+            idempotency_key: format!("freshness-submit-{ordinal}"),
+        },
+    )
+    .unwrap();
+}
+
+fn state(conn: &Connection) -> ielts_domain::LearnerStateSnapshot {
+    ielts_db::learner_state_snapshot(conn, &LearnerStateQuery::default()).unwrap()
+}
+
+#[test]
+fn real_submit_refreshes_each_read_entry_without_manual_rebuild_or_hot_writes() {
+    for entry in ["state", "needs", "combined"] {
+        let (dir, conn) = open_db();
+        submit_fixture(dir.path(), &conn, 1);
+        match entry {
+            "state" => assert_eq!(state(&conn).states.len(), 2),
+            "needs" => assert_eq!(
+                ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default())
+                    .unwrap()
+                    .needs
+                    .len(),
+                2
+            ),
+            _ => assert_eq!(
+                ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default())
+                    .unwrap()
+                    .needs
+                    .len(),
+                2
+            ),
+        }
+        let first = state(&conn);
+        assert!(first.states.iter().all(|row| row.evidence_count == 1));
+        submit_fixture(dir.path(), &conn, 2);
+        let second = state(&conn);
+        assert_ne!(first.state_hash, second.state_hash);
+        assert!(second.states.iter().all(|row| row.evidence_count == 2));
+        assert!(
+            ielts_db::learning_observations_verify(&conn)
+                .unwrap()
+                .consistent
+        );
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+        let changes = conn.total_changes();
+        for _ in 0..3 {
+            assert_eq!(state(&conn).state_hash, second.state_hash);
+            ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default())
+                .unwrap();
+            ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default()).unwrap();
+        }
+        assert_eq!(
+            conn.total_changes(),
+            changes,
+            "{entry}: hot reads must not rebuild"
+        );
+    }
+}
+
+#[test]
+fn reads_repair_m2_m4_content_mapping_changes_and_deactivation() {
+    let (dir, conn) = open_db();
+    submit_fixture(dir.path(), &conn, 1);
+    let original = state(&conn);
+    for corruption in [
+        "DELETE FROM learner_observations WHERE observation_type='reading.question.outcome'",
+        "UPDATE learner_skill_observations SET outcome=0.25",
+        "UPDATE learner_skill_observations SET context_json='{}'",
+        "UPDATE learner_skill_state SET mastery_mean=0.99",
+        "UPDATE skill_review_schedule SET priority=0.99",
+    ] {
+        conn.execute_batch(corruption).unwrap();
+        assert_eq!(state(&conn).state_hash, original.state_hash, "{corruption}");
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+    }
+    let ids = observation_ids(&conn);
+    conn.execute_batch(
+        "UPDATE question_skill_map SET mapping_version=mapping_version+1, weight=0.5",
+    )
+    .unwrap();
+    assert_ne!(state(&conn).state_hash, original.state_hash);
+    assert_ne!(observation_ids(&conn), ids);
+    conn.execute_batch("UPDATE question_skill_map SET active=0 WHERE skill_key='reading.tfng'")
+        .unwrap();
+    assert_eq!(state(&conn).states.len(), 1);
+    conn.execute_batch("UPDATE question_skill_map SET active=1 WHERE skill_key='reading.tfng'; UPDATE skill_catalog SET active=0 WHERE skill_key='reading.multi_choice'").unwrap();
+    let one = state(&conn);
+    assert_eq!(one.states.len(), 1);
+    assert_eq!(one.states[0].skill_key, "reading.tfng");
+    conn.execute_batch("UPDATE skill_catalog SET active=1 WHERE skill_key='reading.multi_choice'")
+        .unwrap();
+    assert_eq!(state(&conn).states.len(), 2);
+}
+
+#[test]
+fn projection_late_failures_reject_stale_success_and_roll_back() {
+    for table in ["learning_projection_runs", "skill_review_schedule"] {
+        let (dir, conn) = open_db();
+        submit_fixture(dir.path(), &conn, 1);
+        let original = state(&conn);
+        let original_ids = observation_ids(&conn);
+        submit_fixture(dir.path(), &conn, 2);
+        let condition = if table == "learning_projection_runs" {
+            "WHEN NEW.status='completed'"
+        } else {
+            ""
+        };
+        conn.execute_batch(&format!("CREATE TRIGGER reject_late BEFORE INSERT ON {table} {condition} BEGIN SELECT RAISE(ABORT,'late failure'); END;")).unwrap();
+        assert!(ielts_db::learner_state_snapshot(&conn, &LearnerStateQuery::default()).is_err());
+        assert!(
+            ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default())
+                .is_err()
+        );
+        assert!(ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default()).is_err());
+        assert_eq!(observation_ids(&conn), original_ids);
+        let evidence: u64 = conn
+            .query_row(
+                "SELECT MAX(evidence_count) FROM learner_skill_state",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(evidence, 1);
+        conn.execute_batch("DROP TRIGGER reject_late").unwrap();
+        let latest = state(&conn);
+        assert_ne!(latest.state_hash, original.state_hash);
+        assert!(latest.states.iter().all(|row| row.evidence_count == 2));
+    }
+}
+
+#[test]
+fn review_priority_cursor_visits_each_skill_and_combined_filter_matches_state() {
+    let (_dir, conn) = open_db();
+    // Independent assets avoid same-asset discount obscuring the deliberately
+    // reversed priority/lexical order. Real submit freshness is tested above.
+    insert_question(
+        &conn,
+        "page-tfng",
+        "asset-tfng",
+        "q1",
+        "tfng",
+        "2026-08-12T00:00:00Z",
+        false,
+        None,
+    );
+    insert_question(
+        &conn,
+        "page-mcq",
+        "asset-mcq",
+        "q2",
+        "mcq",
+        "2026-08-12T00:00:00Z",
+        true,
+        None,
+    );
+    let full =
+        ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default()).unwrap();
+    assert_eq!(full.needs[0].skill_key, "reading.tfng"); // priority and lexical order disagree
+    let first = ielts_db::skill_review_needs_snapshot(
+        &conn,
+        &SkillReviewNeedsQuery {
+            limit: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(first.truncated);
+    let second = ielts_db::skill_review_needs_snapshot(
+        &conn,
+        &SkillReviewNeedsQuery {
+            limit: 1,
+            after_skill_key: first.continuation,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(second.needs[0].skill_key, "reading.multi_choice");
+    assert!(!second.truncated);
+    let combined = ielts_db::learner_skill_snapshot(
+        &conn,
+        &LearnerStateQuery {
+            skill_keys: vec!["reading.multi_choice".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(combined.state.states.len(), 1);
+    assert_eq!(combined.needs.len(), 1);
+    assert_eq!(
+        combined.needs[0].skill_key,
+        combined.state.states[0].skill_key
+    );
+    let bound = &full.needs[0].due_at;
+    let due = ielts_db::skill_review_needs_snapshot(
+        &conn,
+        &SkillReviewNeedsQuery {
+            due_before: Some(bound.clone()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(due.needs.iter().any(|need| &need.due_at == bound));
+}
+
+#[test]
+fn desktop_reads_exclude_other_users_and_their_reference_clock() {
+    let (_dir, conn) = open_db();
+    insert_question(
+        &conn,
+        "local-evidence",
+        "local-asset",
+        "q1",
+        "tfng",
+        "2026-08-12T00:00:00Z",
+        false,
+        None,
+    );
+    let before = state(&conn);
+    let as_of = chrono::DateTime::parse_from_rfc3339("2026-10-02T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let needs_before = ielts_db::skill_review_needs_snapshot_as_of(
+        &conn,
+        &SkillReviewNeedsQuery::default(),
+        as_of,
+    )
+    .unwrap();
+    insert_question(
+        &conn,
+        "foreign-evidence",
+        "foreign-asset",
+        "q1",
+        "tfng",
+        "2026-09-12T00:00:00Z",
+        true,
+        None,
+    );
+    // Synthetic foreign ledger input: production submit still fixes user=local.
+    conn.execute(
+        "UPDATE learning_events SET user_id='other' WHERE id='foreign-evidence'",
+        [],
+    )
+    .unwrap();
+    let after = state(&conn);
+    assert_eq!(after, before);
+    assert_eq!(
+        ielts_db::skill_review_needs_snapshot_as_of(
+            &conn,
+            &SkillReviewNeedsQuery::default(),
+            as_of
+        )
+        .unwrap(),
+        needs_before
+    );
+    let combined =
+        ielts_db::learner_skill_snapshot_as_of(&conn, &LearnerStateQuery::default(), as_of)
+            .unwrap();
+    assert_eq!(combined.state, before);
+    assert_eq!(combined.needs, needs_before.needs);
+    assert!(combined.needs[0]
+        .avoid_asset_ids
+        .iter()
+        .all(|asset| asset == "local-asset"));
+    let users: i64 = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT user_id) FROM learner_skill_state",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(users, 2, "admin projection still retains all users");
+}
+
+fn submit_payload(
+    dir: &std::path::Path,
+    conn: &Connection,
+    payload: serde_json::Value,
+    attempt: &str,
+    answers: serde_json::Value,
+) -> String {
+    let path = dir.join("m4-production-fixture.json");
+    std::fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let asset = import_asset_payload_file(conn, &path).unwrap();
+    submit_reading_attempt(
+        conn,
+        &ReadingSubmitCommand {
+            attempt_id: attempt.into(),
+            asset_id: payload["examId"].as_str().unwrap().into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint.clone()),
+            answers,
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(900),
+            title_snapshot: Some("M4 production fixture".into()),
+            idempotency_key: format!("submit-{attempt}"),
+        },
+    )
+    .unwrap();
+    asset.fingerprint
+}
+
+fn submit_trend_attempt(
+    dir: &std::path::Path,
+    conn: &Connection,
+    asset: &str,
+    attempt: &str,
+    day: u32,
+    correct: &[bool; 8],
+    reverse_ids: bool,
+) {
+    let ids = (1..=8).map(|id| format!("q{id}")).collect::<Vec<_>>();
+    let answer_key = ids.iter().map(|id| (id.clone(), json!("TRUE")))
+        .collect::<serde_json::Map<_, _>>();
+    let answers = ids.iter().enumerate().map(|(index, id)| {
+        let index = if reverse_ids { 7 - index } else { index };
+        (id.clone(), json!(if correct[index] { "TRUE" } else { "FALSE" }))
+    }).collect::<serde_json::Map<_, _>>();
+    submit_payload(dir, conn, json!({
+        "examId": asset, "meta": {"title": "Trend", "category": "P1"},
+        "questionCount": 8, "questionOrder": ids, "answerKey": answer_key,
+        "questionGroups": [{"kind": "tfng", "questionIds": ids}]
+    }), attempt, json!(answers));
+    // The submit API owns the clock. Pin the real submitted ledger for replay.
+    conn.execute(
+        "UPDATE learning_events SET occurred_at=?1 WHERE attempt_id=?2",
+        params![format!("2026-08-{day:02}T00:00:00Z"), attempt],
+    ).unwrap();
+}
+
+#[test]
+fn real_mixed_eight_question_attempt_has_no_trend_even_with_swapped_ids() {
+    let mut summaries = Vec::new();
+    for reverse in [false, true] {
+        let (dir, conn) = open_db();
+        submit_trend_attempt(dir.path(), &conn, "mixed", "mixed-attempt", 12,
+            &[false, false, false, false, true, true, true, true], reverse);
+        let snapshot = state(&conn);
+        let row = &snapshot.states[0];
+        assert_eq!(row.trend, ielts_domain::TrendDirection::InsufficientEvidence);
+        assert_eq!(row.explanation["trendOutcomes"], json!([0.5]));
+        assert_eq!(row.evidence_count, 8);
+        assert_eq!(row.mastery_mean, 0.5);
+        summaries.push((row.trend.clone(), row.mastery_mean, row.uncertainty));
+        assert_eq!(learner_model_rebuild(&conn).unwrap().state_hash, snapshot.state_hash);
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+    }
+    assert_eq!(summaries[0], summaries[1]);
+}
+
+#[test]
+fn real_same_material_wrong_to_right_updates_posterior_without_transfer_trend() {
+    let (dir, conn) = open_db();
+    submit_trend_attempt(dir.path(), &conn, "repeat", "wrong", 12, &[false; 8], false);
+    let first = state(&conn);
+    for (attempt, day) in [("right", 13), ("right-again", 14)] {
+        submit_trend_attempt(dir.path(), &conn, "repeat", attempt, day, &[true; 8], false);
+    }
+    let snapshot = state(&conn);
+    let row = &snapshot.states[0];
+    assert_eq!(row.trend, ielts_domain::TrendDirection::InsufficientEvidence);
+    assert_eq!(row.explanation["trendOutcomes"], json!([0.0]));
+    assert_eq!(row.evidence_count, 24);
+    assert_eq!(row.distinct_asset_count, 1);
+    assert!(row.mastery_mean > first.states[0].mastery_mean);
+    assert_eq!(learner_model_rebuild(&conn).unwrap().state_hash, snapshot.state_hash);
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn real_independent_future_material_establishes_direction_and_repairs_old_trend() {
+    for improving in [true, false] {
+        let (dir, conn) = open_db();
+        for ordinal in 0..4 {
+            let correct = if ordinal < 2 { !improving } else { improving };
+            submit_trend_attempt(dir.path(), &conn, &format!("material-{ordinal}"),
+                &format!("attempt-{ordinal}"), 12 + ordinal, &[correct; 8], false);
+        }
+        let snapshot = state(&conn);
+        assert_eq!(snapshot.states[0].trend, if improving {
+            ielts_domain::TrendDirection::Improving
+        } else {
+            ielts_domain::TrendDirection::Declining
+        });
+        assert_eq!(snapshot.states[0].evidence_count, 32);
+        assert_eq!(snapshot.states[0].distinct_asset_count, 4);
+        conn.execute_batch("UPDATE learner_skill_state SET explanation_json=json_remove(json_set(explanation_json, '$.trend', 'stable'), '$.trendOutcomes')").unwrap();
+        assert!(!learner_model_verify(&conn).unwrap().consistent);
+        assert_eq!(state(&conn), snapshot);
+        assert_eq!(learner_model_rebuild(&conn).unwrap().state_hash, snapshot.state_hash);
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+    }
+}
+
+#[test]
+fn real_equal_time_material_does_not_gain_direction_from_attempt_ids() {
+    let (dir, conn) = open_db();
+    for ordinal in 0..4 {
+        submit_trend_attempt(dir.path(), &conn, &format!("tied-{ordinal}"),
+            &format!("tied-attempt-{ordinal}"), 12, &[ordinal >= 2; 8], false);
+    }
+    let snapshot = state(&conn);
+    assert_eq!(snapshot.states[0].trend, ielts_domain::TrendDirection::InsufficientEvidence);
+    assert_eq!(snapshot.states[0].explanation["trendOutcomes"], json!([0.5]));
+    assert_eq!(learner_model_rebuild(&conn).unwrap().state_hash, snapshot.state_hash);
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn real_first_attempt_weights_all_questions_equally_and_id_swap_preserves_skills() {
+    let mut first_posteriors = Vec::new();
+    for (tfng_id, mcq_id) in [("q1", "q2"), ("q2", "q1")] {
+        let (dir, conn) = open_db();
+        let payload = json!({
+            "examId": "m4-first", "meta": {"title": "First", "category": "P1"},
+            "questionCount": 2, "questionOrder": ["q1", "q2"],
+            "answerKey": {(tfng_id): "TRUE", (mcq_id): "B"},
+            "questionGroups": [{"kind": "tfng", "questionIds": [tfng_id]},
+                               {"kind": "mcq", "questionIds": [mcq_id]}]
+        });
+        let answers = json!({(tfng_id): "FALSE", (mcq_id): "B"});
+        submit_payload(dir.path(), &conn, payload.clone(), "first", answers.clone());
+        let first = state(&conn);
+        first_posteriors.push(
+            first
+                .states
+                .iter()
+                .map(|row| (row.skill_key.clone(), row.mastery_mean, row.uncertainty))
+                .collect::<Vec<_>>(),
+        );
+        for row in &first.states {
+            assert_eq!(observation_weights(&conn, &row.skill_key), vec![(1.0, 1.0)]);
+            assert_eq!(row.explanation["novelEvidenceCount"], 1);
+            assert_eq!(row.explanation["repeatedEvidenceCount"], 0);
+        }
+        submit_payload(dir.path(), &conn, payload, "second", answers);
+        let second = state(&conn);
+        for row in &second.states {
+            assert_eq!(
+                observation_weights(&conn, &row.skill_key),
+                vec![(1.0, 1.0), (0.1, 0.25)]
+            );
+            assert_eq!(row.explanation["novelEvidenceCount"], 1);
+            assert_eq!(row.explanation["repeatedEvidenceCount"], 1);
+        }
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+        assert_eq!(
+            learner_model_rebuild(&conn).unwrap().state_hash,
+            second.state_hash
+        );
+    }
+    assert_eq!(first_posteriors[0], first_posteriors[1]);
+}
+
+#[test]
+fn tied_first_attempts_of_same_asset_are_averaged_independent_of_ids() {
+    let mut results = Vec::new();
+    for swap in [false, true] {
+        let (dir, conn) = open_db();
+        for ordinal in 0..4 {
+            let asset = format!("tie-material-{ordinal}");
+            if ordinal < 2 {
+                for (suffix, correct) in [("a", swap), ("z", !swap)] {
+                    submit_trend_attempt(dir.path(), &conn, &asset,
+                        &format!("tie-{ordinal}-{suffix}"), 12 + ordinal, &[correct; 8], false);
+                }
+            } else {
+                submit_trend_attempt(dir.path(), &conn, &asset,
+                    &format!("tie-{ordinal}"), 12 + ordinal, &[true; 8], false);
+            }
+        }
+        let snapshot = state(&conn);
+        let row = &snapshot.states[0];
+        assert_eq!(row.explanation["trendOutcomes"], json!([0.5, 0.5, 1.0, 1.0]));
+        results.push((row.trend.clone(), row.explanation["trendOutcomes"].clone()));
+        assert_eq!(learner_model_rebuild(&conn).unwrap().state_hash, snapshot.state_hash);
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+    }
+    assert_eq!(results[0], results[1]);
+}
+
+#[test]
+fn real_reimport_preserves_each_submitted_kind_and_active_curated_priority() {
+    let (dir, conn) = open_db();
+    let payload = |kind: &str, answer: &str| {
+        json!({
+            "examId": "m4-reimport", "meta": {"title": "Reimport", "category": "P1"},
+            "questionCount": 1, "questionOrder": ["q1"], "answerKey": {"q1": answer},
+            "questionGroups": [{"kind": kind, "questionIds": ["q1"]}]
+        })
+    };
+    let old_fingerprint = submit_payload(
+        dir.path(),
+        &conn,
+        payload("tfng", "TRUE"),
+        "old",
+        json!({"q1": "FALSE"}),
+    );
+    let old = state(&conn);
+    assert_eq!(old.states[0].skill_key, "reading.tfng");
+    let new_fingerprint = submit_payload(
+        dir.path(),
+        &conn,
+        payload("mcq", "B"),
+        "new",
+        json!({"q1": "B"}),
+    );
+    assert_ne!(old_fingerprint, new_fingerprint);
+    let new = state(&conn);
+    assert_eq!(new.states.len(), 2);
+    let mut statement = conn
+        .prepare(
+            "SELECT o.attempt_id, o.skill_key, json_extract(e.payload_json, '$.questionKind'),
+                a.submitted_asset_fingerprint
+         FROM learner_skill_observations o JOIN learning_events e ON e.id=o.event_id
+         JOIN attempts a ON a.id=o.attempt_id ORDER BY o.attempt_id",
+        )
+        .unwrap();
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "new".into(),
+                "reading.multi_choice".into(),
+                "mcq".into(),
+                new_fingerprint
+            ),
+            (
+                "old".into(),
+                "reading.tfng".into(),
+                "tfng".into(),
+                old_fingerprint
+            ),
+        ]
+    );
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+    assert_eq!(
+        learner_model_rebuild(&conn).unwrap().state_hash,
+        new.state_hash
+    );
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+    // Manual and content-pack rows are curated decisions, even with cached builtins.
+    for (source, skill, version) in [
+        ("manual", "reading.matching_headings", 7),
+        ("content_pack", "reading.short_answer", 8),
+    ] {
+        conn.execute(
+            "INSERT INTO question_skill_map
+            (asset_id, question_id, skill_key, weight, mapping_source, mapping_version, active)
+            VALUES ('m4-reimport', 'q1', ?1, 0.8, ?2, ?3, 1)",
+            params![skill, source, version],
+        )
+        .unwrap();
+        let curated = state(&conn);
+        assert_eq!(curated.states.len(), 1);
+        assert_eq!(curated.states[0].skill_key, skill);
+        assert_eq!(curated.states[0].evidence_count, 2);
+        let mut stmt = conn
+            .prepare("SELECT mapping_weight, context_json FROM learner_skill_observations")
+            .unwrap();
+        for row in stmt
+            .query_map([], |r| Ok((r.get::<_, f64>(0)?, r.get::<_, String>(1)?)))
+            .unwrap()
+        {
+            let (weight, context) = row.unwrap();
+            let context: serde_json::Value = serde_json::from_str(&context).unwrap();
+            assert_eq!(weight, 0.8);
+            assert_eq!(context["mappingSource"], source);
+            assert_eq!(context["mappingVersion"], version);
+        }
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+    }
+}
+
+#[test]
+fn real_idle_review_uses_read_clock_without_mutating_evidence_or_replay_hash() {
+    let (dir, conn) = open_db();
+    submit_fixture(dir.path(), &conn, 1);
+    let initial = state(&conn);
+    let reference = chrono::DateTime::parse_from_rfc3339(&initial.generated_at)
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let query = SkillReviewNeedsQuery::default();
+    let before = ielts_db::skill_review_needs_snapshot_as_of(&conn, &query, reference).unwrap();
+    assert!(before
+        .needs
+        .iter()
+        .all(|need| !need.reason_codes.iter().any(|r| r == "review_due")));
+    let baseline = learner_model_verify(&conn).unwrap();
+    let changes = conn.total_changes();
+    let later = reference + chrono::Duration::days(60);
+    let after = ielts_db::skill_review_needs_snapshot_as_of(&conn, &query, later).unwrap();
+    assert_eq!(after.generated_at, later.to_rfc3339());
+    for need in &after.needs {
+        let earlier = before
+            .needs
+            .iter()
+            .find(|row| row.skill_key == need.skill_key)
+            .unwrap();
+        assert!(need.priority > earlier.priority);
+        assert!(need.reason_codes.iter().any(|r| r == "review_due"));
+        assert_eq!(need.due_at, earlier.due_at);
+        assert_eq!(
+            need.supporting_observation_ids,
+            earlier.supporting_observation_ids
+        );
+    }
+    assert_eq!(
+        ielts_db::skill_review_needs_snapshot_as_of(&conn, &query, later).unwrap(),
+        after
+    );
+    let combined =
+        ielts_db::learner_skill_snapshot_as_of(&conn, &LearnerStateQuery::default(), later)
+            .unwrap();
+    assert_eq!(combined.state, initial);
+    assert_eq!(combined.needs, after.needs);
+    let clock_before = chrono::Utc::now();
+    let default = ielts_db::skill_review_needs_snapshot(&conn, &query).unwrap();
+    let clock_after = chrono::Utc::now();
+    let generated = chrono::DateTime::parse_from_rfc3339(&default.generated_at).unwrap();
+    assert!(generated >= clock_before && generated <= clock_after);
+    assert_eq!(
+        conn.total_changes(),
+        changes,
+        "time projection must not write any rows"
+    );
+    assert_eq!(learner_model_verify(&conn).unwrap(), baseline);
+    assert_eq!(
+        learner_model_rebuild(&conn).unwrap().state_hash,
+        initial.state_hash
+    );
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn rust_snapshot_is_consumed_by_python_and_python_query_is_accepted_by_rust() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let (dir, conn) = open_db();
+    submit_fixture(dir.path(), &conn, 1);
+    let snapshot = ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default()).unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let python = std::env::var("PYTHON")
+        .unwrap_or_else(|_| if cfg!(windows) { "python" } else { "python3" }.into());
+    let mut child = Command::new(python)
+        .arg(root.join("developer/tests/ci/learner_wire_probe.py"))
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Python is required for the real learner wire contract");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&serde_json::to_vec(&snapshot).unwrap())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "Python failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let params: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let query: LearnerStateQuery = serde_json::from_value(
+        params
+            .get("query")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .unwrap();
+    assert_eq!(
+        query.skill_keys,
+        snapshot
+            .state
+            .states
+            .iter()
+            .map(|row| row.skill_key.clone())
+            .collect::<Vec<_>>()
+    );
+    assert!(serde_json::from_value::<LearnerStateQuery>(
+        json!({"activity":"reading", "skills":[]})
+    )
+    .is_err());
+    assert!(serde_json::from_value::<LearnerStateQuery>(serde_json::Value::Null).is_err());
 }

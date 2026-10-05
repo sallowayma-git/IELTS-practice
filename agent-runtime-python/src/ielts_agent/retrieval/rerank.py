@@ -5,9 +5,9 @@ insufficient before rerank is enabled in production. When enabled, every model
 call goes through `host_bridge.invoke("model.invoke")` — Python never holds the
 provider secret and never makes a direct network request.
 
-Clean-room: TechSpa `vector_memory.py:search_memory` re-ranks via LLM in-process
-(R2). We instead route through the Rust Model Gateway so usage/latency/trace and
-credentials stay host-owned, matching the v1.3 runtime ownership table.
+Re-ranking is never done by an in-process LLM call. We route through the Rust
+Model Gateway so usage/latency/trace and credentials stay host-owned, matching
+the v1.3 runtime ownership table.
 """
 
 from __future__ import annotations

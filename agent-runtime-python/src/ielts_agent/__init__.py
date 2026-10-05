@@ -11,8 +11,6 @@ from .coach import (
     select_strategy,
 )
 from .dream import (
-    DailyDreamOrchestrator,
-    DreamRunInput,
     JournalEnricher,
     WeeklyDreamInput,
     WeeklyDreamOrchestrator,
@@ -24,8 +22,6 @@ __all__ = [
     "CoachShadowResult",
     "PythonPersonalizedCoach",
     "select_strategy",
-    "DailyDreamOrchestrator",
-    "DreamRunInput",
     "JournalEnricher",
     "WeeklyDreamInput",
     "WeeklyDreamOrchestrator",

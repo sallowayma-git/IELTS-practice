@@ -72,8 +72,8 @@ pub fn insert_context_snapshot(
         ],
     )?;
     for section in &manifest.sections {
-        for (index, item) in section.items.iter().enumerate() {
-            insert_item(&tx, &manifest.snapshot_id, item, index as i64)?;
+        for item in &section.items {
+            insert_item(&tx, &manifest.snapshot_id, item, item.rank as i64)?;
         }
     }
     tx.commit()?;
@@ -186,14 +186,11 @@ fn group_items(items: Vec<StoredItem>) -> Vec<ContextMaterializedSection> {
         let materialized = ContextMaterializedItem {
             item_id: item.item_id.clone(),
             section,
-            source_kind: provenance_field(&item.provenance_json, "sourceKind")
-                .unwrap_or_default(),
-            source_id: provenance_field(&item.provenance_json, "sourceId")
-                .unwrap_or_default(),
+            source_kind: provenance_field(&item.provenance_json, "sourceKind").unwrap_or_default(),
+            source_id: provenance_field(&item.provenance_json, "sourceId").unwrap_or_default(),
             content_hash: provenance_field(&item.provenance_json, "contentHash")
                 .unwrap_or_default(),
-            sensitivity: provenance_field(&item.provenance_json, "sensitivity")
-                .unwrap_or_default(),
+            sensitivity: provenance_field(&item.provenance_json, "sensitivity").unwrap_or_default(),
             estimated_tokens: item.estimated_tokens,
             rank: item.rank,
             score: item.score,
@@ -211,6 +208,7 @@ fn group_items(items: Vec<StoredItem>) -> Vec<ContextMaterializedSection> {
     for section in &mut sections {
         section.estimated_tokens = section.items.iter().map(|i| i.estimated_tokens).sum();
     }
+    sections.sort_by_key(|section| section.section.truncation_rank());
     sections
 }
 

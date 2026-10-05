@@ -54,6 +54,124 @@ fn persists_run_and_ordered_tool_audit() {
 }
 
 #[test]
+fn dream_run_kind_survives_completion_failure_and_cancellation() {
+    let (_directory, connection) = open_db();
+    for (id, status, result, error) in [
+        (
+            "dream-completed",
+            StoredAgentRunStatus::Completed,
+            Some(json!({"summary": "done", "details": {"count": 2}})),
+            None,
+        ),
+        (
+            "dream-failed",
+            StoredAgentRunStatus::Failed,
+            None,
+            Some(json!({"code": "agent.failed"})),
+        ),
+        (
+            "dream-cancelled",
+            StoredAgentRunStatus::Failed,
+            None,
+            Some(json!({"code": "agent.cancelled"})),
+        ),
+    ] {
+        let mut begin = begin_run(id);
+        begin.run_kind = ielts_domain::AgentRunKind::Dream;
+        begin_agent_run(&connection, &begin).unwrap();
+        finish_agent_run(
+            &connection,
+            &FinishAgentRunCommand {
+                id: id.into(),
+                status,
+                rounds: 2,
+                tool_call_count: 0,
+                result: result.clone(),
+                error: error.clone(),
+            },
+        )
+        .unwrap();
+
+        let run = load_agent_run(&connection, id).unwrap().unwrap();
+        let mut expected_result = result.unwrap_or_else(|| json!({}));
+        expected_result["runKind"] = json!("dream");
+        assert_eq!(run.run_kind, ielts_domain::AgentRunKind::Dream);
+        assert_eq!(run.status, status);
+        assert_eq!(run.result, Some(expected_result));
+        assert_eq!(run.error, error);
+        assert!(run.completed_at.is_some());
+    }
+}
+
+#[test]
+fn caller_cannot_override_original_run_kind() {
+    let (_directory, connection) = open_db();
+    for kind in [
+        ielts_domain::AgentRunKind::Dream,
+        ielts_domain::AgentRunKind::Workspace,
+    ] {
+        let id = format!("conflict-{kind:?}");
+        let mut begin = begin_run(&id);
+        begin.run_kind = kind;
+        begin_agent_run(&connection, &begin).unwrap();
+        let mut result = json!({
+            "runKind": "coach",
+            "summary": "done",
+            "details": {"count": 2},
+            "items": [1, 2],
+            "optional": null,
+        });
+        finish_agent_run(
+            &connection,
+            &FinishAgentRunCommand {
+                id: id.clone(),
+                status: StoredAgentRunStatus::Completed,
+                rounds: 1,
+                tool_call_count: 0,
+                result: Some(result.clone()),
+                error: None,
+            },
+        )
+        .unwrap();
+
+        result["runKind"] = json!(kind);
+        let run = load_agent_run(&connection, &id).unwrap().unwrap();
+        assert_eq!(run.run_kind, kind);
+        assert_eq!(run.result, Some(result));
+    }
+}
+
+#[test]
+fn non_object_result_is_rejected_without_changing_running_run() {
+    let (_directory, connection) = open_db();
+    let mut begin = begin_run("dream-invalid");
+    begin.run_kind = ielts_domain::AgentRunKind::Dream;
+    begin_agent_run(&connection, &begin).unwrap();
+    let original = load_agent_run(&connection, &begin.id).unwrap().unwrap();
+
+    for result in [json!(null), json!([]), json!("done"), json!(42), json!(true)] {
+        let error = finish_agent_run(
+            &connection,
+            &FinishAgentRunCommand {
+                id: begin.id.clone(),
+                status: StoredAgentRunStatus::Completed,
+                rounds: 2,
+                tool_call_count: 3,
+                result: Some(result),
+                error: Some(json!({"code": "agent.failed"})),
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(error, ielts_db::sqlite::DbError::Validation(_)));
+        assert!(error.to_string().contains("result must be a JSON object"));
+        assert_eq!(
+            load_agent_run(&connection, &begin.id).unwrap().unwrap(),
+            original
+        );
+    }
+}
+
+#[test]
 fn rejects_duplicate_sequence_and_terminal_reopen() {
     let (_directory, connection) = open_db();
     begin_agent_run(&connection, &begin_run("run-1")).unwrap();

@@ -20,10 +20,11 @@ pub mod learner;
 pub mod memory;
 pub mod modes;
 pub mod paths;
-#[cfg(feature = "daily-dream-v1")]
+#[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
 pub mod prompt_skill;
 pub mod reading;
 pub mod routes;
 pub mod settings;
+#[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
 pub mod teaching_strategy;
 pub mod writing;

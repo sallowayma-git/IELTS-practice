@@ -723,6 +723,7 @@ fn delete_attempt_graph_in_transaction(conn: &Connection, attempt_id: &str) -> D
         "UPDATE endless_sessions SET current_attempt_id = NULL WHERE current_attempt_id = ?1",
         params![attempt_id],
     )?;
+    redact_coach_requests_for_attempt(conn, attempt_id)?;
     conn.execute(
         "UPDATE coach_threads SET attempt_id = NULL WHERE attempt_id = ?1",
         params![attempt_id],
@@ -742,6 +743,78 @@ fn delete_attempt_graph_in_transaction(conn: &Connection, attempt_id: &str) -> D
     delete_mode_idempotency_replays_for_attempt(conn, attempt_id)?;
     let deleted = conn.execute("DELETE FROM attempts WHERE id = ?1", params![attempt_id])?;
     Ok(deleted > 0)
+}
+
+/// A Coach request snapshot contains the exact submitted answers. Keep the
+/// thread transcript and audit rows, but erase request bodies before the
+/// attempt-to-thread edge is removed. The caller's transaction covers both.
+fn redact_coach_requests_for_attempt(conn: &Connection, attempt_id: &str) -> DbResult<()> {
+    let thread_ids = {
+        let mut statement = conn.prepare("SELECT id FROM coach_threads WHERE attempt_id = ?1")?;
+        let rows = statement.query_map(params![attempt_id], |row| row.get::<_, String>(0))?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        ids
+    };
+    for thread_id in thread_ids {
+        redact_coach_thread_requests(conn, &thread_id)?;
+    }
+    Ok(())
+}
+
+fn redact_coach_thread_requests(conn: &Connection, thread_id: &str) -> DbResult<()> {
+    // Both links are needed: scope survives a run deletion (snapshot.run_id
+    // becomes NULL), while the run receipt identifies its other snapshots.
+    let snapshot_ids = {
+        let mut statement = conn.prepare(
+            "SELECT id FROM agent_context_snapshots
+             WHERE scope = ?1 OR run_id IN (
+               SELECT id FROM agent_runs
+               WHERE json_extract(CASE WHEN json_valid(result_json) THEN result_json ELSE '{}' END,
+                                  '$.runKind') = 'coach'
+                 AND json_extract(CASE WHEN json_valid(result_json) THEN result_json ELSE '{}' END,
+                                  '$.threadId') = ?2
+             )",
+        )?;
+        let rows = statement
+            .query_map(params![format!("coach:{thread_id}"), thread_id], |row| {
+                row.get::<_, String>(0)
+            })?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        ids
+    };
+    for snapshot_id in snapshot_ids {
+        conn.execute(
+            "UPDATE agent_context_items
+             SET inclusion_reason = 'redacted', provenance_json = '{\"redacted\":true}'
+             WHERE snapshot_id = ?1",
+            params![snapshot_id],
+        )?;
+        conn.execute(
+            "UPDATE agent_context_snapshots
+             SET rendered_context = '[redacted: deleted attempt]', content_hash = 'redacted',
+                 query_plan_json = '{\"redacted\":true}'
+             WHERE id = ?1",
+            params![snapshot_id],
+        )?;
+    }
+    conn.execute(
+        "UPDATE llm_invocations SET request_hash = 'redacted'
+         WHERE run_id IN (
+           SELECT id FROM agent_runs
+           WHERE json_extract(CASE WHEN json_valid(result_json) THEN result_json ELSE '{}' END,
+                              '$.runKind') = 'coach'
+             AND json_extract(CASE WHEN json_valid(result_json) THEN result_json ELSE '{}' END,
+                              '$.threadId') = ?1
+         )",
+        params![thread_id],
+    )?;
+    Ok(())
 }
 
 /// Mode idempotency predates a direct attempt foreign key. Its response is

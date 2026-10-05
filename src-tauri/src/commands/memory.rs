@@ -1,22 +1,40 @@
-use ielts_application::{MemoryService, SubmitMemoryCandidatesCommand};
+use ielts_application::MemoryService;
 use ielts_domain::{
-    Activity, AgentRunKind, CommandResponse, ErrorEnvelope, ExplicitPreference, ExplicitPreferenceUpsert,
-    MemoryCandidateBatchReceipt, MemoryCatalogQuery, MemoryContextPreview, MemoryContextQuery,
-    MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposalBatch, MemoryMutationReceipt,
-    MemoryPromotionCommand, MemorySourceClass, MAX_MEMORY_PROPOSALS,
+    Activity, CommandResponse, ErrorEnvelope, ExplicitPreference, ExplicitPreferenceUpsert,
+    MemoryCatalogQuery, MemoryContextPreview, MemoryContextQuery,
+    MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationReceipt,
+    MemoryPromotionCommand,
 };
-use ielts_db::{BeginAgentRunCommand, StoredAgentRunStatus};
+// Imports used only by the developer-only `memory_generate_candidates` entry.
+#[cfg(feature = "developer-tools")]
+use ielts_db::StoredAgentRunStatus;
+#[cfg(feature = "developer-tools")]
+use ielts_domain::MemoryMutationProposalBatch;
+#[cfg(feature = "developer-tools")]
+use ielts_application::SubmitMemoryCandidatesCommand;
+#[cfg(feature = "developer-tools")]
+use ielts_domain::{AgentRunKind, MemoryCandidateBatchReceipt, MemorySourceClass, MAX_MEMORY_PROPOSALS};
+#[cfg(feature = "developer-tools")]
+use ielts_db::BeginAgentRunCommand;
+#[cfg(feature = "developer-tools")]
+use crate::ai::load_provider_config;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
+#[cfg(feature = "developer-tools")]
+use serde_json::json;
+#[cfg(feature = "developer-tools")]
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, State};
 
 use crate::app::application_store::ApplicationStore;
+#[cfg(feature = "developer-tools")]
 use crate::app::run_audit::RunAuditGuard;
-use crate::ai::load_provider_config;
-use crate::app::state::{AppDb, AppVault};
+use crate::app::state::AppDb;
+#[cfg(feature = "developer-tools")]
+use crate::app::state::AppVault;
 use crate::cognitive_runtime::{RuntimeManager, RuntimeStatus};
 
+#[cfg(feature = "developer-tools")]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GenerateMemoryCandidatesInput {
@@ -62,6 +80,10 @@ pub struct MemoryContextPreviewInput {
     pub limit: u32,
 }
 
+/// Developer-only LLM entry (no UI caller): the daily worker is the only
+/// shipping path that spends tokens on memory candidates. Compiled out of release
+/// builds; the sidecar `memory.candidates.generate` method itself stays.
+#[cfg(feature = "developer-tools")]
 #[tauri::command]
 pub async fn memory_generate_candidates(
     app: AppHandle,
@@ -73,6 +95,7 @@ pub async fn memory_generate_candidates(
     Ok(memory_generate_candidates_inner(app, db, vault, runtime, input).await)
 }
 
+#[cfg(feature = "developer-tools")]
 async fn memory_generate_candidates_inner(
     app: AppHandle,
     db: State<'_, AppDb>,
@@ -409,6 +432,7 @@ fn respond<T>(result: Result<T, ielts_application::ApplicationError>) -> Command
     }
 }
 
+#[cfg(feature = "developer-tools")]
 fn fail_run<T>(audit: &mut RunAuditGuard<'_>, error: ErrorEnvelope) -> CommandResponse<T> {
     let audit_error = json!({"code": error.code, "message": error.message, "retryable": error.retryable});
     match audit.finish(
@@ -425,6 +449,7 @@ fn fail_run<T>(audit: &mut RunAuditGuard<'_>, error: ErrorEnvelope) -> CommandRe
     }
 }
 
+#[cfg(feature = "developer-tools")]
 fn interrupt_run<T>(audit: &mut RunAuditGuard<'_>) -> CommandResponse<T> {
     let error = ErrorEnvelope::new("memory.run_cancelled", "memory generation was cancelled", true);
     let audit_error = json!({"code": error.code, "message": error.message, "retryable": true});
@@ -438,6 +463,7 @@ fn interrupt_run<T>(audit: &mut RunAuditGuard<'_>) -> CommandResponse<T> {
     }
 }
 
+#[cfg(feature = "developer-tools")]
 fn stable_candidate_request_id(input_hash: &str, batch: &MemoryMutationProposalBatch) -> String {
     let mut digest = Sha256::new();
     digest.update(input_hash.as_bytes());
@@ -477,6 +503,7 @@ fn require_local_object(
     }
 }
 
+#[cfg(feature = "developer-tools")]
 fn application_failure(error: ielts_application::ApplicationError) -> ErrorEnvelope {
     ErrorEnvelope::new(error.code, error.message, error.retryable)
 }
@@ -497,6 +524,7 @@ fn default_context_limit() -> u32 {
     50
 }
 
+#[cfg(feature = "developer-tools")]
 fn default_max_candidates() -> usize {
     16
 }

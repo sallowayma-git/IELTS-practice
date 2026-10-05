@@ -50,10 +50,21 @@ fn seed_eval_case(conn: &rusqlite::Connection, kind: EvalCaseKind, holdout: bool
 }
 
 fn full_pipeline(conn: &rusqlite::Connection, version_id: &str, case_id: &str, approver: &str) {
+    let candidate_id = approved_candidate(conn, CandidateTargetKind::Prompt, version_id, case_id, approver);
+    promote_candidate(conn, &PromoteCandidateCommand { candidate_id }).unwrap();
+}
+
+fn approved_candidate(
+    conn: &rusqlite::Connection,
+    kind: CandidateTargetKind,
+    version_id: &str,
+    case_id: &str,
+    approver: &str,
+) -> String {
     let candidate = propose_candidate(
         conn,
         &ProposeCandidateCommand {
-            target_kind: CandidateTargetKind::Prompt,
+            target_kind: kind,
             target_version_id: version_id.to_string(),
             proposal: json!({}),
             proposed_by: "tester".into(),
@@ -81,13 +92,7 @@ fn full_pipeline(conn: &rusqlite::Connection, version_id: &str, case_id: &str, a
         },
     )
     .unwrap();
-    promote_candidate(
-        conn,
-        &PromoteCandidateCommand {
-            candidate_id: candidate.id.clone(),
-        },
-    )
-    .unwrap();
+    candidate.id
 }
 
 #[test]
@@ -504,17 +509,9 @@ fn rollback_never_activates_a_never_active_draft() {
     let template = ensure_prompt_template(&conn, PromptModule::AttemptReview, None).unwrap();
     let v1 = create_prompt_version(&conn, &template.id, "v1 body", &json!({}), "seed").unwrap();
     let v2 = create_prompt_version(&conn, &template.id, "v2 body", &json!({}), "seed").unwrap();
-    // v1 was active and got superseded by v2, which is the live version.
-    conn.execute(
-        "UPDATE prompt_versions SET status='rollback' WHERE id=?1",
-        params![v1.id],
-    )
-    .unwrap();
-    conn.execute(
-        "UPDATE prompt_versions SET status='active' WHERE id=?1",
-        params![v2.id],
-    )
-    .unwrap();
+    let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    full_pipeline(&conn, &v1.id, &case, "operator");
+    full_pipeline(&conn, &v2.id, &case, "operator");
     // A fresh, unevaluated draft now carries the highest version number.
     let draft = create_prompt_version(&conn, &template.id, "evil body", &json!({}), "sidecar")
         .unwrap();
@@ -557,11 +554,8 @@ fn rollback_with_no_prior_active_version_reinstates_nothing() {
     let (_dir, conn) = open_db();
     let template = ensure_prompt_template(&conn, PromptModule::AttemptReview, None).unwrap();
     let v1 = create_prompt_version(&conn, &template.id, "v1 body", &json!({}), "seed").unwrap();
-    conn.execute(
-        "UPDATE prompt_versions SET status='active' WHERE id=?1",
-        params![v1.id],
-    )
-    .unwrap();
+    let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    full_pipeline(&conn, &v1.id, &case, "operator");
     let draft = create_prompt_version(&conn, &template.id, "draft body", &json!({}), "seed")
         .unwrap();
 
@@ -686,4 +680,167 @@ fn promote_then_rollback_round_trips_through_the_gate() {
     assert_eq!(outcome.reinstated_version_id, Some(v1.id.clone()));
     assert_eq!(status_of_version(&conn, &v1.id), "active");
     assert_eq!(status_of_version(&conn, &v2.id), "rollback");
+    // The new release can restore a known legacy active version, but cannot
+    // invent that legacy version's own predecessor on the next rollback.
+    let error = rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &v1.id))
+        .unwrap_err();
+    assert!(error.to_string().contains("predecessor record missing"));
+    assert_eq!(status_of_version(&conn, &v1.id), "active");
+}
+
+fn rollback_command(kind: CandidateTargetKind, version_id: &str) -> RollbackCommand {
+    RollbackCommand {
+        target_kind: kind,
+        target_version_id: version_id.to_owned(),
+        rolled_back_by: "operator".into(),
+    }
+}
+
+#[test]
+fn out_of_order_publications_rollback_twice_for_prompts_and_skills() {
+    for kind in [CandidateTargetKind::Prompt, CandidateTargetKind::Skill] {
+        let (_dir, conn) = open_db();
+        let (table, ids) = match kind {
+            CandidateTargetKind::Prompt => {
+                let template = ensure_prompt_template(&conn, PromptModule::AttemptReview, None).unwrap();
+                let ids: Vec<String> = (1..=3).map(|v| {
+                    create_prompt_version(&conn, &template.id, &format!("v{v}"), &json!({}), "tester")
+                        .unwrap().id
+                }).collect();
+                ("prompt_versions", ids)
+            }
+            CandidateTargetKind::Skill => {
+                let definition = ielts_db::ensure_skill_definition(
+                    &conn, ielts_domain::SkillName::ReadAttemptEvidence, None,
+                ).unwrap();
+                let ids: Vec<String> = (1..=3).map(|v| {
+                    ielts_db::create_skill_version(&conn, &definition.id, &json!({"version": v}), "tester")
+                        .unwrap().id
+                }).collect();
+                ("skill_versions", ids)
+            }
+        };
+        let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+        for index in [0, 2, 1] {
+            let candidate_id = approved_candidate(&conn, kind, &ids[index], &case, "operator");
+            promote_candidate(&conn, &PromoteCandidateCommand { candidate_id }).unwrap();
+        }
+        for (from, to) in [(1, 2), (2, 0)] {
+            let outcome = rollback_version(&conn, &rollback_command(kind, &ids[from])).unwrap();
+            assert_eq!(outcome.reinstated_version_id.as_ref(), Some(&ids[to]));
+            let active: String = conn.query_row(
+                &format!("SELECT id FROM {table} WHERE status = 'active'"), [], |row| row.get(0),
+            ).unwrap();
+            assert_eq!(active, ids[to]);
+        }
+        let outcome = rollback_version(&conn, &rollback_command(kind, &ids[0])).unwrap();
+        assert_eq!(outcome.reinstated_version_id, None);
+        let heads: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM prompt_skill_release_heads", [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(heads, 0);
+        let releases: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM prompt_skill_releases", [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(releases, 3, "rollback must preserve publication history");
+    }
+}
+
+#[test]
+fn migration_does_not_guess_legacy_release_predecessors() {
+    for has_prior in [false, true] {
+        let (_dir, mut conn) = open_db();
+        // Recreate the actual v24 state, then upgrade with legacy rows present.
+        conn.execute_batch(
+            "DROP TABLE prompt_skill_release_heads;
+             DROP TABLE prompt_skill_releases;
+             ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
+             DELETE FROM schema_migrations WHERE version >= 25;",
+        ).unwrap();
+        let template = ensure_prompt_template(&conn, PromptModule::AttemptReview, None).unwrap();
+        let prior = create_prompt_version(&conn, &template.id, "prior", &json!({}), "tester").unwrap();
+        let live = create_prompt_version(&conn, &template.id, "live", &json!({}), "tester").unwrap();
+        if has_prior {
+            conn.execute("UPDATE prompt_versions SET status = 'rollback' WHERE id = ?1", [&prior.id]).unwrap();
+        }
+        conn.execute("UPDATE prompt_versions SET status = 'active' WHERE id = ?1", [&live.id]).unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), vec![25, 26]);
+        assert!(migrate(&mut conn).unwrap().is_empty());
+        let error = rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &live.id))
+            .unwrap_err();
+        assert!(error.to_string().contains("predecessor record missing"));
+        assert_eq!(status_of_version(&conn, &live.id), "active");
+        assert_eq!(status_of_version(&conn, &prior.id), if has_prior { "rollback" } else { "draft" });
+    }
+}
+
+#[test]
+fn publication_head_write_failure_is_atomic() {
+    let (_dir, conn) = open_db();
+    let first = seed_prompt_version(&conn, "first", "tester");
+    let second = seed_prompt_version(&conn, "second", "tester");
+    let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    full_pipeline(&conn, &first, &case, "operator");
+    let candidate_id = approved_candidate(&conn, CandidateTargetKind::Prompt, &second, &case, "operator");
+    conn.execute_batch(
+        "CREATE TRIGGER reject_release_head BEFORE UPDATE ON prompt_skill_release_heads
+         BEGIN SELECT RAISE(ABORT, 'simulated publication head write failure'); END;",
+    ).unwrap();
+    assert!(promote_candidate(&conn, &PromoteCandidateCommand { candidate_id: candidate_id.clone() }).is_err());
+    assert_eq!(status_of_version(&conn, &first), "active");
+    assert_eq!(status_of_version(&conn, &second), "draft");
+    let status: String = conn.query_row(
+        "SELECT status FROM candidate_promotions WHERE id = ?1", [&candidate_id], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(status, "approved");
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM prompt_skill_releases", [], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(count, 1);
+    conn.execute_batch("DROP TRIGGER reject_release_head").unwrap();
+    promote_candidate(&conn, &PromoteCandidateCommand { candidate_id }).unwrap();
+    assert_eq!(rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &second))
+        .unwrap().reinstated_version_id, Some(first));
+}
+
+#[test]
+fn rollback_head_write_failure_is_atomic() {
+    let (_dir, conn) = open_db();
+    let first = seed_prompt_version(&conn, "first", "tester");
+    let second = seed_prompt_version(&conn, "second", "tester");
+    let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    full_pipeline(&conn, &first, &case, "operator");
+    full_pipeline(&conn, &second, &case, "operator");
+    let old_head: String = conn.query_row(
+        "SELECT release_id FROM prompt_skill_release_heads", [], |row| row.get(0),
+    ).unwrap();
+    conn.execute_batch(
+        "CREATE TRIGGER reject_rollback_head BEFORE INSERT ON prompt_skill_release_heads
+         BEGIN SELECT RAISE(ABORT, 'simulated rollback head write failure'); END;",
+    ).unwrap();
+    assert!(rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &second)).is_err());
+    assert_eq!(status_of_version(&conn, &second), "active");
+    assert_eq!(status_of_version(&conn, &first), "rollback");
+    let head: String = conn.query_row(
+        "SELECT release_id FROM prompt_skill_release_heads", [], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(head, old_head);
+    conn.execute_batch("DROP TRIGGER reject_rollback_head").unwrap();
+    assert_eq!(rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &second))
+        .unwrap().reinstated_version_id, Some(first));
+}
+
+#[test]
+fn rollback_rejects_a_recorded_predecessor_with_invalid_status() {
+    let (_dir, conn) = open_db();
+    let first = seed_prompt_version(&conn, "first", "tester");
+    let second = seed_prompt_version(&conn, "second", "tester");
+    let case = seed_eval_case(&conn, EvalCaseKind::ContextSelection, false);
+    full_pipeline(&conn, &first, &case, "operator");
+    full_pipeline(&conn, &second, &case, "operator");
+    conn.execute("UPDATE prompt_versions SET status = 'draft' WHERE id = ?1", [&first]).unwrap();
+    let error = rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &second)).unwrap_err();
+    assert!(error.to_string().contains("not restorable"));
+    assert_eq!(status_of_version(&conn, &second), "active");
+    assert_eq!(status_of_version(&conn, &first), "draft");
 }

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,22 +32,35 @@ def run_command(name: str, command: list[str], cwd: Path = ROOT) -> dict[str, An
     environment = os.environ.copy()
     environment["PYTHONUTF8"] = "1"
     environment["PYTHONIOENCODING"] = "utf-8"
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            env=environment,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            check=False,
+    retries = 0
+    while True:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=cwd,
+                env=environment,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {"name": name, "status": "fail", "detail": str(exc)}
+        linker_busy = (
+            sys.platform == "win32"
+            and command[0] == "cargo" and "test" in command
+            and re.search(r"LNK1104:[^\r\n]*[\\/]target[\\/]debug[\\/]deps[\\/][^\r\n]+\.exe", completed.stderr)
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return {"name": name, "status": "fail", "detail": str(exc)}
+        if completed.returncode == 0 or not linker_busy or retries == 2:
+            break
+        retries += 1
+        time.sleep(1)
 
     output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
+    if retries:
+        output += f"\nWindows test executable linker LNK1104 retries: {retries}"
     return {
         "name": name,
         "status": "pass" if completed.returncode == 0 else "fail",
@@ -124,6 +139,24 @@ def check_tauri_contract() -> dict[str, Any]:
     evaluating_page = (ROOT / "apps/writing-vue/src/views/EvaluatingPage.vue").read_text(encoding="utf-8")
     if "Math.random" in evaluating_page:
         failures.append("evaluation progress animation must not use random timing")
+    # M10 teaching-strategy and M11 prompt/skill commands are engineering
+    # surfaces: registered only behind `developer-tools`, never called by the UI.
+    handler_lines = rust_shell[rust_shell.index("generate_handler!["):].splitlines()
+    gated = [index for index, line in enumerate(handler_lines)
+             if "commands::teaching_strategy::" in line or "commands::prompt_skill::" in line]
+    if not gated:
+        failures.append("M10/M11 commands are no longer listed in the handler; update this gate")
+    for index in gated:
+        if 'feature = "developer-tools"' not in handler_lines[index - 1]:
+            failures.append(f"M10/M11 command is not gated by developer-tools: {handler_lines[index].strip()}")
+    command_names = re.findall(r"commands::(?:teaching_strategy|prompt_skill)::(\w+)", "\n".join(handler_lines))
+    for source in (ROOT / "apps/writing-vue/src").rglob("*"):
+        if source.suffix not in {".js", ".ts", ".vue", ".mjs"} or not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8")
+        for name in command_names:
+            if name in text:
+                failures.append(f"frontend references developer-only command {name}: {source.relative_to(ROOT)}")
     serialized = json.dumps(config).lower()
     for retired in ("electron", "fastify", "file://"):
         if retired in serialized:
@@ -202,6 +235,11 @@ def main() -> int:
             "Phase 10 release contract",
             [sys.executable, "developer/tests/ci/release_contract_test.py"],
         ),
+        run_command("Memory evidence navigation contract", ["node", "developer/tests/js/memoryEvidence.test.mjs"]),
+        run_command("Agent console durable state contract", ["node", "developer/tests/js/agentConsoleState.test.mjs"]),
+        run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
+        run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
+        run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Vue production build", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(
@@ -209,6 +247,15 @@ def main() -> int:
             # Includes fixed workspace fallback/junction/grant boundaries as
             # well as runtime authority. Do not leave host security un-gated.
             ["cargo", "test", "-p", "ielts-practice-tauri", "--lib"],
+        ),
+        run_command(
+            "Rust developer-tools build (M10/M11 commands, memory generation)",
+            ["cargo", "check", "-p", "ielts-practice-tauri", "--features", "developer-tools", "--tests", "--locked"],
+        ),
+        run_command(
+            "E2E harness: packaged receipts and WebDriver/WebView2 matching",
+            [sys.executable, "-m", "unittest", "test_packaged_receipts", "test_webdriver_select"],
+            cwd=ROOT / "developer/tests/e2e",
         ),
         run_command(
             "Rust memory proposal validator",
@@ -250,6 +297,8 @@ def main() -> int:
                 "--test",
                 "memory_profile_core",
                 "--test",
+                "memory_supersede_identity",
+                "--test",
                 "learner_model",
                 # Round-3 audit remediation (2026-08-31): these three suites
                 # carry the regression tests for the fixes landed in that pass
@@ -273,11 +322,57 @@ def main() -> int:
                 "prompt_skill",
                 "--test",
                 "context_snapshot",
+                "--test",
+                "corpus_export",
                 # Startup recovery must survive duplicate windows and must
                 # not reset terminal retry budgets on every reboot.
                 "--test",
                 "background_jobs",
             ],
+        ),
+        run_command(
+            "Rust M5 canonical context materialization",
+            ["cargo", "test", "-p", "ielts-application", "--test", "context_materialization", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust in-flight model cancellation",
+            ["cargo", "test", "-p", "ielts-application", "--lib", "agent::", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust M7–M12 phase repairs",
+            ["cargo", "test", "-p", "ielts-db", "--test", "journal", "--test", "journal_lifecycle", "--test", "agent_thread", "--test", "teaching_strategy", "--test", "backup_release_history", "--test", "reading_asset_revision", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust canonical Coach evidence",
+            ["cargo", "test", "-p", "ielts-application", "--test", "coach_canonical", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust Coach prompt cache layout and chunked history",
+            ["cargo", "test", "-p", "ielts-application", "--lib", "coach::", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust weekly dream receipts and digests",
+            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust production Coach trace and daily job receipts",
+            ["cargo", "test", "-p", "ielts-db", "--test", "coach_trace", "--test", "background_jobs", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust automatic Daily worker",
+            ["cargo", "test", "-p", "ielts-practice-tauri", "--lib", "app::daily_worker", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust trusted consolidation policy",
+            ["cargo", "test", "-p", "ielts-application", "--test", "consolidation", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust Coach v0 authority",
+            ["cargo", "test", "-p", "ielts-db", "--test", "coach_feedback", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust Coach feedback legacy authority",
+            ["cargo", "test", "-p", "ielts-db", "--lib", "coach_feedback", "--locked", "--offline"],
         ),
         run_command(
             "Rust M4 domain learner contract",

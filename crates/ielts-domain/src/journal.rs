@@ -59,6 +59,10 @@ pub struct JournalMemoryEvent {
     pub namespace: String,
     pub canonical_key: String,
     pub change_kind: String,
+    /// Canonical memory_evidence links to same-user observations on this day.
+    /// Older journals have no links and cannot ground Dream proposals.
+    #[serde(default)]
+    pub evidence_observation_ids: Vec<String>,
 }
 
 /// Bounded writing-evaluation summary for a day. Only aggregate scores and

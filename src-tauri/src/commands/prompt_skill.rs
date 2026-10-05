@@ -1,8 +1,8 @@
 //! M11 Prompt/Skill Evolution Tauri commands.
 //!
-//! Feature-gated on `daily-dream-v1` (the evolution layer sits above the
-//! context/journal/dream surface). These commands wrap the
-//! `PromptSkillService` use cases for the IPC boundary. Rust is the release
+//! Compiled only with the `developer-tools` feature (and `daily-dream-v1`): the
+//! shipped handler does not register these commands and no UI calls them. They
+//! wrap the `PromptSkillService` use cases for engineering tooling. Rust is the release
 //! gate; the LLM may only propose candidates. Product eval verdicts, approval,
 //! promotion and rollback are NOT Webview commands (task book §17.8). The
 //! offline application/db services remain available to engineering tooling.

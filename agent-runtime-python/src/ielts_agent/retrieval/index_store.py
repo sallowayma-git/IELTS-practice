@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -220,7 +221,10 @@ class IndexStore:
                 when,
             ),
         )
-        if chunk.text and changed:
+        if changed:
+            conn.execute("DELETE FROM embeddings WHERE chunk_id = ?", (chunk.chunk_id,))
+            conn.execute("DELETE FROM fts_chunks WHERE chunk_id = ?", (chunk.chunk_id,))
+        if chunk.text:
             conn.execute(
                 "INSERT OR REPLACE INTO fts_chunks(chunk_id, text) VALUES (?, ?)",
                 (chunk.chunk_id, chunk.text),
@@ -255,12 +259,27 @@ class IndexStore:
 
     # -- sync run audit ------------------------------------------------------
 
+    @contextmanager
+    def atomic_sync(self):
+        """Keep the old chunks, lexical rows and vectors on any sync failure."""
+        conn = self.open()
+        conn.execute("SAVEPOINT corpus_sync")
+        try:
+            yield
+            conn.execute("RELEASE corpus_sync")
+        except BaseException:
+            # begin_sync_run committed the audit before this owned transaction.
+            # Release/commit failures must also roll back before failure audit;
+            # otherwise finish_sync_run could commit the failed sync's writes.
+            conn.rollback()
+            raise
+
     def begin_sync_run(self, manifest: CorpusManifest | None) -> int:
         conn = self.open()
         started = time.time()
         cur = conn.execute(
             "INSERT INTO sync_runs(started_at, status, corpus_version) VALUES (?, ?, ?)",
-            ("running", started, manifest.corpus_version if manifest else None),
+            (started, "running", manifest.corpus_version if manifest else None),
         )
         conn.commit()
         return int(cur.lastrowid)
@@ -274,13 +293,15 @@ class IndexStore:
         updated: int,
         removed: int,
         detail: str | None = None,
+        corpus_version: str | None = None,
     ) -> None:
         conn = self.open()
         conn.execute(
             "UPDATE sync_runs SET finished_at = ?, status = ?, "
-            "chunks_added = ?, chunks_updated = ?, chunks_removed = ?, detail = ? "
+            "chunks_added = ?, chunks_updated = ?, chunks_removed = ?, detail = ?, "
+            "corpus_version = COALESCE(?, corpus_version) "
             "WHERE run_id = ?",
-            (time.time(), status, added, updated, removed, detail, run_id),
+            (time.time(), status, added, updated, removed, detail, corpus_version, run_id),
         )
         conn.commit()
 

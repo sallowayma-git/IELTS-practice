@@ -171,7 +171,7 @@ def main() -> int:
             "runtime.shutdown": "1",
             "memory.candidates.extract": "1",
             "memory.candidates.generate": "1",
-            "dream.daily": "1",
+            "dream.weekly": "1",
             "planner.study_plan": "1",
         }
         if handshake.get("ok") is not True:
@@ -226,6 +226,8 @@ def main() -> int:
         model_call = read_frame(process.stdout)
         if model_call.get("method") != "model.invoke" or model_call.get("traceId") != "smoke-trace":
             raise RuntimeError("sidecar did not issue the host-owned model request")
+        if model_call.get("params", {}).get("request", {}).get("maxTokens") != 2000:
+            raise RuntimeError("sidecar model request must declare its output ceiling")
         write_frame(
             process.stdin,
             response_for(

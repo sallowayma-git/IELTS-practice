@@ -1,4 +1,4 @@
-"""M5 Python-first retrieval engine (clean-room, derived-only).
+"""M5 Python-first retrieval engine (derived-only).
 
 Owns the disposable derived retrieval index. Never opens the canonical IELTS
 SQLite, never holds provider secrets, never makes direct network requests.

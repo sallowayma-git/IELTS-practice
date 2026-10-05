@@ -25,13 +25,11 @@ pub fn context_materialize(
 ) -> CommandResponse<ContextPack> {
     let store = ApplicationStore::new(db.inner());
     let service = ContextMaterializerService::new(&store, &store);
-    respond(service.materialize(&plan, &scope))
+    respond(service.materialize_for_caller(&plan, &scope))
 }
 
 #[cfg(feature = "context-compiler-v1")]
-fn respond<T>(
-    result: Result<T, ielts_application::ApplicationError>,
-) -> CommandResponse<T> {
+fn respond<T>(result: Result<T, ielts_application::ApplicationError>) -> CommandResponse<T> {
     match result {
         Ok(value) => CommandResponse::success(value),
         Err(error) => CommandResponse::failure(ErrorEnvelope::new(

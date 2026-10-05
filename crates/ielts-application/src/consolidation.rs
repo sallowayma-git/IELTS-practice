@@ -6,12 +6,12 @@
 //! exposes user feedback (M8-09). Rust is the promotion gate; Python only
 //! proposes.
 
+use ielts_db::SupportMemory;
 use ielts_domain::{
     ConsolidationConfig, ConsolidationReceipt, MemoryFeedbackKind, MemoryFeedbackRecord,
     PatternProposal, PatternValidationReport, StaleArchiveReport, SupportChangeOutcome,
     WeeklyDreamQuery,
 };
-use ielts_db::SupportMemory;
 
 use crate::ApplicationError;
 
@@ -34,6 +34,40 @@ pub trait ConsolidationStore {
         user_id: &str,
         now: &str,
     ) -> Result<ConsolidationReceipt, ApplicationError>;
+    /// Config-aware adapters must revalidate and write in one transaction,
+    /// using `ielts_db::apply_consolidation_with_config` or an equivalent gate.
+    /// Legacy adapters remain usable for the default policy only; a custom
+    /// service must never silently fall back to a receipt-selected policy.
+    fn apply_consolidation_with_config(
+        &self,
+        pattern: &ielts_domain::ValidatedPattern,
+        user_id: &str,
+        now: &str,
+        config: &ConsolidationConfig,
+    ) -> Result<ConsolidationReceipt, ApplicationError> {
+        if *config != ConsolidationConfig::default() {
+            return Err(ApplicationError::new(
+                "consolidation_policy_unsupported",
+                "store must implement transactional custom-policy consolidation",
+                false,
+            ));
+        }
+        let proposal = PatternProposal {
+            statement: pattern.statement.clone(),
+            supporting_memory_ids: pattern.support_ids.clone(),
+            pattern_kind: pattern.pattern_kind,
+            confidence_proposal: pattern.confidence,
+        };
+        let report = self.validate_patterns(&[proposal], user_id, config)?;
+        if report.validated.as_slice() != std::slice::from_ref(pattern) {
+            return Err(ApplicationError::new(
+                "consolidation_revalidation_failed",
+                "consolidation receipt does not match trusted policy and current evidence",
+                false,
+            ));
+        }
+        self.apply_consolidation(pattern, user_id, now)
+    }
     fn propagate_support_change(
         &self,
         memory_id: &str,
@@ -79,7 +113,8 @@ impl<'a> ConsolidationService<'a> {
         proposals: &[PatternProposal],
         user_id: &str,
     ) -> Result<PatternValidationReport, ApplicationError> {
-        self.store.validate_patterns(proposals, user_id, &self.config)
+        self.store
+            .validate_patterns(proposals, user_id, &self.config)
     }
 
     /// M8-06: apply consolidation for each validated pattern. Old supports are
@@ -100,7 +135,10 @@ impl<'a> ConsolidationService<'a> {
     ) -> Result<Vec<ConsolidationReceipt>, PartialConsolidation> {
         let mut applied = Vec::with_capacity(patterns.len());
         for pattern in patterns {
-            match self.store.apply_consolidation(pattern, user_id, now) {
+            match self
+                .store
+                .apply_consolidation_with_config(pattern, user_id, now, &self.config)
+            {
                 Ok(receipt) => applied.push(receipt),
                 Err(error) => {
                     return Err(PartialConsolidation {
@@ -121,7 +159,8 @@ impl<'a> ConsolidationService<'a> {
         new_status: &str,
         now: &str,
     ) -> Result<SupportChangeOutcome, ApplicationError> {
-        self.store.propagate_support_change(memory_id, new_status, now)
+        self.store
+            .propagate_support_change(memory_id, new_status, now)
     }
 
     /// M8-08: stale archive sweep (per-kind policy; archive not delete).

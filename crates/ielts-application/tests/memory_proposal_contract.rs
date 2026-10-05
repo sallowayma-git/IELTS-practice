@@ -115,6 +115,17 @@ fn proposal_batch(proposals: Vec<MemoryMutationProposal>) -> MemoryMutationPropo
     }
 }
 
+fn supersede_proposal(canonical_key: &str, evidence: &[&str]) -> MemoryMutationProposal {
+    MemoryMutationProposal::Supersede {
+        target_memory_id: ACTIVE_MEMORY_ID.to_owned(),
+        namespace: MemoryNamespace::Strategy,
+        canonical_key: canonical_key.to_owned(),
+        scope: activity_scope(Activity::Reading),
+        proposed_statement: "Verify the full paragraph before committing an answer.".to_owned(),
+        evidence_observation_ids: evidence_ids(evidence),
+    }
+}
+
 fn cognitive_origin(source_class: MemorySourceClass) -> MemoryProposalOrigin {
     MemoryProposalOrigin::CognitiveRuntime { source_class }
 }
@@ -590,6 +601,100 @@ fn exact_active_and_same_batch_identities_are_duplicates() {
             MemoryProposalDisposition::Duplicate,
         ]
     );
+}
+
+#[test]
+fn supersede_same_identity_is_pending_but_batch_repeats_are_duplicates() {
+    let replacement = supersede_proposal("strategy.reading.existing", &[READING_EVIDENCE_ID]);
+    let report = MemoryProposalValidator::default().validate(
+        &proposal_batch(vec![
+            replacement.clone(),
+            replacement,
+            add_proposal("strategy.reading.existing", &[READING_EVIDENCE_ID]),
+        ]),
+        cognitive_origin(MemorySourceClass::Inferred),
+        &validation_snapshot(),
+    );
+
+    assert!(report.batch_issues.is_empty());
+    assert!(report.decisions.iter().all(|decision| decision.issues.is_empty()));
+    assert_eq!(
+        report.decisions.iter().map(|decision| decision.disposition).collect::<Vec<_>>(),
+        vec![
+            MemoryProposalDisposition::Pending,
+            MemoryProposalDisposition::Duplicate,
+            MemoryProposalDisposition::Duplicate,
+        ]
+    );
+}
+
+#[test]
+fn supersede_excludes_only_its_target_from_active_identity_conflicts() {
+    for occupied_key in ["strategy.reading.existing", "strategy.reading.occupied"] {
+        let mut snapshot = validation_snapshot();
+        let mut other = snapshot.active_memory[0].clone();
+        other.id = "mem-other".to_owned();
+        other.canonical_key = occupied_key.to_owned();
+        snapshot.active_memory.push(other);
+        let report = MemoryProposalValidator::default().validate(
+            &proposal_batch(vec![supersede_proposal(occupied_key, &[READING_EVIDENCE_ID])]),
+            cognitive_origin(MemorySourceClass::Inferred),
+            &snapshot,
+        );
+        assert!(report.decisions[0].issues.is_empty());
+        assert_eq!(report.decisions[0].disposition, MemoryProposalDisposition::Duplicate);
+    }
+}
+
+#[test]
+fn supersede_same_identity_still_rejects_stale_cross_user_and_cross_scope_evidence() {
+    for (evidence, expected_issue) in [
+        ("obs-stale", "observation_not_found"),
+        ("obs-other-user", "observation_cross_user"),
+        ("obs-writing", "observation_scope_mismatch"),
+    ] {
+        let report = MemoryProposalValidator::default().validate(
+            &proposal_batch(vec![supersede_proposal("strategy.reading.existing", &[evidence])]),
+            cognitive_origin(MemorySourceClass::Inferred),
+            &validation_snapshot(),
+        );
+        assert_eq!(report.decisions[0].disposition, MemoryProposalDisposition::Rejected);
+        assert_issue(&report.decisions[0], expected_issue);
+    }
+}
+
+#[test]
+fn supersede_same_identity_requires_a_valid_target_and_authorized_origin() {
+    for expected_issue in [
+        "target_memory_not_found",
+        "target_memory_cross_user",
+        "target_memory_not_active",
+        "scope_mismatch",
+    ] {
+        let mut snapshot = validation_snapshot();
+        match expected_issue {
+            "target_memory_not_found" => snapshot.active_memory.clear(),
+            "target_memory_cross_user" => snapshot.active_memory[0].user_id = "user-2".to_owned(),
+            "target_memory_not_active" => snapshot.active_memory[0].status = MemoryStatus::Archived,
+            "scope_mismatch" => snapshot.active_memory[0].scope = activity_scope(Activity::Writing),
+            _ => unreachable!(),
+        }
+        let report = MemoryProposalValidator::default().validate(
+            &proposal_batch(vec![supersede_proposal("strategy.reading.existing", &[READING_EVIDENCE_ID])]),
+            cognitive_origin(MemorySourceClass::Inferred),
+            &snapshot,
+        );
+        assert_eq!(report.decisions[0].disposition, MemoryProposalDisposition::Rejected);
+        assert_issue(&report.decisions[0], expected_issue);
+    }
+
+    let report = MemoryProposalValidator::default().validate(
+        &proposal_batch(vec![supersede_proposal("strategy.reading.existing", &[READING_EVIDENCE_ID])]),
+        cognitive_origin(MemorySourceClass::UserExplicit),
+        &validation_snapshot(),
+    );
+    assert!(report.decisions.is_empty());
+    assert!(report.batch_issues.iter().any(|issue| issue.code == "origin_not_authorized"));
 }
 
 #[test]

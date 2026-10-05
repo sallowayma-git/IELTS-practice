@@ -407,6 +407,7 @@ fn default_available_minutes() -> u32 {
 pub struct StudyPlanItem {
     pub id: String,
     pub plan_id: String,
+    #[serde(serialize_with = "serialize_study_probe", deserialize_with = "deserialize_study_probe")]
     pub skill_probe: String,
     pub why_text: String,
     pub estimated_minutes: u32,
@@ -501,13 +502,99 @@ pub struct CreateStudyPlanCommand {
     pub items: Vec<CreateStudyPlanItemCommand>,
 }
 
+impl CreateStudyPlanCommand {
+    /// Adapt the sidecar proposal without reducing its probe to a skill key.
+    pub fn from_planner_proposal(proposal: &serde_json::Value) -> Result<Self, String> {
+        if !proposal.is_object() {
+            return Err("study plan proposal must be an object".into());
+        }
+        serde_json::from_value(serde_json::json!({
+            "userId": proposal.get("userId").cloned().unwrap_or_else(|| serde_json::json!("local")),
+            "goal": proposal.get("userGoal"),
+            "availableMinutes": proposal.get("totalEstimatedMinutes").cloned().unwrap_or_else(|| serde_json::json!(0)),
+            "targetDate": proposal.get("targetDate"),
+            "items": proposal.get("items").cloned().unwrap_or_else(|| serde_json::json!([])),
+        })).map_err(|error| error.to_string())
+    }
+}
+
 /// M12-04: a proposed item within a study plan command.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStudyPlanItemCommand {
+    #[serde(serialize_with = "serialize_study_probe", deserialize_with = "deserialize_study_probe")]
     pub skill_probe: String,
     pub why_text: String,
     pub estimated_minutes: u32,
+}
+
+/// The existing TEXT column keeps legacy skill keys verbatim and stores new
+/// probes as JSON. The wire emits an object for JSON and a string for old rows.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StructuredStudyProbe {
+    skill_key: String,
+    probe_kind: crate::SkillReviewProbe,
+    #[serde(default)]
+    avoid_asset_ids: Vec<String>,
+    #[serde(default)]
+    reason_codes: Vec<String>,
+}
+
+pub fn study_plan_probe_value(raw: &str) -> Result<serde_json::Value, String> {
+    if raw.trim().is_empty() {
+        return Err("skillProbe is required".into());
+    }
+    if !raw.trim_start().starts_with('{') {
+        return Ok(serde_json::Value::String(raw.into()));
+    }
+    if raw.len() > 16 * 1024 {
+        return Err("skillProbe exceeds 16 KiB".into());
+    }
+    let value: serde_json::Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    let probe: StructuredStudyProbe = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+    let _ = probe.probe_kind; // Deserialization enforces the canonical five-kind enum.
+    if probe.skill_key.trim().is_empty() || probe.skill_key.chars().count() > 64 {
+        return Err("skillProbe.skillKey must contain 1..64 characters".into());
+    }
+    validate_probe_ids(&probe.avoid_asset_ids, 32, "avoidAssetIds")?;
+    validate_probe_ids(&probe.reason_codes, 16, "reasonCodes")?;
+    Ok(value)
+}
+
+fn validate_probe_ids(ids: &[String], limit: usize, field: &str) -> Result<(), String> {
+    if ids.len() > limit {
+        return Err(format!("{field} exceeds {limit} entries"));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for id in ids {
+        if id.trim().is_empty() || id.chars().count() > 128 || id.chars().any(char::is_control) {
+            return Err(format!("{field} entries must be nonempty, at most 128 characters, without controls"));
+        }
+        if !seen.insert(id) {
+            return Err(format!("{field} entries must be unique"));
+        }
+    }
+    Ok(())
+}
+
+fn serialize_study_probe<S: serde::Serializer>(raw: &String, serializer: S) -> Result<S::Ok, S::Error> {
+    study_plan_probe_value(raw).map_err(serde::ser::Error::custom)?.serialize(serializer)
+}
+
+fn deserialize_study_probe<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let raw = match value {
+        serde_json::Value::String(raw) => raw,
+        // Old host callers also used the skillKey-only object.
+        serde_json::Value::Object(ref object) if object.len() == 1 && object.contains_key("skillKey") => {
+            object["skillKey"].as_str().ok_or_else(|| serde::de::Error::custom("skillKey must be a string"))?.to_string()
+        }
+        serde_json::Value::Object(_) => value.to_string(),
+        _ => return Err(serde::de::Error::custom("skillProbe must be a string or object")),
+    };
+    study_plan_probe_value(&raw).map_err(serde::de::Error::custom)?;
+    Ok(raw)
 }
 
 /// M12-04: command to mark a plan item done.
@@ -540,6 +627,56 @@ pub struct DecideApprovalCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn planner_proposal_retains_structured_probe_and_date() {
+        let probe = serde_json::json!({
+            "skillKey": "reading.tfng", "probeKind": "novel_item",
+            "avoidAssetIds": ["asset-1"], "reasonCodes": ["review_due"]
+        });
+        let command = CreateStudyPlanCommand::from_planner_proposal(&serde_json::json!({
+            "userGoal": "review", "totalEstimatedMinutes": 10, "targetDate": "2026-10-20",
+            "items": [{"skillProbe": probe, "whyText": "review due", "estimatedMinutes": 10}]
+        })).unwrap();
+        assert_eq!(command.user_id, "local");
+        assert_eq!(command.target_date.as_deref(), Some("2026-10-20"));
+        assert_eq!(serde_json::to_value(&command).unwrap()["items"][0]["skillProbe"], probe);
+    }
+
+    #[test]
+    fn structured_probe_validation_applies_to_wire_and_stored_text() {
+        let valid = serde_json::json!({"skillKey": "reading.tfng", "probeKind": "novel_item"});
+        let mut invalid = Vec::new();
+        for kind in [serde_json::json!("invalid"), serde_json::Value::Null] {
+            let mut probe = valid.clone();
+            probe["probeKind"] = kind;
+            invalid.push(probe);
+        }
+        for ids in [serde_json::json!([""]), serde_json::json!(["a", "a"]),
+                    serde_json::json!(["x".repeat(129)]), serde_json::json!([1]),
+                    serde_json::json!(vec!["a"; 33])] {
+            let mut probe = valid.clone();
+            probe["avoidAssetIds"] = ids;
+            invalid.push(probe);
+        }
+        for probe in invalid {
+            assert!(study_plan_probe_value(&probe.to_string()).is_err());
+            assert!(serde_json::from_value::<CreateStudyPlanItemCommand>(serde_json::json!({
+                "skillProbe": probe, "whyText": "review", "estimatedMinutes": 10
+            })).is_err());
+        }
+    }
+
+    #[test]
+    fn legacy_probe_wire_remains_a_string() {
+        for probe in [serde_json::json!("reading.tfng"), serde_json::json!({"skillKey": "reading.tfng"})] {
+            let item: CreateStudyPlanItemCommand = serde_json::from_value(serde_json::json!({
+                "skillProbe": probe, "whyText": "review", "estimatedMinutes": 10
+            })).unwrap();
+            assert_eq!(item.skill_probe, "reading.tfng");
+            assert_eq!(serde_json::to_value(item).unwrap()["skillProbe"], "reading.tfng");
+        }
+    }
 
     #[test]
     fn action_kind_gate_classification_is_total() {

@@ -66,6 +66,8 @@ REQUIRED_COACH_HOST_CAPABILITIES: dict[str, str] = {
 
 # Cognitive timeout for the whole enhanced path (host calls + model.invoke).
 # Conservative: keeps shadow from blocking the user-facing Rust baseline.
+# Output ceiling the host requires on every model.invoke.
+COACH_MODEL_MAX_TOKENS = 2_000
 DEFAULT_COGNITIVE_DEADLINE_MS = 12_000
 
 
@@ -179,7 +181,8 @@ class PythonPersonalizedCoach:
                 frozen_input,
                 started=started,
             )
-            quality_signals["learnerSkillStatePresent"] = bool(learner_state)
+            proficiencies = _extract_proficiencies(learner_state)
+            quality_signals["learnerSkillStatePresent"] = bool(proficiencies)
 
             # 2. Materialize the context plan (M5) — Rust re-fetches canonical text.
             context_pack = self._materialize_context(
@@ -194,7 +197,7 @@ class PythonPersonalizedCoach:
             strategy_id = select_strategy(
                 StrategySelectionInput(
                     skills_addressed=frozen_input.skills_addressed,
-                    skill_proficiencies=_extract_proficiencies(learner_state),
+                    skill_proficiencies=proficiencies,
                     memory_canonical_keys=frozen_input.selected_memory_canonical_keys,
                     prior_feedback_kinds=frozen_input.prior_feedback_kinds,
                     is_reask=frozen_input.is_reask,
@@ -299,8 +302,7 @@ class PythonPersonalizedCoach:
             result = self._bridge.invoke(
                 CAPABILITY_LEARNER_SKILL_STATE,
                 {
-                    "activity": frozen_input.activity,
-                    "skills": list(frozen_input.skills_addressed),
+                    "query": {"skillKeys": list(frozen_input.skills_addressed)},
                 },
                 trace_id=frozen_input.trace_id,
                 deadline_ms=self._deadline_ms,
@@ -361,6 +363,7 @@ class PythonPersonalizedCoach:
                             {"role": "user", "content": user_payload},
                         ],
                         "temperature": 0.0,
+                        "maxTokens": COACH_MODEL_MAX_TOKENS,
                     }
                 },
                 trace_id=frozen_input.trace_id,
@@ -402,16 +405,18 @@ def _extract_rendered_context(context_pack: dict[str, Any]) -> str:
 
 def _extract_proficiencies(learner_state: dict[str, Any]) -> dict[str, float]:
     """Best-effort proficiency extraction. Missing ⇒ 0.5 mid prior."""
-    skills = learner_state.get("skills")
+    skills = learner_state.get("states")
     if not isinstance(skills, list):
         return {}
     proficiencies: dict[str, float] = {}
     for entry in skills:
         if not isinstance(entry, dict):
             continue
-        skill = entry.get("skill")
-        proficiency = entry.get("proficiency")
-        if isinstance(skill, str) and isinstance(proficiency, (int, float)):
+        skill = entry.get("skillKey")
+        proficiency = entry.get("masteryMean")
+        if (isinstance(skill, str) and skill
+                and isinstance(proficiency, (int, float)) and not isinstance(proficiency, bool)
+                and 0.0 <= proficiency <= 1.0):
             proficiencies[skill] = float(proficiency)
     return proficiencies
 

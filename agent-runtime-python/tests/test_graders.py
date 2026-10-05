@@ -256,6 +256,9 @@ class GradeTraceTests(unittest.TestCase):
         class _StubBridge:
             def invoke(self, method, params, *, trace_id, deadline_ms, started_at):
                 assert method == "model.invoke"
+                # The host contract: a `request` carrying messages + maxTokens.
+                assert params["request"]["maxTokens"] == 32
+                assert params["request"]["messages"][0]["role"] == "user"
                 return {"score": 0.8}
 
         grade = grade_trace(

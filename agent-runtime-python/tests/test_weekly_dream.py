@@ -22,13 +22,22 @@ from ielts_agent.dream.types import (
 from ielts_agent.dream.weekly import (
     DEFAULT_COGNITIVE_DEADLINE_MS,
     MAX_RAW_PATTERNS,
+    MAX_SUPPORTING_IDS,
     MIN_CANDIDATE_POOL,
     MIN_SUPPORTING_MEMORY_IDS,
+    MODEL_MAX_ATTEMPTS,
+    MODEL_RETRY_BACKOFF_SECONDS,
     WeeklyDreamInput,
-    WeeklyDreamOrchestrator,
+    WeeklyDreamOrchestrator as _WeeklyDreamOrchestrator,
     fallback_result,
 )
 from ielts_agent.protocol import ProtocolError
+
+
+def WeeklyDreamOrchestrator(bridge, **kwargs):  # noqa: N802 - keeps the class-style call sites
+    """The production orchestrator, except that backoff never really sleeps."""
+    kwargs.setdefault("sleep", lambda seconds: None)
+    return _WeeklyDreamOrchestrator(bridge, **kwargs)
 
 
 def _capabilities(extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -330,8 +339,8 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         patterns = dream_call[1]["patterns"]
         self.assertEqual(len(patterns), 0)
 
-    def test_below_min_support_yields_zero_patterns(self) -> None:
-        """M8-01: < min supporting IDs → pattern dropped → zero patterns."""
+    def test_two_supports_reach_rust_authority(self) -> None:
+        """Memory count must not stand in for independent practice count."""
         bridge = FakeHostBridge(
             llm_patterns=[
                 _llm_pattern(supporting_ids=["mem-0", "mem-1"]),  # only 2
@@ -347,11 +356,11 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         )
         self.assertIsNone(result.fallback_reason)
         dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"], [])
+        self.assertEqual(dream_call[1]["patterns"][0]["supportingMemoryIds"], ["mem-0", "mem-1"])
 
     def test_below_min_candidate_pool_skips_llm(self) -> None:
         """M8-03: below the minimum candidate pool floor, skip the LLM call."""
-        bridge = FakeHostBridge(candidate_pool=_candidate_pool_wire(count=3))
+        bridge = FakeHostBridge(candidate_pool=_candidate_pool_wire(count=0))
         orchestrator = WeeklyDreamOrchestrator(bridge)
         result = orchestrator.run_weekly(
             WeeklyDreamInput(
@@ -425,8 +434,8 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertIn("dream_run_weekly_unavailable", result.fallback_reason)
         self.assertEqual(result.run_id, "")
 
-    def test_fail_closed_llm_failure_yields_zero_patterns(self) -> None:
-        """model.invoke failure → zero-pattern path (no fatal), not fallback."""
+    def test_llm_failure_is_a_fallback_not_an_empty_success(self) -> None:
+        """model.invoke failure → fallback, so the host can retry the week."""
         bridge = FakeHostBridge(
             fail_methods=frozenset({"model.invoke"}),
             dream_result=_dream_result_wire(validated=0, rejected=0, accepted=0),
@@ -439,12 +448,10 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
                 available_host_capabilities=_capabilities(),
             )
         )
-        # LLM failure → zero patterns submitted → success (not fallback).
-        self.assertIsNone(result.fallback_reason)
-        self.assertEqual(result.run_id, "weekly-run-1")
-        self.assertEqual(result.accepted, 0)
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"], [])
+        self.assertIn("model_invoke_failed", result.fallback_reason)
+        self.assertEqual(result.run_id, "")
+        # Nothing was submitted to the authority: no run row may claim success.
+        self.assertNotIn("dream.run_weekly", [call[0] for call in bridge.calls])
 
     def test_missing_capabilities_fallback(self) -> None:
         bridge = FakeHostBridge()
@@ -519,8 +526,8 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         dream_call = bridge.calls[-1]
         self.assertEqual(dream_call[1]["patterns"], [])
 
-    def test_malformed_llm_output_yields_zero_patterns(self) -> None:
-        """Parse failure → zero-pattern success, not fatal."""
+    def test_malformed_llm_output_fails_without_submission(self) -> None:
+        """Parse failure must not record a successful empty run."""
         bridge = FakeHostBridge(llm_content_override="not valid json {{{")
         orchestrator = WeeklyDreamOrchestrator(bridge)
         result = orchestrator.run_weekly(
@@ -530,9 +537,9 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
                 available_host_capabilities=_capabilities(),
             )
         )
-        self.assertIsNone(result.fallback_reason)
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"], [])
+        self.assertEqual(result.fallback_reason, "model_output_invalid_json")
+        self.assertEqual(result.run_id, "")
+        self.assertNotIn(CAPABILITY_DREAM_RUN_WEEKLY, [call[0] for call in bridge.calls])
 
     def test_empty_llm_patterns_yields_zero_pattern_success(self) -> None:
         """M8-01: empty LLM output is a success, not a fallback."""
@@ -658,11 +665,56 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertEqual(result.run_id, "")
 
     def test_default_deadline_constant(self) -> None:
-        self.assertEqual(DEFAULT_COGNITIVE_DEADLINE_MS, 20_000)
+        # Room for MODEL_MAX_ATTEMPTS provider-timeout-long calls plus backoff,
+        # and below the host's 420 s weekly budget.
+        self.assertEqual(DEFAULT_COGNITIVE_DEADLINE_MS, 400_000)
+        self.assertEqual(MODEL_MAX_ATTEMPTS, 3)
+        self.assertEqual(MODEL_RETRY_BACKOFF_SECONDS, (2.0, 5.0))
 
     def test_min_threshold_constants(self) -> None:
-        self.assertEqual(MIN_CANDIDATE_POOL, 6)
-        self.assertEqual(MIN_SUPPORTING_MEMORY_IDS, 3)
+        self.assertEqual(MIN_CANDIDATE_POOL, 1)
+        self.assertEqual(MIN_SUPPORTING_MEMORY_IDS, 1)
+
+    def test_single_memory_preserves_host_evidence_and_reaches_authority(self) -> None:
+        pool = [{"memoryId": "mem-observed", "summary": "Three distinct practices show repeated skimming.",
+                 "scope": "writing", "key": "irrelevant-key"}]
+        bridge = FakeHostBridge(candidate_pool={"candidates": pool},
+                                llm_patterns=[_llm_pattern(supporting_ids=["mem-observed"])])
+        result = WeeklyDreamOrchestrator(bridge).run_weekly(
+            WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
+        self.assertIsNone(result.fallback_reason)
+        model = next(params for method, params in bridge.calls if method == "model.invoke")
+        evidence = json.loads(model["request"]["messages"][1]["content"])["evidence"]
+        self.assertEqual(evidence, [{key: pool[0][key] for key in ("memoryId", "summary", "scope")}])
+        self.assertEqual(bridge.calls[-1][1]["patterns"][0]["supportingMemoryIds"], ["mem-observed"])
+
+    def test_support_bounds_membership_and_uniqueness(self) -> None:
+        orchestrator = WeeklyDreamOrchestrator(FakeHostBridge())
+        ids = [f"mem-{i}" for i in range(MAX_SUPPORTING_IDS + 1)]
+        pool_ids = set(ids)
+        for invalid in ([], [""], ["pending-1"], ["mem-missing"], ["mem-0", "mem-0"], ids):
+            with self.subTest(supports=invalid):
+                self.assertIsNone(orchestrator._validate_one_pattern(_llm_pattern(supporting_ids=invalid), pool_ids))
+        proposal = orchestrator._validate_one_pattern(_llm_pattern(supporting_ids=ids[:-1]), pool_ids)
+        self.assertIsNotNone(proposal)
+
+    def test_invalid_json_shapes_do_not_submit(self) -> None:
+        for content in ('{}', 'null', '{"patterns":null}', '{"patterns":[null]}', '', '[1]',
+                        '{"patterns":[],"invalid":NaN}',
+                        json.dumps({"patterns": [_llm_pattern()] * MAX_RAW_PATTERNS + [None]})):
+            with self.subTest(content=content):
+                bridge = FakeHostBridge(llm_content_override=content)
+                result = WeeklyDreamOrchestrator(bridge).run_weekly(
+                    WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
+                self.assertTrue(result.fallback_reason)
+                self.assertNotIn(CAPABILITY_DREAM_RUN_WEEKLY, [call[0] for call in bridge.calls])
+
+    def test_bare_empty_array_succeeds(self) -> None:
+        bridge = FakeHostBridge(llm_content_override="[]", dream_result=_dream_result_wire(validated=0, accepted=0))
+        result = WeeklyDreamOrchestrator(bridge).run_weekly(
+            WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
+        self.assertIsNone(result.fallback_reason)
+        self.assertEqual(bridge.calls[-1][1]["patterns"], [])
 
     def test_predicted_only_not_promoted(self) -> None:
         """M8-10: the orchestrator never promotes predicted-only memories.
@@ -693,6 +745,115 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         for pattern in dream_call[1]["patterns"]:
             for identifier in pattern["supportingMemoryIds"]:
                 self.assertNotIn("predicted", identifier)
+
+
+class ScriptedModelBridge(FakeHostBridge):
+    """Serves ``model.invoke`` from a script: each entry is the next reply
+    (a content string, a raw dict result) or an exception to raise."""
+
+    def __init__(self, script: list) -> None:
+        super().__init__()
+        self._script = list(script)
+
+    @property
+    def model_calls(self) -> int:
+        return sum(1 for method, _ in self.calls if method == "model.invoke")
+
+    def invoke(self, method, params, **kwargs):  # type: ignore[override]
+        if method != "model.invoke":
+            return super().invoke(method, params, **kwargs)
+        self.calls.append((method, dict(params)))
+        step = self._script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step if isinstance(step, dict) else {"content": step}
+
+
+def _transient() -> ProtocolError:
+    return ProtocolError("host_request_failed", "AI provider returned HTTP 503", retryable=True)
+
+
+class WeeklyRetryTests(unittest.TestCase):
+    """One attempt = at most MODEL_MAX_ATTEMPTS model calls, with backoff."""
+
+    def _run(self, script, **kwargs):
+        sleeps: list[float] = []
+        bridge = ScriptedModelBridge(script)
+        orchestrator = _WeeklyDreamOrchestrator(bridge, sleep=sleeps.append, **kwargs)
+        result = orchestrator.run_weekly(
+            WeeklyDreamInput(trace_id="t", window="2026-W41", available_host_capabilities=_capabilities()))
+        return result, bridge, sleeps
+
+    def _submitted(self, bridge: ScriptedModelBridge) -> bool:
+        return CAPABILITY_DREAM_RUN_WEEKLY in [call[0] for call in bridge.calls]
+
+    def test_first_call_success_makes_one_call_and_never_sleeps(self) -> None:
+        result, bridge, sleeps = self._run([_llm_content([_llm_pattern()])])
+        self.assertIsNone(result.fallback_reason)
+        self.assertEqual((bridge.model_calls, sleeps), (1, []))
+
+    def test_a_transient_provider_error_is_retried_with_backoff(self) -> None:
+        result, bridge, sleeps = self._run([_transient(), _llm_content([_llm_pattern()])])
+        self.assertIsNone(result.fallback_reason)
+        self.assertEqual(bridge.model_calls, 2)
+        self.assertEqual(sleeps, [2.0])
+        self.assertTrue(self._submitted(bridge))
+
+    def test_malformed_output_is_retried_in_every_shape(self) -> None:
+        for bad in ("not json at all", "", "{}", '{"patterns": null}', '{"patterns": [1]}', "[1]",
+                    {"content": None}, {"nothing": "here"}, {"content": "   "}):
+            with self.subTest(bad=bad):
+                result, bridge, sleeps = self._run([bad, bad, _llm_content([_llm_pattern()])])
+                self.assertIsNone(result.fallback_reason)
+                self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
+
+    def test_the_attempt_is_bounded_to_three_calls_then_fails_closed(self) -> None:
+        result, bridge, sleeps = self._run(["nope", "still nope", "never json"])
+        self.assertEqual(result.fallback_reason, "model_output_invalid_json")
+        self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
+        self.assertFalse(self._submitted(bridge), "a failed attempt submits nothing")
+        # The extra scripted answers must be untouched: the loop never makes a fourth call.
+        result, bridge, _ = self._run([_transient()] * 3 + [_llm_content([_llm_pattern()])])
+        self.assertIn("model_invoke_failed:ProtocolError", result.fallback_reason)
+        self.assertEqual(bridge.model_calls, 3)
+
+    def test_provider_errors_and_bad_output_share_one_budget(self) -> None:
+        result, bridge, sleeps = self._run([_transient(), "garbage", _transient()])
+        self.assertTrue(result.fallback_reason)
+        self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
+
+    def test_a_genuine_empty_result_is_a_success_and_never_retried(self) -> None:
+        for empty in ('{"patterns": []}', "[]"):
+            with self.subTest(empty=empty):
+                result, bridge, sleeps = self._run([empty])
+                self.assertIsNone(result.fallback_reason)
+                self.assertEqual((bridge.model_calls, sleeps), (1, []))
+                self.assertEqual(bridge.calls[-1][1]["patterns"], [])
+
+    def test_unfixable_failures_are_not_retried(self) -> None:
+        for error in (
+            ProtocolError("host_request_failed", "AI provider returned HTTP 401: bad key", retryable=False),
+            ProtocolError("deadline_exceeded", "cognitive request deadline expired", retryable=True),
+            RuntimeError("unexpected"),
+        ):
+            with self.subTest(error=error):
+                result, bridge, sleeps = self._run([error, _llm_content([_llm_pattern()])])
+                self.assertTrue(result.fallback_reason)
+                self.assertEqual((bridge.model_calls, sleeps), (1, []))
+
+    def test_no_retry_is_started_without_time_for_it(self) -> None:
+        # 4 s of budget cannot hold a 2 s pause plus a 5 s attempt.
+        result, bridge, sleeps = self._run(["garbage", _llm_content([_llm_pattern()])],
+                                           cognitive_deadline_ms=4_000)
+        self.assertEqual(result.fallback_reason, "model_output_invalid_json")
+        self.assertEqual((bridge.model_calls, sleeps), (1, []))
+
+    def test_every_retry_carries_the_same_bounded_request(self) -> None:
+        _, bridge, _ = self._run(["garbage", "garbage", _llm_content([])])
+        requests = [params["request"] for method, params in bridge.calls if method == "model.invoke"]
+        self.assertEqual(len(requests), 3)
+        self.assertTrue(all(request == requests[0] for request in requests))
+        self.assertEqual(requests[0]["maxTokens"], 1_500)
 
 
 if __name__ == "__main__":

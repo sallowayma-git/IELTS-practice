@@ -7,16 +7,16 @@
 //! the rendered context, and persists the snapshot. Python cannot inject
 //! arbitrary prompt text — it only proposes IDs, and Rust materializes them.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ielts_domain::{
     estimate_tokens, rendered_hash, ContextManifest, ContextMaterializedItem,
-    ContextMaterializedSection, ContextPack, ContextPlan, ContextSection, CONTEXT_HARD_TOKEN_CEILING,
-    CONTEXT_PLANNER_VERSION, CONTEXT_PLAN_SCHEMA_VERSION,
+    ContextMaterializedSection, ContextPack, ContextPlan, ContextSection,
+    CONTEXT_HARD_TOKEN_CEILING, CONTEXT_PLANNER_VERSION, CONTEXT_PLAN_SCHEMA_VERSION,
 };
 
-use crate::ApplicationError;
 use crate::corpus::CorpusExportStore;
+use crate::ApplicationError;
 
 /// Soul/policy section Rust injects. Python can never remove or override it.
 /// In production this is sourced from the canonical Soul definition; here it
@@ -41,11 +41,39 @@ pub trait ContextSnapshotStore {
 pub struct ContextMaterializerService<'a> {
     corpus: &'a dyn CorpusExportStore,
     snapshots: &'a dyn ContextSnapshotStore,
+    current_task: Option<&'a str>,
 }
 
 impl<'a> ContextMaterializerService<'a> {
     pub fn new(corpus: &'a dyn CorpusExportStore, snapshots: &'a dyn ContextSnapshotStore) -> Self {
-        Self { corpus, snapshots }
+        Self {
+            corpus,
+            snapshots,
+            current_task: None,
+        }
+    }
+
+    /// Only the host supplies task text; a planner's corpus IDs cannot become
+    /// task instructions. This value must come from the trusted active task.
+    pub fn with_current_task(mut self, text: &'a str) -> Self {
+        self.current_task = Some(text);
+        self
+    }
+
+    /// Webview/sidecar scopes are requests, not authority to disclose secrets.
+    pub fn materialize_for_caller(
+        &self,
+        plan: &ContextPlan,
+        scope: &str,
+    ) -> Result<ContextPack, ApplicationError> {
+        if !matches!(scope, "public" | "internal") {
+            return Err(ApplicationError::new(
+                "context.unauthorized_scope",
+                "caller cannot elevate context scope",
+                false,
+            ));
+        }
+        self.materialize(plan, scope)
     }
 
     /// Execute the nine-step fail-closed materialization gate.
@@ -60,10 +88,18 @@ impl<'a> ContextMaterializerService<'a> {
     ) -> Result<ContextPack, ApplicationError> {
         // Step 1: validate schema/planner capability version.
         validate_plan_header(plan)?;
+        validate_plan_ids(plan)?;
+        if !matches!(scope, "public" | "internal" | "restricted" | "private") {
+            return Err(ApplicationError::new(
+                "context.invalid_scope",
+                "unknown context scope",
+                false,
+            ));
+        }
 
         // Collect every stable ID the planner ranked, preserving rank order.
         let ranked_ids: Vec<String> = plan.ranked_item_ids.clone();
-        if ranked_ids.is_empty() && plan.sections.iter().all(|s| s.item_ids.is_empty()) {
+        if ranked_ids.is_empty() && self.current_task.is_none() {
             return Err(ApplicationError::new(
                 "context.empty_plan",
                 "context plan has no item ids to materialize",
@@ -73,33 +109,106 @@ impl<'a> ContextMaterializerService<'a> {
 
         // Step 2 + 4: verify stable IDs exist + re-fetch canonical text.
         // Rust never trusts Python-supplied text; it re-reads canonical source.
-        let fetched = self
-            .corpus
-            .fetch_chunks(&ielts_domain::CorpusFetchQuery { ids: ranked_ids.clone() })?;
+        let fetched = self.corpus.fetch_chunks(&ielts_domain::CorpusFetchQuery {
+            ids: ranked_ids.clone(),
+        })?;
 
         // Step 3: re-check authorization. Any missing or restricted/private chunk
         // not explicitly allowed by scope fails closed.
-        let canonical: BTreeMap<String, &ielts_domain::CorpusChunk> = fetched
+        let mut canonical: BTreeMap<String, &ielts_domain::CorpusChunk> = fetched
             .chunks
             .iter()
             .map(|chunk| (chunk.chunk_id.clone(), chunk))
             .collect();
-        if !fetched.missing_ids.is_empty() {
+        if !fetched.missing_ids.is_empty()
+            || canonical.len() != ranked_ids.len()
+            || ranked_ids.iter().any(|id| !canonical.contains_key(id))
+        {
             return Err(ApplicationError::new(
                 "context.unknown_stable_ids",
-                format!("plan referenced unknown stable ids: {}", fetched.missing_ids.join(",")),
+                format!(
+                    "plan referenced unknown stable ids: {}",
+                    fetched.missing_ids.join(",")
+                ),
                 false,
             ));
+        }
+
+        // Validate every source assignment and authority before trimming can hide it.
+        for section in &plan.sections {
+            for id in &section.item_ids {
+                validate_source_section(canonical[id], section.section)?;
+            }
+        }
+        for item_id in &ranked_ids {
+            let chunk = canonical[item_id];
+            if !is_authorized(chunk, scope) {
+                return Err(ApplicationError::new(
+                    "context.unauthorized_item",
+                    format!(
+                        "plan item {item_id} sensitivity {} not authorized for scope {scope}",
+                        chunk.sensitivity
+                    ),
+                    false,
+                ));
+            }
+        }
+
+        let task_chunk = self.current_task.map(|text| ielts_domain::CorpusChunk {
+            chunk_id: "host:current_task".into(),
+            source_kind: "host_task".into(),
+            source_id: "current_task".into(),
+            source_version: 1,
+            activity: plan.task_kind.clone(),
+            content_hash: rendered_hash(text),
+            sensitivity: "internal".into(),
+            text: text.into(),
+            updated_at: String::new(),
+        });
+        if let Some(task) = &task_chunk {
+            canonical.insert(task.chunk_id.clone(), task);
         }
 
         // Build per-item materialized records in plan section order, then
         // assemble sections. The Soul/policy section is injected by Rust and
         // cannot be removed by the plan.
         let mut sections: Vec<ContextMaterializedSection> = Vec::new();
-        let mut used_tokens: u32 = 0;
+        if let Some(task) = &task_chunk {
+            let tokens =
+                estimate_tokens(&render_item(&task.chunk_id, &task.source_kind, &task.text));
+            sections.push(ContextMaterializedSection {
+                section: ContextSection::CurrentTask,
+                estimated_tokens: tokens,
+                items: vec![ContextMaterializedItem {
+                    item_id: task.chunk_id.clone(),
+                    section: ContextSection::CurrentTask,
+                    source_kind: task.source_kind.clone(),
+                    source_id: task.source_id.clone(),
+                    content_hash: task.content_hash.clone(),
+                    sensitivity: task.sensitivity.clone(),
+                    estimated_tokens: tokens,
+                    rank: 0,
+                    score: 1.0,
+                    inclusion_reason: "required:host_current_task".into(),
+                }],
+            });
+            let section_budget = plan
+                .sections
+                .iter()
+                .find(|section| section.section == ContextSection::CurrentTask)
+                .map_or(0, |section| section.requested_token_budget);
+            if section_budget > 0
+                && estimate_tokens(&render_context(&sections, &canonical)) > section_budget
+            {
+                return Err(ApplicationError::new(
+                    "context.token_ceiling_exceeded",
+                    "current task exceeds section budget",
+                    false,
+                ));
+            }
+        }
 
-        // Step 5: inject Soul/policy first (it has truncation rank 1, just below
-        // CURRENT_TASK, so it survives truncation unless CURRENT_TASK is dropped).
+        // Step 5: inject mandatory Soul/policy; neither host section is droppable.
         let soul_tokens = estimate_tokens(SOUL_POLICY_TEXT);
         sections.push(ContextMaterializedSection {
             section: ContextSection::SoulPolicy,
@@ -117,17 +226,24 @@ impl<'a> ContextMaterializerService<'a> {
             }],
             estimated_tokens: soul_tokens,
         });
-        used_tokens += soul_tokens;
-
-        let mut rank: u32 = 0;
+        let soul_budget = plan.sections.iter()
+            .find(|section| section.section == ContextSection::SoulPolicy)
+            .map_or(0, |section| section.requested_token_budget);
+        if soul_budget > 0 {
+            truncate_to_budget(vec![sections.last().unwrap().clone()], soul_budget, &canonical)?;
+        }
         for section_plan in &plan.sections {
-            if section_plan.section == ContextSection::SoulPolicy {
+            if section_plan.section == ContextSection::SoulPolicy
+                || section_plan.item_ids.is_empty()
+            {
                 // Python must not duplicate the Rust-injected Soul section.
                 continue;
             }
             let mut items: Vec<ContextMaterializedItem> = Vec::new();
             let mut section_tokens: u32 = 0;
-            for item_id in &section_plan.item_ids {
+            let mut ids = section_plan.item_ids.clone();
+            ids.sort_by_key(|id| ranked_ids.iter().position(|ranked| ranked == id).unwrap());
+            for item_id in &ids {
                 let chunk = canonical.get(item_id).ok_or_else(|| {
                     ApplicationError::new(
                         "context.unresolved_item",
@@ -135,23 +251,14 @@ impl<'a> ContextMaterializerService<'a> {
                         false,
                     )
                 })?;
-                if !is_authorized(chunk, scope) {
-                    return Err(ApplicationError::new(
-                        "context.unauthorized_item",
-                        format!(
-                            "plan item {item_id} sensitivity {} not authorized for scope {scope}",
-                            chunk.sensitivity
-                        ),
-                        false,
-                    ));
-                }
-                let tokens = estimate_tokens(&chunk.text);
+                let tokens =
+                    estimate_tokens(&render_item(item_id, &chunk.source_kind, &chunk.text));
                 let reason = plan
                     .inclusion_reasons
                     .get(item_id)
                     .and_then(|reasons| reasons.first().cloned())
                     .unwrap_or_else(|| format!("section:{}", section_plan.section.as_str()));
-                rank += 1;
+                let rank = ranked_ids.iter().position(|id| id == item_id).unwrap() as u32 + 1;
                 section_tokens += tokens;
                 items.push(ContextMaterializedItem {
                     item_id: item_id.clone(),
@@ -166,24 +273,37 @@ impl<'a> ContextMaterializerService<'a> {
                     inclusion_reason: reason,
                 });
             }
-            used_tokens += section_tokens;
-            sections.push(ContextMaterializedSection {
+            let section = ContextMaterializedSection {
                 section: section_plan.section,
                 items,
                 estimated_tokens: section_tokens,
-            });
+            };
+            if section_plan.requested_token_budget > 0 {
+                sections.extend(truncate_to_budget(
+                    vec![section],
+                    section_plan.requested_token_budget,
+                    &canonical,
+                )?);
+            } else {
+                sections.push(section);
+            }
         }
 
-        // Step 6: enforce hard token ceiling. Truncate by section priority
+        // Step 6: enforce hard token ceiling. Trim items by section priority
         // (lowest truncation_rank dropped last) — but SOUL and CURRENT_TASK are
         // never dropped. Over-budget after trimming fails closed.
-        if used_tokens > CONTEXT_HARD_TOKEN_CEILING {
-            sections = truncate_to_budget(sections, CONTEXT_HARD_TOKEN_CEILING, &mut used_tokens)?;
-        }
+        let budget = if plan.requested_token_budget == 0 {
+            CONTEXT_HARD_TOKEN_CEILING
+        } else {
+            plan.requested_token_budget.min(CONTEXT_HARD_TOKEN_CEILING)
+        };
+        sections = truncate_to_budget(sections, budget, &canonical)?;
 
         // Step 7: generate manifest + rendered_hash. Rendering is deterministic:
         // section order is fixed, item order follows rank, text is canonical.
-        let rendered_context = render_context(&sections);
+        sections.sort_by_key(|section| section.section.truncation_rank());
+        let rendered_context = render_context(&sections, &canonical);
+        let used_tokens = estimate_tokens(&rendered_context);
         let content_hash = rendered_hash(&rendered_context);
 
         // Round-3 audit (R7b): `snapshot_id` is a fresh identity per
@@ -235,10 +355,10 @@ impl<'a> ContextMaterializerService<'a> {
             run_id: None,
             planner_version: plan.planner_version.clone(),
             scope: scope.to_string(),
-            token_budget: CONTEXT_HARD_TOKEN_CEILING,
+            token_budget: budget,
             used_tokens,
             content_hash: content_hash.clone(),
-            rendered_at: now_iso(),
+            rendered_at: chrono::Utc::now().to_rfc3339(),
             sections,
         };
 
@@ -246,8 +366,12 @@ impl<'a> ContextMaterializerService<'a> {
         let query_plan_json = serde_json::to_value(plan).map_err(|error| {
             ApplicationError::new("context.serialize_failed", error.to_string(), false)
         })?;
-        self.snapshots
-            .insert_context_snapshot(&manifest, &rendered_context, &query_plan_json, scope)?;
+        self.snapshots.insert_context_snapshot(
+            &manifest,
+            &rendered_context,
+            &query_plan_json,
+            scope,
+        )?;
 
         // Step 9: return the audited ContextPack. The caller may now model.invoke.
         Ok(ContextPack {
@@ -262,7 +386,10 @@ fn validate_plan_header(plan: &ContextPlan) -> Result<(), ApplicationError> {
     if plan.schema_version != CONTEXT_PLAN_SCHEMA_VERSION {
         return Err(ApplicationError::new(
             "context.schema_version_mismatch",
-            format!("expected schema version {CONTEXT_PLAN_SCHEMA_VERSION}, got {}", plan.schema_version),
+            format!(
+                "expected schema version {CONTEXT_PLAN_SCHEMA_VERSION}, got {}",
+                plan.schema_version
+            ),
             false,
         ));
     }
@@ -279,26 +406,76 @@ fn validate_plan_header(plan: &ContextPlan) -> Result<(), ApplicationError> {
     Ok(())
 }
 
+fn validate_plan_ids(plan: &ContextPlan) -> Result<(), ApplicationError> {
+    let ranked: BTreeSet<_> = plan.ranked_item_ids.iter().collect();
+    let mut selected = BTreeSet::new();
+    let mut sections = BTreeSet::new();
+    let mut valid = ranked.len() == plan.ranked_item_ids.len()
+        && ranked.len() <= ielts_domain::MAX_CORPUS_FETCH_IDS;
+    for section in &plan.sections {
+        valid &= sections.insert(section.section.truncation_rank());
+        valid &= section.section != ContextSection::SoulPolicy || section.item_ids.is_empty();
+        for id in &section.item_ids {
+            valid &= selected.insert(id) && !id.trim().is_empty();
+        }
+    }
+    if !valid || ranked != selected {
+        return Err(ApplicationError::new(
+            "context.inconsistent_plan_ids",
+            "ranked and section IDs must match exactly, without duplicates or caller-supplied Soul",
+            false,
+        ));
+    }
+    Ok(())
+}
+
 /// Authorization re-check. The materializer never trusts the planner's
 /// sensitivity field — it re-reads it from the canonical chunk. Restricted and
 /// private chunks are only authorized for matching restricted/private scopes.
 fn is_authorized(chunk: &ielts_domain::CorpusChunk, scope: &str) -> bool {
     match chunk.sensitivity.as_str() {
-        "public" | "internal" => true,
+        "public" => true,
+        "normal" | "internal" => scope != "public",
         "restricted" => scope == "restricted" || scope == "private",
         "private" => scope == "private",
         _ => false,
     }
 }
 
-/// Drop the lowest-priority sections (highest truncation_rank) until under
-/// budget. SOUL_POLICY and CURRENT_TASK are never dropped.
+/// The current corpus gateway exports curated reading/writing material only.
+/// It has no preference, profile, learner, memory, journal or few-shot source
+/// contract. New source kinds fail closed until their ownership rules exist.
+fn validate_source_section(
+    chunk: &ielts_domain::CorpusChunk,
+    section: ContextSection,
+) -> Result<(), ApplicationError> {
+    if matches!(
+        chunk.source_kind.as_str(),
+        "reading_asset" | "writing_topic"
+    ) && section == ContextSection::RetrievedCorpus
+    {
+        return Ok(());
+    }
+    Err(ApplicationError::new(
+        "context.invalid_source_section",
+        format!(
+            "canonical source {} cannot enter {}",
+            chunk.source_kind,
+            section.as_str()
+        ),
+        false,
+    ))
+}
+
+/// Trim one lowest-ranked item from the lowest-priority section at a time.
+/// Include all rendering overhead in the budget; remove empty optional sections.
+/// SOUL_POLICY and CURRENT_TASK are never trimmed.
 fn truncate_to_budget(
     mut sections: Vec<ContextMaterializedSection>,
     ceiling: u32,
-    used_tokens: &mut u32,
+    canonical: &BTreeMap<String, &ielts_domain::CorpusChunk>,
 ) -> Result<Vec<ContextMaterializedSection>, ApplicationError> {
-    while *used_tokens > ceiling {
+    while estimate_tokens(&render_context(&sections, canonical)) > ceiling {
         // Find the droppable section with the highest (lowest priority) rank.
         let candidate = sections
             .iter()
@@ -306,19 +483,31 @@ fn truncate_to_budget(
             .filter(|(_, section)| {
                 section.section != ContextSection::SoulPolicy
                     && section.section != ContextSection::CurrentTask
+                    && !section.items.is_empty()
             })
             .max_by_key(|(_, section)| section.section.truncation_rank())
-            .map(|(index, section)| (index, section.estimated_tokens));
+            .map(|(index, _)| index);
         match candidate {
-            Some((index, tokens)) => {
-                *used_tokens = used_tokens.saturating_sub(tokens);
-                sections.remove(index);
+            Some(index) => {
+                let section = &mut sections[index];
+                let item_index = section
+                    .items
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|(_, item)| item.rank)
+                    .map(|(index, _)| index)
+                    .unwrap();
+                let removed = section.items.remove(item_index);
+                section.estimated_tokens -= removed.estimated_tokens;
+                if section.items.is_empty() {
+                    sections.remove(index);
+                }
             }
             _ => {
                 return Err(ApplicationError::new(
                     "context.token_ceiling_exceeded",
                     format!(
-                        "rendered context {used_tokens} exceeds hard ceiling {ceiling} after trimming"
+                        "rendered context exceeds token estimate ceiling {ceiling} after trimming"
                     ),
                     false,
                 ));
@@ -330,7 +519,10 @@ fn truncate_to_budget(
 
 /// Deterministic rendering: one block per section, header + item bodies, in
 /// canonical section order. The hash is stable for identical input.
-fn render_context(sections: &[ContextMaterializedSection]) -> String {
+fn render_context(
+    sections: &[ContextMaterializedSection],
+    canonical: &BTreeMap<String, &ielts_domain::CorpusChunk>,
+) -> String {
     let mut out = String::new();
     // Render in fixed priority order so hash is independent of plan section order.
     let mut ordered: Vec<&ContextMaterializedSection> = sections.iter().collect();
@@ -344,14 +536,8 @@ fn render_context(sections: &[ContextMaterializedSection]) -> String {
             if item.item_id == "soul:policy" {
                 out.push_str(SOUL_POLICY_TEXT);
             } else {
-                // The canonical text was already fetched; here we emit the
-                // provenance header. The full canonical body is persisted in the
-                // snapshot row for audit; the model gateway re-reads it via
-                // fetch_chunks at invoke time.
-                out.push_str(&format!(
-                    "- {} ({}, {} tok)\n",
-                    item.item_id, item.source_kind, item.estimated_tokens
-                ));
+                let chunk = canonical[&item.item_id];
+                out.push_str(&render_item(&item.item_id, &item.source_kind, &chunk.text));
             }
         }
         out.push('\n');
@@ -359,13 +545,8 @@ fn render_context(sections: &[ContextMaterializedSection]) -> String {
     out
 }
 
-/// Minimal UTC timestamp without pulling chrono into the application crate.
-/// Sufficient for audit rows; the db layer writes its own `created_at` with
-/// higher precision at insert time, so this is informational only.
-fn now_iso() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    format!("1970-01-01T00:00:{secs:05}Z")
+fn render_item(id: &str, source_kind: &str, text: &str) -> String {
+    // JSON quoting keeps source text/IDs from forging section delimiters. All
+    // reference material remains data, never a policy/system instruction.
+    serde_json::json!({"itemId": id, "sourceKind": source_kind, "text": text}).to_string() + "\n"
 }

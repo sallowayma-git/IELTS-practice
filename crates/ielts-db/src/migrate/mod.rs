@@ -135,6 +135,16 @@ fn migrations() -> &'static [Migration] {
                 name: "coach_outcome_link_fk_fix",
                 sql: include_str!("../../migrations/0024_coach_outcome_link_fk_fix.sql"),
             },
+            Migration {
+                version: 25,
+                name: "prompt_release_predecessor",
+                sql: include_str!("../../migrations/0025_prompt_release_predecessor.sql"),
+            },
+            Migration {
+                version: 26,
+                name: "attempt_asset_revision",
+                sql: include_str!("../../migrations/0026_attempt_asset_revision.sql"),
+            },
         ]
     })
 }

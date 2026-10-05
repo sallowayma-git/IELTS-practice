@@ -259,10 +259,17 @@ pub struct StrategyFeedbackRecord {
 pub struct RecordStrategyOutcomeCommand {
     pub assignment_id: String,
     pub outcome_kind: StrategyOutcomeKind,
+    /// Required for attribution; optional on the wire for backwards-compatible
+    /// decoding. Missing evidence is rejected, never treated as success.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observation_id: Option<String>,
+    /// Optional consistency assertion. Asset identity/novelty comes from the
+    /// persisted observation's event evidence, not this field's presence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub novel_asset_id: Option<String>,
+    /// Optional consistency assertion for the measured score minus the latest
+    /// comparable pre-assignment score. The DB derives this value; absent
+    /// comparable scores remain unknown, not a fabricated improvement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub score_delta: Option<f64>,
 }
@@ -324,7 +331,8 @@ impl UserStrategyState {
     }
 
     /// Bounded confidence formula: success / (success + failure), clamped to
-    /// [0, 1]. Returns 0 when there is no evidence. No global reinforcement
+    /// [0, 1]. Returns 0 when there is no evidence, meaning unknown (distinguish
+    /// this from observed failure using evidence_count). No global reinforcement
     /// learning is performed (M10-05).
     pub fn clamp_confidence(success: i64, failure: i64) -> f64 {
         let s = success.max(0) as f64;

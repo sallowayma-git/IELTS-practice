@@ -355,7 +355,7 @@ fn create_study_plan_item_inner(
     item: &CreateStudyPlanItemCommand,
     now: &str,
 ) -> DbResult<String> {
-    require_text(&item.skill_probe, "skillProbe")?;
+    ielts_domain::study_plan_probe_value(&item.skill_probe).map_err(DbError::Validation)?;
     require_text(&item.why_text, "whyText")?;
     let id = format!("spi-{}", Uuid::new_v4());
     tx.execute(

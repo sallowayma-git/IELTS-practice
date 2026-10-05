@@ -1,8 +1,8 @@
 //! M4 learner-model application contracts.
 //!
 //! Production callers only receive bounded, read-only snapshots. Rebuild and
-//! verification are kept on a separate admin port so a UI command cannot
-//! accidentally mutate the learner model.
+//! verification are kept on a separate admin port. Production reads may
+//! repair stale derived rows in Rust; callers cannot supply or write state.
 
 use ielts_domain::{
     LearnerRebuildReport, LearnerStateQuery, LearnerStateSnapshot, LearnerVerifyReport,

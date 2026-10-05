@@ -32,6 +32,11 @@ const SIDECAR_NAME: &str = "ielts-agent-runtime";
 const SIDECAR_BUILD_ID: &str = env!("IELTS_AGENT_RUNTIME_BUILD_ID");
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const COGNITIVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// The weekly run makes up to `MODEL_MAX_ATTEMPTS` (3) model calls with backoff;
+/// each may take as long as the provider timeout (5..=300 s, default 60 s). The
+/// sidecar bounds itself by `WEEKLY_RUN_DEADLINE_MS` (400 s), slightly below this.
+#[cfg(feature = "daily-dream-v1")]
+const WEEKLY_REQUEST_TIMEOUT: Duration = Duration::from_secs(420);
 const START_TIMEOUT: Duration = Duration::from_secs(30);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 /// Methods the HOST calls ON the sidecar. Every entry must be a method the host
@@ -39,8 +44,8 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 /// otherwise the handshake succeeds against a sidecar that cannot serve the
 /// call, and the failure surfaces later as `method_not_found` mid-run.
 ///
-/// Round-3 audit (item 8): `dream.daily` and `planner.study_plan` were sent in
-/// production (`run_daily_dream` / `run_study_planner`) but appeared in neither
+/// Round-3 audit (item 8): `dream.weekly` and `planner.study_plan` were sent in
+/// production (`run_weekly_dream` / `run_study_planner`) but appeared in neither
 /// this list nor `requestedCapabilities`, so a sidecar build without them
 /// negotiated cleanly and then failed on first use. The sidecar has always
 /// declared both in `SUPPORTED_CAPABILITIES` (protocol.py), so only this side
@@ -55,7 +60,7 @@ const REQUIRED_RUNTIME_CAPABILITIES: &[(&str, &str)] = &[
     ("runtime.shutdown", "1"),
     ("memory.candidates.extract", "1"),
     ("memory.candidates.generate", "1"),
-    ("dream.daily", "1"),
+    ("dream.weekly", "1"),
     ("planner.study_plan", "1"),
 ];
 /// Reverse-RPC surface the HOST provides TO the sidecar (the opposite direction
@@ -85,10 +90,6 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     ("memory.search_active", "1"),
     #[cfg(feature = "context-compiler-v1")]
     ("learning.evidence_by_ids", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("journal.build_daily", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("dream.run_daily", "1"),
     #[cfg(feature = "daily-dream-v1")]
     ("dream.run_weekly", "1"),
     #[cfg(feature = "daily-dream-v1")]
@@ -135,106 +136,91 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     #[cfg(feature = "agent-threads-v1")]
     ("study_plan.mark_done", "1"),
 ];
-/// Wire DTO for the Python planner proposal (M12-04). Mirrors
-/// ``StudyPlanItem.to_wire()``: each item carries a structured skillProbe —
-/// the persistence schema stores only the probe string (the skill key).
-/// Unknown proposal fields (itemId/questionKind/schemaVersion) are ignored
-/// here; Python's strict model is the producer-side guard.
-#[cfg(feature = "agent-threads-v1")]
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-struct PlannerProposalWire {
-    user_id: String,
-    user_goal: String,
-    total_estimated_minutes: u32,
-    items: Vec<PlannerItemWire>,
+/// Mirrors the sidecar's `weekly.MIN_CANDIDATE_POOL`: below this the weekly
+/// call would have nothing to consolidate, so the host never starts it.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) const WEEKLY_MIN_CANDIDATE_POOL: usize = 1;
+
+/// Saturday or Sunday, in `now`'s own zone.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn is_weekend<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> bool {
+    use chrono::{Datelike, Weekday};
+    matches!(now.weekday(), Weekday::Sat | Weekday::Sun)
 }
 
-#[cfg(feature = "agent-threads-v1")]
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-struct PlannerItemWire {
-    skill_probe: PlannerProbeWire,
-    why_text: String,
-    estimated_minutes: u32,
-}
-
-#[cfg(feature = "agent-threads-v1")]
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-struct PlannerProbeWire {
-    skill_key: String,
-}
-
-#[cfg(feature = "agent-threads-v1")]
-impl Default for PlannerProposalWire {
-    fn default() -> Self {
-        Self {
-            user_id: "local".into(),
-            user_goal: String::new(),
-            total_estimated_minutes: 0,
-            items: Vec::new(),
-        }
-    }
-}
-
-#[cfg(feature = "agent-threads-v1")]
-impl Default for PlannerItemWire {
-    fn default() -> Self {
-        Self {
-            skill_probe: PlannerProbeWire::default(),
-            why_text: String::new(),
-            estimated_minutes: 0,
-        }
-    }
-}
-
-#[cfg(feature = "agent-threads-v1")]
-impl Default for PlannerProbeWire {
-    fn default() -> Self {
-        Self {
-            skill_key: String::new(),
-        }
-    }
-}
-
-/// Strict YYYY-MM-DD day key for journal/dream day params. Junk day strings
-/// would otherwise be published as journal rows and dedupe keys.
-/// Resolve the weekly `window` the sidecar sends into the ISO day whose journal
-/// anchors the run's `dream_runs` row.
+/// The weekly window the host consolidates at `now`, or `None` when it is not due.
 ///
-/// `WeeklyDreamInput.window` is documented as "ISO date or week identifier", and
-/// the sidecar sends an ISO week (`2026-W33`). Both forms are accepted; anything
-/// else is a hard error rather than a guess, because the resolved day decides
-/// which journal the run is attributed to.
-fn resolve_weekly_window_day(window: &str) -> Result<String, String> {
-    if is_iso_day(window) {
-        return Ok(window.to_string());
+/// Due only on a Saturday or Sunday (in `now`'s own zone). The window runs from
+/// the end of the last COMPLETED consolidation (exclusive) to `now`, never more
+/// than `WEEKLY_MAX_LOOKBACK_DAYS` back, so a missed weekend is folded into the
+/// next one with no separate catch-up path. Its key is the ISO week of `now`,
+/// which Saturday and Sunday share: one weekend, at most one completed run.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn plan_weekly_window<Tz: chrono::TimeZone>(
+    now: &chrono::DateTime<Tz>,
+    last_completed_end: Option<chrono::DateTime<chrono::Utc>>,
+) -> Option<ielts_db::WeeklyWindow> {
+    use chrono::{Datelike, Duration, Utc};
+    if !is_weekend(now) {
+        return None;
     }
-    // ISO week form: YYYY-Www -> the Monday of that week.
-    let (year_part, week_part) = window
-        .split_once("-W")
-        .ok_or_else(|| format!("dream.run_weekly window must be YYYY-MM-DD or YYYY-Www: {window}"))?;
-    let year: i32 = year_part
-        .parse()
-        .map_err(|_| format!("dream.run_weekly window has a non-numeric year: {window}"))?;
-    let week: u32 = week_part
-        .parse()
-        .map_err(|_| format!("dream.run_weekly window has a non-numeric week: {window}"))?;
-    chrono::NaiveDate::from_isoywd_opt(year, week, chrono::Weekday::Mon)
-        .map(|date| date.format("%Y-%m-%d").to_string())
-        .ok_or_else(|| format!("dream.run_weekly window is not a real ISO week: {window}"))
+    let end = chrono::DateTime::<Utc>::from_timestamp(now.timestamp(), 0)?;
+    let floor = end - Duration::days(ielts_db::WEEKLY_MAX_LOOKBACK_DAYS);
+    let start = last_completed_end.map_or(floor, |last| last.max(floor));
+    let week = now.iso_week();
+    (start < end).then(|| ielts_db::WeeklyWindow::new(format!("{}-W{:02}", week.year(), week.week()), start, end))
 }
 
-fn is_iso_day(day: &str) -> bool {
-    let bytes = day.as_bytes();
-    bytes.len() == 10
-        && bytes[4] == b'-'
-        && bytes[7] == b'-'
-        && bytes
-            .iter()
-            .enumerate()
-            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+/// Start of `now`'s calendar day in `now`'s zone, as a UTC instant: the retry
+/// bound is one weekly attempt per local day.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn local_day_start_utc<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> chrono::DateTime<chrono::Utc> {
+    use chrono::{Duration, NaiveTime, Utc};
+    now.timezone()
+        .from_local_datetime(&now.date_naive().and_time(NaiveTime::MIN))
+        .earliest()
+        .map_or_else(|| now.with_timezone(&Utc) - Duration::hours(24), |start| start.with_timezone(&Utc))
+}
+
+/// Bounded candidate pool for one weekly window. Returns stable ids + summaries
+/// clipped to 400 chars (they are the bulk of the weekly prompt, up to 50 rows;
+/// a pattern needs the gist, not the full body), plus whether the 50-row bound
+/// truncated the pool. The pool is the active, observed memories last observed
+/// inside the window (start exclusive, end inclusive).
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn weekly_candidate_pool(
+    db: &AppDb,
+    window: &ielts_db::WeeklyWindow,
+) -> Result<Value, RuntimeHostError> {
+    let instant = |value: chrono::DateTime<chrono::Utc>| value.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let mut candidates = db.with_conn(|conn| {
+        let mut statement = conn.prepare(r#"
+            SELECT json_object('memoryId', id, 'summary', substr(content, 1, 400), 'scope', scope)
+            FROM memory_items
+            WHERE user_id = ?1 AND status = 'active' AND source_class != 'predicted'
+              AND sensitivity = 'normal' AND trim(content) != ''
+              AND julianday(last_observed_at) > julianday(?2)
+              AND julianday(last_observed_at) <= julianday(?3)
+            ORDER BY julianday(last_observed_at) DESC, id ASC
+            LIMIT 51
+        "#)?;
+        let rows = statement.query_map(
+            rusqlite::params!["local", instant(window.start), instant(window.end)],
+            |row| row.get::<_, String>(0),
+        )?;
+        rows.map(|row| {
+            let value = row?;
+            serde_json::from_str::<Value>(&value)
+                .map_err(|error| ielts_db::DbError::Message(error.to_string()))
+        })
+        .collect::<ielts_db::DbResult<Vec<_>>>()
+    }).map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
+    let truncated = candidates.len() > 50;
+    candidates.truncate(50);
+    Ok(json!({
+        "candidates": candidates,
+        "truncated": truncated,
+    }))
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -304,6 +290,10 @@ pub(crate) enum RuntimeHostError {
     Process(String),
     #[error("runtime request timed out")]
     Timeout,
+    /// The model provider failed; `retryable` is the gateway's own verdict
+    /// (5xx / 429 / timeout / connect), which the sidecar's retry loop honours.
+    #[error("{message}")]
+    Provider { message: String, retryable: bool },
     #[error("runtime response is invalid: {0}")]
     InvalidResponse(String),
 }
@@ -439,16 +429,143 @@ impl Default for RuntimeManager {
     }
 }
 
+fn validate_local_rpc_user(value: &Value) -> Result<(), RuntimeHostError> {
+    match value {
+        Value::Object(fields) => {
+            for (key, value) in fields {
+                if matches!(key.as_str(), "userId" | "user_id") && value.as_str() != Some("local") {
+                    return Err(RuntimeHostError::InvalidResponse("RPC user differs from host-owned local user".into()));
+                }
+                validate_local_rpc_user(value)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                validate_local_rpc_user(value)?;
+            }
+        }
+        _ => {},
+    }
+    Ok(())
+}
+
+#[cfg(feature = "context-compiler-v1")]
+fn local_learning_evidence(
+    conn: &rusqlite::Connection,
+    ids: &[String],
+) -> ielts_db::DbResult<ielts_domain::LearningEventEvidenceBatch> {
+    if ids.len() > 200 {
+        return Err(ielts_db::DbError::Validation("too many evidence ids".into()));
+    }
+    for id in ids {
+        let foreign: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM learning_events WHERE id=?1 AND user_id!='local')",
+            [id], |row| row.get(0),
+        )?;
+        if foreign {
+            return Err(ielts_db::DbError::Validation("evidence differs from host-owned local user".into()));
+        }
+    }
+    ielts_db::learning_events_by_ids(conn, ids)
+}
+
 struct PendingRequest {
     trace_id: String,
     sender: oneshot::Sender<Result<Value, RuntimeHostError>>,
 }
 
 struct ActiveRun {
+    kind: RunKind,
     trace_id: String,
     candidate_input: Value,
     generation: u64,
     deadline: Instant,
+}
+
+/// Selected exclusively from the method sent by the host, never sidecar params.
+/// `WeeklyDream` is only ever started by the host's weekend worker; it may
+/// read the candidate pool, call the model and submit patterns for host
+/// re-validation, and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunKind {
+    MemoryCandidate,
+    #[cfg(feature = "daily-dream-v1")]
+    WeeklyDream,
+    #[cfg(feature = "agent-threads-v1")]
+    StudyPlanner,
+}
+
+impl RunKind {
+    fn from_host_method(method: &str) -> Result<Self, RuntimeHostError> {
+        match method {
+            "memory.candidates.generate" => Ok(Self::MemoryCandidate),
+            #[cfg(feature = "daily-dream-v1")]
+            "dream.weekly" => Ok(Self::WeeklyDream),
+            #[cfg(feature = "agent-threads-v1")]
+            "planner.study_plan" => Ok(Self::StudyPlanner),
+            _ => Err(RuntimeHostError::InvalidResponse(format!(
+                "unsupported cognitive host method: {method}"
+            ))),
+        }
+    }
+
+    fn allows(self, method: &str) -> bool {
+        // Feature-disabled routes and unknown methods also fail closed.
+        if is_host_only_method(method)
+            || !PROVIDED_HOST_CAPABILITIES.iter().any(|(name, _)| *name == method)
+        {
+            return false;
+        }
+        match self {
+            Self::MemoryCandidate => matches!(method,
+                "tool.invoke" | "model.invoke" | "learning.learner_skill_state"
+                | "memory.search_active" | "learning.evidence_by_ids"),
+            #[cfg(feature = "daily-dream-v1")]
+            Self::WeeklyDream => matches!(method,
+                "memory.candidate_pool" | "model.invoke" | "dream.run_weekly"),
+            #[cfg(feature = "agent-threads-v1")]
+            Self::StudyPlanner => matches!(method,
+                "learning.learner_skill_state" | "memory.search_active" | "study_plan.create"),
+        }
+    }
+}
+
+impl RunKind {
+    /// Wall-clock budget of one run of this kind.
+    fn budget(self) -> Duration {
+        match self {
+            #[cfg(feature = "daily-dream-v1")]
+            Self::WeeklyDream => WEEKLY_REQUEST_TIMEOUT,
+            _ => COGNITIVE_REQUEST_TIMEOUT,
+        }
+    }
+
+    /// Transport retries the model gateway may spend inside ONE `model.invoke`.
+    /// A run that owns a semantic retry loop (the weekly orchestrator retries on
+    /// provider errors and on malformed output) takes none here, so the two
+    /// layers never multiply: the weekly run makes at most 3 provider requests.
+    fn model_transport_retries(self) -> u32 {
+        match self {
+            #[cfg(feature = "daily-dream-v1")]
+            Self::WeeklyDream => 0,
+            _ => crate::ai::MAX_RETRIES,
+        }
+    }
+}
+
+impl ActiveRun {
+    fn new(host_method: &str, trace_id: &str, candidate_input: Value, generation: u64)
+        -> Result<Self, RuntimeHostError>
+    {
+        let kind = RunKind::from_host_method(host_method)?;
+        Ok(Self {
+            kind,
+            trace_id: trace_id.to_owned(),
+            candidate_input,
+            generation,
+            deadline: Instant::now() + kind.budget(),
+        })
+    }
 }
 
 pub(crate) struct RuntimeReservation {
@@ -653,6 +770,7 @@ impl RuntimeManager {
         })
     }
 
+    #[cfg(feature = "developer-tools")]
     pub(crate) async fn generate_memory_candidates(
         &self,
         reservation: &mut RuntimeReservation,
@@ -660,24 +778,22 @@ impl RuntimeManager {
         candidate_input: Value,
         max_candidates: u32,
     ) -> Result<Value, RuntimeHostError> {
+        let host_method = "memory.candidates.generate";
         let active = {
             let mut process = self.inner.lock().await;
             if process.active_run.is_some() {
                 return Err(RuntimeHostError::Busy);
             }
-            let active = Arc::new(ActiveRun {
-                trace_id: trace_id.to_owned(),
-                candidate_input,
-                generation: process.generation,
-                deadline: Instant::now() + COGNITIVE_REQUEST_TIMEOUT,
-            });
+            let active = Arc::new(ActiveRun::new(
+                host_method, trace_id, candidate_input, process.generation,
+            )?);
             process.active_run = Some(active.clone());
             active
         };
         reservation.arm();
         let result = self
             .request_internal(
-                "memory.candidates.generate",
+                host_method,
                 json!({"maxCandidates": max_candidates}),
                 Some(trace_id),
                 &[RuntimeState::Ready],
@@ -693,40 +809,49 @@ impl RuntimeManager {
         result
     }
 
-    /// M7-06: drive one bounded daily-dream consolidation pass in the Python
-    /// sidecar. The orchestrator fetches today's facts via ``journal.build_daily``
-    /// and submits proposals via ``dream.run_daily`` (reverse-RPC); a fallback
-    /// result comes back as an ok payload with ``fallbackReason`` set, so the
-    /// caller can mark the run failed without treating it as a transport error.
+    /// The single weekly consolidation call: the sidecar reads the host-bounded
+    /// candidate pool, makes one model call (retried by the sidecar, at most 3
+    /// calls) and submits patterns that the host re-validates by stable memory
+    /// id. `binding` carries the host-owned window token and the worker identity.
     #[cfg(feature = "daily-dream-v1")]
-    pub(crate) async fn run_daily_dream(
+    pub(crate) async fn run_weekly_dream(
         &self,
         reservation: &mut RuntimeReservation,
         trace_id: &str,
-        day: &str,
+        window: &ielts_db::WeeklyWindow,
+        binding: Value,
+    ) -> Result<Value, RuntimeHostError> {
+        self.run_bound_dream(reservation, "dream.weekly", trace_id, json!({ "window": window.token() }), binding).await
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    async fn run_bound_dream(
+        &self,
+        reservation: &mut RuntimeReservation,
+        host_method: &str,
+        trace_id: &str,
+        params: Value,
+        binding: Value,
     ) -> Result<Value, RuntimeHostError> {
         let active = {
             let mut process = self.inner.lock().await;
             if process.active_run.is_some() {
                 return Err(RuntimeHostError::Busy);
             }
-            let active = Arc::new(ActiveRun {
-                trace_id: trace_id.to_owned(),
-                candidate_input: json!({ "day": day }),
-                generation: process.generation,
-                deadline: Instant::now() + COGNITIVE_REQUEST_TIMEOUT,
-            });
+            let active = Arc::new(ActiveRun::new(
+                host_method, trace_id, binding, process.generation,
+            )?);
             process.active_run = Some(active.clone());
             active
         };
         reservation.arm();
         let result = self
             .request_internal(
-                "dream.daily",
-                json!({ "day": day }),
+                host_method,
+                params,
                 Some(trace_id),
                 &[RuntimeState::Ready],
-                COGNITIVE_REQUEST_TIMEOUT,
+                active.kind.budget(),
             )
             .await;
         drop(active);
@@ -749,24 +874,22 @@ impl RuntimeManager {
         trace_id: &str,
         planner_input: Value,
     ) -> Result<Value, RuntimeHostError> {
+        let host_method = "planner.study_plan";
         let active = {
             let mut process = self.inner.lock().await;
             if process.active_run.is_some() {
                 return Err(RuntimeHostError::Busy);
             }
-            let active = Arc::new(ActiveRun {
-                trace_id: trace_id.to_owned(),
-                candidate_input: planner_input.clone(),
-                generation: process.generation,
-                deadline: Instant::now() + COGNITIVE_REQUEST_TIMEOUT,
-            });
+            let active = Arc::new(ActiveRun::new(
+                host_method, trace_id, planner_input.clone(), process.generation,
+            )?);
             process.active_run = Some(active.clone());
             active
         };
         reservation.arm();
         let result = self
             .request_internal(
-                "planner.study_plan",
+                host_method,
                 json!({ "plannerInput": planner_input }),
                 Some(trace_id),
                 &[RuntimeState::Ready],
@@ -1055,20 +1178,24 @@ impl RuntimeManager {
                 "error": {
                     "code": "host_request_failed",
                     "message": error.to_string(),
-                    "retryable": matches!(error, RuntimeHostError::Timeout),
+                    "retryable": matches!(
+                        error,
+                        RuntimeHostError::Timeout | RuntimeHostError::Provider { retryable: true, .. }
+                    ),
                     "details": {}
                 }
             }),
         }
     }
 
-    async fn dispatch_host_request(
+    /// Pure pre-routing gate: no AppHandle, DB access, tool audit, or provider.
+    /// All reverse-RPC routes must pass this host-owned run authorization first.
+    async fn authorize_host_request(
         &self,
-        app: &AppHandle,
         generation: u64,
         trace_id: &str,
         value: &Value,
-    ) -> Result<Value, RuntimeHostError> {
+    ) -> Result<(Arc<ActiveRun>, Duration), RuntimeHostError> {
         if value.get("protocolVersion").and_then(Value::as_u64)
             != Some(PROTOCOL_VERSION.into())
         {
@@ -1106,23 +1233,46 @@ impl RuntimeManager {
             .checked_duration_since(Instant::now())
             .ok_or(RuntimeHostError::Timeout)?;
         let request_budget = remaining.min(Duration::from_millis(deadline_ms));
+        let method = value.get("method").and_then(Value::as_str)
+            .ok_or_else(|| RuntimeHostError::InvalidResponse("host method is missing".into()))?;
+        if !active.kind.allows(method) {
+            return Err(RuntimeHostError::InvalidResponse(format!(
+                "host method is not allowed for {:?}: {method}", active.kind
+            )));
+        }
         let params = value
             .get("params")
             .and_then(Value::as_object)
             .ok_or_else(|| RuntimeHostError::InvalidResponse("host params must be an object".into()))?;
-        // Round-3 audit (A2): explicit deny-list checked BEFORE routing, so a
-        // future edit to the match arms below cannot silently re-expose an
-        // authority operation to the sidecar.
-        if let Some(method) = value.get("method").and_then(Value::as_str) {
-            if is_host_only_method(method) {
-                return Err(RuntimeHostError::InvalidResponse(format!(
-                    "host method is not available to the runtime: {method}"
-                )));
+        validate_local_rpc_user(&Value::Object(params.clone()))?;
+        // The weekly window is host-owned: the sidecar cannot widen the pool or
+        // attribute a run to another week.
+        #[cfg(feature = "daily-dream-v1")]
+        if matches!(active.kind, RunKind::WeeklyDream) && method != "model.invoke" {
+            let window = params.get("window").and_then(Value::as_str);
+            let user = params.get("userId").and_then(Value::as_str).unwrap_or("local");
+            if window.is_none() || window != active.candidate_input.get("window").and_then(Value::as_str) || user != "local" {
+                return Err(RuntimeHostError::InvalidResponse("weekly RPC user/window differs from host-owned run".into()));
             }
         }
+        Ok((active, request_budget))
+    }
+
+    async fn dispatch_host_request(
+        &self,
+        app: &AppHandle,
+        generation: u64,
+        trace_id: &str,
+        value: &Value,
+    ) -> Result<Value, RuntimeHostError> {
+        let (active, request_budget) = self.authorize_host_request(generation, trace_id, value).await?;
+        let params = value.get("params").and_then(Value::as_object)
+            .expect("params validated by pre-routing authorization");
         match value.get("method").and_then(Value::as_str) {
             Some("tool.invoke") => self.invoke_candidate_input_tool(app, trace_id, params, &active).await,
-            Some("model.invoke") => self.invoke_model(app, params, request_budget).await,
+            Some("model.invoke") => {
+                self.invoke_model(app, params, request_budget, active.kind.model_transport_retries()).await
+            }
             #[cfg(feature = "context-compiler-v1")]
             Some("model.embed.batch") => self.invoke_embed(app, params, request_budget).await,
             #[cfg(feature = "context-compiler-v1")]
@@ -1139,11 +1289,8 @@ impl RuntimeManager {
                 self.invoke_learner_memory_reads(app, method, params).await
             }
             #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("journal.build_daily"
-                | "dream.run_daily"
-                | "dream.run_weekly"
-                | "memory.candidate_pool")) => {
-                self.invoke_journal_dream(app, method, params).await
+            Some(method @ ("dream.run_weekly" | "memory.candidate_pool")) => {
+                self.invoke_journal_dream(app, method, params, &active).await
             }
             #[cfg(feature = "daily-dream-v1")]
             Some(method @ ("strategy.select"
@@ -1242,7 +1389,7 @@ impl RuntimeManager {
                             .to_string();
                         serialize_result(
                             ContextMaterializerService::new(&store, &store)
-                                .materialize(&plan, &scope),
+                                .materialize_for_caller(&plan, &scope),
                         )
                     }
                     Err(error) => Err(error.to_string()),
@@ -1267,9 +1414,7 @@ impl RuntimeManager {
         method: &str,
         params: &serde_json::Map<String, Value>,
     ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::{
-            CognitiveReadService, LearnerModelService, MemoryService,
-        };
+        use ielts_application::MemoryService;
         use ielts_domain::{LearnerStateQuery, MemoryContextQuery};
 
         const READ_TOOL_RESPONSE_BYTES: usize = 64 * 1024;
@@ -1282,57 +1427,14 @@ impl RuntimeManager {
                     params.get("query").cloned().unwrap_or(Value::Null),
                 ) {
                     Ok(query) => {
-                        // Merged envelope: the state snapshot carries `states`
-                        // (skill views/uncertainty) while the planner's
-                        // enrichment reads `needs` (M4 scheduler review rows).
-                        // Needs are best-effort: a scheduler miss degrades to
-                        // an empty list, never a failed snapshot.
-                        let needs_result = db.with_conn(|conn| {
-                            ielts_db::skill_review_needs_snapshot(
-                                conn,
-                                &ielts_domain::SkillReviewNeedsQuery {
-                                    due_before: None,
-                                    after_skill_key: query.after_skill_key.clone(),
-                                    limit: query.limit,
-                                },
-                            )
-                        });
-                        // Degrading to an empty list is deliberate (above), but the
-                        // failure must not be invisible: an empty `needs` is
-                        // otherwise indistinguishable from "nothing is due", so a
-                        // scheduler read error silently yields a study plan built
-                        // from no review needs at all, and the plan looks fine.
-                        // Log it, and tell the consumer which of the two happened.
-                        let needs_available = needs_result.is_ok();
-                        if let Err(error) = &needs_result {
-                            tracing::warn!(
-                                error = %error,
-                                "skill review needs unavailable; the planner will                                  see an empty review list for this snapshot"
-                            );
-                        }
-                        let needs = needs_result
-                            .map(|snapshot| snapshot.needs)
-                            .unwrap_or_default();
-                        let merged = serialize_result(
-                            LearnerModelService::new(&store).state_snapshot(&query),
-                        )
-                        .map(|mut value| {
-                            if let Some(object) = value.as_object_mut() {
-                                object.insert(
-                                    "needs".to_string(),
-                                    serde_json::to_value(needs).unwrap_or(Value::Array(vec![])),
-                                );
-                                // Lets the sidecar separate "no reviews due" from
-                                // "the scheduler read failed" instead of guessing
-                                // from an empty list.
-                                object.insert(
-                                    "needsAvailable".to_string(),
-                                    Value::Bool(needs_available),
-                                );
-                            }
-                            value
-                        });
-                        merged
+                        // State and review needs share one fresh transaction,
+                        // one user and one skill page. Projection errors are
+                        // failures, not a fabricated "nothing needs review".
+                        db.with_conn(|conn| ielts_db::learner_skill_snapshot(conn, &query))
+                            .map_err(|error| error.to_string())
+                            .and_then(|snapshot| {
+                                serde_json::to_value(snapshot).map_err(|error| error.to_string())
+                            })
                     }
                     Err(error) => Err(error.to_string()),
                 }
@@ -1348,19 +1450,18 @@ impl RuntimeManager {
                 }
             }
             "learning.evidence_by_ids" => {
-                match params.get("ids").and_then(Value::as_array) {
+                (|| -> Result<Value, String> { match params.get("ids").and_then(Value::as_array) {
                     Some(array) => {
                         let ids = array
                             .iter()
-                            .filter_map(Value::as_str)
-                            .map(str::to_owned)
-                            .collect::<Vec<_>>();
-                        serialize_result(
-                            CognitiveReadService::new(&store).learning_events_by_ids(&ids),
-                        )
+                            .map(|id| id.as_str().map(str::to_owned).ok_or_else(|| "evidence ids must be strings".to_string()))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        db.with_conn(|conn| local_learning_evidence(conn, &ids))
+                            .map_err(|error| error.to_string())
+                            .and_then(|batch| serde_json::to_value(batch).map_err(|error| error.to_string()))
                     }
                     None => Err("evidence ids must be an array".to_string()),
-                }
+                } })()
             }
             other => Err(format!("unsupported learner/memory read method: {other}")),
         };
@@ -1376,171 +1477,49 @@ impl RuntimeManager {
         Ok(value)
     }
 
-    /// M7-03/M7-07: serve the Daily Journal build + Daily Dream run reverse-RPC.
+    /// Serve the weekly-dream reverse-RPC: the bounded candidate pool and the
+    /// pattern submission.
     ///
-    /// Python asks Rust to build the deterministic daily facts (no LLM) or to
-    /// record dream proposals as pending candidates. Rust is the authority: the
-    /// journal is a deterministic derived projection, and dreams only produce
-    /// pending candidates that must still go through M3
-    /// `promote_memory_candidate` before touching active memory.
+    /// Rust is the authority. The window is the host-issued token of the active
+    /// run (`authorize_host_request` already pinned the sidecar's `window` to it);
+    /// patterns are re-validated by stable memory id and applied as relations +
+    /// supersede, never as deletes. The daily journal is deterministic and has no
+    /// sidecar involvement.
     #[cfg(feature = "daily-dream-v1")]
     async fn invoke_journal_dream(
         &self,
         app: &AppHandle,
         method: &str,
         params: &serde_json::Map<String, Value>,
+        active: &ActiveRun,
     ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::{DreamService, JournalService};
-        use ielts_domain::{DailyDreamQuery, DailyJournalQuery, PatternProposal, WeeklyDreamQuery};
+        use ielts_application::JournalService;
+        use ielts_domain::{DailyJournalQuery, PatternProposal, WeeklyDreamQuery};
 
         const JOURNAL_DREAM_RESPONSE_BYTES: usize = 256 * 1024;
 
         let db = app.state::<AppDb>();
         let store = crate::app::application_store::ApplicationStore::new(db.inner());
+        if active.candidate_input.get("workerId").and_then(Value::as_str)
+            .is_some_and(|worker| worker.starts_with("daily-worker-"))
+            && !db.with_conn(ielts_db::background_jobs::automatic_learning_enabled)
+                .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))? {
+            return Err(RuntimeHostError::Cancelled);
+        }
+        let window = active.candidate_input.get("window").and_then(Value::as_str)
+            .and_then(ielts_db::WeeklyWindow::parse)
+            .ok_or_else(|| RuntimeHostError::InvalidResponse("weekly run has no valid host-owned window".into()))?;
         let result: Result<Value, String> = match method {
-            "journal.build_daily" => {
-                // Python sends {day, userId?} (dream daily orchestrator);
-                // mirror the dream.run_daily envelope.
-                let outcome = (|| -> Result<Value, String> {
-                    let day = params
-                        .get("day")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| "journal.build_daily requires day".to_string())?;
-                    let user_id = params
-                        .get("userId")
-                        .and_then(Value::as_str)
-                        .unwrap_or("local");
-                    if !is_iso_day(day) {
-                        return Err(format!(
-                            "journal.build_daily day must be YYYY-MM-DD: {day}"
-                        ));
-                    }
-                    serialize_result(
-                        JournalService::new(&store).build_facts(&DailyJournalQuery {
-                            user_id: user_id.to_string(),
-                            journal_date: day.to_string(),
-                        }),
-                    )
-                })();
-                outcome
-            }
-            "dream.run_daily" => {
-                // M7-07/M7-08: Rust is the authority. Proposals are parsed
-                // strictly (a malformed proposal is a visible rejection, never
-                // a silent drop), the run drives queued→running→completed,
-                // and the reply matches the Python dream contract:
-                // {runId, accepted, rejected, failed}.
-                let dream_service = DreamService::new(&store);
-                let journal_service = JournalService::new(&store);
-                let now = chrono::Utc::now().to_rfc3339();
-                let outcome = (|| -> Result<Value, String> {
-                    // Python sends {day, userId?, inputHash?, proposals}. The
-                    // dream run row references the day's journal (FK), so
-                    // resolve the published journal or build+insert the
-                    // deterministic one before claiming a run.
-                    let day = params
-                        .get("day")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| "dream.run_daily requires day".to_string())?
-                        .to_string();
-                    if !is_iso_day(&day) {
-                        return Err(format!("dream.run_daily day must be YYYY-MM-DD: {day}"));
-                    }
-                    let user_id = params
-                        .get("userId")
-                        .and_then(Value::as_str)
-                        .unwrap_or("local")
-                        .to_string();
-                    let journal_query = DailyJournalQuery {
-                        user_id: user_id.clone(),
-                        journal_date: day.clone(),
-                    };
-                    let journal = match journal_service
-                        .load_latest_journal(&journal_query)
-                        .map_err(|error| error.to_string())?
-                    {
-                        Some(journal) => journal,
-                        None => journal_service
-                            .build_facts(&journal_query)
-                            .and_then(|facts| journal_service.insert_journal(&facts, None))
-                            .map_err(|error| error.to_string())?,
-                    };
-                    let query = DailyDreamQuery {
-                        user_id: user_id.clone(),
-                        journal_id: journal.id,
-                    };
-                    let mut proposals = Vec::new();
-                    let mut parse_rejected = 0usize;
-                    if let Some(array) = params.get("proposals").and_then(Value::as_array) {
-                        for item in array {
-                            match serde_json::from_value::<ielts_domain::DreamProposal>(item.clone())
-                            {
-                                Ok(proposal) => proposals.push(proposal),
-                                Err(_) => parse_rejected += 1,
-                            }
-                        }
-                    }
-                    let run = dream_service
-                        .insert_dream_run(
-                            &query,
-                            params.get("inputHash").and_then(Value::as_str),
-                        )
-                        .map_err(|error| error.to_string())?;
-                    let result = (|| -> Result<Value, String> {
-                        dream_service
-                            .start_dream_run(&run.id, &now)
-                            .map_err(|error| error.to_string())?;
-                        let (candidates, capacity_rejected) = dream_service
-                            .record_proposals(&run.id, &proposals)
-                            .map_err(|error| error.to_string())?;
-                        let output_hash = Self::dream_output_hash(&candidates);
-                        dream_service
-                            .finish_dream_run(&run.id, &output_hash, &now)
-                            .map_err(|error| error.to_string())?;
-                        Ok(json!({
-                            "runId": run.id,
-                            "accepted": candidates.len(),
-                            "rejected": parse_rejected + capacity_rejected,
-                            "failed": 0,
-                        }))
-                    })();
-                    if let Err(error) = &result {
-                        // Fail-closed: record the run failure before surfacing
-                        // the error channel back to Python.
-                        let _ = dream_service.fail_run(&run.id, &json!({"error": error}), &now);
-                    }
-                    result
-                })();
-                outcome
-            }
             "dream.run_weekly" => {
-                // M8-02: Rust re-validates sidecar-proposed cross-scope patterns
-                // by stable memory ID (never trusting the LLM index), applies
+                // Rust re-validates sidecar-proposed cross-scope patterns by
+                // stable memory ID (never trusting the LLM index), applies
                 // consolidation as relations + supersede (never deletes), and
-                // returns a report. Empty validated is success (M8-01).
+                // returns a flat report. Empty validated is success (M8-01).
                 //
-                // Round-3 audit (A3): this arm previously read
-                // `params["query"]` as a `WeeklyDreamQuery`. The sidecar sends
-                // `{window, patterns}` and has never sent `query`, so the
-                // deserialize saw `Null` against a struct with two required
-                // fields and the arm returned an error on every real call —
-                // the whole weekly path was dead on arrival. It also returned
-                // `WeeklyDreamResult`, whose counts are arrays nested under
-                // `report`, while the sidecar reads TOP-LEVEL ints
-                // (`validated`/`rejected`/`accepted`) and silently defaults
-                // them to 0. Both halves are on record as a dormant P1 in
-                // .planning/agent_backend_audit_20260824/findings.md:132.
-                //
-                // The window resolves to a journal the same way the daily arm
-                // does, so the run gets a real FK-checked `dream_runs` row, and
-                // the reply now matches the flat contract the sidecar parses.
+                // The run row is FK-anchored on the journal of the window's end
+                // day, resolved the same way the daily worker does.
                 let journal_service = JournalService::new(&store);
                 (|| -> Result<Value, String> {
-                    let window = params
-                        .get("window")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| "dream.run_weekly requires window".to_string())?;
-                    let day = resolve_weekly_window_day(window)?;
                     let user_id = params
                         .get("userId")
                         .and_then(Value::as_str)
@@ -1548,7 +1527,7 @@ impl RuntimeManager {
                         .to_string();
                     let journal_query = DailyJournalQuery {
                         user_id: user_id.clone(),
-                        journal_date: day,
+                        journal_date: window.anchor_day(),
                     };
                     let journal = match journal_service
                         .load_latest_journal(&journal_query)
@@ -1561,7 +1540,7 @@ impl RuntimeManager {
                             .map_err(|error| error.to_string())?,
                     };
                     // A malformed proposal is a visible rejection, never a
-                    // silent drop — same rule the daily arm follows.
+                    // silent drop.
                     let mut proposals = Vec::new();
                     let mut parse_rejected = 0usize;
                     if let Some(array) = params.get("patterns").and_then(Value::as_array) {
@@ -1577,7 +1556,7 @@ impl RuntimeManager {
                         journal_id: journal.id,
                     };
                     let result =
-                        crate::commands::journal::run_weekly_consolidation(db.inner(), &query, &proposals)
+                        crate::commands::journal::run_weekly_consolidation(db.inner(), &query, &proposals, &window)
                             .map_err(|error| error.to_string())?;
                     Ok(json!({
                         "runId": result.run_id,
@@ -1588,20 +1567,11 @@ impl RuntimeManager {
                 })()
             }
             "memory.candidate_pool" => {
-                // M8-02: bounded active + pending observed candidate memories.
-                // Rust is the authority; predicted-only memories are excluded
-                // (M8-10). Returns stable IDs + summaries only (no full bodies).
-                let window = params
-                    .get("window")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                match self.load_candidate_pool(app, &window).await {
-                    Ok(value) => Ok(value),
-                    Err(error) => Err(error.to_string()),
-                }
+                // Bounded active observed memories of the window; predicted-only
+                // memories are excluded (M8-10). Stable IDs + summaries only.
+                weekly_candidate_pool(db.inner(), &window).map_err(|error| error.to_string())
             }
-            other => Err(format!("unsupported journal/dream method: {other}")),
+            other => Err(format!("unsupported weekly dream method: {other}")),
         };
         let value = result.map_err(RuntimeHostError::InvalidResponse)?;
         let size = serde_json::to_vec(&value)
@@ -1613,20 +1583,6 @@ impl RuntimeManager {
             )));
         }
         Ok(value)
-    }
-
-    /// Stable output hash for a completed dream run: SHA-256 over the recorded
-    /// candidate ids + dispositions, so the dream_runs ledger is auditable
-    /// without re-reading candidate bodies.
-    #[cfg(feature = "daily-dream-v1")]
-    fn dream_output_hash(candidates: &[ielts_domain::DreamCandidate]) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        for candidate in candidates {
-            hasher.update(candidate.id.as_bytes());
-            hasher.update(candidate.disposition.as_str().as_bytes());
-        }
-        format!("{:x}", hasher.finalize())
     }
 
     /// M10: serve the teaching-strategy evolution reverse-RPC. Rust is the
@@ -1823,7 +1779,7 @@ impl RuntimeManager {
         // DecideApprovalCommand is deliberately absent: `approval.decide` is not
         // served on this path.
         use ielts_domain::{
-            CreateStudyPlanCommand, CreateStudyPlanItemCommand, CreateThreadCommand,
+            CreateStudyPlanCommand, CreateThreadCommand,
             MarkPlanItemDoneCommand, RecordApprovalCommand, RequestCancelCommand,
             SaveCheckpointCommand,
         };
@@ -1902,36 +1858,18 @@ impl RuntimeManager {
                 }
             }
             "study_plan.create" => {
-                // Python sends {proposal: {userGoal, items: [...]}} where each
-                // item carries a structured skillProbe. The persistence schema
-                // stores the skill key as the probe string; reply with the
-                // {planId} envelope Python's orchestrator contract requires.
+                // Preserve the full probe JSON in the existing TEXT column.
+                // Return the envelope required by the Python orchestrator.
                 let parsed = params
                     .get("proposal")
-                    .cloned()
                     .ok_or_else(|| "study_plan.create requires proposal".to_string())
-                    .and_then(|value| serde_json::from_value::<PlannerProposalWire>(value).map_err(|error| error.to_string()));
+                    .and_then(CreateStudyPlanCommand::from_planner_proposal);
                 match parsed {
-                    Ok(proposal) => {
-                        let command = CreateStudyPlanCommand {
-                            user_id: proposal.user_id,
-                            goal: proposal.user_goal,
-                            available_minutes: proposal.total_estimated_minutes,
-                            target_date: None,
-                            items: proposal
-                                .items
-                                .iter()
-                                .map(|item| CreateStudyPlanItemCommand {
-                                    skill_probe: item.skill_probe.skill_key.clone(),
-                                    why_text: item.why_text.clone(),
-                                    estimated_minutes: item.estimated_minutes,
-                                })
-                                .collect(),
-                        };
+                    Ok(command) => {
                         match service.create_study_plan(&command) {
                             Ok(plan) => Ok(json!({
                                 "planId": plan.id,
-                                "accepted": proposal.items.len(),
+                                "accepted": command.items.len(),
                                 "rejected": 0,
                             })),
                             Err(error) => Err(error.message),
@@ -1968,52 +1906,6 @@ impl RuntimeManager {
             )));
         }
         Ok(value)
-    }
-
-    /// M8-02: load a bounded candidate memory pool for the Weekly Dream. Rust
-    /// returns stable `mem-*` IDs + summaries; predicted-only memories are
-    /// excluded (M8-10). The pool reuses `MemoryStore::context_preview`, which
-    /// already applies sensitivity filtering + bounded counts.
-    #[cfg(feature = "daily-dream-v1")]
-    async fn load_candidate_pool(
-        &self,
-        app: &AppHandle,
-        _window: &str,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::MemoryService;
-        use ielts_domain::{Activity, MemoryContextQuery};
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = MemoryService::new(&store);
-        // Activity-scoped pool: the Weekly Dream operates over the user's active
-        // memory across the recent window. We sample the reading activity slice
-        // as the bounded pool (the full cross-activity pool is an M9 diagnostic
-        // surface; M8 keeps the reverse-RPC bounded + simple).
-        let query = MemoryContextQuery {
-            user_id: "local".into(),
-            activity: Activity::Reading,
-            current_instruction: None,
-            limit: 50,
-        };
-        let preview = service
-            .context_preview(&query)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.message))?;
-        let candidates: Vec<Value> = preview
-            .entries
-            .into_iter()
-            .filter(|entry| entry.id.is_some())
-            .map(|entry| {
-                json!({
-                    "memoryId": entry.id,
-                    "key": entry.key,
-                    "pendingVerification": entry.pending_verification,
-                })
-            })
-            .collect();
-        Ok(json!({
-            "candidates": candidates,
-            "truncated": preview.truncated,
-        }))
     }
 
     async fn invoke_candidate_input_tool(
@@ -2111,22 +2003,27 @@ impl RuntimeManager {
         app: &AppHandle,
         params: &serde_json::Map<String, Value>,
         timeout: Duration,
+        transport_retries: u32,
     ) -> Result<Value, RuntimeHostError> {
         let request = params
             .get("request")
             .cloned()
             .ok_or_else(|| RuntimeHostError::InvalidResponse("model request is missing".into()))?;
-        let request: CompletionRequest = serde_json::from_value(request)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
-        validate_model_request(&request)?;
+        let request = parse_model_request(request)?;
         let db = app.state::<AppDb>();
         let vault = app.state::<AppVault>();
         let runtime = load_runtime(&db, &vault)
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
+            .map_err(|error| RuntimeHostError::Process(error.to_string()))?
+            .with_transport_retries(transport_retries);
+        // The gateway already returns final content only (no reasoning), so the
+        // sidecar can never receive chain-of-thought.
         let response = tokio::time::timeout(timeout, runtime.complete(request))
             .await
             .map_err(|_| RuntimeHostError::Timeout)?
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
+            .map_err(|error| RuntimeHostError::Provider {
+                message: error.message,
+                retryable: error.retryable,
+            })?;
         serde_json::to_value(response)
             .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
     }
@@ -2276,6 +2173,15 @@ pub(crate) fn is_host_only_method(method: &str) -> bool {
     HOST_ONLY_METHODS.contains(&method)
 }
 
+/// A sidecar completion must declare `maxTokens` (serde rejects a missing
+/// field), and the declared ceiling must pass `validate_model_request`.
+fn parse_model_request(request: Value) -> Result<CompletionRequest, RuntimeHostError> {
+    let request: CompletionRequest = serde_json::from_value(request)
+        .map_err(|error| RuntimeHostError::InvalidResponse(format!("invalid model request: {error}")))?;
+    validate_model_request(&request)?;
+    Ok(request)
+}
+
 fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHostError> {
     if request.messages.is_empty() || request.messages.len() > 4 {
         return Err(RuntimeHostError::InvalidResponse(
@@ -2301,15 +2207,13 @@ fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHost
             "memory model temperature must be zero".into(),
         ));
     }
-    // Round-3 audit (7.8): `maxTokens` is now part of the wire contract, so the
-    // sidecar can set it. Bound it here — an unbounded ceiling defeats the point
-    // and a zero ceiling would make every sidecar completion return empty.
-    if let Some(max_tokens) = request.max_tokens {
-        if max_tokens == 0 || max_tokens > SIDECAR_MAX_OUTPUT_TOKENS {
-            return Err(RuntimeHostError::InvalidResponse(format!(
-                "model request maxTokens must be between 1 and {SIDECAR_MAX_OUTPUT_TOKENS}"
-            )));
-        }
+    // `maxTokens` is required on the wire. Bound it here — an unbounded ceiling
+    // defeats the point and a zero ceiling would make every sidecar completion
+    // return empty.
+    if request.max_tokens == 0 || request.max_tokens > SIDECAR_MAX_OUTPUT_TOKENS {
+        return Err(RuntimeHostError::InvalidResponse(format!(
+            "model request maxTokens must be between 1 and {SIDECAR_MAX_OUTPUT_TOKENS}"
+        )));
     }
     Ok(())
 }
@@ -2466,8 +2370,399 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn framed_reverse_request(method: &str) -> Value {
+        let frame = encode_frame(&json!({
+            "protocolVersion": PROTOCOL_VERSION, "requestId": "fake-sidecar-1",
+            "traceId": "trusted-run", "deadlineMs": 1_000, "method": method,
+            "params": {"runKind": "weekly", "capabilities": ["dream.run_weekly"],
+                "window": "2026-W33", "patterns": []}
+        })).unwrap();
+        let (request, consumed) = decode_frame(&frame).unwrap().unwrap();
+        assert_eq!(consumed, frame.len());
+        request
+    }
+
+    async fn manager_for_host_method(method: &str) -> RuntimeManager {
+        let manager = RuntimeManager::default();
+        {
+            let mut process = manager.inner.lock().await;
+            process.generation = 7;
+            process.active_run = Some(Arc::new(ActiveRun::new(
+                method, "trusted-run", json!({"maxCandidates": 3,"day":"2026-10-01","window":"2026-W40"}), 7,
+            ).unwrap()));
+        }
+        manager
+    }
+
+    // Uses the same production pre-routing gate as dispatch_host_request.
+    // Framed requests can forge runKind/capabilities, but cannot pick authority.
+    #[tokio::test]
+    async fn run_capability_memory_candidate_rejects_writes_before_db_access() {
+        let manager = manager_for_host_method("memory.candidates.generate").await;
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE memory_items (id TEXT, status TEXT);
+            CREATE TABLE memory_supports (id TEXT, status TEXT);
+            INSERT INTO memory_items VALUES ('memory-1', 'active');
+            INSERT INTO memory_supports VALUES ('support-1', 'active');").unwrap();
+        let before = conn.total_changes();
+        for method in [
+            "dream.run_weekly", "dream.run_daily", "journal.build_daily",
+            "memory.apply", "memory.apply_consolidations", "memory.promote_candidate",
+            "approval.decide", "approval.record", "prompt.promote_candidate",
+            "prompt.rollback", "eval.run_case", "strategy.record_assignment",
+            "strategy.record_feedback", "strategy.record_outcome", "strategy.promote",
+            "study_plan.create", "thread.create", "unknown.method",
+        ] {
+            let request = framed_reverse_request(method);
+            let result = manager.authorize_host_request(7, "trusted-run", &request).await;
+            assert!(matches!(result, Err(RuntimeHostError::InvalidResponse(ref message))
+                if message.contains("not allowed for MemoryCandidate")), "{method}");
+        }
+        assert_eq!(conn.total_changes(), before);
+        for table in ["memory_items", "memory_supports"] {
+            let status: String = conn.query_row(&format!("SELECT status FROM {table}"), [],
+                |row| row.get(0)).unwrap();
+            assert_eq!(status, "active");
+        }
+    }
+
+    #[tokio::test]
+    async fn run_capability_memory_candidate_preserves_legal_model_tool_and_reads() {
+        let manager = manager_for_host_method("memory.candidates.generate").await;
+        for method in ["tool.invoke", "model.invoke", "learning.learner_skill_state",
+                       "memory.search_active", "learning.evidence_by_ids"] {
+            let request = framed_reverse_request(method);
+            let result = manager.authorize_host_request(7, "trusted-run", &request).await;
+            let enabled = PROVIDED_HOST_CAPABILITIES.iter().any(|(name, _)| *name == method);
+            assert_eq!(result.is_ok(), enabled, "{method}");
+        }
+    }
+
+    #[tokio::test]
+    async fn run_capability_all_advertised_routes_have_minimal_run_permissions() {
+        let mut runs = vec![("memory.candidates.generate", vec!["tool.invoke", "model.invoke",
+            "learning.learner_skill_state", "memory.search_active", "learning.evidence_by_ids"])];
+        #[cfg(feature = "daily-dream-v1")]
+        runs.push(("dream.weekly", vec!["memory.candidate_pool", "model.invoke", "dream.run_weekly"]));
+        #[cfg(feature = "agent-threads-v1")]
+        runs.push(("planner.study_plan", vec!["learning.learner_skill_state",
+            "memory.search_active", "study_plan.create"]));
+        for (host_method, allowed) in runs {
+            let manager = manager_for_host_method(host_method).await;
+            for (method, _) in PROVIDED_HOST_CAPABILITIES {
+                let mut request = framed_reverse_request(method);
+                if host_method == "dream.weekly" { request["params"]["window"] = json!("2026-W40"); }
+                assert_eq!(manager.authorize_host_request(7, "trusted-run", &request).await.is_ok(),
+                    allowed.contains(method), "{host_method} -> {method}");
+            }
+            // `dream.run_weekly` is a legal weekly-run method only; every other
+            // run kind still fails closed on it.
+            let denied: &[&str] = if host_method == "dream.weekly" {
+                &["approval.decide", "prompt.promote_candidate", "strategy.promote", "unknown.method"]
+            } else {
+                &["dream.run_weekly", "approval.decide", "prompt.promote_candidate", "strategy.promote", "unknown.method"]
+            };
+            for method in denied.iter().copied() {
+                assert!(manager.authorize_host_request(7, "trusted-run",
+                    &framed_reverse_request(method)).await.is_err(), "{host_method} -> {method}");
+            }
+        }
+    }
+
+    #[test]
+    fn run_capability_unknown_host_methods_fail_closed() {
+        // `dream.daily` is gone: the daily journal has no sidecar run.
+        for method in ["dream.run_weekly", "dream.daily", "memory.candidates.extract",
+                       "unknown", "", "runtime.health"] {
+            assert!(ActiveRun::new(method, "trusted-run", json!({}), 7).is_err(), "{method}");
+        }
+    }
+
+    /// Weekly is reachable only through the host-selected `dream.weekly` run
+    /// kind, and that kind grants exactly the pool read, the model call and the
+    /// host-validated pattern submission.
+    #[cfg(feature = "daily-dream-v1")]
+    #[tokio::test]
+    async fn weekly_run_kind_is_host_selected_and_minimal() {
+        assert!(ActiveRun::new("dream.weekly", "trusted-run", json!({"window":"2026-W40"}), 7).is_ok());
+        assert!(PROVIDED_HOST_CAPABILITIES.iter().any(|(name, _)| *name == "dream.run_weekly"));
+        assert!(REQUIRED_RUNTIME_CAPABILITIES.iter().any(|(name, _)| *name == "dream.weekly"));
+        let manager = RuntimeManager::default();
+        {
+            let mut process = manager.inner.lock().await;
+            process.generation = 7;
+            process.active_run = Some(Arc::new(ActiveRun::new(
+                "dream.weekly", "trusted-run", json!({"window": "2026-W40"}), 7).unwrap()));
+        }
+        let mut request = framed_reverse_request("memory.candidate_pool");
+        request["params"]["window"] = json!("2026-W40");
+        assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_ok());
+        // The sidecar cannot widen or move the host-owned window...
+        for window in ["2026-W39", "2026-08-10", ""] {
+            for method in ["memory.candidate_pool", "dream.run_weekly"] {
+                let mut forged = framed_reverse_request(method);
+                forged["params"]["window"] = json!(window);
+                assert!(manager.authorize_host_request(7, "trusted-run", &forged).await.is_err(), "{method} {window}");
+            }
+        }
+        // ...nor act for another user.
+        request["params"]["userId"] = json!("other-user");
+        assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_err());
+        // The model call carries no window and is allowed.
+        assert!(manager.authorize_host_request(7, "trusted-run", &framed_reverse_request("model.invoke")).await.is_ok());
+        // Daily-only methods stay denied to a weekly run.
+        for method in ["journal.build_daily", "dream.run_daily", "tool.invoke"] {
+            assert!(manager.authorize_host_request(7, "trusted-run", &framed_reverse_request(method)).await.is_err(), "{method}");
+        }
+    }
+
+    /// The model gateway's transport retries and the weekly sidecar's own retry
+    /// loop must never multiply, and the weekly budget must fit its three calls.
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn weekly_owns_its_retries_and_has_a_budget_for_three_model_calls() {
+        assert_eq!(RunKind::WeeklyDream.model_transport_retries(), 0);
+        assert_eq!(RunKind::MemoryCandidate.model_transport_retries(), crate::ai::MAX_RETRIES);
+        assert!(RunKind::WeeklyDream.budget() > RunKind::MemoryCandidate.budget());
+        assert_eq!(RunKind::MemoryCandidate.budget(), COGNITIVE_REQUEST_TIMEOUT);
+        let weekly = ActiveRun::new("dream.weekly", "trusted-run", json!({}), 7).unwrap();
+        assert!(weekly.deadline > Instant::now() + Duration::from_secs(400));
+    }
+
+    #[tokio::test]
+    async fn run_capability_preserves_trace_generation_deadline_and_envelope_checks() {
+        let manager = manager_for_host_method("memory.candidates.generate").await;
+        let request = framed_reverse_request("model.invoke");
+        assert!(manager.authorize_host_request(8, "trusted-run", &request).await.is_err());
+        assert!(manager.authorize_host_request(7, "forged-trace", &request).await.is_err());
+        for (key, value) in [("protocolVersion", json!(2)), ("deadlineMs", json!(0)),
+                             ("params", Value::Null), ("method", Value::Null)] {
+            let mut invalid = request.clone();
+            invalid[key] = value;
+            assert!(manager.authorize_host_request(7, "trusted-run", &invalid).await.is_err(), "{key}");
+        }
+        {
+            let mut process = manager.inner.lock().await;
+            let active = Arc::get_mut(process.active_run.as_mut().unwrap()).unwrap();
+            active.generation = 6;
+        }
+        assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_err());
+        {
+            let mut process = manager.inner.lock().await;
+            let active = Arc::get_mut(process.active_run.as_mut().unwrap()).unwrap();
+            active.generation = 7;
+            active.deadline = Instant::now() - Duration::from_secs(1);
+        }
+        assert!(matches!(manager.authorize_host_request(7, "trusted-run", &request).await,
+            Err(RuntimeHostError::Timeout)));
+        manager.inner.lock().await.active_run = None;
+        assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_err());
+    }
+
+    #[cfg(feature = "context-compiler-v1")]
+    #[tokio::test]
+    async fn non_daily_rpc_rejects_foreign_nested_query_user() {
+        let mut runs = vec!["memory.candidates.generate"];
+        #[cfg(feature = "agent-threads-v1")]
+        runs.push("planner.study_plan");
+        for host_method in runs {
+            let manager = manager_for_host_method(host_method).await;
+            for method in ["learning.learner_skill_state", "memory.search_active"] {
+                let mut request = framed_reverse_request(method);
+                request["params"]["query"] = json!({"userId":"u2"});
+                assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_err());
+                request["params"]["query"]["userId"] = json!("local");
+                assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_ok());
+                request["params"]["query"]["userId"] = Value::Null;
+                assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_err());
+            }
+        }
+    }
+
+    #[cfg(feature = "context-compiler-v1")]
+    #[test]
+    fn evidence_by_ids_rejects_foreign_user_in_real_sqlite_before_projection() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = ielts_db::open_connection(&ielts_db::DbOpenOptions::create(dir.path().join("evidence.db"))).unwrap();
+        ielts_db::migrate(&mut conn).unwrap();
+        conn.execute("INSERT INTO learning_events
+            (id,user_id,event_type,source_kind,source_id,idempotency_key,occurred_at,payload_json,
+             content_hash,schema_version,consolidation_state,sensitivity,created_at,updated_at)
+            VALUES ('foreign','u2','reading.question.outcome','reading_question','source','idem',
+             '2026-08-16T00:00:00Z','{}','hash',1,'pending','normal','2026-08-16T00:00:00Z','2026-08-16T00:00:00Z')", []).unwrap();
+        assert!(matches!(local_learning_evidence(&conn, &["foreign".into()]),
+            Err(ielts_db::DbError::Validation(message)) if message.contains("host-owned local user")));
+        let missing = local_learning_evidence(&conn, &["missing".into()]).unwrap();
+        assert!(missing.events.is_empty());
+        assert_eq!(missing.missing_ids, vec!["missing"]);
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn weekly_candidate_pool_production_sql_filters_and_preserves_evidence() {
+        // Execute the production query rather than a second copy of its filters.
+        let source = include_str!("cognitive_runtime.rs");
+        let method = source.split("fn weekly_candidate_pool(").nth(1).unwrap();
+        let sql = method.split("conn.prepare(r#\"").nth(1).unwrap()
+            .split("\"#)?").next().unwrap();
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE memory_items (
+            id TEXT, user_id TEXT, status TEXT, source_class TEXT, sensitivity TEXT,
+            content TEXT, scope TEXT, last_observed_at TEXT);
+            CREATE TABLE memory_candidates (id TEXT);
+            INSERT INTO memory_candidates VALUES ('pending-not-a-memory');").unwrap();
+        let insert = |id: &str, owner: &str, status: &str, class: &str, sensitivity: &str,
+                      observed: Option<&str>, scope: &str| {
+            conn.execute("INSERT INTO memory_items VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                rusqlite::params![id, owner, status, class, sensitivity,
+                    format!("Evidence for {id}"), scope, observed]).unwrap();
+        };
+        insert("mem-reading", "local", "active", "observed", "normal", Some("2026-08-10T00:00:00Z"), "reading");
+        insert("mem-writing", "local", "active", "inferred", "normal", Some("2026-08-16T23:59:59Z"), "writing");
+        insert("mem-other", "other", "active", "observed", "normal", Some("2026-08-12"), "reading");
+        insert("mem-predicted", "local", "active", "predicted", "normal", Some("2026-08-12"), "reading");
+        insert("mem-pending", "local", "pending_review", "observed", "normal", Some("2026-08-12"), "reading");
+        insert("mem-archived", "local", "archived", "observed", "normal", Some("2026-08-12"), "reading");
+        insert("mem-private", "local", "active", "observed", "private", Some("2026-08-12"), "reading");
+        insert("mem-unobserved", "local", "active", "inferred", "normal", None, "reading");
+        insert("mem-before", "local", "active", "observed", "normal", Some("2026-08-09T23:59:59Z"), "reading");
+        insert("mem-after", "local", "active", "observed", "normal", Some("2026-08-17T00:00:00Z"), "reading");
+        insert("mem-bad-date", "local", "active", "observed", "normal", Some("garbage"), "reading");
+        let query = || {
+            let mut statement = conn.prepare(sql).unwrap();
+            // Start exclusive, end inclusive.
+            let rows = statement.query_map(
+                rusqlite::params!["local", "2026-08-09T23:59:59Z", "2026-08-16T23:59:59Z"],
+                |row| row.get::<_, String>(0)).unwrap();
+            rows.map(|row| serde_json::from_str::<Value>(&row.unwrap()).unwrap()).collect::<Vec<_>>()
+        };
+        assert_eq!(query(), vec![
+            json!({"memoryId":"mem-writing", "summary":"Evidence for mem-writing", "scope":"writing"}),
+            json!({"memoryId":"mem-reading", "summary":"Evidence for mem-reading", "scope":"reading"}),
+        ]);
+        for index in 0..60 {
+            insert(&format!("mem-bound-{index:02}"), "local", "active", "observed", "normal", Some("2026-08-12"), "reading");
+        }
+        let rows = query();
+        assert_eq!(rows.len(), 51); // One overflow row lets the host report truncation.
+        assert_eq!(rows[1]["memoryId"], "mem-bound-00");
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn weekly_pool_summaries_are_clipped_to_400_chars() {
+        let source = include_str!("cognitive_runtime.rs");
+        let method = source.split("fn weekly_candidate_pool(").nth(1).unwrap();
+        let sql = method.split("conn.prepare(r#\"").nth(1).unwrap().split("\"#)?").next().unwrap();
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE memory_items (
+            id TEXT, user_id TEXT, status TEXT, source_class TEXT, sensitivity TEXT,
+            content TEXT, scope TEXT, last_observed_at TEXT);").unwrap();
+        conn.execute("INSERT INTO memory_items VALUES ('mem-long','local','active','observed','normal',?1,'reading','2026-08-12')",
+            [&"长".repeat(900)]).unwrap();
+        let raw: String = conn.query_row(sql, rusqlite::params!["local", "2026-08-09T23:59:59Z", "2026-08-16T23:59:59Z"],
+            |row| row.get::<_, String>(0)).unwrap();
+        let summary = serde_json::from_str::<Value>(&raw).unwrap()["summary"].as_str().unwrap().to_owned();
+        assert_eq!(summary.chars().count(), 400);
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    fn local(offset_hours: i32, utc: &str) -> chrono::DateTime<chrono::FixedOffset> {
+        use chrono::TimeZone;
+        chrono::FixedOffset::east_opt(offset_hours * 3600).unwrap()
+            .from_utc_datetime(&chrono::DateTime::parse_from_rfc3339(utc).unwrap().naive_utc())
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    fn utc(value: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&chrono::Utc)
+    }
+
+    /// Weekend only, by the LOCAL day: Saturday and Sunday of one ISO week share a
+    /// key, so one weekend can complete at most once.
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn weekly_window_exists_only_on_a_local_weekend_and_keys_the_weekend() {
+        // 2026-10-09 is a Friday, 10 Saturday, 11 Sunday, 12 Monday.
+        for (now, due, key) in [
+            (local(0, "2026-10-09T23:59:00Z"), false, ""),
+            (local(0, "2026-10-10T00:00:00Z"), true, "2026-W41"),
+            (local(0, "2026-10-11T23:59:00Z"), true, "2026-W41"),
+            (local(0, "2026-10-12T00:00:00Z"), false, ""),
+            // Local day, not UTC day: Friday 16:30Z is already Saturday 00:30 at UTC+8...
+            (local(8, "2026-10-09T16:30:00Z"), true, "2026-W41"),
+            // ...and Sunday 22:00Z is already Monday 06:00 at UTC+8.
+            (local(8, "2026-10-11T22:00:00Z"), false, ""),
+            // The ISO year, not the calendar year, names the weekend: 2027-01-02 is 2026-W53.
+            (local(0, "2027-01-02T12:00:00Z"), true, "2026-W53"),
+        ] {
+            let window = plan_weekly_window(&now, None);
+            assert_eq!(window.is_some(), due, "{now}");
+            if let Some(window) = window {
+                assert_eq!(window.key, key, "{now}");
+            }
+        }
+    }
+
+    /// The window starts where the last COMPLETED one ended (exclusive), never
+    /// further back than 28 days; a missed weekend folds into the next one.
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn weekly_window_runs_from_the_last_completed_end_capped_at_28_days() {
+        let now = local(0, "2026-10-10T09:30:45Z");
+        let end = utc("2026-10-10T09:30:45Z");
+        // First run ever: the cap.
+        assert_eq!(plan_weekly_window(&now, None).unwrap().start, end - chrono::Duration::days(28));
+        // Normal weekly cadence.
+        let last = utc("2026-10-03T09:00:00Z");
+        let window = plan_weekly_window(&now, Some(last)).unwrap();
+        assert_eq!((window.start, window.end), (last, end));
+        // A missed weekend is folded in: two weeks, no catch-up path.
+        let folded = plan_weekly_window(&now, Some(utc("2026-09-26T09:00:00Z"))).unwrap();
+        assert_eq!(folded.start, utc("2026-09-26T09:00:00Z"));
+        // A long absence never reaches past the cap.
+        let capped = plan_weekly_window(&now, Some(utc("2026-06-01T00:00:00Z"))).unwrap();
+        assert_eq!(capped.start, end - chrono::Duration::days(28));
+        // Nothing new since a run that ended at (or after) now.
+        assert!(plan_weekly_window(&now, Some(end)).is_none());
+        // Sub-second noise never leaks into the window: the end is whole seconds.
+        let noisy = chrono::DateTime::parse_from_rfc3339("2026-10-10T09:30:45.987Z").unwrap();
+        assert_eq!(plan_weekly_window(&noisy, None).unwrap().end, end);
+    }
+
+    #[cfg(feature = "daily-dream-v1")]
+    #[test]
+    fn the_retry_bound_is_one_attempt_per_local_day() {
+        // Saturday 11:00 at UTC+8: the local day began Friday 16:00Z.
+        assert_eq!(local_day_start_utc(&local(8, "2026-10-10T03:00:00Z")), utc("2026-10-09T16:00:00Z"));
+        assert_eq!(local_day_start_utc(&local(0, "2026-10-10T03:00:00Z")), utc("2026-10-10T00:00:00Z"));
+    }
+
+    #[cfg(feature = "agent-threads-v1")]
+    #[test]
+    fn study_plan_create_uses_lossless_proposal_adapter() {
+        let probe = json!({"skillKey": "reading.tfng", "probeKind": "contrastive_pair",
+                           "avoidAssetIds": ["asset-1"], "reasonCodes": ["review_due"]});
+        let command = ielts_domain::CreateStudyPlanCommand::from_planner_proposal(&json!({
+            "userGoal": "review", "totalEstimatedMinutes": 15, "targetDate": "2026-10-20",
+            "items": [{"skillProbe": probe, "whyText": "review due", "estimatedMinutes": 15}]
+        })).unwrap();
+        assert_eq!(command.target_date.as_deref(), Some("2026-10-20"));
+        let dir = tempfile::tempdir().unwrap();
+        let options = ielts_db::DbOpenOptions::create(dir.path().join("plan.db"));
+        let mut conn = ielts_db::open_connection(&options).unwrap();
+        ielts_db::migrate(&mut conn).unwrap();
+        ielts_db::create_study_plan(&conn, &command).unwrap();
+        drop(conn);
+        let conn = ielts_db::open_connection(&options).unwrap();
+        let snapshot = ielts_db::load_latest_study_plan(&conn, "local").unwrap().unwrap();
+        let wire = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(wire["plan"]["targetDate"], "2026-10-20");
+        assert_eq!(wire["items"][0]["skillProbe"], probe);
+    }
+
     /// Round-3 audit (item 8): every method the host actually sends to the
-    /// sidecar must be negotiated in the handshake. `dream.daily` and
+    /// sidecar must be negotiated in the handshake. `dream.weekly` and
     /// `planner.study_plan` were sent in production while absent from the
     /// requested set, so a sidecar without them negotiated cleanly and then
     /// failed mid-run with `method_not_found`.
@@ -2488,7 +2783,7 @@ mod tests {
             "runtime.health",
             "runtime.shutdown",
             "memory.candidates.generate",
-            "dream.daily",
+            "dream.weekly",
             "planner.study_plan",
         ] {
             assert!(
@@ -2506,32 +2801,6 @@ mod tests {
             source.contains("\"requestedCapabilities\": REQUIRED_RUNTIME_CAPABILITIES"),
             "requestedCapabilities must be derived from REQUIRED_RUNTIME_CAPABILITIES"
         );
-    }
-
-    /// Round-3 audit (A3): the sidecar sends an ISO week (`2026-W33`) as the
-    /// weekly `window`. The arm used to read a `query` key the sidecar never
-    /// sends, so it errored on every real call before validating anything.
-    #[test]
-    fn weekly_window_resolves_iso_week_to_its_monday() {
-        assert_eq!(
-            resolve_weekly_window_day("2026-W33").unwrap(),
-            "2026-08-10"
-        );
-        // A plain ISO day is also documented as accepted, and passes through.
-        assert_eq!(
-            resolve_weekly_window_day("2026-08-16").unwrap(),
-            "2026-08-16"
-        );
-    }
-
-    #[test]
-    fn weekly_window_fails_closed_on_garbage() {
-        for window in ["", "nonsense", "2026-W99", "2026-Wxx", "20260810", "2026/08/10"] {
-            assert!(
-                resolve_weekly_window_day(window).is_err(),
-                "{window} must not resolve to a journal day"
-            );
-        }
     }
 
     /// Round-3 audit (A3): weekly consolidation writes active memory and
@@ -2636,24 +2905,31 @@ mod tests {
     }
 
     #[test]
-    fn sidecar_output_ceiling_is_bounded() {
+    fn sidecar_output_ceiling_is_required_and_bounded() {
         let message = ChatMessage::new("user", "hello");
         let request = |max_tokens| CompletionRequest {
             messages: vec![message.clone()],
             temperature: 0.0,
             max_tokens,
         };
-        assert!(validate_model_request(&request(None)).is_ok());
-        assert!(validate_model_request(&request(Some(1))).is_ok());
-        assert!(validate_model_request(&request(Some(SIDECAR_MAX_OUTPUT_TOKENS))).is_ok());
+        assert!(validate_model_request(&request(1)).is_ok());
+        assert!(validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS)).is_ok());
         assert!(
-            validate_model_request(&request(Some(0))).is_err(),
+            validate_model_request(&request(0)).is_err(),
             "a zero ceiling would make every completion return empty"
         );
         assert!(
-            validate_model_request(&request(Some(SIDECAR_MAX_OUTPUT_TOKENS + 1))).is_err(),
+            validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS + 1)).is_err(),
             "the sidecar must not request an unbounded completion"
         );
+        let wire = |extra: Value| {
+            let mut body = json!({"messages":[{"role":"user","content":"hi"}],"temperature":0.0});
+            body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            body
+        };
+        assert!(parse_model_request(wire(json!({"maxTokens": 1500}))).is_ok());
+        let missing = parse_model_request(wire(json!({}))).unwrap_err().to_string();
+        assert!(missing.contains("maxTokens"), "{missing}");
     }
 
     fn handshake() -> RuntimeHandshake {

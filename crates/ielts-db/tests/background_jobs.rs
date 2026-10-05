@@ -190,18 +190,17 @@ fn startup_recovery_preserves_queued_replacement_without_blocking_catch_up() {
     let old = enqueue_job(&conn, "daily_journal", "local", NOW, 1, Some(key), None).unwrap();
     claim_job(&conn, NOW, WORKER_A).unwrap();
     let replacement = enqueue_job(&conn, "daily_journal", "local", NOW, 1, Some(key), None).unwrap();
-    let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+    let report = startup_recovery_with_catch_up(&conn, "2026-08-17T00:06:00Z", 300).unwrap();
     assert_eq!(report.requeued_jobs, 0);
     assert_eq!(report.journal_jobs_enqueued, 0);
-    assert_eq!(report.dream_jobs_enqueued, 1);
     let retired = load_job(&conn, &old).unwrap().unwrap();
     assert_eq!(retired.status, "failed");
     assert_eq!(retired.attempts, 1);
     assert!(retired.last_error.unwrap().contains("duplicate window"));
     assert_eq!(load_job(&conn, &replacement).unwrap().unwrap().status, "queued");
-    let again = startup_recovery_with_catch_up(&conn, "2026-08-16T00:07:00Z", 300).unwrap();
+    let again = startup_recovery_with_catch_up(&conn, "2026-08-17T00:07:00Z", 300).unwrap();
     assert_eq!(again.requeued_jobs, 0);
-    assert_eq!(again.dream_jobs_enqueued, 0);
+    assert_eq!(again.journal_jobs_enqueued, 0);
 }
 
 #[test]
@@ -257,20 +256,19 @@ fn startup_recovery_rolls_back_when_catch_up_enqueue_fails() {
     let id = enqueue_job(&conn, "daily_journal", "local", NOW, 1, None, None).unwrap();
     claim_job(&conn, NOW, WORKER_A).unwrap();
     conn.execute_batch(
-        "CREATE TRIGGER reject_dream_enqueue BEFORE INSERT ON background_jobs
-         WHEN NEW.job_kind = 'daily_dream'
+        "CREATE TRIGGER reject_journal_enqueue BEFORE INSERT ON background_jobs
+         WHEN NEW.job_kind = 'daily_journal'
          BEGIN SELECT RAISE(ABORT, 'simulated enqueue failure'); END;",
     ).unwrap();
-    assert!(startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).is_err());
+    assert!(startup_recovery_with_catch_up(&conn, "2026-08-17T00:06:00Z", 300).is_err());
     let job = load_job(&conn, &id).unwrap().unwrap();
     assert_eq!(job.status, "running");
     assert_eq!(job.locked_by.as_deref(), Some(WORKER_A));
     assert_eq!(list_recent_jobs(&conn, 20).unwrap().len(), 1);
-    conn.execute_batch("DROP TRIGGER reject_dream_enqueue").unwrap();
-    let report = startup_recovery_with_catch_up(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+    conn.execute_batch("DROP TRIGGER reject_journal_enqueue").unwrap();
+    let report = startup_recovery_with_catch_up(&conn, "2026-08-17T00:06:00Z", 300).unwrap();
     assert_eq!(report.requeued_jobs, 1);
     assert_eq!(report.journal_jobs_enqueued, 1);
-    assert_eq!(report.dream_jobs_enqueued, 1);
 }
 
 #[test]
@@ -358,14 +356,12 @@ fn startup_catch_up_discovers_canonical_activity_dates_and_dedupes() {
     let report = startup_recovery_with_catch_up(&conn, "2026-08-17T00:00:00Z", 300).unwrap();
     assert_eq!(report.requeued_jobs, 0);
     assert_eq!(report.journal_jobs_enqueued, 2);
-    assert_eq!(report.dream_jobs_enqueued, 2);
 
+    // One daily job kind: catch-up never enqueues a `daily_dream`.
     let jobs = list_jobs(&conn);
     assert_eq!(
         jobs,
         vec![
-            "daily_dream:local:2026-08-15".to_string(),
-            "daily_dream:u2:2026-08-16".to_string(),
             "daily_journal:local:2026-08-15".to_string(),
             "daily_journal:u2:2026-08-16".to_string(),
         ]
@@ -375,12 +371,11 @@ fn startup_catch_up_discovers_canonical_activity_dates_and_dedupes() {
     // does not create another copy.
     let second = startup_recovery_with_catch_up(&conn, "2026-08-17T00:00:00Z", 300).unwrap();
     assert_eq!(second.journal_jobs_enqueued, 0);
-    assert_eq!(second.dream_jobs_enqueued, 0);
-    assert_eq!(list_recent_jobs(&conn, 20).unwrap().len(), 4);
+    assert_eq!(list_recent_jobs(&conn, 20).unwrap().len(), 2);
 }
 
 #[test]
-fn startup_catch_up_skips_dates_with_existing_journal_and_dream() {
+fn startup_catch_up_skips_dates_with_an_up_to_date_journal() {
     let (_dir, conn) = open_db();
     conn.execute(
         "INSERT INTO attempts
@@ -399,21 +394,232 @@ fn startup_catch_up_skips_dates_with_existing_journal_and_dream() {
         [],
     )
     .unwrap();
-    conn.execute(
-        "INSERT INTO dream_runs
-           (id, user_id, journal_id, status, input_hash, output_hash, started_at,
-            finished_at, error_json, attempts, created_at, updated_at)
-         VALUES ('drmrun-covered', 'local', 'djnl-covered', 'completed', NULL, 'out',
-                 '2026-08-15T23:01:00Z', '2026-08-15T23:02:00Z', NULL, 1,
-                 '2026-08-15T23:01:00Z', '2026-08-15T23:02:00Z')",
-        [],
-    )
-    .unwrap();
-
+    let facts = ielts_db::build_daily_facts(&conn, "local", "2026-08-15").unwrap();
+    conn.execute("UPDATE daily_journals SET source_hash=?1 WHERE id='djnl-covered'", [&facts.source_hash]).unwrap();
     let report = startup_recovery_with_catch_up(&conn, "2026-08-17T00:00:00Z", 300).unwrap();
     assert_eq!(report.journal_jobs_enqueued, 0);
-    assert_eq!(report.dream_jobs_enqueued, 0);
     assert!(list_recent_jobs(&conn, 20).unwrap().is_empty());
+}
+
+/// A `daily_dream` row can only come from an older database: nothing enqueues one
+/// any more (the migration 0018 CHECK still allows the kind).
+fn legacy_daily_dream_job(conn: &Connection, day: &str) -> String {
+    let id = format!("job-legacy-{day}");
+    conn.execute(
+        "INSERT INTO background_jobs (id, job_kind, user_id, status, priority, scheduled_at, attempts,
+           max_attempts, dedupe_key, created_at, updated_at)
+         VALUES (?1, 'daily_dream', 'local', 'queued', 4, ?2, 0, 3, ?3, ?2, ?2)",
+        rusqlite::params![id, NOW, format!("daily_dream:local:{day}")],
+    ).unwrap();
+    id
+}
+
+fn journal_binding(conn: &Connection, id: &str, day: &str) -> serde_json::Value {
+    let facts = ielts_db::build_daily_facts(conn, "local", day).unwrap();
+    let journal = ielts_db::insert_journal(conn, "local", &facts, None).unwrap();
+    let binding = serde_json::json!({"jobId": id, "workerId": WORKER_A, "day": day, "userId": "local",
+        "journalId": journal.id, "sourceHash": journal.source_hash});
+    ielts_db::bind_job_business(conn, id, WORKER_A, &binding).unwrap();
+    binding
+}
+
+#[test]
+fn only_the_daily_journal_kind_can_be_enqueued() {
+    let (_dir, conn) = open_db();
+    assert!(enqueue_job(&conn, "daily_dream", "local", NOW, 4, Some("daily_dream:local:2026-08-15"), None).is_err());
+    assert!(enqueue_job(&conn, "weekly_dream", "local", NOW, 4, None, None).is_err());
+    assert!(enqueue_job(&conn, "daily_journal", "local", NOW, 4, None, None).is_ok());
+}
+
+#[test]
+fn automatic_claim_only_closed_local_windows_and_preserves_retry_identity() {
+    let (_dir, conn) = open_db();
+    let now = "2026-08-17T00:00:00Z";
+    let old = enqueue_job(&conn,"daily_journal","local",now,4,Some("daily_journal:local:2026-08-16"),None).unwrap();
+    enqueue_job(&conn,"daily_journal","local",now,10,Some("daily_journal:local:2026-08-17"),None).unwrap();
+    enqueue_job(&conn,"daily_journal","u2",now,20,Some("daily_journal:u2:2026-08-16"),None).unwrap();
+    let claimed = ielts_db::claim_closed_daily_job(&conn,now,WORKER_A).unwrap().unwrap();
+    assert_eq!(claimed.id,old);
+    assert!(ielts_db::claim_closed_daily_job(&conn,now,WORKER_B).unwrap().is_none());
+    assert!(heartbeat(&conn,&old,WORKER_A,"2026-08-17T00:00:30Z").unwrap());
+    ielts_db::fail_job(&conn,&old,WORKER_A,"2026-08-17T00:00:31Z","journal build failed",60).unwrap();
+    assert!(ielts_db::claim_closed_daily_job(&conn,"2026-08-17T00:01:00Z",WORKER_A).unwrap().is_none());
+    let retry = ielts_db::claim_closed_daily_job(&conn,"2026-08-17T00:01:32Z",WORKER_A).unwrap().unwrap();
+    assert_eq!(retry.id,old);
+    assert_eq!(retry.attempts,2);
+}
+
+#[test]
+fn a_legacy_daily_dream_job_is_claimed_and_completed_like_a_journal_job() {
+    let (_dir, conn) = open_db();
+    let id = legacy_daily_dream_job(&conn, "2026-08-15");
+    let claimed = ielts_db::claim_closed_daily_job(&conn, "2026-08-17T00:00:00Z", WORKER_A).unwrap().unwrap();
+    assert_eq!(claimed.id, id);
+    assert_eq!(claimed.job_kind, "daily_dream");
+    journal_binding(&conn, &id, "2026-08-15");
+    // No dream run is needed or created: the journal version is the whole result.
+    assert!(ielts_db::finish_bound_daily_job(&conn, &id, WORKER_A, "2026-08-17T00:00:05Z").unwrap());
+    assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "completed");
+    assert_eq!(conn.query_row("SELECT COUNT(*) FROM dream_runs", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+    assert_eq!(conn.query_row("SELECT COUNT(*) FROM agent_runs", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+}
+
+#[test]
+fn open_day_is_not_scheduled_and_closed_day_checkpoint_is_authoritative() {
+    let (_dir,conn) = open_db();
+    seed_recovery_activity(&conn);
+    let today = startup_recovery_with_catch_up(&conn,"2026-08-16T20:00:00Z",300).unwrap();
+    assert_eq!(today.journal_jobs_enqueued,0);
+    startup_recovery_with_catch_up(&conn,"2026-08-17T00:00:00Z",300).unwrap();
+    let job = ielts_db::claim_closed_daily_job(&conn,"2026-08-17T00:00:00Z",WORKER_A).unwrap().unwrap();
+    assert_eq!(job.job_kind,"daily_journal");
+    assert_eq!(job.checkpoint_json.unwrap(),serde_json::json!({"day":"2026-08-16","userId":"local"}));
+}
+
+#[test]
+fn exhausted_attempt_recovers_completed_business_receipt_without_reexecution() {
+    for legacy in [false, true] {
+        let (_dir,conn) = open_db();
+        let day = "2026-08-15";
+        let id = if legacy {
+            legacy_daily_dream_job(&conn, day)
+        } else {
+            enqueue_job(&conn,"daily_journal","local",NOW,4,Some(&format!("daily_journal:local:{day}")),None).unwrap()
+        };
+        ielts_db::claim_closed_daily_job(&conn,"2026-08-17T00:00:00Z",WORKER_A).unwrap().unwrap();
+        journal_binding(&conn, &id, day);
+        conn.execute("UPDATE background_jobs SET attempts=max_attempts WHERE id=?1",[&id]).unwrap();
+        startup_recovery_with_catch_up(&conn,"2026-08-17T00:06:00Z",300).unwrap();
+        let receipt = load_job(&conn,&id).unwrap().unwrap();
+        assert_eq!(receipt.status,"completed");
+        assert_eq!(receipt.attempts,receipt.max_attempts);
+        assert!(ielts_db::claim_closed_daily_job(&conn,"2026-08-17T00:06:00Z",WORKER_A).unwrap().is_none());
+    }
+}
+
+#[test]
+fn failure_with_queued_manual_replacement_does_not_hit_unique_constraint() {
+    let (_dir,conn) = open_db();
+    let key = "daily_journal:local:2026-08-15";
+    let old = enqueue_job(&conn,"daily_journal","local",NOW,1,Some(key),None).unwrap();
+    claim_job(&conn,NOW,WORKER_A).unwrap().unwrap();
+    let replacement = enqueue_job(&conn,"daily_journal","local",NOW,1,Some(key),None).unwrap();
+    assert!(ielts_db::fail_job(&conn,&old,WORKER_A,NOW,"superseded by manual retry",60).unwrap());
+    assert_eq!(load_job(&conn,&old).unwrap().unwrap().status,"failed");
+    assert_eq!(load_job(&conn,&replacement).unwrap().unwrap().status,"queued");
+}
+
+#[test]
+fn a_job_completes_only_against_the_exact_bound_journal_version() {
+    for corruption in [
+        "UPDATE daily_journals SET user_id='other'",
+        "UPDATE daily_journals SET source_hash='another-hash'",
+        "UPDATE background_jobs SET checkpoint_json=json_set(checkpoint_json,'$.sourceHash','wrong-hash')",
+        "UPDATE background_jobs SET checkpoint_json=json_set(checkpoint_json,'$.day','2026-08-14')",
+        "UPDATE background_jobs SET checkpoint_json=json_set(checkpoint_json,'$.journalId','missing-journal')",
+    ] {
+        let (_dir, conn) = open_db();
+        let id = enqueue_job(&conn, "daily_journal", "local", NOW, 4, Some("daily_journal:local:2026-08-15"), None).unwrap();
+        ielts_db::claim_job_by_id(&conn, &id, NOW, WORKER_A).unwrap();
+        journal_binding(&conn, &id, "2026-08-15");
+        conn.execute_batch(corruption).unwrap();
+        assert!(!ielts_db::finish_bound_daily_job(&conn, &id, WORKER_A, NOW).unwrap(), "{corruption}");
+        assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "running");
+        // Recovery does not invent a receipt for a stale binding either: it retries.
+        for now in ["2026-08-16T00:06:00Z", "2026-08-16T00:07:00Z"] {
+            ielts_db::background_jobs::recover_daily_leases(&conn, now, 300).unwrap();
+            assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "queued", "{corruption}");
+        }
+    }
+}
+
+#[test]
+fn a_foreign_worker_cannot_complete_the_job() {
+    let (_dir, conn) = open_db();
+    let id = enqueue_job(&conn, "daily_journal", "local", NOW, 4, Some("daily_journal:local:2026-08-15"), None).unwrap();
+    ielts_db::claim_job_by_id(&conn, &id, NOW, WORKER_A).unwrap();
+    journal_binding(&conn, &id, "2026-08-15");
+    assert!(!ielts_db::finish_bound_daily_job(&conn, &id, WORKER_B, NOW).unwrap());
+    assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "running");
+    assert!(ielts_db::bind_job_business(&conn, &id, WORKER_B, &serde_json::json!({})).is_err());
+    assert!(ielts_db::finish_bound_daily_job(&conn, &id, WORKER_A, NOW).unwrap());
+}
+
+#[test]
+fn job_completion_failure_rolls_back_direct_and_lease_recovery() {
+    for recovery in [false, true] {
+        let (_dir, conn) = open_db();
+        let id = enqueue_job(&conn, "daily_journal", "local", NOW, 4, Some("daily_journal:local:2026-08-15"), None).unwrap();
+        ielts_db::claim_job_by_id(&conn, &id, NOW, WORKER_A).unwrap();
+        journal_binding(&conn, &id, "2026-08-15");
+        let jobs_before = sqlite_rows(&conn, "SELECT * FROM background_jobs ORDER BY id");
+        conn.execute_batch(
+            "CREATE TRIGGER reject_job_completion BEFORE UPDATE OF status ON background_jobs
+             WHEN NEW.status='completed'
+             BEGIN SELECT RAISE(ABORT,'completion rejected'); END;",
+        ).unwrap();
+        let error = if recovery {
+            ielts_db::background_jobs::recover_daily_leases(&conn, "2026-08-16T00:06:00Z", 300).unwrap_err()
+        } else {
+            ielts_db::finish_bound_daily_job(&conn, &id, WORKER_A, NOW).unwrap_err()
+        };
+        assert!(error.to_string().contains("completion rejected"), "{error}");
+        assert!(conn.is_autocommit());
+        // Includes the lease expiry UPDATE made before reconciliation in the outer transaction.
+        assert_eq!(sqlite_rows(&conn, "SELECT * FROM background_jobs ORDER BY id"), jobs_before);
+        conn.execute_batch("DROP TRIGGER reject_job_completion").unwrap();
+        if recovery {
+            ielts_db::background_jobs::recover_daily_leases(&conn, "2026-08-16T00:06:00Z", 300).unwrap();
+        } else {
+            assert!(ielts_db::finish_bound_daily_job(&conn, &id, WORKER_A, NOW).unwrap());
+        }
+        assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "completed");
+    }
+}
+
+fn sqlite_rows(conn: &Connection, sql: &str) -> Vec<Vec<rusqlite::types::Value>> {
+    let mut statement = conn.prepare(sql).unwrap();
+    let columns = statement.column_count();
+    statement.query_map([], |row| {
+        (0..columns).map(|column| row.get(column)).collect()
+    }).unwrap().collect::<Result<Vec<_>, _>>().unwrap()
+}
+
+#[test]
+fn automatic_pause_before_claim_and_after_claim_refunds_attempt_and_resumes() {
+    let (_dir, conn) = open_db();
+    let worker = "daily-worker-test";
+    let id = enqueue_job(&conn, "daily_journal", "local", NOW, 4,
+        Some("daily_journal:local:2026-08-15"), None).unwrap();
+    ielts_db::upsert_setting(&conn, "features", "memory_auto_candidates_v1", &serde_json::json!("disabled")).unwrap();
+    assert!(ielts_db::claim_closed_daily_job(&conn, NOW, worker).unwrap().is_none());
+    assert_eq!(load_job(&conn, &id).unwrap().unwrap().attempts, 0);
+    ielts_db::upsert_setting(&conn, "features", "memory_auto_candidates_v1", &serde_json::json!("proposal_only")).unwrap();
+    let claim = ielts_db::claim_closed_daily_job(&conn, NOW, worker).unwrap().unwrap();
+    assert_eq!(claim.id, id);
+    ielts_db::upsert_setting(&conn, "features", "memory_auto_candidates_v1", &serde_json::json!("disabled")).unwrap();
+    assert!(ielts_db::fail_job(&conn, &id, worker, NOW, "paused during execution", 60).unwrap());
+    let paused = load_job(&conn, &id).unwrap().unwrap();
+    assert_eq!(paused.status, "queued");
+    assert_eq!(paused.attempts, 0);
+    assert!(paused.last_error.is_none());
+    assert!(paused.locked_by.is_none());
+    assert!(!ielts_db::background_jobs::pause_owned_daily_job(&conn, &id, worker, NOW).unwrap());
+    ielts_db::delete_setting(&conn, "features", "memory_auto_candidates_v1").unwrap();
+    let resumed = ielts_db::claim_closed_daily_job(&conn, NOW, worker).unwrap().unwrap();
+    assert_eq!(resumed.id, id);
+    assert_eq!(resumed.attempts, 1);
+}
+
+#[test]
+fn periodic_lease_recovery_does_not_scan_activity_history() {
+    let (_dir, conn) = open_db();
+    seed_recovery_activity(&conn);
+    let id = enqueue_job(&conn, "daily_journal", "local", NOW, 4, None, None).unwrap();
+    claim_job(&conn, NOW, WORKER_A).unwrap();
+    assert_eq!(ielts_db::background_jobs::recover_daily_leases(&conn, "2026-08-17T00:06:00Z", 300).unwrap(), 1);
+    assert_eq!(load_job(&conn, &id).unwrap().unwrap().status, "queued");
+    assert_eq!(list_recent_jobs(&conn, 20).unwrap().len(), 1);
 }
 
 fn list_jobs(conn: &Connection) -> Vec<String> {

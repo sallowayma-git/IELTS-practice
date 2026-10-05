@@ -15,19 +15,17 @@
 //! created_at) before recording. An out-of-window observation returns
 //! `OutcomeAttribution::OutOfWindow` and is NOT recorded. A missing
 //! context_snapshot_id returns `MissingContextSnapshot`. A repeated same-asset
-//! attempt is recorded but flagged as non-novel (discounted).
+//! attempt is recorded but excluded from learning success/failure counts.
 
 use ielts_domain::{
     OutcomeAttribution, PromoteStrategyCandidateCommand, RecordStrategyAssignmentCommand,
     RecordStrategyCandidateBatchCommand, RecordStrategyCandidateEvaluationCommand,
-    RecordStrategyFeedbackCommand,
-    RecordStrategyOutcomeCommand, SelectStrategyCommand, StrategyAssignmentRecord,
-    StrategyCandidateBatchRecord, StrategyCandidateDecision, StrategyCandidateDisposition,
-    StrategyCandidateEvaluationRecord, StrategyFeedbackKind, StrategyFeedbackRecord,
+    RecordStrategyFeedbackCommand, RecordStrategyOutcomeCommand, SelectStrategyCommand,
+    StrategyAssignmentRecord, StrategyCandidateBatchRecord, StrategyCandidateDecision,
+    StrategyCandidateDisposition, StrategyCandidateEvaluationRecord, StrategyFeedbackRecord,
     StrategyOutcomeKind, StrategyOutcomeRecord, StrategySelection, StrategySelectionReason,
-    TeachingStrategyCatalogEntry,
-    TeachingStrategyId, UserStrategyState, DEFAULT_OUTCOME_WINDOW, EXPLORATION_MIN_EVIDENCE,
-    EXPLORATION_SLOT_RATE, PROVEN_STRATEGY_MIN_EVIDENCE,
+    TeachingStrategyCatalogEntry, TeachingStrategyId, UserStrategyState, DEFAULT_OUTCOME_WINDOW,
+    EXPLORATION_MIN_EVIDENCE, EXPLORATION_SLOT_RATE, PROVEN_STRATEGY_MIN_EVIDENCE,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -92,21 +90,6 @@ fn require_assignment_exists(conn: &Connection, assignment_id: &str) -> DbResult
     }
 }
 
-fn require_observation_exists(conn: &Connection, observation_id: &str) -> DbResult<()> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM learner_observations WHERE id = ?1",
-        params![observation_id],
-        |row| row.get(0),
-    )?;
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(DbError::Validation(format!(
-            "learner observation not found: {observation_id}"
-        )))
-    }
-}
-
 /// M10-01: load a catalog entry by strategy id. Returns the developer-defined
 /// row (seeded by the migration).
 pub fn load_catalog_entry(
@@ -150,14 +133,13 @@ pub fn load_catalog(conn: &Connection) -> DbResult<Vec<TeachingStrategyCatalogEn
     )?;
     let rows = stmt.query_map([], |row| {
         let strategy_id_str: String = row.get(0)?;
-        let strategy_id =
-            TeachingStrategyId::parse(&strategy_id_str).ok_or_else(|| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    0,
-                    rusqlite::types::Type::Text,
-                    format!("unknown strategy id: {strategy_id_str}").into(),
-                )
-            })?;
+        let strategy_id = TeachingStrategyId::parse(&strategy_id_str).ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                format!("unknown strategy id: {strategy_id_str}").into(),
+            )
+        })?;
         let contraindications_json: String = row.get(4)?;
         let contraindications: Vec<String> =
             serde_json::from_str(&contraindications_json).unwrap_or_default();
@@ -236,8 +218,9 @@ pub fn record_strategy_assignment(
             now,
         ],
     )?;
-    load_strategy_assignment_by_message(conn, &command.response_message_id)?
-        .ok_or_else(|| DbError::Message("teaching strategy assignment insert did not hydrate".into()))
+    load_strategy_assignment_by_message(conn, &command.response_message_id)?.ok_or_else(|| {
+        DbError::Message("teaching strategy assignment insert did not hydrate".into())
+    })
 }
 
 fn load_strategy_assignment_by_message(
@@ -282,14 +265,11 @@ fn hydrate_assignment(row: &rusqlite::Row<'_>) -> rusqlite::Result<StrategyAssig
         )
     })?;
     let why_json: String = row.get(3)?;
-    let why_selected: Value =
-        serde_json::from_str(&why_json).unwrap_or_else(|_| Value::Null);
+    let why_selected: Value = serde_json::from_str(&why_json).unwrap_or_else(|_| Value::Null);
     let memory_ids_json: String = row.get(4)?;
-    let memory_ids: Vec<String> =
-        serde_json::from_str(&memory_ids_json).unwrap_or_default();
+    let memory_ids: Vec<String> = serde_json::from_str(&memory_ids_json).unwrap_or_default();
     let skill_keys_json: String = row.get(5)?;
-    let skill_keys: Vec<String> =
-        serde_json::from_str(&skill_keys_json).unwrap_or_default();
+    let skill_keys: Vec<String> = serde_json::from_str(&skill_keys_json).unwrap_or_default();
     Ok(StrategyAssignmentRecord {
         id: row.get(0)?,
         user_id: row.get(1)?,
@@ -310,6 +290,8 @@ pub fn record_strategy_feedback(
     conn: &Connection,
     command: &RecordStrategyFeedbackCommand,
 ) -> DbResult<StrategyFeedbackRecord> {
+    let tx = conn.unchecked_transaction()?;
+    let conn = &tx;
     require_text(&command.assignment_id, "assignment_id")?;
     require_assignment_exists(conn, &command.assignment_id)?;
     let id = format!("tsfb-{}", Uuid::new_v4());
@@ -317,35 +299,20 @@ pub fn record_strategy_feedback(
     conn.execute(
         "INSERT INTO teaching_strategy_feedback (id, feedback_kind, assignment_id, created_at)
          VALUES (?1, ?2, ?3, ?4)",
-        params![id, command.feedback_kind.as_str(), command.assignment_id, now],
+        params![
+            id,
+            command.feedback_kind.as_str(),
+            command.assignment_id,
+            now
+        ],
     )?;
     // M10-05: aggregate satisfaction into per-user state. A reask increments
     // the reask counter; other satisfaction kinds increment satisfaction_count.
     let assignment = load_strategy_assignment_by_id(conn, &command.assignment_id)?
         .ok_or_else(|| DbError::Message("assignment vanished after feedback".into()))?;
     let scope = infer_scope_from_skill_keys(&assignment.skill_keys);
-    match command.feedback_kind {
-        StrategyFeedbackKind::Reask => {
-            update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope, |state| {
-                state.reask_count += 1;
-                state.failure_count += 1;
-            })?;
-        }
-        StrategyFeedbackKind::ThumbsUp => {
-            update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope, |state| {
-                state.satisfaction_count += 1;
-                state.success_count += 1;
-            })?;
-        }
-        StrategyFeedbackKind::ThumbsDown
-        | StrategyFeedbackKind::ExplicitCorrection
-        | StrategyFeedbackKind::Abandon => {
-            update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope, |state| {
-                state.satisfaction_count += 1;
-                state.failure_count += 1;
-            })?;
-        }
-    }
+    update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope)?;
+    tx.commit()?;
     Ok(StrategyFeedbackRecord {
         id,
         assignment_id: command.assignment_id.clone(),
@@ -360,11 +327,13 @@ pub fn record_strategy_feedback(
 /// assignment's created_at must be within DEFAULT_OUTCOME_WINDOW. A missing
 /// context_snapshot_id means the skill context is unavailable, so no outcome
 /// is recorded (M10-04 missing-context test). A repeated same-asset attempt
-/// is recorded but flagged non-novel (discounted, M10-04).
+/// is recorded but contributes neither learning success nor failure.
 pub fn record_strategy_outcome(
     conn: &Connection,
     command: &RecordStrategyOutcomeCommand,
 ) -> DbResult<OutcomeAttribution> {
+    let tx = conn.unchecked_transaction()?;
+    let conn = &tx;
     require_text(&command.assignment_id, "assignment_id")?;
     require_assignment_exists(conn, &command.assignment_id)?;
     let assignment = load_strategy_assignment_by_id(conn, &command.assignment_id)?
@@ -374,25 +343,82 @@ pub fn record_strategy_outcome(
     if assignment.context_snapshot_id.is_none() {
         return Ok(OutcomeAttribution::MissingContextSnapshot);
     }
-    // M10-04: attribution window. Count subsequent relevant skill observations
-    // for this user after the assignment's created_at. If the count exceeds
-    // the window, the observation is too far removed to attribute.
-    if let Some(observation_id) = &command.observation_id {
-        require_observation_exists(conn, observation_id)?;
+    let observation_id = command.observation_id.as_deref().ok_or_else(|| {
+        DbError::Validation("learning attribution requires observation_id".into())
+    })?;
+    let observations = load_scored_observations(conn, &assignment.user_id)?;
+    let observation = observations
+        .iter()
+        .find(|item| item.id == observation_id)
+        .ok_or_else(|| {
+            DbError::Validation("observation lacks owned, scored event evidence".into())
+        })?;
+    if command.outcome_kind == StrategyOutcomeKind::NextWritingRevision
+        && !observation.metric.starts_with("writing.")
+    {
+        return Err(DbError::Validation(
+            "writing revision requires writing score evidence".into(),
+        ));
     }
-    let subsequent_count = count_subsequent_observations(
-        conn,
-        &assignment.user_id,
-        &assignment.created_at,
-        &assignment.skill_keys,
-    )?;
-    if subsequent_count > DEFAULT_OUTCOME_WINDOW as i64 {
-        // Out of window: do not record. Never silently coerce.
+    if observation.observed_at <= parse_strategy_time(&assignment.created_at)?
+        || !observation.relevant(&assignment.skill_keys)
+    {
+        return Err(DbError::Validation(
+            "observation must be later and skill-relevant".into(),
+        ));
+    }
+    if count_subsequent_observations(&observations, &assignment, observation)?
+        > DEFAULT_OUTCOME_WINDOW as i64
+    {
         return Ok(OutcomeAttribution::OutOfWindow);
     }
-    // M10-04: prefer novel asset. A repeated same-asset attempt is recorded
-    // but flagged non-novel (discounted for confidence aggregation).
-    let novel_asset = command.novel_asset_id.is_some();
+    let (novel_asset, score_delta) =
+        evaluate_observation(conn, &observations, &assignment, observation)?;
+    if command
+        .novel_asset_id
+        .as_deref()
+        .is_some_and(|asset| Some(asset) != observation.source.asset_id())
+    {
+        return Err(DbError::Validation(
+            "novel_asset_id disagrees with event evidence".into(),
+        ));
+    }
+    if command.score_delta.is_some_and(|delta| {
+        !delta.is_finite() || score_delta.is_none_or(|actual| (delta - actual).abs() > 1e-9)
+    }) {
+        return Err(DbError::Validation(
+            "score_delta disagrees with comparable persisted scores".into(),
+        ));
+    }
+    // Retrying the same attribution must not manufacture additional evidence.
+    let existing: Option<StrategyOutcomeRecord> = conn
+        .query_row(
+            "SELECT id, outcome_kind, created_at
+         FROM teaching_strategy_outcomes WHERE assignment_id = ?1 AND observation_id = ?2
+         ORDER BY created_at, id LIMIT 1",
+            params![assignment.id, observation_id],
+            |row| {
+                let kind: String = row.get(1)?;
+                Ok(StrategyOutcomeRecord {
+                    id: row.get(0)?,
+                    assignment_id: assignment.id.clone(),
+                    outcome_kind: StrategyOutcomeKind::parse(&kind).unwrap(),
+                    observation_id: Some(observation_id.to_string()),
+                    novel_asset_id: novel_asset
+                        .then(|| observation.source.asset_id().map(str::to_string))
+                        .flatten(),
+                    score_delta,
+                    created_at: row.get(2)?,
+                })
+            },
+        )
+        .optional()?;
+    if let Some(record) = existing {
+        return Ok(OutcomeAttribution::Attributed {
+            record,
+            novel_asset,
+        });
+    }
     let id = format!("tsout-{}", Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
@@ -404,60 +430,308 @@ pub fn record_strategy_outcome(
             command.outcome_kind.as_str(),
             command.assignment_id,
             command.observation_id,
-            command.novel_asset_id,
-            command.score_delta,
+            novel_asset.then(|| observation.source.asset_id().map(str::to_string)).flatten(),
+            score_delta,
             now,
         ],
     )?;
     // M10-05: aggregate the learning outcome into per-user state.
     let scope = infer_scope_from_skill_keys(&assignment.skill_keys);
-    let is_success = matches!(
-        command.outcome_kind,
-        StrategyOutcomeKind::NextNovelSkillAttempt
-            | StrategyOutcomeKind::NextWritingRevision
-            | StrategyOutcomeKind::CorrectedRepeatedBehavior
-            | StrategyOutcomeKind::TransferToAnotherAsset
-    ) && novel_asset;
-    update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope, |state| {
-        if is_success {
-            state.success_count += 1;
-            state.novel_transfer_success += 1;
-        } else {
-            state.failure_count += 1;
-        }
-    })?;
+    update_strategy_state(conn, &assignment.user_id, assignment.strategy_id, &scope)?;
     let record = StrategyOutcomeRecord {
         id,
         assignment_id: command.assignment_id.clone(),
         outcome_kind: command.outcome_kind,
         observation_id: command.observation_id.clone(),
-        novel_asset_id: command.novel_asset_id.clone(),
-        score_delta: command.score_delta,
+        novel_asset_id: novel_asset
+            .then(|| observation.source.asset_id().map(str::to_string))
+            .flatten(),
+        score_delta,
         created_at: now,
     };
+    tx.commit()?;
     Ok(OutcomeAttribution::Attributed {
         record,
         novel_asset,
     })
 }
 
-/// M10-04: count subsequent relevant skill observations for the user after the
-/// assignment's created_at. "Relevant" is approximated by the user + time
-/// boundary; the assignment's skill_keys are recorded for later refinement
-/// but the window is a count of the user's observations after T0.
-fn count_subsequent_observations(
+// Only persisted score observations backed by an owned event can establish
+// asset identity or learning effects. Auxiliary timing/click observations do
+// not consume the attribution window.
+struct ScoredObservation {
+    id: String,
+    observed_at: chrono::DateTime<chrono::FixedOffset>,
+    source: PracticeSource,
+    attempt_id: Option<String>,
+    event_id: String,
+    skill_keys: Vec<String>,
+    metric: String,
+    score: f64,
+}
+
+#[derive(PartialEq, Eq)]
+enum PracticeSource {
+    Asset(String),
+    WritingPrompt { task_type: String, prompt: String },
+}
+
+impl PracticeSource {
+    fn asset_id(&self) -> Option<&str> {
+        match self {
+            Self::Asset(id) => Some(id),
+            Self::WritingPrompt { .. } => None,
+        }
+    }
+}
+
+// Writing ledger events deliberately omit asset_id. Resolve identity from the
+// durable attempt, never from an outcome caller or a projected payload claim.
+fn practice_source(
     conn: &Connection,
-    user_id: &str,
-    after_created_at: &str,
-    _skill_keys: &[String],
-) -> DbResult<i64> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM learner_observations
-         WHERE user_id = ?1 AND observed_at > ?2",
-        params![user_id, after_created_at],
-        |row| row.get(0),
+    asset: Option<&str>,
+    attempt: Option<&str>,
+    writing: bool,
+) -> DbResult<Option<PracticeSource>> {
+    if !writing {
+        return Ok(asset
+            .filter(|id| !id.trim().is_empty())
+            .map(|id| PracticeSource::Asset(id.into())));
+    }
+    let Some(attempt) = attempt else {
+        return Ok(None);
+    };
+    let row: Option<(
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = conn
+        .query_row(
+            "SELECT a.asset_id, a.prompt_snapshot, a.task_type, p.activity
+         FROM attempts a LEFT JOIN practice_assets p ON p.id = a.asset_id
+         WHERE a.id = ?1 AND a.activity = 'writing'",
+            params![attempt],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()?;
+    let Some((persisted_asset, prompt, task_type, activity)) = row else {
+        return Ok(None);
+    };
+    if asset.is_some() && asset != persisted_asset.as_deref() {
+        return Ok(None);
+    }
+    if let Some(id) = persisted_asset {
+        return Ok(
+            (activity.as_deref() == Some("writing") && !id.trim().is_empty())
+                .then_some(PracticeSource::Asset(id)),
+        );
+    }
+    Ok(match (task_type, prompt) {
+        (Some(task_type), Some(prompt))
+            if matches!(task_type.as_str(), "task1" | "task2") && !prompt.trim().is_empty() =>
+        {
+            Some(PracticeSource::WritingPrompt { task_type, prompt })
+        }
+        _ => None,
+    })
+}
+
+impl ScoredObservation {
+    fn relevant(&self, skills: &[String]) -> bool {
+        skills.iter().any(|skill| self.skill_keys.contains(skill))
+    }
+}
+
+fn parse_strategy_time(value: &str) -> DbResult<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map_err(|_| DbError::Validation("invalid strategy evidence timestamp".into()))
+}
+
+fn load_scored_observations(conn: &Connection, user_id: &str) -> DbResult<Vec<ScoredObservation>> {
+    let mut stmt = conn.prepare(
+        "SELECT o.id, o.observed_at, o.observation_type, o.value_num, o.payload_json,
+                e.asset_id, e.skill_key, e.id, e.attempt_id, e.payload_json
+         FROM learner_observations o
+         JOIN learner_observation_evidence link ON link.observation_id = o.id AND link.evidence_role = 'support'
+         JOIN learning_events e ON e.id = link.event_id AND e.user_id = o.user_id
+         WHERE o.user_id = ?1 AND o.evidence_strength > 0 AND o.confidence > 0
+           AND e.consolidation_state <> 'quarantined'
+           AND julianday(e.occurred_at) = julianday(o.observed_at)
+           AND o.observation_type IN ('reading.question.outcome', 'reading.attempt.score',
+                                     'writing.evaluation.overall_band', 'writing.evaluation.criterion_score')
+           AND ((o.observation_type = 'reading.question.outcome' AND e.event_type = 'reading_question_outcome')
+             OR (o.observation_type = 'reading.attempt.score' AND e.event_type IN ('attempt_submitted', 'attempt_completed'))
+             OR (o.observation_type LIKE 'writing.evaluation.%' AND e.event_type = 'writing_evaluation_completed'))
+         ORDER BY julianday(o.observed_at), o.id",
     )?;
-    Ok(count)
+    let rows = stmt.query_map(params![user_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<f64>>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, Option<String>>(5)?,
+            row.get::<_, Option<String>>(6)?,
+            row.get::<_, String>(7)?,
+            row.get::<_, Option<String>>(8)?,
+            row.get::<_, String>(9)?,
+        ))
+    })?;
+    let mut out: Vec<ScoredObservation> = Vec::new();
+    let mut seen = HashSet::new();
+    for row in rows {
+        let (id, time, kind, score, payload, asset, skill, event_id, attempt_id, event_payload) =
+            row?;
+        let payload: Value = serde_json::from_str(&payload).unwrap_or(Value::Null);
+        let writing = kind.starts_with("writing.");
+        let Some(source) = practice_source(conn, asset.as_deref(), attempt_id.as_deref(), writing)?
+        else {
+            continue;
+        };
+        if payload["assetId"]
+            .as_str()
+            .is_some_and(|asset| Some(asset) != source.asset_id())
+        {
+            continue;
+        }
+        let maximum = if kind.starts_with("writing.") {
+            9.0
+        } else {
+            1.0
+        };
+        let Some(score) =
+            score.filter(|score| score.is_finite() && (0.0..=maximum).contains(score))
+        else {
+            continue;
+        };
+        let mut skill_keys = Vec::new();
+        if writing {
+            let event_payload: Value = serde_json::from_str(&event_payload).unwrap_or(Value::Null);
+            let Some(criterion) = payload["criterion"].as_str().filter(|field| {
+                matches!(
+                    *field,
+                    "overall" | "taskResponse" | "coherence" | "lexical" | "grammar"
+                )
+            }) else {
+                continue;
+            };
+            if payload["attemptId"].as_str() != attempt_id.as_deref()
+                || event_payload["attemptId"].as_str() != attempt_id.as_deref()
+                || payload["taskType"] != event_payload["taskType"]
+                || event_payload["score"][criterion].as_f64() != Some(score)
+            {
+                continue;
+            }
+            // Each score dimension supplies its own skill, not all skills of
+            // its shared evaluation event (grammar cannot borrow lexical).
+            skill_keys.push(format!("writing.{criterion}"));
+        } else {
+            skill_keys.extend(skill);
+            let mut mapped = conn.prepare("SELECT skill_key FROM learner_skill_observations WHERE event_id = ?1 AND user_id = ?2")?;
+            let mapped_rows =
+                mapped.query_map(params![event_id, user_id], |row| row.get::<_, String>(0))?;
+            for skill in mapped_rows {
+                skill_keys.push(skill?);
+            }
+        }
+        if skill_keys.is_empty() {
+            continue;
+        }
+        let metric = format!(
+            "{}:{}:{}",
+            kind,
+            payload["criterion"].as_str().unwrap_or(""),
+            payload["taskType"].as_str().unwrap_or("")
+        );
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        out.push(ScoredObservation {
+            id,
+            observed_at: parse_strategy_time(&time)?,
+            source,
+            attempt_id,
+            event_id,
+            skill_keys,
+            metric,
+            score,
+        });
+    }
+    Ok(out)
+}
+
+fn count_subsequent_observations(
+    observations: &[ScoredObservation],
+    assignment: &StrategyAssignmentRecord,
+    target: &ScoredObservation,
+) -> DbResult<i64> {
+    let after = parse_strategy_time(&assignment.created_at)?;
+    Ok(observations
+        .iter()
+        .filter(|item| {
+            item.observed_at > after
+                && (item.observed_at, &item.id) <= (target.observed_at, &target.id)
+                && item.relevant(&assignment.skill_keys)
+        })
+        .count() as i64)
+}
+
+fn evaluate_observation(
+    conn: &Connection,
+    observations: &[ScoredObservation],
+    assignment: &StrategyAssignmentRecord,
+    target: &ScoredObservation,
+) -> DbResult<(bool, Option<f64>)> {
+    let before = parse_strategy_time(&assignment.created_at)?;
+    let mut stmt = conn.prepare(
+        "SELECT asset_id, attempt_id, activity FROM learning_events
+         WHERE user_id = ?1 AND id <> ?2
+           AND (?3 IS NULL OR attempt_id IS NULL OR attempt_id <> ?3)
+           AND julianday(occurred_at) <= julianday(?4)",
+    )?;
+    let events = stmt.query_map(
+        params![
+            assignment.user_id,
+            target.event_id,
+            target.attempt_id,
+            target.observed_at.to_rfc3339()
+        ],
+        |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        },
+    )?;
+    let mut novel = true;
+    for event in events {
+        let (asset, attempt, activity) = event?;
+        if practice_source(
+            conn,
+            asset.as_deref(),
+            attempt.as_deref(),
+            activity.as_deref() == Some("writing"),
+        )?
+        .as_ref()
+            == Some(&target.source)
+        {
+            novel = false;
+            break;
+        }
+    }
+    let baseline = observations.iter().rev().find(|item| {
+        item.observed_at <= before
+            && item.metric == target.metric
+            && item.relevant(&assignment.skill_keys)
+            && item
+                .skill_keys
+                .iter()
+                .any(|skill| target.skill_keys.contains(skill))
+    });
+    Ok((novel, baseline.map(|item| target.score - item.score)))
 }
 
 fn infer_scope_from_skill_keys(skill_keys: &[String]) -> String {
@@ -479,77 +753,116 @@ pub fn load_user_strategy_state(
     scope: &str,
 ) -> DbResult<Option<UserStrategyState>> {
     let user_id = normalize_user_id(user_id);
-    conn.query_row(
-        "SELECT user_id, strategy_id, scope, success_count, failure_count,
-                satisfaction_count, reask_count, novel_transfer_success, last_used,
-                confidence, updated_at
-         FROM user_strategy_state
-         WHERE user_id = ?1 AND strategy_id = ?2 AND scope = ?3",
-        params![user_id, strategy_id.as_str(), scope],
-        |row| hydrate_user_state(row),
-    )
-    .optional()
-    .map_err(Into::into)
-}
-
-fn hydrate_user_state(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserStrategyState> {
-    let strategy_id_str: String = row.get(1)?;
-    let strategy_id = TeachingStrategyId::parse(&strategy_id_str).ok_or_else(|| {
-        rusqlite::Error::FromSqlConversionFailure(
-            1,
-            rusqlite::types::Type::Text,
-            format!("unknown strategy id: {strategy_id_str}").into(),
-        )
-    })?;
-    Ok(UserStrategyState {
-        user_id: row.get(0)?,
+    // The old cache mixed thumbs with learning. Never trust its counters,
+    // including on read/selection before the first post-upgrade write.
+    let cached: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM user_strategy_state WHERE user_id = ?1 AND strategy_id = ?2 AND scope = ?3)",
+        params![user_id, strategy_id.as_str(), scope], |row| row.get(0),
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT id, user_id, strategy_id, why_selected_json, memory_ids_json,
+                skill_keys_json, context_snapshot_id, response_message_id, created_at
+         FROM teaching_strategy_assignments WHERE user_id = ?1 AND strategy_id = ?2
+         ORDER BY julianday(created_at), id",
+    )?;
+    let assignments = stmt
+        .query_map(params![user_id, strategy_id.as_str()], hydrate_assignment)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let assignments: Vec<_> = assignments
+        .into_iter()
+        .filter(|assignment| infer_scope_from_skill_keys(&assignment.skill_keys) == scope)
+        .collect();
+    if !cached && assignments.is_empty() {
+        return Ok(None);
+    }
+    let mut state = UserStrategyState {
+        user_id: user_id.clone(),
         strategy_id,
-        scope: row.get(2)?,
-        success_count: row.get(3)?,
-        failure_count: row.get(4)?,
-        satisfaction_count: row.get(5)?,
-        reask_count: row.get(6)?,
-        novel_transfer_success: row.get(7)?,
-        last_used: row.get(8)?,
-        confidence: row.get(9)?,
-        updated_at: row.get(10)?,
-    })
+        scope: scope.to_string(),
+        success_count: 0,
+        failure_count: 0,
+        satisfaction_count: 0,
+        reask_count: 0,
+        novel_transfer_success: 0,
+        last_used: None,
+        confidence: 0.0,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let observations = load_scored_observations(conn, &user_id)?;
+    let mut seen = HashSet::new();
+    for assignment in assignments {
+        state.last_used = Some(assignment.created_at.clone());
+        let (satisfaction, reasks): (i64, i64) = conn.query_row(
+            "SELECT COUNT(CASE WHEN feedback_kind <> 'reask' THEN 1 END),
+                    COUNT(CASE WHEN feedback_kind = 'reask' THEN 1 END)
+             FROM teaching_strategy_feedback WHERE assignment_id = ?1",
+            params![assignment.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        state.satisfaction_count += satisfaction;
+        state.reask_count += reasks;
+        if assignment.context_snapshot_id.is_none() {
+            continue;
+        }
+        let mut outcomes = conn.prepare("SELECT DISTINCT observation_id, outcome_kind FROM teaching_strategy_outcomes WHERE assignment_id = ?1 AND observation_id IS NOT NULL")?;
+        let ids = outcomes.query_map(params![assignment.id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for id in ids {
+            let (id, kind) = id?;
+            let Some(target) = observations.iter().find(|item| item.id == id) else {
+                continue;
+            };
+            if kind == "next_writing_revision" && !target.metric.starts_with("writing.") {
+                continue;
+            }
+            if !valid_outcome_target(&observations, &assignment, target)? {
+                continue;
+            }
+            let (novel, delta) = evaluate_observation(conn, &observations, &assignment, target)?;
+            if !novel || !seen.insert(id) {
+                continue;
+            }
+            match delta {
+                Some(delta) if delta > 0.0 => {
+                    state.success_count += 1;
+                    state.novel_transfer_success += 1;
+                }
+                Some(delta) if delta < 0.0 => state.failure_count += 1,
+                _ => {}
+            }
+        }
+    }
+    state.confidence =
+        UserStrategyState::clamp_confidence(state.success_count, state.failure_count);
+    Ok(Some(state))
 }
 
-/// M10-05: update the per-user strategy state with a closure. The row is
-/// upserted; confidence is recomputed as the bounded success/(success+failure)
-/// formula, clamped to [0, 1]. No global reinforcement learning is performed.
-fn update_strategy_state<F>(
+fn valid_outcome_target(
+    observations: &[ScoredObservation],
+    assignment: &StrategyAssignmentRecord,
+    target: &ScoredObservation,
+) -> DbResult<bool> {
+    Ok(
+        target.observed_at > parse_strategy_time(&assignment.created_at)?
+            && target.relevant(&assignment.skill_keys)
+            && count_subsequent_observations(observations, assignment, target)?
+                <= DEFAULT_OUTCOME_WINDOW as i64,
+    )
+}
+
+/// Refresh the compatibility cache exclusively from independent persisted facts.
+fn update_strategy_state(
     conn: &Connection,
     user_id: &str,
     strategy_id: TeachingStrategyId,
     scope: &str,
-    mutate: F,
-) -> DbResult<()>
-where
-    F: FnOnce(&mut UserStrategyState),
-{
+) -> DbResult<()> {
     let user_id = normalize_user_id(user_id);
-    let mut state = load_user_strategy_state(conn, &user_id, strategy_id, scope)?.unwrap_or_else(|| {
-        UserStrategyState {
-            user_id: user_id.clone(),
-            strategy_id,
-            scope: scope.to_string(),
-            success_count: 0,
-            failure_count: 0,
-            satisfaction_count: 0,
-            reask_count: 0,
-            novel_transfer_success: 0,
-            last_used: None,
-            confidence: 0.0,
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        }
-    });
-    mutate(&mut state);
-    state.confidence = UserStrategyState::clamp_confidence(state.success_count, state.failure_count);
+    let mut state = load_user_strategy_state(conn, &user_id, strategy_id, scope)?
+        .ok_or_else(|| DbError::Message("strategy state has no assignment".into()))?;
     let now = chrono::Utc::now().to_rfc3339();
     state.updated_at = now.clone();
-    state.last_used = Some(now);
     conn.execute(
         "INSERT INTO user_strategy_state
            (user_id, strategy_id, scope, success_count, failure_count,
@@ -590,19 +903,17 @@ pub fn load_user_strategy_states_for_scope(
     scope: &str,
 ) -> DbResult<Vec<UserStrategyState>> {
     let user_id = normalize_user_id(user_id);
-    let mut stmt = conn.prepare(
-        "SELECT user_id, strategy_id, scope, success_count, failure_count,
-                satisfaction_count, reask_count, novel_transfer_success, last_used,
-                confidence, updated_at
-         FROM user_strategy_state
-         WHERE user_id = ?1 AND scope = ?2
-         ORDER BY confidence DESC, (success_count + failure_count) DESC",
-    )?;
-    let rows = stmt.query_map(params![user_id, scope], |row| hydrate_user_state(row))?;
     let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
+    for strategy in TeachingStrategyId::ALL {
+        if let Some(state) = load_user_strategy_state(conn, &user_id, strategy, scope)? {
+            out.push(state);
+        }
     }
+    out.sort_by(|a, b| {
+        b.confidence
+            .total_cmp(&a.confidence)
+            .then(b.evidence_count().cmp(&a.evidence_count()))
+    });
     Ok(out)
 }
 
@@ -657,7 +968,10 @@ pub fn select_strategy(
     let states = load_user_strategy_states_for_scope(conn, &user_id, &scope)?;
     for state in &states {
         if state.evidence_count() >= PROVEN_STRATEGY_MIN_EVIDENCE
-            && candidates.iter().any(|e| e.strategy_id == state.strategy_id)
+            && state.confidence > 0.5
+            && candidates
+                .iter()
+                .any(|e| e.strategy_id == state.strategy_id)
         {
             return Ok(StrategySelection {
                 strategy_id: state.strategy_id,
@@ -788,7 +1102,9 @@ fn candidate_text_field(
             Some(value.to_string())
         }
         Some(_) => {
-            errors.push(format!("{field} must be non-empty and <= {max_bytes} bytes"));
+            errors.push(format!(
+                "{field} must be non-empty and <= {max_bytes} bytes"
+            ));
             None
         }
         None => {
@@ -804,17 +1120,16 @@ fn valid_strategy_id(value: &str) -> bool {
         return false;
     };
     first.is_ascii_lowercase()
-        && chars.all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_')
+        && chars.all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+        })
         && value
             .rsplit_once("_v")
             .map(|(_, version)| !version.is_empty() && version.chars().all(|c| c.is_ascii_digit()))
             .unwrap_or(false)
 }
 
-fn evaluate_strategy_candidate_batch(
-    conn: &Connection,
-    batch: &Value,
-) -> (bool, Value) {
+fn evaluate_strategy_candidate_batch(conn: &Connection, batch: &Value) -> (bool, Value) {
     let mut errors = Vec::new();
     let mut candidate_count = 0usize;
     let mut valid_candidate_count = 0usize;
@@ -844,12 +1159,8 @@ fn evaluate_strategy_candidate_batch(
             continue;
         };
         let before = errors.len();
-        let strategy_id = candidate_text_field(
-            candidate,
-            "strategyId",
-            MAX_STRATEGY_ID_BYTES,
-            &mut errors,
-        );
+        let strategy_id =
+            candidate_text_field(candidate, "strategyId", MAX_STRATEGY_ID_BYTES, &mut errors);
         if let Some(strategy_id) = strategy_id.as_deref() {
             if !valid_strategy_id(strategy_id) {
                 errors.push(format!(
@@ -889,9 +1200,12 @@ fn evaluate_strategy_candidate_batch(
         }
 
         match candidate.get("contraindications") {
-            Some(Value::Array(values)) if values.iter().all(|value| {
-                value.as_str().is_some_and(|text| !text.trim().is_empty() && text.len() <= 128)
-            }) => {}
+            Some(Value::Array(values))
+                if values.iter().all(|value| {
+                    value
+                        .as_str()
+                        .is_some_and(|text| !text.trim().is_empty() && text.len() <= 128)
+                }) => {}
             _ => errors.push(format!(
                 "candidate[{index}].contraindications must be an array of non-empty strings"
             )),
@@ -962,11 +1276,12 @@ pub fn record_strategy_candidate_evaluation(
         )));
     }
 
-    let batch: Value = serde_json::from_str(&batch_text)
-        .map_err(|error| DbError::Message(format!("stored candidate batch is invalid JSON: {error}")))?;
+    let batch: Value = serde_json::from_str(&batch_text).map_err(|error| {
+        DbError::Message(format!("stored candidate batch is invalid JSON: {error}"))
+    })?;
     let (passed, metrics) = evaluate_strategy_candidate_batch(&tx, &batch);
-    let metrics_text = serde_json::to_string(&metrics)
-        .map_err(|error| DbError::Message(error.to_string()))?;
+    let metrics_text =
+        serde_json::to_string(&metrics).map_err(|error| DbError::Message(error.to_string()))?;
 
     let id = format!("tsev-{}", Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
@@ -974,13 +1289,7 @@ pub fn record_strategy_candidate_evaluation(
         "INSERT INTO strategy_candidate_evaluations
            (id, batch_id, passed, metrics_json, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            id,
-            command.batch_id,
-            passed as i64,
-            metrics_text,
-            now,
-        ],
+        params![id, command.batch_id, passed as i64, metrics_text, now,],
     )?;
     tx.execute(
         "UPDATE strategy_candidate_batches SET disposition = 'eval' WHERE id = ?1",
@@ -1040,8 +1349,7 @@ pub fn promote_strategy_candidate(
             .optional()?;
         if latest_passed != Some(1) {
             return Err(DbError::Validation(
-                "strategy candidate promotion requires a latest passing offline evaluation"
-                    .into(),
+                "strategy candidate promotion requires a latest passing offline evaluation".into(),
             ));
         }
         StrategyCandidateDisposition::Promoted

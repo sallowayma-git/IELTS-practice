@@ -1,7 +1,7 @@
 //! Versioned, lossless backup / restore for the canonical SQLite store.
 //! Ordinary backups contain opaque keychain references, never secret bytes.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use rusqlite::types::{Value as SqlValue, ValueRef};
@@ -18,13 +18,89 @@ use crate::migrate::current_version;
 use crate::settings::{list_secret_refs, list_settings, put_secret_ref, upsert_setting};
 use crate::sqlite::{DbError, DbResult};
 
-pub const BACKUP_SCHEMA_VERSION: u32 = 16;
+pub const BACKUP_SCHEMA_VERSION: u32 = 17;
 const LEGACY_BACKUP_SCHEMA_VERSION: u32 = 1;
 
 // Parent tables precede their children. Restore inserts in this order and
 // clears in reverse order, so foreign keys remain enabled for the whole
 // transaction.
 const CANONICAL_TABLES: &[&str] = &[
+    "practice_assets",
+    "writing_topics",
+    "writing_prompts",
+    "reading_suites",
+    "attempts",
+    "history_retention_policy",
+    "attempt_answers",
+    "attempt_annotations",
+    "writing_evaluations",
+    "writing_drafts",
+    "attempt_idempotency",
+    "evaluation_sessions",
+    "evaluation_checkpoints",
+    "evaluation_events",
+    "evaluation_lineage",
+    "reading_suite_items",
+    "endless_sessions",
+    "reading_timer_states",
+    "mode_idempotency",
+    "coach_threads",
+    "coach_messages",
+    "coach_feedback",
+    "coach_reask_links",
+    "coach_strategy_assignments_v0",
+    "coach_outcome_links_v0",
+    "agent_runs",
+    "agent_tool_calls",
+    "learning_events",
+    "explicit_user_preferences",
+    "memory_items",
+    "memory_candidate_batches",
+    "memory_candidates",
+    "memory_evidence",
+    "memory_mutations",
+    "daily_journals",
+    "daily_journal_sources",
+    "background_jobs",
+    "dream_runs",
+    "dream_candidates",
+    "memory_relations",
+    "memory_feedback",
+    "memory_capacity_state",
+    "teaching_strategy_catalog",
+    "teaching_strategy_assignments",
+    "teaching_strategy_feedback",
+    "teaching_strategy_outcomes",
+    "user_strategy_state",
+    "strategy_candidate_batches",
+    "strategy_candidate_evaluations",
+    "prompt_templates",
+    "prompt_versions",
+    "skill_definitions",
+    "skill_versions",
+    "eval_cases",
+    "candidate_promotions",
+    "prompt_skill_releases",
+    "prompt_skill_release_heads",
+    "eval_runs",
+    "eval_results",
+    "shadow_runs",
+    "agent_threads",
+    "agent_messages",
+    "agent_checkpoints",
+    "study_plans",
+    "study_plan_items",
+    "agent_action_approvals",
+    "vocabulary_items",
+    "vocabulary_review_state",
+    "dictionary_entries",
+    "settings",
+    "migration_meta",
+];
+
+// Schema v16 predates the publication predecessor chain. Never require the
+// new tables from old packages or reconstruct history from version numbers.
+const V16_CANONICAL_TABLES: &[&str] = &[
     "practice_assets",
     "writing_topics",
     "writing_prompts",
@@ -661,8 +737,10 @@ const V14_CANONICAL_TABLES: &[&str] = &[
 ];
 
 fn snapshot_tables_for_schema(schema_version: u32) -> &'static [&'static str] {
-    if schema_version >= 16 {
+    if schema_version >= 17 {
         CANONICAL_TABLES
+    } else if schema_version == 16 {
+        V16_CANONICAL_TABLES
     } else if schema_version == 15 {
         V15_CANONICAL_TABLES
     } else if schema_version == 14 {
@@ -982,7 +1060,18 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
     }
     for table in &package.database {
         let target_columns = table_columns(conn, &table.name)?;
-        if table.columns != target_columns {
+        // Migration 26 adds only a nullable submission revision. Historical
+        // snapshots cannot invent it; INSERT with the old columns leaves NULL.
+        // Keep every other column and all modern snapshots strictly checked.
+        let pre_revision_attempt = table.name == "attempts"
+            && package.manifest.database_schema_version < 26
+            && table.columns
+                == target_columns
+                    .iter()
+                    .filter(|column| column.as_str() != "submitted_asset_fingerprint")
+                    .cloned()
+                    .collect::<Vec<_>>();
+        if table.columns != target_columns && !pre_revision_attempt {
             return Err(DbError::Validation(format!(
                 "backup table {} columns do not match target schema",
                 table.name
@@ -1026,6 +1115,10 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
         if *table == "history_retention_policy" && !source_tables.contains(table) {
             continue;
         }
+        if *table == "prompt_skill_releases" {
+            clear_release_history(tx)?;
+            continue;
+        }
         tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
     }
     for table_name in source_tables {
@@ -1052,7 +1145,12 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             quote_identifier(table_name)
         );
         let mut stmt = tx.prepare(&sql)?;
-        for row in &table.rows {
+        let rows = if *table_name == "prompt_skill_releases" {
+            release_rows_in_order(table)?
+        } else {
+            table.rows.iter().collect()
+        };
+        for row in rows {
             let values = row.iter().map(sql_value).collect::<Vec<_>>();
             stmt.execute(params_from_iter(values))?;
         }
@@ -1110,6 +1208,65 @@ fn assert_no_foreign_key_violations(conn: &Connection) -> DbResult<()> {
         return Err(DbError::Validation(format!(
             "foreign key violation after restore: {table} -> {parent}"
         )));
+    }
+    Ok(())
+}
+
+// JSON/id/timestamp order is unrelated to publication order. Build the order
+// from recorded edges only, in O(rows + edges), and reject cycles.
+fn release_rows_in_order(table: &BackupTable) -> DbResult<Vec<&Vec<BackupSqlValue>>> {
+    let ids = text_set(table, "id")?;
+    require_optional_refs(table, "predecessor_release_id", &ids)?;
+    let id_index = column_index(table, "id")?;
+    let predecessor_index = column_index(table, "predecessor_release_id")?;
+    let mut children: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut ready = VecDeque::new();
+    for (index, row) in table.rows.iter().enumerate() {
+        match &row[predecessor_index] {
+            BackupSqlValue::Text(parent) => children.entry(parent).or_default().push(index),
+            BackupSqlValue::Null => ready.push_back(index),
+            _ => unreachable!("reference types validated above"),
+        }
+    }
+    let mut ordered = Vec::with_capacity(table.rows.len());
+    while let Some(index) = ready.pop_front() {
+        let row = &table.rows[index];
+        ordered.push(row);
+        let BackupSqlValue::Text(id) = &row[id_index] else {
+            unreachable!("ids validated above");
+        };
+        if let Some(indices) = children.remove(id.as_str()) {
+            ready.extend(indices);
+        }
+    }
+    if ordered.len() != table.rows.len() {
+        return Err(DbError::Validation(
+            "cycle in prompt_skill_releases predecessor chain".into(),
+        ));
+    }
+    Ok(ordered)
+}
+
+fn clear_release_history(tx: &Transaction<'_>) -> DbResult<()> {
+    let mut stmt = tx.prepare("SELECT id, predecessor_release_id FROM prompt_skill_releases")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(vec![
+                sql_value_from_ref(row.get_ref(0)?),
+                sql_value_from_ref(row.get_ref(1)?),
+            ])
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let table = BackupTable {
+        name: "prompt_skill_releases".into(),
+        columns: vec!["id".into(), "predecessor_release_id".into()],
+        rows,
+    };
+    // ON DELETE RESTRICT needs children removed before their predecessors,
+    // even while other restore foreign keys are deferred. Heads are already gone.
+    let mut delete = tx.prepare("DELETE FROM prompt_skill_releases WHERE id = ?1")?;
+    for row in release_rows_in_order(&table)?.into_iter().rev() {
+        delete.execute([sql_value(&row[0])])?;
     }
     Ok(())
 }
@@ -1286,6 +1443,19 @@ fn validate_json_cells(tables: &HashMap<&str, &BackupTable>) -> DbResult<()> {
 }
 
 fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult<()> {
+    if let Some(releases) = tables.get("prompt_skill_releases") {
+        release_rows_in_order(releases)?;
+        require_refs(
+            releases,
+            "candidate_id",
+            &text_set(tables["candidate_promotions"], "id")?,
+        )?;
+        require_refs(
+            tables["prompt_skill_release_heads"],
+            "release_id",
+            &text_set(releases, "id")?,
+        )?;
+    }
     let assets = text_set(tables["practice_assets"], "id")?;
     let suites = text_set(tables["reading_suites"], "id")?;
     let attempts = text_set(tables["attempts"], "id")?;
@@ -1345,13 +1515,7 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
     {
         require_refs(tool_calls, "run_id", &text_set(runs, "id")?)?;
     }
-    if let (
-        Some(items),
-        Some(batches),
-        Some(candidates),
-        Some(evidence),
-        Some(mutations),
-    ) = (
+    if let (Some(items), Some(batches), Some(candidates), Some(evidence), Some(mutations)) = (
         tables.get("memory_items"),
         tables.get("memory_candidate_batches"),
         tables.get("memory_candidates"),
@@ -1381,7 +1545,14 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
     // messages, checkpoints, and approvals; study_plans is the parent for
     // plan items. run_id on checkpoints references agent_runs but is
     // optional and may predate the run row, so it is not validated here.
-    if let (Some(threads), Some(messages), Some(checkpoints), Some(plans), Some(items), Some(approvals)) = (
+    if let (
+        Some(threads),
+        Some(messages),
+        Some(checkpoints),
+        Some(plans),
+        Some(items),
+        Some(approvals),
+    ) = (
         tables.get("agent_threads"),
         tables.get("agent_messages"),
         tables.get("agent_checkpoints"),
@@ -1412,11 +1583,7 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
         let message_ids = text_set(tables["coach_messages"], "id")?;
         require_refs(assignments, "coach_message_id", &message_ids)?;
         let assignment_ids = text_set(assignments, "id")?;
-        require_refs(
-            outcome_links,
-            "strategy_assignment_id",
-            &assignment_ids,
-        )?;
+        require_refs(outcome_links, "strategy_assignment_id", &assignment_ids)?;
         // context_snapshot_id and future_observation_id reference derived
         // projection tables (agent_context_snapshots / learner_observations)
         // that are intentionally not part of the backup snapshot; they are
@@ -1617,7 +1784,11 @@ fn validate_secret_policy(package: &BackupPackage) -> DbResult<()> {
         ("memory_candidates", &["proposed_statement"][..]),
         ("memory_mutations", &["reason"][..]),
     ] {
-        let Some(table) = package.database.iter().find(|table| table.name == table_name) else {
+        let Some(table) = package
+            .database
+            .iter()
+            .find(|table| table.name == table_name)
+        else {
             continue;
         };
         for column in columns {

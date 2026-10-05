@@ -625,6 +625,87 @@ fn study_plan_crud_is_stable() {
 }
 
 #[test]
+fn study_plan_proposal_probe_survives_database_reopen() {
+    let (dir, conn) = open_db();
+    let probe = json!({
+        "skillKey": "reading.tfng", "probeKind": "contrastive_pair",
+        "avoidAssetIds": ["asset-1", "asset-2"], "reasonCodes": ["review_due"]
+    });
+    let command = CreateStudyPlanCommand::from_planner_proposal(&json!({
+        "userGoal": "improve reading", "totalEstimatedMinutes": 15,
+        "targetDate": "2026-10-20",
+        "items": [{"skillProbe": probe, "whyText": "review due", "estimatedMinutes": 15,
+                   "questionKind": "reading_tfng", "itemId": "proposal-1", "schemaVersion": 1}]
+    })).unwrap();
+    let plan = create_study_plan(&conn, &command).unwrap();
+    let stored: String = conn.query_row(
+        "SELECT skill_probe FROM study_plan_items WHERE plan_id = ?1",
+        [&plan.id], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&stored).unwrap(), probe);
+    drop(conn);
+    let conn = open_connection(&DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
+    let snapshot = load_latest_study_plan(&conn, "local").unwrap().unwrap();
+    let wire = serde_json::to_value(&snapshot).unwrap();
+    assert_eq!(wire["plan"]["targetDate"], "2026-10-20");
+    assert_eq!(wire["items"][0]["skillProbe"], probe);
+    let item: ielts_domain::StudyPlanItem = serde_json::from_value(wire["items"][0].clone()).unwrap();
+    assert_eq!(item, snapshot.items[0]);
+}
+
+#[test]
+fn study_plan_rejects_invalid_structured_probes_atomically() {
+    let (_dir, conn) = open_db();
+    let valid = json!({"skillKey": "reading.tfng", "probeKind": "novel_item", "avoidAssetIds": []});
+    let mut invalid = Vec::new();
+    for kind in [json!("unknown"), json!(null), json!(1)] {
+        let mut probe = valid.clone();
+        probe["probeKind"] = kind;
+        invalid.push(probe);
+    }
+    for ids in [json!([""]), json!([" "]), json!(["a", "a"]), json!([1]),
+                json!(["a\n"]), json!(["x".repeat(129)]), json!((0..33).map(|i| format!("asset-{i}")).collect::<Vec<_>>())] {
+        let mut probe = valid.clone();
+        probe["avoidAssetIds"] = ids;
+        invalid.push(probe);
+    }
+    for probe in invalid {
+        // Direct Rust callers bypass serde; the DB authority still rejects.
+        let command = CreateStudyPlanCommand {
+            user_id: "local".into(), goal: "review".into(), available_minutes: 20,
+            target_date: None,
+            items: vec![
+                CreateStudyPlanItemCommand { skill_probe: valid.to_string(), why_text: "valid".into(), estimated_minutes: 10 },
+                CreateStudyPlanItemCommand { skill_probe: probe.to_string(), why_text: "invalid".into(), estimated_minutes: 10 },
+            ],
+        };
+        assert!(create_study_plan(&conn, &command).is_err(), "{probe}");
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM study_plans", [], |row| row.get(0)).unwrap();
+        assert_eq!(count, 0, "invalid probe must roll back the entire proposal");
+    }
+}
+
+#[test]
+fn study_plan_legacy_and_probe_bounds_remain_compatible() {
+    let (_dir, conn) = open_db();
+    for probe in [json!("reading.tfng"), json!({"skillKey": "reading.tfng"})] {
+        let command = CreateStudyPlanCommand::from_planner_proposal(&json!({
+            "userGoal": "review", "totalEstimatedMinutes": 10,
+            "items": [{"skillProbe": probe, "whyText": "legacy", "estimatedMinutes": 10}]
+        })).unwrap();
+        assert_eq!(command.items[0].skill_probe, "reading.tfng");
+        let plan = create_study_plan(&conn, &command).unwrap();
+        let items = list_study_plan_items(&conn, &plan.id).unwrap();
+        assert_eq!(serde_json::to_value(&items).unwrap()[0]["skillProbe"], "reading.tfng");
+    }
+    for kind in ["novel_item", "same_item_retention", "contrastive_pair", "coach_micro_drill", "writing_rewrite"] {
+        let probe = json!({"skillKey": "s".repeat(64), "probeKind": kind,
+            "avoidAssetIds": (0..32).map(|i| format!("{i:03}{}", "x".repeat(125))).collect::<Vec<_>>()});
+        assert!(ielts_domain::study_plan_probe_value(&probe.to_string()).is_ok());
+    }
+}
+
+#[test]
 fn archive_thread_cascades_to_messages_and_checkpoints() {
     let (_dir, conn) = open_db();
     let thread_id = seed_thread(&conn, "local", ThreadKind::Workspace, "t1");

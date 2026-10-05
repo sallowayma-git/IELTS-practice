@@ -13,17 +13,16 @@
 //!   new_user_message_id).
 //! - `coach_strategy_assignments_v0` is unique on coach_message_id (one
 //!   strategy per assistant message).
-//! - `coach_outcome_links_v0` is keyed on (strategy_assignment_id,
-//!   future_observation_id, outcome_kind); satisfaction and learning are
-//!   recorded on separate rows.
+//! - Existing `coach_outcome_links_v0` rows remain readable by other consumers.
+//!   New attribution fails closed until trusted provenance is available.
 
 use ielts_domain::{
     CoachFeedbackKind, CoachFeedbackRecord, CoachFollowupType, CoachOutcomeKind,
-    CoachOutcomeLinkRecord, CoachReaskLinkRecord, CoachStrategyAssignmentRecord,
-    CoachStrategyId, LinkCoachOutcomeCommand, RecordCoachFeedbackCommand,
-    RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
+    CoachOutcomeLinkRecord, CoachReaskLinkRecord, CoachStrategyAssignmentRecord, CoachStrategyId,
+    LinkCoachOutcomeCommand, RecordCoachFeedbackCommand, RecordCoachStrategyAssignmentCommand,
+    RecordReaskLinkCommand,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -41,8 +40,21 @@ pub fn record_coach_feedback(
     conn: &Connection,
     command: &RecordCoachFeedbackCommand,
 ) -> DbResult<CoachFeedbackRecord> {
+    let tx = conn.unchecked_transaction()?;
+    let record = record_coach_feedback_in_transaction(&tx, command)?;
+    tx.commit()?;
+    Ok(record)
+}
+
+/// Reuse the caller's transaction so feedback, ledger and hydration commit together.
+pub(crate) fn record_coach_feedback_in_transaction(
+    tx: &Transaction<'_>,
+    command: &RecordCoachFeedbackCommand,
+) -> DbResult<CoachFeedbackRecord> {
+    let conn: &Connection = tx;
     require_text(&command.coach_message_id, "coach_message_id")?;
-    require_message_exists(conn, &command.coach_message_id)?;
+    require_local_user(&command.user_id)?;
+    require_completed_assistant(conn, &command.coach_message_id)?;
     let payload_json = command
         .payload
         .as_ref()
@@ -104,6 +116,14 @@ pub fn record_coach_feedback(
     }
     load_coach_feedback(conn, &command.coach_message_id, command.feedback_kind)?
         .ok_or_else(|| DbError::Message("coach feedback insert did not hydrate".into()))
+        .and_then(|record| {
+            if record.user_id != DEFAULT_USER_ID {
+                return Err(DbError::Validation(
+                    "coach feedback owner must be local".into(),
+                ));
+            }
+            Ok(record)
+        })
 }
 
 fn load_coach_feedback(
@@ -118,8 +138,7 @@ fn load_coach_feedback(
         params![coach_message_id, feedback_kind.as_str()],
         |row| {
             let payload_text: Option<String> = row.get(4)?;
-            let payload = payload_text
-                .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+            let payload = payload_text.and_then(|text| serde_json::from_str::<Value>(&text).ok());
             Ok(CoachFeedbackRecord {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
@@ -141,15 +160,36 @@ pub fn record_reask_link(
     conn: &Connection,
     command: &RecordReaskLinkCommand,
 ) -> DbResult<CoachReaskLinkRecord> {
-    require_text(&command.parent_assistant_message_id, "parent_assistant_message_id")?;
+    require_text(
+        &command.parent_assistant_message_id,
+        "parent_assistant_message_id",
+    )?;
     require_text(&command.new_user_message_id, "new_user_message_id")?;
     if command.parent_assistant_message_id == command.new_user_message_id {
         return Err(DbError::Validation(
             "parent_assistant_message_id and new_user_message_id must differ".into(),
         ));
     }
-    require_message_exists(conn, &command.parent_assistant_message_id)?;
-    require_message_exists(conn, &command.new_user_message_id)?;
+    require_local_user(&command.user_id)?;
+    let parent = load_link_message(conn, &command.parent_assistant_message_id)?;
+    let new = load_link_message(conn, &command.new_user_message_id)?;
+    if parent.role != "assistant" || new.role != "user" {
+        return Err(DbError::Validation(
+            "re-ask requires assistant parent and new user message".into(),
+        ));
+    }
+    if parent.thread_id != new.thread_id {
+        return Err(DbError::Validation(
+            "re-ask messages must belong to the same thread".into(),
+        ));
+    }
+    if new.sequence <= parent.sequence
+        || parse_time(&new.created_at)? <= parse_time(&parent.created_at)?
+    {
+        return Err(DbError::Validation(
+            "re-ask requires increasing sequence and time".into(),
+        ));
+    }
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO coach_reask_links (parent_assistant_message_id, new_user_message_id, feedback_kind, created_at)
@@ -161,8 +201,12 @@ pub fn record_reask_link(
             now,
         ],
     )?;
-    load_reask_link(conn, &command.parent_assistant_message_id, &command.new_user_message_id)?
-        .ok_or_else(|| DbError::Message("coach re-ask link insert did not hydrate".into()))
+    load_reask_link(
+        conn,
+        &command.parent_assistant_message_id,
+        &command.new_user_message_id,
+    )?
+    .ok_or_else(|| DbError::Message("coach re-ask link insert did not hydrate".into()))
 }
 
 fn load_reask_link(
@@ -188,14 +232,16 @@ fn load_reask_link(
     .map_err(Into::into)
 }
 
-/// M6-04: record the teaching-strategy provenance for a coach response. One
-/// strategy assignment per assistant message (unique on coach_message_id).
+/// Read an identical historical assignment retry without authorizing caller
+/// supplied provenance. New assignments require host-owned evidence unavailable
+/// through this command; conflicting retries must never rewrite history.
 pub fn record_coach_strategy_assignment(
     conn: &Connection,
     command: &RecordCoachStrategyAssignmentCommand,
 ) -> DbResult<CoachStrategyAssignmentRecord> {
     require_text(&command.coach_message_id, "coach_message_id")?;
-    require_message_exists(conn, &command.coach_message_id)?;
+    require_local_user(&command.user_id)?;
+    require_completed_assistant(conn, &command.coach_message_id)?;
     if command.skills_addressed.len() > MAX_SKILLS {
         return Err(DbError::Validation(format!(
             "skills_addressed exceeds {MAX_SKILLS} entries"
@@ -215,38 +261,21 @@ pub fn record_coach_strategy_assignment(
     if let Some(context_snapshot_id) = &command.context_snapshot_id {
         require_text(context_snapshot_id, "context_snapshot_id")?;
     }
-    let skills_json = serde_json::to_string(&command.skills_addressed)
-        .map_err(|error| DbError::Message(error.to_string()))?;
-    let memory_ids_json = serde_json::to_string(&command.memory_ids_used)
-        .map_err(|error| DbError::Message(error.to_string()))?;
-    let id = format!("csa-{}", Uuid::new_v4());
-    let now = chrono::Utc::now().to_rfc3339();
-    let user_id = normalize_user_id(&command.user_id);
-    conn.execute(
-        "INSERT INTO coach_strategy_assignments_v0
-           (id, user_id, coach_message_id, strategy_id, skills_addressed_json,
-            memory_ids_used_json, context_snapshot_id, followup_type, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-         ON CONFLICT(coach_message_id) DO UPDATE SET
-           strategy_id = excluded.strategy_id,
-           skills_addressed_json = excluded.skills_addressed_json,
-           memory_ids_used_json = excluded.memory_ids_used_json,
-           context_snapshot_id = excluded.context_snapshot_id,
-           followup_type = excluded.followup_type",
-        params![
-            id,
-            user_id,
-            command.coach_message_id,
-            command.strategy_id.as_str(),
-            skills_json,
-            memory_ids_json,
-            command.context_snapshot_id,
-            command.followup_type.as_str(),
-            now,
-        ],
-    )?;
-    load_strategy_assignment(conn, &command.coach_message_id)?
-        .ok_or_else(|| DbError::Message("coach strategy assignment insert did not hydrate".into()))
+    let record = load_strategy_assignment(conn, &command.coach_message_id)?.ok_or_else(|| {
+        DbError::Validation("new coach strategy assignment unavailable: requires verified host trace, bound snapshot and host-selected strategy metadata".into())
+    })?;
+    if record.user_id != DEFAULT_USER_ID
+        || record.strategy_id != command.strategy_id
+        || record.skills_addressed != command.skills_addressed
+        || record.memory_ids_used != command.memory_ids_used
+        || record.context_snapshot_id != command.context_snapshot_id
+        || record.followup_type != command.followup_type
+    {
+        return Err(DbError::Validation(
+            "coach strategy assignment conflict: historical assignment is immutable".into(),
+        ));
+    }
+    Ok(record)
 }
 
 fn load_strategy_assignment(
@@ -282,10 +311,15 @@ fn load_strategy_assignment(
                     ))),
                 )
             })?;
-            let skills: Vec<String> =
-                serde_json::from_str(&skills_str).unwrap_or_default();
-            let memory_ids: Vec<String> =
-                serde_json::from_str(&memory_ids_str).unwrap_or_default();
+            let decode_list = |text: &str, column| {
+                serde_json::from_str::<Vec<String>>(text).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        column, rusqlite::types::Type::Text, Box::new(error),
+                    )
+                })
+            };
+            let skills = decode_list(&skills_str, 4)?;
+            let memory_ids = decode_list(&memory_ids_str, 5)?;
             Ok(CoachStrategyAssignmentRecord {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
@@ -303,113 +337,125 @@ fn load_strategy_assignment(
     .map_err(Into::into)
 }
 
-/// M6-10: link a strategy assignment to a future observation. Satisfaction and
-/// learning outcomes are recorded on separate rows; a thumbs-up is never
-/// treated as a learning outcome.
+/// M6-10: validate a requested future-outcome link. v0 cannot authorize new
+/// links: it lacks trusted context ownership and satisfaction projections.
+/// Existing feedback, strategy assignments and explicit re-asks remain usable.
 pub fn link_coach_outcome(
     conn: &Connection,
     command: &LinkCoachOutcomeCommand,
 ) -> DbResult<CoachOutcomeLinkRecord> {
     require_text(&command.strategy_assignment_id, "strategy_assignment_id")?;
     require_text(&command.future_observation_id, "future_observation_id")?;
-    require_strategy_assignment_exists(conn, &command.strategy_assignment_id)?;
-    require_observation_exists(conn, &command.future_observation_id)?;
-    let now = chrono::Utc::now().to_rfc3339();
-    conn.execute(
-        "INSERT INTO coach_outcome_links_v0
-           (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
-         VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(strategy_assignment_id, future_observation_id, outcome_kind) DO NOTHING",
-        params![
-            command.strategy_assignment_id,
-            command.future_observation_id,
-            command.outcome_kind.as_str(),
-            now,
-        ],
-    )?;
-    load_outcome_link(
-        conn,
-        &command.strategy_assignment_id,
-        &command.future_observation_id,
-        command.outcome_kind,
-    )?
-    .ok_or_else(|| DbError::Message("coach outcome link insert did not hydrate".into()))
+    require_outcome_authority(conn, command)
 }
 
-fn load_outcome_link(
-    conn: &Connection,
-    strategy_assignment_id: &str,
-    future_observation_id: &str,
-    outcome_kind: CoachOutcomeKind,
-) -> DbResult<Option<CoachOutcomeLinkRecord>> {
+fn require_completed_assistant(conn: &Connection, message_id: &str) -> DbResult<()> {
+    let message: Option<(String, String)> = conn.query_row(
+        "SELECT role, status FROM coach_messages WHERE id = ?1",
+        params![message_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+    let (role, status) = message.ok_or_else(|| {
+        DbError::Validation(format!("coach message not found: {message_id}"))
+    })?;
+    if role != "assistant" || status != "completed" {
+        return Err(DbError::Validation(
+            "coach feedback/strategy requires a completed assistant message".into(),
+        ));
+    }
+    Ok(())
+}
+
+struct LinkMessage {
+    thread_id: String,
+    role: String,
+    sequence: i64,
+    created_at: String,
+}
+
+fn load_link_message(conn: &Connection, id: &str) -> DbResult<LinkMessage> {
     conn.query_row(
-        "SELECT strategy_assignment_id, future_observation_id, outcome_kind, created_at
-         FROM coach_outcome_links_v0
-         WHERE strategy_assignment_id = ?1 AND future_observation_id = ?2 AND outcome_kind = ?3",
-        params![
-            strategy_assignment_id,
-            future_observation_id,
-            outcome_kind.as_str(),
-        ],
+        "SELECT thread_id, role, sequence, created_at FROM coach_messages WHERE id = ?1",
+        [id],
         |row| {
-            Ok(CoachOutcomeLinkRecord {
-                strategy_assignment_id: row.get(0)?,
-                future_observation_id: row.get(1)?,
-                outcome_kind,
+            Ok(LinkMessage {
+                thread_id: row.get(0)?,
+                role: row.get(1)?,
+                sequence: row.get(2)?,
                 created_at: row.get(3)?,
             })
         },
     )
-    .optional()
-    .map_err(Into::into)
+    .optional()?
+    .ok_or_else(|| DbError::Validation(format!("coach message not found: {id}")))
 }
 
-fn require_message_exists(conn: &Connection, message_id: &str) -> DbResult<()> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM coach_messages WHERE id = ?1",
-        params![message_id],
-        |row| row.get(0),
-    )?;
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(DbError::Validation(format!(
-            "coach message not found: {message_id}"
-        )))
+fn require_local_user(user: &str) -> DbResult<()> {
+    if normalize_user_id(user) != DEFAULT_USER_ID {
+        return Err(DbError::Validation(
+            "coach linkage owner must be local".into(),
+        ));
     }
+    Ok(())
 }
 
-fn require_strategy_assignment_exists(
+fn parse_time(value: &str) -> DbResult<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map_err(|_| DbError::Validation("coach linkage requires valid RFC3339 time".into()))
+}
+
+/// v0 stores caller-supplied provenance, not a host-owned snapshot/thread/attempt
+/// binding. Do not infer learning effectiveness from those fields. The current
+/// observation projector also does not project CoachFeedbackProvided events.
+/// Feedback and explicit re-asks remain supported independently of outcome links.
+fn require_outcome_authority(
     conn: &Connection,
-    assignment_id: &str,
-) -> DbResult<()> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM coach_strategy_assignments_v0 WHERE id = ?1",
-        params![assignment_id],
-        |row| row.get(0),
-    )?;
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(DbError::Validation(format!(
-            "coach strategy assignment not found: {assignment_id}"
-        )))
+    command: &LinkCoachOutcomeCommand,
+) -> DbResult<CoachOutcomeLinkRecord> {
+    let assignment: Option<(String, String, String)> = conn.query_row(
+        "SELECT user_id, coach_message_id, created_at FROM coach_strategy_assignments_v0 WHERE id = ?1",
+        [&command.strategy_assignment_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).optional()?;
+    let (owner, message_id, assigned_at) = assignment
+        .ok_or_else(|| DbError::Validation("coach strategy assignment not found".into()))?;
+    if owner != DEFAULT_USER_ID {
+        return Err(DbError::Validation(
+            "coach outcome assignment owner must be local".into(),
+        ));
     }
-}
-
-fn require_observation_exists(conn: &Connection, observation_id: &str) -> DbResult<()> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM learner_observations WHERE id = ?1",
-        params![observation_id],
-        |row| row.get(0),
-    )?;
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(DbError::Validation(format!(
-            "learner observation not found: {observation_id}"
-        )))
+    let message = load_link_message(conn, &message_id)?;
+    if message.role != "assistant" {
+        return Err(DbError::Validation(
+            "coach outcome assignment must reference an assistant message".into(),
+        ));
     }
+    let observation: Option<(String, String)> = conn
+        .query_row(
+            "SELECT user_id, observed_at FROM learner_observations WHERE id = ?1",
+            [&command.future_observation_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let (user, observed_at) =
+        observation.ok_or_else(|| DbError::Validation("learner observation not found".into()))?;
+    if user != DEFAULT_USER_ID {
+        return Err(DbError::Validation(
+            "coach outcome observation owner must be local".into(),
+        ));
+    }
+    let observed_at = parse_time(&observed_at)?;
+    if observed_at <= parse_time(&assigned_at)? || observed_at <= parse_time(&message.created_at)? {
+        return Err(DbError::Validation(
+            "coach outcome requires a later observation".into(),
+        ));
+    }
+    let limitation = match command.outcome_kind {
+        CoachOutcomeKind::Learning => "v0 learning attribution unavailable: missing trusted context scope/snapshot binding to coach thread and attempt; same-skill and independent new-asset evidence cannot be authorized",
+        CoachOutcomeKind::Satisfaction => "v0 satisfaction attribution unavailable: no canonical feedback observation projection; use record_coach_feedback for satisfaction facts",
+    };
+    Err(DbError::Validation(limitation.into()))
 }
 
 fn require_text(value: &str, field: &str) -> DbResult<()> {
@@ -491,12 +537,35 @@ mod tests {
     }
 
     #[test]
+    fn feedback_helper_participates_in_outer_transaction() {
+        let (_dir, conn) = open_db();
+        let tx = conn.unchecked_transaction().unwrap();
+        let command = feedback_command(CoachFeedbackKind::ThumbsUp);
+        let first = record_coach_feedback_in_transaction(&tx, &command).unwrap();
+        assert_eq!(
+            first,
+            record_coach_feedback_in_transaction(&tx, &command).unwrap()
+        );
+        tx.rollback().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM coach_feedback", [], |row| row.get(0)
+        ).unwrap();
+        assert_eq!(count, 0);
+        let events: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM learning_events WHERE source_kind='coach_feedback'",
+            [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(events, 0);
+        record_coach_feedback(&conn, &command).unwrap();
+    }
+
+    #[test]
     fn feedback_is_idempotent_on_same_message_and_kind() {
         let (_dir, conn) = open_db();
-        let first = record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::ThumbsUp))
-            .unwrap();
-        let second = record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::ThumbsUp))
-            .unwrap();
+        let first =
+            record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::ThumbsUp)).unwrap();
+        let second =
+            record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::ThumbsUp)).unwrap();
         assert_eq!(first.id, second.id);
         assert_eq!(first.feedback_kind, CoachFeedbackKind::ThumbsUp);
         let count: i64 = conn
@@ -583,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn strategy_assignment_is_upsert_on_message() {
+    fn strategy_assignment_history_is_immutable() {
         let (_dir, conn) = open_db();
         let command = RecordCoachStrategyAssignmentCommand {
             user_id: "local".into(),
@@ -594,20 +663,37 @@ mod tests {
             context_snapshot_id: None,
             followup_type: CoachFollowupType::Explain,
         };
-        let first = record_coach_strategy_assignment(&conn, &command).unwrap();
-        let mut updated = command.clone();
-        updated.strategy_id = CoachStrategyId::ExampleFirstV1;
-        let second = record_coach_strategy_assignment(&conn, &updated).unwrap();
-        assert_eq!(first.id, second.id);
-        assert_eq!(second.strategy_id, CoachStrategyId::ExampleFirstV1);
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM coach_strategy_assignments_v0 WHERE coach_message_id = 'cmsg-parent'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 1);
+        let error = record_coach_strategy_assignment(&conn, &command).unwrap_err();
+        assert!(error.to_string().contains("verified host trace"));
+        let first = seed_history_assignment(&conn, &command).unwrap();
+        assert_eq!(first, record_coach_strategy_assignment(&conn, &command).unwrap());
+        let mut changed = command.clone();
+        changed.strategy_id = CoachStrategyId::ConciseDirectV1;
+        assert!(record_coach_strategy_assignment(&conn, &changed)
+            .unwrap_err().to_string().contains("immutable"));
+        assert_eq!(first, record_coach_strategy_assignment(&conn, &command).unwrap());
+    }
+
+    fn seed_history_assignment(
+        conn: &rusqlite::Connection,
+        command: &RecordCoachStrategyAssignmentCommand,
+    ) -> Result<ielts_domain::CoachStrategyAssignmentRecord, DbError> {
+        // Historical fixture, not proof of production host strategy selection.
+        conn.execute(
+            "INSERT INTO coach_strategy_assignments_v0
+            (id,user_id,coach_message_id,strategy_id,skills_addressed_json,
+             memory_ids_used_json,context_snapshot_id,followup_type,created_at)
+            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            params![
+                format!("legacy-{}", command.coach_message_id), command.user_id,
+                command.coach_message_id, command.strategy_id.as_str(),
+                serde_json::to_string(&command.skills_addressed).unwrap(),
+                serde_json::to_string(&command.memory_ids_used).unwrap(),
+                command.context_snapshot_id, command.followup_type.as_str(),
+                chrono::Utc::now().to_rfc3339(),
+            ],
+        )?;
+        record_coach_strategy_assignment(conn, command)
     }
 
     #[test]
@@ -626,9 +712,9 @@ mod tests {
     }
 
     #[test]
-    fn outcome_links_satisfaction_and_learning_are_separate_rows() {
+    fn outcome_links_cannot_promote_unattributable_observations() {
         let (_dir, conn) = open_db();
-        let assignment = record_coach_strategy_assignment(
+        let assignment = seed_history_assignment(
             &conn,
             &RecordCoachStrategyAssignmentCommand {
                 user_id: "local".into(),
@@ -649,7 +735,7 @@ mod tests {
                 outcome_kind: CoachOutcomeKind::Satisfaction,
             },
         )
-        .unwrap();
+        .unwrap_err();
         let learning = link_coach_outcome(
             &conn,
             &LinkCoachOutcomeCommand {
@@ -658,9 +744,9 @@ mod tests {
                 outcome_kind: CoachOutcomeKind::Learning,
             },
         )
-        .unwrap();
-        assert_eq!(satisfaction.outcome_kind, CoachOutcomeKind::Satisfaction);
-        assert_eq!(learning.outcome_kind, CoachOutcomeKind::Learning);
+        .unwrap_err();
+        assert!(matches!(satisfaction, DbError::Validation(_)));
+        assert!(matches!(learning, DbError::Validation(_)));
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM coach_outcome_links_v0 WHERE strategy_assignment_id = ?1",
@@ -668,13 +754,13 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 2);
+        assert_eq!(count, 0);
     }
 
     #[test]
-    fn outcome_link_is_idempotent_on_same_kind() {
+    fn outcome_link_retries_remain_fail_closed() {
         let (_dir, conn) = open_db();
-        let assignment = record_coach_strategy_assignment(
+        let assignment = seed_history_assignment(
             &conn,
             &RecordCoachStrategyAssignmentCommand {
                 user_id: "local".into(),
@@ -692,8 +778,14 @@ mod tests {
             future_observation_id: "lobs-1".into(),
             outcome_kind: CoachOutcomeKind::Learning,
         };
-        link_coach_outcome(&conn, &command).unwrap();
-        link_coach_outcome(&conn, &command).unwrap();
+        assert!(matches!(
+            link_coach_outcome(&conn, &command),
+            Err(DbError::Validation(_))
+        ));
+        assert!(matches!(
+            link_coach_outcome(&conn, &command),
+            Err(DbError::Validation(_))
+        ));
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM coach_outcome_links_v0 WHERE strategy_assignment_id = ?1 AND outcome_kind = 'learning'",
@@ -701,7 +793,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(count, 0);
     }
 
     #[test]

@@ -31,19 +31,34 @@ impl ChatMessage {
 pub struct CompletionRequest {
     pub messages: Vec<ChatMessage>,
     pub temperature: f32,
-    /// Round-3 audit (7.8): optional provider-side output ceiling. `None` keeps
-    /// the historical request shape byte-identical, so this is additive for both
-    /// the existing Rust callers and the Python sidecar, which sends only
-    /// `messages` + `temperature`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    /// Provider-side output ceiling. Required: every completion declares its
+    /// own ceiling, so no call site can ship an unbounded request by omission.
+    pub max_tokens: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Per-call-site output ceilings (tokens). The Coach (2000) and the sidecar
+/// jobs (memory candidates 2000, weekly dream 1500) keep their own constants
+/// next to the code that builds the prompt.
+pub const WRITING_EVALUATION_MAX_TOKENS: u32 = 6_144;
+pub const AGENT_ROUND_MAX_TOKENS: u32 = 1_500;
+pub const PROVIDER_PROBE_MAX_TOKENS: u32 = 16;
+
+/// Provider-reported token counts. `output_tokens` is the provider's completion
+/// total, which already INCLUDES hidden reasoning; `reasoning_tokens` is that
+/// reasoning share when the provider reports it separately
+/// (`completion_tokens_details.reasoning_tokens`), otherwise 0. Counts only:
+/// reasoning text is never part of this structure.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub reasoning_tokens: u64,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +109,12 @@ impl From<ModelError> for ProviderError {
 pub trait LanguageModel: Send + Sync {
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError>;
 
+    fn identity(&self) -> (&str, &str) { ("unknown", "unknown") }
+
+    async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), crate::AgentModelFailure> {
+        self.complete(request).await.map(|response| (response, 0)).map_err(Into::into)
+    }
+
     /// M5-04: request an embedding batch through the Rust Model Gateway.
     ///
     /// The default implementation returns a non-retryable `embedding_not_supported`
@@ -136,6 +157,21 @@ pub trait WritingEvaluationStore: Send + Sync {
 }
 
 pub trait CoachStore: Send + Sync {
+    fn begin_trace(&self, thread: &str, user_message: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError>;
+    fn complete_trace(&self, run: &str, thread: &str, answer: &str, payload: Value, response: &Value) -> Result<CoachMessage, ApplicationError>;
+    fn fail_trace(&self, run: &str, error: &Value, response: Option<&Value>) -> Result<(), ApplicationError>;
+    fn resolve_context(
+        &self,
+        thread_id: &str,
+        selector: Option<&Value>,
+    ) -> Result<ielts_db::ResolvedCoachContext, ApplicationError>;
+
+    /// Newest completed automatic review (`review_set`) on the thread, if any.
+    fn find_completed_review(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<ielts_db::CoachRunResult>, ApplicationError>;
+
     fn append_message(
         &self,
         command: &AppendCoachMessageCommand,

@@ -110,6 +110,7 @@ class MemoryExtractorTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["name"], "memory.candidate_input")
         model_request = calls[1][1]["request"]
         self.assertEqual(model_request["temperature"], 0.0)
+        self.assertEqual(model_request["maxTokens"], 2000)
         self.assertEqual([item["role"] for item in model_request["messages"]], ["system", "user"])
 
     def test_malformed_json_uses_exact_key_label_then_pending_add_fallback(self) -> None:

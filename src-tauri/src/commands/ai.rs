@@ -229,8 +229,7 @@ pub async fn ai_test_provider(
                 ChatMessage::new("user", "Return exactly {\"ok\":true}."),
             ],
             temperature: 0.0,
-            // Connectivity probe: keep the request shape exactly as before.
-            max_tokens: None,
+            max_tokens: ielts_application::PROVIDER_PROBE_MAX_TOKENS,
         })
         .await;
     match response {

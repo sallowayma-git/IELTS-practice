@@ -244,7 +244,12 @@ class ContextPlan(_StrictModel):
             "schemaVersion": self.schema_version,
             "plannerVersion": self.planner_version,
             "taskKind": self.task_kind,
-            "sections": [section.model_dump(by_alias=False, mode="json") for section in self.sections],
+            "sections": [{
+                "section": section.section.value,
+                "itemIds": list(section.item_ids),
+                "requestedTokenBudget": section.requested_token_budget,
+                "inclusionReasons": list(section.inclusion_reasons),
+            } for section in self.sections],
             "rankedItemIds": list(self.ranked_item_ids),
             "inclusionReasons": {
                 key: list(values) for key, values in self.inclusion_reasons.items()

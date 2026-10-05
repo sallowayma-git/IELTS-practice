@@ -101,23 +101,91 @@ struct LedgerEvent {
     content_hash: String,
     schema_version: i64,
     sensitivity: String,
+    consolidation_state: String,
 }
 
 #[derive(Debug, Clone)]
-struct RawLedgerEvent {
-    id: String,
-    user_id: String,
-    event_type_raw: String,
-    source_id: Option<String>,
-    activity: Option<String>,
-    asset_id: Option<String>,
-    attempt_id: Option<String>,
-    question_id: Option<String>,
-    occurred_at: String,
-    payload_json: String,
-    content_hash: String,
-    schema_version: i64,
-    sensitivity: String,
+pub(crate) struct RawLedgerEvent {
+    pub id: String,
+    pub user_id: String,
+    pub event_type_raw: String,
+    pub source_id: Option<String>,
+    pub activity: Option<String>,
+    pub asset_id: Option<String>,
+    pub attempt_id: Option<String>,
+    pub question_id: Option<String>,
+    pub occurred_at: String,
+    pub payload_json: String,
+    pub content_hash: String,
+    pub schema_version: i64,
+    pub sensitivity: String,
+    pub consolidation_state: String,
+}
+
+impl From<RawLedgerEvent> for LedgerEvent {
+    fn from(event: RawLedgerEvent) -> Self {
+        let (payload, parsed) = match serde_json::from_str::<Value>(&event.payload_json) {
+            Ok(payload) => (payload, true),
+            Err(_) => (Value::Null, false),
+        };
+        let payload_valid = parsed && sha256_hex(&event.payload_json) == event.content_hash;
+        Self {
+            id: event.id,
+            user_id: event.user_id,
+            event_type: parse_event_type(&event.event_type_raw),
+            event_type_raw: event.event_type_raw,
+            source_id: event.source_id,
+            activity: event.activity,
+            asset_id: event.asset_id,
+            attempt_id: event.attempt_id,
+            question_id: event.question_id,
+            occurred_at: event.occurred_at,
+            payload,
+            payload_valid,
+            content_hash: event.content_hash,
+            schema_version: event.schema_version,
+            sensitivity: event.sensitivity,
+            consolidation_state: event.consolidation_state,
+        }
+    }
+}
+
+/// Evidence reads and projection share the same ledger trust boundary.
+pub(crate) fn validated_learning_event_payload(event: RawLedgerEvent) -> Result<Value, String> {
+    let event = LedgerEvent::from(event);
+    validate_ledger_event(&event)?;
+    Ok(event.payload)
+}
+
+fn validate_ledger_event(event: &LedgerEvent) -> Result<(), String> {
+    if event.sensitivity != "normal" || event.consolidation_state == "quarantined" {
+        return Err("event is sensitive or quarantined".into());
+    }
+    if !event.payload_valid || !event.payload.is_object() {
+        return Err("event payload is invalid or its hash does not match".into());
+    }
+    if event.schema_version != LearningEventType::SCHEMA_VERSION {
+        return Err("unsupported event schema version".into());
+    }
+    match event.event_type {
+        Some(LearningEventType::AttemptCompleted)
+            if event.activity.as_deref() == Some("reading") =>
+        {
+            validate_reading_attempt_payload(event, &decode_payload(event)?)
+        }
+        Some(LearningEventType::ReadingQuestionOutcome) => {
+            validate_reading_question_payload(event, &decode_payload(event)?)
+        }
+        Some(LearningEventType::WritingEvaluationCompleted) => {
+            validate_writing_payload(event, &decode_payload(event)?)
+        }
+        Some(LearningEventType::CoachQuestionAsked)
+        | Some(LearningEventType::CoachResponseGenerated) => {
+            validate_coach_payload(event, &decode_payload(event)?)
+        }
+        Some(_) => Ok(()),
+        None => Err("unknown learning event type".into()),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -404,7 +472,7 @@ pub fn learning_observations_verify(
 fn load_ledger_events(conn: &Connection) -> DbResult<Vec<LedgerEvent>> {
     let mut statement = conn.prepare(
         "SELECT id, user_id, event_type, source_id, activity, asset_id, attempt_id, question_id,
-                occurred_at, payload_json, content_hash, schema_version, sensitivity
+                occurred_at, payload_json, content_hash, schema_version, sensitivity, consolidation_state
          FROM learning_events
          ORDER BY occurred_at ASC, id ASC",
     )?;
@@ -423,36 +491,11 @@ fn load_ledger_events(conn: &Connection) -> DbResult<Vec<LedgerEvent>> {
             content_hash: row.get(10)?,
             schema_version: row.get(11)?,
             sensitivity: row.get(12)?,
+            consolidation_state: row.get(13)?,
         })
     })?;
     let raw = rows.collect::<Result<Vec<_>, _>>()?;
-    Ok(raw
-        .into_iter()
-        .map(|event| {
-            let (payload, parsed) = match serde_json::from_str::<Value>(&event.payload_json) {
-                Ok(payload) => (payload, true),
-                Err(_) => (Value::Null, false),
-            };
-            let payload_valid = parsed && sha256_hex(&event.payload_json) == event.content_hash;
-            LedgerEvent {
-                id: event.id,
-                user_id: event.user_id,
-                event_type: parse_event_type(&event.event_type_raw),
-                event_type_raw: event.event_type_raw,
-                source_id: event.source_id,
-                activity: event.activity,
-                asset_id: event.asset_id,
-                attempt_id: event.attempt_id,
-                question_id: event.question_id,
-                occurred_at: event.occurred_at,
-                payload,
-                payload_valid,
-                content_hash: event.content_hash,
-                schema_version: event.schema_version,
-                sensitivity: event.sensitivity,
-            }
-        })
-        .collect())
+    Ok(raw.into_iter().map(LedgerEvent::from).collect())
 }
 
 fn build_projection(events: &[LedgerEvent]) -> ProjectionBuild {
@@ -466,15 +509,7 @@ fn build_projection(events: &[LedgerEvent]) -> ProjectionBuild {
             skipped_sensitive += 1;
             continue;
         }
-        let projected_event = matches!(
-            event.event_type,
-            Some(LearningEventType::AttemptCompleted)
-                | Some(LearningEventType::ReadingQuestionOutcome)
-                | Some(LearningEventType::WritingEvaluationCompleted)
-                | Some(LearningEventType::CoachQuestionAsked)
-                | Some(LearningEventType::CoachResponseGenerated)
-        );
-        if projected_event && event.schema_version != LearningEventType::SCHEMA_VERSION {
+        if validate_ledger_event(event).is_err() {
             quarantined.insert(event.id.clone());
             continue;
         }
@@ -778,10 +813,11 @@ fn project_reading_repeats(events: &[ReadingQuestionEvent]) -> Vec<ObservationCa
     let mut output = Vec::new();
     for ((_user_id, asset_id, question_id), mut observations) in grouped {
         observations.sort_by(|left, right| {
-            left.attempt_ordinal
-                .cmp(&right.attempt_ordinal)
+            left.event
+                .occurred_at
+                .cmp(&right.event.occurred_at)
+                .then_with(|| left.attempt_ordinal.cmp(&right.attempt_ordinal))
                 .then_with(|| left.attempt_id.cmp(&right.attempt_id))
-                .then_with(|| left.event.occurred_at.cmp(&right.event.occurred_at))
                 .then_with(|| left.event.id.cmp(&right.event.id))
         });
         let mut last_scored: Option<ReadingQuestionEvent> = None;
@@ -963,36 +999,32 @@ fn insert_records(conn: &Connection, records: &[ObservationRecord]) -> DbResult<
          VALUES (?1, ?2, ?3, ?4)",
     )?;
     for record in records {
-        observation_statement.execute(
-            params![
-                record.id,
-                record.user_id,
-                record.observation_type,
-                record.namespace,
-                record.scope_kind,
-                record.scope_key,
-                record.polarity,
-                record.value_num,
-                record.value_text,
-                canonical_json(&record.payload),
-                record.confidence,
-                record.evidence_strength,
-                record.observed_at,
-                LEARNING_OBSERVATION_PROJECTOR_KEY,
-                LEARNING_OBSERVATION_PROJECTOR_VERSION,
-                record.source_fingerprint,
-                created_at,
-            ],
-        )?;
+        observation_statement.execute(params![
+            record.id,
+            record.user_id,
+            record.observation_type,
+            record.namespace,
+            record.scope_kind,
+            record.scope_key,
+            record.polarity,
+            record.value_num,
+            record.value_text,
+            canonical_json(&record.payload),
+            record.confidence,
+            record.evidence_strength,
+            record.observed_at,
+            LEARNING_OBSERVATION_PROJECTOR_KEY,
+            LEARNING_OBSERVATION_PROJECTOR_VERSION,
+            record.source_fingerprint,
+            created_at,
+        ])?;
         for evidence in &record.evidence {
-            evidence_statement.execute(
-                params![
-                    record.id,
-                    evidence.event_id,
-                    evidence.evidence_role,
-                    evidence.ordinal,
-                ],
-            )?;
+            evidence_statement.execute(params![
+                record.id,
+                evidence.event_id,
+                evidence.evidence_role,
+                evidence.ordinal,
+            ])?;
         }
     }
     Ok(())
@@ -1088,6 +1120,7 @@ fn input_hash(events: &[LedgerEvent]) -> String {
                 "contentHash": event.content_hash,
                 "schemaVersion": event.schema_version,
                 "sensitivity": event.sensitivity,
+                "quarantined": event.consolidation_state == "quarantined",
             })
         })
         .map(|value| canonical_json(&value))
@@ -1388,7 +1421,10 @@ fn prune_projection_runs(conn: &Connection) -> DbResult<()> {
              ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
              LIMIT ?2
            )",
-        params![LEARNING_OBSERVATION_PROJECTOR_KEY, PROJECTION_SUCCESS_RETENTION],
+        params![
+            LEARNING_OBSERVATION_PROJECTOR_KEY,
+            PROJECTION_SUCCESS_RETENTION
+        ],
     )?;
     conn.execute(
         "DELETE FROM learning_projection_runs
@@ -1400,7 +1436,10 @@ fn prune_projection_runs(conn: &Connection) -> DbResult<()> {
              ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
              LIMIT ?2
            )",
-        params![LEARNING_OBSERVATION_PROJECTOR_KEY, PROJECTION_ERROR_RETENTION],
+        params![
+            LEARNING_OBSERVATION_PROJECTOR_KEY,
+            PROJECTION_ERROR_RETENTION
+        ],
     )?;
     Ok(())
 }

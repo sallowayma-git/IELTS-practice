@@ -123,9 +123,7 @@ async fn evaluate_language_model<M: LanguageModel>(
                 ChatMessage::new("user", prompt),
             ],
             temperature: prepared.temperature,
-            // Writing evaluation returns a large structured rubric; keep the
-            // historical unbounded behaviour rather than guessing a ceiling.
-            max_tokens: None,
+            max_tokens: crate::WRITING_EVALUATION_MAX_TOKENS,
         })
         .await?;
     parse_output(&response.content)

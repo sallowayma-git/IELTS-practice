@@ -305,14 +305,22 @@ def _llm_grade_final_answer(
         result = bridge.invoke(
             "model.invoke",
             {
-                "prompt": (
-                    f"Grade the following answer against the expected golden. "
-                    f"Respond with a single float in [0.0, 1.0].\n\n"
-                    f"Case: {case_id}\n"
-                    f"Answer: {final}\n"
-                    f"Expected: {expected.get('finalAnswer', expected)}\n"
-                ),
-                "maxTokens": 32,
+                "request": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Grade the following answer against the expected golden. "
+                                f"Respond with a single float in [0.0, 1.0].\n\n"
+                                f"Case: {case_id}\n"
+                                f"Answer: {final}\n"
+                                f"Expected: {expected.get('finalAnswer', expected)}\n"
+                            ),
+                        }
+                    ],
+                    "temperature": 0.0,
+                    "maxTokens": 32,
+                }
             },
             trace_id=trace_id or f"eval-llm-{case_id}",
             deadline_ms=8_000,
@@ -322,7 +330,8 @@ def _llm_grade_final_answer(
         return deterministic_fallback, "llm_fallback"
     score = result.get("score") if isinstance(result, dict) else None
     if not isinstance(score, (int, float)):
-        text = result.get("text") if isinstance(result, dict) else None
+        # The host returns a CompletionResponse: the grade text is `content`.
+        text = (result.get("content") or result.get("text")) if isinstance(result, dict) else None
         score = _parse_float(text) if isinstance(text, str) else None
     if not isinstance(score, (int, float)):
         return deterministic_fallback, "llm_fallback"

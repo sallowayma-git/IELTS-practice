@@ -1,14 +1,15 @@
 //! M7-01 SQLite Job Worker.
 //!
-//! A durable process-local job ledger backed by `background_jobs`. This is NOT
-//! a copy of TechSpar's process-local `_task_status` + FastAPI BackgroundTasks:
-//! there is a single worker per machine, claim is atomic via BEGIN IMMEDIATE +
+//! A durable process-local job ledger backed by `background_jobs`: there is a
+//! single worker per machine, claim is atomic via BEGIN IMMEDIATE +
 //! RETURNING (§23.15), and lease timeout reclaims abandoned runs on the next
 //! start.
 //!
 //! The worker is deliberately minimal: it owns claim/heartbeat/finish/fail and
-//! startup recovery. Business logic (journal build, dream run) lives in the
-//! application layer and calls into these primitives.
+//! startup recovery. Business logic (the deterministic daily journal) lives in
+//! the application layer and calls into these primitives. There is one daily
+//! job kind, `daily_journal`; `daily_dream` is a legacy kind that old databases
+//! may still hold, and it is claimed and completed exactly like a journal job.
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -20,7 +21,6 @@ pub const DEFAULT_LEASE_TIMEOUT_SECS: i64 = 300;
 pub const DEFAULT_MAX_ATTEMPTS: i64 = 3;
 const DEFAULT_USER_ID: &str = "local";
 const DAILY_JOURNAL_PRIORITY: i64 = 5;
-const DAILY_DREAM_PRIORITY: i64 = 4;
 
 /// A durable background job row.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,13 +44,12 @@ pub struct BackgroundJob {
 }
 
 /// Counts the work performed by startup recovery. `requeued_jobs` retains the
-/// legacy `startup_recovery` return value; the other fields describe catch-up
-/// jobs created from canonical activity dates.
+/// legacy `startup_recovery` return value; `journal_jobs_enqueued` counts
+/// catch-up jobs created from canonical activity dates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StartupRecoveryReport {
     pub requeued_jobs: u64,
     pub journal_jobs_enqueued: u64,
-    pub dream_jobs_enqueued: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,10 +73,10 @@ pub fn enqueue_job(
     require_text(job_kind, "jobKind")?;
     require_text(user_id, "userId")?;
     require_text(scheduled_at, "scheduledAt")?;
-    // Only kinds the background_jobs CHECK constraint accepts. The weekly
-    // dream bypasses the queue entirely (dream_run_weekly runs inline), so
-    // accepting it here would just crash the INSERT against migration 0018.
-    if !matches!(job_kind, "daily_journal" | "daily_dream") {
+    // Only the daily journal is queued. The weekly dream bypasses the queue
+    // entirely, and `daily_dream` (still allowed by the migration 0018 CHECK)
+    // is a legacy kind that nothing enqueues any more.
+    if job_kind != "daily_journal" {
         return Err(DbError::Validation(format!(
             "unsupported job_kind: {job_kind}"
         )));
@@ -146,6 +145,29 @@ pub fn claim_job(conn: &Connection, now: &str, worker_id: &str) -> DbResult<Opti
             Err(error)
         }
     }
+}
+
+/// Claim a specific queued job by id (e.g. the job a command just enqueued).
+/// Automatic client work is limited to local, closed UTC days. Manual current
+/// day work retains its explicit command path and is never stolen by this loop.
+pub fn claim_closed_daily_job(conn: &Connection, now: &str, worker_id: &str) -> DbResult<Option<BackgroundJob>> {
+    let tx = conn.unchecked_transaction()?;
+    if !automatic_learning_enabled(&tx)? {
+        return Ok(None);
+    }
+    let id: Option<String> = tx.query_row(
+        "SELECT id FROM background_jobs WHERE status='queued' AND user_id='local'
+         AND scheduled_at <= ?1 AND job_kind IN ('daily_journal','daily_dream')
+         AND dedupe_key = job_kind || ':local:' || substr(dedupe_key,-10)
+         AND date(substr(dedupe_key,-10)) < date(?1)
+         ORDER BY priority DESC, scheduled_at ASC, id LIMIT 1", [now], |r| r.get(0),
+    ).optional()?;
+    let job = match id {
+        Some(id) if claim_job_by_id(&tx, &id, now, worker_id)? => load_job(&tx, &id)?,
+        _ => None,
+    };
+    tx.commit()?;
+    Ok(job)
 }
 
 /// Claim a specific queued job by id (e.g. the job a command just enqueued).
@@ -248,9 +270,26 @@ pub fn startup_recovery_with_catch_up(
     now: &str,
     lease_timeout_secs: i64,
 ) -> DbResult<StartupRecoveryReport> {
+    recover_daily_jobs(conn, now, lease_timeout_secs, true)
+}
+
+/// Periodic lease/receipt recovery without scanning the activity history.
+pub fn recover_daily_leases(conn: &Connection, now: &str, lease_timeout_secs: i64) -> DbResult<u64> {
+    Ok(recover_daily_jobs(conn, now, lease_timeout_secs, false)?.requeued_jobs)
+}
+
+fn recover_daily_jobs(
+    conn: &Connection,
+    now: &str,
+    lease_timeout_secs: i64,
+    catch_up: bool,
+) -> DbResult<StartupRecoveryReport> {
     require_text(now, "now")?;
     let tx = conn.unchecked_transaction()?;
     lease_recover(&tx, now, lease_timeout_secs)?;
+    // Completing a receipt is not another business attempt. Match the exact
+    // persisted business binding before applying the retry-budget terminal gate.
+    reconcile_business_receipts(&tx, now, None)?;
     // A crashed final attempt and an explicit final failure have the same
     // terminal semantics. Keep the row (and checkpoint) as the retry receipt.
     tx.execute(
@@ -287,12 +326,15 @@ pub fn startup_recovery_with_catch_up(
          WHERE status = 'interrupted' AND attempts < max_attempts",
         params![now],
     )?;
-    let (journal_jobs_enqueued, dream_jobs_enqueued) = enqueue_missing_daily_jobs(&tx, now)?;
+    let journal_jobs_enqueued = if catch_up {
+        enqueue_missing_daily_jobs(&tx, now)?
+    } else {
+        0
+    };
     tx.commit()?;
     Ok(StartupRecoveryReport {
         requeued_jobs: requeued as u64,
         journal_jobs_enqueued,
-        dream_jobs_enqueued,
     })
 }
 
@@ -328,7 +370,7 @@ fn canonical_activity_windows(conn: &Connection, now: &str) -> DbResult<Vec<Acti
            SELECT ?1, date(created_at)
            FROM coach_reask_links
          )
-         WHERE activity_date IS NOT NULL AND activity_date <= date(?2)
+         WHERE activity_date IS NOT NULL AND activity_date < date(?2)
          ORDER BY user_id, activity_date",
     )?;
     let rows = statement.query_map(params![DEFAULT_USER_ID, now], |row| {
@@ -340,82 +382,40 @@ fn canonical_activity_windows(conn: &Connection, now: &str) -> DbResult<Vec<Acti
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
-fn enqueue_missing_daily_jobs(
-    conn: &Connection,
-    now: &str,
-) -> DbResult<(u64, u64)> {
-    let windows = canonical_activity_windows(conn, now)?;
-    let mut journal_jobs_enqueued = 0;
-    let mut dream_jobs_enqueued = 0;
-    for window in windows {
-        let user_id = &window.user_id;
-        let day = &window.day;
-        let journal_dedupe = format!("daily_journal:{user_id}:{day}");
-        if !journal_exists(conn, user_id, &day)?
-            && !catch_up_job_exists(conn, "daily_journal", user_id, &journal_dedupe)?
+fn enqueue_missing_daily_jobs(conn: &Connection, now: &str) -> DbResult<u64> {
+    let mut enqueued = 0;
+    for window in canonical_activity_windows(conn, now)? {
+        let (user_id, day) = (&window.user_id, &window.day);
+        let dedupe = format!("daily_journal:{user_id}:{day}");
+        if journal_exists(conn, user_id, day)?
+            || catch_up_job_exists(conn, "daily_journal", user_id, &dedupe)?
         {
-            enqueue_job(
-                conn,
-                "daily_journal",
-                user_id,
-                now,
-                DAILY_JOURNAL_PRIORITY,
-                Some(&journal_dedupe),
-                None,
-            )?;
-            journal_jobs_enqueued += 1;
+            continue;
         }
-
-        let dream_dedupe = format!("daily_dream:{user_id}:{day}");
-        if !dream_exists(conn, user_id, &day)?
-            && !catch_up_job_exists(conn, "daily_dream", user_id, &dream_dedupe)?
-        {
-            enqueue_job(
-                conn,
-                "daily_dream",
-                user_id,
-                now,
-                DAILY_DREAM_PRIORITY,
-                Some(&dream_dedupe),
-                None,
-            )?;
-            dream_jobs_enqueued += 1;
-        }
+        enqueue_job(
+            conn,
+            "daily_journal",
+            user_id,
+            now,
+            DAILY_JOURNAL_PRIORITY,
+            Some(&dedupe),
+            Some(&serde_json::json!({"day": day, "userId": user_id})),
+        )?;
+        enqueued += 1;
     }
-    Ok((journal_jobs_enqueued, dream_jobs_enqueued))
+    Ok(enqueued)
 }
 
 fn journal_exists(conn: &Connection, user_id: &str, day: &str) -> DbResult<bool> {
-    let exists: i64 = conn.query_row(
-        "SELECT EXISTS(
-           SELECT 1 FROM daily_journals
-           WHERE user_id = ?1 AND journal_date = ?2
-         )",
+    let hash: Option<String> = conn.query_row(
+        "SELECT source_hash FROM daily_journals WHERE user_id=?1 AND journal_date=?2 ORDER BY version DESC LIMIT 1",
         params![user_id, day],
         |row| row.get(0),
-    )?;
-    Ok(exists != 0)
-}
-
-fn dream_exists(conn: &Connection, user_id: &str, day: &str) -> DbResult<bool> {
-    let exists: i64 = conn.query_row(
-        "SELECT EXISTS(
-           SELECT 1
-           FROM dream_runs dr
-           JOIN daily_journals dj ON dj.id = dr.journal_id
-           WHERE dj.id = (
-             SELECT id FROM daily_journals
-             WHERE user_id = ?1 AND journal_date = ?2
-             ORDER BY version DESC LIMIT 1
-           )
-             AND dr.user_id = ?1
-             AND dj.user_id = ?1
-             AND dr.status IN ('queued', 'running', 'completed')
-         )",
-        params![user_id, day],
-        |row| row.get(0),
-    )?;
-    Ok(exists != 0)
+    ).optional()?;
+    match hash {
+        Some(hash) => Ok(hash == crate::build_daily_facts(conn, user_id, day)?.source_hash),
+        None => Ok(false),
+    }
 }
 
 // Startup is not an explicit user retry. A terminal failure must not acquire a
@@ -472,12 +472,23 @@ pub fn fail_job(
     if job.locked_by.as_deref() != Some(worker_id) || job.status != "running" {
         return Ok(false);
     }
+    if reconcile_business_receipts(conn, now, Some((job_id, worker_id)))? > 0 {
+        return Ok(true);
+    }
+    if worker_id.starts_with("daily-worker-") && !automatic_learning_enabled(conn)? {
+        return pause_owned_daily_job(conn, job_id, worker_id, now);
+    }
     if job.attempts < job.max_attempts {
         // Reschedule: back to queued with a delayed scheduled_at.
         let reschedule_at = shift_timestamp(now, reschedule_delay_secs)?;
         conn.execute(
-            "UPDATE background_jobs
-             SET status = 'queued', locked_at = NULL, locked_by = NULL, heartbeat_at = NULL,
+            "UPDATE background_jobs AS job
+             SET status = CASE WHEN EXISTS (
+                   SELECT 1 FROM background_jobs other WHERE other.id!=job.id
+                   AND other.job_kind=job.job_kind AND other.user_id=job.user_id
+                   AND other.dedupe_key=job.dedupe_key AND other.status='queued'
+                 ) THEN 'failed' ELSE 'queued' END,
+                 locked_at = NULL, locked_by = NULL, heartbeat_at = NULL,
                  last_error = ?1, scheduled_at = ?2, updated_at = ?3
              WHERE id = ?4",
             params![error, reschedule_at, now, job_id],
@@ -493,6 +504,70 @@ pub fn fail_job(
         )?;
     }
     Ok(true)
+}
+
+/// A daily job's business result is its journal version and nothing else, so a
+/// job whose checkpoint names a journal that exists with the same source hash is
+/// complete, whatever happened to the worker afterwards. This closes a crashed
+/// job (`owned == None`) or the caller's own running job (`owned == Some`) without
+/// executing it again. Returns the number of jobs closed.
+fn reconcile_business_receipts(conn: &Connection, now: &str, owned: Option<(&str, &str)>) -> DbResult<u64> {
+    let (id, worker) = (owned.map(|o| o.0), owned.map(|o| o.1));
+    let changed = conn.execute(
+        "UPDATE background_jobs
+            SET status='completed', last_error='completed business receipt recovered',
+                locked_at=NULL, locked_by=NULL, heartbeat_at=NULL, updated_at=?1
+          WHERE ((?2 IS NULL AND status='interrupted')
+                 OR (id=?2 AND locked_by=?3 AND status='running'))
+            AND EXISTS (
+              SELECT 1 FROM daily_journals j
+               WHERE j.id=json_extract(background_jobs.checkpoint_json,'$.journalId')
+                 AND j.user_id=background_jobs.user_id
+                 AND j.journal_date=json_extract(background_jobs.checkpoint_json,'$.day')
+                 AND j.source_hash=json_extract(background_jobs.checkpoint_json,'$.sourceHash'))",
+        params![now, id, worker],
+    )?;
+    Ok(changed as u64)
+}
+
+/// Close the caller's own running job once its journal version is bound. Returns
+/// whether the job was closed (false: the lease was lost or the binding is stale).
+pub fn finish_bound_daily_job(conn: &Connection, id: &str, worker: &str, now: &str) -> DbResult<bool> {
+    load_job(conn, id)?.ok_or_else(|| DbError::Validation("daily job missing".into()))?;
+    Ok(reconcile_business_receipts(conn, now, Some((id, worker)))? == 1)
+}
+
+/// Persist the host-owned journal version a job is bound to, under its lease.
+pub fn bind_job_business(conn: &Connection, id: &str, worker: &str, binding: &Value) -> DbResult<()> {
+    let changed = conn.execute(
+        "UPDATE background_jobs SET checkpoint_json=?1 WHERE id=?2 AND locked_by=?3 AND status='running'",
+        params![binding.to_string(), id, worker],
+    )?;
+    if changed != 1 {
+        return Err(DbError::Validation("cannot bind business version without owning job lease".into()));
+    }
+    Ok(())
+}
+
+pub fn automatic_learning_enabled(conn: &Connection) -> DbResult<bool> {
+    Ok(crate::get_setting(conn, "features", "memory_auto_candidates_v1")?
+        .and_then(|entry| entry.value.as_str().map(str::to_owned))
+        .is_none_or(|mode| mode == "proposal_only"))
+}
+
+/// Release a paused automatic claim and refund only its current attempt.
+pub fn pause_owned_daily_job(conn: &Connection, id: &str, worker: &str, now: &str) -> DbResult<bool> {
+    let changed = conn.execute(
+        "UPDATE background_jobs AS job SET status=CASE WHEN EXISTS (
+           SELECT 1 FROM background_jobs other WHERE other.id!=job.id
+           AND other.job_kind=job.job_kind AND other.user_id=job.user_id
+           AND other.dedupe_key=job.dedupe_key AND other.status='queued'
+         ) THEN 'interrupted' ELSE 'queued' END,
+         locked_at=NULL,locked_by=NULL,heartbeat_at=NULL,attempts=MAX(0,attempts-1),updated_at=?1
+         WHERE id=?2 AND locked_by=?3 AND status='running'",
+        params![now, id, worker],
+    )?;
+    Ok(changed == 1)
 }
 
 /// Load a job by id.

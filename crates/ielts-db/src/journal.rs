@@ -377,12 +377,19 @@ fn today_observation_ids(
 ) -> DbResult<Vec<String>> {
     let mut stmt = conn.prepare(
         "SELECT id FROM learner_observations
-         WHERE user_id = ?1 AND observed_at >= ?2 AND observed_at < ?3
-         ORDER BY observed_at DESC, id ASC
+         WHERE user_id = ?1
+           AND julianday(observed_at) >= julianday(?2)
+           AND julianday(observed_at) < julianday(?3)
+         ORDER BY julianday(observed_at) DESC, id ASC
          LIMIT ?4",
     )?;
     let rows = stmt.query_map(
-        params![user_id, day_start, day_end, MAX_TODAY_OBSERVATION_IDS as i64],
+        params![
+            user_id,
+            day_start,
+            day_end,
+            MAX_TODAY_OBSERVATION_IDS as i64
+        ],
         |row| row.get::<_, String>(0),
     )?;
     let mut ids = Vec::new();
@@ -403,31 +410,100 @@ fn memory_events(
     day_start: &str,
     day_end: &str,
 ) -> DbResult<Vec<JournalMemoryEvent>> {
-    let _ = user_id;
+    // A partial event list can hide a late contradiction and turn the first
+    // 128 reinforcing events into an unsafe Dream proposal.
+    let event_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_mutations m
+         JOIN memory_items mi ON mi.id = m.memory_id
+         WHERE m.created_at >= ?1 AND m.created_at < ?2
+           AND mi.sensitivity = 'normal' AND mi.user_id = ?3",
+        params![day_start, day_end, user_id],
+        |row| row.get(0),
+    )?;
+    if event_count > MAX_MEMORY_EVENTS as i64 {
+        return Ok(Vec::new());
+    }
     let mut stmt = conn.prepare(
-        "SELECT m.memory_id, mi.namespace, mi.canonical_key, m.operation
+        "SELECT m.id, m.memory_id, mi.namespace, mi.canonical_key, m.operation
          FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
          WHERE m.created_at >= ?1 AND m.created_at < ?2
            AND mi.sensitivity = 'normal'
-           AND m.memory_id IS NOT NULL
+           AND mi.user_id = ?4
          ORDER BY m.created_at ASC, m.id ASC
          LIMIT ?3",
     )?;
-    let rows = stmt.query_map(params![day_start, day_end, MAX_MEMORY_EVENTS as i64], |row| {
-        let operation: String = row.get(3)?;
-        Ok(JournalMemoryEvent {
-            memory_id: row.get(0)?,
-            namespace: row.get(1)?,
-            canonical_key: row.get(2)?,
-            change_kind: past_tense_change_kind(&operation),
-        })
-    })?;
+    let rows = stmt.query_map(
+        params![day_start, day_end, MAX_MEMORY_EVENTS as i64, user_id],
+        |row| {
+            let operation: String = row.get(4)?;
+            Ok((
+                row.get::<_, String>(0)?,
+                JournalMemoryEvent {
+                    memory_id: row.get(1)?,
+                    namespace: row.get(2)?,
+                    canonical_key: row.get(3)?,
+                    change_kind: past_tense_change_kind(&operation),
+                    evidence_observation_ids: Vec::new(),
+                },
+            ))
+        },
+    )?;
     let mut events = Vec::new();
     for row in rows {
-        events.push(row?);
+        let (mutation_id, mut event) = row?;
+        event.evidence_observation_ids =
+            memory_evidence_for_event(conn, &mutation_id, user_id, day_start, day_end)?;
+        events.push(event);
     }
     Ok(events)
+}
+
+fn memory_evidence_for_event(
+    conn: &Connection,
+    mutation_id: &str,
+    user_id: &str,
+    day_start: &str,
+    day_end: &str,
+) -> DbResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT o.id, o.observed_at FROM memory_mutations m
+         JOIN memory_evidence e ON e.memory_id = m.memory_id
+         JOIN learner_observations o ON o.id = e.observation_id
+           AND o.source_fingerprint = e.source_fingerprint
+           AND o.projector_key = e.projector_key
+           AND o.projector_version = e.projector_version
+         JOIN memory_items mi ON mi.id = e.memory_id
+         WHERE m.id = ?1 AND mi.user_id = ?2 AND o.user_id = ?2
+           AND julianday(o.observed_at) >= julianday(?3)
+           AND julianday(o.observed_at) < julianday(?4)
+           AND e.evidence_role = CASE m.operation
+             WHEN 'contradict' THEN 'contradict'
+             WHEN 'improve' THEN 'improvement'
+             WHEN 'reinforce' THEN 'support'
+             WHEN 'refine' THEN 'support'
+             WHEN 'regress' THEN 'support'
+             WHEN 'promote' THEN 'support'
+             WHEN 'create' THEN 'support'
+             ELSE '' END
+           AND (
+             (m.candidate_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM memory_candidates c, json_each(c.evidence_observation_ids_json) ids
+               WHERE c.id = m.candidate_id AND ids.value = e.observation_id
+             )) OR
+             (m.candidate_id IS NULL AND e.created_at = m.created_at
+              AND NOT EXISTS (
+                SELECT 1 FROM memory_mutations sibling
+                WHERE sibling.id != m.id AND sibling.memory_id = m.memory_id
+                  AND sibling.created_at = m.created_at
+              ))
+           )
+         ORDER BY julianday(o.observed_at) DESC, o.id ASC LIMIT 32",
+    )?;
+    let rows = stmt.query_map(params![mutation_id, user_id, day_start, day_end], |row| {
+        row.get(0)
+    })?;
+    rows.collect::<Result<Vec<String>, _>>().map_err(Into::into)
 }
 
 fn memory_mutations(
@@ -438,12 +514,14 @@ fn memory_mutations(
 ) -> DbResult<MemoryChangeSummary> {
     let mut summary = MemoryChangeSummary::default();
     let mut stmt = conn.prepare(
-        "SELECT operation, COUNT(*)
-         FROM memory_mutations
-         WHERE created_at >= ?1 AND created_at < ?2
-         GROUP BY operation",
+        "SELECT m.operation, COUNT(*)
+         FROM memory_mutations m
+         JOIN memory_items mi ON mi.id = m.memory_id
+         WHERE m.created_at >= ?1 AND m.created_at < ?2
+           AND mi.user_id = ?3
+         GROUP BY m.operation",
     )?;
-    let rows = stmt.query_map(params![day_start, day_end], |row| {
+    let rows = stmt.query_map(params![day_start, day_end, user_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
     })?;
     for row in rows {
@@ -461,7 +539,6 @@ fn memory_mutations(
             _ => {}
         }
     }
-    let _ = user_id;
     Ok(summary)
 }
 
@@ -602,13 +679,17 @@ fn daily_source_hash(
             )
             .as_bytes(),
         );
+        hasher.update(
+            serde_json::to_vec(&event.evidence_observation_ids).expect("string IDs serialize"),
+        );
     }
     hex::encode(hasher.finalize())
 }
 
-fn day_bounds(day: &str) -> DbResult<(String, String)> {
-    let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
-        .map_err(|error| DbError::Validation(format!("journalDate is not a valid date: {error}")))?;
+pub(crate) fn day_bounds(day: &str) -> DbResult<(String, String)> {
+    let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").map_err(|error| {
+        DbError::Validation(format!("journalDate is not a valid date: {error}"))
+    })?;
     let start = date
         .and_hms_opt(0, 0, 0)
         .ok_or_else(|| DbError::Validation("day start midnight overflowed".into()))?;

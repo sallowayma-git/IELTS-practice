@@ -252,6 +252,34 @@ fn same_timestamp_uses_attempt_ordinal_instead_of_random_event_id() {
 }
 
 #[test]
+fn chronological_repeat_order_survives_legacy_ordinal_regression() {
+    let (_dir, conn) = open_db();
+    insert_reading_question_at_ordinal(
+        &conn, "a3-wrong", "q1", "2026-08-12T00:00:00Z", Some(false), 3,
+    );
+    insert_reading_question_at_ordinal(
+        &conn, "a4-correct", "q1", "2026-08-12T01:00:00Z", Some(true), 2,
+    );
+    let first = learning_observations_rebuild(&conn).unwrap();
+    let ids = observation_ids(&conn);
+    assert_eq!(observation_types(&conn, "reading.repeat.%"),
+        BTreeSet::from(["reading.repeat.corrected".to_string()]));
+    let payload: String = conn.query_row(
+        "SELECT payload_json FROM learner_observations WHERE observation_type = 'reading.repeat.corrected'",
+        [], |row| row.get(0),
+    ).unwrap();
+    let payload: Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(payload["previousEventId"], "a3-wrong");
+    assert_eq!(payload["currentEventId"], "a4-correct");
+    assert_eq!(payload["gapHours"], 1.0);
+    let second = learning_observations_rebuild(&conn).unwrap();
+    assert_eq!(first.input_hash, second.input_hash);
+    assert_eq!(first.output_hash, second.output_hash);
+    assert_eq!(ids, observation_ids(&conn));
+    assert!(learning_observations_verify(&conn).unwrap().consistent);
+}
+
+#[test]
 fn deleting_ledger_evidence_removes_derived_observations_without_orphans() {
     let (_dir, conn) = open_db();
     insert_reading_question(

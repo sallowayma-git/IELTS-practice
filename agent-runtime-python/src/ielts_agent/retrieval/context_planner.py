@@ -127,9 +127,14 @@ def build_context_plan(
     sections: list[ContextSectionPlan] = []
     inclusion_reasons: dict[str, list[str]] = {}
     ranked: list[str] = []
+    seen: set[str] = set()
 
     for section in SECTION_PRIORITY:
-        items = section_items.get(section, [])
+        items = []
+        for item_id in section_items.get(section, []):
+            if item_id not in seen:
+                seen.add(item_id)
+                items.append(item_id)
         budget = max(0, int(total_token_budget * ratios.get(section, 0.0)))
         reasons = _section_reasons(section, retrieval)
         sections.append(
@@ -145,15 +150,6 @@ def build_context_plan(
                 inclusion_reasons[item_id] = [f"section:{section.value}"]
             ranked.append(item_id)
 
-    # De-duplicate ranked while preserving first-seen order (priority order).
-    seen: set[str] = set()
-    deduped_ranked: list[str] = []
-    for item_id in ranked:
-        if item_id in seen:
-            continue
-        seen.add(item_id)
-        deduped_ranked.append(item_id)
-
     # Enrich inclusion_reasons with retrieval fusion lineage.
     for candidate in retrieval.candidates:
         existing = inclusion_reasons.get(candidate.chunk_id, [])
@@ -166,7 +162,7 @@ def build_context_plan(
         planner_version=CONTEXT_PLANNER_VERSION,
         task_kind=task.task_kind,
         sections=sections,
-        ranked_item_ids=deduped_ranked,
+        ranked_item_ids=ranked,
         inclusion_reasons=inclusion_reasons,
         requested_token_budget=total_token_budget,
         retrieval_run_ids=[retrieval.run_id],

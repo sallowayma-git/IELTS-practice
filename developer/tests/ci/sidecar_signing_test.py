@@ -38,6 +38,11 @@ class SidecarSigningTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.binaries = self.root / "src-tauri" / "binaries"
         self.build_root = self.root / "target" / "agent-runtime-sidecar"
+        self.source_root = self.root / "agent-runtime-python"
+        (self.source_root / "src" / "ielts_agent").mkdir(parents=True)
+        (self.source_root / "sidecar_entry.py").write_text("", encoding="utf-8")
+        (self.source_root / "pyproject.toml").write_text("", encoding="utf-8")
+        (self.source_root / "src" / "ielts_agent" / "__init__.py").write_text("", encoding="utf-8")
         self.commands: list[list[str]] = []
         self.events: list[str] = []
         self.metadata = f"Authority={IDENTITY}\nTeamIdentifier=TEAMID\n"
@@ -56,6 +61,8 @@ class SidecarSigningTests(unittest.TestCase):
             stack.enter_context(mock.patch.object(builder.sys, "argv", argv))
             stack.enter_context(mock.patch.object(builder, "host_target", return_value=self.target))
             stack.enter_context(mock.patch.object(builder, "ROOT", self.root))
+            stack.enter_context(mock.patch.object(builder, "SOURCE_ROOT", self.source_root))
+            stack.enter_context(mock.patch.object(builder, "ENTRYPOINT", self.source_root / "sidecar_entry.py"))
             stack.enter_context(mock.patch.object(builder, "BUILD_ROOT", self.build_root))
             stack.enter_context(mock.patch.object(builder, "BINARIES", self.binaries))
             stack.enter_context(mock.patch.dict(builder.os.environ, ENVIRONMENT if environment is None else environment, clear=True))

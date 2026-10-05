@@ -1,6 +1,6 @@
 //! Durable, content-minimized audit trail for Agent runs and tool calls.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -281,10 +281,36 @@ pub fn finish_agent_run(conn: &Connection, command: &FinishAgentRunCommand) -> D
             "agent run requires a terminal status".into(),
         ));
     }
-    let result = serialize_optional_audit_json(command.result.as_ref())?;
+    let mut result = match command.result.as_ref() {
+        Some(Value::Object(result)) => result.clone(),
+        None => serde_json::Map::new(),
+        Some(_) => {
+            return Err(DbError::Validation(
+                "agent run result must be a JSON object".into(),
+            ));
+        }
+    };
     let error = serialize_optional_audit_json(command.error.as_ref())?;
     let now = chrono::Utc::now().to_rfc3339();
     let tx = conn.unchecked_transaction()?;
+    let stored_result: Option<String> = tx
+        .query_row(
+            "SELECT result_json FROM agent_runs WHERE id = ?1 AND status = 'running'",
+            params![command.id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| {
+            DbError::Validation(format!("agent run is not active: {}", command.id))
+        })?;
+    let stored_result = parse_optional_json(stored_result.as_deref(), "agent run result")?;
+    let run_kind = stored_result
+        .as_ref()
+        .and_then(|value| value.get("runKind"))
+        .cloned()
+        .unwrap_or_else(|| json!(AgentRunKind::default()));
+    result.insert("runKind".into(), run_kind);
+    let result = serialize_audit_json(&Value::Object(result))?;
     let active_calls: i64 = tx.query_row(
         "SELECT COUNT(*) FROM agent_tool_calls WHERE run_id = ?1 AND status = 'running'",
         params![command.id],
@@ -358,6 +384,11 @@ pub fn recover_interrupted_agent_runs(conn: &Connection) -> DbResult<AgentRecove
          SET status = 'interrupted', error_json = ?1, updated_at = ?2, completed_at = ?2
          WHERE status = 'running'",
         params![error_json, now],
+    )?;
+    tx.execute(
+        "UPDATE llm_invocations SET error_json=?1 WHERE response_hash IS NULL AND error_json IS NULL
+         AND run_id IN (SELECT id FROM agent_runs WHERE status='interrupted')",
+        params![error_json],
     )?;
     tx.commit()?;
     Ok(AgentRecoveryReport {
@@ -463,6 +494,7 @@ fn parse_run_kind(value: &str) -> DbResult<AgentRunKind> {
         "memory_manager" => Ok(AgentRunKind::MemoryManager),
         "dream" => Ok(AgentRunKind::Dream),
         "study_plan" => Ok(AgentRunKind::StudyPlan),
+        "coach" => Ok(AgentRunKind::Coach),
         other => Err(DbError::Message(format!(
             "invalid stored agent run kind: {other}"
         ))),

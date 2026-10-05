@@ -41,6 +41,7 @@ pub enum AgentRunKind {
     MemoryManager,
     Dream,
     StudyPlan,
+    Coach,
 }
 
 impl AgentRunKind {
@@ -51,6 +52,7 @@ impl AgentRunKind {
             Self::MemoryManager => "memory_manager",
             Self::Dream => "dream",
             Self::StudyPlan => "study_plan",
+            Self::Coach => "coach",
         }
     }
 }

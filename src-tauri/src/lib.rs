@@ -34,20 +34,19 @@ pub fn run() {
         }
     };
     // M7-02/R3: on startup, recover abandoned leases and enqueue missing daily
-    // journal/dream windows discovered from canonical activity dates. This does
-    // not execute business logic or spawn a worker thread; jobs remain durable
-    // queued work for the existing journal/dream execution paths. No OS
+    // journal windows discovered from canonical activity dates. This does
+    // not execute business logic here; the in-app consumer starts after setup
+    // has recovered business runs. No OS
     // scheduler is implied, so the app makes no promise about work while closed.
     #[cfg(feature = "daily-dream-v1")]
     {
         let now = chrono::Utc::now().to_rfc3339();
         if let Err(err) = db.with_conn(|conn| {
             let report = ielts_db::background_jobs::startup_recovery_with_catch_up(conn, &now, 300)?;
-            if report.journal_jobs_enqueued > 0 || report.dream_jobs_enqueued > 0 {
+            if report.journal_jobs_enqueued > 0 {
                 tracing::info!(
                     requeued = report.requeued_jobs,
                     journal_jobs = report.journal_jobs_enqueued,
-                    dream_jobs = report.dream_jobs_enqueued,
                     "background job startup recovery enqueued canonical catch-up windows"
                 );
             }
@@ -163,7 +162,7 @@ pub fn run() {
             commands::learning::learning_observations_get_by_ids,
             #[cfg(feature = "learning-observation-v1")]
             commands::learning::learning_events_get_evidence_by_ids,
-            #[cfg(feature = "memory-core-v1")]
+            #[cfg(all(feature = "memory-core-v1", feature = "developer-tools"))]
             commands::memory::memory_generate_candidates,
             #[cfg(feature = "memory-core-v1")]
             commands::memory::cognitive_runtime_status,
@@ -218,6 +217,8 @@ pub fn run() {
             commands::journal::dream_run_daily,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::background_job_status,
+            #[cfg(feature = "daily-dream-v1")]
+            commands::journal::weekly_digest_list,
             // Round-3 audit (A3): `dream_run_weekly` is deliberately NOT
             // registered here. Weekly consolidation writes active memory and
             // supersedes supports, so it must never accept webview-supplied
@@ -303,29 +304,31 @@ pub fn run() {
             commands::coach_feedback::coach_record_strategy_assignment,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_link_outcome,
-            #[cfg(feature = "daily-dream-v1")]
+            // M10 teaching-strategy and M11 prompt/skill commands are engineering
+            // surfaces with no product caller: compiled only with `developer-tools`.
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_select,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_record_assignment,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_record_feedback,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_record_outcome,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_user_state,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_record_candidate_batch,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_record_candidate_evaluation,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::teaching_strategy::teaching_strategy_promote_candidate,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::prompt_skill::prompt_list_versions,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::prompt_skill::prompt_get_active,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::prompt_skill::prompt_propose_candidate,
-            #[cfg(feature = "daily-dream-v1")]
+            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
             commands::prompt_skill::skill_list_versions,
         ])
         .setup(|app| {
@@ -389,8 +392,20 @@ pub fn run() {
     let app = builder
         .build(tauri::generate_context!())
         .expect("error while building IELTS Practice Tauri application");
-    app.run(|app, event| {
+    #[cfg(feature = "daily-dream-v1")]
+    let mut daily_worker: Option<tauri::async_runtime::JoinHandle<()>> = None;
+    app.run(move |app, event| {
+        // Tauri runs setup at Ready, not at build. Starting earlier races
+        // startup recovery, which can interrupt this process's own Dream.
+        #[cfg(feature = "daily-dream-v1")]
+        if matches!(event, tauri::RunEvent::Ready) && daily_worker.is_none() {
+            daily_worker = Some(app::daily_worker::start(app.clone()));
+        }
         if matches!(event, tauri::RunEvent::Exit) {
+            #[cfg(feature = "daily-dream-v1")]
+            if let Some(worker) = daily_worker.take() {
+                worker.abort();
+            }
             let runtime = app.state::<cognitive_runtime::RuntimeManager>();
             if let Err(error) = tauri::async_runtime::block_on(runtime.shutdown()) {
                 tracing::warn!(%error, "failed to shut down Python cognitive runtime cleanly");

@@ -57,7 +57,7 @@ class ContextPlannerTests(unittest.TestCase):
         wire = plan.to_wire()
         # No field carries free-form prompt text; only IDs + reasons.
         for section in wire["sections"]:
-            for item in section["item_ids"]:
+            for item in section["itemIds"]:
                 self.assertIsInstance(item, str)
                 self.assertNotIn(" ", item)  # IDs are stable tokens, not prose
         self.assertEqual(plan.schema_version, CONTEXT_PLAN_SCHEMA_VERSION)
@@ -81,6 +81,16 @@ class ContextPlannerTests(unittest.TestCase):
         self.assertEqual(plan.ranked_item_ids.count("reading:shared:v1:0"), 1)
         self.assertEqual(plan.ranked_item_ids[0], "reading:shared:v1:0")
         self.assertIn("reading:other:v1:0", plan.ranked_item_ids)
+        section_ids = [item for section in plan.sections for item in section.item_ids]
+        self.assertEqual(section_ids, plan.ranked_item_ids)
+        self.assertEqual(section_ids.count("reading:shared:v1:0"), 1)
+
+    def test_duplicate_task_ids_are_normalized_before_section_validation(self):
+        task = ContextTaskInput(task_kind="t", current_task_item_ids=["a", "a"],
+                                explicit_user_item_ids=["a", "b", "b"])
+        plan = build_context_plan(task, _retrieval_result([]), total_token_budget=4000)
+        self.assertEqual(plan.ranked_item_ids, ["a", "b"])
+        self.assertEqual([item for section in plan.sections for item in section.item_ids], ["a", "b"])
 
     def test_budget_ratios_sum_and_allocate(self) -> None:
         task = ContextTaskInput(task_kind="t", current_task_item_ids=["a"])

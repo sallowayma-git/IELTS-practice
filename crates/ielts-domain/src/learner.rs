@@ -207,6 +207,17 @@ pub struct SkillReviewNeedsSnapshot {
     pub continuation: Option<String>,
 }
 
+/// One host-owned learner snapshot. Needs describe exactly the returned skill
+/// page; the flattened state's pagination applies to both arrays.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LearnerSkillSnapshot {
+    #[serde(flatten)]
+    pub state: LearnerStateSnapshot,
+    pub needs: Vec<SkillReviewNeed>,
+    pub needs_available: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LearnerRebuildReport {

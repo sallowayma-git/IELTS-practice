@@ -90,14 +90,14 @@ fn migration_is_forward_only_from_v11_fixture() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
     );
     let version: i64 = conn
         .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
             row.get(0)
         })
         .unwrap();
-    assert!(version >= 23, "migration 0023 was not applied, got {version}");
+    assert_eq!(version, 26, "latest migration 0026 was not applied");
     let exists: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'learning_events'",
@@ -227,6 +227,82 @@ fn failed_event_projection_rolls_back_reading_attempt_and_idempotency() {
         )
         .unwrap();
     assert_eq!((attempts, idempotency), (0, 0));
+}
+
+#[test]
+fn submit_after_deleting_early_attempts_preserves_ledger_chronology() {
+    let (dir, conn) = open_db();
+    let asset_path = dir.path().join("asset.json");
+    std::fs::write(&asset_path, serde_json::to_vec(&sample_payload()).unwrap()).unwrap();
+    let asset = import_asset_payload_file(&conn, &asset_path).unwrap();
+    let submit = |id: &str, correct: bool| {
+        submit_reading_attempt(&conn, &ReadingSubmitCommand {
+            attempt_id: id.into(),
+            asset_id: "ledger-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint.clone()),
+            answers: json!({"q1": if correct { "TRUE" } else { "FALSE" }, "q2": "B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(1000),
+            title_snapshot: None,
+            idempotency_key: format!("submit-{id}"),
+        }).unwrap();
+    };
+    for id in ["a1", "a2", "a3"] {
+        submit(id, false);
+    }
+    let old_events = list_learning_events(&conn, None, Some("a3"), 20).unwrap();
+    assert!(old_events.iter().all(|event| event.payload["attemptOrdinal"] == 3));
+    assert!(ielts_db::delete_attempt(&conn, "a1").unwrap());
+    assert!(ielts_db::delete_attempt(&conn, "a2").unwrap());
+    submit("a4", true);
+    let new_events = list_learning_events(&conn, None, Some("a4"), 20).unwrap();
+    assert!(new_events.iter().all(|event| event.payload["attemptOrdinal"] == 4));
+    for _ in 0..2 {
+        let ledger = learning_events_rebuild(&conn, 100).unwrap();
+        assert_eq!(ledger.inserted_events, 0);
+        assert_eq!(ledger.existing_events, 6);
+        assert!(learning_events_verify(&conn).unwrap().consistent);
+        assert_eq!(list_learning_events(&conn, None, Some("a3"), 20).unwrap(), old_events);
+        assert_eq!(list_learning_events(&conn, None, Some("a4"), 20).unwrap(), new_events);
+    }
+    let first = ielts_db::learning_observations_rebuild(&conn).unwrap();
+    let second = ielts_db::learning_observations_rebuild(&conn).unwrap();
+    assert_eq!(first.input_hash, second.input_hash);
+    assert_eq!(first.output_hash, second.output_hash);
+    let payload: String = conn.query_row(
+        "SELECT payload_json FROM learner_observations
+         WHERE observation_type = 'reading.repeat.corrected' AND scope_key = 'ledger-asset:q1'",
+        [], |row| row.get(0),
+    ).unwrap();
+    let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(payload["previousAttemptId"], "a3");
+    assert_eq!(payload["currentAttemptId"], "a4");
+    assert!(payload["gapHours"].as_f64().unwrap() >= 0.0);
+    let newly_wrong: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM learner_observations WHERE observation_type = 'reading.repeat.newly_wrong'",
+        [], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(newly_wrong, 0);
+    assert!(ielts_db::learning_observations_verify(&conn).unwrap().consistent);
+    conn.execute("DELETE FROM learning_events WHERE attempt_id='a3' AND event_type='attempt_completed'", []).unwrap();
+    let repaired = learning_events_rebuild(&conn, 100).unwrap();
+    assert_eq!(repaired.inserted_events, 1);
+    let repaired_events = list_learning_events(&conn, None, Some("a3"), 20).unwrap();
+    assert!(repaired_events.iter().all(|event| event.payload["attemptOrdinal"] == 3));
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+    assert_eq!(learning_events_rebuild(&conn, 100).unwrap().inserted_events, 0);
+    // Contradictory surviving chronology must fail, not choose one record.
+    conn.execute("UPDATE learning_events SET payload_json=json_set(payload_json,'$.attemptOrdinal',99) WHERE attempt_id='a3' AND event_type='attempt_completed'", []).unwrap();
+    assert!(learning_events_rebuild(&conn, 100).unwrap_err().to_string().contains("conflicting frozen"));
+    conn.execute("UPDATE learning_events SET payload_json=json_set(payload_json,'$.attemptOrdinal',3) WHERE attempt_id='a3' AND event_type='attempt_completed'", []).unwrap();
+    // Frozen chronology must not hide changes to the other authoritative fields.
+    conn.execute("UPDATE attempt_answers SET change_count = 1 WHERE attempt_id = 'a3' AND question_id = 'q1'", []).unwrap();
+    assert!(!learning_events_verify(&conn).unwrap().consistent);
+    assert!(learning_events_rebuild(&conn, 100).is_err());
+    conn.execute("UPDATE learning_events SET content_hash = 'bad' WHERE attempt_id = 'a3'", []).unwrap();
+    assert!(learning_events_verify(&conn).unwrap().bad_hashes > 0);
 }
 
 #[allow(dead_code)]

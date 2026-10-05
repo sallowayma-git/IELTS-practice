@@ -1,30 +1,25 @@
-//! M7 Daily Journal + Daily Dream + M8 Weekly Dream/Consolidation Tauri commands
+//! M7 Daily Journal + M8 Weekly Dream/Consolidation Tauri commands
 //! (feature-gated `daily-dream-v1`).
 //!
-//! Exposes the Rust-owned journal/dream/consolidation authority to the UI.
-//! The actual LLM enrichment runs in the Python sidecar; Rust is the durable
-//! authority that builds deterministic facts, persists versioned journals,
-//! records dream proposals as pending candidates (never writing active memory),
-//! and re-validates weekly consolidation patterns by stable ID.
+//! The daily journal is a deterministic summary of facts: Rust builds and
+//! versions it, no model and no dream are involved. The only dream is the weekly
+//! consolidation, which runs in the Python sidecar; Rust is the durable authority
+//! that persists its run and re-validates its patterns by stable ID.
 
 #![cfg(feature = "daily-dream-v1")]
 
-use ielts_application::{
-    ApplicationError, ConsolidationService, DreamService, JournalService,
-};
+use ielts_application::{ApplicationError, ConsolidationService, DreamService, JournalService};
 use ielts_db::background_jobs::{self, BackgroundJob};
-use ielts_db::{BeginAgentRunCommand, StoredAgentRunStatus};
+use ielts_db::WeeklyWindow;
 use ielts_domain::{
-    AgentRunKind, CommandResponse, DailyDreamQuery, DailyDreamResult, DailyJournal,
-    DailyJournalQuery, ErrorEnvelope, MemoryFeedbackKind, PatternProposal, WeeklyDreamQuery,
+    CommandResponse, DailyDreamQuery, DailyJournal, DailyJournalQuery, ErrorEnvelope,
+    MemoryFeedbackKind, PatternProposal, WeeklyDreamQuery,
 };
 use serde::Serialize;
 use tauri::State;
 
 use crate::app::application_store::ApplicationStore;
-use crate::app::run_audit::RunAuditGuard;
 use crate::app::state::AppDb;
-use crate::cognitive_runtime::RuntimeManager;
 
 /// Read or build today's journal. If a published journal exists for the day it
 /// is returned; otherwise the deterministic facts are built and a new version
@@ -133,21 +128,63 @@ pub fn journal_list_versions(
     respond(Ok(Vec::new()))
 }
 
-/// Trigger a daily dream run: enqueue + claim an honest `daily_dream` audit
-/// job, then drive the Python sidecar's deterministic consolidation pass
-/// (M7-06) over the reverse-RPC gateway. The Python orchestrator submits its
-/// proposals via `dream.run_daily`; Rust stays the only writer — the run row,
-/// its queued→running→completed lifecycle, and the candidates are all created
-/// on the Rust authority side. Host failure is fail-closed: the job and the
-/// sidecar result both record the failure, the practice loop is unaffected.
+/// "整理今天": refresh the deterministic daily summary of a day on demand. The
+/// same job the automatic worker runs: an honest `daily_journal` ledger row that
+/// this command enqueues, claims, and closes only after the journal version is
+/// bound. No model, no sidecar, no memory proposals (all consolidation is the
+/// weekly pass). The command keeps its historical IPC name.
 #[tauri::command]
-pub async fn dream_run_daily(
-    app: tauri::AppHandle,
+pub fn dream_run_daily(
     db: State<'_, AppDb>,
-    runtime: State<'_, RuntimeManager>,
     query: DailyDreamRunInput,
-) -> Result<CommandResponse<DailyDreamResult>, ErrorEnvelope> {
-    Ok(dream_run_daily_inner(app, db, runtime, query).await)
+) -> CommandResponse<DailyJournal> {
+    if !crate::app::daily_worker::valid_local_window(&query.user_id, &query.day) {
+        return CommandResponse::failure(ErrorEnvelope::new(
+            "journal.invalid_request",
+            "a valid YYYY-MM-DD day and local user are required",
+            false,
+        ));
+    }
+    const WORKER_ID: &str = "manual-dream";
+    let now = now_iso();
+    let _ = db.with_conn(|conn| background_jobs::lease_recover(conn, &now, 300));
+    let dedupe = format!("daily_journal:{}:{}", query.user_id, query.day);
+    let claimed = db.with_conn(|conn| {
+        let id = background_jobs::enqueue_job(conn, "daily_journal", &query.user_id, &now, 5, Some(&dedupe), None)?;
+        let owned = background_jobs::claim_job_by_id(conn, &id, &now, WORKER_ID)?;
+        Ok(owned.then(|| background_jobs::load_job(conn, &id)).transpose()?.flatten())
+    });
+    let job = match claimed {
+        Ok(Some(job)) => job,
+        Ok(None) => return job_failure("enqueued journal job is not claimable".into()),
+        Err(error) => return job_failure(error.to_string()),
+    };
+    match crate::app::daily_worker::run_daily_journal(db.inner(), &job, WORKER_ID) {
+        Ok(journal_id) => load_journal(&db, &query.day, &journal_id),
+        Err(error) => {
+            let message = error.to_string();
+            let _ = db.with_conn(|conn| {
+                background_jobs::fail_job(conn, &job.id, WORKER_ID, &now_iso(), &message, 60)
+            });
+            CommandResponse::failure(ErrorEnvelope::new("journal.build_failed", message, true))
+        }
+    }
+}
+
+fn job_failure(message: String) -> CommandResponse<DailyJournal> {
+    CommandResponse::failure(ErrorEnvelope::new("journal.background_job_failed", message, false))
+}
+
+fn load_journal(db: &AppDb, day: &str, journal_id: &str) -> CommandResponse<DailyJournal> {
+    match db.with_conn(|conn| ielts_db::load_latest_journal(conn, "local", day)) {
+        Ok(Some(journal)) if journal.id == journal_id => CommandResponse::success(journal),
+        Ok(_) => CommandResponse::failure(ErrorEnvelope::new(
+            "journal.build_failed",
+            "the daily journal changed while it was being built",
+            true,
+        )),
+        Err(error) => CommandResponse::failure(ErrorEnvelope::new("journal.build_failed", error.to_string(), true)),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -162,231 +199,22 @@ fn default_local_user() -> String {
     "local".into()
 }
 
-async fn dream_run_daily_inner(
-    app: tauri::AppHandle,
+/// Read-only: recent weekly consolidations, each with the window it covered and
+/// the patterns it produced that are still active. Runs that produced nothing are
+/// omitted. The Notebook renders these as prose; nothing here can mutate memory.
+#[tauri::command]
+pub fn weekly_digest_list(
     db: State<'_, AppDb>,
-    runtime: State<'_, RuntimeManager>,
-    query: DailyDreamRunInput,
-) -> CommandResponse<DailyDreamResult> {
-    if query.day.trim().is_empty() {
-        return CommandResponse::failure(ErrorEnvelope::new(
-            "journal.invalid_request",
-            "day is required",
-            false,
-        ));
-    }
-    const WORKER_ID: &str = "manual-dream";
-    let now = now_iso();
-    let _ = db.with_conn(|conn| background_jobs::lease_recover(conn, &now, 300));
-    let dedupe = format!("daily_dream:{}:{}", query.user_id, query.day);
-
-    // 1. Honest job ledger: enqueue, then claim the job THIS command owns.
-    let job_id = match db.with_conn(|conn| {
-        background_jobs::enqueue_job(
-            conn,
-            "daily_dream",
-            &query.user_id,
-            &now,
-            4,
-            Some(&dedupe),
-            None,
-        )
-    }) {
-        Ok(id) => id,
-        Err(error) => {
-            return CommandResponse::failure(ErrorEnvelope::new(
-                "journal.background_job_failed",
-                error.to_string(),
-                false,
-            ));
-        }
-    };
-    let claimed = db
-        .with_conn(|conn| background_jobs::claim_job_by_id(conn, &job_id, &now, WORKER_ID))
-        .unwrap_or(false);
-    if !claimed {
-        return CommandResponse::failure(ErrorEnvelope::new(
-            "journal.background_job_failed",
-            "enqueued dream job is not claimable",
-            false,
-        ));
-    }
-
-    // 2. Agent-run audit row for the deterministic dream pass (run_kind Dream).
-    let audit_run_id = format!("dream-{}", uuid::Uuid::new_v4());
-    if let Err(error) = db.with_conn(|conn| {
-        ielts_db::begin_agent_run(
-            conn,
-            &BeginAgentRunCommand {
-                id: audit_run_id.clone(),
-                provider_id: "deterministic".into(),
-                model: "daily-dream-v1".into(),
-                run_kind: AgentRunKind::Dream,
-            },
-        )
-    }) {
-        let _ = db.with_conn(|conn| {
-            background_jobs::fail_job(conn, &job_id, WORKER_ID, &now_iso(), &error.to_string(), 0)
-        });
-        return CommandResponse::failure(ErrorEnvelope::new(
-            "journal.audit_failed",
+    limit: Option<u32>,
+) -> CommandResponse<Vec<ielts_db::WeeklyDigest>> {
+    match db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", limit.unwrap_or(8))) {
+        Ok(digests) => CommandResponse::success(digests),
+        Err(error) => CommandResponse::failure(ErrorEnvelope::new(
+            "journal.weekly_digest_failed",
             error.to_string(),
             false,
-        ));
+        )),
     }
-    let mut audit = RunAuditGuard::new(
-        db.inner(),
-        audit_run_id.clone(),
-        StoredAgentRunStatus::Failed,
-        serde_json::json!({
-            "code": "journal.dream_abandoned",
-            "message": "daily dream run was abandoned before completion",
-        }),
-    );
-
-    // 3. Reserve the sidecar and drive the orchestrator.
-    let mut reservation = match runtime.reserve_generation(&app).await {
-        Ok(reservation) => reservation,
-        Err(error) => {
-            return dream_fail(
-                &db,
-                &mut audit,
-                &job_id,
-                WORKER_ID,
-                "journal.runtime_unavailable",
-                &error.to_string(),
-            )
-        }
-    };
-    let outcome = runtime
-        .run_daily_dream(&mut reservation, &audit_run_id, &query.day)
-        .await;
-    let payload = match outcome {
-        Ok(value) => value,
-        Err(crate::cognitive_runtime::RuntimeHostError::Cancelled) => {
-            return dream_cancelled(&db, &mut audit, &job_id, WORKER_ID)
-        }
-        Err(error) => {
-            return dream_fail(
-                &db,
-                &mut audit,
-                &job_id,
-                WORKER_ID,
-                "journal.runtime_failed",
-                &error.to_string(),
-            )
-        }
-    };
-    let result_value = payload
-        .get("result")
-        .cloned()
-        .ok_or_else(|| "dream result is missing".to_owned());
-    let dream_result: DreamOutcome = match result_value
-        .and_then(|value| serde_json::from_value(value).map_err(|error| error.to_string()))
-    {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            return dream_fail(&db, &mut audit, &job_id, WORKER_ID, "journal.runtime_invalid", &error)
-        }
-    };
-    if let Some(reason) = dream_result.fallback_reason.as_deref() {
-        // Fail-closed fallback from the orchestrator (e.g. capability
-        // mismatch): the sidecar ran but produced no authoritative run.
-        return dream_fail(&db, &mut audit, &job_id, WORKER_ID, "journal.dream_fallback", reason);
-    }
-
-    // 4. Load the authoritative run + candidates and close the ledger.
-    //    (Created here so the non-Send DreamStore borrow never spans an await.)
-    let store = ApplicationStore::new(db.inner());
-    let service = DreamService::new(&store);
-    let load = service.load_result(&dream_result.run_id);
-    match load {
-        Ok(Some(result)) => {
-            let _ = db.with_conn(|conn| {
-                background_jobs::finish_job(conn, &job_id, WORKER_ID, &now_iso())
-            });
-            let _ = audit.finish(
-                StoredAgentRunStatus::Completed,
-                Some(serde_json::json!({
-                    "runId": result.run.id,
-                    "accepted": dream_result.accepted,
-                    "rejected": dream_result.rejected,
-                    "failed": dream_result.failed,
-                })),
-                None,
-            );
-            CommandResponse::success(result)
-        }
-        Ok(None) => dream_fail(
-            &db,
-            &mut audit,
-            &job_id,
-            WORKER_ID,
-            "journal.dream_run_missing",
-            "sidecar reported a run the store cannot load",
-        ),
-        Err(error) => dream_fail(&db, &mut audit, &job_id, WORKER_ID, "journal.dream_load_failed", &error.to_string()),
-    }
-}
-
-/// Wire shape of the Python `dream.daily` dispatch result.
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DreamOutcome {
-    run_id: String,
-    #[serde(default)]
-    accepted: i64,
-    #[serde(default)]
-    rejected: i64,
-    #[serde(default)]
-    failed: i64,
-    #[serde(default)]
-    fallback_reason: Option<String>,
-}
-
-fn dream_fail(
-    db: &AppDb,
-    audit: &mut RunAuditGuard<'_>,
-    job_id: &str,
-    worker_id: &str,
-    code: &str,
-    message: &str,
-) -> CommandResponse<DailyDreamResult> {
-    let failed = db.with_conn(|conn| {
-        background_jobs::fail_job(conn, job_id, worker_id, &now_iso(), message, 0)
-    });
-    if let Ok(false) = failed {
-        tracing::warn!(job_id, "dream job was not owned by this worker; ledger untouched");
-    }
-    let audit_error = serde_json::json!({"code": code, "message": message});
-    if let Err(finish_error) = audit.finish(StoredAgentRunStatus::Failed, None, Some(audit_error)) {
-        tracing::warn!(%finish_error, "failed to close dream agent run");
-    }
-    CommandResponse::failure(ErrorEnvelope::new(code, message.to_string(), true))
-}
-
-fn dream_cancelled(
-    db: &AppDb,
-    audit: &mut RunAuditGuard<'_>,
-    job_id: &str,
-    worker_id: &str,
-) -> CommandResponse<DailyDreamResult> {
-    let message = "daily dream run was cancelled";
-    let failed = db.with_conn(|conn| {
-        background_jobs::fail_job(conn, job_id, worker_id, &now_iso(), message, 0)
-    });
-    if let Ok(false) = failed {
-        tracing::warn!(job_id, "dream job was not owned by this worker; ledger untouched");
-    }
-    let audit_error = serde_json::json!({"code": "journal.dream_cancelled", "message": message, "retryable": true});
-    if let Err(finish_error) = audit.finish(StoredAgentRunStatus::Interrupted, None, Some(audit_error)) {
-        tracing::warn!(%finish_error, "failed to close cancelled dream agent run");
-    }
-    CommandResponse::failure(ErrorEnvelope::new(
-        "journal.dream_cancelled",
-        message.to_string(),
-        true,
-    ))
 }
 
 /// Inspect background-job status for the diagnostics UI. Returns the most
@@ -448,7 +276,7 @@ fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// M8: run a Weekly Dream consolidation. Rust re-validates the proposed
+/// M8: run a Weekly Dream consolidation over `window`. Rust re-validates the proposed
 /// cross-scope patterns by stable memory ID (M8-02), applies consolidation as
 /// relations + supersede (M8-06, never deletes), and returns the report +
 /// receipts. Empty validated is success (M8-01: better zero than a wrong
@@ -475,6 +303,7 @@ pub(crate) fn run_weekly_consolidation(
     db: &AppDb,
     query: &WeeklyDreamQuery,
     patterns: &[PatternProposal],
+    window: &WeeklyWindow,
 ) -> Result<ielts_application::WeeklyDreamResult, ApplicationError> {
     let store = ApplicationStore::new(db);
     let service = ConsolidationService::new(&store);
@@ -490,7 +319,10 @@ pub(crate) fn run_weekly_consolidation(
         user_id: query.user_id.clone(),
         journal_id: query.journal_id.clone(),
     };
-    let run = dream_service.insert_dream_run(&dream_query, None)?;
+    // The run row is the weekly receipt: its marker names the weekend (the
+    // idempotency key) and the window it covered, so no schema change is needed.
+    let marker = window.marker();
+    let run = dream_service.insert_dream_run(&dream_query, Some(&marker))?;
     dream_service.start_dream_run(&run.id, &now)?;
 
     let outcome = (|| -> Result<ielts_application::WeeklyDreamResult, ApplicationError> {
@@ -627,10 +459,19 @@ mod tests {
         let service = JournalService::new(&store);
         let query = DailyJournalQuery {
             user_id: user_id.to_string(),
-            journal_date: "2026-08-10".to_string(),
+            journal_date: "2026-10-10".to_string(),
         };
         let facts = service.build_facts(&query).unwrap();
         service.insert_journal(&facts, None).unwrap().id
+    }
+
+    fn window(key: &str, start: &str, end: &str) -> WeeklyWindow {
+        let at = |value: &str| chrono::DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&chrono::Utc);
+        WeeklyWindow::new(key, at(start), at(end))
+    }
+
+    fn saturday() -> WeeklyWindow {
+        window("2026-W41", "2026-10-03T04:00:00Z", "2026-10-10T09:30:00Z")
     }
 
     fn dream_run_status(db: &AppDb, run_id: &str) -> Option<String> {
@@ -660,7 +501,7 @@ mod tests {
 
         // Zero patterns is a legitimate success (M8-01), and still must be
         // recorded: the run happened, it just produced nothing.
-        let result = run_weekly_consolidation(&db, &query, &[]).unwrap();
+        let result = run_weekly_consolidation(&db, &query, &[], &saturday()).unwrap();
 
         assert!(
             !result.run_id.starts_with("weekly-"),
@@ -692,7 +533,7 @@ mod tests {
             confidence_proposal: 0.8,
         }];
 
-        let outcome = run_weekly_consolidation(&db, &query, &patterns);
+        let outcome = run_weekly_consolidation(&db, &query, &patterns, &saturday());
 
         assert!(outcome.is_err(), "a nonexistent journal_id must fail closed");
         let written: i64 = db
@@ -707,6 +548,30 @@ mod tests {
             })
             .unwrap();
         assert_eq!(written, 0, "no consolidation may land when the run cannot be claimed");
+    }
+
+    /// The weekly run row is the per-weekend idempotency receipt: it is keyed by
+    /// the host-owned window, an empty result still counts (zero patterns is a
+    /// success), the next window starts where it ended, and another weekend is
+    /// unaffected.
+    #[test]
+    fn weekly_consolidation_leaves_a_receipt_for_its_weekend() {
+        let (_dir, db) = temp_db();
+        let journal_id = seed_journal(&db, "local");
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id };
+        let due = |key: &str| db
+            .with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", key))
+            .unwrap();
+        assert!(!due("2026-W41"));
+        let window = saturday();
+        run_weekly_consolidation(&db, &query, &[], &window).unwrap();
+        assert!(due("2026-W41"));
+        assert!(!due("2026-W42"));
+        let end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap();
+        assert_eq!(end, Some(window.end));
+        // Nothing consolidated: the digest has nothing to show for that run.
+        let digests = db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
+        assert!(digests.is_empty());
     }
 
     /// A rejected pattern is a recorded rejection, not a silent drop, and the
@@ -728,7 +593,7 @@ mod tests {
             confidence_proposal: 0.8,
         }];
 
-        let result = run_weekly_consolidation(&db, &query, &patterns).unwrap();
+        let result = run_weekly_consolidation(&db, &query, &patterns, &saturday()).unwrap();
 
         assert_eq!(result.report.validated.len(), 0);
         assert_eq!(result.report.rejected.len(), 1);
@@ -740,5 +605,29 @@ mod tests {
             dream_run_status(&db, &result.run_id).as_deref(),
             Some("completed")
         );
+    }
+
+    /// "整理今天" is the deterministic journal and nothing else: no run, no
+    /// candidate, no sidecar, and the ledger row it used is closed.
+    #[test]
+    fn manual_daily_summary_builds_the_journal_through_an_honest_job_and_no_dream() {
+        let (_dir, db) = temp_db();
+        let now = now_iso();
+        let job = db.with_conn(|conn| {
+            let id = background_jobs::enqueue_job(conn, "daily_journal", "local", &now, 5,
+                Some("daily_journal:local:2026-10-01"), None)?;
+            background_jobs::claim_job_by_id(conn, &id, &now, "manual-dream")?;
+            Ok(background_jobs::load_job(conn, &id)?.unwrap())
+        }).unwrap();
+        let journal_id = crate::app::daily_worker::run_daily_journal(&db, &job, "manual-dream").unwrap();
+        let loaded = load_journal(&db, "2026-10-01", &journal_id);
+        assert!(loaded.ok);
+        assert_eq!(loaded.data.unwrap().id, journal_id);
+        let (jobs, dreams): (String, i64) = db.with_conn(|conn| Ok((
+            background_jobs::load_job(conn, &job.id)?.unwrap().status,
+            conn.query_row("SELECT COUNT(*) FROM dream_runs", [], |row| row.get(0))?,
+        ))).unwrap();
+        assert_eq!((jobs.as_str(), dreams), ("completed", 0));
+        assert!(!load_journal(&db, "2026-10-01", "some-other-journal").ok);
     }
 }

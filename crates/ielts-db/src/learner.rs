@@ -15,7 +15,7 @@ use ielts_domain::{
     TrendDirection, UncertaintyBand, LEARNER_MODEL_SCHEMA_VERSION, LEARNER_SCHEDULER_VERSION,
     LEARNER_STATE_MODEL_VERSION, LEARNER_TAXONOMY_VERSION, MAX_LEARNER_LIMIT,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -27,6 +27,7 @@ const MAX_STATE_EXPLANATION_OBSERVATIONS: usize = 12;
 const MAX_AVOID_ASSETS: usize = 5;
 const MAX_LEARNER_RESPONSE_BYTES: usize = 1_048_576;
 const EMPTY_REFERENCE_AT: &str = "1970-01-01T00:00:00Z";
+const DESKTOP_USER_ID: &str = "local";
 
 #[derive(Debug, Clone)]
 struct SourceObservation {
@@ -117,10 +118,15 @@ pub fn learner_model_verify(conn: &Connection) -> DbResult<LearnerVerifyReport> 
         LearnerModelConfig::default(),
     )?;
     let stored_observations = count_rows(conn, "learner_skill_observations")?;
+    let mut expected_observations = built.observations.clone();
+    expected_observations.sort_by(|left, right| left.id.cmp(&right.id));
     let stored_states = load_stored_states(conn)?;
     let stored_schedules = load_stored_schedules(conn)?;
     let stored_hash = hash_derived(&stored_states, &stored_schedules)?;
     let mut mismatches = Vec::new();
+    if load_stored_skill_observations(conn)? != expected_observations {
+        mismatches.push("skill observation content mismatch".into());
+    }
     if stored_observations != built.observations.len() as u64 {
         mismatches.push(format!(
             "observation count mismatch: stored={}, expected={}",
@@ -165,8 +171,75 @@ pub fn learner_state_snapshot(
     conn: &Connection,
     query: &LearnerStateQuery,
 ) -> DbResult<LearnerStateSnapshot> {
+    let tx = fresh_learner_transaction(conn)?;
+    let snapshot = read_learner_state_snapshot(&tx, query)?;
+    tx.commit()?;
+    Ok(snapshot)
+}
+
+fn fresh_learner_transaction(conn: &Connection) -> DbResult<Transaction<'_>> {
+    crate::cognitive_read::ensure_observations_fresh(conn)?;
+    let tx = conn.unchecked_transaction()?;
+    crate::cognitive_read::require_observations_fresh(&tx)?;
+    if !learner_model_verify(&tx)?.consistent {
+        learner_model_rebuild_in_transaction(&tx)?;
+        if !learner_model_verify(&tx)?.consistent {
+            return Err(DbError::Validation(
+                "learner projection is not fresh after rebuild".into(),
+            ));
+        }
+    }
+    Ok(tx)
+}
+
+pub fn learner_skill_snapshot(
+    conn: &Connection,
+    query: &LearnerStateQuery,
+) -> DbResult<ielts_domain::LearnerSkillSnapshot> {
+    learner_skill_snapshot_as_of(conn, query, Utc::now())
+}
+
+/// Project review urgency at a fixed read clock without changing replay state.
+pub fn learner_skill_snapshot_as_of(
+    conn: &Connection,
+    query: &LearnerStateQuery,
+    as_of: DateTime<Utc>,
+) -> DbResult<ielts_domain::LearnerSkillSnapshot> {
+    let tx = fresh_learner_transaction(conn)?;
+    let state = read_learner_state_snapshot(&tx, query)?;
+    let selected = state
+        .states
+        .iter()
+        .map(|row| row.skill_key.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut records = read_schedules_as_of(&tx, as_of)?;
+    records.retain(|row| {
+        row.user_id == DESKTOP_USER_ID && selected.contains(row.need.skill_key.as_str())
+    });
+    records.sort_by(|left, right| {
+        right
+            .need
+            .priority
+            .total_cmp(&left.need.priority)
+            .then_with(|| left.need.skill_key.cmp(&right.need.skill_key))
+    });
+    let snapshot = ielts_domain::LearnerSkillSnapshot {
+        state,
+        needs: records.into_iter().map(|row| row.need).collect(),
+        needs_available: true,
+    };
+    ensure_response_size(&snapshot)?;
+    tx.commit()?;
+    Ok(snapshot)
+}
+
+fn read_learner_state_snapshot(
+    conn: &Connection,
+    query: &LearnerStateQuery,
+) -> DbResult<LearnerStateSnapshot> {
     let limit = query.limit.clamp(1, MAX_LEARNER_LIMIT) as usize;
     let mut states = load_stored_states(conn)?;
+    states.retain(|state| state.user_id == DESKTOP_USER_ID);
     if !query.skill_keys.is_empty() {
         let wanted = query
             .skill_keys
@@ -190,7 +263,10 @@ pub fn learner_state_snapshot(
         .collect::<BTreeSet<_>>();
     let schedules = load_stored_schedules(conn)?
         .into_iter()
-        .filter(|schedule| selected_skill_keys.contains(schedule.need.skill_key.as_str()))
+        .filter(|schedule| {
+            schedule.user_id == DESKTOP_USER_ID
+                && selected_skill_keys.contains(schedule.need.skill_key.as_str())
+        })
         .collect::<Vec<_>>();
     let state_hash = hash_derived(&states, &schedules)?;
     let generated_at = states
@@ -218,13 +294,31 @@ pub fn skill_review_needs_snapshot(
     conn: &Connection,
     query: &SkillReviewNeedsQuery,
 ) -> DbResult<SkillReviewNeedsSnapshot> {
+    skill_review_needs_snapshot_as_of(conn, query, Utc::now())
+}
+
+/// A fixed clock also lets callers keep review pagination on one time basis.
+pub fn skill_review_needs_snapshot_as_of(
+    conn: &Connection,
+    query: &SkillReviewNeedsQuery,
+    as_of: DateTime<Utc>,
+) -> DbResult<SkillReviewNeedsSnapshot> {
+    let tx = fresh_learner_transaction(conn)?;
+    let snapshot = read_skill_review_needs_snapshot(&tx, query, as_of)?;
+    tx.commit()?;
+    Ok(snapshot)
+}
+
+fn read_skill_review_needs_snapshot(
+    conn: &Connection,
+    query: &SkillReviewNeedsQuery,
+    as_of: DateTime<Utc>,
+) -> DbResult<SkillReviewNeedsSnapshot> {
     let limit = query.limit.clamp(1, MAX_LEARNER_LIMIT) as usize;
-    let mut needs = load_stored_schedules(conn)?;
+    let mut needs = read_schedules_as_of(conn, as_of)?;
+    needs.retain(|record| record.user_id == DESKTOP_USER_ID);
     if let Some(due_before) = query.due_before.as_deref() {
         needs.retain(|record| record.need.due_at.as_str() <= due_before);
-    }
-    if let Some(after) = query.after_skill_key.as_deref() {
-        needs.retain(|record| record.need.skill_key.as_str() > after);
     }
     needs.sort_by(|left, right| {
         right
@@ -233,6 +327,15 @@ pub fn skill_review_needs_snapshot(
             .total_cmp(&left.need.priority)
             .then_with(|| left.need.skill_key.cmp(&right.need.skill_key))
     });
+    if let Some(after) = query.after_skill_key.as_deref() {
+        let index = needs
+            .iter()
+            .position(|record| record.need.skill_key == after)
+            .ok_or_else(|| {
+                DbError::Validation("review cursor no longer exists; restart pagination".into())
+            })?;
+        needs.drain(..=index);
+    }
     let truncated = needs.len() > limit;
     needs.truncate(limit);
     let continuation = truncated
@@ -241,12 +344,7 @@ pub fn skill_review_needs_snapshot(
     let response = SkillReviewNeedsSnapshot {
         schema_version: LEARNER_MODEL_SCHEMA_VERSION,
         scheduler_version: LEARNER_SCHEDULER_VERSION.into(),
-        generated_at: needs
-            .iter()
-            .map(|record| record.need.due_at.as_str())
-            .max()
-            .unwrap_or(EMPTY_REFERENCE_AT)
-            .to_string(),
+        generated_at: as_of.to_rfc3339(),
         needs: needs.into_iter().map(|record| record.need).collect(),
         truncated,
         continuation,
@@ -259,23 +357,14 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
     let sources = load_source_observations(conn)?;
     let mut observations = Vec::new();
     let mut input_parts = Vec::new();
-    let mut last_asset_at: BTreeMap<(String, String), String> = BTreeMap::new();
+    let practice_gaps = practice_gaps(&sources);
 
     for source in &sources {
         let Some(outcome) = source.value_num.filter(|value| value.is_finite()) else {
             continue;
         };
-        let mappings = if allow_seed_mapping {
-            ensure_mapping_for_source(conn, source)?
-        } else {
-            active_mappings(conn, &source.asset_id, &source.question_id)?
-        };
-        let asset_key = (source.user_id.clone(), source.asset_id.clone());
-        let previous_asset_at = last_asset_at.get(&asset_key).cloned();
-        let gap_hours = previous_asset_at
-            .as_deref()
-            .and_then(|previous| gap_hours(previous, &source.observed_at));
-        let same_asset = previous_asset_at.is_some();
+        let mappings = mappings_for_source(conn, source, allow_seed_mapping)?;
+        let (same_asset, gap_hours) = practice_gaps[&practice_key(source)];
         let (novelty_weight, familiarity_weight) =
             familiarity_weights(same_asset, gap_hours, LearnerModelConfig::default());
         for mapping in mappings {
@@ -335,7 +424,6 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
             ));
             observations.push(observation);
         }
-        last_asset_at.insert(asset_key, source.observed_at.clone());
     }
     observations.sort_by(|left, right| {
         left.observed_at
@@ -355,6 +443,43 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
         input_hash: sha256_hex(&input_parts.join("\n")),
         reference_at,
     })
+}
+
+fn practice_key(source: &SourceObservation) -> (String, String, String) {
+    let practice = match source.attempt_id.as_deref() {
+        Some(attempt) => format!("attempt:{attempt}"),
+        // Without an attempt identity, do not guess a session from timestamps.
+        None => format!("event:{}", source.event_id),
+    };
+    (source.user_id.clone(), source.asset_id.clone(), practice)
+}
+
+fn practice_gaps(
+    sources: &[SourceObservation],
+) -> BTreeMap<(String, String, String), (bool, Option<f64>)> {
+    let mut practices = BTreeMap::new();
+    for source in sources {
+        let at = practices
+            .entry(practice_key(source))
+            .or_insert_with(|| source.observed_at.clone());
+        if source.observed_at < *at {
+            *at = source.observed_at.clone();
+        }
+    }
+    let mut ordered = practices.into_iter().collect::<Vec<_>>();
+    // Session order is independent of question IDs, including equal-time events.
+    ordered.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
+    let mut last_asset_at = BTreeMap::new();
+    let mut gaps = BTreeMap::new();
+    for (key, at) in ordered {
+        let asset_key = (key.0.clone(), key.1.clone());
+        let previous = last_asset_at.insert(asset_key, at.clone());
+        let gap = previous
+            .as_deref()
+            .and_then(|previous| gap_hours(previous, &at));
+        gaps.insert(key, (previous.is_some(), gap));
+    }
+    gaps
 }
 
 fn load_source_observations(conn: &Connection) -> DbResult<Vec<SourceObservation>> {
@@ -433,17 +558,33 @@ fn load_source_observations(conn: &Connection) -> DbResult<Vec<SourceObservation
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
-fn ensure_mapping_for_source(
+fn mappings_for_source(
     conn: &Connection,
     source: &SourceObservation,
+    allow_seed_mapping: bool,
 ) -> DbResult<Vec<MappingRow>> {
     let existing = active_mappings(conn, &source.asset_id, &source.question_id)?;
-    if !existing.is_empty() {
-        return Ok(existing);
+    let mut curated = existing
+        .iter()
+        .filter(|row| row.mapping_source != "builtin")
+        .cloned()
+        .collect::<Vec<_>>();
+    if let Some(priority) = curated
+        .iter()
+        .map(|row| mapping_priority(&row.mapping_source))
+        .min()
+    {
+        curated.retain(|row| mapping_priority(&row.mapping_source) == priority);
+        return Ok(curated);
     }
     let Some(skill_key) = deterministic_skill_key(conn, source) else {
         return Ok(Vec::new());
     };
+    // Builtin rows are a cache of event-kind mappings, not current asset truth.
+    // Keep each old event on its submitted kind after a same-ID reimport.
+    if let Some(mapping) = existing.into_iter().find(|row| row.skill_key == skill_key) {
+        return Ok(vec![mapping]);
+    }
     let existing_any: Option<String> = conn
         .query_row(
             "SELECT mapping_source FROM question_skill_map
@@ -453,6 +594,14 @@ fn ensure_mapping_for_source(
         )
         .optional()?;
     if existing_any.is_none() {
+        if !allow_seed_mapping {
+            return Ok(vec![MappingRow {
+                skill_key,
+                weight: 1.0,
+                mapping_source: "builtin".into(),
+                mapping_version: LEARNER_TAXONOMY_VERSION,
+            }]);
+        }
         conn.execute(
             "INSERT INTO question_skill_map
              (asset_id, question_id, skill_key, weight, mapping_source, mapping_version, active)
@@ -465,7 +614,12 @@ fn ensure_mapping_for_source(
             ],
         )?;
     }
-    active_mappings(conn, &source.asset_id, &source.question_id)
+    Ok(
+        active_mappings(conn, &source.asset_id, &source.question_id)?
+            .into_iter()
+            .filter(|row| row.mapping_source == "builtin" && row.skill_key == skill_key)
+            .collect(),
+    )
 }
 
 fn active_mappings(
@@ -490,16 +644,7 @@ fn active_mappings(
             mapping_version: row.get(3)?,
         })
     })?;
-    let mut mappings = rows.collect::<Result<Vec<_>, _>>()?;
-    let Some(best_priority) = mappings
-        .iter()
-        .map(|mapping| mapping_priority(&mapping.mapping_source))
-        .min()
-    else {
-        return Ok(Vec::new());
-    };
-    mappings.retain(|mapping| mapping_priority(&mapping.mapping_source) == best_priority);
-    Ok(mappings)
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
 fn mapping_priority(source: &str) -> u8 {
@@ -564,6 +709,38 @@ fn deterministic_skill_key(conn: &Connection, source: &SourceObservation) -> Opt
     .flatten()
 }
 
+fn load_stored_skill_observations(conn: &Connection) -> DbResult<Vec<SkillObservation>> {
+    let mut statement = conn.prepare(
+        "SELECT id, user_id, event_id, skill_key, outcome, mapping_weight, evidence_weight,
+                novelty_weight, familiarity_weight, time_weight, error_type, context_json,
+                observed_at, asset_id, question_id, attempt_id, intervention_id, intervention_type
+         FROM learner_skill_observations ORDER BY id",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok(SkillObservation {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            event_id: row.get(2)?,
+            skill_key: row.get(3)?,
+            outcome: row.get(4)?,
+            mapping_weight: row.get(5)?,
+            evidence_weight: row.get(6)?,
+            novelty_weight: row.get(7)?,
+            familiarity_weight: row.get(8)?,
+            time_weight: row.get(9)?,
+            error_type: row.get(10)?,
+            context: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or(Value::Null),
+            observed_at: row.get(12)?,
+            asset_id: row.get(13)?,
+            question_id: row.get(14)?,
+            attempt_id: row.get(15)?,
+            intervention_id: row.get(16)?,
+            intervention_type: row.get(17)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation]) -> DbResult<()> {
     for observation in observations {
         conn.execute(
@@ -613,6 +790,57 @@ fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation
     Ok(())
 }
 
+/// Trend measures transfer across first attempts on independent materials.
+/// Repeated practice still updates the posterior, but cannot establish transfer.
+fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> {
+    let mut attempts = BTreeMap::new();
+    for observation in observations {
+        if observation.asset_id.is_empty()
+            || ielts_domain::effective_observation_weight(observation) <= 0.0
+        {
+            continue;
+        }
+        let practice = observation
+            .attempt_id
+            .as_ref()
+            .map(|id| format!("attempt:{id}"))
+            .unwrap_or_else(|| format!("event:{}", observation.event_id));
+        let entry = attempts
+            .entry((observation.asset_id.as_str(), practice))
+            .or_insert((observation.observed_at.as_str(), Vec::new()));
+        entry.0 = entry.0.min(observation.observed_at.as_str());
+        entry.1.push(observation.outcome.clamp(0.0, 1.0));
+    }
+    let mut attempts = attempts.into_iter().collect::<Vec<_>>();
+    attempts.sort_by(|left, right| left.1.0.cmp(right.1.0).then_with(|| left.0.cmp(&right.0)));
+    let mut first_assets: BTreeMap<&str, (&str, Vec<f64>)> = BTreeMap::new();
+    for ((asset, _), (at, mut outcomes)) in attempts {
+        let first = first_assets.entry(asset).or_insert((at, Vec::new()));
+        if first.0 != at {
+            continue;
+        }
+        // Equal-time evidence has no temporal direction; question IDs must not
+        // affect either the attempt mean or ordering within a time bucket.
+        outcomes.sort_by(f64::total_cmp);
+        first.1.push(outcomes.iter().sum::<f64>() / outcomes.len() as f64);
+    }
+    let mut temporal_outcomes: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    for (at, mut values) in first_assets.into_values() {
+        values.sort_by(f64::total_cmp);
+        temporal_outcomes.entry(at).or_default()
+            .push(values.iter().sum::<f64>() / values.len() as f64);
+    }
+    let mut outcomes = temporal_outcomes
+        .into_values()
+        .map(|mut values| {
+            values.sort_by(f64::total_cmp);
+            values.iter().sum::<f64>() / values.len() as f64
+        })
+        .collect::<Vec<_>>();
+    outcomes.drain(..outcomes.len().saturating_sub(8));
+    outcomes
+}
+
 fn build_states_and_schedules(
     observations: &[SkillObservation],
     reference_at: &str,
@@ -621,6 +849,7 @@ fn build_states_and_schedules(
     let mut states: BTreeMap<(String, String), SkillState> = BTreeMap::new();
     let mut assets: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
     let mut recent_outcomes: BTreeMap<(String, String), Vec<f64>> = BTreeMap::new();
+    let mut trend_observations: BTreeMap<(String, String), Vec<&SkillObservation>> = BTreeMap::new();
     let mut recent_observation_ids: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     let mut recent_assets: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     let mut intervention_ids: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
@@ -631,6 +860,7 @@ fn build_states_and_schedules(
 
     for observation in observations {
         let key = (observation.user_id.clone(), observation.skill_key.clone());
+        trend_observations.entry(key.clone()).or_default().push(observation);
         let state = states.entry(key.clone()).or_insert_with(|| SkillState {
             user_id: observation.user_id.clone(),
             skill_key: observation.skill_key.clone(),
@@ -719,13 +949,27 @@ fn build_states_and_schedules(
         }
     }
 
-    let reference =
-        parse_time(reference_at).unwrap_or_else(|| parse_time(EMPTY_REFERENCE_AT).unwrap());
+    let mut user_references: BTreeMap<&str, &str> = BTreeMap::new();
+    for observation in observations {
+        let latest = user_references
+            .entry(&observation.user_id)
+            .or_insert(&observation.observed_at);
+        if observation.observed_at.as_str() > *latest {
+            *latest = &observation.observed_at;
+        }
+    }
     let mut output_states = Vec::new();
     let mut schedules = Vec::new();
     for (key, mut state) in states {
+        let reference_at = user_references
+            .get(state.user_id.as_str())
+            .copied()
+            .unwrap_or(reference_at);
+        let reference =
+            parse_time(reference_at).unwrap_or_else(|| parse_time(EMPTY_REFERENCE_AT).unwrap());
         let outcomes = recent_outcomes.get(&key).cloned().unwrap_or_default();
-        let trend = trend_direction(&outcomes);
+        let trend_outcomes = independent_attempt_outcomes(&trend_observations[&key]);
+        let trend = trend_direction(&trend_outcomes);
         let delay_days = review_delay_days(&state);
         let next_review_at = state
             .last_practiced_at
@@ -769,6 +1013,7 @@ fn build_states_and_schedules(
         state.explanation = json!({
             "uncertaintyBand": uncertainty_band(state.uncertainty),
             "trend": trend,
+            "trendOutcomes": trend_outcomes,
             "recentOutcomes": outcomes,
             "supportingObservationIds": supporting_observation_ids,
             "avoidAssetIds": avoid_asset_ids,
@@ -781,25 +1026,7 @@ fn build_states_and_schedules(
         });
         output_states.push(state.clone());
 
-        let overdue_factor = state
-            .next_review_at
-            .as_deref()
-            .and_then(parse_time)
-            .map(|due| {
-                let days = (reference - due).num_seconds() as f64 / 86_400.0;
-                if days <= 0.0 {
-                    0.0
-                } else {
-                    (0.5 + days / 7.0).min(1.0)
-                }
-            })
-            .unwrap_or(0.0);
-        let recency_gap_factor = state
-            .last_practiced_at
-            .as_deref()
-            .and_then(parse_time)
-            .map(|last| ((reference - last).num_seconds() as f64 / 86_400.0 / 30.0).clamp(0.0, 1.0))
-            .unwrap_or(1.0);
+        let (overdue_factor, recency_gap_factor) = schedule_time_factors(&state, reference);
         let priority = review_priority(&state, overdue_factor, recency_gap_factor);
         let need = SkillReviewNeed {
             skill_key: state.skill_key.clone(),
@@ -930,6 +1157,17 @@ fn load_stored_states(conn: &Connection) -> DbResult<Vec<SkillState>> {
 }
 
 fn load_stored_schedules(conn: &Connection) -> DbResult<Vec<ScheduleRecord>> {
+    load_schedules(conn, None)
+}
+
+fn read_schedules_as_of(conn: &Connection, as_of: DateTime<Utc>) -> DbResult<Vec<ScheduleRecord>> {
+    load_schedules(conn, Some(as_of))
+}
+
+fn load_schedules(
+    conn: &Connection,
+    as_of: Option<DateTime<Utc>>,
+) -> DbResult<Vec<ScheduleRecord>> {
     let mut statement = conn.prepare(
         "SELECT user_id, skill_key, due_at, priority, priority_band, preferred_probe,
                 avoid_asset_ids_json, reason_codes_json, supporting_observation_ids_json
@@ -974,6 +1212,12 @@ fn load_stored_schedules(conn: &Connection) -> DbResult<Vec<ScheduleRecord>> {
             record.need.mastery_mean = state.mastery_mean;
             record.need.evidence_count = state.evidence_count;
             record.need.distinct_asset_count = state.distinct_asset_count;
+            if let Some(as_of) = as_of {
+                let (overdue, recency) = schedule_time_factors(state, as_of);
+                record.need.priority = review_priority(state, overdue, recency);
+                record.need.priority_band = priority_band(record.need.priority);
+                record.need.reason_codes = reason_codes(state, overdue);
+            }
         }
     }
     Ok(records)
@@ -1001,6 +1245,29 @@ fn state_view(state: &SkillState) -> SkillStateView {
         model_version: state.model_version.clone(),
         explanation: state.explanation.clone(),
     }
+}
+
+fn schedule_time_factors(state: &SkillState, as_of: DateTime<Utc>) -> (f64, f64) {
+    let overdue = state
+        .next_review_at
+        .as_deref()
+        .and_then(parse_time)
+        .map(|due| {
+            let days = (as_of - due).num_seconds() as f64 / 86_400.0;
+            if days <= 0.0 {
+                0.0
+            } else {
+                (0.5 + days / 7.0).min(1.0)
+            }
+        })
+        .unwrap_or(0.0);
+    let recency = state
+        .last_practiced_at
+        .as_deref()
+        .and_then(parse_time)
+        .map(|last| ((as_of - last).num_seconds() as f64 / 86_400.0 / 30.0).clamp(0.0, 1.0))
+        .unwrap_or(1.0);
+    (overdue, recency)
 }
 
 fn reason_codes(state: &SkillState, overdue_factor: f64) -> Vec<String> {

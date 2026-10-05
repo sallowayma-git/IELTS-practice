@@ -11,6 +11,11 @@ use ielts_domain::LearningEventType;
 use crate::learning_events::{append_learning_event_if_enabled, NewLearningEvent};
 use crate::sqlite::{DbError, DbResult};
 
+mod context;
+mod trace;
+pub use trace::*;
+pub use context::{resolve_reading_coach_context, ResolvedCoachContext};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CoachThread {
@@ -108,17 +113,22 @@ pub fn ensure_coach_thread(
     conn: &Connection,
     cmd: &EnsureCoachThreadCommand,
 ) -> DbResult<CoachThread> {
+    let kind = if cmd.kind.trim().is_empty() {
+        "chat".to_string()
+    } else {
+        cmd.kind.trim().to_ascii_lowercase()
+    };
     if let Some(id) = cmd.thread_id.as_deref() {
         if !id.trim().is_empty() {
             if let Ok(existing) = get_thread(conn, id) {
-                return Ok(existing);
+                return validate_thread_scope(existing, cmd);
             }
         }
     }
-    // reuse open thread for attempt if present
+    // A failed run keeps its messages on the same attempt-bound thread.
     if let Some(attempt_id) = cmd.attempt_id.as_deref() {
-        if let Ok(Some(existing)) = find_thread_for_attempt(conn, attempt_id, &cmd.kind) {
-            return Ok(existing);
+        if let Some(existing) = find_thread_for_attempt(conn, attempt_id, &kind)? {
+            return validate_thread_scope(existing, cmd);
         }
     }
     let now = chrono::Utc::now().to_rfc3339();
@@ -127,17 +137,27 @@ pub fn ensure_coach_thread(
         .clone()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| format!("coach-{}", Uuid::new_v4()));
-    let kind = if cmd.kind.trim().is_empty() {
-        "chat".into()
-    } else {
-        cmd.kind.trim().to_ascii_lowercase()
-    };
     conn.execute(
         "INSERT INTO coach_threads (id, attempt_id, asset_id, status, created_at, updated_at, kind, last_error_json)
          VALUES (?1, ?2, ?3, 'active', ?4, ?4, ?5, NULL)",
         params![id, cmd.attempt_id, cmd.asset_id, now, kind],
     )?;
     get_thread(conn, &id)
+}
+
+fn validate_thread_scope(thread: CoachThread, cmd: &EnsureCoachThreadCommand) -> DbResult<CoachThread> {
+    let kind = if cmd.kind.trim().is_empty() { "chat".to_string() } else { cmd.kind.trim().to_ascii_lowercase() };
+    let attempt_conflict = cmd.attempt_id.as_ref().is_some_and(|id| thread.attempt_id.as_ref() != Some(id));
+    // Old clients created attempt-bound threads without asset_id. The resolver
+    // derives their asset from the exact attempt; never rebind that attempt.
+    let asset_conflict = match (&cmd.asset_id, &thread.asset_id) {
+        (Some(requested), Some(bound)) => requested != bound,
+        _ => false,
+    };
+    if attempt_conflict || asset_conflict || thread.kind != kind || !matches!(thread.status.as_str(), "active" | "degraded") {
+        return Err(DbError::Validation("coach.thread_scope_conflict: existing thread cannot be rebound".into()));
+    }
+    Ok(thread)
 }
 
 pub fn get_thread(conn: &Connection, id: &str) -> DbResult<CoachThread> {
@@ -169,8 +189,8 @@ fn find_thread_for_attempt(
     kind: &str,
 ) -> DbResult<Option<CoachThread>> {
     let mut stmt = conn.prepare(
-        "SELECT id FROM coach_threads WHERE attempt_id = ?1 AND COALESCE(kind,'chat') = ?2 AND status = 'active'
-         ORDER BY updated_at DESC LIMIT 1",
+        "SELECT id FROM coach_threads WHERE attempt_id = ?1 AND COALESCE(kind,'chat') = ?2 AND status IN ('active', 'degraded')
+         ORDER BY updated_at DESC, created_at DESC, id DESC LIMIT 1",
     )?;
     let mut rows = stmt.query(params![attempt_id, kind])?;
     if let Some(row) = rows.next()? {
@@ -288,23 +308,56 @@ pub fn list_coach_messages(
          LIMIT ?3",
     )?;
     let rows = stmt.query_map(params![thread_id, after, limit.min(500) as i64], |r| {
-        let structured: Option<String> = r.get(4)?;
-        Ok(CoachMessage {
-            id: r.get(0)?,
-            thread_id: r.get(1)?,
-            role: r.get(2)?,
-            content: r.get(3)?,
-            structured_payload: structured.and_then(|s| serde_json::from_str(&s).ok()),
-            status: r.get(5)?,
-            created_at: r.get(6)?,
-            sequence: r.get::<_, i64>(7)? as u32,
-        })
+        message_from_row(r, 0)
     })?;
     let mut out = Vec::new();
     for row in rows {
         out.push(row?);
     }
     Ok(out)
+}
+
+/// Columns, in order: id, thread_id, role, content, structured_payload,
+/// status, created_at, sequence — starting at column `base`.
+fn message_from_row(r: &rusqlite::Row<'_>, base: usize) -> rusqlite::Result<CoachMessage> {
+    let structured: Option<String> = r.get(base + 4)?;
+    Ok(CoachMessage {
+        id: r.get(base)?,
+        thread_id: r.get(base + 1)?,
+        role: r.get(base + 2)?,
+        content: r.get(base + 3)?,
+        structured_payload: structured.and_then(|s| serde_json::from_str(&s).ok()),
+        status: r.get(base + 5)?,
+        created_at: r.get(base + 6)?,
+        sequence: r.get::<_, i64>(base + 7)? as u32,
+    })
+}
+
+/// The newest completed automatic review on a thread: a `review_set` user turn
+/// plus the completed assistant answer bound to it by `userMessageId`. A review
+/// that only failed (or is still pending) is not a result, so it can be retried.
+/// This is what makes the automatic review idempotent per attempt.
+pub fn find_completed_review(conn: &Connection, thread_id: &str) -> DbResult<Option<CoachRunResult>> {
+    let mut stmt = conn.prepare(
+        "SELECT u.id, u.thread_id, u.role, u.content, u.structured_payload, u.status, u.created_at, u.sequence,
+                a.id, a.thread_id, a.role, a.content, a.structured_payload, a.status, a.created_at, a.sequence
+         FROM coach_messages u
+         JOIN coach_messages a
+           ON a.thread_id = u.thread_id AND a.role = 'assistant' AND a.status = 'completed'
+          AND json_extract(a.structured_payload, '$.userMessageId') = u.id
+         WHERE u.thread_id = ?1 AND u.role = 'user' AND u.status = 'completed'
+           AND json_extract(u.structured_payload, '$.action') = 'review_set'
+         ORDER BY a.sequence DESC
+         LIMIT 1",
+    )?;
+    let mut rows = stmt.query(params![thread_id])?;
+    match rows.next()? {
+        Some(row) => Ok(Some(CoachRunResult {
+            user_message: message_from_row(row, 0)?,
+            assistant_message: message_from_row(row, 8)?,
+        })),
+        None => Ok(None),
+    }
 }
 
 /// Round-3 audit (7.8): the NEWEST `limit` messages, returned in chronological
@@ -328,17 +381,7 @@ pub fn list_recent_coach_messages(
          LIMIT ?2",
     )?;
     let rows = stmt.query_map(params![thread_id, limit.min(500) as i64], |r| {
-        let structured: Option<String> = r.get(4)?;
-        Ok(CoachMessage {
-            id: r.get(0)?,
-            thread_id: r.get(1)?,
-            role: r.get(2)?,
-            content: r.get(3)?,
-            structured_payload: structured.and_then(|s| serde_json::from_str(&s).ok()),
-            status: r.get(5)?,
-            created_at: r.get(6)?,
-            sequence: r.get::<_, i64>(7)? as u32,
-        })
+        message_from_row(r, 0)
     })?;
     let mut out = Vec::new();
     for row in rows {

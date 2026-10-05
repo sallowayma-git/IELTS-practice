@@ -5,11 +5,9 @@ Rust host gateway (`model.embed.batch`, wired in Slice 4). This module owns the
 *signature* contract: any change to provider/model/dimension/schema/config
 invalidates every cached vector so stale vectors can never silently match.
 
-Clean-room from TechSpa `vector_memory.py:rebuild_index_from_profile` (R2) and
-`routers/settings.py` embedding-model-change (R1): we keep the invalidate-on-
-signature-drift idea but drive it from canonical Rust truth, not a mutable
-profile.json. The plan forbids defaulting to vectorization, so `embed_batch` is
-only called when a caller explicitly enables embeddings AND a provider
+Invalidate-on-signature-drift is driven from canonical Rust truth, not a
+mutable profile.json. The plan forbids defaulting to vectorization, so
+`embed_batch` is only called when a caller explicitly enables embeddings AND a provider
 endpoint is wired on the Rust side. If the host reports `embedding_not_supported`
 we fail closed — the planner decides whether to fall back to lexical, not here.
 """

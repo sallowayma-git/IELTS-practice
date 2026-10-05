@@ -310,6 +310,11 @@ pub(crate) fn submit_reading_attempt_in_scope(
     };
 
     upsert_attempt(conn, &attempt)?;
+    // All mode adapters share this authority and its caller-owned transaction.
+    conn.execute(
+        "UPDATE attempts SET submitted_asset_fingerprint = ?1 WHERE id = ?2",
+        params![loaded.asset.fingerprint, cmd.attempt_id],
+    )?;
     let result = ReadingSubmitResult {
         attempt: attempt.clone(),
         score: summary.clone(),

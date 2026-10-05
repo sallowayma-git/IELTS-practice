@@ -71,6 +71,33 @@ impl WritingEvaluationStore for ApplicationStore<'_> {
 }
 
 impl CoachStore for ApplicationStore<'_> {
+    fn begin_trace(&self, thread: &str, user: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError> {
+        self.db.with_conn(|conn| ielts_db::begin_coach_trace(conn, thread, user, request, provider, model, budget)).map_err(enrichment_error)
+    }
+    fn complete_trace(&self, run: &str, thread: &str, answer: &str, payload: Value, response: &Value) -> Result<CoachMessage, ApplicationError> {
+        self.db.with_conn(|conn| ielts_db::complete_traced_coach(conn, run, thread, answer, payload, response)).map_err(enrichment_error)
+    }
+    fn fail_trace(&self, run: &str, error: &Value, response: Option<&Value>) -> Result<(), ApplicationError> {
+        self.db.with_conn(|conn| ielts_db::fail_coach_trace(conn, run, error, response)).map_err(enrichment_error)
+    }
+    fn resolve_context(
+        &self,
+        thread_id: &str,
+        selector: Option<&Value>,
+    ) -> Result<ielts_db::ResolvedCoachContext, ApplicationError> {
+        self.db.with_conn(|conn| ielts_db::resolve_reading_coach_context(conn, thread_id, selector))
+            .map_err(enrichment_error)
+    }
+
+    fn find_completed_review(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<ielts_db::CoachRunResult>, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::find_completed_review(conn, thread_id))
+            .map_err(enrichment_error)
+    }
+
     fn append_message(
         &self,
         command: &AppendCoachMessageCommand,
@@ -596,16 +623,6 @@ impl DreamStore for ApplicationStore<'_> {
             .map_err(dream_error)
     }
 
-    fn insert_dream_candidate(
-        &self,
-        run_id: &str,
-        proposal: &ielts_domain::DreamProposal,
-    ) -> Result<ielts_domain::DreamCandidate, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::insert_dream_candidate(conn, run_id, proposal))
-            .map_err(dream_error)
-    }
-
     fn start_dream_run(
         &self,
         run_id: &str,
@@ -635,15 +652,6 @@ impl DreamStore for ApplicationStore<'_> {
     ) -> Result<ielts_domain::DreamRun, ApplicationError> {
         self.db
             .with_conn(|conn| ielts_db::fail_dream_run(conn, run_id, error, now))
-            .map_err(dream_error)
-    }
-
-    fn load_daily_dream_result(
-        &self,
-        run_id: &str,
-    ) -> Result<Option<ielts_domain::DailyDreamResult>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::load_daily_dream_result(conn, run_id))
             .map_err(dream_error)
     }
 }

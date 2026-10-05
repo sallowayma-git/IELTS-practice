@@ -2,8 +2,7 @@
 //! source_hash stability, private memory redaction.
 
 use ielts_db::{
-    build_daily_facts, insert_journal, load_latest_journal, migrate, open_connection,
-    DbOpenOptions,
+    build_daily_facts, insert_journal, load_latest_journal, migrate, open_connection, DbOpenOptions,
 };
 use ielts_domain::{DailyJournalStatus, MemoryChangeSummary, WritingEvalSummary};
 use rusqlite::params;
@@ -271,7 +270,10 @@ fn memory_events_carry_identity_and_past_tense_kinds() {
     assert_eq!(reloaded.id, journal.id);
     assert_eq!(reloaded.facts.memory_events.len(), 1);
     assert_eq!(reloaded.facts.memory_events[0].canonical_key, "evt-key-1");
-    assert_eq!(reloaded.facts.today_observation_ids, facts.today_observation_ids);
+    assert_eq!(
+        reloaded.facts.today_observation_ids,
+        facts.today_observation_ids
+    );
 }
 
 #[test]
@@ -305,7 +307,11 @@ fn memory_events_exclude_private_memories() {
     .unwrap();
 
     let facts = build_daily_facts(&conn, "local", DAY).unwrap();
-    let ids: Vec<&str> = facts.memory_events.iter().map(|e| e.memory_id.as_str()).collect();
+    let ids: Vec<&str> = facts
+        .memory_events
+        .iter()
+        .map(|e| e.memory_id.as_str())
+        .collect();
     assert_eq!(ids, vec!["mem-pub"]);
     let json = serde_json::to_string(&facts).unwrap();
     assert!(
@@ -339,7 +345,10 @@ fn today_observation_ids_scope_and_order() {
     // Persistence round-trips the list for Dream evidence (M7-06).
     insert_journal(&conn, "local", &facts, None).unwrap();
     let reloaded = load_latest_journal(&conn, "local", DAY).unwrap().unwrap();
-    assert_eq!(reloaded.facts.today_observation_ids, vec!["obs-in-2", "obs-in-1"]);
+    assert_eq!(
+        reloaded.facts.today_observation_ids,
+        vec!["obs-in-2", "obs-in-1"]
+    );
 }
 
 #[test]
@@ -391,4 +400,192 @@ fn writing_eval_summary_default() {
     assert_eq!(summary.completed, 0);
     assert_eq!(summary.degraded, 0);
     assert_eq!(summary.average_band, None);
+}
+
+fn seed_dream_memory(conn: &rusqlite::Connection, id: &str, user: &str) {
+    conn.execute(
+        "INSERT INTO memory_items (
+         id, user_id, namespace, scope, memory_type, canonical_key, normalized_label,
+         content, status, source_class, created_by, content_hash, created_at, updated_at
+         ) VALUES (?1, ?2, 'strategy', 'activity:reading', 'procedural', ?1, 'label',
+         'content', 'active', 'observed', 'system', ?1, '2026-08-16T00:00:00Z', '2026-08-16T00:00:00Z')",
+        params![id, user],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO memory_mutations (id, memory_id, operation, actor_type, actor_id, reason, created_at)
+         VALUES (?1, ?2, 'reinforce', 'agent', 'test', 'test', '2026-08-16T10:00:00Z')",
+        params![format!("mmut-{id}"), id],
+    ).unwrap();
+}
+
+#[test]
+fn memory_changes_and_source_hash_are_scoped_to_memory_owner() {
+    let (_dir, conn) = open_db();
+    let local_before = build_daily_facts(&conn, "local", DAY).unwrap();
+
+    seed_dream_memory(&conn, "mem-other", "other");
+    let local_after_other = build_daily_facts(&conn, "local", DAY).unwrap();
+    let other_before_local = build_daily_facts(&conn, "other", DAY).unwrap();
+    assert_eq!(local_after_other.memory_changes.reinforced, 0);
+    assert!(local_after_other.memory_events.is_empty());
+    assert_eq!(local_after_other.source_hash, local_before.source_hash);
+    assert_eq!(other_before_local.memory_changes.reinforced, 1);
+    assert_eq!(other_before_local.memory_events.len(), 1);
+
+    seed_dream_memory(&conn, "mem-local", "local");
+    let local_with_own = build_daily_facts(&conn, "local", DAY).unwrap();
+    let other_after_local = build_daily_facts(&conn, "other", DAY).unwrap();
+    assert_eq!(local_with_own.memory_changes.reinforced, 1);
+    assert_eq!(local_with_own.memory_events.len(), 1);
+    assert_ne!(local_with_own.source_hash, local_before.source_hash);
+    assert_eq!(other_after_local.memory_changes.reinforced, 1);
+    assert_eq!(other_after_local.source_hash, other_before_local.source_hash);
+
+    // A mutation with no memory owner cannot be attributed to either user.
+    conn.execute(
+        "INSERT INTO memory_mutations
+         (id, memory_id, operation, actor_type, reason, created_at)
+         VALUES ('mmut-unowned', NULL, 'reinforce', 'agent', 'test', '2026-08-16T10:00:00Z')",
+        [],
+    )
+    .unwrap();
+    let local_after_unowned = build_daily_facts(&conn, "local", DAY).unwrap();
+    let other_after_unowned = build_daily_facts(&conn, "other", DAY).unwrap();
+    assert_eq!(local_after_unowned.memory_changes.reinforced, 1);
+    assert_eq!(other_after_unowned.memory_changes.reinforced, 1);
+    assert_eq!(local_after_unowned.source_hash, local_with_own.source_hash);
+    assert_eq!(other_after_unowned.source_hash, other_after_local.source_hash);
+}
+
+fn seed_dream_observation(conn: &rusqlite::Connection, id: &str, user: &str, at: &str) {
+    conn.execute(
+        "INSERT INTO learner_observations (
+         id, user_id, observation_type, namespace, scope_kind, scope_key, payload_json,
+         observed_at, projector_key, projector_version, source_fingerprint, created_at
+         ) VALUES (?1, ?2, 'outcome', 'strategy', 'activity', 'reading', '{}', ?3, 'test', 1, ?1, ?3)",
+        params![id, user, at],
+    ).unwrap();
+    if id == "obs-writing" {
+        conn.execute(
+            "UPDATE learner_observations SET scope_key = 'writing' WHERE id = ?1",
+            [id],
+        ).unwrap();
+    }
+}
+
+fn link_dream_evidence(conn: &rusqlite::Connection, memory: &str, observation: &str) {
+    conn.execute(
+        "INSERT INTO memory_evidence (memory_id, observation_id, source_fingerprint,
+         projector_key, projector_version, event_ids_json, evidence_hash, created_at)
+         VALUES (?1, ?2, ?2, 'test', 1, '[]', 'hash', '2026-08-16T10:00:00Z')",
+        params![memory, observation],
+    )
+    .unwrap();
+}
+
+#[test]
+fn memory_event_evidence_is_linked_day_user_scoped_and_round_trips() {
+    let (_dir, conn) = open_db();
+    seed_dream_memory(&conn, "mem-reading", "local");
+    seed_dream_memory(&conn, "mem-other", "other");
+    for (id, user, at) in [
+        ("obs-related", "local", "2026-08-16T09:00:00Z"),
+        ("obs-writing", "local", "2026-08-16T15:00:00Z"),
+        ("obs-old", "local", "2026-08-15T09:00:00Z"),
+        ("obs-other", "other", "2026-08-16T09:00:00Z"),
+        ("obs-offset", "local", "2026-08-16T00:30:00+01:00"),
+    ] {
+        seed_dream_observation(&conn, id, user, at);
+    }
+    let before = build_daily_facts(&conn, "local", DAY).unwrap();
+    for id in ["obs-related", "obs-old", "obs-other", "obs-offset"] {
+        link_dream_evidence(&conn, "mem-reading", id);
+    }
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.memory_events.len(), 1);
+    assert_eq!(
+        facts.memory_events[0].evidence_observation_ids,
+        ["obs-related"]
+    );
+    assert_ne!(before.source_hash, facts.source_hash);
+    insert_journal(&conn, "local", &facts, None).unwrap();
+    assert_eq!(
+        load_latest_journal(&conn, "local", DAY)
+            .unwrap()
+            .unwrap()
+            .facts,
+        facts
+    );
+    let mut legacy = serde_json::to_value(&facts).unwrap();
+    legacy["memoryEvents"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("evidenceObservationIds");
+    let legacy: ielts_domain::JournalFacts = serde_json::from_value(legacy).unwrap();
+    assert!(legacy.memory_events[0].evidence_observation_ids.is_empty());
+}
+
+#[test]
+fn late_contradiction_cannot_hide_behind_128_event_limit_or_borrow_support() {
+    let (_dir, conn) = open_db();
+    seed_dream_memory(&conn, "mem-reading", "local");
+    seed_dream_observation(&conn, "obs-support", "local", "2026-08-16T09:00:00Z");
+    seed_dream_observation(&conn, "obs-counter", "local", "2026-08-16T09:30:00Z");
+    link_dream_evidence(&conn, "mem-reading", "obs-support");
+    for index in 1..128 {
+        let at = format!("2026-08-16T10:{:02}:{:02}Z", index / 60, index % 60);
+        conn.execute(
+            "INSERT INTO memory_mutations
+             (id, memory_id, operation, actor_type, reason, created_at)
+             VALUES (?1, 'mem-reading', 'reinforce', 'agent', 'test', ?2)",
+            params![format!("mmut-extra-{index:03}"), at],
+        )
+        .unwrap();
+    }
+    conn.execute(
+        "INSERT INTO memory_mutations
+         (id, memory_id, operation, actor_type, reason, created_at)
+         VALUES ('mmut-counter', 'mem-reading', 'contradict', 'agent', 'test',
+                 '2026-08-16T11:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO memory_evidence
+         (memory_id, observation_id, source_fingerprint, projector_key,
+          projector_version, evidence_role, event_ids_json, evidence_hash, created_at)
+         VALUES ('mem-reading', 'obs-counter', 'obs-counter', 'test', 1,
+                 'contradict', '[]', 'counter-hash', '2026-08-16T11:00:00Z')",
+        [],
+    )
+    .unwrap();
+
+    let overflow = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(overflow.memory_changes.reinforced, 128);
+    assert_eq!(overflow.memory_changes.contradicted, 1);
+    assert!(overflow.memory_events.is_empty());
+    assert_eq!(
+        overflow.source_hash,
+        build_daily_facts(&conn, "local", DAY).unwrap().source_hash
+    );
+
+    conn.execute(
+        "DELETE FROM memory_mutations WHERE id = 'mmut-extra-127'",
+        [],
+    )
+    .unwrap();
+    let bounded = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(bounded.memory_events.len(), 128);
+    assert_ne!(overflow.source_hash, bounded.source_hash);
+    assert_eq!(
+        bounded.source_hash,
+        build_daily_facts(&conn, "local", DAY).unwrap().source_hash
+    );
+    assert_eq!(
+        bounded.memory_events[0].evidence_observation_ids,
+        ["obs-support"]
+    );
+    let contradiction = bounded.memory_events.last().unwrap();
+    assert_eq!(contradiction.change_kind, "contradicted");
+    assert_eq!(contradiction.evidence_observation_ids, ["obs-counter"]);
 }

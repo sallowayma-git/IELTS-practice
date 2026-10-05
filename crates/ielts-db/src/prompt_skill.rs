@@ -782,14 +782,14 @@ pub fn promote_candidate(
     command: &PromoteCandidateCommand,
 ) -> DbResult<CandidateDecision> {
     require_text(&command.candidate_id, "candidate_id")?;
-    let candidate = load_candidate(conn, &command.candidate_id)?;
+    let tx = conn.unchecked_transaction()?;
+    let candidate = load_candidate(&tx, &command.candidate_id)?;
     if candidate.status != CandidateStatus::Approved {
         return Err(DbError::Validation(format!(
             "candidate cannot be promoted in status: {}; requires approved",
             candidate.status.as_str()
         )));
     }
-    let tx = conn.unchecked_transaction()?;
     // Find the template/definition id for the target version.
     let (id_col, version_table) = match candidate.target_kind {
         CandidateTargetKind::Prompt => ("template_id", "prompt_versions"),
@@ -799,6 +799,32 @@ pub fn promote_candidate(
         &format!("SELECT {id_col} FROM {version_table} WHERE id = ?1"),
         params![candidate.target_version_id],
         |row| row.get(0),
+    )?;
+    let prior_id: Option<String> = tx.query_row(
+        &format!("SELECT id FROM {version_table} WHERE {id_col} = ?1 AND status = 'active'"),
+        params![parent_id], |row| row.get(0),
+    ).optional()?;
+    let active_count: i64 = tx.query_row(
+        &format!("SELECT COUNT(*) FROM {version_table} WHERE {id_col} = ?1 AND status = 'active'"),
+        params![parent_id], |row| row.get(0),
+    )?;
+    if active_count > 1 {
+        return Err(DbError::Validation("multiple active versions; release predecessor is ambiguous".into()));
+    }
+    let prior_release = release_head(&tx, candidate.target_kind, &parent_id)?;
+    if prior_release.as_ref().is_some_and(|(_, version)| Some(version) != prior_id.as_ref()) {
+        return Err(DbError::Validation("release head does not match active version".into()));
+    }
+    let release_id = format!("psr-{}", Uuid::new_v4());
+    let now = now_rfc3339();
+    tx.execute(
+        "INSERT INTO prompt_skill_releases
+         (id, target_kind, parent_id, version_id, predecessor_version_id,
+          predecessor_release_id, candidate_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![release_id, candidate.target_kind.as_str(), parent_id,
+            candidate.target_version_id, prior_id,
+            prior_release.as_ref().map(|(id, _)| id), candidate.id, now],
     )?;
     // Mark any currently-active version for this parent as rollback.
     tx.execute(
@@ -815,11 +841,16 @@ pub fn promote_candidate(
         ),
         params![candidate.target_version_id],
     )?;
-    let now = now_rfc3339();
     tx.execute(
         "UPDATE candidate_promotions SET status = 'promoted', updated_at = ?2
          WHERE id = ?1",
         params![candidate.id, now],
+    )?;
+    tx.execute(
+        "INSERT INTO prompt_skill_release_heads (target_kind, parent_id, release_id)
+         VALUES (?1, ?2, ?3) ON CONFLICT(target_kind, parent_id)
+         DO UPDATE SET release_id = excluded.release_id",
+        params![candidate.target_kind.as_str(), parent_id, release_id],
     )?;
     tx.commit()?;
     Ok(CandidateDecision {
@@ -828,41 +859,22 @@ pub fn promote_candidate(
     })
 }
 
-/// M11-05: exact rollback. Marks the currently active version rollback and
-/// reinstates the most recent PREVIOUSLY-ACTIVE version as active. Returns the
-/// reinstated version id, or None when there is no prior active version to
-/// reinstate (the active version is simply rolled back to the const fallback).
-///
-/// Round-3 audit (A2): this used to pick the reinstatement target with
-/// `ORDER BY version DESC LIMIT 1` and NO status filter, which made rollback a
-/// privilege-escalation path rather than a reversal:
-///
-/// - `create_prompt_version` assigns `MAX(version) + 1` and status `draft`.
-/// - So the newest version for a template is typically an unevaluated draft.
-/// - Rollback would select that draft and set it `active`.
-///
-/// A draft that never ran an eval and was never approved could therefore become
-/// the live prompt, bypassing the entire `propose -> eval -> holdout -> shadow ->
-/// approve -> promote` gate that `promote_candidate` enforces. The old doc
-/// comment described the target as "the most recent non-rollback, non-active
-/// version", which is both what the code did not do and the wrong rule anyway:
-/// `rollback` status is precisely the marker `promote_candidate` leaves on a
-/// version it superseded, so `rollback` rows are the ONLY valid reinstatement
-/// targets.
-///
-/// The gate is now:
-///
-/// 1. `rolled_back_by` is required, so the activation is attributable — the
-///    same standard `approve_candidate` holds for `approved_by`.
-/// 2. The destination must already carry `rollback` status, i.e. it was active
-///    at some earlier point and therefore already passed the promote gate.
-///    Rollback is strictly non-escalating: it cannot activate anything that was
-///    not already blessed.
-///
-/// Rollback deliberately does NOT require a fresh approval record. It is the
-/// emergency reversal path and the M11 contract requires it stay available; the
-/// safety property comes from constraining the destination, not from blocking
-/// the operation.
+fn release_head(
+    conn: &Connection,
+    kind: CandidateTargetKind,
+    parent_id: &str,
+) -> DbResult<Option<(String, String)>> {
+    Ok(conn.query_row(
+        "SELECT r.id, r.version_id FROM prompt_skill_release_heads h
+         JOIN prompt_skill_releases r ON r.id = h.release_id
+         WHERE h.target_kind = ?1 AND h.parent_id = ?2",
+        params![kind.as_str(), parent_id], |row| Ok((row.get(0)?, row.get(1)?)),
+    ).optional()?)
+}
+
+/// Reverse the current publication and move the head to its recorded predecessor.
+/// A recorded empty predecessor restores the constant fallback. Missing legacy
+/// history fails closed; version numbers and timestamps cannot reconstruct it.
 pub fn rollback_version(
     conn: &Connection,
     command: &RollbackCommand,
@@ -873,8 +885,9 @@ pub fn rollback_version(
         CandidateTargetKind::Prompt => ("prompt_versions", "template_id"),
         CandidateTargetKind::Skill => ("skill_versions", "skill_definition_id"),
     };
+    let tx = conn.unchecked_transaction()?;
     // The target version must currently be active.
-    let status_str: String = conn
+    let status_str: String = tx
         .query_row(
             &format!("SELECT status FROM {version_table} WHERE id = ?1"),
             params![command.target_version_id],
@@ -891,29 +904,49 @@ pub fn rollback_version(
             "cannot rollback a version that is not active (current: {status_str})"
         )));
     }
-    let parent_id: String = conn.query_row(
+    let parent_id: String = tx.query_row(
         &format!("SELECT {id_col} FROM {version_table} WHERE id = ?1"),
         params![command.target_version_id],
         |row| row.get(0),
     )?;
-    let tx = conn.unchecked_transaction()?;
-    // Find the prior version to reinstate: the most recent version for the
-    // same parent that ALREADY carries `rollback` status. That status is only
-    // ever written by `promote_candidate` when it supersedes the version that
-    // was active, so it is exactly the set of versions that previously passed
-    // the promote gate. Any other status (draft/eval/holdout/shadow/canary)
-    // has never been active and must never become active here.
-    let prior_id: Option<String> = tx
-        .query_row(
-            &format!(
-                "SELECT id FROM {version_table}
-                 WHERE {id_col} = ?1 AND id != ?2 AND status = 'rollback'
-                 ORDER BY version DESC LIMIT 1"
-            ),
-            params![parent_id, command.target_version_id],
+    let active_count: i64 = tx.query_row(
+        &format!("SELECT COUNT(*) FROM {version_table} WHERE {id_col} = ?1 AND status = 'active'"),
+        params![parent_id], |row| row.get(0),
+    )?;
+    if active_count != 1 {
+        return Err(DbError::Validation("multiple active versions; rollback refused".into()));
+    }
+    let (release_id, version_id) = release_head(&tx, command.target_kind, &parent_id)?
+        .ok_or_else(|| DbError::Validation("release predecessor record missing; rollback refused".into()))?;
+    if version_id != command.target_version_id {
+        return Err(DbError::Validation("release head does not match active version".into()));
+    }
+    let (prior_id, prior_release): (Option<String>, Option<String>) = tx.query_row(
+        "SELECT predecessor_version_id, predecessor_release_id
+         FROM prompt_skill_releases WHERE id = ?1",
+        params![release_id], |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    if let Some(ref prior) = prior_id {
+        let valid: bool = tx.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM {version_table}
+                WHERE id = ?1 AND {id_col} = ?2 AND status = 'rollback' AND id != ?3)"),
+            params![prior, parent_id, command.target_version_id], |row| row.get(0),
+        )?;
+        if !valid {
+            return Err(DbError::Validation("recorded release predecessor is not restorable".into()));
+        }
+    }
+    if let Some(ref prior_release_id) = prior_release {
+        let valid: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM prompt_skill_releases
+             WHERE id = ?1 AND target_kind = ?2 AND parent_id = ?3 AND version_id = ?4)",
+            params![prior_release_id, command.target_kind.as_str(), parent_id, prior_id],
             |row| row.get(0),
-        )
-        .optional()?;
+        )?;
+        if !valid {
+            return Err(DbError::Validation("release predecessor chain is inconsistent".into()));
+        }
+    }
     // Mark the target rollback.
     tx.execute(
         &format!("UPDATE {version_table} SET status = 'rollback' WHERE id = ?1"),
@@ -923,6 +956,17 @@ pub fn rollback_version(
         tx.execute(
             &format!("UPDATE {version_table} SET status = 'active' WHERE id = ?1"),
             params![prior],
+        )?;
+    }
+    tx.execute(
+        "DELETE FROM prompt_skill_release_heads WHERE target_kind = ?1 AND parent_id = ?2",
+        params![command.target_kind.as_str(), parent_id],
+    )?;
+    if let Some(ref prior_release_id) = prior_release {
+        tx.execute(
+            "INSERT INTO prompt_skill_release_heads (target_kind, parent_id, release_id)
+             VALUES (?1, ?2, ?3)",
+            params![command.target_kind.as_str(), parent_id, prior_release_id],
         )?;
     }
     tx.commit()?;

@@ -22,8 +22,8 @@ pub const CONTEXT_PLANNER_VERSION: &str = "m5-retrieval-v1";
 /// partial, un-audited context.
 pub const CONTEXT_HARD_TOKEN_CEILING: u32 = 32_000;
 
-/// Token estimate: ~4 chars per token. Conservative and deterministic so the
-/// rendered_hash is stable across runs with identical input.
+/// Deterministic estimate: four Unicode scalars per unit. This is not a
+/// provider tokenizer and does not guarantee a provider-specific token limit.
 const TOKEN_CHARS_PER_UNIT: u32 = 4;
 
 /// Fixed ContextPlan section taxonomy (M5-07). Rust injects SOUL_POLICY; the
@@ -177,10 +177,21 @@ pub fn rendered_hash(rendered_context: &str) -> String {
     hex::encode(digest)
 }
 
-/// Deterministic token estimate from byte length. Conservative (4 chars/token).
+/// CJK scalars (Han, kana, Hangul, CJK/fullwidth punctuation) tokenize at
+/// roughly one token each, not four scalars per token.
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x303F | 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF
+        | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FA1F)
+}
+
+/// Deterministic token estimate: one token per CJK scalar, plus 4 other
+/// scalars per token (rounded up).
 pub fn estimate_tokens(text: &str) -> u32 {
-    let chars = text.chars().count() as u32;
-    chars.div_ceil(TOKEN_CHARS_PER_UNIT)
+    let (cjk, other) = text.chars().fold((0u32, 0u32), |(cjk, other), c| {
+        if is_cjk(c) { (cjk + 1, other) } else { (cjk, other + 1) }
+    });
+    cjk + other.div_ceil(TOKEN_CHARS_PER_UNIT)
 }
 
 #[cfg(test)]
@@ -207,6 +218,16 @@ mod tests {
         assert_eq!(estimate_tokens("abcd"), 1);
         assert_eq!(estimate_tokens("abcde"), 2);
         assert_eq!(estimate_tokens(""), 0);
+        // ASCII and other non-CJK scalars keep the 4-per-token rule.
+        assert_eq!(estimate_tokens("🙂ab"), 1);
+    }
+
+    #[test]
+    fn estimate_tokens_counts_cjk_scalars_as_one_token_each() {
+        assert_eq!(estimate_tokens("中文"), 2);
+        assert_eq!(estimate_tokens("中文🙂ab"), 3);
+        assert_eq!(estimate_tokens("请复盘我本次错题，按优先级给出训练建议"), 19);
+        assert_eq!(estimate_tokens("かな한글"), 4);
     }
 
     #[test]

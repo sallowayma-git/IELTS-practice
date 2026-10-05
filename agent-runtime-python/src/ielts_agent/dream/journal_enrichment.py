@@ -9,8 +9,8 @@ list of open hypotheses to verify. It MUST NOT:
 - raise memory confidence;
 - invent a long-term profile from nothing.
 
-The numeric facts are produced deterministically by the Rust
-``journal.build_daily`` authority and are immutable here. The enrichment is a
+The numeric facts are produced deterministically by the Rust journal builder
+and are immutable here. The enrichment is a
 strict overlay; the original facts JSON is asserted byte-for-byte unchanged
 after enrichment (testable invariant).
 
@@ -40,6 +40,8 @@ from .types import (
 )
 
 
+# Output ceiling the host requires on every model.invoke.
+ENRICHMENT_MODEL_MAX_TOKENS = 1_500
 DEFAULT_COGNITIVE_DEADLINE_MS = 10_000
 MAX_TITLE_BYTES = 200
 MAX_SUMMARY_BYTES = 4 * 1024
@@ -137,6 +139,7 @@ class JournalEnricher:
                             {"role": "user", "content": user_payload},
                         ],
                         "temperature": 0.0,
+                        "maxTokens": ENRICHMENT_MODEL_MAX_TOKENS,
                     }
                 },
                 trace_id=enrichment_input.trace_id,

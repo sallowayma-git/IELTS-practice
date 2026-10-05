@@ -1,13 +1,13 @@
 """M8-01 Weekly Dream orchestrator (Slice 2 / Python side).
 
 Cross-scope pattern discovery. Reads ONLY a bounded candidate memory pool
-via the Rust host gateway (``memory.candidate_pool`` — active + pending
+via the Rust host gateway (``memory.candidate_pool`` — active
 observed, never predicted-only per M8-10), gives the LLM stable memory IDs +
 summaries (never array indexes, per M8-02), and submits candidate patterns
 via ``dream.run_weekly`` — the Rust authority re-validates supports against
 the canonical DB and runs the promotion gate (M8-02/M8-03/M8-04/M8-10).
 
-Four pattern gates (M8-01, R2 clean-room from TechSpar memory.py:1590-1705):
+Four pattern gates (M8-01):
 
 1. cross at least two independent scopes/topics;
 2. abstract level higher than the original observations;
@@ -18,9 +18,21 @@ Four pattern gates (M8-01, R2 clean-room from TechSpar memory.py:1590-1705):
 fallback. The orchestrator only emits candidate patterns for the Rust
 authority to persist; it never writes active memory directly (no-write-bypass).
 
-No-LLM path: when ``model.invoke`` is unavailable or the pool is below the
-minimum evidence threshold, the orchestrator returns a zero-pattern success
+No-LLM path: when ``model.invoke`` is unavailable or the pool is empty,
+the orchestrator returns a zero-pattern success
 (``validated=0`` via the Rust authority) — it never raises fatal.
+
+Retry layering (explicit and bounded). ONE attempt of this orchestrator makes at
+most ``MODEL_MAX_ATTEMPTS`` (3) model calls: the first plus two retries, with
+backoff, on a retryable provider error (5xx / 429 / timeout / connect, flagged
+by the host gateway) and on malformed or invalid output (not JSON, wrong shape,
+no content). The host gives a weekly ``model.invoke`` no transport retries of
+its own, so the two layers never multiply: at most 3 provider requests. A
+non-retryable provider error (bad key, bad request) fails at once, since a retry
+cannot fix it, and so does a spent deadline. A genuine empty result is success,
+never retried. If the attempt still fails it is returned as a fallback; the host
+records the run as failed and a later weekend-day tick tries again, at most once
+per day, and a weekend that never succeeds is folded into the next window.
 """
 
 from __future__ import annotations
@@ -28,6 +40,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -47,14 +60,22 @@ from .types import (
 )
 
 
-DEFAULT_COGNITIVE_DEADLINE_MS = 20_000
+# Output ceiling the host requires on every model.invoke.
+WEEKLY_MODEL_MAX_TOKENS = 1_500
 
-# M8-03 conservative thresholds (Python-side pre-check; Rust re-validates with
-# the canonical DB). These are the floors below which the orchestrator will
-# not even call the LLM — better to skip than to ask for patterns from too few
-# memories. The Rust authority holds the authoritative thresholds.
-MIN_CANDIDATE_POOL = 6
-MIN_SUPPORTING_MEMORY_IDS = 3
+# The whole attempt (every model call and backoff) must finish inside this; the
+# host budget for a weekly run (WEEKLY_REQUEST_TIMEOUT, 420 s) is slightly larger.
+DEFAULT_COGNITIVE_DEADLINE_MS = 400_000
+
+# Model calls per attempt: the first plus two retries, with backoff before each
+# retry. A retry is only started if time for it remains.
+MODEL_MAX_ATTEMPTS = 3
+MODEL_RETRY_BACKOFF_SECONDS = (2.0, 5.0)
+MIN_ATTEMPT_SECONDS = 5.0
+
+# Memory count is not independent practice count. Rust owns the evidence gate.
+MIN_CANDIDATE_POOL = 1
+MIN_SUPPORTING_MEMORY_IDS = 1
 
 # Bounded LLM output: at most this many raw pattern candidates are parsed and
 # submitted. The Rust authority re-validates the bound.
@@ -90,11 +111,9 @@ class WeeklyDreamOrchestrator:
     """M8-01 weekly-dream orchestrator (Python side, fail-closed).
 
     Constructed with a host bridge and the set of required host capabilities.
-    If a required capability is missing, the candidate pool is below the
-    minimum threshold, the LLM is unavailable, or any host call fails, the
-    orchestrator returns a zero-pattern fallback result instead of raising —
-    the Rust job authority still records the run and schedules a retry per
-    M8 fail-closed.
+    Missing capabilities, malformed model output, and pool/submission failures
+    produce a fallback result. An empty pool or unavailable model produces a
+    successful empty candidate batch. Rust owns evidence validation.
     """
 
     def __init__(
@@ -103,12 +122,16 @@ class WeeklyDreamOrchestrator:
         *,
         required_capabilities: dict[str, str] | None = None,
         cognitive_deadline_ms: int = DEFAULT_COGNITIVE_DEADLINE_MS,
+        sleep: Callable[[float], None] = time.sleep,
+        retry_backoff_seconds: tuple[float, ...] = MODEL_RETRY_BACKOFF_SECONDS,
     ) -> None:
         self._bridge = bridge
         self._required = dict(
             required_capabilities or REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES
         )
         self._deadline_ms = cognitive_deadline_ms
+        self._sleep = sleep
+        self._backoff = retry_backoff_seconds
 
     def run_weekly(self, run_input: WeeklyDreamInput) -> WeeklyDreamResult:
         """Run one weekly-dream cross-scope pattern discovery pass.
@@ -123,7 +146,7 @@ class WeeklyDreamOrchestrator:
 
             pool = self._fetch_candidate_pool(run_input, started=started)
 
-            # M8-03: below the minimum evidence floor, do not call the LLM.
+            # An empty pool has no supports. Rust owns practice-count gates.
             # Zero patterns is a success here, but we still submit an empty
             # candidate batch to the Rust authority so it records the run and
             # updates the cooldown.
@@ -181,7 +204,7 @@ class WeeklyDreamOrchestrator:
     ) -> list[dict[str, Any]]:
         """Fetch the bounded candidate memory pool (M8-02/M8-10).
 
-        The host returns ONLY active + pending observed memories — never
+        The host returns ONLY active observed memories — never
         predicted-only (M8-10). Each entry carries a stable ``memory_id`` and
         a ``summary``. The orchestrator never opens the canonical DB and never
         scans full history; the host bounds the pool.
@@ -213,7 +236,7 @@ class WeeklyDreamOrchestrator:
             if not isinstance(memory_id, str) or not memory_id.startswith("mem-"):
                 raise _Fallback(f"candidate_pool_entry_bad_id:{index}")
             # Normalize to a stable wire shape the LLM consumes: stable ID +
-            # summary only. We deliberately strip anything else so the prompt
+            # summary and scope. We deliberately strip anything else so the prompt
             # surface stays minimal and the LLM cannot echo mutable metadata.
             normalized = {
                 "memoryId": memory_id,
@@ -236,14 +259,43 @@ class WeeklyDreamOrchestrator:
     ) -> list[dict[str, Any]]:
         """Call ``model.invoke`` to discover cross-scope patterns (M8-01/M8-02).
 
-        The LLM receives ONLY stable memory IDs + summaries (never array
-        indexes). The system prompt encodes the four pattern gates and the
-        M8-05 allowed/forbidden kind taxonomy. The model returns a JSON object
-        with a ``patterns`` array; each pattern carries ``statement``,
-        ``supportingMemoryIds`` (stable IDs), ``patternKind``, and
-        ``confidenceProposal``.
+        Makes up to ``MODEL_MAX_ATTEMPTS`` calls (see the module docstring): a
+        retryable provider error or malformed output is retried with backoff; a
+        valid empty array is a success; anything else fails closed.
+        """
+        failure: _Retryable | None = None
+        for attempt in range(MODEL_MAX_ATTEMPTS):
+            if failure is not None and not self._wait_before_retry(attempt, started):
+                break
+            try:
+                return self._discover_once(run_input, pool, started=started)
+            except _Retryable as retryable:
+                failure = retryable
+        raise failure if failure is not None else _Fallback("model_not_called")
 
-        Parse failure or empty output → empty list (zero-pattern success).
+    def _wait_before_retry(self, attempt: int, started: float) -> bool:
+        """Back off before retry number ``attempt``; False if no time remains."""
+        pause = self._backoff[min(attempt, len(self._backoff)) - 1] if self._backoff else 0.0
+        remaining = self._deadline_ms / 1000 - (time.monotonic() - started)
+        if remaining < pause + MIN_ATTEMPT_SECONDS:
+            return False
+        if pause > 0:
+            self._sleep(pause)
+        return True
+
+    def _discover_once(
+        self,
+        run_input: WeeklyDreamInput,
+        pool: list[dict[str, Any]],
+        *,
+        started: float,
+    ) -> list[dict[str, Any]]:
+        """One model call. The LLM receives ONLY stable memory IDs + summaries
+        (never array indexes); the system prompt encodes the four pattern gates
+        and the M8-05 kind taxonomy. The model returns a JSON object with a
+        ``patterns`` array; each pattern carries ``statement``,
+        ``supportingMemoryIds`` (stable IDs), ``patternKind`` and
+        ``confidenceProposal``.
         """
         system_prompt = _build_system_prompt()
         user_payload = _build_user_payload(pool)
@@ -257,6 +309,7 @@ class WeeklyDreamOrchestrator:
                             {"role": "user", "content": user_payload},
                         ],
                         "temperature": 0.0,
+                        "maxTokens": WEEKLY_MODEL_MAX_TOKENS,
                     }
                 },
                 trace_id=run_input.trace_id,
@@ -264,12 +317,18 @@ class WeeklyDreamOrchestrator:
                 started_at=started,
             )
         except Exception as error:
-            # LLM unavailable → zero-pattern path, not fatal.
-            return []
+            # A failed model call is NOT "nothing to consolidate": fail closed so
+            # the host records the run as failed and a later day retries it.
+            reason = f"model_invoke_failed:{type(error).__name__}"
+            if _is_retryable_provider_error(error):
+                raise _Retryable(reason) from error
+            raise _Fallback(reason) from error
 
+        if not isinstance(result, dict):
+            raise _Retryable("model_output_invalid_shape")
         content = result.get("content")
         if not isinstance(content, str) or not content.strip():
-            return []
+            raise _Retryable("model_output_missing_content")
 
         return _parse_pattern_output(content)
 
@@ -288,7 +347,7 @@ class WeeklyDreamOrchestrator:
 
         - supporting_memory_ids must be stable mem-* IDs present in the pool
           (M8-02: no index, no hallucinated ID);
-        - at least MIN_SUPPORTING_MEMORY_IDS supports (M8-03);
+        - non-empty supports, bounded by MAX_SUPPORTING_IDS; Rust counts practices;
         - pattern_kind must be in the M8-05 allow-list and not in the
           forbidden diagnostic set (M8-05);
         - statement must be non-empty and bounded.
@@ -316,7 +375,7 @@ class WeeklyDreamOrchestrator:
         supporting = raw.get("supportingMemoryIds")
         if not isinstance(supporting, list) or not supporting:
             return None
-        if len(supporting) < MIN_SUPPORTING_MEMORY_IDS:
+        if len(supporting) > MAX_SUPPORTING_IDS:
             return None
         normalized_ids: list[str] = []
         seen: set[str] = set()
@@ -333,8 +392,6 @@ class WeeklyDreamOrchestrator:
                 return None
             seen.add(identifier)
             normalized_ids.append(identifier)
-        if len(normalized_ids) < MIN_SUPPORTING_MEMORY_IDS:
-            return None
 
         # M8-05: pattern_kind must be in the allow-list and not forbidden.
         raw_kind = raw.get("patternKind")
@@ -439,6 +496,19 @@ class _Fallback(Exception):
         self.reason = reason
 
 
+class _Retryable(_Fallback):
+    """A fallback worth another model call: a transient provider error or a
+    malformed answer. Caught by the bounded retry loop in ``_discover_patterns``."""
+
+
+def _is_retryable_provider_error(error: Exception) -> bool:
+    """The host gateway flags transient provider failures (5xx / 429 / timeout /
+    connect) as retryable. A spent deadline is never retried: no time is left."""
+    if getattr(error, "code", None) == "deadline_exceeded":
+        return False
+    return getattr(error, "retryable", False) is True
+
+
 _STATEMENT_WS = re.compile(r"\s+")
 _FORBIDDEN_PREFIXES = ("index", "idx")
 
@@ -492,25 +562,21 @@ def _build_user_payload(pool: list[dict[str, Any]]) -> str:
 def _parse_pattern_output(content: str) -> list[dict[str, Any]]:
     """Parse the LLM JSON output into a list of raw pattern dicts.
 
-    Falls back to an empty list on any parse failure — the orchestrator never
-    raises fatal on malformed LLM output (M8-01 no-LLM path).
+    Malformed JSON/shape signals a failed run; valid empty arrays succeed.
     """
+    def reject_constant(value: str) -> None:
+        raise _Retryable("model_output_invalid_json")
+
     try:
-        raw = json.loads(content)
-    except (json.JSONDecodeError, TypeError):
-        return []
-    if not isinstance(raw, dict):
-        return []
-    patterns = raw.get("patterns")
+        raw = json.loads(content, parse_constant=reject_constant)
+    except (json.JSONDecodeError, TypeError) as error:
+        raise _Retryable("model_output_invalid_json") from error
+    patterns = raw.get("patterns") if isinstance(raw, dict) else raw
     if not isinstance(patterns, list):
-        return []
-    result: list[dict[str, Any]] = []
-    for item in patterns:
-        if isinstance(item, dict):
-            result.append(item)
-        if len(result) >= MAX_RAW_PATTERNS:
-            break
-    return result
+        raise _Retryable("model_output_invalid_patterns")
+    if any(not isinstance(item, dict) for item in patterns):
+        raise _Retryable("model_output_invalid_pattern_entry")
+    return patterns[:MAX_RAW_PATTERNS]
 
 
 def fallback_result(reason: str) -> WeeklyDreamResult:
@@ -528,6 +594,8 @@ __all__ = [
     "DEFAULT_COGNITIVE_DEADLINE_MS",
     "MAX_RAW_PATTERNS",
     "MIN_CANDIDATE_POOL",
+    "MODEL_MAX_ATTEMPTS",
+    "MODEL_RETRY_BACKOFF_SECONDS",
     "MIN_SUPPORTING_MEMORY_IDS",
     "WeeklyDreamInput",
     "WeeklyDreamOrchestrator",

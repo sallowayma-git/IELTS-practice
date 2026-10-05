@@ -1,14 +1,12 @@
-//! M7-07 Daily Dream persistence.
+//! Dream-run ledger.
 //!
-//! Persists dream runs and pending candidates. A dream only produces pending
-//! candidates that must still go through M3 `promote_memory_candidate` before
-//! touching active memory (no bypass). Capacity is bounded by the application
-//! layer (M7-08).
+//! `dream_runs` is the ledger of the weekly consolidation, the only dream there
+//! is: the daily journal is a deterministic summary and has no run. The legacy
+//! `dream_candidates` table stays in the schema (no destructive migration) but
+//! nothing writes or reads it any more.
 
-use ielts_domain::{
-    DailyDreamResult, DreamCandidate, DreamCandidateDisposition, DreamProposal, DreamProposalKind,
-    DreamRun, DreamRunStatus,
-};
+use chrono::{DateTime, Duration, NaiveDate, SecondsFormat, Utc};
+use ielts_domain::{DreamRun, DreamRunStatus};
 use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
 
@@ -58,11 +56,7 @@ pub fn insert_dream_run(
 }
 
 /// Mark a dream run as running (claimed).
-pub fn start_dream_run(
-    conn: &Connection,
-    run_id: &str,
-    now: &str,
-) -> DbResult<DreamRun> {
+pub fn start_dream_run(conn: &Connection, run_id: &str, now: &str) -> DbResult<DreamRun> {
     require_text(run_id, "runId")?;
     require_text(now, "now")?;
     let changed = conn.execute(
@@ -76,55 +70,6 @@ pub fn start_dream_run(
     }
     load_dream_run(conn, run_id)?
         .ok_or_else(|| DbError::Validation("dream run vanished after claim".into()))
-}
-
-/// Insert a pending dream candidate. Capacity is enforced by the caller
-/// (application layer). The candidate is `pending` until M3 promotion.
-pub fn insert_dream_candidate(
-    conn: &Connection,
-    run_id: &str,
-    proposal: &DreamProposal,
-) -> DbResult<DreamCandidate> {
-    require_text(run_id, "runId")?;
-    validate_proposal(proposal)?;
-    let proposal_json = serde_json::to_string(&proposal.proposal_json)
-        .map_err(|error| DbError::Message(error.to_string()))?;
-    if proposal_json.len() > ielts_domain::MAX_DREAM_PROPOSAL_BYTES {
-        return Err(DbError::Validation(format!(
-            "proposal json exceeds {} bytes",
-            ielts_domain::MAX_DREAM_PROPOSAL_BYTES
-        )));
-    }
-    let evidence_json = serde_json::to_string(&proposal.evidence_observation_ids)
-        .map_err(|error| DbError::Message(error.to_string()))?;
-    let id = format!("dcand-{}", Uuid::new_v4());
-    let now = chrono::Utc::now().to_rfc3339();
-    conn.execute(
-        "INSERT INTO dream_candidates (
-           id, run_id, proposal_json, proposal_kind, target_memory_id,
-           evidence_observation_ids_json, disposition, created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![
-            id,
-            run_id,
-            proposal_json,
-            proposal.kind.as_str(),
-            proposal.target_memory_id,
-            evidence_json,
-            DreamCandidateDisposition::Pending.as_str(),
-            now,
-        ],
-    )?;
-    Ok(DreamCandidate {
-        id,
-        run_id: run_id.into(),
-        kind: proposal.kind,
-        target_memory_id: proposal.target_memory_id.clone(),
-        evidence_observation_ids: proposal.evidence_observation_ids.clone(),
-        disposition: DreamCandidateDisposition::Pending,
-        created_at: now,
-        proposal: proposal.clone(),
-    })
 }
 
 /// Mark a dream run completed and record the output hash.
@@ -150,8 +95,7 @@ pub fn finish_dream_run(
         .ok_or_else(|| DbError::Validation("dream run vanished after finish".into()))
 }
 
-/// Mark a dream run failed (fail-closed). The journal deterministic version is
-/// already complete; this only records the dream failure.
+/// Mark a dream run failed (fail-closed).
 pub fn fail_dream_run(
     conn: &Connection,
     run_id: &str,
@@ -160,8 +104,8 @@ pub fn fail_dream_run(
 ) -> DbResult<DreamRun> {
     require_text(run_id, "runId")?;
     require_text(now, "now")?;
-    let error_json = serde_json::to_string(error)
-        .map_err(|error| DbError::Message(error.to_string()))?;
+    let error_json =
+        serde_json::to_string(error).map_err(|error| DbError::Message(error.to_string()))?;
     let changed = conn.execute(
         "UPDATE dream_runs
          SET status = 'failed', error_json = ?1, finished_at = ?2, updated_at = ?2
@@ -193,6 +137,222 @@ pub fn recover_interrupted_dream_runs(conn: &Connection) -> DbResult<u64> {
     Ok(changed as u64)
 }
 
+// ---------------------------------------------------------------------------
+// Weekly consolidation window and receipt.
+//
+// A weekly run happens on a weekend and covers everything since the previous
+// COMPLETED run (exclusive), at most `WEEKLY_MAX_LOOKBACK_DAYS` back, up to the
+// moment it starts. A missed weekend is therefore folded into the next one with
+// no separate catch-up path. One weekend is one ISO week, and that ISO week is
+// the idempotency key: at most one completed run per key.
+//
+// The run row carries the whole window in `dream_runs.input_hash` (the run's
+// input identity): `weekly:<ISO week>:<start>..<end>`, instants as RFC3339 UTC.
+// Failed attempts carry only `weekly:<ISO week>`. Rows written before windows
+// existed carry `weekly:<ISO week>` and cover that ISO week, Monday to Sunday.
+// ---------------------------------------------------------------------------
+
+const WEEKLY_MARKER_PREFIX: &str = "weekly:";
+
+/// The furthest back a weekly window may reach, however long since the last run.
+pub const WEEKLY_MAX_LOOKBACK_DAYS: i64 = 28;
+
+/// The span one weekly consolidation covers, and the identity of that run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WeeklyWindow {
+    /// ISO week (`YYYY-Www`) of the weekend the run belongs to: the idempotency key.
+    pub key: String,
+    /// Exclusive: observations at exactly this instant belong to the previous window.
+    pub start: DateTime<Utc>,
+    /// Inclusive.
+    pub end: DateTime<Utc>,
+}
+
+impl WeeklyWindow {
+    pub fn new(key: impl Into<String>, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        Self { key: key.into(), start, end }
+    }
+
+    /// Opaque, host-issued name of this window: what crosses to the sidecar and
+    /// comes back unchanged. `<ISO week>:<start>..<end>`.
+    pub fn token(&self) -> String {
+        format!("{}:{}..{}", self.key, rfc3339(self.start), rfc3339(self.end))
+    }
+
+    pub fn parse(token: &str) -> Option<Self> {
+        let (key, span) = token.split_once(':')?;
+        let (start, end) = span.split_once("..")?;
+        iso_week_monday(key)?;
+        let parse = |value: &str| DateTime::parse_from_rfc3339(value).ok().map(|t| t.with_timezone(&Utc));
+        let (start, end) = (parse(start)?, parse(end)?);
+        (start < end).then(|| Self::new(key, start, end))
+    }
+
+    /// `input_hash` of the run that consolidates this window.
+    pub fn marker(&self) -> String {
+        format!("{WEEKLY_MARKER_PREFIX}{}", self.token())
+    }
+
+    /// UTC day of the window end: the day whose journal the run row is anchored on.
+    pub fn anchor_day(&self) -> String {
+        self.end.format("%Y-%m-%d").to_string()
+    }
+}
+
+fn rfc3339(instant: DateTime<Utc>) -> String {
+    instant.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn iso_week_monday(key: &str) -> Option<NaiveDate> {
+    let (year, week) = key.split_once("-W")?;
+    NaiveDate::from_isoywd_opt(year.parse().ok()?, week.parse().ok()?, chrono::Weekday::Mon)
+}
+
+/// Window a run marker stands for; a pre-window marker covers its ISO week.
+fn window_of_marker(marker: &str) -> Option<WeeklyWindow> {
+    let body = marker.strip_prefix(WEEKLY_MARKER_PREFIX)?;
+    WeeklyWindow::parse(body).or_else(|| {
+        let start = iso_week_monday(body)?.and_hms_opt(0, 0, 0)?.and_utc();
+        Some(WeeklyWindow::new(body, start, start + Duration::days(7) - Duration::seconds(1)))
+    })
+}
+
+/// `input_hash` of a failed attempt: it names the weekend, not a window.
+pub fn weekly_key_marker(key: &str) -> String {
+    format!("{WEEKLY_MARKER_PREFIX}{key}")
+}
+
+/// SQL matching every marker of one weekend key (bare, windowed or legacy).
+const WEEKLY_KEY_MATCH: &str = "(input_hash = 'weekly:' || ?2 OR input_hash LIKE 'weekly:' || ?2 || ':%')";
+
+/// Whether a completed weekly consolidation already exists for the weekend key.
+pub fn weekly_run_completed(conn: &Connection, user_id: &str, key: &str) -> DbResult<bool> {
+    let exists: i64 = conn.query_row(
+        &format!(
+            "SELECT EXISTS(SELECT 1 FROM dream_runs
+              WHERE user_id = ?1 AND status = 'completed' AND {WEEKLY_KEY_MATCH})"
+        ),
+        params![normalize_user_id(user_id), key],
+        |row| row.get(0),
+    )?;
+    Ok(exists != 0)
+}
+
+/// Whether a weekly run for the weekend key already finished (completed OR
+/// failed) at or after `since` (RFC3339): the retry bound is one attempt per
+/// local day, so callers pass the start of the local day.
+pub fn weekly_attempted_since(conn: &Connection, user_id: &str, key: &str, since: &str) -> DbResult<bool> {
+    let exists: i64 = conn.query_row(
+        &format!(
+            "SELECT EXISTS(SELECT 1 FROM dream_runs
+              WHERE user_id = ?1 AND {WEEKLY_KEY_MATCH} AND status IN ('completed','failed')
+                AND julianday(COALESCE(finished_at, updated_at)) >= julianday(?3))"
+        ),
+        params![normalize_user_id(user_id), key, since],
+        |row| row.get(0),
+    )?;
+    Ok(exists != 0)
+}
+
+/// End of the newest completed weekly window: where the next window starts.
+pub fn last_weekly_window_end(conn: &Connection, user_id: &str) -> DbResult<Option<DateTime<Utc>>> {
+    let marker: Option<String> = conn
+        .query_row(
+            "SELECT input_hash FROM dream_runs
+              WHERE user_id = ?1 AND status = 'completed' AND finished_at IS NOT NULL
+                AND input_hash LIKE 'weekly:%'
+              ORDER BY finished_at DESC, id DESC LIMIT 1",
+            params![normalize_user_id(user_id)],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(marker.and_then(|marker| window_of_marker(&marker)).map(|window| window.end))
+}
+
+/// Record a weekly attempt that did not produce a result (model/provider/sidecar
+/// failure) as a failed run, anchored on a journal. It is not a receipt:
+/// `weekly_run_completed` stays false, so a later day retries the weekend.
+pub fn record_failed_weekly_run(
+    conn: &Connection,
+    user_id: &str,
+    journal_id: &str,
+    key: &str,
+    error: &serde_json::Value,
+    now: &str,
+) -> DbResult<DreamRun> {
+    let run = insert_dream_run(conn, user_id, journal_id, Some(&weekly_key_marker(key)))?;
+    start_dream_run(conn, &run.id, now)?;
+    fail_dream_run(conn, &run.id, error, now)
+}
+
+/// One weekly consolidation's patterns, as plain statements.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyDigest {
+    /// Idempotency key: ISO week of the weekend the run belongs to.
+    pub window: String,
+    /// The span the run actually covered, RFC3339 UTC (start exclusive).
+    pub window_start: String,
+    pub window_end: String,
+    pub finished_at: String,
+    pub patterns: Vec<WeeklyPattern>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyPattern {
+    pub memory_id: String,
+    pub statement: String,
+}
+
+/// Newest completed weekly runs with the patterns they produced that are still
+/// active. Runs that produced nothing (an empty result is a success) or whose
+/// patterns were since forgotten/superseded are omitted: there is nothing to
+/// show. Read-only.
+///
+/// A run's patterns are the `weekly_dream` memories stamped with the run's
+/// `finished_at` (the consolidation writes both with one `now`).
+pub fn list_weekly_digests(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyDigest>> {
+    let user_id = normalize_user_id(user_id);
+    let mut runs = conn.prepare(
+        "SELECT input_hash, finished_at FROM dream_runs
+          WHERE user_id = ?1 AND status = 'completed' AND finished_at IS NOT NULL
+            AND input_hash LIKE 'weekly:%'
+          ORDER BY finished_at DESC, id DESC LIMIT ?2",
+    )?;
+    let mut patterns = conn.prepare(
+        "SELECT id, content FROM memory_items
+          WHERE user_id = ?1 AND created_by = 'weekly_dream' AND created_at = ?2
+            AND status = 'active' AND trim(content) != ''
+          ORDER BY id",
+    )?;
+    let rows = runs
+        .query_map(params![user_id, limit.min(52) as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut digests = Vec::new();
+    for (marker, finished_at) in rows {
+        let Some(window) = window_of_marker(&marker) else { continue };
+        let found = patterns
+            .query_map(params![user_id, finished_at], |row| {
+                Ok(WeeklyPattern { memory_id: row.get(0)?, statement: row.get(1)? })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if found.is_empty() {
+            continue;
+        }
+        digests.push(WeeklyDigest {
+            window_start: rfc3339(window.start),
+            window_end: rfc3339(window.end),
+            window: window.key,
+            finished_at,
+            patterns: found,
+        });
+    }
+    Ok(digests)
+}
+
 /// Load a dream run by id.
 pub fn load_dream_run(conn: &Connection, run_id: &str) -> DbResult<Option<DreamRun>> {
     require_text(run_id, "runId")?;
@@ -207,37 +367,6 @@ pub fn load_dream_run(conn: &Connection, run_id: &str) -> DbResult<Option<DreamR
         )
         .optional()?;
     Ok(row)
-}
-
-/// Load all candidates for a dream run.
-pub fn load_dream_candidates(conn: &Connection, run_id: &str) -> DbResult<Vec<DreamCandidate>> {
-    require_text(run_id, "runId")?;
-    let mut stmt = conn.prepare(
-        "SELECT id, run_id, proposal_json, proposal_kind, target_memory_id,
-                evidence_observation_ids_json, disposition, created_at
-         FROM dream_candidates
-         WHERE run_id = ?1
-         ORDER BY id",
-    )?;
-    let rows = stmt.query_map(params![run_id], map_candidate)?;
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
-    }
-    Ok(out)
-}
-
-/// Load the full daily dream result (run + candidates).
-pub fn load_daily_dream_result(
-    conn: &Connection,
-    run_id: &str,
-) -> DbResult<Option<DailyDreamResult>> {
-    let run = match load_dream_run(conn, run_id)? {
-        Some(run) => run,
-        None => return Ok(None),
-    };
-    let candidates = load_dream_candidates(conn, run_id)?;
-    Ok(Some(DailyDreamResult { run, candidates }))
 }
 
 fn map_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<DreamRun> {
@@ -280,81 +409,6 @@ fn map_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<DreamRun> {
     })
 }
 
-fn map_candidate(row: &rusqlite::Row<'_>) -> rusqlite::Result<DreamCandidate> {
-    let proposal_json: String = row.get(2)?;
-    let proposal_value: serde_json::Value =
-        serde_json::from_str(&proposal_json).map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-                2,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-            )
-        })?;
-    let kind_str: String = row.get(3)?;
-    let kind = DreamProposalKind::parse(&kind_str).ok_or_else(|| {
-        rusqlite::Error::FromSqlConversionFailure(
-            3,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("invalid proposal kind: {kind_str}"),
-            )),
-        )
-    })?;
-    let evidence_json: String = row.get(5)?;
-    let evidence: Vec<String> =
-        serde_json::from_str(&evidence_json).map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-                5,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-            )
-        })?;
-    let disposition_str: String = row.get(6)?;
-    let disposition = DreamCandidateDisposition::parse(&disposition_str).ok_or_else(|| {
-        rusqlite::Error::FromSqlConversionFailure(
-            6,
-            rusqlite::types::Type::Text,
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("invalid disposition: {disposition_str}"),
-            )),
-        )
-    })?;
-    let target_memory_id: Option<String> = row.get(4)?;
-    let proposal = DreamProposal {
-        kind,
-        target_memory_id: target_memory_id.clone(),
-        evidence_observation_ids: evidence.clone(),
-        proposed_statement: proposal_value
-            .get("proposedStatement")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string(),
-        proposal_json: proposal_value,
-    };
-    Ok(DreamCandidate {
-        id: row.get(0)?,
-        run_id: row.get(1)?,
-        kind,
-        target_memory_id,
-        evidence_observation_ids: evidence,
-        disposition,
-        created_at: row.get(7)?,
-        proposal,
-    })
-}
-
-fn validate_proposal(proposal: &DreamProposal) -> DbResult<()> {
-    if proposal.evidence_observation_ids.len() > ielts_domain::MAX_INPUT_OBSERVATIONS {
-        return Err(DbError::Validation(format!(
-            "proposal evidence exceeds {} observations",
-            ielts_domain::MAX_INPUT_OBSERVATIONS
-        )));
-    }
-    Ok(())
-}
-
 fn normalize_user_id(user_id: &str) -> String {
     if user_id.trim().is_empty() {
         DEFAULT_USER_ID.into()
@@ -368,5 +422,37 @@ fn require_text(value: &str, field: &str) -> DbResult<()> {
         Err(DbError::Validation(format!("{field} is required")))
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(value: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&Utc)
+    }
+
+    #[test]
+    fn window_token_round_trips_and_rejects_garbage() {
+        let window = WeeklyWindow::new("2026-W41", at("2026-10-03T04:00:00Z"), at("2026-10-10T09:30:00Z"));
+        assert_eq!(window.token(), "2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
+        assert_eq!(WeeklyWindow::parse(&window.token()), Some(window.clone()));
+        assert_eq!(window.marker(), "weekly:2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
+        assert_eq!(window.anchor_day(), "2026-10-10");
+        for bad in [
+            "", "2026-W41", "2026-W41:garbage", "2026-W99:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z",
+            "2026-W41:2026-10-10T09:30:00Z..2026-10-03T04:00:00Z",
+        ] {
+            assert_eq!(WeeklyWindow::parse(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_legacy_marker_covers_its_iso_week() {
+        let window = window_of_marker("weekly:2026-W33").unwrap();
+        assert_eq!(window.start, at("2026-08-10T00:00:00Z"));
+        assert_eq!(window.end, at("2026-08-16T23:59:59Z"));
+        assert!(window_of_marker("source-hash").is_none());
     }
 }

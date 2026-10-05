@@ -9,7 +9,29 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
-use crate::{ApplicationError, ModelError, TokenUsage};
+use crate::{ApplicationError, ModelError, TokenUsage, AGENT_ROUND_MAX_TOKENS};
+
+/// Provider reasoning that must be echoed back, verbatim, within ONE tool-calling
+/// turn (DeepSeek `reasoning_content`; OpenRouter `reasoning` / `reasoning_details`).
+///
+/// This is transport state, not content: it lives only in the in-memory message
+/// list of a single `AgentService::run` loop, is never serialized (`serde(skip)`
+/// at every use), never reaches the audit store, and `Debug` is redacted so it
+/// cannot leak through `{:?}` logging. It is dropped with the loop.
+#[derive(Clone, PartialEq, Default)]
+pub struct ReasoningEcho(pub serde_json::Map<String, Value>);
+
+impl ReasoningEcho {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl std::fmt::Debug for ReasoningEcho {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ReasoningEcho(<redacted>)")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -25,6 +47,9 @@ pub enum AgentMessage {
         content: Option<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tool_calls: Vec<AgentToolCall>,
+        /// In-memory echo for the current tool loop only; see [`ReasoningEcho`].
+        #[serde(skip)]
+        reasoning: Option<ReasoningEcho>,
     },
     ToolResult {
         tool_call_id: String,
@@ -55,6 +80,7 @@ pub struct AgentModelRequest {
     pub messages: Vec<AgentMessage>,
     pub tools: Vec<AgentToolDefinition>,
     pub temperature: f32,
+    pub max_tokens: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,6 +98,10 @@ pub struct AgentModelResponse {
     pub provider_request_id: Option<String>,
     #[serde(default)]
     pub retry_count: u32,
+    /// Set only on a tool-calling reply whose provider requires the reasoning to
+    /// be echoed back within the same turn. Never serialized.
+    #[serde(skip)]
+    pub reasoning: Option<ReasoningEcho>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -334,11 +364,13 @@ pub struct AgentService;
 /// Cooperative cancellation token for one agent run (M12-02/M14 cancel path).
 ///
 /// The host (Tauri command layer) owns the token and hands it to the run;
-/// the loop checks it at round and tool-call boundaries and lands the run as
+/// the loop waits for it during model I/O and checks tool-call boundaries,
+/// landing the run as
 /// `Interrupted` — never as a fabricated failure — when cancelled.
 #[derive(Debug, Clone, Default)]
 pub struct AgentCancelToken {
     cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    notification: std::sync::Arc<tokio::sync::Notify>,
 }
 
 impl AgentCancelToken {
@@ -349,10 +381,22 @@ impl AgentCancelToken {
     pub fn cancel(&self) {
         self.cancelled
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.notification.notify_waiters();
     }
 
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub async fn cancelled(&self) {
+        let notified = self.notification.notified();
+        tokio::pin!(notified);
+        // Register before checking the flag so cancellation cannot be lost
+        // between the check and the first poll of the notification.
+        notified.as_mut().enable();
+        if !self.is_cancelled() {
+            notified.await;
+        }
     }
 }
 
@@ -401,17 +445,34 @@ impl AgentService {
                     &trace,
                 ));
             }
-            let response = match model
-                .respond(AgentModelRequest {
+            let result = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => {
+                    return Err(cancelled_run(
+                        store, &command.run_id, round, tool_call_count, &trace,
+                    ));
+                }
+                result = model.respond(AgentModelRequest {
                     messages: messages.clone(),
                     tools: definitions.clone(),
                     temperature: command.temperature,
-                })
-                .await
-            {
+                    max_tokens: AGENT_ROUND_MAX_TOKENS,
+                }) => result,
+            };
+            // Retain metadata from a reply that raced with cancellation, but
+            // never commit that reply as a successful or failed run.
+            match &result {
+                Ok(response) => trace.record_response(response),
+                Err(failure) => trace.record_failure(failure),
+            }
+            if cancel.is_cancelled() {
+                return Err(cancelled_run(
+                    store, &command.run_id, round, tool_call_count, &trace,
+                ));
+            }
+            let response = match result {
                 Ok(response) => response,
                 Err(failure) => {
-                    trace.record_failure(&failure);
                     let error = ApplicationError::new(
                         "agent.provider_failed",
                         failure.error.message,
@@ -429,7 +490,6 @@ impl AgentService {
                     return Err(error);
                 }
             };
-            trace.record_response(&response);
 
             if response.tool_calls.is_empty() {
                 let content = response
@@ -490,6 +550,7 @@ impl AgentService {
             messages.push(AgentMessage::Assistant {
                 content: response.content,
                 tool_calls: response.tool_calls.clone(),
+                reasoning: response.reasoning,
             });
             if let Err((status, error)) = validate_tool_batch(
                 &response.tool_calls,
@@ -544,6 +605,11 @@ impl AgentService {
                     content: execution.model_content,
                     is_error: execution.status != AgentToolStatus::Succeeded,
                 });
+                if cancel.is_cancelled() {
+                    return Err(cancelled_run(
+                        store, &command.run_id, round, tool_call_count, &trace,
+                    ));
+                }
             }
         }
 
@@ -702,6 +768,7 @@ fn merge_usage(current: Option<TokenUsage>, next: Option<TokenUsage>) -> Option<
         (Some(current), Some(next)) => Some(TokenUsage {
             input_tokens: current.input_tokens.saturating_add(next.input_tokens),
             output_tokens: current.output_tokens.saturating_add(next.output_tokens),
+            reasoning_tokens: current.reasoning_tokens.saturating_add(next.reasoning_tokens),
         }),
     }
 }
@@ -912,6 +979,54 @@ mod tests {
         assert!(!state.calls_finished[0].result.to_string().contains("hello"));
     }
 
+    /// Provider reasoning (DeepSeek `reasoning_content`, OpenRouter
+    /// `reasoning_details`) must be echoed inside the tool-calling turn that
+    /// produced it and nowhere else: not in the first request, not in the
+    /// outcome, not in the audit rows, and not in anything serializable.
+    #[tokio::test]
+    async fn reasoning_is_echoed_within_the_tool_turn_and_never_persisted() {
+        const SECRET: &str = "CHAIN_OF_THOUGHT_SENTINEL";
+        let store = FakeStore::default();
+        let mut first = response(None, vec![call("call-1", "read_file")]);
+        first.reasoning = Some(ReasoningEcho(
+            json!({"reasoning_content": SECRET}).as_object().unwrap().clone(),
+        ));
+        let model = model(&store, vec![Ok(first), Ok(response(Some("finished"), vec![]))]);
+        let outcome = AgentService::run(&store, &model, &FakeTools::default(), command(), &AgentCancelToken::new())
+            .await
+            .unwrap();
+
+        let requests = model.requests.lock().unwrap();
+        assert!(requests[0].messages.iter().all(|message| !matches!(
+            message, AgentMessage::Assistant { reasoning: Some(_), .. }
+        )));
+        let AgentMessage::Assistant { reasoning: Some(echo), .. } = &requests[1].messages[2] else {
+            panic!("the assistant turn that called the tool must carry its reasoning");
+        };
+        assert_eq!(echo.0["reasoning_content"], SECRET);
+
+        // Never serialized, never debug-printed, never audited, never returned.
+        assert!(!serde_json::to_string(&requests[1]).unwrap().contains(SECRET));
+        assert!(!format!("{:?}", requests[1].messages).contains(SECRET));
+        assert!(!serde_json::to_string(&outcome).unwrap().contains(SECRET));
+        let state = store.0.lock().unwrap();
+        assert!(!state.run_finished.as_ref().unwrap().result.as_ref().unwrap().to_string().contains(SECRET));
+        assert!(state.calls_started.iter().all(|call| !call.arguments.to_string().contains(SECRET)));
+        assert!(state.calls_finished.iter().all(|call| !call.result.to_string().contains(SECRET)));
+    }
+
+    #[test]
+    fn usage_merge_keeps_the_reasoning_share_and_wire_omits_zero() {
+        let merged = merge_usage(
+            Some(TokenUsage { input_tokens: 1, output_tokens: 10, reasoning_tokens: 6 }),
+            Some(TokenUsage { input_tokens: 2, output_tokens: 20, reasoning_tokens: 4 }),
+        ).unwrap();
+        assert_eq!((merged.input_tokens, merged.output_tokens, merged.reasoning_tokens), (3, 30, 10));
+        assert_eq!(serde_json::to_value(&merged).unwrap()["reasoningTokens"], 10);
+        let plain = TokenUsage { input_tokens: 1, output_tokens: 2, reasoning_tokens: 0 };
+        assert!(serde_json::to_value(plain).unwrap().get("reasoningTokens").is_none());
+    }
+
     #[tokio::test]
     async fn replays_multiple_tools_in_sequence() {
         let store = FakeStore::default();
@@ -1067,6 +1182,7 @@ mod tests {
             Some(TokenUsage {
                 input_tokens: 5,
                 output_tokens: 0,
+                reasoning_tokens: 0,
             }),
             Some("request-failed".into()),
             2,
@@ -1234,9 +1350,11 @@ mod tests {
             usage: Some(TokenUsage {
                 input_tokens: 2,
                 output_tokens: 1,
+                reasoning_tokens: 0,
             }),
             provider_request_id: Some("request-1".into()),
             retry_count: 0,
+            reasoning: None,
         }
     }
 
@@ -1322,5 +1440,196 @@ mod tests {
             model.requests.lock().unwrap().is_empty(),
             "cancelled run must not reach the model"
         );
+    }
+
+    struct DropFlag<'a>(&'a std::sync::atomic::AtomicBool);
+
+    impl Drop for DropFlag<'_> {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[derive(Default)]
+    struct PendingModel {
+        requests: std::sync::atomic::AtomicUsize,
+        dropped: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl AgentModel for PendingModel {
+        async fn respond(
+            &self,
+            _request: AgentModelRequest,
+        ) -> Result<AgentModelResponse, AgentModelFailure> {
+            if self.requests.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                return Ok(response(None, vec![call("call-1", "read_file")]));
+            }
+            let _drop = DropFlag(&self.dropped);
+            std::future::pending().await
+        }
+    }
+
+    #[derive(Default)]
+    struct WakeFlag(std::sync::atomic::AtomicBool);
+
+    impl std::task::Wake for WakeFlag {
+        fn wake(self: Arc<Self>) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_wakes_run_and_drops_pending_model_with_existing_trace() {
+        use std::future::Future;
+        use std::sync::atomic::Ordering::SeqCst;
+
+        let store = FakeStore::default();
+        let model = PendingModel::default();
+        let tools = FakeTools::default();
+        let cancel = AgentCancelToken::new();
+        let mut run = Box::pin(AgentService::run(&store, &model, &tools, command(), &cancel));
+        let wake = Arc::new(WakeFlag::default());
+        let waker = std::task::Waker::from(wake.clone());
+        let mut context = std::task::Context::from_waker(&waker);
+        assert!(run.as_mut().poll(&mut context).is_pending());
+        assert_eq!(model.requests.load(SeqCst), 2);
+        assert!(!model.dropped.load(SeqCst));
+
+        cancel.clone().cancel();
+        assert!(wake.0.load(SeqCst), "cancellation must wake model I/O");
+        let std::task::Poll::Ready(result) = run.as_mut().poll(&mut context) else {
+            panic!("cancelled run must terminate without another model reply");
+        };
+        assert_eq!(result.unwrap_err().code, "agent.run_cancelled");
+        assert!(model.dropped.load(SeqCst));
+        let state = store.0.lock().unwrap();
+        let finish = state.run_finished.as_ref().unwrap();
+        assert_eq!(finish.status, AgentRunStatus::Interrupted);
+        assert_eq!(finish.rounds, 2);
+        assert_eq!(finish.tool_call_count, 1);
+        assert_eq!(state.calls_finished[0].status, AgentToolStatus::Succeeded);
+        let trace = finish.result.as_ref().unwrap();
+        assert_eq!(trace["hasContent"], false);
+        assert_eq!(trace["actualModel"], "fake-model");
+        assert_eq!(trace["latencyMs"], 1);
+        assert_eq!(trace["usage"]["inputTokens"], 2);
+        assert_eq!(trace["providerRequestId"], "request-1");
+    }
+
+    struct CancelThenReplyModel {
+        cancel: AgentCancelToken,
+        fail: bool,
+    }
+
+    #[async_trait]
+    impl AgentModel for CancelThenReplyModel {
+        async fn respond(
+            &self,
+            _request: AgentModelRequest,
+        ) -> Result<AgentModelResponse, AgentModelFailure> {
+            self.cancel.cancel();
+            if self.fail {
+                Err(failure("provider timeout", true))
+            } else {
+                Ok(response(Some("must not succeed"), vec![]))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_then_final_reply_or_failure_remains_interrupted_with_real_trace() {
+        for fail in [false, true] {
+            let store = FakeStore::default();
+            let cancel = AgentCancelToken::new();
+            let model = CancelThenReplyModel {
+                cancel: cancel.clone(),
+                fail,
+            };
+            let tools = FakeTools::default();
+            let error = AgentService::run(&store, &model, &tools, command(), &cancel)
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, "agent.run_cancelled");
+            let state = store.0.lock().unwrap();
+            let finish = state.run_finished.as_ref().unwrap();
+            assert_eq!(finish.status, AgentRunStatus::Interrupted);
+            assert!(state.calls_started.is_empty());
+            let trace = finish.result.as_ref().unwrap();
+            assert_eq!(trace["hasContent"], false);
+            assert!(trace.get("content").is_none());
+            assert_eq!(trace["latencyMs"], if fail { 3 } else { 1 });
+            assert_eq!(trace["retryCount"], if fail { 2 } else { 0 });
+            assert_eq!(
+                trace["providerRequestId"],
+                if fail { "request-failed" } else { "request-1" }
+            );
+        }
+    }
+
+    #[derive(Default)]
+    struct PendingWriteTool {
+        release: std::sync::atomic::AtomicBool,
+        dropped: std::sync::atomic::AtomicBool,
+        executions: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait]
+    impl AgentToolExecutor for PendingWriteTool {
+        fn definitions(&self) -> Vec<AgentToolDefinition> {
+            vec![]
+        }
+
+        fn audit_arguments(&self, _call: &AgentToolCall) -> Value {
+            json!({"write": true})
+        }
+
+        async fn execute(&self, _call: &AgentToolCall) -> AgentToolExecution {
+            use std::sync::atomic::Ordering::SeqCst;
+            self.executions.fetch_add(1, SeqCst);
+            let _drop = DropFlag(&self.dropped);
+            std::future::poll_fn(|_| {
+                if self.release.load(SeqCst) {
+                    std::task::Poll::Ready(())
+                } else {
+                    std::task::Poll::Pending
+                }
+            }).await;
+            AgentToolExecution::succeeded("written", json!({"written": true}))
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_write_waits_for_tool_audit_without_replay() {
+        use std::future::Future;
+        use std::sync::atomic::Ordering::SeqCst;
+
+        let store = FakeStore::default();
+        let model = model(&store, vec![Ok(response(None, vec![call("write-1", "write_file")]))]);
+        let tools = PendingWriteTool::default();
+        let cancel = AgentCancelToken::new();
+        let mut command = command();
+        command.limits.max_rounds = 1;
+        let mut run = Box::pin(AgentService::run(&store, &model, &tools, command, &cancel));
+        let waker = std::task::Waker::from(Arc::new(WakeFlag::default()));
+        let mut context = std::task::Context::from_waker(&waker);
+        assert!(run.as_mut().poll(&mut context).is_pending());
+        cancel.cancel();
+        assert!(run.as_mut().poll(&mut context).is_pending());
+        assert!(!tools.dropped.load(SeqCst));
+        assert!(store.0.lock().unwrap().calls_finished.is_empty());
+
+        tools.release.store(true, SeqCst);
+        let std::task::Poll::Ready(result) = run.as_mut().poll(&mut context) else {
+            panic!("run must terminate after the write finishes");
+        };
+        assert_eq!(result.unwrap_err().code, "agent.run_cancelled");
+        assert_eq!(tools.executions.load(SeqCst), 1);
+        assert_eq!(model.requests.lock().unwrap().len(), 1);
+        let state = store.0.lock().unwrap();
+        assert_eq!(state.calls_finished.len(), 1);
+        assert_eq!(state.calls_finished[0].status, AgentToolStatus::Succeeded);
+        assert_eq!(state.calls_finished[0].result["written"], true);
+        assert_eq!(state.run_finished.as_ref().unwrap().status, AgentRunStatus::Interrupted);
     }
 }

@@ -7,7 +7,7 @@
 //!
 //! The validator is the authority: the LLM proposes patterns with stable
 //! memory IDs, Rust re-loads those IDs from the DB (never trusting the LLM
-//! index), runs the four TechSpar Stage 3 gates plus the IELTS-specific
+//! index), runs the four Stage 3 gates plus the IELTS-specific
 //! falsifiability / predicted-only / forbidden-kind gates, and only then
 //! promotes a `ValidatedPattern`. Empty output is success: better zero
 //! patterns than a wrong pattern (M8-01).
@@ -104,10 +104,12 @@ pub struct PatternProposal {
 }
 
 /// A pattern that passed all Rust-side gates and is ready for consolidation
-/// apply. `support_ids` is the Rust-verified subset of the proposal's
-/// `supporting_memory_ids` that actually exist, are active, and are not
-/// predicted-only. The validator never invents supports the LLM did not
-/// return — it only filters.
+/// apply. `support_ids` contains deduplicated active, owned, non-predicted
+/// memories with resolvable practice lineage. Thresholds count independent
+/// sessions, assets and skills in that lineage, never memory labels. The
+/// snapshot binds the proposal, source rows and complete validation policy for
+/// transactional revalidation. It is not an authorization token: apply must
+/// supply trusted policy independently and reject a receipt from another policy.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(
@@ -122,6 +124,9 @@ pub struct ValidatedPattern {
     pub confidence: f64,
     pub distinct_asset_count: usize,
     pub distinct_scope_count: usize,
+    /// Rust validation receipt. Missing legacy receipts cannot be applied.
+    #[serde(default)]
+    pub evidence_snapshot: String,
 }
 
 /// Machine-readable reason a proposal was rejected. Carried in the
@@ -156,6 +161,7 @@ pub enum RejectReason {
     InsufficientDistinctScopes { provided: usize, required: usize },
     PredictedOnlySupport { support_id: String },
     SupersededSupport { support_id: String },
+    MissingPracticeEvidence { support_id: String },
     StatementTooShort,
     StatementTooLong { provided: usize, max: usize },
     NotFalsifiable,
@@ -173,6 +179,7 @@ impl RejectReason {
             Self::InsufficientDistinctScopes { .. } => "insufficient_distinct_scopes",
             Self::PredictedOnlySupport { .. } => "predicted_only_support",
             Self::SupersededSupport { .. } => "superseded_support",
+            Self::MissingPracticeEvidence { .. } => "missing_practice_evidence",
             Self::StatementTooShort => "statement_too_short",
             Self::StatementTooLong { .. } => "statement_too_long",
             Self::NotFalsifiable => "not_falsifiable",
@@ -213,8 +220,9 @@ pub struct PatternRejection {
 
 /// Tunable thresholds for the validator. All fields are config so longitudinal
 /// fixtures can adjust them without code changes (M8-03).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConsolidationConfig {
+    /// Minimum independent practice sessions, not the number of memory labels.
     pub min_supports: usize,
     pub min_new_evidence: usize,
     pub min_distinct_assets: usize,

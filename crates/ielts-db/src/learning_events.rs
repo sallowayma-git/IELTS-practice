@@ -483,6 +483,24 @@ fn reading_projection_events(
             occurred_at.to_string(),
         ));
     }
+    // Chronology is frozen when an event is first recorded. History deletion
+    // must not renumber it; all other fields still come from the source attempt
+    // and pass the normal payload/hash comparison.
+    for event in &mut events {
+        let key = event_key(
+            event.event_type,
+            event.source_id.as_deref(),
+            event.schema_version,
+        );
+        if let Some(stored) = load_by_key(conn, &key)? {
+            for field in ["attemptOrdinal", "gapHours"] {
+                if event.payload.get(field).is_some() {
+                    let value = &stored.payload[field];
+                    event.payload[field] = value.clone();
+                }
+            }
+        }
+    }
     Ok(events)
 }
 
@@ -521,6 +539,34 @@ fn attempt_ordinal_and_gap(
     conn: &Connection,
     attempt: &AttemptRecord,
 ) -> DbResult<(u32, Option<f64>)> {
+    // A partially missing ledger must reuse surviving chronology from this
+    // attempt, not allocate a new ordinal behind later attempts.
+    let mut statement = conn.prepare(
+        "SELECT payload_json FROM learning_events WHERE attempt_id=?1
+         AND event_type IN ('attempt_completed','reading_question_outcome')",
+    )?;
+    let payloads = statement.query_map([&attempt.id], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut frozen = None;
+    for payload in payloads {
+        let payload: serde_json::Value = serde_json::from_str(&payload)
+            .map_err(|error| DbError::Validation(error.to_string()))?;
+        let ordinal = payload["attemptOrdinal"]
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| DbError::Validation("stored attemptOrdinal must be positive".into()))?;
+        let gap = serde_json::from_value::<Option<f64>>(payload["gapHours"].clone())
+            .map_err(|error| DbError::Validation(error.to_string()))?;
+        if frozen.is_some_and(|previous: (u32, Option<f64>)| previous.0 != ordinal) {
+            return Err(DbError::Validation("conflicting frozen attempt chronology".into()));
+        }
+        let retained_gap = frozen.and_then(|previous| previous.1).or(gap);
+        frozen = Some((ordinal, retained_gap));
+    }
+    if let Some(frozen) = frozen {
+        return Ok(frozen);
+    }
     let asset_id = attempt.asset_id.as_deref().unwrap_or_default();
     let terminal_at = attempt
         .completed_at
@@ -534,6 +580,14 @@ fn attempt_ordinal_and_gap(
                 OR (COALESCE(completed_at,submitted_at,started_at) = ?2 AND id <= ?3))",
         params![asset_id, terminal_at, attempt.id],
         |row| row.get::<_, i64>(0),
+    )?;
+    let persisted_ordinal: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(json_extract(payload_json, '$.attemptOrdinal')), 0)
+         FROM learning_events
+         WHERE activity = 'reading' AND asset_id = ?1 AND attempt_id != ?2
+           AND event_type IN ('attempt_completed', 'reading_question_outcome')",
+        params![asset_id, attempt.id],
+        |row| row.get(0),
     )?;
     let previous: Option<String> = conn
         .query_row(
@@ -551,7 +605,9 @@ fn attempt_ordinal_and_gap(
         let current = chrono::DateTime::parse_from_rfc3339(terminal_at).ok()?;
         Some((current - previous).num_seconds() as f64 / 3600.0)
     });
-    Ok((ordinal.max(0) as u32, gap_hours))
+    let ordinal = u32::try_from(ordinal.max(persisted_ordinal.saturating_add(1)))
+        .map_err(|_| DbError::Validation("attemptOrdinal overflow".into()))?;
+    Ok((ordinal, gap_hours))
 }
 
 fn reading_mode(attempt: &AttemptRecord) -> &'static str {

@@ -38,7 +38,7 @@ class FakeHostBridge:
     ) -> None:
         self.calls: list[tuple[str, dict]] = []
         self._learner_skill_state = learner_skill_state or {
-            "skills": [{"skill": "reading.tfng.false_vs_not_given", "proficiency": 0.9}]
+            "states": [{"skillKey": "reading.tfng.false_vs_not_given", "masteryMean": 0.9}]
         }
         self._context_pack = context_pack or {
             "manifest": {
@@ -326,7 +326,7 @@ class PersonalizedCoachStrategyIntegrationTests(unittest.TestCase):
         bridge = FakeHostBridge()
         coach = PythonPersonalizedCoach(bridge)
         prefetched = {
-            "skills": [{"skill": "reading.tfng.false_vs_not_given", "proficiency": 0.1}]
+            "states": [{"skillKey": "reading.tfng.false_vs_not_given", "masteryMean": 0.1}]
         }
         result = coach.evaluate_shadow(
             _frozen_input(learner_skill_state=prefetched),
@@ -340,6 +340,21 @@ class PersonalizedCoachStrategyIntegrationTests(unittest.TestCase):
         # default for reading.tfng? reading.tfng defaults to contrastive, but
         # proficiency ≤0.25 is checked AFTER skill-family default — so contrastive
         # wins. Assert the call order instead, which is the load-bearing part.)
+
+    def test_canonical_host_query_and_mastery_drive_strategy(self) -> None:
+        for prefetched in (False, True):
+            for mastery, expected in ((0.1, CoachStrategyId.STEP_BY_STEP), (0.95, CoachStrategyId.CONCISE_DIRECT)):
+                snapshot = {"states": [{"skillKey": "reading.unknown.deep", "masteryMean": mastery}]}
+                bridge = FakeHostBridge(learner_skill_state=snapshot)
+                result = PythonPersonalizedCoach(bridge).evaluate_shadow(
+                    _frozen_input(skills_addressed=("reading.unknown.deep",),
+                                  learner_skill_state=snapshot if prefetched else None),
+                    available_host_capabilities=_capabilities(),
+                )
+                self.assertFalse(result.fell_back)
+                self.assertEqual(result.assignment.strategy_id, expected.value)
+                requests = [params for method, params in bridge.calls if method == CAPABILITY_LEARNER_SKILL_STATE]
+                self.assertEqual(requests, [] if prefetched else [{"query": {"skillKeys": ["reading.unknown.deep"]}}])
 
 
 if __name__ == "__main__":

@@ -10,7 +10,9 @@
 //! per-materialization identity, `content_hash` is the deterministic digest,
 //! and two snapshots sharing a hash must both persist.
 
-use ielts_db::{insert_context_snapshot, load_context_snapshot, migrate, open_connection, DbOpenOptions};
+use ielts_db::{
+    insert_context_snapshot, load_context_snapshot, migrate, open_connection, DbOpenOptions,
+};
 use ielts_domain::{
     ContextManifest, ContextMaterializedItem, ContextMaterializedSection, ContextSection,
 };
@@ -64,15 +66,32 @@ fn identical_renders_persist_as_two_snapshots() {
     let (_dir, conn) = open_db();
     let plan = json!({"planner_version": "planner-v1"});
 
-    insert_context_snapshot(&conn, &manifest("ctx-a", "same-hash"), "rendered", &plan, "internal")
-        .expect("first snapshot persists");
-    insert_context_snapshot(&conn, &manifest("ctx-b", "same-hash"), "rendered", &plan, "internal")
-        .expect("a re-render with the same content_hash must also persist");
+    insert_context_snapshot(
+        &conn,
+        &manifest("ctx-a", "same-hash"),
+        "rendered",
+        &plan,
+        "internal",
+    )
+    .expect("first snapshot persists");
+    insert_context_snapshot(
+        &conn,
+        &manifest("ctx-b", "same-hash"),
+        "rendered",
+        &plan,
+        "internal",
+    )
+    .expect("a re-render with the same content_hash must also persist");
 
     let rows: i64 = conn
-        .query_row("SELECT COUNT(*) FROM agent_context_snapshots", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM agent_context_snapshots", [], |row| {
+            row.get(0)
+        })
         .unwrap();
-    assert_eq!(rows, 2, "both materializations are retained as separate audit rows");
+    assert_eq!(
+        rows, 2,
+        "both materializations are retained as separate audit rows"
+    );
 
     // Neither row was overwritten: each id still resolves to its own snapshot,
     // and each kept its own item set. An upsert-based "fix" would collapse
@@ -84,11 +103,14 @@ fn identical_renders_persist_as_two_snapshots() {
         assert_eq!(loaded.snapshot_id, id);
         assert_eq!(loaded.content_hash, "same-hash");
         assert_eq!(loaded.sections.len(), 1);
+        assert_eq!(loaded.sections[0].items[0].rank, 1);
         assert_eq!(rendered, "rendered");
     }
 
     let items: i64 = conn
-        .query_row("SELECT COUNT(*) FROM agent_context_items", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM agent_context_items", [], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert_eq!(items, 2, "each snapshot keeps its own items");
 }
@@ -101,8 +123,14 @@ fn reinserting_one_id_is_still_rejected() {
     let (_dir, conn) = open_db();
     let plan = json!({"planner_version": "planner-v1"});
 
-    insert_context_snapshot(&conn, &manifest("ctx-dup", "hash-1"), "rendered", &plan, "internal")
-        .expect("first insert persists");
+    insert_context_snapshot(
+        &conn,
+        &manifest("ctx-dup", "hash-1"),
+        "rendered",
+        &plan,
+        "internal",
+    )
+    .expect("first insert persists");
     let err = insert_context_snapshot(
         &conn,
         &manifest("ctx-dup", "hash-2"),
@@ -110,12 +138,21 @@ fn reinserting_one_id_is_still_rejected() {
         &plan,
         "internal",
     );
-    assert!(err.is_err(), "the same snapshot_id must never be written twice");
+    assert!(
+        err.is_err(),
+        "the same snapshot_id must never be written twice"
+    );
 
     // The failed insert left nothing behind, and the original row is intact.
     let (loaded, rendered) = load_context_snapshot(&conn, "ctx-dup").unwrap().unwrap();
-    assert_eq!(loaded.content_hash, "hash-1", "the original row was not overwritten");
-    assert_eq!(rendered, "rendered", "the rejected insert did not replace the text");
+    assert_eq!(
+        loaded.content_hash, "hash-1",
+        "the original row was not overwritten"
+    );
+    assert_eq!(
+        rendered, "rendered",
+        "the rejected insert did not replace the text"
+    );
 }
 
 #[test]
@@ -150,13 +187,52 @@ fn an_unknown_run_id_is_rejected_with_a_typed_error() {
     // Nothing was written — the guard runs before the INSERT, so there is no
     // partial snapshot and no orphan items.
     let rows: i64 = conn
-        .query_row("SELECT COUNT(*) FROM agent_context_snapshots", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM agent_context_snapshots", [], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert_eq!(rows, 0);
     let items: i64 = conn
-        .query_row("SELECT COUNT(*) FROM agent_context_items", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM agent_context_items", [], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert_eq!(items, 0);
+}
+
+#[test]
+fn item_ranks_and_priority_order_round_trip_and_item_failure_rolls_back() {
+    let (_dir, conn) = open_db();
+    let mut snapshot = manifest("ctx-ranked", "hash");
+    snapshot.sections[0].items[0].rank = 7;
+    let mut second = snapshot.sections[0].clone();
+    second.section = ContextSection::ActiveMemory;
+    second.items[0].section = ContextSection::ActiveMemory;
+    second.items[0].item_id = "memory:m1".into();
+    second.items[0].rank = 3;
+    snapshot.sections.insert(0, second);
+    insert_context_snapshot(&conn, &snapshot, "body", &json!({}), "internal").unwrap();
+    let (loaded, body) = load_context_snapshot(&conn, "ctx-ranked").unwrap().unwrap();
+    assert_eq!(body, "body");
+    assert_eq!(loaded.sections[0].section, ContextSection::CurrentTask);
+    assert_eq!(loaded.sections[0].items[0].rank, 7);
+    assert_eq!(loaded.sections[1].items[0].rank, 3);
+    let mut invalid = snapshot.clone();
+    invalid.snapshot_id = "ctx-rollback".into();
+    let duplicate = invalid.sections[0].items[0].clone();
+    invalid.sections[0].items.push(duplicate);
+    assert!(insert_context_snapshot(&conn, &invalid, "bad", &json!({}), "internal").is_err());
+    assert!(load_context_snapshot(&conn, "ctx-rollback")
+        .unwrap()
+        .is_none());
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM agent_context_items WHERE snapshot_id='ctx-rollback'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0);
 }
 
 #[test]
@@ -171,6 +247,8 @@ fn a_null_run_id_is_the_normal_case_and_persists() {
 
     insert_context_snapshot(&conn, &unattributed, "rendered", &plan, "internal")
         .expect("an unattributed snapshot is the ordinary case");
-    let (loaded, _) = load_context_snapshot(&conn, "ctx-null-run").unwrap().unwrap();
+    let (loaded, _) = load_context_snapshot(&conn, "ctx-null-run")
+        .unwrap()
+        .unwrap();
     assert!(loaded.run_id.is_none());
 }

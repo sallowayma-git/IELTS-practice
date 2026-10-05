@@ -15,9 +15,8 @@ Hard rules enforced here (M12 plan §9204-9384):
 - **M12-05 skill probe, not exact question.** A plan item targets a
   ``skill_key`` + ``probe_kind`` (a skill probe). It never echoes an original
   asset / question id — the learner practises the SKILL, not a memorised item.
-  We reference the TechSpar ``get_due_reviews()`` *idea* (priority-ordered due
-  reviews) but select a skill probe, never an exact question repeat. We never
-  copy TechSpar's process-local ``task_status``.
+  Due reviews are priority-ordered, but each selects a skill probe, never an
+  exact question repeat. Task status is never kept in process-local state.
 - **deterministic constraints.** The proposal is a pure function of the inputs:
   identical inputs ⇒ identical item ordering and (modulo host-assigned
   ``plan_id``) identical proposal. Ordering key:

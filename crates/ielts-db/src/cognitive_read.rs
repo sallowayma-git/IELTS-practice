@@ -9,8 +9,8 @@ use rusqlite::{params, params_from_iter, types::Value as SqlValue, Connection, O
 use serde_json::Value;
 
 use crate::learning_observations::{
-    learning_observations_rebuild, learning_observations_verify,
-    LearningObservationsVerifyReport, LEARNING_OBSERVATION_PROJECTOR_KEY,
+    learning_observations_rebuild, learning_observations_verify, validated_learning_event_payload,
+    LearningObservationsVerifyReport, RawLedgerEvent, LEARNING_OBSERVATION_PROJECTOR_KEY,
     LEARNING_OBSERVATION_PROJECTOR_VERSION,
 };
 use crate::sqlite::{DbError, DbResult};
@@ -66,10 +66,7 @@ pub fn observation_snapshot(
     })
 }
 
-pub fn observations_by_ids(
-    conn: &Connection,
-    ids: &[String],
-) -> DbResult<ObservationBatch> {
+pub fn observations_by_ids(conn: &Connection, ids: &[String]) -> DbResult<ObservationBatch> {
     let header = ensure_fresh(conn)?;
     let requested = unique_bounded_ids(ids)?;
     let observations = load_observations_by_ids(conn, &requested)?;
@@ -117,14 +114,13 @@ pub fn learning_events_by_ids(
 }
 
 fn ensure_fresh(conn: &Connection) -> DbResult<ProjectionHeader> {
-    let verify = learning_observations_verify(conn)?;
-    if !projection_run_matches(conn, &verify)? {
+    let mut verify = learning_observations_verify(conn)?;
+    if !verify.consistent || !projection_run_matches(conn, &verify)? {
         // This is deliberately outside any caller-owned business transaction:
         // a cognitive read may repair derived state, but never blocks a submit.
         learning_observations_rebuild(conn)?;
+        verify = learning_observations_verify(conn)?;
     }
-
-    let verify = learning_observations_verify(conn)?;
     if !verify.consistent || !projection_run_matches(conn, &verify)? {
         return Err(DbError::Validation(
             "learning observation projection is not fresh after rebuild".into(),
@@ -135,6 +131,22 @@ fn ensure_fresh(conn: &Connection) -> DbResult<ProjectionHeader> {
         output_hash: verify.expected_output_hash,
         generated_at: projection_generated_at(conn)?,
     })
+}
+
+pub(crate) fn ensure_observations_fresh(conn: &Connection) -> DbResult<()> {
+    ensure_fresh(conn).map(|_| ())
+}
+
+/// Recheck in the learner read transaction: another connection may have
+/// committed evidence between M2 repair and acquiring this snapshot.
+pub(crate) fn require_observations_fresh(conn: &Connection) -> DbResult<()> {
+    let verify = learning_observations_verify(conn)?;
+    if !verify.consistent || !projection_run_matches(conn, &verify)? {
+        return Err(DbError::Validation(
+            "learning observations changed before learner read; retry".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn latest_projection_run(
@@ -390,7 +402,8 @@ fn load_learning_events_by_ids(
         .join(",");
     let sql = format!(
         "SELECT id,user_id,event_type,source_kind,source_id,activity,asset_id,attempt_id,
-                question_id,skill_key,occurred_at,payload_json,content_hash,schema_version,sensitivity
+                question_id,skill_key,occurred_at,payload_json,content_hash,schema_version,sensitivity,
+                consolidation_state
          FROM learning_events
          WHERE sensitivity = 'normal' AND id IN ({placeholders})
          ORDER BY id"
@@ -415,11 +428,12 @@ fn load_learning_events_by_ids(
             row.get::<_, String>(12)?,
             row.get::<_, i64>(13)?,
             row.get::<_, String>(14)?,
+            row.get::<_, String>(15)?,
         ))
     })?;
     rows.collect::<Result<Vec<_>, _>>()?
         .into_iter()
-        .map(
+        .filter_map(
             |(
                 id,
                 user_id,
@@ -436,8 +450,29 @@ fn load_learning_events_by_ids(
                 content_hash,
                 schema_version,
                 sensitivity,
+                consolidation_state,
             )| {
-                Ok(LearningEventEvidence {
+                if payload_json.len() > MAX_PAYLOAD_BYTES {
+                    return None;
+                }
+                let payload = validated_learning_event_payload(RawLedgerEvent {
+                    id: id.clone(),
+                    user_id: user_id.clone(),
+                    event_type_raw: event_type.clone(),
+                    source_id: source_id.clone(),
+                    activity: activity.clone(),
+                    asset_id: asset_id.clone(),
+                    attempt_id: attempt_id.clone(),
+                    question_id: question_id.clone(),
+                    occurred_at: occurred_at.clone(),
+                    payload_json,
+                    content_hash: content_hash.clone(),
+                    schema_version,
+                    sensitivity: sensitivity.clone(),
+                    consolidation_state,
+                })
+                .ok()?;
+                Some(Ok(LearningEventEvidence {
                     id,
                     user_id,
                     event_type,
@@ -449,12 +484,12 @@ fn load_learning_events_by_ids(
                     question_id,
                     skill_key,
                     occurred_at,
-                    payload: bounded_json(&payload_json, "learning event payload")?,
+                    payload,
                     content_hash,
                     schema_version,
                     sensitivity,
                     trust: "canonical_learning_truth".into(),
-                })
+                }))
             },
         )
         .collect()

@@ -257,6 +257,12 @@ pub struct CoachStrategyAssignmentRecord {
 
 /// M6-10: link a strategy assignment to a future observation. Satisfaction and
 /// learning outcomes are recorded on separate rows.
+///
+/// The v0 DB API currently fails closed: its provenance does not establish a
+/// trusted snapshot/scope binding to the Coach thread and attempt, and the
+/// observation projector does not emit canonical satisfaction observations.
+/// Record satisfaction through RecordCoachFeedbackCommand. This DTO alone
+/// never authorizes learning attribution, even when the referenced IDs exist.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkCoachOutcomeCommand {

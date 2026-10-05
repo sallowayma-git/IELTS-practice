@@ -25,6 +25,17 @@ BUILD_ROOT = ROOT / "target" / "agent-runtime-sidecar"
 BINARIES = ROOT / "src-tauri" / "binaries"
 
 
+def source_fingerprint() -> str:
+    """Hash the exact Python inputs to the frozen runtime, including file names."""
+    paths = [ENTRYPOINT, SOURCE_ROOT / "pyproject.toml"]
+    paths.extend((SOURCE_ROOT / "src").rglob("*.py"))
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda item: item.relative_to(ROOT).as_posix()):
+        digest.update(path.relative_to(ROOT).as_posix().encode("utf-8") + b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
 @dataclass(frozen=True)
 class SidecarSigning:
     platform: str
@@ -116,6 +127,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.target != host_target():
         raise SystemExit("Python sidecars must be frozen on the matching native target")
+    frozen_source = source_fingerprint()
     try:
         signing = signing_configuration(args.sign)
     except ValueError as error:
@@ -185,10 +197,14 @@ def main() -> int:
             str(staged),
             "--build-id",
             digest,
+            "--report",
+            str(BUILD_ROOT / "smoke-report.json"),
         ],
         cwd=ROOT,
         check=True,
     )
+    if source_fingerprint() != frozen_source:
+        raise RuntimeError("Python runtime sources changed while freezing the sidecar; rebuild it")
     try:
         os.replace(staged, target)
     except PermissionError:
@@ -199,9 +215,11 @@ def main() -> int:
         staged.unlink()
     hash_path = BINARIES / f"ielts-agent-runtime-{args.target}.sha256"
     hash_path.write_text(f"{digest}\n", encoding="ascii")
+    fingerprint_path = BINARIES / f"ielts-agent-runtime-{args.target}.source-fingerprint"
+    fingerprint_path.write_text(f"{frozen_source}\n", encoding="ascii")
     if sys.platform != "win32":
         target.chmod(target.stat().st_mode | 0o111)
-    print(f"built {target.relative_to(ROOT)} sha256={digest}")
+    print(f"built {target.relative_to(ROOT)} sha256={digest} sourceFingerprint={frozen_source}")
     return 0
 
 

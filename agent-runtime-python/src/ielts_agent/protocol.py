@@ -13,9 +13,9 @@ SUPPORTED_CAPABILITIES = {
     "runtime.shutdown": "1",
     "memory.candidates.extract": "1",
     "memory.candidates.generate": "1",
-    # M7-06 daily-dream orchestration entry: the Rust host drives one bounded
-    # consolidation pass (journal facts → proposals → dream.run_daily).
-    "dream.daily": "1",
+    # Weekly consolidation entry: ONE model call over the host-bounded candidate
+    # pool; patterns go back through dream.run_weekly for host re-validation.
+    "dream.weekly": "1",
     # M12-04 study-planner orchestration entry: deterministic plan proposal,
     # submitted back via the study_plan.create host capability.
     "planner.study_plan": "1",

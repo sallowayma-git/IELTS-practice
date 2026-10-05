@@ -5,9 +5,8 @@ single ranked list. No provider calls. Salience and time-decay features are
 derived from the index metadata so a stale chunk naturally demotes without
 being dropped (the Rust materializer re-authorizes anyway).
 
-Clean-room from TechSpa `vector_memory.py:_time_decay` (R2): we borrow the
-half-life idea but drive it from canonical `updated_at` and never mix predicted
-with observed source trust.
+Recency uses a half-life decay driven from canonical `updated_at`, and never
+mixes predicted with observed source trust.
 """
 
 from __future__ import annotations

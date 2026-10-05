@@ -7,6 +7,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use ielts_domain::{
@@ -66,21 +67,18 @@ pub fn load_support_memories(
     let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(ids.len() + 1);
     params.push(&user_id as &dyn rusqlite::ToSql);
     params.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
-    let rows = statement.query_map(
-        params.as_slice(),
-        |row| {
-            Ok(SupportMemory {
-                memory_id: row.get(0)?,
-                status: row.get(1)?,
-                source_class: row.get(2)?,
-                canonical_key: row.get(3)?,
-                scope: row.get(4)?,
-                namespace: row.get(5)?,
-                subject_key: row.get::<_, Option<String>>(6)?,
-                last_observed_at: row.get::<_, Option<String>>(7)?,
-            })
-        },
-    )?;
+    let rows = statement.query_map(params.as_slice(), |row| {
+        Ok(SupportMemory {
+            memory_id: row.get(0)?,
+            status: row.get(1)?,
+            source_class: row.get(2)?,
+            canonical_key: row.get(3)?,
+            scope: row.get(4)?,
+            namespace: row.get(5)?,
+            subject_key: row.get::<_, Option<String>>(6)?,
+            last_observed_at: row.get::<_, Option<String>>(7)?,
+        })
+    })?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
@@ -96,7 +94,13 @@ pub fn insert_memory_relation(
         "INSERT OR IGNORE INTO memory_relations (id, source_memory_id, target_memory_id,
             relation_kind, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![format!("mrel-{}", Uuid::new_v4()), source, target, kind.as_str(), now],
+        params![
+            format!("mrel-{}", Uuid::new_v4()),
+            source,
+            target,
+            kind.as_str(),
+            now
+        ],
     )?;
     Ok(())
 }
@@ -110,7 +114,40 @@ pub fn apply_consolidation(
     user_id: &str,
     now: &str,
 ) -> DbResult<ConsolidationReceipt> {
+    apply_consolidation_with_config(conn, pattern, user_id, now, &ConsolidationConfig::default())
+}
+
+/// Apply using policy supplied by the trusted service, never by the receipt.
+/// The legacy entry point above always uses the default policy. Custom-policy
+/// callers must pass the same trusted config to validation and this function.
+pub fn apply_consolidation_with_config(
+    conn: &Connection,
+    pattern: &ValidatedPattern,
+    user_id: &str,
+    now: &str,
+    config: &ConsolidationConfig,
+) -> DbResult<ConsolidationReceipt> {
     let tx = conn.unchecked_transaction()?;
+    let snapshot: ValidationSnapshot = serde_json::from_str(&pattern.evidence_snapshot)
+        .map_err(|_| DbError::Validation("missing consolidation validation receipt".into()))?;
+    if snapshot.config != *config {
+        return Err(DbError::Validation(
+            "consolidation validation policy mismatch".into(),
+        ));
+    }
+    let proposal = PatternProposal {
+        statement: pattern.statement.clone(),
+        supporting_memory_ids: pattern.support_ids.clone(),
+        pattern_kind: pattern.pattern_kind,
+        confidence_proposal: pattern.confidence,
+    };
+    let current = validate_one(&tx, &proposal, user_id, config)?
+        .map_err(|reason| DbError::Validation(format!("consolidation revalidation: {reason:?}")))?;
+    if &current != pattern {
+        return Err(DbError::Validation(
+            "consolidation evidence changed since validation".into(),
+        ));
+    }
     let consolidated_id = format!("mem-{}", Uuid::new_v4());
     let content_hash = sha256_hex(&pattern.statement);
     tx.execute(
@@ -135,6 +172,17 @@ pub fn apply_consolidation(
     )?;
     let mut relations_created = 0usize;
     for support_id in &pattern.support_ids {
+        // Preserve the verified practice lineage for later consolidation too;
+        // a newly created pattern must not become another evidence-free label.
+        tx.execute(
+            "INSERT OR IGNORE INTO memory_evidence
+                (memory_id,observation_id,source_fingerprint,projector_key,projector_version,
+                 evidence_role,event_ids_json,evidence_hash,created_at)
+             SELECT ?1,observation_id,source_fingerprint,projector_key,projector_version,
+                    evidence_role,event_ids_json,evidence_hash,created_at
+             FROM memory_evidence WHERE memory_id=?2 AND evidence_role='support'",
+            params![consolidated_id, support_id],
+        )?;
         insert_memory_relation(
             &tx,
             support_id,
@@ -197,7 +245,9 @@ pub(crate) fn propagate_support_change_in_transaction(
     now: &str,
 ) -> DbResult<SupportChangeOutcome> {
     let owner: String = conn.query_row(
-        "SELECT user_id FROM memory_items WHERE id=?1", [memory_id], |row| row.get(0),
+        "SELECT user_id FROM memory_items WHERE id=?1",
+        [memory_id],
+        |row| row.get(0),
     )?;
     // UNION (not UNION ALL) visits each stable ID once, including old cyclic
     // backup graphs. Never traverse a foreign owner, even to re-enter this one.
@@ -232,8 +282,14 @@ pub(crate) fn propagate_support_change_in_transaction(
     // Missing/refuted evidence invalidates every derived conclusion, not just
     // a currently active direct child. Preserve content and lineage for review.
     for pattern_id in &affected {
-        crate::memory::archive_memory_record(conn, pattern_id, "system", None,
-            "support memory invalidated", now)?;
+        crate::memory::archive_memory_record(
+            conn,
+            pattern_id,
+            "system",
+            None,
+            "support memory invalidated",
+            now,
+        )?;
     }
     Ok(SupportChangeOutcome::PatternArchived)
 }
@@ -270,7 +326,9 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
         .query_map([], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
     let archived_before: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM memory_items WHERE status='archived'", [], |row| row.get(0),
+        "SELECT COUNT(*) FROM memory_items WHERE status='archived'",
+        [],
+        |row| row.get(0),
     )?;
     let mut skipped: Vec<String> = Vec::new();
     let mut policy_by_kind: Vec<(String, String)> = Vec::new();
@@ -299,22 +357,34 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
                 let cutoff_iso = chrono::DateTime::from_timestamp(cutoff_secs, 0)
                     .map(|dt| dt.to_rfc3339())
                     .unwrap_or_else(|| now.to_string());
-                let ids = conn.prepare(
-                    "SELECT id FROM memory_items
+                let ids = conn
+                    .prepare(
+                        "SELECT id FROM memory_items
                      WHERE namespace=?2 AND status='active'
                        AND COALESCE(last_observed_at, updated_at, created_at) < ?3",
-                )?.query_map(params![now, kind, cutoff_iso], |row| row.get::<_, String>(0))?
+                    )?
+                    .query_map(params![now, kind, cutoff_iso], |row| {
+                        row.get::<_, String>(0)
+                    })?
                     .collect::<Result<Vec<_>, _>>()?;
                 for id in ids {
                     crate::memory::archive_memory_record(
-                        conn, &id, "system", None, "stale memory policy", now)?;
+                        conn,
+                        &id,
+                        "system",
+                        None,
+                        "stale memory policy",
+                        now,
+                    )?;
                     propagate_support_change_in_transaction(conn, &id, "archived", now)?;
                 }
             }
         }
     }
     let archived_after: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM memory_items WHERE status='archived'", [], |row| row.get(0),
+        "SELECT COUNT(*) FROM memory_items WHERE status='archived'",
+        [],
+        |row| row.get(0),
     )?;
     tx.commit()?;
     Ok(StaleArchiveReport {
@@ -338,19 +408,35 @@ pub fn record_memory_feedback(
     let owned: bool = tx.query_row(
         "SELECT EXISTS(SELECT 1 FROM memory_items
          WHERE id=?1 AND user_id=?2 AND status != 'deleted')",
-        params![memory_id, user_id], |row| row.get(0),
+        params![memory_id, user_id],
+        |row| row.get(0),
     )?;
-    if !owned { return Err(DbError::Validation("missing or foreign memory".into())); }
+    if !owned {
+        return Err(DbError::Validation("missing or foreign memory".into()));
+    }
     let id = format!("mfb-{}", Uuid::new_v4());
     tx.execute(
         "INSERT INTO memory_feedback (id, memory_id, feedback_kind, user_id, payload_json,
             created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![id, memory_id, kind.as_str(), user_id, payload.to_string(), now],
+        params![
+            id,
+            memory_id,
+            kind.as_str(),
+            user_id,
+            payload.to_string(),
+            now
+        ],
     )?;
     if kind.is_contradiction() || kind.archives_memory() {
-        crate::memory::archive_memory_record(&tx, memory_id, "user", Some(user_id),
-            kind.as_str(), now)?;
+        crate::memory::archive_memory_record(
+            &tx,
+            memory_id,
+            "user",
+            Some(user_id),
+            kind.as_str(),
+            now,
+        )?;
         propagate_support_change_in_transaction(&tx, memory_id, "refuted", now)?;
     }
     tx.commit()?;
@@ -365,7 +451,7 @@ pub fn record_memory_feedback(
 }
 
 /// M8-02: the validator's core. Re-loads support memories by stable ID, runs
-/// the TechSpar Stage 3 four gates + IELTS-specific gates. Returns a report;
+/// the Stage 3 four gates + IELTS-specific gates. Returns a report;
 /// empty `validated` is success (M8-01).
 pub fn validate_patterns(
     conn: &Connection,
@@ -373,10 +459,12 @@ pub fn validate_patterns(
     user_id: &str,
     config: &ConsolidationConfig,
 ) -> DbResult<PatternValidationReport> {
+    // One read snapshot for all memory/projection/ledger reads.
+    let tx = conn.unchecked_transaction()?;
     let mut validated: Vec<ValidatedPattern> = Vec::new();
     let mut rejected: Vec<ielts_domain::PatternRejection> = Vec::new();
     for proposal in proposals {
-        match validate_one(conn, proposal, user_id, config)? {
+        match validate_one(&tx, proposal, user_id, config)? {
             Ok(pattern) => validated.push(pattern),
             Err(reason) => rejected.push(ielts_domain::PatternRejection {
                 statement: proposal.statement.clone(),
@@ -384,11 +472,138 @@ pub fn validate_patterns(
             }),
         }
     }
+    tx.commit()?;
     Ok(PatternValidationReport {
         schema_version: ielts_domain::CONSOLIDATION_SCHEMA_VERSION,
         validated,
         rejected,
     })
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ValidationSnapshot {
+    config: ConsolidationConfig,
+    fingerprint: String,
+}
+
+struct PracticeEvidence {
+    observation: String,
+    event: String,
+    asset: String,
+    question: Option<String>,
+    session: String,
+    skill: Option<String>,
+    snapshot: String,
+}
+
+fn load_practice_evidence(
+    conn: &Connection,
+    memory_id: &str,
+    user_id: &str,
+) -> DbResult<Vec<PracticeEvidence>> {
+    // Durable lineage must agree with the current projection AND its ledger.
+    // Labels and memory scopes never establish practice identity. Suite attempts
+    // share a session; free-standing attempts use their own stable IDs.
+    let mut query = conn.prepare(
+        "SELECT a.asset_id, e.question_id,
+                CASE WHEN a.suite_id IS NOT NULL AND a.suite_id != ''
+                     THEN 'suite:' || a.suite_id ELSE 'attempt:' || a.id END,
+                sc.skill_key,
+                json_array(
+                    json_array(me.memory_id,me.observation_id,me.source_fingerprint,me.projector_key,
+                        me.projector_version,me.evidence_role,me.event_ids_json,me.evidence_hash,me.created_at),
+                    json_array(o.id,o.user_id,o.observation_type,o.namespace,o.scope_kind,o.scope_key,
+                        o.polarity,o.value_num,o.value_text,o.payload_json,o.confidence,o.evidence_strength,
+                        o.observed_at,o.projector_key,o.projector_version,o.source_fingerprint,o.created_at),
+                    json_array(oe.evidence_role,oe.ordinal),
+                    json_array(e.id,e.user_id,e.event_type,e.source_kind,e.source_id,e.idempotency_key,
+                        e.activity,e.asset_id,e.attempt_id,e.question_id,e.skill_key,e.occurred_at,
+                        e.payload_json,e.content_hash,e.schema_version,e.consolidation_state,
+                        e.sensitivity,e.created_at,e.updated_at),
+                    json_array(a.id,a.activity,a.asset_id,a.mode,a.suite_id,a.status,a.started_at,
+                        a.submitted_at,a.completed_at,a.duration_ms,a.score_value,a.score_scale,
+                        a.correct_count,a.question_count,a.title_snapshot,a.prompt_snapshot,
+                        a.content_text,a.schema_version,a.created_at,a.updated_at,a.task_type),
+                    json_array(ans.answer_json,ans.is_correct,ans.weight,ans.question_kind,
+                        ans.change_count,ans.visit_count,ans.elapsed_ms,ans.marked,ans.answered_at),
+                    json_array(so.id,so.user_id,so.skill_key,so.outcome,so.mapping_weight,so.evidence_weight,
+                        so.novelty_weight,so.familiarity_weight,so.time_weight,so.error_type,
+                        so.context_json,so.observed_at,so.intervention_id,so.intervention_type),
+                    json_array(qm.skill_key,qm.weight,qm.mapping_source,qm.mapping_version,qm.created_at,qm.updated_at),
+                    json_array(sc.skill_key,sc.activity,sc.parent_key,sc.label,sc.description,
+                        sc.taxonomy_version,sc.mapping_source,sc.created_at,sc.updated_at),
+                    json_array(asset.id,asset.activity,asset.source_kind,asset.source_key,asset.title,
+                        asset.category,asset.difficulty,asset.frequency,asset.content_ref,
+                        asset.schema_version,asset.fingerprint,asset.pdf_only,asset.metadata_json,
+                        asset.created_at,asset.updated_at)),
+                me.observation_id,e.id
+         FROM memory_evidence me
+         JOIN learner_observations o ON o.id=me.observation_id AND o.user_id=?2
+              AND o.source_fingerprint=me.source_fingerprint
+              AND o.projector_key=me.projector_key AND o.projector_version=me.projector_version
+         JOIN learner_observation_evidence oe ON oe.observation_id=o.id AND oe.evidence_role='support'
+         JOIN learning_events e ON e.id=oe.event_id AND e.user_id=?2
+         JOIN json_each(me.event_ids_json) cited ON cited.value=e.id AND cited.type='text'
+         JOIN attempts a ON a.id=e.attempt_id
+         JOIN practice_assets asset ON asset.id=a.asset_id AND asset.activity=a.activity
+         LEFT JOIN attempt_answers ans ON ans.attempt_id=a.id AND ans.question_id=e.question_id
+         LEFT JOIN learner_skill_observations so ON so.event_id=e.id AND so.user_id=?2
+              AND so.attempt_id=a.id AND so.asset_id=a.asset_id AND so.question_id=e.question_id
+         LEFT JOIN question_skill_map qm ON qm.asset_id=a.asset_id AND qm.question_id=e.question_id
+              AND qm.active=1 AND qm.mapping_source != 'model_proposed'
+         LEFT JOIN skill_catalog sc ON sc.skill_key=COALESCE(so.skill_key,e.skill_key,qm.skill_key)
+              AND sc.active=1 AND sc.mapping_source != 'model_proposed' AND sc.activity=a.activity
+         WHERE me.memory_id=?1 AND me.evidence_role='support'
+              AND a.status='completed'
+              AND (e.asset_id IS NULL OR e.asset_id=a.asset_id)
+              AND (e.activity IS NULL OR e.activity=a.activity)
+              AND e.consolidation_state IN ('pending','processed')
+              AND e.event_type IN ('attempt_completed','reading_question_outcome','writing_evaluation_completed')
+              AND (e.question_id IS NULL OR ans.question_id IS NOT NULL)
+         ORDER BY me.observation_id,e.id,sc.skill_key,so.id,qm.skill_key",
+    )?;
+    let rows = query.query_map(params![memory_id, user_id], |r| {
+        Ok(PracticeEvidence {
+            asset: r.get(0)?,
+            question: r.get(1)?,
+            session: r.get(2)?,
+            skill: r.get(3)?,
+            snapshot: r.get(4)?,
+            observation: r.get(5)?,
+            event: r.get(6)?,
+        })
+    })?;
+    let rows = rows.collect::<Result<Vec<_>, _>>()?;
+    let malformed: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM memory_evidence WHERE memory_id=?1
+            AND evidence_role='support' AND
+            (json_type(event_ids_json) != 'array' OR json_array_length(event_ids_json)=0
+             OR EXISTS(SELECT 1 FROM json_each(event_ids_json) WHERE type != 'text')))",
+        [memory_id],
+        |r| r.get(0),
+    )?;
+    if malformed {
+        return Ok(Vec::new());
+    }
+    let expected = conn
+        .prepare(
+            "SELECT me.observation_id,cited.value FROM memory_evidence me
+         JOIN json_each(me.event_ids_json) cited
+         WHERE me.memory_id=?1 AND me.evidence_role='support'",
+        )?
+        .query_map([memory_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?
+        .collect::<Result<HashSet<_>, _>>()?;
+    let resolved: HashSet<_> = rows
+        .iter()
+        .map(|r| (r.observation.clone(), r.event.clone()))
+        .collect();
+    if expected != resolved {
+        return Ok(Vec::new());
+    }
+    Ok(rows)
 }
 
 fn validate_one(
@@ -443,20 +658,20 @@ fn validate_one(
     let mut verified: Vec<&SupportMemory> = Vec::new();
     for id in &proposal.supporting_memory_ids {
         match supports.iter().find(|s| &s.memory_id == id) {
-            Some(s) => verified.push(s),
+            Some(s) => {
+                if !verified
+                    .iter()
+                    .any(|existing| existing.memory_id == s.memory_id)
+                {
+                    verified.push(s);
+                }
+            }
             None => {
                 return Ok(Err(RejectReason::HallucinatedSupportId {
                     support_id: id.clone(),
                 }))
             }
         }
-    }
-    // Min supports gate (M8-03).
-    if verified.len() < config.min_supports {
-        return Ok(Err(RejectReason::BelowMinSupports {
-            provided: verified.len(),
-            required: config.min_supports,
-        }));
     }
     // No predicted-only / superseded supports (M8-10, M8-04).
     for support in &verified {
@@ -465,22 +680,49 @@ fn validate_one(
                 support_id: support.memory_id.clone(),
             }));
         }
-        if support.status == "superseded" || support.status == "archived" {
+        if support.status != "active" {
             return Ok(Err(RejectReason::SupersededSupport {
                 support_id: support.memory_id.clone(),
             }));
         }
     }
-    // Distinct assets (M8-04: same asset 3x is not independent). Asset identity
-    // is derived from the support's `subject_key` (falls back to canonical_key).
-    let distinct_assets: std::collections::HashSet<&str> = verified
+    let mut evidence = Vec::new();
+    let mut snapshots = Vec::new();
+    for support in &verified {
+        let rows = load_practice_evidence(conn, &support.memory_id, user_id)?;
+        if rows.is_empty() {
+            return Ok(Err(RejectReason::MissingPracticeEvidence {
+                support_id: support.memory_id.clone(),
+            }));
+        }
+        let memory_snapshot: String = conn.query_row(
+            "SELECT json_array(id,user_id,version,status,source_class,content,content_hash,
+                namespace,memory_type,canonical_key,normalized_label,scope,subject_key,title,
+                structured_json,confidence,importance,source_trust,sensitivity,improvement_state,
+                valid_from,valid_to,first_observed_at,last_observed_at,supersedes_id,
+                created_by,created_run_id,created_at,updated_at)
+             FROM memory_items WHERE id=?1",
+            [&support.memory_id],
+            |r| r.get(0),
+        )?;
+        snapshots.push(memory_snapshot);
+        snapshots.extend(rows.iter().map(|r| r.snapshot.clone()));
+        evidence.extend(rows);
+    }
+    let independent: HashSet<_> = evidence
         .iter()
-        .map(|s| {
-            s.subject_key
-                .as_deref()
-                .unwrap_or(s.canonical_key.as_str())
-        })
+        .map(|r| (&r.session, &r.asset, &r.question))
         .collect();
+    let sessions: HashSet<_> = evidence.iter().map(|r| &r.session).collect();
+    let independent_count = independent.len().min(sessions.len());
+    if independent_count < config.min_supports.max(1) {
+        return Ok(Err(RejectReason::BelowMinSupports {
+            provided: independent_count,
+            required: config.min_supports.max(1),
+        }));
+    }
+    let distinct_scopes: HashSet<_> = evidence.iter().filter_map(|r| r.skill.as_ref()).collect();
+    let distinct_assets: HashSet<_> = evidence.iter().map(|r| &r.asset).collect();
     if distinct_assets.len() < config.min_distinct_assets {
         return Ok(Err(RejectReason::InsufficientDistinctAssets {
             provided: distinct_assets.len(),
@@ -489,8 +731,6 @@ fn validate_one(
     }
     // Distinct scopes for cross-cutting patterns (M8-03).
     if proposal.pattern_kind.is_cross_cutting() {
-        let distinct_scopes: std::collections::HashSet<&str> =
-            verified.iter().map(|s| s.scope.as_str()).collect();
         if distinct_scopes.len() < config.min_distinct_scopes {
             return Ok(Err(RejectReason::InsufficientDistinctScopes {
                 provided: distinct_scopes.len(),
@@ -498,17 +738,26 @@ fn validate_one(
             }));
         }
     }
+    let support_ids: Vec<String> = verified.iter().map(|s| s.memory_id.clone()).collect();
+    snapshots.push(
+        json!({
+            "statement": proposal.statement, "supportIds": support_ids,
+            "patternKind": proposal.pattern_kind,
+            "confidence": proposal.confidence_proposal.clamp(0.0, 1.0),
+        })
+        .to_string(),
+    );
     Ok(Ok(ValidatedPattern {
         statement: proposal.statement.clone(),
-        support_ids: proposal.supporting_memory_ids.clone(),
+        support_ids,
         pattern_kind: proposal.pattern_kind,
         confidence: proposal.confidence_proposal.clamp(0.0, 1.0),
         distinct_asset_count: distinct_assets.len(),
-        distinct_scope_count: verified
-            .iter()
-            .map(|s| s.scope.as_str())
-            .collect::<std::collections::HashSet<_>>()
-            .len(),
+        distinct_scope_count: distinct_scopes.len(),
+        evidence_snapshot: serde_json::to_string(&ValidationSnapshot {
+            config: *config,
+            fingerprint: sha256_hex(&serde_json::to_string(&(config, snapshots))?),
+        })?,
     }))
 }
 
