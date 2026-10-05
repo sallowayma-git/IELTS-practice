@@ -3,17 +3,21 @@
 //!
 //! The daily journal is a deterministic summary of facts: Rust builds and
 //! versions it, no model and no dream are involved. The only dream is the weekly
-//! consolidation, which runs in the Python sidecar; Rust is the durable authority
-//! that persists its run and re-validates its patterns by stable ID.
+//! weekly pass, which runs in the Python sidecar; Rust is the durable authority
+//! that persists its run, stores its digest prose, and gates its memory mutations.
 
 #![cfg(feature = "daily-dream-v1")]
 
-use ielts_application::{ApplicationError, ConsolidationService, DreamService, JournalService};
+use ielts_application::{
+    ApplicationError, ConsolidationService, DreamService, JournalService, MemoryService,
+    SubmitMemoryCandidatesCommand, WeeklyEvidence,
+};
 use ielts_db::background_jobs::{self, BackgroundJob};
 use ielts_db::WeeklyWindow;
 use ielts_domain::{
     CommandResponse, DailyDreamQuery, DailyJournal, DailyJournalQuery, ErrorEnvelope,
-    MemoryFeedbackKind, PatternProposal, WeeklyDreamQuery,
+    MemoryFeedbackKind, MemoryMutationProposalBatch, MemorySourceClass, WeeklyDreamQuery,
+    MEMORY_PROPOSAL_SCHEMA_VERSION,
 };
 use serde::Serialize;
 use tauri::State;
@@ -200,7 +204,7 @@ fn default_local_user() -> String {
 }
 
 /// Read-only: recent weekly consolidations, each with the window it covered and
-/// the patterns it produced that are still active. Runs that produced nothing are
+/// the prose its pass wrote (what was seen, what changed, what to practise). Runs that wrote nothing are
 /// omitted. The Notebook renders these as prose; nothing here can mutate memory.
 #[tauri::command]
 pub fn weekly_digest_list(
@@ -276,25 +280,54 @@ fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// M8: run a Weekly Dream consolidation over `window`. Rust re-validates the proposed
-/// cross-scope patterns by stable memory ID (M8-02), applies consolidation as
-/// relations + supersede (M8-06, never deletes), and returns the report +
-/// receipts. Empty validated is success (M8-01: better zero than a wrong
-/// pattern).
+/// What the sidecar's one model call produced, after the host parsed it: the
+/// digest prose, and the memory mutations in the same wire shape every cognitive
+/// proposal uses. Mutations that do not even parse are counted, never dropped
+/// silently.
+#[derive(Debug, Default)]
+pub(crate) struct WeeklySubmission {
+    pub digest: ielts_db::WeeklyDigestProse,
+    pub mutations: Vec<ielts_domain::MemoryMutationProposal>,
+    pub unparsed: usize,
+}
+
+impl WeeklySubmission {
+    pub(crate) fn from_params(params: &serde_json::Map<String, serde_json::Value>) -> Self {
+        let digest = params
+            .get("digest")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
+        let mut submission = Self { digest, ..Self::default() };
+        for item in params.get("mutations").and_then(serde_json::Value::as_array).into_iter().flatten() {
+            match serde_json::from_value(item.clone()) {
+                Ok(mutation) => submission.mutations.push(mutation),
+                Err(_) => submission.unparsed += 1,
+            }
+        }
+        submission
+    }
+}
+
+/// How a weekly run ended, in the counts the sidecar reports back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WeeklyOutcome {
+    pub run_id: String,
+    pub validated: usize,
+    pub rejected: usize,
+    pub accepted: usize,
+}
+
+/// M8: record one weekly pass over `window`: its digest prose and its memory
+/// mutations. Every mutation must cite observations of the pack the model was
+/// shown and target memories of that pack (`WeeklyEvidence`), then goes through
+/// the one cognitive-proposal gate (`MemoryService`): validation, then promotion
+/// as the `dream` actor. Nothing is ever deleted; supersede and archive keep the
+/// old row. An empty submission is a success.
 ///
-/// Round-3 audit (A3): this is deliberately NOT a `#[tauri::command]`.
-///
-/// It used to be one, registered in `generate_handler!`, taking
-/// `patterns: Vec<PatternProposal>` straight off the wire. Since
-/// `capabilities/main.json` grants blanket `core:*` with no per-command ACL,
-/// any code running in the webview could hand this function arbitrary
-/// statements and arbitrary `mem-*` support ids, and `apply_consolidation`
-/// would write those statements into `memory_items` as `status='active'` while
-/// flipping the named supports to `superseded`. That made the webview a
-/// source of trusted, irreversible memory mutations — the exact inversion the
-/// architecture forbids. Dropping the attribute means serde can never
-/// deserialize `patterns` from the webview again; the only remaining entry is
-/// the sidecar reverse-RPC handler, which is host-gated.
+/// Round-3 audit (A3): this is deliberately NOT a `#[tauri::command]`. The
+/// webview must never be able to hand the host digest text or mutations; the only
+/// entry is the sidecar reverse-RPC handler, which is host-gated.
 ///
 /// The run is persisted BEFORE any mutation so the ledger bounds it, and the
 /// `journal_id` is FK-validated by that insert instead of being echoed back
@@ -302,11 +335,10 @@ fn now_iso() -> String {
 pub(crate) fn run_weekly_consolidation(
     db: &AppDb,
     query: &WeeklyDreamQuery,
-    patterns: &[PatternProposal],
+    submission: WeeklySubmission,
     window: &WeeklyWindow,
-) -> Result<ielts_application::WeeklyDreamResult, ApplicationError> {
+) -> Result<WeeklyOutcome, ApplicationError> {
     let store = ApplicationStore::new(db);
-    let service = ConsolidationService::new(&store);
     let dream_service = DreamService::new(&store);
     let now = now_iso();
 
@@ -325,63 +357,70 @@ pub(crate) fn run_weekly_consolidation(
     let run = dream_service.insert_dream_run(&dream_query, Some(&marker))?;
     dream_service.start_dream_run(&run.id, &now)?;
 
-    let outcome = (|| -> Result<ielts_application::WeeklyDreamResult, ApplicationError> {
-        let report = service.validate_patterns(patterns, &query.user_id)?;
-        let receipts = service
-            .apply_consolidations(&report.validated, &query.user_id, &now)
-            .map_err(|partial| {
-                // Per-pattern commits mean the prefix already landed. Record
-                // what was actually applied before surfacing the failure, so
-                // the ledger never claims a clean failure over a mutated DB.
-                let payload = serde_json::json!({
-                    "error": partial.to_string(),
-                    "failedStatement": partial.failed_statement,
-                    "appliedMemoryIds": partial
-                        .applied
-                        .iter()
-                        .map(|receipt| receipt.consolidated_memory_id.clone())
-                        .collect::<Vec<_>>(),
-                    "partiallyApplied": !partial.is_clean(),
-                });
-                let _ = dream_service.fail_run(&run.id, &payload, &now);
-                ApplicationError::from(partial)
-            })?;
-        let output_hash = weekly_output_hash(&receipts);
-        dream_service.finish_dream_run(&run.id, &output_hash, &now)?;
-        Ok(ielts_application::WeeklyDreamResult {
-            run_id: run.id.clone(),
-            query: query.clone(),
-            report,
-            receipts,
-        })
-    })();
-
+    let outcome = apply_weekly_submission(db, &store, query, submission, window, &run.id, &now);
     if let Err(error) = &outcome {
-        // `fail_run` is idempotent enough for the double-call case above: the
-        // partial-application arm already recorded the richer payload, and a
-        // second terminal write on an already-terminal run is a no-op.
-        let _ = dream_service.fail_run(
-            &run.id,
-            &serde_json::json!({ "error": error.to_string() }),
-            &now,
-        );
+        let _ = dream_service.fail_run(&run.id, &serde_json::json!({ "error": error.to_string() }), &now);
     }
     outcome
 }
 
-/// Deterministic hash over the consolidation receipts, mirroring the shape the
-/// daily dream records. Order-independent per receipt, stable across runs.
-fn weekly_output_hash(receipts: &[ielts_domain::ConsolidationReceipt]) -> String {
+fn apply_weekly_submission(
+    db: &AppDb,
+    store: &ApplicationStore<'_>,
+    query: &WeeklyDreamQuery,
+    submission: WeeklySubmission,
+    window: &WeeklyWindow,
+    run_id: &str,
+    now: &str,
+) -> Result<WeeklyOutcome, ApplicationError> {
+    let dream_service = DreamService::new(store);
+    let pack = db
+        .with_conn(|conn| ielts_db::weekly_pack(conn, &query.user_id, window.start, window.end))
+        .map_err(|error| ApplicationError::new("weekly.pack_failed", error.to_string(), true))?;
+    let evidence = WeeklyEvidence { observation_ids: pack.evidence_ids(), memory_ids: pack.memory_ids() };
+
+    let digest = submission.digest.sanitized();
+    db.with_conn(|conn| ielts_db::put_weekly_digest(conn, run_id, &digest, now))
+        .map_err(|error| ApplicationError::new("weekly.digest_failed", error.to_string(), true))?;
+
+    let (admitted, refused) = evidence.admitted(submission.mutations);
+    let mut rejected = refused + submission.unparsed;
+    let mut outcome = ielts_application::AppliedMutations::default();
+    if !admitted.is_empty() {
+        outcome = MemoryService::new(store).apply_cognitive_mutations(
+            &SubmitMemoryCandidatesCommand {
+                request_id: format!("weekly-mutations-{run_id}"),
+                user_id: query.user_id.clone(),
+                run_id: None,
+                batch: MemoryMutationProposalBatch {
+                    schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
+                    proposals: admitted,
+                },
+            },
+            MemorySourceClass::Consolidated,
+            "weekly dream",
+        )?;
+    }
+    rejected += outcome.rejected;
+    let output_hash = weekly_output_hash(&digest, &outcome.applied);
+    dream_service.finish_dream_run(run_id, &output_hash, now)?;
+    Ok(WeeklyOutcome {
+        run_id: run_id.to_owned(),
+        validated: outcome.validated,
+        rejected,
+        accepted: outcome.applied.len(),
+    })
+}
+
+/// Deterministic hash over the digest and the memories the pass touched.
+fn weekly_output_hash(digest: &ielts_db::WeeklyDigestProse, applied: &[ielts_domain::MemoryMutationReceipt]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
-    for receipt in receipts {
-        hasher.update(receipt.consolidated_memory_id.as_bytes());
+    hasher.update(serde_json::to_string(digest).unwrap_or_default().as_bytes());
+    for receipt in applied {
         hasher.update(b"|");
-        let mut supports = receipt.support_ids.clone();
-        supports.sort();
-        hasher.update(supports.join(",").as_bytes());
-        hasher.update(b"
-");
+        hasher.update(receipt.memory_id.as_deref().unwrap_or("").as_bytes());
+        hasher.update(receipt.action.as_bytes());
     }
     format!("{:x}", hasher.finalize())
 }
@@ -434,7 +473,6 @@ fn respond<T>(
 mod tests {
     use super::*;
     use crate::app::state::AppPaths;
-    use ielts_domain::PatternKind;
 
     fn temp_db() -> (tempfile::TempDir, AppDb) {
         let dir = tempfile::tempdir().unwrap();
@@ -487,6 +525,18 @@ mod tests {
         .unwrap()
     }
 
+    fn params(value: serde_json::Value) -> WeeklySubmission {
+        WeeklySubmission::from_params(value.as_object().unwrap())
+    }
+
+    fn digest_json() -> serde_json::Value {
+        serde_json::json!({
+            "observations": ["P1 的第 14 题（判断题）连续两次选错"],
+            "changes": ["重做 P1 后修正了一道错题"],
+            "nextPractice": ["换一篇文章再练判断题"]
+        })
+    }
+
     /// Round-3 audit (A3): the weekly path minted a synthetic `weekly-<uuid>`
     /// run id and wrote no `dream_runs` row at all, so an irreversible memory
     /// mutation left no ledger entry.
@@ -494,26 +544,18 @@ mod tests {
     fn weekly_consolidation_persists_a_completed_run_row() {
         let (_dir, db) = temp_db();
         let journal_id = seed_journal(&db, "local");
-        let query = WeeklyDreamQuery {
-            user_id: "local".into(),
-            journal_id,
-        };
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id };
 
-        // Zero patterns is a legitimate success (M8-01), and still must be
+        // An empty submission is a legitimate success, and still must be
         // recorded: the run happened, it just produced nothing.
-        let result = run_weekly_consolidation(&db, &query, &[], &saturday()).unwrap();
+        let result = run_weekly_consolidation(&db, &query, WeeklySubmission::default(), &saturday()).unwrap();
 
         assert!(
             !result.run_id.starts_with("weekly-"),
             "run id must come from the dream_runs authority, not a synthetic uuid"
         );
-        assert_eq!(
-            dream_run_status(&db, &result.run_id).as_deref(),
-            Some("completed"),
-            "the run must be persisted and closed"
-        );
-        assert_eq!(result.report.validated.len(), 0);
-        assert_eq!(result.receipts.len(), 0);
+        assert_eq!(dream_run_status(&db, &result.run_id).as_deref(), Some("completed"));
+        assert_eq!((result.validated, result.rejected, result.accepted), (0, 0, 0));
     }
 
     /// The `journal_id` used to be accepted and echoed without ever being
@@ -522,89 +564,168 @@ mod tests {
     #[test]
     fn weekly_consolidation_rejects_an_unknown_journal_id() {
         let (_dir, db) = temp_db();
-        let query = WeeklyDreamQuery {
-            user_id: "local".into(),
-            journal_id: "journal-does-not-exist".into(),
-        };
-        let patterns = vec![PatternProposal {
-            statement: "should never be applied".into(),
-            supporting_memory_ids: vec!["mem-a".into()],
-            pattern_kind: PatternKind::BehaviorPattern,
-            confidence_proposal: 0.8,
-        }];
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: "journal-does-not-exist".into() };
+        let submission = params(serde_json::json!({
+            "digest": digest_json(),
+            "mutations": [add_json("strategy.reading.never", &["obs-x"])],
+        }));
 
-        let outcome = run_weekly_consolidation(&db, &query, &patterns, &saturday());
-
-        assert!(outcome.is_err(), "a nonexistent journal_id must fail closed");
+        assert!(run_weekly_consolidation(&db, &query, submission, &saturday()).is_err());
         let written: i64 = db
-            .with_conn(|conn| {
-                Ok(conn
-                    .query_row(
-                        "SELECT COUNT(*) FROM memory_items WHERE created_by='weekly_dream'",
-                        [],
-                        |row| row.get(0),
-                    )
-                    .unwrap_or(0))
-            })
+            .with_conn(|conn| Ok(conn.query_row("SELECT COUNT(*) FROM memory_items", [], |row| row.get(0)).unwrap_or(0)))
             .unwrap();
-        assert_eq!(written, 0, "no consolidation may land when the run cannot be claimed");
+        assert_eq!(written, 0, "no memory may land when the run cannot be claimed");
     }
 
-    /// The weekly run row is the per-weekend idempotency receipt: it is keyed by
-    /// the host-owned window, an empty result still counts (zero patterns is a
-    /// success), the next window starts where it ended, and another weekend is
-    /// unaffected.
+    /// The weekly run row is the per-weekend idempotency receipt, and its digest
+    /// prose is what the notebook reads back. A run with nothing to say leaves a
+    /// receipt but no entry.
     #[test]
-    fn weekly_consolidation_leaves_a_receipt_for_its_weekend() {
+    fn weekly_consolidation_leaves_a_receipt_and_a_digest_for_its_weekend() {
         let (_dir, db) = temp_db();
         let journal_id = seed_journal(&db, "local");
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id };
-        let due = |key: &str| db
-            .with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", key))
-            .unwrap();
+        let due = |key: &str| db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", key)).unwrap();
         assert!(!due("2026-W41"));
         let window = saturday();
-        run_weekly_consolidation(&db, &query, &[], &window).unwrap();
-        assert!(due("2026-W41"));
-        assert!(!due("2026-W42"));
-        let end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap();
-        assert_eq!(end, Some(window.end));
-        // Nothing consolidated: the digest has nothing to show for that run.
-        let digests = db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
-        assert!(digests.is_empty());
+        run_weekly_consolidation(&db, &query, WeeklySubmission::default(), &window).unwrap();
+        assert!(due("2026-W41") && !due("2026-W42"));
+        assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), Some(window.end));
+        let digests = || db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
+        assert!(digests().is_empty(), "nothing to say, nothing to show");
+
+        let later = window_after(&window);
+        run_weekly_consolidation(&db, &query, params(serde_json::json!({"digest": digest_json()})), &later).unwrap();
+        let listed = digests();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].observations, vec!["P1 的第 14 题（判断题）连续两次选错"]);
+        assert_eq!(listed[0].next_practice, vec!["换一篇文章再练判断题"]);
     }
 
-    /// A rejected pattern is a recorded rejection, not a silent drop, and the
-    /// run still completes: rejecting everything is a successful run that
-    /// consolidated nothing.
+    fn window_after(window: &WeeklyWindow) -> WeeklyWindow {
+        WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7))
+    }
+
+    /// Another run over the same span (the pack, and so the citable ids, is the same).
+    fn rerun_of(window: &WeeklyWindow, key: &str) -> WeeklyWindow {
+        WeeklyWindow::new(key, window.start, window.end)
+    }
+
+    fn add_json(key: &str, evidence: &[&str]) -> serde_json::Value {
+        serde_json::json!({
+            "action": "ADD", "namespace": "strategy", "canonicalKey": key,
+            "scope": {"type": "activity", "key": "reading"},
+            "statement": "判断题里把“没提到”当成“错误”，需要先确认原文有无相反表述。",
+            "evidenceObservationIds": evidence,
+        })
+    }
+
+    fn import_passage(db: &AppDb, dir: &std::path::Path, id: &str) {
+        let path = dir.join(format!("{id}.json"));
+        let payload = serde_json::json!({
+            "examId": id, "meta": {"title": format!("Passage {id}"), "category": id},
+            "questionCount": 3, "questionOrder": ["q1", "q2", "q3"],
+            "answerKey": {"q1": "TRUE", "q2": "FALSE", "q3": "B"},
+            "questionDisplayMap": {"q1": "14", "q2": "15", "q3": "16"},
+            "passage": {"blocks": [{"html": "<p>Body text.</p>"}]},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1", "q2"]}, {"kind": "matching", "questionIds": ["q3"]}]
+        });
+        std::fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        db.with_conn(|conn| ielts_db::import_asset_payload_file(conn, &path).map(|_| ())).unwrap();
+    }
+
+    fn submit(db: &AppDb, attempt: &str, asset: &str, answers: serde_json::Value, when: &str) {
+        db.with_conn(|conn| {
+            let command = serde_json::json!({
+                "attemptId": attempt, "assetId": asset, "answers": answers, "idempotencyKey": attempt
+            });
+            ielts_db::submit_reading_attempt(conn, &serde_json::from_value(command).unwrap())?;
+            conn.execute(
+                "UPDATE learning_events SET occurred_at = ?1 WHERE json_extract(payload_json, '$.attemptId') = ?2",
+                rusqlite::params![when, attempt],
+            )?;
+            Ok(())
+        }).unwrap();
+    }
+
+    fn memories(db: &AppDb) -> Vec<(String, String, String)> {
+        db.with_conn(|conn| {
+            let mut statement = conn.prepare(
+                "SELECT id, status, content FROM memory_items WHERE created_by = 'weekly_dream' ORDER BY created_at, id")?;
+            let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        }).unwrap()
+    }
+
+    /// The whole weekly path with a fake model, on real submissions: the pack the
+    /// sidecar would read, a model answer written from that pack, and the host
+    /// gate. Every mutation cites pack ids or it is refused; accepted ones become
+    /// memory with their evidence; nothing is ever deleted.
     #[test]
-    fn weekly_consolidation_records_rejections_and_still_completes() {
-        let (_dir, db) = temp_db();
-        let journal_id = seed_journal(&db, "local");
-        let query = WeeklyDreamQuery {
-            user_id: "local".into(),
-            journal_id,
-        };
-        let patterns = vec![PatternProposal {
-            // Hallucinated support id: nothing in memory_items matches.
-            statement: "learner rushes conclusions".into(),
-            supporting_memory_ids: vec!["mem-nope".into()],
-            pattern_kind: PatternKind::BehaviorPattern,
-            confidence_proposal: 0.8,
-        }];
+    fn a_fake_model_over_a_real_pack_writes_a_digest_and_gated_memory_mutations() {
+        let (dir, db) = temp_db();
+        for id in ["P1", "P2"] {
+            import_passage(&db, dir.path(), id);
+        }
+        submit(&db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        submit(&db, "a2", "P2", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-07T09:00:00Z");
+        let window = saturday();
+        let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        let first_miss = pack.lines.iter().find(|line| line.kind == "miss" && line.text.starts_with("P1")).unwrap().ids[0].clone();
+        let later_miss = pack.lines.iter().find(|line| line.kind == "miss" && line.text.starts_with("P2")).unwrap().ids[0].clone();
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
 
-        let result = run_weekly_consolidation(&db, &query, &patterns, &saturday()).unwrap();
+        // Run 1: one grounded ADD, one citing an id the pack never offered, one
+        // targeting a memory that does not exist, one the validator rejects
+        // (writing scope cannot rest on reading evidence), and one malformed.
+        let mut wrong_scope = add_json("strategy.writing.x", &[&first_miss]);
+        wrong_scope["scope"] = serde_json::json!({"type": "activity", "key": "writing"});
+        let first = run_weekly_consolidation(&db, &query, params(serde_json::json!({
+            "digest": digest_json(),
+            "mutations": [
+                add_json("strategy.reading.tfng_boundary", &[&first_miss]),
+                add_json("strategy.reading.invented", &["obs-forged"]),
+                {"action": "REINFORCE", "targetMemoryId": "mem-not-in-pack", "evidenceObservationIds": [first_miss]},
+                wrong_scope,
+                {"action": "ADD", "bogus": true},
+            ],
+        })), &window).unwrap();
+        assert_eq!((first.validated, first.accepted, first.rejected), (1, 1, 4));
+        let written = memories(&db);
+        assert_eq!(written.len(), 1);
+        let memory = written[0].0.clone();
+        let evidence: i64 = db.with_conn(|c| Ok(c.query_row(
+            "SELECT COUNT(*) FROM memory_evidence WHERE memory_id = ?1 AND observation_id = ?2",
+            rusqlite::params![memory, first_miss], |r| r.get(0))?)).unwrap();
+        assert_eq!(evidence, 1, "the memory carries the evidence it was written from");
 
-        assert_eq!(result.report.validated.len(), 0);
-        assert_eq!(result.report.rejected.len(), 1);
-        assert_eq!(
-            result.report.rejected[0].reason.code(),
-            "hallucinated_support_id"
-        );
-        assert_eq!(
-            dream_run_status(&db, &result.run_id).as_deref(),
-            Some("completed")
-        );
+        // Run 2: the memory is now in the pack, so newer evidence can reinforce it.
+        let again = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        assert!(again.memory_ids().contains(&memory));
+        let second = run_weekly_consolidation(&db, &query, params(serde_json::json!({"mutations": [
+            {"action": "REINFORCE", "targetMemoryId": memory, "evidenceObservationIds": [later_miss]},
+        ]})), &rerun_of(&window, "2026-W42")).unwrap();
+        assert_eq!((second.validated, second.accepted, second.rejected), (1, 1, 0));
+
+        // Run 3: a sharper statement supersedes it; the old row stays, as superseded.
+        let sharper = serde_json::json!({
+            "action": "SUPERSEDE", "targetMemoryId": memory, "namespace": "strategy",
+            "canonicalKey": "strategy.reading.tfng_not_given", "scope": {"type": "activity", "key": "reading"},
+            "proposedStatement": "判断题先找反面证据，没有再选 Not Given。", "evidenceObservationIds": [later_miss],
+        });
+        let third = run_weekly_consolidation(&db, &query, params(serde_json::json!({"mutations": [sharper]})),
+            &rerun_of(&window, "2026-W43")).unwrap();
+        assert_eq!(third.accepted, 1);
+        let rows = memories(&db);
+        assert_eq!(rows.len(), 2, "supersede keeps the old row");
+        let status = |id: &str| rows.iter().find(|(row, _, _)| row == id).unwrap().1.clone();
+        assert_eq!(status(&memory), "superseded");
+        assert_eq!(rows.iter().filter(|(_, status, _)| status == "active").count(), 1);
+
+        // The notebook reads the digest of the first run.
+        let digests = db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
+        assert_eq!(digests.len(), 1);
+        assert_eq!(digests[0].changes, vec!["重做 P1 后修正了一道错题"]);
     }
 
     /// "整理今天" is the deterministic journal and nothing else: no run, no

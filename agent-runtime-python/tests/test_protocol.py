@@ -179,18 +179,24 @@ class DreamDispatchBridge:
             raise RuntimeError(f"simulated failure for {method}")
         if method == "study_plan.create":
             return {"planId": "plan-1", "accepted": 1, "rejected": 0}
-        if method == "memory.candidate_pool":
-            return {"candidates": [
-                {"memoryId": "mem-a", "summary": "rushes tfng", "scope": "reading"},
-                {"memoryId": "mem-b", "summary": "rushes task 2 conclusions", "scope": "writing"},
-            ], "truncated": False}
+        if method == "learning.weekly_pack":
+            return {
+                "schemaVersion": 2,
+                "observationCount": 12,
+                "header": {},
+                "lines": [{"ids": ["obs-a"], "date": "2026-10-05", "kind": "miss", "text": "P1 q14 [tfng] answered FALSE -> key TRUE"}],
+                "memories": [],
+                "preferences": [],
+            }
         if method == "model.invoke":
-            return {"content": json.dumps({"patterns": [{
-                "statement": "Rushes the final check across reading and writing.",
-                "supportingMemoryIds": ["mem-a", "mem-b"],
-                "patternKind": "cross_skill_strategy",
-                "confidenceProposal": 0.6,
-            }]})}
+            return {"content": json.dumps({
+                "digest": {"observations": ["P1 第 14 题选错"], "changes": [], "nextPractice": []},
+                "mutations": [{
+                    "action": "ADD", "namespace": "strategy", "canonicalKey": "strategy.reading.tfng_boundary",
+                    "scope": {"type": "activity", "key": "reading"}, "statement": "判断题容易混淆 False 与 Not Given。",
+                    "evidenceObservationIds": ["obs-a"],
+                }],
+            })}
         if method == "dream.run_weekly":
             return {"runId": "weekly-run-1", "validated": 1, "rejected": 0, "accepted": 1}
         if method == "learning.learner_skill_state":
@@ -224,7 +230,7 @@ class DispatchTests(unittest.TestCase):
                         "model.invoke": "1",
                         "tool.invoke": "1",
                         "dream.run_weekly": "1",
-                        "memory.candidate_pool": "1",
+                        "learning.weekly_pack": "1",
                         "learning.learner_skill_state": "1",
                         "memory.search_active": "1",
                         "study_plan.create": "1",
@@ -255,10 +261,13 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(result["accepted"], 1)
         self.assertIsNone(result["fallbackReason"])
         methods = [call[0] for call in bridge.calls]
-        self.assertEqual(methods, ["memory.candidate_pool", "model.invoke", "dream.run_weekly"])
+        self.assertEqual(methods, ["learning.weekly_pack", "model.invoke", "dream.run_weekly"])
         model_request = bridge.calls[1][1]["request"]
         self.assertEqual(model_request["maxTokens"], 1500)
         self.assertEqual(bridge.calls[0][1], {"window": "2026-W40"})
+        submitted = bridge.calls[2][1]
+        self.assertEqual(submitted["digest"]["observations"], ["P1 第 14 题选错"])
+        self.assertEqual(submitted["mutations"][0]["action"], "ADD")
 
     def test_dream_weekly_requires_exactly_window(self) -> None:
         server = self._handshaken_server(DreamDispatchBridge())
@@ -270,13 +279,13 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(response["error"]["code"], "schema_type_error")
 
     def test_dream_weekly_reports_fallback_not_fatal(self) -> None:
-        bridge = DreamDispatchBridge(fail_methods=frozenset({"memory.candidate_pool"}))
+        bridge = DreamDispatchBridge(fail_methods=frozenset({"learning.weekly_pack"}))
         server = self._handshaken_server(bridge)
         response = server.handle(request("dream.weekly", {"window": "2026-W40"}))
         self.assertTrue(response["ok"], response)
         result = response["result"]["result"]
         self.assertEqual(result["runId"], "")
-        self.assertIn("candidate_pool_unavailable", result["fallbackReason"])
+        self.assertIn("weekly_pack_unavailable", result["fallbackReason"])
 
     def test_planner_dispatch_submits_proposal(self) -> None:
         bridge = DreamDispatchBridge()

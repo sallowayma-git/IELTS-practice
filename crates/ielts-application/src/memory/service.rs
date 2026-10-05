@@ -21,6 +21,16 @@ pub struct SubmitMemoryCandidatesCommand {
     pub batch: MemoryMutationProposalBatch,
 }
 
+/// What happened to one batch of cognitive mutations.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppliedMutations {
+    /// Proposals the validator accepted (pending), whether or not promotion held.
+    pub validated: usize,
+    /// Proposals the validator did not accept (invalid, duplicate, quarantined).
+    pub rejected: usize,
+    pub applied: Vec<MemoryMutationReceipt>,
+}
+
 pub trait MemoryStore {
     fn prepare_candidate_input(
         &self,
@@ -59,6 +69,10 @@ pub trait MemoryStore {
     /// Product-host catalog read (M9/18.3): governable memory items for the
     /// console. Not a Context Pack; private/restricted rows never leave the db.
     fn load_catalog(&self, query: &MemoryCatalogQuery) -> Result<MemoryCatalog, ApplicationError>;
+
+    /// Settle a validated candidate that could not be promoted so it does not
+    /// linger as pending (pending candidates reach the coach as unverified context).
+    fn reject_candidate(&self, candidate_id: &str) -> Result<(), ApplicationError>;
 
     fn archive_memory(&self, command: &MemoryArchiveCommand) -> Result<(), ApplicationError>;
     fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError>;
@@ -118,6 +132,43 @@ impl<'a> MemoryService<'a> {
             validation,
             snapshot,
         })
+    }
+
+    /// The weekly dream's write path: validate the batch with the same gate as
+    /// every cognitive proposal, then promote each accepted candidate as the
+    /// `dream` actor. A candidate that validated but cannot be promoted (its
+    /// target moved, the scope is full) is settled as rejected and costs the
+    /// batch nothing else.
+    pub fn apply_cognitive_mutations(
+        &self,
+        command: &SubmitMemoryCandidatesCommand,
+        source_class: MemorySourceClass,
+        reason: &str,
+    ) -> Result<AppliedMutations, ApplicationError> {
+        let receipt = self.submit_cognitive_candidates(command, source_class)?;
+        let mut outcome = AppliedMutations::default();
+        for candidate in &receipt.candidates {
+            match candidate.disposition.as_str() {
+                "pending" => outcome.validated += 1,
+                "noop" => continue,
+                _ => {
+                    outcome.rejected += 1;
+                    continue;
+                }
+            }
+            let promotion = MemoryPromotionCommand {
+                candidate_id: candidate.id.clone(),
+                expected_candidate_version: candidate.version,
+                actor_type: "dream".into(),
+                actor_id: Some("weekly_dream".into()),
+                reason: reason.into(),
+            };
+            match self.store.promote_candidate(&promotion) {
+                Ok(done) => outcome.applied.push(done),
+                Err(_) => self.store.reject_candidate(&candidate.id)?,
+            }
+        }
+        Ok(outcome)
     }
 
     pub fn promote_candidate(

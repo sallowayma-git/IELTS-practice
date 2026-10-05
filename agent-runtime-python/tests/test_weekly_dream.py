@@ -11,20 +11,16 @@ from pydantic import ValidationError
 
 from ielts_agent.dream.types import (
     CAPABILITY_DREAM_RUN_WEEKLY,
-    CAPABILITY_MEMORY_CANDIDATE_POOL,
-    FORBIDDEN_PATTERN_KINDS,
-    PATTERN_KINDS,
-    PatternKind,
+    CAPABILITY_LEARNING_WEEKLY_PACK,
     REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES,
+    WEEKLY_MUTATION_ACTIONS,
+    WeeklyDigest,
     WeeklyDreamResult,
-    WeeklyPatternProposal,
 )
 from ielts_agent.dream.weekly import (
     DEFAULT_COGNITIVE_DEADLINE_MS,
-    MAX_RAW_PATTERNS,
-    MAX_SUPPORTING_IDS,
-    MIN_CANDIDATE_POOL,
-    MIN_SUPPORTING_MEMORY_IDS,
+    MAX_MUTATIONS,
+    MIN_OBSERVATIONS,
     MODEL_MAX_ATTEMPTS,
     MODEL_RETRY_BACKOFF_SECONDS,
     WeeklyDreamInput,
@@ -48,55 +44,58 @@ def _capabilities(extra: dict[str, str] | None = None) -> dict[str, str]:
     return caps
 
 
-def _candidate_pool(count: int = 6) -> list[dict]:
-    return [
-        {
-            "memoryId": f"mem-{i}",
-            "summary": f"candidate memory summary {i} for skill reading.tfng",
-            "scope": "strategy" if i % 2 == 0 else "behavior",
-        }
-        for i in range(count)
-    ]
-
-
-def _candidate_pool_wire(count: int = 6) -> dict:
-    return {"candidates": _candidate_pool(count)}
-
-
-def _llm_pattern(
-    *,
-    statement: str = "Learner defaults to skimming when under time pressure across reading and writing.",
-    supporting_ids: list[str] | None = None,
-    pattern_kind: str = "cross_skill_strategy",
-    confidence: float = 0.78,
-) -> dict:
-    if supporting_ids is None:
-        supporting_ids = ["mem-0", "mem-1", "mem-2"]
+def _pack(observations: int = 14) -> dict:
+    """A pack as the host builds it: record lines with citable ids, and memories."""
     return {
-        "statement": statement,
-        "supportingMemoryIds": supporting_ids,
-        "patternKind": pattern_kind,
-        "confidenceProposal": confidence,
+        "schemaVersion": 2,
+        "window": {"start": "2026-10-03T00:00:00Z", "end": "2026-10-10T00:00:00Z"},
+        "observationCount": observations,
+        "header": {"reading": {"missedAcrossPassages": ["tfng (2 passages)"]}},
+        "lines": [
+            {"ids": ["obs-a1"], "date": "2026-10-04", "kind": "miss",
+             "text": "P1 q14 [tfng] answered FALSE -> key TRUE"},
+            {"ids": ["obs-b1"], "date": "2026-10-06", "kind": "miss",
+             "text": "P2 q3 [tfng] answered NOT GIVEN -> key FALSE"},
+            {"ids": ["obs-r1", "obs-r2"], "date": "2026-10-07", "kind": "redo",
+             "text": 'redo P1 "Passage P1": fixed 1 of 2 earlier misses; still wrong q16'},
+            {"date": "2026-10-08", "kind": "coach", "text": "coach on an attempt: feedback too_long"},
+        ],
+        "memories": [
+            {"memoryId": "mem-1", "namespace": "strategy", "scope": "activity:reading",
+             "canonicalKey": "strategy.reading.stem_first", "statement": "先读题干。", "version": 2},
+        ],
+        "preferences": [{"key": "explanation_language", "scope": "global", "value": '"zh"'}],
     }
 
 
-def _llm_content(patterns: list[dict]) -> str:
-    return json.dumps({"patterns": patterns})
-
-
-def _dream_result_wire(
-    *,
-    run_id: str = "weekly-run-1",
-    validated: int = 1,
-    rejected: int = 0,
-    accepted: int = 1,
-) -> dict:
-    return {
-        "runId": run_id,
-        "validated": validated,
-        "rejected": rejected,
-        "accepted": accepted,
+def _add(**overrides) -> dict:
+    mutation = {
+        "action": "ADD", "namespace": "strategy", "canonicalKey": "strategy.reading.tfng_boundary",
+        "scope": {"type": "activity", "key": "reading"},
+        "statement": "判断题里容易把 False 与 Not Given 混为一谈。",
+        "evidenceObservationIds": ["obs-a1", "obs-b1"],
     }
+    mutation.update(overrides)
+    return mutation
+
+
+def _digest(**overrides) -> dict:
+    digest = {
+        "observations": ["P1 第 14 题和 P2 第 3 题都在判断题上选错"],
+        "changes": ["重做 P1 后修正了一道错题，第 16 题仍然错"],
+        "nextPractice": ["换一篇文章再练判断题"],
+    }
+    digest.update(overrides)
+    return digest
+
+
+def _answer(digest: dict | None = None, mutations: list | None = None) -> str:
+    return json.dumps({"digest": _digest() if digest is None else digest,
+                       "mutations": [_add()] if mutations is None else mutations})
+
+
+def _dream_result_wire(*, run_id: str = "weekly-run-1", validated: int = 1, rejected: int = 0, accepted: int = 1) -> dict:
+    return {"runId": run_id, "validated": validated, "rejected": rejected, "accepted": accepted}
 
 
 class FakeHostBridge:
@@ -105,646 +104,267 @@ class FakeHostBridge:
     def __init__(
         self,
         *,
-        candidate_pool: dict | None = None,
-        llm_patterns: list[dict] | None = None,
+        pack: dict | None = None,
+        content: str | None = None,
         dream_result: dict | None = None,
         fail_methods: frozenset[str] | None = None,
-        llm_content_override: str | None = None,
     ) -> None:
         self.calls: list[tuple[str, dict]] = []
-        self._candidate_pool = candidate_pool or _candidate_pool_wire()
-        self._llm_patterns = llm_patterns if llm_patterns is not None else [_llm_pattern()]
+        self._pack = pack if pack is not None else _pack()
+        self._content = content if content is not None else _answer()
         self._dream_result = dream_result or _dream_result_wire()
         self._fail_methods = fail_methods or frozenset()
-        self._llm_content_override = llm_content_override
 
-    def invoke(
-        self,
-        method: str,
-        params: dict,
-        *,
-        trace_id: str,
-        deadline_ms: int,
-        started_at: float,
-    ) -> dict:
+    def invoke(self, method: str, params: dict, *, trace_id: str, deadline_ms: int, started_at: float) -> dict:
         self.calls.append((method, dict(params)))
         if method in self._fail_methods:
             raise ProtocolError("host_error", f"simulated failure for {method}", retryable=False)
-        if method == CAPABILITY_MEMORY_CANDIDATE_POOL:
-            return self._candidate_pool
+        if method == CAPABILITY_LEARNING_WEEKLY_PACK:
+            return self._pack
         if method == "model.invoke":
-            if self._llm_content_override is not None:
-                return {"content": self._llm_content_override}
-            return {"content": _llm_content(self._llm_patterns)}
+            return {"content": self._content}
         if method == CAPABILITY_DREAM_RUN_WEEKLY:
             return self._dream_result
         raise ProtocolError("method_not_found", f"unhandled fake method {method}")
 
+    def methods(self) -> list[str]:
+        return [method for method, _ in self.calls]
+
+    def submitted(self) -> dict:
+        return next(params for method, params in self.calls if method == CAPABILITY_DREAM_RUN_WEEKLY)
+
+
+def _run(bridge: FakeHostBridge, **kwargs):
+    return WeeklyDreamOrchestrator(bridge, **kwargs).run_weekly(
+        WeeklyDreamInput(trace_id="trace-1", window="2026-W41", available_host_capabilities=_capabilities())
+    )
+
 
 class WeeklyDreamTypesTests(unittest.TestCase):
-    def test_pattern_kind_enum_has_exactly_five_values(self) -> None:
-        self.assertEqual(
-            {kind.value for kind in PatternKind},
-            {
-                "cross_skill_strategy",
-                "metacognitive_pattern",
-                "behavior_pattern",
-                "stable_learning_preference",
-                "recurrent_language_pattern",
-            },
-        )
+    def test_mutation_actions_are_exactly_new_reinforce_supersede_archive(self) -> None:
+        self.assertEqual(WEEKLY_MUTATION_ACTIONS, frozenset({"ADD", "REINFORCE", "SUPERSEDE", "ARCHIVE"}))
 
-    def test_pattern_kinds_frozenset_matches_enum(self) -> None:
-        self.assertEqual(PATTERN_KINDS, frozenset(kind.value for kind in PatternKind))
-
-    def test_forbidden_pattern_kinds_excludes_diagnostics(self) -> None:
-        self.assertIn("medical", FORBIDDEN_PATTERN_KINDS)
-        self.assertIn("personality", FORBIDDEN_PATTERN_KINDS)
-        self.assertIn("intelligence", FORBIDDEN_PATTERN_KINDS)
-        self.assertIn("mental_health", FORBIDDEN_PATTERN_KINDS)
-        self.assertTrue(FORBIDDEN_PATTERN_KINDS.isdisjoint(PATTERN_KINDS))
-
-    def test_proposal_requires_stable_mem_ids(self) -> None:
-        with self.assertRaises(ValidationError):
-            WeeklyPatternProposal.model_validate(
-                {
-                    "statement": "s",
-                    "supportingMemoryIds": ["not-mem", "mem-1", "mem-2"],
-                    "patternKind": "cross_skill_strategy",
-                }
-            )
-
-    def test_proposal_rejects_duplicate_supports(self) -> None:
-        with self.assertRaises(ValidationError):
-            WeeklyPatternProposal.model_validate(
-                {
-                    "statement": "s",
-                    "supportingMemoryIds": ["mem-1", "mem-1", "mem-2"],
-                    "patternKind": "cross_skill_strategy",
-                }
-            )
-
-    def test_proposal_rejects_forbidden_kind(self) -> None:
-        with self.assertRaises(ValidationError):
-            WeeklyPatternProposal.model_validate(
-                {
-                    "statement": "s",
-                    "supportingMemoryIds": ["mem-1", "mem-2", "mem-3"],
-                    "patternKind": "medical",
-                }
-            )
-
-    def test_proposal_rejects_unknown_kind(self) -> None:
-        with self.assertRaises(ValidationError):
-            WeeklyPatternProposal.model_validate(
-                {
-                    "statement": "s",
-                    "supportingMemoryIds": ["mem-1", "mem-2", "mem-3"],
-                    "patternKind": "totally_made_up",
-                }
-            )
-
-    def test_proposal_confidence_bounded(self) -> None:
-        with self.assertRaises(ValidationError):
-            WeeklyPatternProposal.model_validate(
-                {
-                    "statement": "s",
-                    "supportingMemoryIds": ["mem-1", "mem-2", "mem-3"],
-                    "patternKind": "behavior_pattern",
-                    "confidenceProposal": 1.5,
-                }
-            )
-
-    def test_proposal_to_wire_roundtrip(self) -> None:
-        proposal = WeeklyPatternProposal.model_validate(
-            {
-                "statement": "cross-scope pattern",
-                "supportingMemoryIds": ["mem-1", "mem-2", "mem-3"],
-                "patternKind": "metacognitive_pattern",
-                "confidenceProposal": 0.6,
-            }
-        )
-        wire = proposal.to_wire()
-        self.assertEqual(wire["patternKind"], "metacognitive_pattern")
-        self.assertEqual(wire["supportingMemoryIds"], ["mem-1", "mem-2", "mem-3"])
-        self.assertEqual(wire["confidenceProposal"], 0.6)
+    def test_digest_is_closed_bounded_and_plain(self) -> None:
+        digest = WeeklyDigest.model_validate({"observations": ["a"], "nextPractice": ["b"]})
+        self.assertEqual(digest.to_wire(), {"observations": ["a"], "changes": [], "nextPractice": ["b"]})
+        for bad in ({"observations": [""]}, {"changes": ["x" * 401]}, {"observations": ["a"] * 7}, {"bogus": []}):
+            with self.assertRaises(ValidationError):
+                WeeklyDigest.model_validate(bad)
 
     def test_result_requires_run_id_when_not_fallback(self) -> None:
         with self.assertRaises(ValidationError):
-            WeeklyDreamResult.model_validate(
-                {"runId": "", "validated": 1, "rejected": 0, "accepted": 1}
-            )
+            WeeklyDreamResult(run_id="", validated=0, rejected=0, accepted=0, fallback_reason=None)
 
     def test_result_fallback(self) -> None:
-        result = WeeklyDreamResult.model_validate(
-            {"runId": "", "fallbackReason": "host_down"}
-        )
-        self.assertEqual(result.run_id, "")
-        self.assertEqual(result.fallback_reason, "host_down")
+        result = WeeklyDreamResult(run_id="", validated=0, rejected=0, accepted=0, fallback_reason="x")
+        self.assertEqual(result.fallback_reason, "x")
 
     def test_result_fallback_must_not_carry_counts(self) -> None:
         with self.assertRaises(ValidationError):
-            WeeklyDreamResult.model_validate(
-                {"runId": "", "validated": 1, "fallbackReason": "host_down"}
-            )
+            WeeklyDreamResult(run_id="", validated=1, rejected=0, accepted=0, fallback_reason="x")
 
     def test_result_to_wire(self) -> None:
-        result = WeeklyDreamResult.model_validate(
-            {"runId": "run-1", "validated": 2, "rejected": 1, "accepted": 1}
-        )
-        wire = result.to_wire()
-        self.assertEqual(wire["runId"], "run-1")
-        self.assertEqual(wire["validated"], 2)
+        result = WeeklyDreamResult(run_id="r", validated=2, rejected=1, accepted=2)
+        self.assertEqual(result.to_wire(), {"runId": "r", "validated": 2, "rejected": 1, "accepted": 2, "fallbackReason": None})
 
 
 class WeeklyDreamOrchestratorTests(unittest.TestCase):
-    def test_fetches_pool_then_llm_then_submits_patterns(self) -> None:
+    def test_one_model_call_over_the_pack_writes_digest_and_mutations(self) -> None:
         bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertIsInstance(result, WeeklyDreamResult)
-        self.assertEqual(result.run_id, "weekly-run-1")
-        self.assertEqual(result.validated, 1)
-        self.assertEqual(result.accepted, 1)
+        result = _run(bridge)
         self.assertIsNone(result.fallback_reason)
-        methods = [call[0] for call in bridge.calls]
-        self.assertEqual(
-            methods,
-            [
-                CAPABILITY_MEMORY_CANDIDATE_POOL,
-                "model.invoke",
-                CAPABILITY_DREAM_RUN_WEEKLY,
-            ],
-        )
+        self.assertEqual((result.run_id, result.validated, result.accepted), ("weekly-run-1", 1, 1))
+        self.assertEqual(bridge.methods(), [CAPABILITY_LEARNING_WEEKLY_PACK, "model.invoke", CAPABILITY_DREAM_RUN_WEEKLY])
+        # The window is the host's opaque token, sent back unchanged on the host reads and the submission.
+        self.assertEqual(bridge.calls[0][1], {"window": "2026-W41"})
+        submitted = bridge.submitted()
+        self.assertEqual(submitted["window"], "2026-W41")
+        self.assertEqual(submitted["digest"], _digest())
+        self.assertEqual(submitted["mutations"], [_add()])
 
-    def test_llm_receives_stable_memory_ids_not_indexes(self) -> None:
-        """M8-02: the LLM prompt carries stable mem-* IDs, never array indexes."""
+    def test_the_model_sees_the_pack_verbatim_and_a_bounded_request(self) -> None:
         bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        model_call = next(
-            call for call in bridge.calls if call[0] == "model.invoke"
-        )
-        user_content = model_call[1]["request"]["messages"][1]["content"]
-        parsed = json.loads(user_content)
-        evidence = parsed["evidence"]
-        self.assertTrue(evidence)
-        for entry in evidence:
-            self.assertIn("memoryId", entry)
-            self.assertTrue(entry["memoryId"].startswith("mem-"))
-        # No "index"/"idx" field name appears anywhere in the evidence shape.
-        for entry in evidence:
-            for key in entry:
-                self.assertNotIn("index", key.lower())
-                self.assertNotIn("idx", key.lower())
+        _run(bridge)
+        request = bridge.calls[1][1]["request"]
+        self.assertEqual(request["maxTokens"], 1_500)
+        self.assertEqual(request["temperature"], 0.0)
+        system, user = (message["content"] for message in request["messages"])
+        payload = json.loads(user)
+        self.assertEqual(payload["pack"], _pack())
+        for needed in ("lines[].ids", "Simplified Chinese", "untrusted data", "ARCHIVE", "repeated misses"):
+            self.assertIn(needed, system)
+        self.assertNotIn("passage text", user)
 
-    def test_pattern_kind_medical_rejected(self) -> None:
-        """M8-05: medical/personality/intelligence/mental-health forbidden."""
-        bridge = FakeHostBridge(
-            llm_patterns=[
-                _llm_pattern(
-                    statement="Learner has anxiety disorder affecting performance.",
-                    supporting_ids=["mem-0", "mem-1", "mem-2"],
-                    pattern_kind="medical",
-                ),
-                _llm_pattern(
-                    statement="Learner is an introvert.",
-                    supporting_ids=["mem-0", "mem-3", "mem-4"],
-                    pattern_kind="personality",
-                ),
-            ]
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[0], CAPABILITY_DREAM_RUN_WEEKLY)
-        patterns = dream_call[1]["patterns"]
-        self.assertEqual(len(patterns), 0)
+    def test_a_mutation_must_cite_ids_of_the_pack(self) -> None:
+        mutations = [
+            _add(evidenceObservationIds=["obs-forged"]),
+            _add(evidenceObservationIds=["obs-a1", "obs-forged"]),
+            _add(evidenceObservationIds=[]),
+            _add(evidenceObservationIds=["obs-a1", "obs-a1"]),
+            _add(evidenceObservationIds="obs-a1"),
+            {"action": "REINFORCE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r1"]},
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=mutations))
+        _run(bridge)
+        self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["REINFORCE"])
 
-    def test_two_supports_reach_rust_authority(self) -> None:
-        """Memory count must not stand in for independent practice count."""
-        bridge = FakeHostBridge(
-            llm_patterns=[
-                _llm_pattern(supporting_ids=["mem-0", "mem-1"]),  # only 2
-            ]
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
+    def test_a_mutation_may_only_target_memories_of_the_pack(self) -> None:
+        mutations = [
+            {"action": "REINFORCE", "targetMemoryId": "mem-other", "evidenceObservationIds": ["obs-a1"]},
+            {"action": "ARCHIVE", "targetMemoryId": ["mem-1"], "evidenceObservationIds": ["obs-a1"]},
+            {"action": "ARCHIVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r2"]},
+            {"action": "SUPERSEDE", "targetMemoryId": "mem-1", "namespace": "strategy",
+             "canonicalKey": "strategy.reading.stem_first_v2", "scope": {"type": "activity", "key": "reading"},
+             "proposedStatement": "先读题干，再找定位词。", "evidenceObservationIds": ["obs-a1"]},
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=mutations))
+        _run(bridge)
+        self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["ARCHIVE", "SUPERSEDE"])
+
+    def test_unknown_actions_extra_fields_and_bad_shapes_are_dropped(self) -> None:
+        mutations = [
+            _add(action="REFINE"),
+            _add(action="regress"),
+            {**_add(), "confidence": 0.99},
+            _add(namespace="astrology", canonicalKey="astrology.reading.x"),
+            _add(canonicalKey="strategy.Reading.Caps"),
+            _add(canonicalKey="language.reading.wrong_namespace"),
+            _add(scope={"type": "activity", "key": "listening"}),
+            _add(scope={"type": "global", "key": "reading"}),
+            _add(scope={"type": "activity", "key": ["reading"]}),
+            _add(statement=""),
+            _add(statement="长" * 301),
+            "not a dict",
+            None,
+            _add(),
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=mutations))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["mutations"], [_add()])
+
+    def test_mutations_are_bounded(self) -> None:
+        many = [_add(canonicalKey=f"strategy.reading.k{i}") for i in range(MAX_MUTATIONS + 5)]
+        bridge = FakeHostBridge(content=_answer(mutations=many))
+        _run(bridge)
+        self.assertEqual(len(bridge.submitted()["mutations"]), MAX_MUTATIONS)
+
+    def test_the_digest_is_cleaned_and_bounded_before_submission(self) -> None:
+        digest = {"observations": [" spaced   out ", "", 5, None] + ["x"] * 10, "changes": "not a list",
+                  "nextPractice": ["长" * 500]}
+        bridge = FakeHostBridge(content=_answer(digest=digest, mutations=[]))
+        _run(bridge)
+        sent = bridge.submitted()["digest"]
+        self.assertEqual(sent["observations"][0], "spaced out")
+        self.assertEqual(len(sent["observations"]), 6)
+        self.assertEqual(sent["changes"], [])
+        self.assertEqual(len(sent["nextPractice"][0]), 240)
+
+    def test_too_little_evidence_skips_the_model_and_still_records_the_run(self) -> None:
+        bridge = FakeHostBridge(pack=_pack(MIN_OBSERVATIONS - 1))
+        result = _run(bridge)
         self.assertIsNone(result.fallback_reason)
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"][0]["supportingMemoryIds"], ["mem-0", "mem-1"])
+        self.assertEqual(bridge.methods(), [CAPABILITY_LEARNING_WEEKLY_PACK, CAPABILITY_DREAM_RUN_WEEKLY])
+        self.assertEqual(bridge.submitted()["mutations"], [])
+        self.assertEqual(bridge.submitted()["digest"], {"observations": [], "changes": [], "nextPractice": []})
+        # Exactly at the threshold the model is called.
+        bridge = FakeHostBridge(pack=_pack(MIN_OBSERVATIONS))
+        _run(bridge)
+        self.assertIn("model.invoke", bridge.methods())
 
-    def test_below_min_candidate_pool_skips_llm(self) -> None:
-        """M8-03: below the minimum candidate pool floor, skip the LLM call."""
-        bridge = FakeHostBridge(candidate_pool=_candidate_pool_wire(count=0))
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        # Zero-pattern success: still submits an empty batch (run recorded).
-        self.assertIsNone(result.fallback_reason)
-        self.assertEqual(result.run_id, "weekly-run-1")
-        methods = [call[0] for call in bridge.calls]
-        # No model.invoke call when pool is below floor.
-        self.assertNotIn("model.invoke", methods)
-        self.assertEqual(
-            methods,
-            [CAPABILITY_MEMORY_CANDIDATE_POOL, CAPABILITY_DREAM_RUN_WEEKLY],
-        )
-
-    def test_no_llm_path_yields_zero_pattern_success(self) -> None:
-        """No model.invoke capability → zero-pattern success, not fatal."""
+    def test_no_model_path_yields_an_empty_success(self) -> None:
+        bridge = FakeHostBridge()
         caps = dict(REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES)
-        # model.invoke intentionally absent.
-        bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=caps,
-            )
-        )
+        result = WeeklyDreamOrchestrator(bridge).run_weekly(
+            WeeklyDreamInput(trace_id="t", window="2026-W41", available_host_capabilities=caps))
         self.assertIsNone(result.fallback_reason)
-        self.assertEqual(result.run_id, "weekly-run-1")
-        self.assertEqual(result.accepted, 1)
-        methods = [call[0] for call in bridge.calls]
-        self.assertNotIn("model.invoke", methods)
+        self.assertNotIn("model.invoke", bridge.methods())
+        self.assertEqual(bridge.submitted()["mutations"], [])
 
-    def test_fail_closed_candidate_pool_failure(self) -> None:
-        """Host failure on memory.candidate_pool → fallback, not fatal."""
-        bridge = FakeHostBridge(
-            fail_methods=frozenset({CAPABILITY_MEMORY_CANDIDATE_POOL})
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("candidate_pool_unavailable", result.fallback_reason)
+    def test_an_empty_answer_is_a_success(self) -> None:
+        for empty in ('{"digest":{"observations":[],"changes":[],"nextPractice":[]},"mutations":[]}',
+                      '{"mutations":[]}', '{"digest":{}}'):
+            with self.subTest(empty=empty):
+                bridge = FakeHostBridge(content=empty)
+                result = _run(bridge)
+                self.assertIsNone(result.fallback_reason)
+                self.assertEqual(bridge.methods().count("model.invoke"), 1)
+                self.assertEqual(bridge.submitted()["mutations"], [])
+
+    def test_fail_closed_pack_failure(self) -> None:
+        bridge = FakeHostBridge(fail_methods=frozenset({CAPABILITY_LEARNING_WEEKLY_PACK}))
+        result = _run(bridge)
+        self.assertIn("weekly_pack_unavailable", result.fallback_reason)
         self.assertEqual(result.run_id, "")
-        self.assertEqual(result.accepted, 0)
+        self.assertEqual(bridge.methods(), [CAPABILITY_LEARNING_WEEKLY_PACK])
 
-    def test_fail_closed_dream_submission_failure(self) -> None:
-        """Host failure on dream.run_weekly → fallback, not fatal."""
-        bridge = FakeHostBridge(
-            fail_methods=frozenset({CAPABILITY_DREAM_RUN_WEEKLY})
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("dream_run_weekly_unavailable", result.fallback_reason)
-        self.assertEqual(result.run_id, "")
+    def test_invalid_packs_are_a_fallback(self) -> None:
+        for pack, reason in (
+            ([], "weekly_pack_invalid_shape"),
+            ({"lines": [], "memories": []}, "weekly_pack_missing_observation_count"),
+            ({"observationCount": True, "lines": [], "memories": []}, "weekly_pack_missing_observation_count"),
+            ({"observationCount": 9, "memories": []}, "weekly_pack_missing_lines"),
+            ({"observationCount": 9, "lines": []}, "weekly_pack_missing_lines"),
+        ):
+            with self.subTest(pack=pack):
+                bridge = FakeHostBridge(pack=pack)
+                self.assertEqual(_run(bridge).fallback_reason, reason)
+                self.assertNotIn("model.invoke", bridge.methods())
 
-    def test_llm_failure_is_a_fallback_not_an_empty_success(self) -> None:
-        """model.invoke failure → fallback, so the host can retry the week."""
-        bridge = FakeHostBridge(
-            fail_methods=frozenset({"model.invoke"}),
-            dream_result=_dream_result_wire(validated=0, rejected=0, accepted=0),
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
+    def test_fail_closed_submission_failure(self) -> None:
+        bridge = FakeHostBridge(fail_methods=frozenset({CAPABILITY_DREAM_RUN_WEEKLY}))
+        self.assertIn("dream_run_weekly_unavailable", _run(bridge).fallback_reason)
+
+    def test_the_model_failing_is_a_fallback_not_an_empty_success(self) -> None:
+        bridge = FakeHostBridge(fail_methods=frozenset({"model.invoke"}))
+        result = _run(bridge)
         self.assertIn("model_invoke_failed", result.fallback_reason)
-        self.assertEqual(result.run_id, "")
-        # Nothing was submitted to the authority: no run row may claim success.
-        self.assertNotIn("dream.run_weekly", [call[0] for call in bridge.calls])
+        self.assertNotIn(CAPABILITY_DREAM_RUN_WEEKLY, bridge.methods())
 
     def test_missing_capabilities_fallback(self) -> None:
         bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities={},
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("host_capabilities_unavailable", result.fallback_reason)
+        result = WeeklyDreamOrchestrator(bridge).run_weekly(
+            WeeklyDreamInput(trace_id="t", window="w", available_host_capabilities={"model.invoke": "1"}))
+        self.assertIn("capability_mismatch", result.fallback_reason)
         self.assertEqual(bridge.calls, [])
+        empty = WeeklyDreamOrchestrator(bridge).run_weekly(WeeklyDreamInput(trace_id="t", window="w"))
+        self.assertEqual(empty.fallback_reason, "host_capabilities_unavailable")
 
     def test_capability_version_mismatch_fallback(self) -> None:
+        caps = _capabilities()
+        caps[CAPABILITY_LEARNING_WEEKLY_PACK] = "9"
         bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        mismatched = _capabilities()
-        mismatched[CAPABILITY_DREAM_RUN_WEEKLY] = "2"
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=mismatched,
-            )
-        )
-        self.assertTrue(result.fallback_reason)
+        result = WeeklyDreamOrchestrator(bridge).run_weekly(
+            WeeklyDreamInput(trace_id="t", window="w", available_host_capabilities=caps))
         self.assertIn("capability_mismatch", result.fallback_reason)
 
-    def test_no_active_memory_write_bypass(self) -> None:
-        """The orchestrator only emits candidate patterns; never writes active
-        memory directly (M8 no-write-bypass)."""
+    def test_the_weekly_pass_reads_one_pack_and_writes_only_through_the_host_authority(self) -> None:
         bridge = FakeHostBridge()
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        methods = [call[0] for call in bridge.calls]
-        self.assertNotIn("memory.promote", methods)
-        self.assertNotIn("memory.write", methods)
-        self.assertNotIn("memory.upsert", methods)
-        # The dream.run_weekly payload carries patterns only.
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[0], CAPABILITY_DREAM_RUN_WEEKLY)
-        self.assertIn("patterns", dream_call[1])
-        for pattern in dream_call[1]["patterns"]:
-            self.assertIn("statement", pattern)
-            self.assertIn("supportingMemoryIds", pattern)
+        _run(bridge)
+        self.assertEqual(set(bridge.methods()), {CAPABILITY_LEARNING_WEEKLY_PACK, "model.invoke", CAPABILITY_DREAM_RUN_WEEKLY})
+        self.assertEqual(set(REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES), {CAPABILITY_LEARNING_WEEKLY_PACK, CAPABILITY_DREAM_RUN_WEEKLY})
 
-    def test_hallucinated_evidence_id_rejected(self) -> None:
-        """M8-02: a supporting ID not in the pool is dropped (hallucinated)."""
-        bridge = FakeHostBridge(
-            llm_patterns=[
-                _llm_pattern(
-                    supporting_ids=["mem-0", "mem-1", "mem-hallucinated"],
-                ),
-            ]
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"], [])
-
-    def test_malformed_llm_output_fails_without_submission(self) -> None:
-        """Parse failure must not record a successful empty run."""
-        bridge = FakeHostBridge(llm_content_override="not valid json {{{")
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertEqual(result.fallback_reason, "model_output_invalid_json")
-        self.assertEqual(result.run_id, "")
-        self.assertNotIn(CAPABILITY_DREAM_RUN_WEEKLY, [call[0] for call in bridge.calls])
-
-    def test_empty_llm_patterns_yields_zero_pattern_success(self) -> None:
-        """M8-01: empty LLM output is a success, not a fallback."""
-        bridge = FakeHostBridge(llm_patterns=[])
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertIsNone(result.fallback_reason)
-        dream_call = bridge.calls[-1]
-        self.assertEqual(dream_call[1]["patterns"], [])
-
-    def test_raw_patterns_truncated_to_max(self) -> None:
-        """Raw LLM patterns beyond MAX_RAW_PATTERNS are truncated."""
-        many = [
-            _llm_pattern(
-                statement=f"pattern {i}",
-                supporting_ids=[f"mem-{i}", f"mem-{i+1}", f"mem-{i+2}"],
-            )
-            for i in range(MAX_RAW_PATTERNS + 5)
-        ]
-        # Ensure enough unique pool IDs exist for the supporting IDs.
-        pool = _candidate_pool(count=MAX_RAW_PATTERNS + 7)
-        bridge = FakeHostBridge(
-            candidate_pool={"candidates": pool},
-            llm_patterns=many,
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        dream_call = bridge.calls[-1]
-        self.assertLessEqual(len(dream_call[1]["patterns"]), MAX_RAW_PATTERNS)
-
-    def test_candidate_pool_entry_bad_id_fallback(self) -> None:
-        """A non mem-* id in the pool → fail-closed fallback."""
-        bridge = FakeHostBridge(
-            candidate_pool={"candidates": [{"memoryId": "not-mem", "summary": "x"}]}
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("candidate_pool_entry_bad_id", result.fallback_reason)
-
-    def test_candidate_pool_missing_candidates_fallback(self) -> None:
-        bridge = FakeHostBridge(candidate_pool={"notCandidates": []})
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("candidate_pool_missing_candidates", result.fallback_reason)
-
-    def test_dream_result_missing_run_id_fallback(self) -> None:
-        bridge = FakeHostBridge(dream_result={"validated": 1, "rejected": 0, "accepted": 1})
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("dream_run_weekly_missing_run_id", result.fallback_reason)
-
-    def test_dream_result_invalid_counts_fallback(self) -> None:
-        bridge = FakeHostBridge(
-            dream_result={"runId": "r1", "validated": "x", "rejected": 0, "accepted": 0}
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        self.assertTrue(result.fallback_reason)
-        self.assertIn("dream_run_weekly_invalid_counts", result.fallback_reason)
-
-    def test_fallback_result_helper(self) -> None:
-        result = fallback_result("manual")
-        self.assertEqual(result.run_id, "")
-        self.assertEqual(result.fallback_reason, "manual")
+    def test_dream_result_shapes_fail_closed(self) -> None:
+        for wire, reason in (
+            ({"validated": 1, "rejected": 0, "accepted": 1}, "dream_run_weekly_missing_run_id"),
+            ({"runId": "r", "validated": "1", "rejected": 0, "accepted": 0}, "dream_run_weekly_invalid_counts"),
+        ):
+            with self.subTest(wire=wire):
+                self.assertEqual(_run(FakeHostBridge(dream_result=wire)).fallback_reason, reason)
 
     def test_never_raises_fatal_on_unexpected_error(self) -> None:
-        class ExplodingBridge(FakeHostBridge):
-            def invoke(self, *args, **kwargs):  # type: ignore[override]
-                raise RuntimeError("unexpected boom")
+        class Exploding(FakeHostBridge):
+            def invoke(self, method, params, **kwargs):  # type: ignore[override]
+                if method == "model.invoke":
+                    raise ValueError("boom")
+                return super().invoke(method, params, **kwargs)
 
-        orchestrator = WeeklyDreamOrchestrator(ExplodingBridge())
-        result = orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        # The load-bearing assertion: run_weekly returns a fallback result,
-        # never raises. The host RuntimeError surfaces as a candidate_pool
-        # fallback (the first host call after the capability gate).
+        result = _run(Exploding())
         self.assertTrue(result.fallback_reason)
-        self.assertIn("candidate_pool_unavailable", result.fallback_reason)
-        self.assertEqual(result.run_id, "")
 
-    def test_default_deadline_constant(self) -> None:
-        # Room for MODEL_MAX_ATTEMPTS provider-timeout-long calls plus backoff,
-        # and below the host's 420 s weekly budget.
+    def test_constants(self) -> None:
         self.assertEqual(DEFAULT_COGNITIVE_DEADLINE_MS, 400_000)
-        self.assertEqual(MODEL_MAX_ATTEMPTS, 3)
-        self.assertEqual(MODEL_RETRY_BACKOFF_SECONDS, (2.0, 5.0))
-
-    def test_min_threshold_constants(self) -> None:
-        self.assertEqual(MIN_CANDIDATE_POOL, 1)
-        self.assertEqual(MIN_SUPPORTING_MEMORY_IDS, 1)
-
-    def test_single_memory_preserves_host_evidence_and_reaches_authority(self) -> None:
-        pool = [{"memoryId": "mem-observed", "summary": "Three distinct practices show repeated skimming.",
-                 "scope": "writing", "key": "irrelevant-key"}]
-        bridge = FakeHostBridge(candidate_pool={"candidates": pool},
-                                llm_patterns=[_llm_pattern(supporting_ids=["mem-observed"])])
-        result = WeeklyDreamOrchestrator(bridge).run_weekly(
-            WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
-        self.assertIsNone(result.fallback_reason)
-        model = next(params for method, params in bridge.calls if method == "model.invoke")
-        evidence = json.loads(model["request"]["messages"][1]["content"])["evidence"]
-        self.assertEqual(evidence, [{key: pool[0][key] for key in ("memoryId", "summary", "scope")}])
-        self.assertEqual(bridge.calls[-1][1]["patterns"][0]["supportingMemoryIds"], ["mem-observed"])
-
-    def test_support_bounds_membership_and_uniqueness(self) -> None:
-        orchestrator = WeeklyDreamOrchestrator(FakeHostBridge())
-        ids = [f"mem-{i}" for i in range(MAX_SUPPORTING_IDS + 1)]
-        pool_ids = set(ids)
-        for invalid in ([], [""], ["pending-1"], ["mem-missing"], ["mem-0", "mem-0"], ids):
-            with self.subTest(supports=invalid):
-                self.assertIsNone(orchestrator._validate_one_pattern(_llm_pattern(supporting_ids=invalid), pool_ids))
-        proposal = orchestrator._validate_one_pattern(_llm_pattern(supporting_ids=ids[:-1]), pool_ids)
-        self.assertIsNotNone(proposal)
-
-    def test_invalid_json_shapes_do_not_submit(self) -> None:
-        for content in ('{}', 'null', '{"patterns":null}', '{"patterns":[null]}', '', '[1]',
-                        '{"patterns":[],"invalid":NaN}',
-                        json.dumps({"patterns": [_llm_pattern()] * MAX_RAW_PATTERNS + [None]})):
-            with self.subTest(content=content):
-                bridge = FakeHostBridge(llm_content_override=content)
-                result = WeeklyDreamOrchestrator(bridge).run_weekly(
-                    WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
-                self.assertTrue(result.fallback_reason)
-                self.assertNotIn(CAPABILITY_DREAM_RUN_WEEKLY, [call[0] for call in bridge.calls])
-
-    def test_bare_empty_array_succeeds(self) -> None:
-        bridge = FakeHostBridge(llm_content_override="[]", dream_result=_dream_result_wire(validated=0, accepted=0))
-        result = WeeklyDreamOrchestrator(bridge).run_weekly(
-            WeeklyDreamInput(trace_id="t", window="2026-W33", available_host_capabilities=_capabilities()))
-        self.assertIsNone(result.fallback_reason)
-        self.assertEqual(bridge.calls[-1][1]["patterns"], [])
-
-    def test_predicted_only_not_promoted(self) -> None:
-        """M8-10: the orchestrator never promotes predicted-only memories.
-
-        The candidate pool is sourced from the Rust host, which is responsible
-        for excluding predicted-only entries. Here we verify the orchestrator
-        does not itself attempt to add predicted memories to the submitted
-        patterns — it only echoes LLM-chosen IDs that exist in the pool.
-        """
-        pool = _candidate_pool(count=6)
-        # The pool contains no predicted entries; the LLM tries to reference
-        # a fabricated "mem-predicted" that is not in the pool.
-        bridge = FakeHostBridge(
-            candidate_pool={"candidates": pool},
-            llm_patterns=[
-                _llm_pattern(supporting_ids=["mem-0", "mem-1", "mem-predicted"]),
-            ],
-        )
-        orchestrator = WeeklyDreamOrchestrator(bridge)
-        orchestrator.run_weekly(
-            WeeklyDreamInput(
-                trace_id="trace-1",
-                window="2026-W33",
-                available_host_capabilities=_capabilities(),
-            )
-        )
-        dream_call = bridge.calls[-1]
-        for pattern in dream_call[1]["patterns"]:
-            for identifier in pattern["supportingMemoryIds"]:
-                self.assertNotIn("predicted", identifier)
+        self.assertEqual(MIN_OBSERVATIONS, 8)
+        self.assertEqual(fallback_result("why").fallback_reason, "why")
 
 
 class ScriptedModelBridge(FakeHostBridge):
@@ -785,25 +405,29 @@ class WeeklyRetryTests(unittest.TestCase):
         return result, bridge, sleeps
 
     def _submitted(self, bridge: ScriptedModelBridge) -> bool:
-        return CAPABILITY_DREAM_RUN_WEEKLY in [call[0] for call in bridge.calls]
+        return CAPABILITY_DREAM_RUN_WEEKLY in bridge.methods()
+
+    def test_constants(self) -> None:
+        self.assertEqual(MODEL_MAX_ATTEMPTS, 3)
+        self.assertEqual(MODEL_RETRY_BACKOFF_SECONDS, (2.0, 5.0))
 
     def test_first_call_success_makes_one_call_and_never_sleeps(self) -> None:
-        result, bridge, sleeps = self._run([_llm_content([_llm_pattern()])])
+        result, bridge, sleeps = self._run([_answer()])
         self.assertIsNone(result.fallback_reason)
         self.assertEqual((bridge.model_calls, sleeps), (1, []))
 
     def test_a_transient_provider_error_is_retried_with_backoff(self) -> None:
-        result, bridge, sleeps = self._run([_transient(), _llm_content([_llm_pattern()])])
+        result, bridge, sleeps = self._run([_transient(), _answer()])
         self.assertIsNone(result.fallback_reason)
         self.assertEqual(bridge.model_calls, 2)
         self.assertEqual(sleeps, [2.0])
         self.assertTrue(self._submitted(bridge))
 
     def test_malformed_output_is_retried_in_every_shape(self) -> None:
-        for bad in ("not json at all", "", "{}", '{"patterns": null}', '{"patterns": [1]}', "[1]",
-                    {"content": None}, {"nothing": "here"}, {"content": "   "}):
+        for bad in ("not json at all", "", "{}", '{"digest": null}', '{"digest": []}', '{"mutations": {}}',
+                    "[1]", "[]", '{"patterns": []}', {"content": None}, {"nothing": "here"}, {"content": "   "}):
             with self.subTest(bad=bad):
-                result, bridge, sleeps = self._run([bad, bad, _llm_content([_llm_pattern()])])
+                result, bridge, sleeps = self._run([bad, bad, _answer()])
                 self.assertIsNone(result.fallback_reason)
                 self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
 
@@ -813,7 +437,7 @@ class WeeklyRetryTests(unittest.TestCase):
         self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
         self.assertFalse(self._submitted(bridge), "a failed attempt submits nothing")
         # The extra scripted answers must be untouched: the loop never makes a fourth call.
-        result, bridge, _ = self._run([_transient()] * 3 + [_llm_content([_llm_pattern()])])
+        result, bridge, _ = self._run([_transient()] * 3 + [_answer()])
         self.assertIn("model_invoke_failed:ProtocolError", result.fallback_reason)
         self.assertEqual(bridge.model_calls, 3)
 
@@ -823,12 +447,10 @@ class WeeklyRetryTests(unittest.TestCase):
         self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
 
     def test_a_genuine_empty_result_is_a_success_and_never_retried(self) -> None:
-        for empty in ('{"patterns": []}', "[]"):
-            with self.subTest(empty=empty):
-                result, bridge, sleeps = self._run([empty])
-                self.assertIsNone(result.fallback_reason)
-                self.assertEqual((bridge.model_calls, sleeps), (1, []))
-                self.assertEqual(bridge.calls[-1][1]["patterns"], [])
+        result, bridge, sleeps = self._run(['{"digest":{},"mutations":[]}'])
+        self.assertIsNone(result.fallback_reason)
+        self.assertEqual((bridge.model_calls, sleeps), (1, []))
+        self.assertEqual(bridge.submitted()["mutations"], [])
 
     def test_unfixable_failures_are_not_retried(self) -> None:
         for error in (
@@ -837,19 +459,18 @@ class WeeklyRetryTests(unittest.TestCase):
             RuntimeError("unexpected"),
         ):
             with self.subTest(error=error):
-                result, bridge, sleeps = self._run([error, _llm_content([_llm_pattern()])])
+                result, bridge, sleeps = self._run([error, _answer()])
                 self.assertTrue(result.fallback_reason)
                 self.assertEqual((bridge.model_calls, sleeps), (1, []))
 
     def test_no_retry_is_started_without_time_for_it(self) -> None:
         # 4 s of budget cannot hold a 2 s pause plus a 5 s attempt.
-        result, bridge, sleeps = self._run(["garbage", _llm_content([_llm_pattern()])],
-                                           cognitive_deadline_ms=4_000)
+        result, bridge, sleeps = self._run(["garbage", _answer()], cognitive_deadline_ms=4_000)
         self.assertEqual(result.fallback_reason, "model_output_invalid_json")
         self.assertEqual((bridge.model_calls, sleeps), (1, []))
 
     def test_every_retry_carries_the_same_bounded_request(self) -> None:
-        _, bridge, _ = self._run(["garbage", "garbage", _llm_content([])])
+        _, bridge, _ = self._run(["garbage", "garbage", _answer()])
         requests = [params["request"] for method, params in bridge.calls if method == "model.invoke"]
         self.assertEqual(len(requests), 3)
         self.assertTrue(all(request == requests[0] for request in requests))

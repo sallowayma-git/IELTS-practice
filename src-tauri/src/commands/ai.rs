@@ -230,6 +230,7 @@ pub async fn ai_test_provider(
             ],
             temperature: 0.0,
             max_tokens: ielts_application::PROVIDER_PROBE_MAX_TOKENS,
+            cache_key: None,
         })
         .await;
     match response {

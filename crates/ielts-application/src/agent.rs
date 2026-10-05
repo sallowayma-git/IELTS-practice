@@ -769,6 +769,7 @@ fn merge_usage(current: Option<TokenUsage>, next: Option<TokenUsage>) -> Option<
             input_tokens: current.input_tokens.saturating_add(next.input_tokens),
             output_tokens: current.output_tokens.saturating_add(next.output_tokens),
             reasoning_tokens: current.reasoning_tokens.saturating_add(next.reasoning_tokens),
+            cached_input_tokens: current.cached_input_tokens.saturating_add(next.cached_input_tokens),
         }),
     }
 }
@@ -1018,12 +1019,12 @@ mod tests {
     #[test]
     fn usage_merge_keeps_the_reasoning_share_and_wire_omits_zero() {
         let merged = merge_usage(
-            Some(TokenUsage { input_tokens: 1, output_tokens: 10, reasoning_tokens: 6 }),
-            Some(TokenUsage { input_tokens: 2, output_tokens: 20, reasoning_tokens: 4 }),
+            Some(TokenUsage { input_tokens: 1, output_tokens: 10, reasoning_tokens: 6, ..Default::default() }),
+            Some(TokenUsage { input_tokens: 2, output_tokens: 20, reasoning_tokens: 4, ..Default::default() }),
         ).unwrap();
         assert_eq!((merged.input_tokens, merged.output_tokens, merged.reasoning_tokens), (3, 30, 10));
         assert_eq!(serde_json::to_value(&merged).unwrap()["reasoningTokens"], 10);
-        let plain = TokenUsage { input_tokens: 1, output_tokens: 2, reasoning_tokens: 0 };
+        let plain = TokenUsage { input_tokens: 1, output_tokens: 2, reasoning_tokens: 0, ..Default::default() };
         assert!(serde_json::to_value(plain).unwrap().get("reasoningTokens").is_none());
     }
 
@@ -1183,6 +1184,7 @@ mod tests {
                 input_tokens: 5,
                 output_tokens: 0,
                 reasoning_tokens: 0,
+                ..Default::default()
             }),
             Some("request-failed".into()),
             2,
@@ -1351,6 +1353,7 @@ mod tests {
                 input_tokens: 2,
                 output_tokens: 1,
                 reasoning_tokens: 0,
+                ..Default::default()
             }),
             provider_request_id: Some("request-1".into()),
             retry_count: 0,

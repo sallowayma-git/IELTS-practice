@@ -33,7 +33,7 @@ pub use consolidation::{
 };
 pub use context::{ContextMaterializerService, ContextSnapshotStore};
 pub use corpus::{CorpusExportService, CorpusExportStore};
-pub use dream::{DreamService, DreamStore};
+pub use dream::{DreamService, DreamStore, WeeklyEvidence, WEEKLY_MAX_MUTATIONS};
 pub use error::ApplicationError;
 pub use journal::{JournalService, JournalStore};
 pub use learning_observations::{LearningObservationService, LearningObservationStore};

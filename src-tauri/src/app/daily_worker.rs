@@ -3,8 +3,10 @@
 //! Two jobs, both best-effort while the app is open:
 //! * the daily pass: build the day's deterministic journal (a summary of facts,
 //!   no model, no dream);
-//! * the weekend pass: the single weekly consolidation, the only model call the
-//!   worker makes and the only place memory is consolidated.
+//! * the weekly pass: the single weekly consolidation, the only model call the
+//!   worker makes and the only place memory is written. It is first attempted on
+//!   a Saturday or Sunday, and an attempt that failed is retried on the following
+//!   days (once per local day) until it completes.
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Local};
@@ -17,13 +19,10 @@ use super::{
     application_store::ApplicationStore,
     state::{AppDb, AppVault},
 };
-use crate::cognitive_runtime::{
-    is_weekend, local_day_start_utc, plan_weekly_window, weekly_candidate_pool, RuntimeManager,
-    WEEKLY_MIN_CANDIDATE_POOL,
-};
+use crate::cognitive_runtime::{is_weekend, local_day_start_utc, plan_weekly_window, RuntimeManager};
 
-/// How often an idle worker looks at the weekend pass. Cheap checks first, so
-/// outside a weekend this is a weekday comparison and nothing else.
+/// How often an idle worker looks at the weekly pass. Cheap checks first, so on
+/// an ordinary weekday this is a clock comparison and one indexed lookup.
 const WEEKLY_CHECK_INTERVAL: Duration = Duration::from_secs(600);
 
 pub(crate) fn valid_local_window(user: &str, day: &str) -> bool {
@@ -109,30 +108,39 @@ pub(crate) fn run_daily_journal(db: &AppDb, job: &BackgroundJob, worker: &str) -
     Ok(journal_id)
 }
 
-/// The weekend window that is due now, or `None`: the cheap, provider-free half
-/// of "is the weekly pass worth a model call". Due means: it is a weekend, there
-/// is a window since the last completed run, automatic learning is on, this
-/// weekend has no completed run, no attempt (completed or failed) was made
-/// today, and the host-bounded pool of that window has something to consolidate.
+/// The weekly window that is due now, or `None`: the cheap, provider-free half of
+/// "is the weekly pass worth a model call". One predicate decides it: the weekend
+/// this window belongs to (the latest Saturday or Sunday at or before now) has no
+/// completed run, none was attempted today, and either today is a weekend day (the
+/// first attempt) or that weekend's earlier attempt failed (the retry, on any
+/// following day). Automatic learning must be on.
 fn weekly_window_due<Tz: chrono::TimeZone>(
     db: &AppDb,
     now: &DateTime<Tz>,
 ) -> DbResult<Option<WeeklyWindow>> {
-    if !is_weekend(now) || !db.with_conn(background_jobs::automatic_learning_enabled)? {
+    if !db.with_conn(background_jobs::automatic_learning_enabled)? {
         return Ok(None);
     }
     let last_end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local"))?;
     let Some(window) = plan_weekly_window(now, last_end) else { return Ok(None) };
     let since = local_day_start_utc(now).to_rfc3339();
-    if db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", &window.key))?
-        // A failed attempt is retried by a later tick on a later day, at most once per day.
-        || db.with_conn(|conn| ielts_db::weekly_attempted_since(conn, "local", &window.key, &since))?
-    {
-        return Ok(None);
-    }
-    let pool = weekly_candidate_pool(db, &window).map_err(|error| DbError::Message(error.to_string()))?;
-    let pooled = pool["candidates"].as_array().map_or(0, Vec::len);
-    Ok((pooled >= WEEKLY_MIN_CANDIDATE_POOL).then_some(window))
+    let (completed, attempted_today, failed) = db.with_conn(|conn| {
+        Ok((
+            ielts_db::weekly_run_completed(conn, "local", &window.key)?,
+            ielts_db::weekly_attempted_since(conn, "local", &window.key, &since)?,
+            ielts_db::weekly_failed_attempt_exists(conn, "local", &window.key)?,
+        ))
+    })?;
+    let due = !completed && !attempted_today && (is_weekend(now) || failed);
+    Ok(due.then_some(window))
+}
+
+/// Whether the window holds enough scored observations to be worth a model call.
+/// A thin window is not recorded as a run: it simply keeps growing (up to the
+/// 28-day cap) until it has something to say.
+fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
+    db.with_conn(|conn| ielts_db::weekly_observation_count(conn, "local", window.start, window.end))
+        .map(|count| count >= ielts_db::WEEKLY_MIN_OBSERVATIONS)
 }
 
 /// Record a failed weekly attempt (anchored on the journal of the window's end
@@ -145,14 +153,15 @@ fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::
         .map(|_| ())
 }
 
-/// The single weekly consolidation call, for the window that is due on this
-/// weekend day. Idempotent per weekend through the `dream_runs` receipt that
-/// `run_weekly_consolidation` writes. A window with nothing to consolidate costs
+/// The single weekly consolidation call, for the window that is due now.
+/// Idempotent per weekend through the `dream_runs` receipt that
+/// `run_weekly_consolidation` writes. A window with too little evidence costs
 /// nothing; a failed attempt (provider, timeout, malformed model output after the
 /// sidecar's own retries, sidecar) is recorded as a failed run and retried by a
-/// later tick on a later day, at most once per day; a weekend that never
-/// succeeds is folded into the next weekend's window. Returns whether a sidecar
-/// run was started.
+/// later tick on a later day, at most once per day, until it completes; if it is
+/// still failing when the next weekend arrives, that weekend's window covers
+/// everything since the last completed run. Returns whether a sidecar run was
+/// started.
 pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> DbResult<bool> {
     use ielts_db::{BeginAgentRunCommand, StoredAgentRunStatus};
 
@@ -161,6 +170,9 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
     let Some(window) = weekly_window_due(&db, &Local::now())? else { return Ok(false) };
     // Without a provider the sidecar would record an empty window and burn it.
     let Ok(provider) = crate::ai::load_provider_config(&db, &vault) else { return Ok(false) };
+    if !weekly_has_evidence(&db, &window)? {
+        return Ok(false);
+    }
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
     db.with_conn(|conn| {
         ielts_db::begin_agent_run(conn, &BeginAgentRunCommand {
@@ -256,7 +268,7 @@ pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<(
                     }
                 }
                 Ok(None) => {
-                    // Idle: the weekend pass gets its turn, outside any job lease.
+                    // Idle: the weekly pass gets its turn, outside any job lease.
                     if last_weekly_check.is_none_or(|last| last.elapsed() >= WEEKLY_CHECK_INTERVAL) {
                         last_weekly_check = Some(Instant::now());
                         if let Err(error) = run_weekly_if_due(&app, &worker).await {
@@ -349,76 +361,154 @@ mod tests {
             .from_utc_datetime(&DateTime::parse_from_rfc3339(value).unwrap().naive_utc())
     }
 
-    fn seed_pool_memory(db: &AppDb, id: &str, observed: &str) {
+    const SATURDAY: &str = "2026-10-10T03:00:00Z"; // 11:00 local (UTC+8), ISO week 2026-W41
+    const KEY: &str = "2026-W41";
+
+    fn journal(db: &AppDb) -> String {
+        ensure_journal(db, "2026-10-10").unwrap()
+    }
+
+    /// A weekly attempt that failed at `when`.
+    fn fail_at(db: &AppDb, key: &str, when: &str) {
+        let journal = journal(db);
+        let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
+        db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal, key, &error, when)).unwrap();
+    }
+
+    /// A weekly attempt that completed at `when`, covering `window`.
+    fn complete_at(db: &AppDb, window: &WeeklyWindow, when: &str) {
+        let journal = journal(db);
         db.with_conn(|conn| {
+            let run = ielts_db::insert_dream_run(conn, "local", &journal, Some(&window.marker()))?;
+            ielts_db::start_dream_run(conn, &run.id, when)?;
+            ielts_db::finish_dream_run(conn, &run.id, "out", when)?;
+            Ok(())
+        }).unwrap();
+    }
+
+    fn due(db: &AppDb, local: &DateTime<FixedOffset>) -> Option<WeeklyWindow> {
+        weekly_window_due(db, local).unwrap()
+    }
+
+    #[test]
+    fn the_first_attempt_is_weekend_only() {
+        let (_dir, db) = test_db("first.db");
+        // Monday to Friday: nothing has failed, so nothing is due.
+        for day in 5..=9 {
+            assert!(due(&db, &at(8, &format!("2026-10-{day:02}T03:00:00Z"))).is_none(), "weekday {day}");
+        }
+        let window = due(&db, &at(8, SATURDAY)).expect("Saturday is due");
+        assert_eq!(window.key, KEY);
+        assert_eq!(window.end, Utc.with_ymd_and_hms(2026, 10, 10, 3, 0, 0).unwrap());
+        // No completed run: the cap still bounds the window.
+        assert_eq!(window.start, window.end - chrono::Duration::days(28));
+        assert!(due(&db, &at(8, "2026-10-11T03:00:00Z")).is_some(), "Sunday is due too");
+        db.with_conn(|conn| {
+            ielts_db::upsert_setting(conn, "features", "memory_auto_candidates_v1", &serde_json::json!("disabled"))
+        }).unwrap();
+        assert!(due(&db, &at(8, SATURDAY)).is_none(), "paused learning costs nothing");
+    }
+
+    #[test]
+    fn a_failed_weekend_is_retried_once_a_day_until_it_completes() {
+        let (_dir, db) = test_db("retry.db");
+        let saturday = at(8, SATURDAY);
+        let window = due(&db, &saturday).unwrap();
+
+        // Saturday fails: no second attempt that day, but Sunday tries again.
+        fail_at(&db, KEY, "2026-10-10T03:05:00Z");
+        assert!(due(&db, &saturday).is_none());
+        let sunday = at(8, "2026-10-11T03:00:00Z");
+        assert_eq!(due(&db, &sunday).unwrap().key, KEY);
+
+        // Sunday fails too. Monday is not a weekend, yet it retries the same weekend.
+        fail_at(&db, KEY, "2026-10-11T03:05:00Z");
+        assert!(due(&db, &sunday).is_none());
+        let monday = at(8, "2026-10-12T03:00:00Z");
+        let retry = due(&db, &monday).expect("a failed weekend is retried on a weekday");
+        assert_eq!(retry.key, KEY, "the retry belongs to the weekend it retries");
+        // A failure moves no boundary: with no completed run the cap still bounds the window.
+        assert_eq!(retry.start, retry.end - chrono::Duration::days(28));
+        assert_eq!(window.start, window.end - chrono::Duration::days(28));
+
+        // Monday succeeds: nothing more until the next weekend.
+        complete_at(&db, &retry, "2026-10-12T03:06:00Z");
+        for day in 12..=16 {
+            assert!(due(&db, &at(8, &format!("2026-10-{day:02}T05:00:00Z"))).is_none(), "after success, day {day}");
+        }
+        // The next window starts where the completed one ended.
+        let next = due(&db, &at(8, "2026-10-17T03:00:00Z")).unwrap();
+        assert_eq!((next.key.as_str(), next.start), ("2026-W42", retry.end));
+    }
+
+    #[test]
+    fn a_weekend_that_succeeded_is_not_run_again_on_monday() {
+        let (_dir, db) = test_db("done.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        complete_at(&db, &window, "2026-10-10T03:06:00Z");
+        for day in 10..=16 {
+            assert!(due(&db, &at(8, &format!("2026-10-{day:02}T05:00:00Z"))).is_none(), "day {day}");
+        }
+    }
+
+    #[test]
+    fn failing_all_week_makes_the_next_weekend_cover_both_weeks() {
+        let (_dir, db) = test_db("fold.db");
+        // The last completed pass ended on Saturday 2026-10-03.
+        let earlier = WeeklyWindow::new(
+            "2026-W40",
+            Utc.with_ymd_and_hms(2026, 9, 26, 3, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 10, 3, 3, 0, 0).unwrap(),
+        );
+        complete_at(&db, &earlier, "2026-10-03T03:06:00Z");
+
+        // The weekend and every weekday after it fail, one attempt per day.
+        for day in 10..=16 {
+            let now = at(8, &format!("2026-10-{day:02}T03:00:00Z"));
+            assert_eq!(due(&db, &now).unwrap().key, KEY, "day {day}");
+            fail_at(&db, KEY, &format!("2026-10-{day:02}T03:05:00Z"));
+            assert!(due(&db, &now).is_none(), "one attempt per day, day {day}");
+        }
+        // The next Saturday is a new weekend whose window reaches back to the last success.
+        let next = due(&db, &at(8, "2026-10-17T03:00:00Z")).unwrap();
+        assert_eq!(next.key, "2026-W42");
+        assert_eq!(next.start, earlier.end);
+        assert_eq!(next.end - next.start, chrono::Duration::days(14));
+        // Completing it ends the retries of the old, failed weekend for good.
+        complete_at(&db, &next, "2026-10-17T03:06:00Z");
+        assert!(due(&db, &at(8, "2026-10-19T03:00:00Z")).is_none());
+    }
+
+    fn seed_scored_outcome(db: &AppDb, index: usize) {
+        use sha2::{Digest, Sha256};
+        db.with_conn(|conn| {
+            let payload = serde_json::json!({
+                "attemptId": "attempt-1", "assetId": "P1", "questionId": format!("q{index}"),
+                "attemptOrdinal": 1, "isCorrect": index % 2 == 0, "questionKind": "tfng",
+                "changeCount": 0, "visitCount": 1, "elapsedMs": 900, "firstTryCorrect": true
+            }).to_string();
             conn.execute(
-                "INSERT INTO memory_items (id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,
-                   content,status,source_class,created_by,content_hash,last_observed_at,created_at,updated_at)
-                 VALUES (?1,'local','strategy','activity:reading','procedural',?1,'label','content','active',
-                   'observed','system',?1,?2,?2,?2)",
-                rusqlite::params![id, observed],
+                "INSERT INTO learning_events (id, user_id, event_type, source_kind, source_id, idempotency_key,
+                    activity, asset_id, attempt_id, question_id, occurred_at, payload_json, content_hash,
+                    schema_version, consolidation_state, sensitivity, created_at, updated_at)
+                 VALUES (?1, 'local', 'reading_question_outcome', 'test', ?1, ?1, 'reading', 'P1', NULL, ?2,
+                    '2026-10-07T10:00:00Z', ?3, ?4, 1, 'pending', 'normal', '2026-10-07T10:00:00Z', '2026-10-07T10:00:00Z')",
+                rusqlite::params![format!("ev-{index}"), format!("q{index}"), payload, hex::encode(Sha256::digest(payload.as_bytes()))],
             )?;
             Ok(())
         }).unwrap();
     }
 
     #[test]
-    fn the_weekend_pass_is_due_once_per_weekend_and_retried_once_per_day() {
-        let (_dir, db) = test_db("weekly.db");
-        seed_pool_memory(&db, "mem-a", "2026-10-07T10:00:00Z");
-        // Saturday 2026-10-10 11:00 local (UTC+8): due. A weekday is not.
-        let saturday = at(8, "2026-10-10T03:00:00Z");
-        let sunday = at(8, "2026-10-11T03:00:00Z");
-        let friday = at(8, "2026-10-09T03:00:00Z");
-        assert!(weekly_window_due(&db, &friday).unwrap().is_none());
-        let window = weekly_window_due(&db, &saturday).unwrap().expect("a weekend with a pool is due");
-        assert_eq!(window.key, "2026-W41");
-        assert_eq!(window.end, Utc.with_ymd_and_hms(2026, 10, 10, 3, 0, 0).unwrap());
-
-        // A failed Saturday attempt blocks Saturday, not Sunday, and does not move the window.
-        let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
-        record_weekly_failure(&db, &window, &error).unwrap();
-        db.with_conn(|conn| {
-            // The failure row is stamped "now"; pin it to Saturday for the day bound.
-            conn.execute("UPDATE dream_runs SET finished_at='2026-10-10T03:05:00Z', updated_at='2026-10-10T03:05:00Z'", [])?;
-            Ok(())
-        }).unwrap();
-        assert!(weekly_window_due(&db, &saturday).unwrap().is_none());
-        let retry = weekly_window_due(&db, &sunday).unwrap().expect("Sunday retries");
-        assert_eq!(retry.key, "2026-W41");
-        // A failure records no boundary: with no completed run the cap still applies.
-        assert_eq!(retry.start, retry.end - chrono::Duration::days(28));
-
-        // A completed run closes the weekend for good, and the next window starts at its end.
-        db.with_conn(|conn| {
-            let journal = ensure_journal_in(conn, &retry.anchor_day());
-            let run = ielts_db::insert_dream_run(conn, "local", &journal, Some(&retry.marker()))?;
-            ielts_db::start_dream_run(conn, &run.id, "2026-10-11T03:06:00Z")?;
-            ielts_db::finish_dream_run(conn, &run.id, "out", "2026-10-11T03:06:30Z")?;
-            Ok(())
-        }).unwrap();
-        assert!(weekly_window_due(&db, &sunday).unwrap().is_none());
-        // Memory observed after the window end is the next weekend's pool.
-        seed_pool_memory(&db, "mem-b", "2026-10-14T10:00:00Z");
-        let next = weekly_window_due(&db, &at(8, "2026-10-17T03:00:00Z")).unwrap().unwrap();
-        assert_eq!((next.key.as_str(), next.start), ("2026-W42", retry.end));
-    }
-
-    fn ensure_journal_in(conn: &rusqlite::Connection, day: &str) -> String {
-        let facts = ielts_db::build_daily_facts(conn, "local", day).unwrap();
-        ielts_db::insert_journal(conn, "local", &facts, None).unwrap().id
-    }
-
-    #[test]
-    fn an_empty_pool_or_paused_learning_costs_nothing() {
-        let (_dir, db) = test_db("quiet.db");
-        let saturday = at(8, "2026-10-10T03:00:00Z");
-        assert!(weekly_window_due(&db, &saturday).unwrap().is_none(), "no memory, no call");
-        seed_pool_memory(&db, "mem-a", "2026-10-07T10:00:00Z");
-        assert!(weekly_window_due(&db, &saturday).unwrap().is_some());
-        db.with_conn(|conn| {
-            ielts_db::upsert_setting(conn, "features", "memory_auto_candidates_v1", &serde_json::json!("disabled"))
-        }).unwrap();
-        assert!(weekly_window_due(&db, &saturday).unwrap().is_none());
+    fn too_little_evidence_costs_no_model_call() {
+        let (_dir, db) = test_db("evidence.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        assert!(!weekly_has_evidence(&db, &window).unwrap(), "no observations at all");
+        for index in 0..ielts_db::WEEKLY_MIN_OBSERVATIONS - 1 {
+            seed_scored_outcome(&db, index);
+        }
+        assert!(!weekly_has_evidence(&db, &window).unwrap());
+        seed_scored_outcome(&db, ielts_db::WEEKLY_MIN_OBSERVATIONS);
+        assert!(weekly_has_evidence(&db, &window).unwrap());
     }
 }

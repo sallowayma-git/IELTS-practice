@@ -36,6 +36,7 @@ pub mod shadow;
 pub mod sqlite;
 pub mod teaching_strategy;
 pub mod vocab;
+pub mod weekly_pack;
 pub mod writing;
 
 pub use agent::*;
@@ -75,4 +76,5 @@ pub use shadow::*;
 pub use sqlite::*;
 pub use teaching_strategy::*;
 pub use vocab::*;
+pub use weekly_pack::*;
 pub use writing::*;

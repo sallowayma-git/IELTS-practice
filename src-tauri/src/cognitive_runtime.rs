@@ -93,7 +93,7 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     #[cfg(feature = "daily-dream-v1")]
     ("dream.run_weekly", "1"),
     #[cfg(feature = "daily-dream-v1")]
-    ("memory.candidate_pool", "1"),
+    ("learning.weekly_pack", "1"),
     #[cfg(feature = "daily-dream-v1")]
     ("strategy.select", "1"),
     #[cfg(feature = "daily-dream-v1")]
@@ -136,11 +136,6 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     #[cfg(feature = "agent-threads-v1")]
     ("study_plan.mark_done", "1"),
 ];
-/// Mirrors the sidecar's `weekly.MIN_CANDIDATE_POOL`: below this the weekly
-/// call would have nothing to consolidate, so the host never starts it.
-#[cfg(feature = "daily-dream-v1")]
-pub(crate) const WEEKLY_MIN_CANDIDATE_POOL: usize = 1;
-
 /// Saturday or Sunday, in `now`'s own zone.
 #[cfg(feature = "daily-dream-v1")]
 pub(crate) fn is_weekend<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> bool {
@@ -148,27 +143,40 @@ pub(crate) fn is_weekend<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> bo
     matches!(now.weekday(), Weekday::Sat | Weekday::Sun)
 }
 
-/// The weekly window the host consolidates at `now`, or `None` when it is not due.
+/// The weekly window the host would consolidate at `now`. A pure function of the
+/// clock and of where the last COMPLETED consolidation ended: whether it is due
+/// is the caller's one predicate (`weekly_window_due`).
 ///
-/// Due only on a Saturday or Sunday (in `now`'s own zone). The window runs from
-/// the end of the last COMPLETED consolidation (exclusive) to `now`, never more
-/// than `WEEKLY_MAX_LOOKBACK_DAYS` back, so a missed weekend is folded into the
-/// next one with no separate catch-up path. Its key is the ISO week of `now`,
-/// which Saturday and Sunday share: one weekend, at most one completed run.
+/// The window runs from the end of the last completed consolidation (exclusive)
+/// to `now`, never more than `WEEKLY_MAX_LOOKBACK_DAYS` back, so a missed weekend
+/// is folded into the next one with no separate catch-up path. Its key names the
+/// latest weekend at or before `now` (`weekend_key`): Saturday and Sunday share
+/// it, and so does every weekday after, so a retry on Monday belongs to the
+/// weekend it is retrying.
 #[cfg(feature = "daily-dream-v1")]
 pub(crate) fn plan_weekly_window<Tz: chrono::TimeZone>(
     now: &chrono::DateTime<Tz>,
     last_completed_end: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Option<ielts_db::WeeklyWindow> {
-    use chrono::{Datelike, Duration, Utc};
-    if !is_weekend(now) {
-        return None;
-    }
+    use chrono::{Duration, Utc};
     let end = chrono::DateTime::<Utc>::from_timestamp(now.timestamp(), 0)?;
     let floor = end - Duration::days(ielts_db::WEEKLY_MAX_LOOKBACK_DAYS);
     let start = last_completed_end.map_or(floor, |last| last.max(floor));
-    let week = now.iso_week();
-    (start < end).then(|| ielts_db::WeeklyWindow::new(format!("{}-W{:02}", week.year(), week.week()), start, end))
+    (start < end).then(|| ielts_db::WeeklyWindow::new(weekend_key(now), start, end))
+}
+
+/// ISO week (`YYYY-Www`) of the latest Saturday or Sunday at or before `now`, in
+/// `now`'s own zone.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn weekend_key<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> String {
+    use chrono::{Datelike, Duration, Weekday};
+    // Monday..Friday step back to the Sunday before; Saturday and Sunday stay.
+    let back = match now.weekday() {
+        Weekday::Sat | Weekday::Sun => 0,
+        weekday => i64::from(weekday.num_days_from_monday()) + 1,
+    };
+    let week = (now.date_naive() - Duration::days(back)).iso_week();
+    format!("{}-W{:02}", week.year(), week.week())
 }
 
 /// Start of `now`'s calendar day in `now`'s zone, as a UTC instant: the retry
@@ -182,45 +190,16 @@ pub(crate) fn local_day_start_utc<Tz: chrono::TimeZone>(now: &chrono::DateTime<T
         .map_or_else(|| now.with_timezone(&Utc) - Duration::hours(24), |start| start.with_timezone(&Utc))
 }
 
-/// Bounded candidate pool for one weekly window. Returns stable ids + summaries
-/// clipped to 400 chars (they are the bulk of the weekly prompt, up to 50 rows;
-/// a pattern needs the gist, not the full body), plus whether the 50-row bound
-/// truncated the pool. The pool is the active, observed memories last observed
-/// inside the window (start exclusive, end inclusive).
+/// The weekly pack of one window, as the sidecar receives it: the learner's real
+/// practice records, bounded (see `ielts_db::weekly_pack`).
 #[cfg(feature = "daily-dream-v1")]
-pub(crate) fn weekly_candidate_pool(
+pub(crate) fn weekly_pack_value(
     db: &AppDb,
     window: &ielts_db::WeeklyWindow,
 ) -> Result<Value, RuntimeHostError> {
-    let instant = |value: chrono::DateTime<chrono::Utc>| value.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    let mut candidates = db.with_conn(|conn| {
-        let mut statement = conn.prepare(r#"
-            SELECT json_object('memoryId', id, 'summary', substr(content, 1, 400), 'scope', scope)
-            FROM memory_items
-            WHERE user_id = ?1 AND status = 'active' AND source_class != 'predicted'
-              AND sensitivity = 'normal' AND trim(content) != ''
-              AND julianday(last_observed_at) > julianday(?2)
-              AND julianday(last_observed_at) <= julianday(?3)
-            ORDER BY julianday(last_observed_at) DESC, id ASC
-            LIMIT 51
-        "#)?;
-        let rows = statement.query_map(
-            rusqlite::params!["local", instant(window.start), instant(window.end)],
-            |row| row.get::<_, String>(0),
-        )?;
-        rows.map(|row| {
-            let value = row?;
-            serde_json::from_str::<Value>(&value)
-                .map_err(|error| ielts_db::DbError::Message(error.to_string()))
-        })
-        .collect::<ielts_db::DbResult<Vec<_>>>()
-    }).map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
-    let truncated = candidates.len() > 50;
-    candidates.truncate(50);
-    Ok(json!({
-        "candidates": candidates,
-        "truncated": truncated,
-    }))
+    db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end))
+        .map(|pack| pack.to_value())
+        .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -483,9 +462,9 @@ struct ActiveRun {
 }
 
 /// Selected exclusively from the method sent by the host, never sidecar params.
-/// `WeeklyDream` is only ever started by the host's weekend worker; it may
-/// read the candidate pool, call the model and submit patterns for host
-/// re-validation, and nothing else.
+/// `WeeklyDream` is only ever started by the host's weekly worker; it may
+/// read the weekly pack, call the model and submit its digest and memory
+/// mutations for host validation, and nothing else.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RunKind {
     MemoryCandidate,
@@ -522,7 +501,7 @@ impl RunKind {
                 | "memory.search_active" | "learning.evidence_by_ids"),
             #[cfg(feature = "daily-dream-v1")]
             Self::WeeklyDream => matches!(method,
-                "memory.candidate_pool" | "model.invoke" | "dream.run_weekly"),
+                "learning.weekly_pack" | "model.invoke" | "dream.run_weekly"),
             #[cfg(feature = "agent-threads-v1")]
             Self::StudyPlanner => matches!(method,
                 "learning.learner_skill_state" | "memory.search_active" | "study_plan.create"),
@@ -1289,7 +1268,7 @@ impl RuntimeManager {
                 self.invoke_learner_memory_reads(app, method, params).await
             }
             #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("dream.run_weekly" | "memory.candidate_pool")) => {
+            Some(method @ ("dream.run_weekly" | "learning.weekly_pack")) => {
                 self.invoke_journal_dream(app, method, params, &active).await
             }
             #[cfg(feature = "daily-dream-v1")]
@@ -1477,13 +1456,14 @@ impl RuntimeManager {
         Ok(value)
     }
 
-    /// Serve the weekly-dream reverse-RPC: the bounded candidate pool and the
-    /// pattern submission.
+    /// Serve the weekly-dream reverse-RPC: the weekly pack and the submission of
+    /// the digest and memory mutations.
     ///
     /// Rust is the authority. The window is the host-issued token of the active
     /// run (`authorize_host_request` already pinned the sidecar's `window` to it);
-    /// patterns are re-validated by stable memory id and applied as relations +
-    /// supersede, never as deletes. The daily journal is deterministic and has no
+    /// mutations are admitted only if they cite the pack's own observation ids and
+    /// target the pack's own memories, then pass the cognitive-proposal gate and are
+    /// applied without any delete. The daily journal is deterministic and has no
     /// sidecar involvement.
     #[cfg(feature = "daily-dream-v1")]
     async fn invoke_journal_dream(
@@ -1494,7 +1474,7 @@ impl RuntimeManager {
         active: &ActiveRun,
     ) -> Result<Value, RuntimeHostError> {
         use ielts_application::JournalService;
-        use ielts_domain::{DailyJournalQuery, PatternProposal, WeeklyDreamQuery};
+        use ielts_domain::{DailyJournalQuery, WeeklyDreamQuery};
 
         const JOURNAL_DREAM_RESPONSE_BYTES: usize = 256 * 1024;
 
@@ -1511,11 +1491,6 @@ impl RuntimeManager {
             .ok_or_else(|| RuntimeHostError::InvalidResponse("weekly run has no valid host-owned window".into()))?;
         let result: Result<Value, String> = match method {
             "dream.run_weekly" => {
-                // Rust re-validates sidecar-proposed cross-scope patterns by
-                // stable memory ID (never trusting the LLM index), applies
-                // consolidation as relations + supersede (never deletes), and
-                // returns a flat report. Empty validated is success (M8-01).
-                //
                 // The run row is FK-anchored on the journal of the window's end
                 // day, resolved the same way the daily worker does.
                 let journal_service = JournalService::new(&store);
@@ -1539,37 +1514,24 @@ impl RuntimeManager {
                             .and_then(|facts| journal_service.insert_journal(&facts, None))
                             .map_err(|error| error.to_string())?,
                     };
-                    // A malformed proposal is a visible rejection, never a
-                    // silent drop.
-                    let mut proposals = Vec::new();
-                    let mut parse_rejected = 0usize;
-                    if let Some(array) = params.get("patterns").and_then(Value::as_array) {
-                        for item in array {
-                            match serde_json::from_value::<PatternProposal>(item.clone()) {
-                                Ok(proposal) => proposals.push(proposal),
-                                Err(_) => parse_rejected += 1,
-                            }
-                        }
-                    }
                     let query = WeeklyDreamQuery {
                         user_id,
                         journal_id: journal.id,
                     };
-                    let result =
-                        crate::commands::journal::run_weekly_consolidation(db.inner(), &query, &proposals, &window)
+                    let submission = crate::commands::journal::WeeklySubmission::from_params(params);
+                    let outcome =
+                        crate::commands::journal::run_weekly_consolidation(db.inner(), &query, submission, &window)
                             .map_err(|error| error.to_string())?;
                     Ok(json!({
-                        "runId": result.run_id,
-                        "validated": result.report.validated.len(),
-                        "rejected": result.report.rejected.len() + parse_rejected,
-                        "accepted": result.receipts.len(),
+                        "runId": outcome.run_id,
+                        "validated": outcome.validated,
+                        "rejected": outcome.rejected,
+                        "accepted": outcome.accepted,
                     }))
                 })()
             }
-            "memory.candidate_pool" => {
-                // Bounded active observed memories of the window; predicted-only
-                // memories are excluded (M8-10). Stable IDs + summaries only.
-                weekly_candidate_pool(db.inner(), &window).map_err(|error| error.to_string())
+            "learning.weekly_pack" => {
+                weekly_pack_value(db.inner(), &window).map_err(|error| error.to_string())
             }
             other => Err(format!("unsupported weekly dream method: {other}")),
         };
@@ -2443,7 +2405,7 @@ mod tests {
         let mut runs = vec![("memory.candidates.generate", vec!["tool.invoke", "model.invoke",
             "learning.learner_skill_state", "memory.search_active", "learning.evidence_by_ids"])];
         #[cfg(feature = "daily-dream-v1")]
-        runs.push(("dream.weekly", vec!["memory.candidate_pool", "model.invoke", "dream.run_weekly"]));
+        runs.push(("dream.weekly", vec!["learning.weekly_pack", "model.invoke", "dream.run_weekly"]));
         #[cfg(feature = "agent-threads-v1")]
         runs.push(("planner.study_plan", vec!["learning.learner_skill_state",
             "memory.search_active", "study_plan.create"]));
@@ -2479,8 +2441,8 @@ mod tests {
     }
 
     /// Weekly is reachable only through the host-selected `dream.weekly` run
-    /// kind, and that kind grants exactly the pool read, the model call and the
-    /// host-validated pattern submission.
+    /// kind, and that kind grants exactly the pack read, the model call and the
+    /// host-validated submission of digest and mutations.
     #[cfg(feature = "daily-dream-v1")]
     #[tokio::test]
     async fn weekly_run_kind_is_host_selected_and_minimal() {
@@ -2494,12 +2456,12 @@ mod tests {
             process.active_run = Some(Arc::new(ActiveRun::new(
                 "dream.weekly", "trusted-run", json!({"window": "2026-W40"}), 7).unwrap()));
         }
-        let mut request = framed_reverse_request("memory.candidate_pool");
+        let mut request = framed_reverse_request("learning.weekly_pack");
         request["params"]["window"] = json!("2026-W40");
         assert!(manager.authorize_host_request(7, "trusted-run", &request).await.is_ok());
         // The sidecar cannot widen or move the host-owned window...
         for window in ["2026-W39", "2026-08-10", ""] {
-            for method in ["memory.candidate_pool", "dream.run_weekly"] {
+            for method in ["learning.weekly_pack", "dream.run_weekly"] {
                 let mut forged = framed_reverse_request(method);
                 forged["params"]["window"] = json!(window);
                 assert!(manager.authorize_host_request(7, "trusted-run", &forged).await.is_err(), "{method} {window}");
@@ -2598,75 +2560,6 @@ mod tests {
     }
 
     #[cfg(feature = "daily-dream-v1")]
-    #[test]
-    fn weekly_candidate_pool_production_sql_filters_and_preserves_evidence() {
-        // Execute the production query rather than a second copy of its filters.
-        let source = include_str!("cognitive_runtime.rs");
-        let method = source.split("fn weekly_candidate_pool(").nth(1).unwrap();
-        let sql = method.split("conn.prepare(r#\"").nth(1).unwrap()
-            .split("\"#)?").next().unwrap();
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute_batch("CREATE TABLE memory_items (
-            id TEXT, user_id TEXT, status TEXT, source_class TEXT, sensitivity TEXT,
-            content TEXT, scope TEXT, last_observed_at TEXT);
-            CREATE TABLE memory_candidates (id TEXT);
-            INSERT INTO memory_candidates VALUES ('pending-not-a-memory');").unwrap();
-        let insert = |id: &str, owner: &str, status: &str, class: &str, sensitivity: &str,
-                      observed: Option<&str>, scope: &str| {
-            conn.execute("INSERT INTO memory_items VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
-                rusqlite::params![id, owner, status, class, sensitivity,
-                    format!("Evidence for {id}"), scope, observed]).unwrap();
-        };
-        insert("mem-reading", "local", "active", "observed", "normal", Some("2026-08-10T00:00:00Z"), "reading");
-        insert("mem-writing", "local", "active", "inferred", "normal", Some("2026-08-16T23:59:59Z"), "writing");
-        insert("mem-other", "other", "active", "observed", "normal", Some("2026-08-12"), "reading");
-        insert("mem-predicted", "local", "active", "predicted", "normal", Some("2026-08-12"), "reading");
-        insert("mem-pending", "local", "pending_review", "observed", "normal", Some("2026-08-12"), "reading");
-        insert("mem-archived", "local", "archived", "observed", "normal", Some("2026-08-12"), "reading");
-        insert("mem-private", "local", "active", "observed", "private", Some("2026-08-12"), "reading");
-        insert("mem-unobserved", "local", "active", "inferred", "normal", None, "reading");
-        insert("mem-before", "local", "active", "observed", "normal", Some("2026-08-09T23:59:59Z"), "reading");
-        insert("mem-after", "local", "active", "observed", "normal", Some("2026-08-17T00:00:00Z"), "reading");
-        insert("mem-bad-date", "local", "active", "observed", "normal", Some("garbage"), "reading");
-        let query = || {
-            let mut statement = conn.prepare(sql).unwrap();
-            // Start exclusive, end inclusive.
-            let rows = statement.query_map(
-                rusqlite::params!["local", "2026-08-09T23:59:59Z", "2026-08-16T23:59:59Z"],
-                |row| row.get::<_, String>(0)).unwrap();
-            rows.map(|row| serde_json::from_str::<Value>(&row.unwrap()).unwrap()).collect::<Vec<_>>()
-        };
-        assert_eq!(query(), vec![
-            json!({"memoryId":"mem-writing", "summary":"Evidence for mem-writing", "scope":"writing"}),
-            json!({"memoryId":"mem-reading", "summary":"Evidence for mem-reading", "scope":"reading"}),
-        ]);
-        for index in 0..60 {
-            insert(&format!("mem-bound-{index:02}"), "local", "active", "observed", "normal", Some("2026-08-12"), "reading");
-        }
-        let rows = query();
-        assert_eq!(rows.len(), 51); // One overflow row lets the host report truncation.
-        assert_eq!(rows[1]["memoryId"], "mem-bound-00");
-    }
-
-    #[cfg(feature = "daily-dream-v1")]
-    #[test]
-    fn weekly_pool_summaries_are_clipped_to_400_chars() {
-        let source = include_str!("cognitive_runtime.rs");
-        let method = source.split("fn weekly_candidate_pool(").nth(1).unwrap();
-        let sql = method.split("conn.prepare(r#\"").nth(1).unwrap().split("\"#)?").next().unwrap();
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute_batch("CREATE TABLE memory_items (
-            id TEXT, user_id TEXT, status TEXT, source_class TEXT, sensitivity TEXT,
-            content TEXT, scope TEXT, last_observed_at TEXT);").unwrap();
-        conn.execute("INSERT INTO memory_items VALUES ('mem-long','local','active','observed','normal',?1,'reading','2026-08-12')",
-            [&"长".repeat(900)]).unwrap();
-        let raw: String = conn.query_row(sql, rusqlite::params!["local", "2026-08-09T23:59:59Z", "2026-08-16T23:59:59Z"],
-            |row| row.get::<_, String>(0)).unwrap();
-        let summary = serde_json::from_str::<Value>(&raw).unwrap()["summary"].as_str().unwrap().to_owned();
-        assert_eq!(summary.chars().count(), 400);
-    }
-
-    #[cfg(feature = "daily-dream-v1")]
     fn local(offset_hours: i32, utc: &str) -> chrono::DateTime<chrono::FixedOffset> {
         use chrono::TimeZone;
         chrono::FixedOffset::east_opt(offset_hours * 3600).unwrap()
@@ -2678,29 +2571,32 @@ mod tests {
         chrono::DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&chrono::Utc)
     }
 
-    /// Weekend only, by the LOCAL day: Saturday and Sunday of one ISO week share a
-    /// key, so one weekend can complete at most once.
+    /// The window is a pure function of the clock; its key names the latest
+    /// weekend at or before now, by the LOCAL day. Saturday, Sunday and every
+    /// weekday after share it, so a weekday retry belongs to the weekend it retries.
+    /// Whether a window is due is the worker's one predicate, not decided here.
     #[cfg(feature = "daily-dream-v1")]
     #[test]
-    fn weekly_window_exists_only_on_a_local_weekend_and_keys_the_weekend() {
-        // 2026-10-09 is a Friday, 10 Saturday, 11 Sunday, 12 Monday.
-        for (now, due, key) in [
-            (local(0, "2026-10-09T23:59:00Z"), false, ""),
-            (local(0, "2026-10-10T00:00:00Z"), true, "2026-W41"),
-            (local(0, "2026-10-11T23:59:00Z"), true, "2026-W41"),
-            (local(0, "2026-10-12T00:00:00Z"), false, ""),
+    fn weekly_window_keys_the_latest_weekend_by_the_local_day() {
+        // 2026-10-03/04 is the weekend of W40; 10/10 and 10/11 that of W41.
+        for (now, key) in [
+            (local(0, "2026-10-09T23:59:00Z"), "2026-W40"), // Friday: still W40's weekend
+            (local(0, "2026-10-10T00:00:00Z"), "2026-W41"), // Saturday
+            (local(0, "2026-10-11T23:59:00Z"), "2026-W41"), // Sunday
+            (local(0, "2026-10-12T00:00:00Z"), "2026-W41"), // Monday retries W41
+            (local(0, "2026-10-16T12:00:00Z"), "2026-W41"), // Friday
+            (local(0, "2026-10-17T12:00:00Z"), "2026-W42"), // next Saturday
             // Local day, not UTC day: Friday 16:30Z is already Saturday 00:30 at UTC+8...
-            (local(8, "2026-10-09T16:30:00Z"), true, "2026-W41"),
-            // ...and Sunday 22:00Z is already Monday 06:00 at UTC+8.
-            (local(8, "2026-10-11T22:00:00Z"), false, ""),
-            // The ISO year, not the calendar year, names the weekend: 2027-01-02 is 2026-W53.
-            (local(0, "2027-01-02T12:00:00Z"), true, "2026-W53"),
+            (local(8, "2026-10-09T16:30:00Z"), "2026-W41"),
+            // ...and Sunday 22:00Z is already Monday 06:00 at UTC+8, still W41's weekend.
+            (local(8, "2026-10-11T22:00:00Z"), "2026-W41"),
+            // The ISO year, not the calendar year, names the weekend: 2027-01-02 is 2026-W53,
+            // and so is the Monday after it.
+            (local(0, "2027-01-02T12:00:00Z"), "2026-W53"),
+            (local(0, "2027-01-04T12:00:00Z"), "2026-W53"),
         ] {
-            let window = plan_weekly_window(&now, None);
-            assert_eq!(window.is_some(), due, "{now}");
-            if let Some(window) = window {
-                assert_eq!(window.key, key, "{now}");
-            }
+            assert_eq!(plan_weekly_window(&now, None).unwrap().key, key, "{now}");
+            assert_eq!(weekend_key(&now), key, "{now}");
         }
     }
 
@@ -2911,6 +2807,7 @@ mod tests {
             messages: vec![message.clone()],
             temperature: 0.0,
             max_tokens,
+            cache_key: None,
         };
         assert!(validate_model_request(&request(1)).is_ok());
         assert!(validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS)).is_ok());

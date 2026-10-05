@@ -490,6 +490,12 @@ impl MemoryStore for ApplicationStore<'_> {
             .map_err(memory_error)
     }
 
+    fn reject_candidate(&self, candidate_id: &str) -> Result<(), ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::reject_pending_candidate(conn, candidate_id))
+            .map_err(memory_error)
+    }
+
     fn upsert_explicit_preference(
         &self,
         command: &ielts_domain::ExplicitPreferenceUpsert,

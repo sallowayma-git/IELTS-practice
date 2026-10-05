@@ -2,7 +2,7 @@
 
 - **日期**：2026-10-05（owner 决策日：2026-10-04 / 2026-10-05）
 - **性质**：对 [v1.3 计划](IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md) 的**定点取代**，不重写 v1.3。v1.3 保持冻结，仅在文首加一行指针。
-- **事实基线**：分支 `IELTS-WRITING-FEAT` 的 **2026-10-05 工作树**（含未提交改动；含同日 owner 追加的四项决策：weekly 仅周末、daily 只做摘要、推理模型只留最终答案、M10/M11 命令仅开发期，见 2.3 / 2.9 / 1.2）。文中 `path:line` 引用均已对照该工作树核对；工作树之后再变动，以代码为准。
+- **事实基线**：分支 `IELTS-WRITING-FEAT` 的 **2026-10-05 工作树**（含未提交改动；含同日 owner 追加的四项决策：weekly 首跑仅周末且失败逐日重试直到完成、daily 只做摘要、推理模型只留最终答案、M10/M11 命令仅开发期，见 2.3 / 2.9 / 1.2）。文中 `path:line` 引用均已对照该工作树核对；工作树之后再变动，以代码为准。
 - **优先级**：代码与测试 > 本文 > 其余文档。对 v1.3 与 ADR / Stage Gate 中与本文**明确列出的被取代条款**（第 4 节）冲突的描述，以本文为准；其余按 [INDEX.md](INDEX.md) 的权威顺序。
 - **不在本文范围**：预算、配额、用量账本、成本 UI（owner 决定不做，见 2.8）。
 
@@ -54,7 +54,7 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 | M5 Retrieval + Context | 未标 | 0016；context compiler 已接 coach 证据；embedding 与 LLM rerank 默认关（`retrieval/planner.py:48-49`），`AiRuntime` 的 embed 默认返回 `embedding_not_supported`（`ports.rs:109-115`） | 词法/确定性路径 |
 | M6 Coach | 未标 | 0017、0024；Rust `CoachService`（`crates/ielts-application/src/coach.rs`）；反馈 / 再问 / 对错链接为确定性观测 | 阅读复盘页内的 coach |
 | M7 Daily Journal（即唯一的“daily dream”） | 未标 | 0018；进程内 worker `src-tauri/src/app/daily_worker.rs`（无 OS 调度器），一次日任务 = `run_daily_journal`：生成/复用当天确定性日记并把任务绑定到该日记版本。**不调模型、不起 sidecar run、不产生 memory proposal，也不写 `dream_runs` / `agent_runs`**（2.1 规则 2） | 札记页的“日记”条目；“整理今天”（IPC 名仍为 `dream_run_daily`）走同一条任务路径 |
-| M8 Weekly Dream | 未标 | 0019；仅周末、带重试的整合（2.3）：窗口规划 `plan_weekly_window`（`cognitive_runtime.rs:159`），worker 入口 `run_weekly_if_due`（`daily_worker.rs:156`）；`dream_runs.input_hash="weekly:<ISO 周>:<start>..<end>"`（`ielts-db/src/dream.rs`，`WeeklyWindow`） | 札记页的“周记”条目（按窗口实际范围标注）；**未对真实 provider 跑通**（第 5 节） |
+| M8 Weekly Dream | 未标 | 0019；首次尝试仅周末、失败后逐日重试直到完成的整合（2.3）：窗口规划 `plan_weekly_window`、到期谓词 `weekly_window_due`（`daily_worker.rs`），worker 入口 `run_weekly_if_due`；输入是窗口内**真实练习记录**（`ielts-db/src/weekly_pack.rs`），一次调用同时产出札记散文与记忆变更；`dream_runs.input_hash="weekly:<ISO 周>:<start>..<end>"`（`ielts-db/src/dream.rs`，`WeeklyWindow`） | 札记页的“周记”条目（按窗口实际范围标注）；**未对真实 provider 跑通**（第 5 节） |
 | M9 Memory Center | 未标 | `MemoryCenterPage.vue` 已不存在；`/memory-center` 重定向到 `/notebook`（`main.js:43-47`）；新页 `views/NotebookPage.vue` + `modules/notebook/compose.js`（**撰写时仍是未跟踪文件**） | 被札记取代（3.3） |
 | M10 Teaching Strategy | 未标 | 0020、0023；`teaching_strategy_*` Tauri 命令**仅在 `developer-tools` feature 下编译并注册**（`lib.rs` handler、`commands/mod.rs`）；服务层与 sidecar 反向 RPC 保留 | **无前端调用，无 worker 调用，发布构建无此命令**；coach 固定使用 `evidence_first_v1`（`coach.rs:158`） |
 | M11 Prompt / Skill Eval | 未标 | 0021、0025；`prompt_*` / `skill_*` Tauri 命令**仅在 `developer-tools` feature 下编译并注册**；Python `ielts_agent/eval/` 不被 `runtime.py` 引用 | **无前端调用，发布构建无此命令**；不进入产品路径（2.5） |
@@ -93,33 +93,61 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 
 推理类模型族由 `OUTPUT_LIMIT_RULES` 表决定字段名与下限（`src-tauri/src/ai/runtime.rs:357-372`）：模型名（去掉 `vendor/` 路由前缀、转小写）以 `o1` / `o3` / `o4` / `gpt-5` 开头时，使用 `max_completion_tokens`，值取 `max(请求值, 1024)`；其余 OpenAI 兼容端点（DeepSeek、OpenRouter、网关）保持 `max_tokens` 且数值不变。原因：推理模型会把一部分额度花在隐藏推理上，16 token 的探测会返回空串，所以给 1024 下限。新增模型族只需往表里加一行。推理内容的剥离与回传规则见 2.9；该表与 1024 下限不受影响。
 
-### 2.3 Weekly dream：仅周末、有界重试、唯一整合调用
+### 2.3 Weekly dream：周末首跑、失败逐日重试、唯一整合调用
 
-**调度（owner 决策 2026-10-05）。** 只在**本地时区的周六或周日**运行。窗口是**自上一次已完成（completed）整合的结束时刻（不含）起，到本次开始时刻（含）**，最多回溯 28 天（`WEEKLY_MAX_LOOKBACK_DAYS`）。漏掉的周末自然并入下一个窗口，**没有单独的补跑路径**；从未成功过时窗口就是 28 天。窗口规划是一个纯函数：`plan_weekly_window`（`cognitive_runtime.rs:159`，用例覆盖周五/周六/周日/周一、本地日而非 UTC 日、ISO 年 W53、28 天封顶、折叠、窗口末尾取整秒）。
+**数据归属（owner 决策 2026-10-05）。** 推断类记忆（`memory_items`）**只由 weekly 写入**；用户显式偏好留在各自的存储（`explicit_user_preferences`）。daily 保持确定性、零 LLM、不写记忆。
 
-**幂等键。** 周六与周日同属一个 ISO 周，所以**键 = 运行日所在的 ISO 周（`YYYY-Www`）**：一个周末最多一个 completed 的 run（`weekly_run_completed`，`ielts-db/src/dream.rs:229`）。run 行的 `dream_runs.input_hash` 同时记录窗口：`weekly:<ISO 周>:<start>..<end>`（RFC3339 UTC，`WeeklyWindow::marker`）；失败的尝试只记 `weekly:<ISO 周>`。该窗口也是宿主发给 sidecar、原样回传的不透明 `window` 标识（`WeeklyWindow::token`），sidecar 无法加宽或移动它（`authorize_host_request` 校验）。改动前写入的 `weekly:<ISO 周>` 旧标记仍可读，按“该 ISO 周的周一至周日”解释。下一窗口的起点 = 最新 completed 窗口的终点（`last_weekly_window_end`）。
+**调度：一个谓词。** 窗口是**自上一次已完成（completed）整合的结束时刻（不含）起，到本次开始时刻（含）**，最多回溯 28 天（`WEEKLY_MAX_LOOKBACK_DAYS`）；漏掉的周末自然并入下一个窗口，没有单独的补跑路径。窗口规划是纯函数 `plan_weekly_window(now, 上次完成的终点)`，它的幂等键是 `weekend_key(now)`：**本地时区下，不晚于 now 的最近一个周六/周日所在的 ISO 周**（`YYYY-Www`，用 ISO 年，W53 成立）。周六、周日以及其后的每个工作日共用同一个键，所以周一的重试属于它所重试的那个周末。是否到期只在一处判定（`weekly_window_due`，`daily_worker.rs`）：
 
-**触发点。** 进程内 worker 空闲时每 10 分钟看一次（`WEEKLY_CHECK_INTERVAL`；工作日只是一次星期比较）。不再挂在某个 daily job 之后。
+```
+due = 自动学习开启
+    && 该键没有 completed 的 run
+    && 该键今天（本地）没有尝试过（completed 或 failed，`weekly_attempted_since`）
+    && (今天是周末 || 该键存在 failed 的尝试（`weekly_failed_attempt_exists`））
+```
 
-**前置条件**（`weekly_window_due`，`daily_worker.rs:117`）：是周末；自动学习开启；该周末无 completed 的 run；**本地今天**对该周末没有 completed/failed 的尝试（`weekly_attempted_since`，起点为本地零点）；窗口内的候选池非空（`WEEKLY_MIN_CANDIDATE_POOL = 1`）；已配置 AI provider（`run_weekly_if_due` 里再查，缺 provider 时 sidecar 会记空窗口并烧掉名额）。任一不满足则 0 次调用。
+即：**首次尝试只在周六/周日**；一个周末的运行一旦尝试过并失败，就在其后的任何一天继续重试，**每个本地日至多一次**，直到该周末完成，此后到下个周末之前不再有任何运行；若下个周末到来时仍未完成，下个周末的运行（新键）覆盖自上次完成起的整个跨度（现有窗口规则，≤28 天）。三种情形各有测试：周六失败 → 周日失败 → 周一成功；周六成功 → 周一不跑；整周失败 → 下周六窗口覆盖两周。
 
-**有界候选池**（`weekly_candidate_pool`，`cognitive_runtime.rs:191`）：窗口内（起点不含、终点含）最近被观察到的 active、非 predicted、sensitivity=normal 的 memory，最多 50 条；每条 `summary` 取 `substr(content, 1, 400)`；超出 50 条标 `truncated`。池是 weekly prompt 的主体。**weekly 直接消费 memory，不消费任何 daily candidate**（daily 已不产出候选）。
+**幂等键与回执。** 键 = 上面的 `weekend_key`；一个周末最多一个 completed 的 run（`weekly_run_completed`，`ielts-db/src/dream.rs`）。run 行的 `dream_runs.input_hash` 同时记录窗口：`weekly:<ISO 周>:<start>..<end>`（RFC3339 UTC，`WeeklyWindow::marker`）；失败的尝试只记 `weekly:<ISO 周>`。该窗口也是宿主发给 sidecar、原样回传的不透明 `window` 标识（`WeeklyWindow::token`），sidecar 无法加宽或移动它（`authorize_host_request` 校验）。改动前写入的 `weekly:<ISO 周>` 旧标记仍可读，按“该 ISO 周的周一至周日”解释。下一窗口的起点 = 最新 completed 窗口的终点（`last_weekly_window_end`）。
+
+**触发点与前置条件。** 进程内 worker 空闲时每 10 分钟看一次（`WEEKLY_CHECK_INTERVAL`）。除上面的谓词外：已配置 AI provider（`run_weekly_if_due` 里再查，缺 provider 时 sidecar 会记空窗口并烧掉名额）；窗口内**已打分的观察数 ≥ `WEEKLY_MIN_OBSERVATIONS`（8）**（`weekly_has_evidence`，Python 侧镜像为 `MIN_OBSERVATIONS`）。证据不足的窗口**不记 run、不调模型**，窗口继续增长（≤28 天）直到有话可说；任一不满足则 0 次调用。
+
+**输入：周包（weekly pack）。** 宿主按窗口确定性地构建（`ielts_db::weekly_pack`，经 `learning.weekly_pack` 读能力交给 sidecar），**没有新表**：行来自 M2 观察投影（阅读答题结果、重做迁移、写作分项分），以及投影不覆盖的规范表（学习者的作答 `attempt_answers`、答案键 `answerKey`、`coach_feedback` / `coach_reask_links` / `coach_threads`）；不含文章正文。形状：
+
+| 字段 | 内容 |
+|---|---|
+| `observationCount` | 窗口内已打分的观察数（阅读已判分的题目结果 + 写作总分） |
+| `header` | 由行**计算**的确定性汇总：按题型的错题数与涉及篇数、按错误类型（`learner::error_type`）计数、“跨不同文章重复错”的题型与“同一文章重复错”的题目、重做的修正/仍错/新错数、写作最低分项计数、coach 反馈种类与追问数、回看旧 attempt 的次数 |
+| `lines[]` | 每个相关事件一行：`{ids, date, kind, text}`。`kind`：`reading`（日期、`资源 id "标题"`、得分、第几次）、`miss`（每道**错题**：题号（用 `questionDisplayMap`）、题型、`answered 学习者作答 -> key 标准答案`）、`redo`（同一文章的重做：修正了前次几道错题、仍错哪些、新错哪些）、`writing`（任务类型、总分、最低的两个分项）、`coach`（某 attempt 当天的反馈种类如 `too_long` / `need_example`、追问次数）、`review`（对更早完成的 attempt 新开 coach 线程，即回看；账本里没有“重新打开”事件，只能这样近似）。`ids` 是可被记忆变更引用的 `obs-*`：每行最多 3 个（coach / review 行引用对应 attempt 的得分观察） |
+| `omitted` | 超限时一行 `omitted N older items` |
+| `memories[]` | 当前 active 的推断记忆（≤30，每条 ≤160 字；排除 user_explicit / system_policy / predicted；仅阅读 / 写作作用域），让模型能强化 / 取代而不是重复 |
+| `preferences[]` | 显式偏好（≤20，只读，不可被变更） |
+
+**大小上限与取舍。** 整包按 `estimate_tokens` 不超过 `WEEKLY_PACK_TOKEN_CAP = 6000`。超限时确定性地取舍（`cap_lines`）：先**保留“在 ≥2 篇不同文章里都错过”的题型的全部行**，再从最新往前保留最近的行（遇到第一条放不下的即停），其余丢弃并写入一行 `omitted N older items`；保护行本身就超限时才丢其中最旧的。`header` 在丢弃之前由全部行计算，所以计数始终如实。行按“日期、种类、文本”排序，与行 id / 数据库行序无关。
+
+**一次调用，两种产出**（`dream/weekly.py`）：`{"digest":{"observations","changes","nextPractice"},"mutations":[…]}`。digest 是简体中文散文（本周观察点名具体文章 / 题号，变化对照更早的 attempt 与重做，下一步练习针对重复错题），落在札记；mutations 只有 **ADD / REINFORCE / SUPERSEDE / ARCHIVE** 四种，线格式就是所有认知提案共用的 `MemoryMutationProposal`。
+
+**写入闸门（宿主，唯一咽喉）。** `dream.run_weekly` 收到 `{window, digest, mutations}` 后（`commands/journal.rs::run_weekly_consolidation`）：
+
+1. **引用必须在包内**（`WeeklyEvidence::admits`）：每个 `evidenceObservationIds` 都必须是宿主此刻重算的周包里出现过的 id，`targetMemoryId` 必须是包里的记忆，动作限四种，至多 8 条；否则直接拒绝（计入 `rejected`，不进校验器）。Python 侧先做同样的预过滤。
+2. 其余走**既有的 M3 校验器**（`MemoryProposalValidator`，来源 `Consolidated`）与提升路径（`MemoryService::apply_cognitive_mutations`）：证据存在 / 同用户 / 作用域匹配 / 无注入与密钥标记 / 规范键与重复 / 目标仍 active；REINFORCE 还要求有晚于旧证据的新证据。通过者以 `dream` 身份提升，`created_by='weekly_dream'`，`source_class='consolidated'`；SUPERSEDE 与 ARCHIVE 只改状态，**从不删除**。校验通过但提升失败（目标已变、作用域已满）的候选被置为 `rejected`（`reject_pending_candidate`），不留 `pending`——pending 候选会作为“未验证”上下文泄漏给 coach。
+3. digest 经 `WeeklyDigestProse::sanitized`（条数 / 字数上限，丢弃命中注入 / 密钥 / 禁止推断域的行）后存入 `settings`（命名空间 `weekly_digest`，键为 run id）。**不加列**：`dream_runs` 属于冻结的备份形状，加列会让旧备份无法还原；settings 在备份内，随备份还原。
+
+整个 M8 旧路径（`PatternProposal` / `validate_patterns` / `apply_consolidation`）仍在库里供开发期测试，**周任务不再使用**；`memory.candidate_pool` 能力已移除，weekly 运行的宿主方法白名单现在是 `learning.weekly_pack`、`model.invoke`、`dream.run_weekly`。
 
 **重试分层（显式且有界）。**
 
 | 层 | 谁负责 | 触发 | 上界 |
 |---|---|---|---|
 | 传输层 | 模型网关 `ai/runtime.rs`（`MAX_RETRIES = 2`） | 5xx / 429 / 超时 / 连接错误 | 一次 `model.invoke` 内；**weekly 的 `model.invoke` 取 0 次**（`RunKind::model_transport_retries`），避免与下一层相乘 |
-| 语义层 | sidecar `dream/weekly.py`（`MODEL_MAX_ATTEMPTS = 3`） | 网关标记为 retryable 的 provider 错误/超时；**畸形或非法输出**（非 JSON、形状错、无内容） | 首次 + 2 次重试，退避 2 s、5 s；剩余时间装不下“退避 + 5 s”就不再重试 |
-| 尝试层 | worker | 一次尝试仍失败 | 记为 failed（`record_failed_weekly_run`），**每个本地日最多一次尝试**：周六失败 → 周日重试 → 仍失败则并入下个周末的窗口 |
+| 语义层 | sidecar `dream/weekly.py`（`MODEL_MAX_ATTEMPTS = 3`） | 网关标记为 retryable 的 provider 错误/超时；**畸形或非法输出**（非 JSON、形状错、`digest` / `mutations` 类型错、无内容；`{}` 不算“想清楚的空答案”） | 首次 + 2 次重试，退避 2 s、5 s；剩余时间装不下“退避 + 5 s”就不再重试 |
+| 尝试层 | worker | 一次尝试仍失败 | 记为 failed（`record_failed_weekly_run`），**每个本地日最多一次尝试**，在其后的任何一天继续，直到该周末完成 |
 
-一次 weekly 因此最多 3 个 provider 请求。不可修复的失败（401 / 400 等非 retryable、超出 deadline）立即失败，不重试。**空结果（没有可成立的模式）是成功**，不重试、不算失败。weekly 一次运行的宿主预算为 420 s（`WEEKLY_REQUEST_TIMEOUT`），sidecar 自限 400 s。
+一次 weekly 因此最多 3 个 provider 请求。不可修复的失败（401 / 400 等非 retryable、超出 deadline）立即失败，不重试。**空结果（没有可成立的内容）是成功**，不重试、不算失败。weekly 一次运行的宿主预算为 420 s（`WEEKLY_REQUEST_TIMEOUT`），sidecar 自限 400 s。
 
 **失败语义。** provider / 超时 / 模型输出不合法 / sidecar 失败，一律记为 **failed 的 dream run**（锚定在窗口终点当日的日记上），不是“无事可整合”；`weekly_run_completed` 仍为 false。Python 侧同样 fail closed。
 
-**写入。** 通过校验的模式写成 `memory_items`（`created_by='weekly_dream'`，`status='active'`，`ielts-db/src/consolidation.rs:150-163`），不经逐条审批；校验与撤销见第 4 节。
-
-**札记。** `weekly_digest_list` 返回每个 completed run 的 `window`（周末键）与实际覆盖的 `windowStart` / `windowEnd`；札记页按这一范围标注（例如“9月19日 – 10月10日”），不再假定“上一个 ISO 周”，变化汇总也取该范围内的日记。
+**札记。** `weekly_digest_list` 返回每个 completed、且有散文的 run 的 `window`（周末键）、实际覆盖的 `windowStart` / `windowEnd` 与三段散文（`observations` / `changes` / `nextPractice`）；札记页按这一范围标注（例如“9月19日 – 10月10日”），三段原样排版，`nextPractice` 之后（仅最新一周）再接学习计划里尚未完成的练习。写了空话的 run 没有条目。
 
 ### 2.4 AI 阅读复盘：opt-in 且幂等
 
@@ -155,6 +183,20 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 
 **CJK 估算**：`estimate_tokens`（`ielts-domain/src/context.rs:188-195`）对 CJK 标量按 1 token/字，其余标量每 4 个 1 token（向上取整）。目的是避免中文输入被按 4 字符/token 严重低估。
 
+**会话内缓存黏性与不重复（2026-10-05）。**
+
+- **路由键。** 每个 coach 线程一个稳定的缓存路由键 `coach-<sha256(thread id) 前 32 位>`（`coach_cache_key`：同线程恒定、跨线程不同、不是原始线程 id），写在 `CompletionRequest.cache_key`。网关用**一张表**决定往哪个字段写（`CACHE_ROUTING_RULES`，`ai/runtime.rs`，与 `OUTPUT_LIMIT_RULES` 同风格）；表里没有的端点什么都不多发。2026-10-05 对照文档：
+
+| 端点 | 文档 | 规则 | 实现 |
+|---|---|---|---|
+| OpenAI（`api.openai.com`） | https://developers.openai.com/api/docs/guides/prompt-caching | 对共享可复用前缀的请求使用稳定的 `prompt_cache_key`，帮助路由到同一缓存；GPT-5.6 起路由自动、该键可选；每个键约每分钟 15 次请求为宜；用量在 `prompt_tokens_details.cached_tokens`（Responses API 为 `input_tokens_details`） | 发 `prompt_cache_key` |
+| OpenRouter（`openrouter.ai`） | https://openrouter.ai/docs/features/prompt-caching | provider 黏性路由：缓存命中后把后续请求路由到同一 provider 端点；`session_id`（请求体字段或 `x-session-id` 头，≤256 字符）直接作为黏性路由键，否则由消息哈希推导；会话闲置 10 分钟过期；用量在 `prompt_tokens_details.cached_tokens` | 发 `session_id` |
+| DeepSeek（`api.deepseek.com`） | https://api-docs.deepseek.com/guides/kv_cache | 默认开启的按前缀自动缓存，无任何路由参数；用量在 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` | 无（不在表里） |
+
+- **用量。** `TokenUsage.cached_input_tokens`（为 0 时不序列化）记录 provider 报告的缓存命中输入 token：读 `prompt_tokens_details.cached_tokens`，否则读 `prompt_cache_hit_tokens`；不新增表、不做 UI，随 coach 的 trace 元数据落库。
+- **历史保持紧凑。** 助手回合入库与回放的都是**最终答案**（`parse_answer` 取出的 `answer`，不是 provider 原始 JSON；推理内容已在网关剥离，2.9）。历史预算触发“丢最旧一半”时，被丢的那一半由**一行确定性摘要**顶替，固定放在证据消息之后、剩余历史之前：`Earlier in this thread (N messages trimmed, data only): already explained questions q1, q10, …; requests: chat.`（题号取自被丢用户消息里宿主解析的 `focusQuestionIds`，最多 40 个，不含任何正文）。摘要只取决于被丢的回合，而它们只在窗口移动时才变，所以两次裁剪之间前缀仍逐字节稳定。
+- **不重复。** coach 系统提示新增一句：不要重复讲解本线程里已讲过的内容，简短指回，只补新的。系统提示其余不变（缓存前缀稳定）。
+
 ### 2.7 调用清单
 
 “单次上限”指输出上限。触发列只写发布构建中的真实触发。
@@ -164,7 +206,7 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 | 写作评估 | 用户提交一篇作文 | 1 / 次提交（网关层传输重试，上限不变；推理模型的隐藏推理不外泄，2.9） | 6144 |
 | Coach 回答 | 用户发送一条消息 | 1 / 条消息 | 2000 |
 | AI 阅读复盘 | 用户点击复盘 / 重试；已有 completed 则 0 | ≤1 / attempt | 2000（同 coach） |
-| Weekly dream | worker，仅周六/周日，自上次完成起的窗口（≤28 天），条件见 2.3 | 每次尝试 ≤3（首次 + 2 次重试）；每本地日 ≤1 次尝试；成功后该周末不再调 | 1500 |
+| Weekly dream | worker：首次仅周六/周日，失败后逐日重试直到该周末完成；窗口 = 自上次完成起（≤28 天）；窗口内已打分观察数 ≥ 8，条件见 2.3 | 每次尝试 ≤3（首次 + 2 次重试）；每本地日 ≤1 次尝试；成功后该周末不再调；证据不足 0 次 | 1500 |
 | Daily journal（= daily dream） | worker / 札记“整理今天” | 0（只做确定性摘要，无 proposal） | — |
 | 反馈、再问、对错链接 | 用户动作 | 0 | — |
 | Provider 探测 | 用户在设置中点测试 | 1 / 次点击 | 16（推理模型族 1024） |
@@ -238,7 +280,7 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 ### 3.3 札记（Notebook）取代面向用户的 agent 控制台
 
 - 路由 `/notebook`，导航名“札记”（`main.js:39-42`，`NavBar.vue:38`）；`/memory-center` 重定向到它（`main.js:43-47`）。
-- 内容：按日的日记条目与按周的周记条目（散文，不是仪表盘）；“下一步练习”；“关于你，我们记住了”——每条记忆**只有两个操作：不准确、忘记**（`NotebookPage.vue:161-170`）。“不准确”记 `inaccurate` 反馈，不删学习事实；“忘记”需确认，且删除该句及其依据，不影响练习记录。
+- 内容：按日的日记条目与按周的周记条目（散文，不是仪表盘；周记的三段 观察 / 变化 / 下一步练习 就是周任务一次调用写下的散文，2.3）；“下一步练习”；“关于你，我们记住了”——每条记忆**只有两个操作：不准确、忘记**（`NotebookPage.vue:161-170`）。“不准确”记 `inaccurate` 反馈，不删学习事实；“忘记”需确认，且删除该句及其依据，不影响练习记录。
 - **不出现**：审批队列、待处理计数、候选数量、置信度、Dream Report 的 approve/reject/edit。
 - 页面头部的“整理今天”是用户主动触发当天的确定性整理，不调模型。
 - 视觉回归：`developer/tests/e2e/notebook_visual_check.py`（撰写时为未跟踪文件）。
@@ -274,7 +316,7 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 | **11.2 Level 1** Session Close Reflection | 会话结束时的 LLM 总结 / 候选提取 | **移除**：不存在这次调用 | 代码中没有 session-close 的调用点（对 `crates/`、`src-tauri/`、`agent-runtime-python/src`、`apps/writing-vue/src` 检索无匹配） |
 | **16** 产品级 Prompt/Skill 自进化；**M10–M12 的 shadow / canary**；**M11** | 应用内 shadow / canary / 提升 | **仅开发者侧，不随产品发布**。DB 表与命令作为合同保留，不作为产品功能运行 | 2.5 |
 | **M7 的 daily dream proposal**（REINFORCE / REFINE / IMPROVE / REGRESS / CONTRADICT / NOOP 候选）；**M7-06～M7-08** 的 daily 编排与容量约束 | 每日生成 memory 候选 | **移除**：daily 只做确定性摘要（日记）；所有记忆整合只在 weekly。`dream_candidates` 表保留但无人读写 | 2.1 规则 2；`daily_dream.py` / `capacity.py` / `record_job_dream_proposals` 已删除 |
-| **M8** “上一个已完成 ISO 周 / 每周每天最多重试一次 / 前置在 daily dream 之后” | weekly 的调度与窗口 | **取代**：仅本地周末；窗口 = 自上次完成起（≤28 天）；幂等键 = 周末所在 ISO 周；一次尝试内有界重试 | 2.3 |
+| **M8** “上一个已完成 ISO 周 / 每周每天最多重试一次 / 前置在 daily dream 之后”；ADR-M8 的 `memory.candidate_pool` 与跨 scope pattern 提案 | weekly 的调度、输入与产出 | **取代**：首次仅本地周末、失败后逐日重试直到完成；窗口 = 自上次完成起（≤28 天）；幂等键 = 最近一个周末所在 ISO 周；输入是窗口内真实练习记录（周包），一次调用产出散文 + 记忆变更（ADD / REINFORCE / SUPERSEDE / ARCHIVE）；`memory.candidate_pool` 能力移除、改为 `learning.weekly_pack` | 2.3 |
 | **M10 / M11** 的 Tauri 命令随发布构建注册 | 命令在发布 handler 中 | **取代**：仅 `developer-tools` 下编译与注册 | 1.2；`lib.rs` handler |
 | **11.12** Dream 成本控制 | 每日 token / cost hard limit、按 event group 调用等 | **由本文第 2 节取代**：以结构性规则控制成本，不做运行时硬限额与成本计量 | 第 2 节 |
 
@@ -289,11 +331,11 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 
 1. **Edge WebDriver 版本（已处理）**：`developer/tests/e2e/webdriver_select.py` 现在读取已安装的 WebView2 运行时版本（注册表 `HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` 的 `pv`，再回退 HKLM 原生键与 HKCU），按顺序在本机已有的 driver 里挑**大版本一致**的：`TAURI_NATIVE_DRIVER`、PATH、`%TEMP%\ielts-msedgedriver-<版本>`、`%LOCALAPPDATA%\IELTSAtlas\webdriver`、Edge 安装目录。找不到匹配的则以 blocked 报告并给出可执行的修复步骤；**不下载任何东西**（下载仍由 `install_edge_webdriver.ps1` 在 CI 完成）。所选 driver、被跳过的 driver、运行时版本都写入 E2E 报告 metadata。
 2. **`phase3_migration` 迁移数（已处理）**：`crates/ielts-db/tests/phase3_migration.rs` 的 `migrate_function_transactional_versions` 现在枚举到 `1..=26`（含 0025、0026）。
-3. **Weekly 尚未对真实 provider 验证**：整条链路（周末窗口、候选池、有界重试、失败记账、每日重试上界、幂等）有单元 / 合同测试，但没有用真实模型跑过一次。首次真跑要重点看：输出 JSON 的合法率与重试命中率、failed 记账是否按预期阻止同日重试、折叠窗口的行为、写出的 `weekly_dream` 记忆质量；推理模型（DeepSeek / OpenRouter）的真实响应形态是否都被 2.9 的解析覆盖。
+3. **Weekly 尚未对真实 provider 验证**：整条链路（周末窗口、周包、有界重试、失败记账、每日重试上界、幂等）有单元 / 合同测试，但没有用真实模型跑过一次。首次真跑要重点看：输出 JSON 的合法率与重试命中率、failed 记账是否按预期阻止同日重试、折叠窗口的行为、写出的 `weekly_dream` 记忆质量；推理模型（DeepSeek / OpenRouter）的真实响应形态是否都被 2.9 的解析覆盖。
 4. **`reports/` 基线被 gitignore**：`exam-freeze` 基线只在本机。换机器或清理 `reports/` 后，需先 `exam_freeze_visual_check.py --baseline`，而且应在已知良好的 dist 上生成，否则守卫失去意义。
 5. **工作树未提交**：札记页、`modules/notebook/`、`notebook_visual_check.py` 等在撰写时仍是未跟踪文件；本文所述行为以该工作树为准。
 6. **M10 / M11 命令（已处理）**：现仅在 `developer-tools` 下编译与注册（见 1.2 末尾）。需要这些命令的开发期流程要带 `--features developer-tools` 构建。
-7. **weekly 的输入来源在发布构建里很窄。** weekly 池只取 `memory_items`；发布构建里写入 `memory_items` 的只有用户显式偏好（`memory_put_explicit_preference`）与 weekly 自己的产出——候选提取（`memory_generate_candidates`）仅开发期，daily 的 proposal 已移除。因此在没有显式偏好的库上，weekly 的池是空的、0 次模型调用。要让 weekly 在真实使用里有料，需要后续单独决定：是否让 weekly 直接以窗口内的 observation 为输入，或恢复一条受控的 observation → memory 投影。本次未改。
+7. **weekly 的输入来源（已处理）。** 原先 weekly 池只取 `memory_items`，发布构建里写入它的只有用户显式偏好与 weekly 自己，普通用户的 weekly 没有输入。现在输入是窗口内的真实练习记录（2.3 的周包），推断类记忆只由 weekly 写入。仍未做的：回看旧 attempt 只能用“新开 coach 线程”近似（账本没有“重新打开”事件）；coach / review 行引用的是 attempt 得分观察（coach 观察命名空间不在 M3 校验器认得的 reading / writing 之内）；digest 存在 `settings` 而不是 `dream_runs` 的列（备份形状冻结）。
 8. **weekly 的 sidecar 时间预算是按估算设的**（宿主 420 s、sidecar 400 s、3 次调用、退避 2/5 s）；provider 超时默认值与上限（5–300 s）下，最坏情况会因预算用尽而少于 3 次调用，首次真跑后再校准。
 
 ---

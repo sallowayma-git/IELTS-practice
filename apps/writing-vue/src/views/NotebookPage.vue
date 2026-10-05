@@ -37,30 +37,26 @@
           <h2 class="heading-serif">{{ week.title }}</h2>
         </header>
 
-        <section class="notebook-section">
+        <section v-if="week.observations.length" class="notebook-section">
           <h3><span class="notebook-mark" aria-hidden="true">§</span>这段时间的观察</h3>
           <ul class="notebook-notes">
-            <li v-for="pattern in week.observations" :key="pattern"><span>{{ pattern }}。</span></li>
+            <li v-for="line in week.observations" :key="line"><span>{{ line }}。</span></li>
           </ul>
         </section>
 
-        <section v-if="week.changes.improved.length || week.changes.recurring.length" class="notebook-section">
+        <section v-if="week.changes.length" class="notebook-section">
           <h3><span class="notebook-mark" aria-hidden="true">§</span>变化</h3>
-          <dl class="notebook-changes">
-            <div v-if="week.changes.improved.length">
-              <dt>在变好</dt>
-              <dd>{{ week.changes.improved.join('、') }}</dd>
-            </div>
-            <div v-if="week.changes.recurring.length">
-              <dt>反复出现</dt>
-              <dd>{{ week.changes.recurring.join('、') }}</dd>
-            </div>
-          </dl>
+          <ul class="notebook-notes">
+            <li v-for="line in week.changes" :key="line"><span>{{ line }}。</span></li>
+          </ul>
         </section>
 
-        <section v-if="weekIndex === 0 && practice.length" class="notebook-section" data-notebook-next>
+        <section v-if="week.nextPractice.length || (weekIndex === 0 && practice.length)" class="notebook-section" data-notebook-next>
           <h3><span class="notebook-mark" aria-hidden="true">§</span>下一步练习</h3>
-          <ol class="notebook-practice">
+          <ul v-if="week.nextPractice.length" class="notebook-notes">
+            <li v-for="line in week.nextPractice" :key="line"><span>{{ line }}。</span></li>
+          </ul>
+          <ol v-if="weekIndex === 0 && practice.length" class="notebook-practice">
             <li v-for="item in practice" :key="item.id">
               <strong>{{ item.label }}</strong>
               <span v-if="item.why">{{ item.why }}</span>
@@ -243,11 +239,11 @@ async function readEntries(memoriesById) {
 
 // Weekly entries are an addition: a host without them (or a failed read)
 // simply shows the daily pages.
-async function readWeeks(dailyEntries) {
+async function readWeeks() {
   try {
     const digests = await getWeeklyDigests()
     return (Array.isArray(digests) ? digests : [])
-      .map((digest) => buildWeeklyEntry(digest, dailyEntries))
+      .map(buildWeeklyEntry)
       .filter(Boolean)
   } catch {
     return []
@@ -264,7 +260,7 @@ async function load() {
     ])
     practice.value = nextPractice(plan)
     entries.value = await readEntries(memoriesById)
-    weeks.value = await readWeeks(entries.value)
+    weeks.value = await readWeeks()
   } catch {
     entries.value = []
     weeks.value = []

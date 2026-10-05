@@ -55,6 +55,10 @@ impl MemoryStore for SqlStore {
         promote_memory_candidate(&self.conn, command).map_err(app_error)
     }
 
+    fn reject_candidate(&self, candidate_id: &str) -> Result<(), ApplicationError> {
+        ielts_db::reject_pending_candidate(&self.conn, candidate_id).map_err(app_error)
+    }
+
     fn upsert_explicit_preference(
         &self,
         command: &ExplicitPreferenceUpsert,

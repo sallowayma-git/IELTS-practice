@@ -243,6 +243,10 @@ impl MemoryStore for ClosedLoopFakeStore {
         })
     }
 
+    fn reject_candidate(&self, _candidate_id: &str) -> Result<(), ApplicationError> {
+        Ok(())
+    }
+
     fn upsert_explicit_preference(
         &self,
         command: &ExplicitPreferenceUpsert,

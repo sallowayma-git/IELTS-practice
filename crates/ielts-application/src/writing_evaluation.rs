@@ -124,6 +124,7 @@ async fn evaluate_language_model<M: LanguageModel>(
             ],
             temperature: prepared.temperature,
             max_tokens: crate::WRITING_EVALUATION_MAX_TOKENS,
+            cache_key: None,
         })
         .await?;
     parse_output(&response.content)

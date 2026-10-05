@@ -194,42 +194,34 @@ function formatWindowRange(startDay, endDay) {
   return `${start} – ${sameYear ? end.slice(end.indexOf('年') + 1) : end}`
 }
 
-function unique(values) {
-  return [...new Set(values)]
+function sentences(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((line) => String(line ?? '').trim().replace(/[。．.!！?？\s]+$/u, ''))
+    .filter(Boolean)
 }
 
 /**
- * One weekly notebook entry from a finished weekly consolidation: the patterns
- * it found (这段时间的观察) and the skill changes gathered from the daily entries
- * inside the window it actually covered (变化). The window is whatever the run
- * covered (a missed weekend folds into the next one, so it can span weeks), and
- * the entry is labelled by that range. No counts, no ids, no confidence.
+ * One weekly notebook entry from a finished weekly pass: the three sections of
+ * prose the pass wrote (这段时间的观察 / 变化 / 下一步练习). The window is whatever
+ * the run covered (a missed weekend folds into the next one, so it can span
+ * weeks), and the entry is labelled by that range. No counts, no ids, no
+ * confidence; a pass that wrote nothing has no entry.
  */
-export function buildWeeklyEntry(digest, dailyEntries = []) {
+export function buildWeeklyEntry(digest) {
   const window = String(digest?.window || '')
   const startDay = localDay(pick(digest, 'windowStart', 'window_start'))
   const endDay = localDay(pick(digest, 'windowEnd', 'window_end'))
   if (!window || !startDay || !endDay) return null
-  const patterns = (Array.isArray(digest.patterns) ? digest.patterns : [])
-    .map((pattern) => String(pattern?.statement || '').trim().replace(/[。．.!！?？\s]+$/u, ''))
-    .filter(Boolean)
-  if (!patterns.length) return null
-  const days = (Array.isArray(dailyEntries) ? dailyEntries : [])
-    .filter((entry) => entry?.day >= startDay && entry.day <= endDay)
-  const change = {
-    improved: unique(days.flatMap((entry) => entry.changes?.improved || [])),
-    recurring: unique(days.flatMap((entry) => entry.changes?.recurring || []))
-  }
-  return {
+  const entry = {
     window,
     startDay,
     dateLabel: formatWindowRange(startDay, endDay),
-    title: change.improved.length
-      ? `这段时间，${change.improved[0]}开始稳定`
-      : change.recurring.length ? `这段时间，${change.recurring[0]}仍需留意` : '这段时间的整理',
-    observations: patterns,
-    changes: change
+    title: '这段时间的整理',
+    observations: sentences(digest.observations),
+    changes: sentences(digest.changes),
+    nextPractice: sentences(pick(digest, 'nextPractice', 'next_practice'))
   }
+  return entry.observations.length || entry.changes.length || entry.nextPractice.length ? entry : null
 }
 
 /** Study-plan items still open, as practice suggestions. */

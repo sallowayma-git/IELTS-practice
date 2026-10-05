@@ -351,8 +351,12 @@ def main() -> int:
             ["cargo", "test", "-p", "ielts-application", "--lib", "coach::", "--locked", "--offline"],
         ),
         run_command(
-            "Rust weekly dream receipts and digests",
-            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--locked", "--offline"],
+            "Rust weekly dream receipts, digests and input pack",
+            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust weekly dream host path (pack, gate, retry predicate)",
+            ["cargo", "test", "-p", "ielts-practice-tauri", "--lib", "commands::journal", "--locked", "--offline"],
         ),
         run_command(
             "Rust production Coach trace and daily job receipts",

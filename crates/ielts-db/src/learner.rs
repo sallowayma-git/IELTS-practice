@@ -1317,7 +1317,7 @@ fn update_stability(previous: f64, elapsed_days: f64, outcome: f64, weight: f64)
     }
 }
 
-fn error_type(question_kind: Option<&str>) -> String {
+pub(crate) fn error_type(question_kind: Option<&str>) -> String {
     match question_kind.unwrap_or("unknown") {
         "tfng" | "true_false_not_given" => "tfng.boundary".into(),
         "yng" | "yes_no_not_given" => "yng.boundary".into(),

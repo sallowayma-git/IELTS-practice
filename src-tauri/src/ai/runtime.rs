@@ -107,7 +107,7 @@ impl LanguageModel for AiRuntime {
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
     async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
-        let body = completion_body(&self.config.model, &request);
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
         let (envelope, latency_ms, retry_count, header_request_id): (ChatResponse, _, _, _) = self
             .post_chat_completion(&body, "AI response envelope invalid")
             .await
@@ -507,6 +507,12 @@ struct ChatUsage {
     // so an odd shape here can never discard the main counts.
     #[serde(default)]
     completion_tokens_details: Option<Value>,
+    // OpenAI / OpenRouter: `{"cached_tokens": n}`. Same `Value` rationale.
+    #[serde(default)]
+    prompt_tokens_details: Option<Value>,
+    // DeepSeek reports the cached share at the top level.
+    #[serde(default)]
+    prompt_cache_hit_tokens: Option<Value>,
 }
 
 /// Output-limit rules by model-name prefix: (prefix, request field, floor).
@@ -532,9 +538,37 @@ fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
         .map_or(("max_tokens", requested), |(_, field, floor)| (*field, requested.max(*floor)))
 }
 
+/// Prompt-cache routing by endpoint host: (host suffix, request body field that
+/// takes the caller's stable cache key). One lookup, no scattered provider ifs;
+/// an endpoint that is not listed gets nothing extra. Checked 2026-10-05:
+/// - OpenAI https://developers.openai.com/api/docs/guides/prompt-caching
+///   documents `prompt_cache_key` ("use a stable prompt_cache_key for requests
+///   that share a reusable prefix to help route related requests to the same
+///   cache"; optional on GPT-5.6+, where routing is automatic).
+/// - OpenRouter https://openrouter.ai/docs/features/prompt-caching documents
+///   provider sticky routing keyed by `session_id` (body field or `x-session-id`
+///   header, at most 256 characters); without it the key is derived from message
+///   hashing. It passes the upstream provider's automatic caching through.
+/// - DeepSeek https://api-docs.deepseek.com/guides/kv_cache caches automatically
+///   by prefix matching and documents no routing parameter, so it has no row.
+const CACHE_ROUTING_RULES: &[(&str, &str)] = &[
+    ("api.openai.com", "prompt_cache_key"),
+    ("openrouter.ai", "session_id"),
+];
+
+/// The body field the endpoint documents for a cache routing key, if any.
+fn cache_routing_field(base_url: &str) -> Option<&'static str> {
+    let host = base_url.split("://").nth(1).unwrap_or(base_url).split(['/', ':']).next().unwrap_or("");
+    let host = host.to_ascii_lowercase();
+    CACHE_ROUTING_RULES
+        .iter()
+        .find(|(suffix, _)| host == *suffix || host.ends_with(&format!(".{suffix}")))
+        .map(|(_, field)| *field)
+}
+
 /// Build the chat-completion body. The output ceiling is mandatory, so every
 /// provider request is bounded.
-fn completion_body(model: &str, request: &CompletionRequest) -> Value {
+fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> Value {
     let mut body = json!({
         "model": model,
         "temperature": request.temperature,
@@ -543,6 +577,9 @@ fn completion_body(model: &str, request: &CompletionRequest) -> Value {
     });
     let (field, value) = output_limit(model, request.max_tokens);
     body[field] = json!(value);
+    if let (Some(key), Some(field)) = (&request.cache_key, cache_routing_field(base_url)) {
+        body[field] = json!(key);
+    }
     body
 }
 
@@ -678,6 +715,13 @@ fn token_usage(usage: ChatUsage) -> TokenUsage {
             .and_then(|details| details.get("reasoning_tokens"))
             .and_then(Value::as_u64)
             .unwrap_or(0),
+        cached_input_tokens: usage
+            .prompt_tokens_details
+            .as_ref()
+            .and_then(|details| details.get("cached_tokens"))
+            .or(usage.prompt_cache_hit_tokens.as_ref())
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
     }
 }
 
@@ -780,6 +824,7 @@ mod tests {
             messages: vec![ielts_application::ChatMessage::new("user", "hello")],
             temperature: 0.2,
             max_tokens: 100,
+            cache_key: None,
         }
     }
 
@@ -830,7 +875,7 @@ mod tests {
                 };
                 server.join().unwrap();
                 assert_eq!(failure.model.as_deref(), model.then_some("actual-v2"));
-                assert_eq!(failure.usage, usage.then_some(TokenUsage { input_tokens: 10, output_tokens: 4, reasoning_tokens: 0 }));
+                assert_eq!(failure.usage, usage.then_some(TokenUsage { input_tokens: 10, output_tokens: 4, reasoning_tokens: 0, ..Default::default() }));
                 assert_eq!(failure.provider_request_id.as_deref(),
                     Some(if header { "header-request" } else { "body-request" }));
                 assert!(failure.latency_ms >= 20);
@@ -853,7 +898,7 @@ mod tests {
         assert_eq!(failure.retry_count, 1);
         assert!(failure.latency_ms >= 250);
         assert_eq!(failure.model.as_deref(), Some("actual-v2"));
-        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 10, output_tokens: 4, reasoning_tokens: 0 }));
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 10, output_tokens: 4, reasoning_tokens: 0, ..Default::default() }));
         assert_eq!(failure.provider_request_id.as_deref(), Some("header-request"));
         assert!(!failure.error.retryable);
     }
@@ -892,13 +937,47 @@ mod tests {
             messages: vec![ielts_application::ChatMessage::new("user", "hello")],
             temperature: 0.2,
             max_tokens: 2_000,
+            cache_key: None,
         };
         // Assert against the production builder, not a hand-rolled copy.
-        let body = completion_body("fake-model", &request);
+        let body = completion_body("fake-model", "https://example.test/v1", &request);
         assert_eq!(body["response_format"]["type"], "json_object");
         assert!(body.get("tools").is_none());
         assert_eq!(body["max_tokens"], json!(2_000));
         assert!(body.get("max_completion_tokens").is_none());
+    }
+
+    #[test]
+    fn cache_key_is_sent_only_where_the_endpoint_documents_a_routing_field() {
+        let request = CompletionRequest {
+            messages: vec![ielts_application::ChatMessage::new("user", "hello")],
+            temperature: 0.2,
+            max_tokens: 100,
+            cache_key: Some("coach-abc".into()),
+        };
+        let body = |url: &str| completion_body("m", url, &request);
+        assert_eq!(body("https://api.openai.com/v1")["prompt_cache_key"], json!("coach-abc"));
+        assert_eq!(body("https://openrouter.ai/api/v1")["session_id"], json!("coach-abc"));
+        assert!(body("https://openrouter.ai/api/v1").get("prompt_cache_key").is_none());
+        // DeepSeek caches by prefix automatically: nothing extra. Neither do unknown hosts,
+        // and a look-alike host does not match.
+        for url in ["https://api.deepseek.com/v1", "https://gateway.example/v1", "https://api.openai.com.evil.test/v1", "http://localhost:8080/v1"] {
+            let body = body(url);
+            assert!(body.get("prompt_cache_key").is_none() && body.get("session_id").is_none(), "{url}");
+        }
+        // No key, no field, even on a provider that has a rule.
+        let plain = CompletionRequest { cache_key: None, ..request.clone() };
+        assert!(completion_body("m", "https://api.openai.com/v1", &plain).get("prompt_cache_key").is_none());
+    }
+
+    #[test]
+    fn cached_input_tokens_are_read_from_every_documented_usage_shape() {
+        let usage = |raw: &str| token_usage(serde_json::from_str::<ChatUsage>(raw).unwrap());
+        assert_eq!(usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":64}}"#).cached_input_tokens, 64);
+        assert_eq!(usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_cache_hit_tokens":80,"prompt_cache_miss_tokens":20}"#).cached_input_tokens, 80);
+        let none = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":"odd"}"#);
+        assert_eq!((none.input_tokens, none.cached_input_tokens), (100, 0));
+        assert!(!serde_json::to_string(&none).unwrap().contains("cachedInputTokens"));
     }
 
     #[test]
@@ -915,11 +994,12 @@ mod tests {
             messages: vec![ielts_application::ChatMessage::new("user", "hello")],
             temperature: 0.2,
             max_tokens: 16,
+            cache_key: None,
         };
-        let body = completion_body("gpt-5-mini", &request);
+        let body = completion_body("gpt-5-mini", "https://api.openai.com/v1", &request);
         assert_eq!(body["max_completion_tokens"], json!(1024));
         assert!(body.get("max_tokens").is_none());
-        assert_eq!(completion_body("deepseek-chat", &request)["max_tokens"], json!(16));
+        assert_eq!(completion_body("deepseek-chat", "https://api.deepseek.com/v1", &request)["max_tokens"], json!(16));
     }
 
     #[test]

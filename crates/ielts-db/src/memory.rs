@@ -424,6 +424,18 @@ pub fn promote_memory_candidate(
     })
 }
 
+/// A validated candidate that could not be promoted (its target moved, the scope
+/// is full) must not stay `pending`: pending candidates are shown to the coach as
+/// unverified context. No-op unless the candidate is still pending.
+pub fn reject_pending_candidate(conn: &Connection, candidate_id: &str) -> DbResult<()> {
+    conn.execute(
+        "UPDATE memory_candidates SET disposition='rejected',version=version+1,updated_at=?1
+         WHERE id=?2 AND disposition='pending'",
+        params![chrono::Utc::now().to_rfc3339(), candidate_id],
+    )?;
+    Ok(())
+}
+
 pub fn upsert_explicit_preference(
     conn: &Connection,
     command: &ExplicitPreferenceUpsert,

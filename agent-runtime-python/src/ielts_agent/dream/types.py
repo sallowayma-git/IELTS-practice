@@ -3,8 +3,9 @@
 Pure pydantic data contracts. No canonical DB access, no provider secrets, no
 host bridge. The daily journal is a deterministic summary built by the Rust
 host: there is no daily dream and no daily proposal. The weekly orchestrator
-reads a bounded pool via the Rust host gateway and submits patterns via
-``dream.run_weekly`` — Rust is the authority.
+reads the host-built weekly pack (the learner's practice records of the window)
+and submits one digest plus memory mutations via ``dream.run_weekly`` — Rust is
+the authority.
 
 Conventions mirror :mod:`ielts_agent.retrieval.types`:
 
@@ -16,7 +17,6 @@ Conventions mirror :mod:`ielts_agent.retrieval.types`:
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -41,23 +41,23 @@ CAPABILITY_VERSION_LEARNER_SKILL_STATE = "1"
 # strings; we pin to "1" so a handshake mismatch forces a clean fallback, not
 # silent drift.
 CAPABILITY_DREAM_RUN_WEEKLY = "dream.run_weekly"
-CAPABILITY_MEMORY_CANDIDATE_POOL = "memory.candidate_pool"
+CAPABILITY_LEARNING_WEEKLY_PACK = "learning.weekly_pack"
 
 CAPABILITY_VERSION_DREAM_RUN_WEEKLY = "1"
-CAPABILITY_VERSION_MEMORY_CANDIDATE_POOL = "1"
+CAPABILITY_VERSION_LEARNING_WEEKLY_PACK = "1"
 
 # Required host capabilities for the weekly-dream orchestration path. The
-# memory.candidate_pool capability returns a bounded pool of active + pending
-# observed (never predicted-only) candidate memories with stable IDs and
-# summaries; dream.run_weekly re-validates supports and runs the promotion
-# gate on the Rust authority.
+# learning.weekly_pack capability returns the bounded record-level pack of the
+# window (one compact line per practice event, each carrying the obs-* ids a
+# mutation may cite, plus the active memories); dream.run_weekly validates the
+# digest and the mutations on the Rust authority.
 REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES: dict[str, str] = {
     CAPABILITY_DREAM_RUN_WEEKLY: CAPABILITY_VERSION_DREAM_RUN_WEEKLY,
-    CAPABILITY_MEMORY_CANDIDATE_POOL: CAPABILITY_VERSION_MEMORY_CANDIDATE_POOL,
+    CAPABILITY_LEARNING_WEEKLY_PACK: CAPABILITY_VERSION_LEARNING_WEEKLY_PACK,
 }
 
 # M8 weekly-dream schema version. Bumped only on wire-breaking change.
-WEEKLY_DREAM_SCHEMA_VERSION = 1
+WEEKLY_DREAM_SCHEMA_VERSION = 2
 
 
 class _StrictModel(BaseModel):
@@ -215,86 +215,52 @@ class JournalEnrichment(_StrictModel):
         return list(value)
 
 
-class PatternKind(StrEnum):
-    """M8-05 fixed weekly-dream pattern taxonomy.
+# The memory mutations a weekly pass may propose (new / reinforce / supersede /
+# archive), in the wire shape every cognitive proposal uses. Rust re-validates.
+WEEKLY_MUTATION_ACTIONS: frozenset[str] = frozenset({"ADD", "REINFORCE", "SUPERSEDE", "ARCHIVE"})
 
-    Only these five pattern kinds are permitted. Diagnostic categories
-    (medical / personality / intelligence / mental-health) are forbidden at
-    the type level — a non-allowed kind cannot be constructed. The
-    orchestrator re-validates the kind against :data:`PATTERN_KINDS` before
-    submitting a candidate, and the Rust authority re-validates again.
-    """
+# Fields each mutation may carry, and nothing else survives to the host.
+WEEKLY_MUTATION_FIELDS: dict[str, frozenset[str]] = {
+    "ADD": frozenset({"namespace", "canonicalKey", "scope", "statement", "evidenceObservationIds"}),
+    "REINFORCE": frozenset({"targetMemoryId", "evidenceObservationIds"}),
+    "SUPERSEDE": frozenset(
+        {"targetMemoryId", "namespace", "canonicalKey", "scope", "proposedStatement", "evidenceObservationIds"}
+    ),
+    "ARCHIVE": frozenset({"targetMemoryId", "evidenceObservationIds"}),
+}
 
-    CROSS_SKILL_STRATEGY = "cross_skill_strategy"
-    METACOGNITIVE_PATTERN = "metacognitive_pattern"
-    BEHAVIOR_PATTERN = "behavior_pattern"
-    STABLE_LEARNING_PREFERENCE = "stable_learning_preference"
-    RECURRENT_LANGUAGE_PATTERN = "recurrent_language_pattern"
-
-
-# The fixed set of allowed pattern kinds (M8-05). Exposed as a frozenset for
-# the orchestrator's allow-list check and for asserting the enum stays at
-# exactly five values.
-PATTERN_KINDS: frozenset[str] = frozenset(kind.value for kind in PatternKind)
-
-# Forbidden diagnostic categories (M8-05). The orchestrator rejects any
-# candidate whose ``pattern_kind`` (case-insensitive) matches one of these.
-# The check is defensive: PatternKind construction already rejects unknown
-# values, but this frozenset guards against a future loosening and makes the
-# boundary explicit at the orchestrator boundary.
-FORBIDDEN_PATTERN_KINDS: frozenset[str] = frozenset(
-    {
-        "medical",
-        "medical_diagnosis",
-        "personality",
-        "personality_diagnosis",
-        "intelligence",
-        "intelligence_claim",
-        "mental_health",
-        "mental_health_inference",
-    }
+MEMORY_NAMESPACES: frozenset[str] = frozenset(
+    {"knowledge", "language", "strategy", "behavior", "metacognition", "preference", "goal"}
 )
+MEMORY_ACTIVITIES: frozenset[str] = frozenset({"reading", "writing"})
 
 
-class WeeklyPatternProposal(_StrictModel):
-    """A single cross-scope pattern proposal from the weekly dream (M8-01/M8-02).
+class WeeklyDigest(_StrictModel):
+    """The prose of one weekly pass, in the three sections the notebook shows.
 
-    The LLM proposes a falsifiable, abstract statement that spans at least two
-    independent scopes/topics, references supporting memories by stable ID
-    (never array index), and carries a confidence proposal. The Rust
-    ``dream.run_weekly`` authority re-validates the supports against the
-    canonical DB and runs the promotion gate — Python only emits candidates.
+    ``observations`` (本周观察) name concrete passages and questions where useful,
+    ``changes`` (变化) compare with earlier attempts and redos, ``next_practice``
+    (下一步练习) targets repeated misses. Plain sentences: no ids, no numbers of
+    jobs or candidates. The host bounds and filters them again.
     """
 
-    statement: str = Field(min_length=1, max_length=512)
-    supporting_memory_ids: list[str] = Field(
-        min_length=1, alias="supportingMemoryIds", max_length=32
-    )
-    pattern_kind: PatternKind = Field(alias="patternKind")
-    confidence_proposal: float = Field(
-        default=0.5, alias="confidenceProposal", ge=0.0, le=1.0
-    )
+    observations: list[str] = Field(default_factory=list, max_length=6)
+    changes: list[str] = Field(default_factory=list, max_length=4)
+    next_practice: list[str] = Field(default_factory=list, max_length=4, alias="nextPractice")
 
-    @field_validator("supporting_memory_ids")
+    @field_validator("observations", "changes", "next_practice")
     @classmethod
-    def _stable_memory_ids(cls, value: list[str]) -> list[str]:
-        seen: set[str] = set()
-        for identifier in value:
-            if not isinstance(identifier, str) or not identifier.startswith("mem-"):
-                raise ValueError(
-                    "supportingMemoryIds must be stable mem-* identifiers"
-                )
-            if identifier in seen:
-                raise ValueError("supportingMemoryIds must be unique")
-            seen.add(identifier)
-        return list(value)
+    def _plain_lines(cls, value: list[str]) -> list[str]:
+        for line in value:
+            if not isinstance(line, str) or not line.strip() or len(line) > 400:
+                raise ValueError("digest lines must be non-empty strings of at most 400 characters")
+        return [line.strip() for line in value]
 
     def to_wire(self) -> dict[str, Any]:
         return {
-            "statement": self.statement,
-            "supportingMemoryIds": list(self.supporting_memory_ids),
-            "patternKind": self.pattern_kind.value,
-            "confidenceProposal": self.confidence_proposal,
+            "observations": list(self.observations),
+            "changes": list(self.changes),
+            "nextPractice": list(self.next_practice),
         }
 
 
@@ -304,8 +270,8 @@ class WeeklyDreamResult(_StrictModel):
     ``run_id`` comes from the Rust ``dream.run_weekly`` authority. When the
     host call fails (fail-closed), the orchestrator returns a fallback result
     with ``run_id=""`` and a non-empty ``fallback_reason`` — it never raises
-    fatal. Empty output (zero patterns) is a success, not a fallback
-    (M8-01: better zero patterns than a wrong one).
+    fatal. An empty result (nothing worth saying, no mutation) is a success,
+    not a fallback (M8-01: better nothing than a wrong claim).
     """
 
     run_id: str = Field(default="", max_length=160, alias="runId")
@@ -341,27 +307,28 @@ __all__ = [
     "CAPABILITY_DREAM_RUN_WEEKLY",
     "CAPABILITY_LEARNING_EVIDENCE_BY_IDS",
     "CAPABILITY_LEARNER_SKILL_STATE",
-    "CAPABILITY_MEMORY_CANDIDATE_POOL",
+    "CAPABILITY_LEARNING_WEEKLY_PACK",
     "CAPABILITY_MEMORY_SEARCH_ACTIVE",
     "CAPABILITY_MODEL_INVOKE",
     "CAPABILITY_VERSION_DREAM_RUN_WEEKLY",
     "CAPABILITY_VERSION_LEARNING_EVIDENCE_BY_IDS",
     "CAPABILITY_VERSION_LEARNER_SKILL_STATE",
-    "CAPABILITY_VERSION_MEMORY_CANDIDATE_POOL",
+    "CAPABILITY_VERSION_LEARNING_WEEKLY_PACK",
     "CAPABILITY_VERSION_MEMORY_SEARCH_ACTIVE",
     "CAPABILITY_VERSION_MODEL_INVOKE",
-    "FORBIDDEN_PATTERN_KINDS",
     "JOURNAL_FACTS_SCHEMA_VERSION",
-    "PATTERN_KINDS",
+    "MEMORY_ACTIVITIES",
+    "MEMORY_NAMESPACES",
     "REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES",
     "WEEKLY_DREAM_SCHEMA_VERSION",
+    "WEEKLY_MUTATION_ACTIONS",
+    "WEEKLY_MUTATION_FIELDS",
     "JournalEnrichment",
     "JournalFacts",
     "JournalMemoryEvent",
     "MemoryChangeSummary",
-    "PatternKind",
     "SkillDelta",
+    "WeeklyDigest",
     "WeeklyDreamResult",
-    "WeeklyPatternProposal",
     "WritingEvalSummary",
 ]

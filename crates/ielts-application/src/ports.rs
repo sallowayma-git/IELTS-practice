@@ -34,6 +34,11 @@ pub struct CompletionRequest {
     /// Provider-side output ceiling. Required: every completion declares its
     /// own ceiling, so no call site can ship an unbounded request by omission.
     pub max_tokens: u32,
+    /// Stable routing key for provider-side prompt caching (one per coach
+    /// thread). The gateway sends it only to providers that document a routing
+    /// parameter for it; everywhere else it is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_key: Option<String>,
 }
 
 /// Per-call-site output ceilings (tokens). The Coach (2000) and the sidecar
@@ -55,6 +60,10 @@ pub struct TokenUsage {
     pub output_tokens: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub reasoning_tokens: u64,
+    /// The part of `input_tokens` the provider served from its prompt cache,
+    /// when it reports one (0 otherwise). Counts only.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cached_input_tokens: u64,
 }
 
 fn is_zero(value: &u64) -> bool {
