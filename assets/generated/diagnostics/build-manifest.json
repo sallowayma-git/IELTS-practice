@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:0a1b927961421f5cb5a0df7efad0968610b21a28442de8923fceaf6cf292c79c",
+  "buildId": "sha256:5e609fbd5cdbdb0a52d6a3fa0d1630dd10728f5d09a745bcb23e4ad86f86db6b",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -500,7 +500,7 @@
     },
     {
       "path": "assets/generated/reading-exams/reading-practice-unified.html",
-      "sha256": "43e5b478eaa9effae0aa7c18330d1ad8d293ee0ff6ffc134161fe4c158533e66"
+      "sha256": "4712e1488a1791325d7f75bc3d52dab8eb5d03e681e01c6a1e7ddda57fa5fd53"
     },
     {
       "path": "assets/generated/reading-explanations/manifest.js",
@@ -552,7 +552,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "5ff14491248f23e79ecfcb079e376e79051d591dc77735fdbee11ec1a326571c"
+      "sha256": "0c010850ee7b5274d1303b23347f7c68ab699dbc31b47324a1638580b242cbc9"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -950,109 +950,109 @@
       {
         "source": "js/services/browseLearningState.js",
         "startLine": 4,
-        "endLine": 123,
+        "endLine": 146,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/readingAnalytics.js",
-        "startLine": 127,
-        "endLine": 396,
+        "startLine": 150,
+        "endLine": 419,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/virtualScroller.js",
-        "startLine": 400,
-        "endLine": 735,
+        "startLine": 423,
+        "endLine": 758,
         "sourceStartLine": 1
       },
       {
         "source": "js/views/legacyViewBundle.js",
-        "startLine": 739,
-        "endLine": 4971,
+        "startLine": 762,
+        "endLine": 4994,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/practiceRecordSource.js",
-        "startLine": 4975,
-        "endLine": 5173,
+        "startLine": 4998,
+        "endLine": 5196,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examActions.js",
-        "startLine": 5177,
-        "endLine": 7280,
+        "startLine": 5200,
+        "endLine": 7303,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 7284,
-        "endLine": 8594,
+        "startLine": 7307,
+        "endLine": 8617,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examSessionMixin.js",
-        "startLine": 8598,
-        "endLine": 15630,
+        "startLine": 8621,
+        "endLine": 15653,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 15634,
-        "endLine": 16304,
+        "startLine": 15657,
+        "endLine": 16327,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 16308,
-        "endLine": 16702,
+        "startLine": 16331,
+        "endLine": 16725,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 16706,
-        "endLine": 17268,
+        "startLine": 16729,
+        "endLine": 17291,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 17272,
-        "endLine": 17441,
+        "startLine": 17295,
+        "endLine": 17464,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 17445,
-        "endLine": 17659,
+        "startLine": 17468,
+        "endLine": 17682,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 17663,
-        "endLine": 18434,
+        "startLine": 17686,
+        "endLine": 18457,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 18438,
-        "endLine": 19470,
+        "startLine": 18461,
+        "endLine": 19493,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 19474,
-        "endLine": 19723,
+        "startLine": 19497,
+        "endLine": 19746,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 19727,
-        "endLine": 19932,
+        "startLine": 19750,
+        "endLine": 19955,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 19936,
-        "endLine": 25201,
+        "startLine": 19959,
+        "endLine": 25224,
         "sourceStartLine": 1
       }
     ],

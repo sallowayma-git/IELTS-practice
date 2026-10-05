@@ -57,6 +57,36 @@ test('provenance and exam identity isolate identical IDs and titles; unknown leg
     assert.equal(state.buildIndex([record('legacy', { metadata: {} })]).size, 0);
 });
 
+test('September records without provenance recover through a unique built-in ID and article title', () => {
+    const { state } = harness({ __READING_EXAM_INDEX__: [
+        { ...exam(), title: 'Children’s literature studies today 儿童文学' }
+    ] });
+    const legacy = record('september', { metadata: {}, title: 'Children’s literature studies today 儿童文学【高】' });
+    const index = state.buildIndex([legacy]);
+    assert.equal(index.get(state.identity(exam(), true)).percentage, 50);
+    assert.equal(index.has(state.identity(exam('p1', 'custom'), true)), false);
+    assert.equal(Object.hasOwn(legacy.metadata, 'libraryConfigurationId'), false,
+        'compatibility reads do not rewrite saved records or favorite identities');
+});
+
+test('legacy recovery rejects ID collisions, missing titles and explicit invalid sources', () => {
+    const catalog = [{ ...exam(), title: 'The Blockbuster Phenomenon 博物馆爆款现象' }];
+    const { state } = harness({ __READING_EXAM_INDEX__: catalog });
+    const legacy = record('legacy', { metadata: {}, title: catalog[0].title });
+    const invalid = [
+        { title: 'A Different Article' }, { title: null },
+        { metadata: { libraryConfigurationId: undefined } },
+        { libraryConfigurationId: '' }
+    ].map(fields => ({ ...legacy, ...fields }));
+    assert.equal(state.buildIndex(invalid).size, 0);
+    const duplicate = harness({ __READING_EXAM_INDEX__: [...catalog, { ...catalog[0] }] }).state;
+    assert.equal(duplicate.buildIndex([legacy]).size, 0);
+    const suite = record('suite', { metadata: { libraryConfigurationId: '' }, suiteEntrySummaries: [legacy] });
+    assert.equal(state.buildIndex([suite]).size, 0);
+    const explicit = { ...legacy, metadata: { libraryConfigurationId: 'custom' } };
+    assert.equal(state.buildIndex([explicit]).has(state.identity(exam('p1', 'custom'), true)), true);
+});
+
 test('suite entries keep their own source, score and completion time without copying parent totals', () => {
     const { state } = harness();
     const suite = record('suite', {

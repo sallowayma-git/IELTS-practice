@@ -23,6 +23,28 @@
         return id && source.known ? JSON.stringify([source.id, 'reading', String(id)]) : null;
     }
 
+    function legacyDefaultIdentity(record, parent) {
+        // September backups predate library provenance. Resolve them only against
+        // the built-in catalog, with both a stable ID and the saved article title.
+        // Never guess from the active custom library or override an explicit source.
+        for (const candidate of [record, parent]) {
+            if (own(candidate, 'libraryConfigurationId')
+                || own(object(candidate && candidate.metadata), 'libraryConfigurationId')) return null;
+        }
+        const metadata = object(record && record.metadata);
+        const id = record && (record.examId || metadata.examId);
+        const titleKey = value => String(value || '').normalize('NFKC')
+            .replace(/【[^】]*】/g, '').split(/[\u3400-\u9fff]/)[0]
+            .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const title = titleKey(record && (record.title || record.examTitle || metadata.examTitle || metadata.title));
+        if (!id || !title) return null;
+        const catalog = Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : [];
+        const matches = catalog.filter(exam => exam && exam.type === 'reading'
+            && String(exam.id) === String(id));
+        if (matches.length !== 1 || titleKey(matches[0].title) !== title) return null;
+        return JSON.stringify([null, 'reading', String(id)]);
+    }
+
     function number(value) {
         return (typeof value === 'number' || (typeof value === 'string' && value.trim()))
             && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -74,7 +96,8 @@
                 if (!record) continue;
                 const type = String(record.type || object(record.metadata).type || parent.type || '').toLowerCase();
                 if (type !== 'reading' && type !== 'reading-suite') continue;
-                const key = identity(record, false, record === parent ? null : parent);
+                const sourceParent = record === parent ? null : parent;
+                const key = identity(record, false, sourceParent) || legacyDefaultIdentity(record, sourceParent);
                 const value = percentage(record);
                 const time = timestamp(record) || (record !== parent ? timestamp(parent) : 0);
                 if (!key || value === null || !time) continue;
