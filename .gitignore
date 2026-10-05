@@ -104,3 +104,5 @@ logs/
 # Rust
 /target/
 __pycache__/
+
+*.pyc
