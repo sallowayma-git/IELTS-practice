@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell atlas-source-ui">
+  <div :class="['app-shell', 'atlas-source-ui', showShellNav ? 'atlas-paper' : 'atlas-exam']">
     <a class="a11y-skip-link" href="#app-main-content">跳到主要内容</a>
     <div id="a11y-status-live" class="a11y-status-live" role="status" aria-live="polite" aria-atomic="true"></div>
     <ShuiBackground />
@@ -55,7 +55,7 @@ const routeViewKey = computed(() => route.path || String(route.name || route.ful
   flex: 1;
   width: min(var(--shui-shell-max-width), 100%);
   margin: 0 auto;
-  padding: 28px clamp(16px, 4vw, 40px) 56px;
+  padding: clamp(28px, 5vw, 48px) clamp(16px, 4vw, 40px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -65,22 +65,21 @@ const routeViewKey = computed(() => route.path || String(route.name || route.ful
   padding: 0;
 }
 
+/* Exam freeze: below 900px the frameless exam main has always carried the
+   legacy shell gutter. Pinned so the CD-IELTS screens stay pixel-identical. */
+@media (max-width: 900px) {
+  .app-main--frameless {
+    padding: 22px 16px 36px;
+  }
+}
+
 .page-enter-active,
 .page-leave-active {
-  transition:
-    opacity var(--duration-normal) var(--ease-smooth),
-    transform var(--duration-normal) var(--ease-smooth);
+  transition: opacity var(--duration-normal) var(--ease-smooth);
 }
 
 .page-enter-from,
 .page-leave-to {
   opacity: 0;
-  transform: translateY(8px);
-}
-
-@media (max-width: 900px) {
-  .app-main {
-    padding: 22px 16px 36px;
-  }
 }
 </style>

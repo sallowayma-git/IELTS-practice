@@ -23,8 +23,11 @@ function clamp(value, lower, upper) {
   return Math.min(upper, Math.max(lower, value))
 }
 
+const PASSTHROUGH_ACTIVITIES = new Set(['reading', 'listening'])
+
 function historyActivity(value) {
-  return String(value || '').trim().toLowerCase() === 'reading' ? 'reading' : 'writing'
+  const activity = String(value || '').trim().toLowerCase()
+  return PASSTHROUGH_ACTIVITIES.has(activity) ? activity : 'writing'
 }
 
 function writingTaskType(value) {

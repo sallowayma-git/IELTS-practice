@@ -1,8 +1,9 @@
-/* Agent console — product layout on Anthropic clay tokens.
+/* Agent console — developer workbench (/dev/agent, behind
+ * VITE_FEATURE_AGENT_WORKSPACE_V1). Learners see the 札记 notebook instead.
  *
- * Heartbeat / plan / evolution live on the main surface. The advanced
- * workbench restores the three-column M0 layout that was dropped when
- * opensource-skin.css was rewritten. No glass, blur, or second palette.
+ * Paper rules apply at a basic level: square corners, no shadows, no clay
+ * washes, panels separated by rules. The three-column M0 workbench layout
+ * is kept for the packaged agent run check.
  */
 
 .agent-console-page {
@@ -17,8 +18,8 @@
   margin: 0;
   padding: 12px 16px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
-  background: var(--anth-surface-sunken);
+  border-radius: 0;
+  background: transparent;
   color: var(--anth-ink-soft);
   font-size: var(--anth-text-sm);
   line-height: var(--anth-leading-snug);
@@ -72,7 +73,7 @@
   min-height: 30px;
   padding: 5px 10px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-surface);
   color: var(--anth-ink-soft);
   font-size: var(--anth-text-xs);
@@ -83,7 +84,7 @@
 .agent-page-header__status.is-running {
   color: var(--anth-accent-strong);
   border-color: var(--anth-accent-ring);
-  background: var(--anth-accent-soft);
+  background: transparent;
 }
 
 .agent-page-header__status.is-complete {
@@ -103,13 +104,13 @@
   width: 8px;
   height: 8px;
   flex: 0 0 auto;
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-ink-disabled);
 }
 
 .agent-page-header__status.is-running .agent-status-dot {
   background: var(--anth-accent);
-  box-shadow: 0 0 0 4px var(--anth-accent-soft);
+  box-shadow: none;
   animation: agent-status-pulse 1.2s ease-in-out infinite;
 }
 
@@ -144,9 +145,9 @@
   gap: 6px;
   padding: 16px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
+  border-radius: 0;
   background: var(--anth-surface);
-  box-shadow: var(--anth-shadow-xs);
+  box-shadow: none;
   transition:
     transform var(--anth-duration-normal) var(--anth-ease),
     box-shadow var(--anth-duration-normal) var(--anth-ease);
@@ -154,7 +155,7 @@
 
 .agent-heartbeat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--anth-shadow-md);
+  box-shadow: none;
 }
 
 .agent-heartbeat-card strong {
@@ -181,13 +182,13 @@
   gap: 12px;
   padding: 18px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
+  border-radius: 0;
   background: var(--anth-surface);
-  box-shadow: var(--anth-shadow-xs);
+  box-shadow: none;
 }
 
 .agent-journal-card {
-  background: var(--anth-accent-softer);
+  background: transparent;
 }
 
 .agent-journal-card__head,
@@ -257,7 +258,7 @@
 
 .agent-journal-card--empty {
   justify-content: center;
-  background: var(--anth-surface-sunken);
+  background: transparent;
   color: var(--anth-ink-soft);
 }
 
@@ -280,7 +281,7 @@
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-canvas-soft);
 }
 
@@ -306,7 +307,7 @@
   width: 20px;
   height: 20px;
   border: 1.5px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-xs);
+  border-radius: 0;
   transition:
     background var(--anth-duration-fast) var(--anth-ease),
     border-color var(--anth-duration-fast) var(--anth-ease);
@@ -345,11 +346,11 @@
   margin: 0;
   padding: 14px 16px;
   border: 1px dashed var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   color: var(--anth-ink-soft);
   font-size: var(--anth-text-sm);
   line-height: var(--anth-leading-normal);
-  background: var(--anth-surface-sunken);
+  background: transparent;
 }
 
 .agent-evo-tabs {
@@ -365,7 +366,7 @@
   min-height: 36px;
   padding: 6px 12px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-surface);
   color: var(--anth-ink-soft);
   cursor: pointer;
@@ -383,7 +384,7 @@
 
 .agent-evo-tabs button.is-active {
   border-color: var(--anth-accent);
-  background: var(--anth-accent-soft);
+  background: transparent;
   color: var(--anth-accent-strong);
 }
 
@@ -417,7 +418,7 @@
   align-items: start;
   padding: 10px 12px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-canvas-soft);
 }
 
@@ -425,7 +426,7 @@
   width: 8px;
   height: 8px;
   margin-top: 6px;
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-info);
 }
 
@@ -457,9 +458,9 @@
   gap: 8px;
   padding: 14px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-canvas-soft);
-  box-shadow: var(--anth-shadow-xs);
+  box-shadow: none;
   animation: atlas-rise-in var(--anth-duration-slow) var(--anth-ease-out) both;
 }
 
@@ -476,15 +477,15 @@
 
 .agent-memory-card__source {
   padding: 2px 8px;
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   font-size: var(--anth-text-xs);
   font-weight: var(--anth-weight-semibold);
-  background: var(--anth-surface-sunken);
+  background: transparent;
   color: var(--anth-ink-soft);
 }
 
 .agent-memory-card__source.is-user_explicit {
-  background: var(--anth-accent-soft);
+  background: transparent;
   color: var(--anth-accent-strong);
 }
 
@@ -544,18 +545,20 @@
 
 .agent-text-button {
   min-height: 36px;
-  padding: 4px 8px;
+  padding: 4px 2px;
   border: 0;
-  border-radius: var(--anth-radius-sm);
-  color: var(--anth-accent-strong);
+  border-radius: 0;
+  color: var(--anth-ink-soft);
   background: transparent;
   font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--anth-border-strong);
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 .agent-text-button:hover:not(:disabled) {
-  background: var(--anth-accent-soft);
+  color: var(--anth-ink);
 }
 
 .agent-text-button:disabled {
@@ -565,9 +568,9 @@
 
 .agent-advanced {
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
+  border-radius: 0;
   background: var(--anth-surface);
-  box-shadow: var(--anth-shadow-xs);
+  box-shadow: none;
 }
 
 .agent-advanced__summary {
@@ -620,7 +623,7 @@
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--anth-warning) 28%, var(--anth-border));
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-warning-soft);
 }
 
@@ -660,7 +663,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
+  border-radius: 0;
   background: var(--anth-canvas-soft);
   overflow: hidden;
 }
@@ -684,7 +687,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-sm);
+  border-radius: 0;
   color: var(--anth-ink-soft);
   background: var(--anth-surface);
   cursor: pointer;
@@ -698,7 +701,7 @@
 .agent-icon-button:hover:not(:disabled) {
   border-color: var(--anth-accent-ring);
   color: var(--anth-accent-strong);
-  background: var(--anth-accent-soft);
+  background: transparent;
 }
 
 .agent-workspace-location {
@@ -709,7 +712,7 @@
   margin: 14px 14px 8px;
   padding: 10px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   color: inherit;
   background: var(--anth-surface);
   text-align: left;
@@ -720,9 +723,9 @@
   width: 34px;
   height: 34px;
   place-items: center;
-  border-radius: var(--anth-radius-sm);
+  border-radius: 0;
   color: var(--anth-accent-strong);
-  background: var(--anth-accent-soft);
+  background: transparent;
 }
 
 .agent-workspace-location__icon svg {
@@ -789,7 +792,7 @@
   min-height: 48px;
   padding: 7px 8px;
   border: 1px solid transparent;
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   color: inherit;
   background: transparent;
   text-align: left;
@@ -799,7 +802,7 @@
 .agent-file-row:hover,
 .agent-file-row.is-selected {
   border-color: color-mix(in srgb, var(--anth-accent) 22%, var(--anth-border));
-  background: var(--anth-accent-softer);
+  background: transparent;
 }
 
 .agent-file-row__icon {
@@ -807,9 +810,9 @@
   width: 28px;
   height: 28px;
   place-items: center;
-  border-radius: var(--anth-radius-xs);
+  border-radius: 0;
   color: var(--anth-accent-strong);
-  background: var(--anth-accent-soft);
+  background: transparent;
 }
 
 .agent-file-row__icon.is-json {
@@ -825,7 +828,7 @@
 .agent-file-row__marker {
   width: 6px;
   height: 6px;
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-accent);
 }
 
@@ -871,7 +874,7 @@
   resize: vertical;
   padding: 14px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   color: var(--anth-ink);
   background: var(--anth-surface);
   font: var(--anth-text-sm)/var(--anth-leading-relaxed) var(--anth-font-mono);
@@ -880,7 +883,7 @@
 
 .agent-prompt-editor textarea:focus {
   border-color: var(--anth-accent-ring);
-  box-shadow: var(--anth-ring-focus);
+  box-shadow: none;
 }
 
 .agent-prompt-editor__meta {
@@ -916,9 +919,9 @@
   max-width: min(260px, 100%);
   padding: 5px 9px;
   border: 1px solid var(--anth-accent-ring);
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   color: var(--anth-accent-strong);
-  background: var(--anth-accent-soft);
+  background: transparent;
   font-size: var(--anth-text-xs);
   font-weight: var(--anth-weight-semibold);
 }
@@ -959,7 +962,7 @@
   min-height: 44px;
   padding: 8px 14px;
   border: 1px solid var(--anth-accent);
-  border-radius: var(--anth-radius-sm);
+  border-radius: 0;
   color: var(--anth-accent-contrast);
   background: var(--anth-accent);
   font-size: var(--anth-text-sm);
@@ -1000,13 +1003,13 @@
   margin: 14px 14px 8px;
   padding: 12px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-surface);
 }
 
 .agent-run-summary.is-running {
   border-color: var(--anth-accent-ring);
-  background: var(--anth-accent-soft);
+  background: transparent;
 }
 
 .agent-run-summary.is-complete {
@@ -1057,7 +1060,7 @@
   width: 26px;
   height: 26px;
   place-items: center;
-  border-radius: var(--anth-radius-xs);
+  border-radius: 0;
   color: var(--anth-ink-faint);
   background: var(--anth-surface);
   font: var(--anth-text-xs)/1 var(--anth-font-mono);
@@ -1087,13 +1090,13 @@
 .agent-run-step__state {
   width: 7px;
   height: 7px;
-  border-radius: var(--anth-radius-pill);
+  border-radius: 0;
   background: var(--anth-border-strong);
 }
 
 .agent-run-steps li.is-active .agent-run-step__state {
   background: var(--anth-accent);
-  box-shadow: 0 0 0 4px var(--anth-accent-soft);
+  box-shadow: none;
 }
 
 .agent-run-steps li.is-complete .agent-run-step__state,
@@ -1120,7 +1123,7 @@
   margin: auto 14px 14px;
   padding: 12px;
   border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: 0;
   background: var(--anth-surface);
 }
 
@@ -1237,4 +1240,46 @@
     animation: none;
     transform: none;
   }
+}
+
+/* Paper pass: containers become ruled sections instead of boxed cards. */
+.agent-heartbeat-card,
+.agent-journal-card,
+.agent-plan-zone,
+.agent-evolution-zone,
+.agent-advanced,
+.agent-panel,
+.agent-plan-item,
+.agent-memory-card,
+.agent-approval-row,
+.agent-delta-item {
+  border: 0;
+  border-top: 1px solid var(--anth-rule);
+  background: transparent;
+}
+
+.agent-plan-zone,
+.agent-evolution-zone,
+.agent-advanced,
+.agent-journal-card {
+  border-top-color: var(--anth-ink);
+}
+
+.agent-evo-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--anth-ink-faint);
+}
+
+.agent-evo-tabs button.is-active {
+  border-bottom-color: var(--anth-ink);
+  background: transparent;
+  color: var(--anth-ink-strong);
+}
+
+.agent-empty-hint {
+  border: 0;
+  background: transparent;
+  color: var(--anth-ink-faint);
 }

@@ -49,10 +49,60 @@ export function runAttemptReview(input: {
 }): Promise<AgentAttemptReviewOutcome>
 export function getAgentRun(runId: string): Promise<Record<string, unknown> | null>
 
+export interface MemoryEvidenceResult {
+  items: Array<{
+    id: string
+    source: string
+    original: string
+    events: Array<{
+      id: string
+      source: string
+      location: string
+      original: string
+      route: { name: string; params: Record<string, string> } | null
+    }>
+  }>
+  warnings: string[]
+  truncated: boolean
+}
+export interface ObservationEvidenceRecord {
+  id: string
+  userId: string
+  observationType: string
+  observedAt: string
+  scopeKey: string
+  valueText: string | null
+  payload: unknown
+  evidence: Array<{ eventId: string; evidenceRole: string; ordinal: number }>
+}
+export interface LearningEventEvidenceRecord {
+  id: string
+  userId: string
+  eventType: string
+  occurredAt: string
+  sourceKind: string
+  sourceId: string | null
+  activity: string | null
+  assetId: string | null
+  attemptId: string | null
+  questionId: string | null
+  payload: unknown
+}
+export function getObservationsByIds(ids: string[]): Promise<{
+  observations: ObservationEvidenceRecord[]; missingIds: string[]; freshness: string
+}>
+export function getEventsEvidenceByIds(ids: string[]): Promise<{
+  events: LearningEventEvidenceRecord[]; missingIds: string[]
+}>
+export function getMemoryEvidence(observationIds: string[], userId?: string): Promise<MemoryEvidenceResult>
+
 export const learningRepository: {
   compareAttemptsForAsset: typeof compareAttemptsForAsset
   runAttemptReview: typeof runAttemptReview
   getAgentRun: typeof getAgentRun
+  getObservationsByIds: typeof getObservationsByIds
+  getEventsEvidenceByIds: typeof getEventsEvidenceByIds
+  getMemoryEvidence: typeof getMemoryEvidence
 }
 
 export default learningRepository

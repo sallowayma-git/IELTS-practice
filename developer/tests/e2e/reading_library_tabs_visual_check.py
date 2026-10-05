@@ -19,7 +19,6 @@ CASES = (
 VIEW_IDS = {
     "overview": "overview-view",
     "browse": "browse-view",
-    "practice": "practice-view",
     "more": "more-view",
     "settings": "reading-preferences-view",
 }
@@ -68,8 +67,8 @@ def assert_geometry(name, geometry):
     if not tabs or tabs["left"] < -1 or tabs["right"] > width + 1:
         raise AssertionError(f"{name}: Library tab container escapes viewport width")
     buttons = geometry["buttons"]
-    if len(buttons) != 5 or {button["view"] for button in buttons} != set(VIEW_IDS):
-        raise AssertionError(f"{name}: expected all five stable Library view entries")
+    if len(buttons) != 4 or {button["view"] for button in buttons} != set(VIEW_IDS):
+        raise AssertionError(f"{name}: expected the four stable Library view entries (records live in /history)")
     if sum(button["active"] for button in buttons) != 1 or sum(button["current"] == "page" for button in buttons) != 1:
         raise AssertionError(f"{name}: Library tab active semantics are ambiguous")
     for button in buttons:
@@ -77,8 +76,8 @@ def assert_geometry(name, geometry):
         if not control or control["left"] < tabs["left"] - 1 or control["right"] > tabs["right"] + 1:
             raise AssertionError(f"{name}: Library view entry is hidden outside the tab container")
     if width <= 640:
-        if geometry["tabsDisplay"] != "grid" or len(geometry["tabsColumns"].split()) != 3:
-            raise AssertionError(f"{name}: mobile Library tabs are not a 3-column grid")
+        if geometry["tabsDisplay"] != "grid" or len(geometry["tabsColumns"].split()) != 4:
+            raise AssertionError(f"{name}: mobile Library tabs are not a 4-column grid")
         if geometry["tabsScrollWidth"] > geometry["tabsClientWidth"] + 1:
             raise AssertionError(f"{name}: mobile Library tabs still require hidden horizontal scrolling")
         if any(button["rect"]["height"] < 44 for button in buttons):

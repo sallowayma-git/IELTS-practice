@@ -744,8 +744,7 @@ const {
   askCoachFollowUp,
   runCoachQuickAction,
   runCoachSelectionAction,
-  runAutomaticReviewCoach,
-  queueAutomaticReviewRefresh
+  runAutomaticReviewCoach
 } = useReadingCoach({
   submissionSource: () => submission.value,
   setSubmission: (nextSubmission) => {
@@ -1248,11 +1247,6 @@ async function loadSubmittedSession(sessionId) {
   setReadOnlyDomControls(true)
   restoreHighlightsFromRecords(highlightSnapshot.value)
   restoreSubmittedViewport(loadedSubmission)
-  if (readingCoachEnabled.value) {
-    if (!loadedSubmission.singleAttemptAnalysisLlm && !loadedSubmission.analysisArtifacts?.singleAttemptAnalysisLlm) {
-      queueAutomaticReviewRefresh(loadedSubmission.sessionId)
-    }
-  }
 }
 
 async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null) {
@@ -1715,7 +1709,6 @@ const modeFlow = useReadingModeFlow({
   setReadOnlyDomControls,
   restoreHighlightsFromRecords,
   setReadingCoachOpen,
-  runAutomaticReviewCoach,
   resetAnswers,
   recycleSubmittedAttempt
 })

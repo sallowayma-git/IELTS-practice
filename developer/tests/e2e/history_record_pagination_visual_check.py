@@ -71,10 +71,10 @@ def install_tauri_mock(page):
         if (command === 'history_writing_statistics') {
           return { ok: true, data: { count: 0, latest: null, average: null } };
         }
-        if (command === 'delete_history_attempt') {
-          const id = String(args.attemptId || '');
-          window.__historyRecords = window.__historyRecords.filter((item) => item.id !== id);
-          return { ok: true, data: 1 };
+        if (command === 'delete_history_attempts') {
+          const ids = new Set(args.cmd?.attemptIds || []);
+          window.__historyRecords = window.__historyRecords.filter((item) => !ids.has(item.id));
+          return { ok: true, data: ids.size };
         }
         return { ok: true, data: null };
       };
@@ -91,41 +91,37 @@ def read_geometry(page):
         () => {
           const rect = (node) => node ? node.getBoundingClientRect() : null;
           const style = (node) => node ? getComputedStyle(node) : null;
-          const item = document.querySelector('.history-page .essay-item');
-          const content = item?.querySelector('.essay-content');
-          const title = item?.querySelector('.essay-title');
-          const checkbox = item?.querySelector('.essay-checkbox');
-          const actions = [...(item?.querySelectorAll('.essay-actions button') || [])];
-          const pagination = document.querySelector('.history-page .pagination');
-          const pageInfo = pagination?.querySelector('.page-info');
+          const item = document.querySelector('.history-page .history-row');
+          const main = item?.querySelector('.history-row__main');
+          const title = item?.querySelector('.history-row__title');
+          const score = item?.querySelector('.history-row__score');
+          const pagination = document.querySelector('.history-page .history-pagination');
+          const pageInfo = pagination?.querySelector('.history-pagination__info');
           const pageButtons = [...(pagination?.querySelectorAll('button') || [])];
-          const badges = [...document.querySelectorAll('.history-page .task-badge')];
+          const kinds = [...document.querySelectorAll('.history-page .history-row__kind')];
           return {
             viewport: [innerWidth, innerHeight],
             documentWidth: document.documentElement.scrollWidth,
             bodyWidth: document.body.scrollWidth,
             itemRect: rect(item),
-            contentMinWidth: style(content)?.minWidth || '',
+            mainMinWidth: style(main)?.minWidth || '',
             titleRect: rect(title),
             titleClientWidth: title?.clientWidth || 0,
             titleScrollWidth: title?.scrollWidth || 0,
             titleOverflowWrap: style(title)?.overflowWrap || '',
-            checkboxRect: rect(checkbox),
-            checkboxLabel: item?.querySelector('.essay-checkbox input')?.getAttribute('aria-label') || '',
-            actions: actions.map((node) => ({
-              title: node.getAttribute('title') || '',
-              ariaLabel: node.getAttribute('aria-label') || '',
-              rect: rect(node)
-            })),
-            badgeKinds: badges.map((node) => ({
+            scoreRect: rect(score),
+            scoreAlign: style(score)?.justifyItems || '',
+            scoreNumerals: style(score?.querySelector('strong'))?.fontVariantNumeric || '',
+            rowButtons: item ? item.querySelectorAll('button').length : -1,
+            dayHeads: [...document.querySelectorAll('.history-day__head')].map((node) => node.textContent.trim()),
+            badgeKinds: kinds.map((node) => ({
               className: node.className,
               text: node.textContent.trim(),
-              background: style(node)?.backgroundColor || ''
+              marker: getComputedStyle(node, '::before').backgroundColor + '|' + getComputedStyle(node, '::before').borderTopWidth
             })),
-            paginationDisplay: style(pagination)?.display || '',
-            paginationColumns: style(pagination)?.gridTemplateColumns || '',
             paginationRect: rect(pagination),
-            pageInfoRect: rect(pageInfo),
+            paginationText: pagination?.textContent.replace(/\s+/g, ' ').trim() || '',
+            pageInfoText: pageInfo?.textContent.trim() || '',
             pageButtons: pageButtons.map((node) => ({ text: node.textContent.trim(), rect: rect(node) }))
           };
         }
@@ -139,57 +135,55 @@ def assert_geometry(name, data):
         raise AssertionError(f"{name}: History page overflows viewport: {json.dumps(data, ensure_ascii=False)}")
     if not data["itemRect"] or not data["titleRect"]:
         raise AssertionError(f"{name}: recent History record did not render")
-    if data["contentMinWidth"] != "0px":
+    if data["mainMinWidth"] != "0px":
         raise AssertionError(f"{name}: record content cannot shrink safely")
     if data["titleScrollWidth"] > data["titleClientWidth"] + 1 or data["titleOverflowWrap"] != "anywhere":
         raise AssertionError(f"{name}: long record title is silently clipped: {json.dumps(data, ensure_ascii=False)}")
-    checkbox = data["checkboxRect"]
-    if not checkbox or checkbox["width"] < 44 or checkbox["height"] < 44 or not data["checkboxLabel"]:
-        raise AssertionError(f"{name}: History selection is not a labeled 44px target")
-    if len(data["actions"]) != 2:
-        raise AssertionError(f"{name}: record actions are missing")
-    for action in data["actions"]:
-        if not action["rect"] or action["rect"]["width"] < 44 or action["rect"]["height"] < 44:
-            raise AssertionError(f"{name}: record action is below 44px: {data['actions']}")
-        if not action["ariaLabel"]:
-            raise AssertionError(f"{name}: icon action has no accessible name")
-    badge_classes = {item["className"] for item in data["badgeKinds"]}
-    if not any("reading" in value for value in badge_classes) or not any("unlabeled" in value for value in badge_classes):
-        raise AssertionError(f"{name}: reading/unlabeled badge states are missing")
-    if any(item["background"] in ("", "rgba(0, 0, 0, 0)") for item in data["badgeKinds"] if "reading" in item["className"] or "unlabeled" in item["className"]):
-        raise AssertionError(f"{name}: reading/unlabeled badges have no visual state")
+    if data["itemRect"]["height"] < 44:
+        raise AssertionError(f"{name}: the record row is not a 44px target")
+    if data["rowButtons"] != 0:
+        raise AssertionError(f"{name}: rows carry no per-row buttons outside selection mode")
+    if not data["dayHeads"]:
+        raise AssertionError(f"{name}: records are not grouped by day")
+    score = data["scoreRect"]
+    if not score or score["right"] > data["itemRect"]["right"] + 1 or score["right"] < data["itemRect"]["right"] - 12:
+        raise AssertionError(f"{name}: score is not right-aligned in the row: {score} / {data['itemRect']}")
+    if data["scoreAlign"] != "end" or "tabular-nums" not in data["scoreNumerals"]:
+        raise AssertionError(f"{name}: score needs right alignment and tabular numerals: {data['scoreAlign']} {data['scoreNumerals']}")
+    kind_classes = {item["className"] for item in data["badgeKinds"]}
+    if not any("reading" in value for value in kind_classes) or not any("unlabeled" in value for value in kind_classes):
+        raise AssertionError(f"{name}: reading/unlabeled kind markers are missing")
+    # Record kind is a word plus a square marker (filled, or outlined when unlabeled).
+    if any(item["marker"] in ("", "rgba(0, 0, 0, 0)|0px") for item in data["badgeKinds"] if "reading" in item["className"] or "unlabeled" in item["className"]):
+        raise AssertionError(f"{name}: reading/unlabeled kind markers have no visual marker")
     if not data["paginationRect"] or len(data["pageButtons"]) != 2:
         raise AssertionError(f"{name}: pagination did not render")
-    if any(item["rect"]["height"] < 44 for item in data["pageButtons"]):
-        raise AssertionError(f"{name}: pagination action is below 44px")
-    if width <= 640:
-        if data["paginationDisplay"] != "grid" or len(data["paginationColumns"].split()) != 2:
-            raise AssertionError(f"{name}: mobile pagination is not a stable two-column grid")
-        if not data["pageInfoRect"] or data["pageInfoRect"]["width"] < data["paginationRect"]["width"] - 2:
-            raise AssertionError(f"{name}: page status does not own the mobile first row")
-        previous_rect = data["pageButtons"][0]["rect"]
-        next_rect = data["pageButtons"][1]["rect"]
-        if data["pageInfoRect"]["top"] >= previous_rect["top"]:
-            raise AssertionError(f"{name}: page status is not the first mobile row")
-        if abs(previous_rect["top"] - next_rect["top"]) > 1 or next_rect["left"] <= previous_rect["right"]:
-            raise AssertionError(f"{name}: previous/next actions do not share the second mobile row")
+    if data["paginationText"] != "‹ 上一页·1 / 2·下一页 ›":
+        raise AssertionError(f"{name}: pagination is plain text: {data['paginationText']}")
+    if any(item["rect"]["height"] < 44 or item["rect"]["right"] > width for item in data["pageButtons"]):
+        raise AssertionError(f"{name}: pagination action is below 44px or escapes the viewport")
 
 
 def verify_last_page_delete(page):
-    page.locator(".history-page .pagination button", has_text="下一页").click()
+    page.locator(".history-page .history-pagination button", has_text="下一页").click()
     page.wait_for_function(
-        "() => document.querySelector('.history-page .page-info')?.textContent.includes('第 2 / 2 页')"
+        "() => document.querySelector('.history-page .history-pagination__info')?.textContent.trim() === '2 / 2'"
     )
-    page.wait_for_function("() => document.querySelectorAll('.history-page .essay-item').length === 1")
-    last_id = page.locator(".history-page .essay-item").get_attribute("data-history-id")
-    page.locator(".history-page .essay-item .essay-actions button[title='删除']").click()
+    page.wait_for_function("() => document.querySelectorAll('.history-page .history-row').length === 1")
+    if "page=2" not in page.evaluate("() => location.hash"):
+        raise AssertionError("the page number is not mirrored in the URL")
+    last_id = page.locator(".history-page .history-row").get_attribute("data-history-id")
+    page.locator("[data-history-toggle='selection']").click()
+    page.locator(".history-page .history-row").click()
+    page.locator("[data-history-delete]").click()
     page.wait_for_selector(".history-page .dialog .btn-danger")
     page.locator(".history-page .dialog .btn-danger").click()
     page.wait_for_function("() => window.__historyRecords.length === 20")
-    page.wait_for_function("() => document.querySelectorAll('.history-page .essay-item').length === 20")
+    page.wait_for_function("() => document.querySelectorAll('.history-page .history-row').length === 20")
     page.wait_for_function("() => !document.querySelector('.history-page .empty-state')")
+    # Activity probes (limit 1) feed the tab strip; only page loads (limit 20) count here.
     offsets = page.evaluate(
-        "() => window.__historyRecordCalls.filter((call) => call.command === 'list_history').map((call) => Number(call.args?.query?.offset || 0))"
+        "() => window.__historyRecordCalls.filter((call) => call.command === 'list_history' && Number(call.args?.query?.limit) === 20).map((call) => Number(call.args?.query?.offset || 0))"
     )
     if offsets[-3:] != [20, 20, 0]:
         raise AssertionError(f"last-page delete did not recover through the canonical first-page query: {offsets}")
@@ -210,7 +204,7 @@ def main():
                 page_errors = []
                 page.on("pageerror", lambda error: page_errors.append(getattr(error, "stack", str(error))))
                 page.goto(f"{BASE_URL}/#/history", wait_until="networkidle")
-                page.wait_for_selector(".history-page .essay-item")
+                page.wait_for_selector(".history-page .history-row")
                 geometry = read_geometry(page)
                 assert_geometry(name, geometry)
                 page.screenshot(

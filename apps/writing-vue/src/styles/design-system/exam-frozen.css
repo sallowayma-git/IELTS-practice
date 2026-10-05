@@ -1,0 +1,632 @@
+/*
+ * Exam freeze — the computer-delivered IELTS simulation keeps its own skin.
+ *
+ * The reading exam routes (PracticeReading, PracticeReadingSuite,
+ * PracticeReadingReview) render under `.atlas-exam` (see App.vue). They were
+ * tuned against the pre-paper design tokens and the pre-paper shared skin,
+ * and must stay pixel-identical across shell redesigns. This file pins both:
+ *
+ *   1. the token values the exam was built on (aliases.css recomputes on the
+ *      same root element, so every --atlas/--lg/--shadow alias follows);
+ *   2. the shared-skin rules the exam markup consumes (buttons, inputs,
+ *      dialogs, inline messages, segmented controls, empty states).
+ *
+ * Do not edit to restyle the app. Edit only to fix an exam bug, and verify with
+ *   python developer/tests/e2e/exam_freeze_visual_check.py
+ * The exam's own visual language lives in exam-theme.css.
+ */
+
+.atlas-exam {
+  color-scheme: light;
+  --anth-scrim: rgba(31, 31, 31, 0.42);
+  --anth-accent: #C15F3C;            /* primary clay */
+  --anth-accent-strong: #A84B2A;     /* hover/press */
+  --anth-accent-soft: #F1E4DC;       /* tinted wash */
+  --anth-accent-softer: #F7EEE8;    /* faintest wash */
+  --anth-accent-ring: rgba(193, 95, 60, 0.42);
+  --anth-accent-contrast: #FFFFFF;
+  --anth-ink: #1F1F1F;              /* primary text */
+  --anth-ink-strong: #141414;        /* headings */
+  --anth-ink-soft: #4A4A4A;          /* secondary text */
+  --anth-ink-faint: #6B6B6B;         /* muted/tertiary */
+  --anth-ink-disabled: #9A9A9A;
+  --anth-canvas: #F5F4EE;           /* app background, warm cream */
+  --anth-canvas-soft: #FAF9F5;      /* lifted canvas */
+  --anth-surface: #FFFFFF;          /* cards/panels */
+  --anth-surface-raised: #FFFFFF;   /* elevated surfaces */
+  --anth-surface-sunken: #EFEDE4;   /* recessed wells */
+  --anth-surface-hover: #F7F5EE;    /* row hover */
+  --anth-surface-inset: #F3F1E8;    /* inputs/code blocks */
+  --anth-border: rgba(31, 31, 31, 0.08);
+  --anth-border-strong: rgba(31, 31, 31, 0.14);
+  --anth-border-subtle: rgba(31, 31, 31, 0.05);
+  --anth-divider: rgba(31, 31, 31, 0.07);
+  --anth-success: #3F7D5E;
+  --anth-success-soft: #E8F0EA;
+  --anth-warning: #B8862F;
+  --anth-warning-soft: #F4ECD8;
+  --anth-danger: #A23B39;
+  --anth-danger-soft: #F4E3E1;
+  --anth-info: #4A6FA5;
+  --anth-info-soft: #E7ECF3;
+  --anth-font-serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", Georgia, "Times New Roman", serif;
+  --anth-font-sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --anth-font-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --anth-text-xs: 0.75rem;     /* 12px — captions, badges */
+  --anth-text-sm: 0.875rem;    /* 14px — secondary, labels */
+  --anth-text-base: 0.9375rem; /* 15px — body */
+  --anth-text-md: 1rem;        /* 16px — emphasized body */
+  --anth-text-lg: 1.25rem;     /* 20px — section heading */
+  --anth-text-xl: 1.5rem;      /* 24px — page heading */
+  --anth-text-2xl: 1.875rem;   /* 30px — hero */
+  --anth-text-3xl: 2.25rem;    /* 36px — display */
+  --anth-leading-tight: 1.2;
+  --anth-leading-snug: 1.4;
+  --anth-leading-normal: 1.6;
+  --anth-leading-relaxed: 1.7;
+  --anth-tracking-tight: -0.015em;
+  --anth-tracking-normal: 0;
+  --anth-tracking-wide: 0.04em;
+  --anth-tracking-caps: 0.1em;
+  --anth-weight-normal: 400;
+  --anth-weight-medium: 500;
+  --anth-weight-semibold: 600;
+  --anth-weight-bold: 700;
+  --anth-space-0: 0;
+  --anth-space-1: 0.25rem;   /* 4px */
+  --anth-space-2: 0.5rem;    /* 8px */
+  --anth-space-3: 0.75rem;   /* 12px */
+  --anth-space-4: 1rem;      /* 16px */
+  --anth-space-5: 1.5rem;    /* 24px */
+  --anth-space-6: 2rem;      /* 32px */
+  --anth-space-7: 2.5rem;    /* 40px */
+  --anth-space-8: 3rem;      /* 48px */
+  --anth-space-9: 4rem;      /* 64px */
+  --anth-radius-xs: 4px;      /* tags, chips */
+  --anth-radius-sm: 6px;      /* buttons, inputs */
+  --anth-radius-md: 8px;      /* small cards */
+  --anth-radius-lg: 10px;     /* cards, panels */
+  --anth-radius-xl: 12px;     /* large panels, modals */
+  --anth-radius-pill: 9999px;
+  --anth-shadow-none: none;
+  --anth-shadow-xs: 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-sm: 0 1px 3px rgba(31, 31, 31, 0.06), 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-md: 0 2px 6px rgba(31, 31, 31, 0.06), 0 1px 2px rgba(31, 31, 31, 0.04);
+  --anth-shadow-lg: 0 4px 12px rgba(31, 31, 31, 0.08), 0 1px 3px rgba(31, 31, 31, 0.05);
+  --anth-ring-focus: 0 0 0 3px var(--anth-accent-ring);
+  --anth-duration-fast: 120ms;
+  --anth-duration-normal: 180ms;
+  --anth-duration-slow: 280ms;
+  --anth-ease: cubic-bezier(0.2, 0, 0, 1);
+  --anth-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --anth-shell-max-width: 1200px;
+  --anth-content-max-width: 720px;
+  --anth-content-width-wide: 860px;   /* tables, multi-column detail grids */
+  --anth-content-width-narrow: 560px; /* forms, focused single-column flows */
+  --anth-nav-height: 56px;
+  --anth-z-raised: 10;
+  --anth-z-sticky: 100;
+  --anth-z-nav: 120;
+  --anth-z-floating: 200;
+  --anth-z-overlay: 500;
+  --anth-z-toast: 600;
+  --anth-z-skip-link: 10000;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Base element styling
+ * ════════════════════════════════════════════════════════════════════ */
+.atlas-exam {
+  min-height: 100vh;
+  color: var(--anth-ink);
+  font-family: var(--anth-font-sans);
+  background: var(--anth-canvas);
+}
+
+.atlas-exam .heading-serif,
+.atlas-exam :is(h1, h2, h3) {
+  color: var(--anth-ink-strong);
+  font-family: var(--anth-font-serif);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-tight);
+}
+
+.atlas-exam .heading-serif {
+  font-family: var(--anth-font-serif);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Surface primitives — cards, panels, shells
+ * ════════════════════════════════════════════════════════════════════ */
+.atlas-exam :is(.glass-toolbar, .atlas-glass-panel, .card, .surface, .shell, .hero-panel, .dialog, .settings-detail-panel) {
+  border: 1px solid var(--anth-border);
+  background: var(--anth-surface);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+.atlas-exam :is(.card, .surface, .shell, .hero-panel) {
+  border-radius: var(--anth-radius-lg);
+}
+
+.atlas-exam :is(.glass-card, .glass-surface) {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-lg);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+.atlas-exam .hero-surface {
+  background: var(--anth-surface-sunken);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-md);
+}
+
+.atlas-exam :is(.category-card, .exam-item, .hero-card, .practice-trend-card__face, .history-item, .tool-card, .hero-settings-group > .hero-panel, .backup-entry, .custom-suite-selection-bar, .system-info-surface, .app-update-details-row) {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-md);
+  box-shadow: var(--anth-shadow-xs);
+  transition:
+    transform var(--anth-duration-normal) var(--anth-ease),
+    box-shadow var(--anth-duration-normal) var(--anth-ease),
+    border-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-exam :is(.category-card, .exam-item, .hero-card, .practice-trend-card__face, .history-item, .tool-card):hover {
+  transform: translateY(-2px);
+  border-color: var(--anth-border-strong);
+  box-shadow: var(--anth-shadow-md);
+}
+
+.atlas-exam :is(.essay-panel, .glass-card, .action-row) {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-lg);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+/* Card grids rise in with a small stagger on first paint. */
+.atlas-exam :is(#category-overview, .exam-list) > * {
+  animation: atlas-rise-in var(--anth-duration-slow) var(--anth-ease-out) both;
+}
+
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(2) { animation-delay: 40ms; }
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(3) { animation-delay: 80ms; }
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(4) { animation-delay: 120ms; }
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(5) { animation-delay: 160ms; }
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(6) { animation-delay: 200ms; }
+.atlas-exam :is(#category-overview, .exam-list) > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+/* ════════════════════════════════════════════════════════════════════
+ * Buttons — flat, hairline-bordered, restrained
+ * ════════════════════════════════════════════════════════════════════ */
+.atlas-exam :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-text, .action-btn, .page-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  line-height: 1.4;
+  padding: 8px 16px;
+  transition: background var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease), color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-exam :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-text, .action-btn, .page-btn):hover:not(:disabled) {
+  background: var(--anth-surface-hover);
+  border-color: var(--anth-border-strong);
+}
+
+.atlas-exam :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-text, .action-btn, .page-btn):active:not(:disabled) {
+  background: var(--anth-surface-sunken);
+}
+
+.atlas-exam :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-text, .action-btn, .page-btn):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary / brand — solid clay */
+.atlas-exam :is(.btn-brand, .btn-primary, .primary-action, .hero-badge, .vocab-add) {
+  border-color: var(--anth-accent);
+  background: var(--anth-accent);
+  color: var(--anth-accent-contrast);
+}
+
+.atlas-exam :is(.btn-brand, .btn-primary, .primary-action, .hero-badge, .vocab-add):hover:not(:disabled) {
+  background: var(--anth-accent-strong);
+  border-color: var(--anth-accent-strong);
+}
+
+/* Secondary / outline */
+.atlas-exam :is(.btn-secondary, .btn-outline, .hero-btn--ghost) {
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+  border-color: var(--anth-border-strong);
+}
+
+.atlas-exam :is(.btn-secondary, .btn-outline, .hero-btn--ghost):hover:not(:disabled) {
+  background: var(--anth-surface-hover);
+}
+
+/* Warning — muted amber */
+.atlas-exam :is(.btn-warning, .hero-btn--warn) {
+  background: var(--anth-surface);
+  color: var(--anth-warning);
+  border-color: var(--anth-warning);
+}
+
+.atlas-exam :is(.btn-warning, .hero-btn--warn):hover:not(:disabled) {
+  background: var(--anth-warning-soft);
+}
+
+/* Success / info */
+.atlas-exam :is(.btn-success, .btn-info) {
+  background: var(--anth-surface);
+  color: var(--anth-success);
+  border-color: var(--anth-success);
+}
+
+.atlas-exam :is(.btn-success, .btn-info):hover:not(:disabled) {
+  background: var(--anth-success-soft);
+}
+
+/* Danger */
+.atlas-exam :is(.btn-danger, .danger) {
+  color: var(--anth-danger);
+  border-color: var(--anth-danger);
+  background: var(--anth-surface);
+}
+
+.atlas-exam :is(.btn-danger, .danger):hover:not(:disabled) {
+  background: var(--anth-danger-soft);
+}
+
+/* Text button */
+.atlas-exam .btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--anth-ink-soft);
+}
+
+.atlas-exam .btn-text:hover:not(:disabled) {
+  background: var(--anth-surface-hover);
+  color: var(--anth-ink);
+}
+
+/* Small / icon buttons */
+.atlas-exam .btn-sm {
+  padding: 5px 10px;
+  font-size: var(--anth-text-xs);
+}
+
+.atlas-exam :is(.btn-icon, .btn-icon-inline) {
+  padding: 6px;
+  border-radius: var(--anth-radius-sm);
+}
+
+/* Hero / large action buttons */
+.atlas-exam :is(.hero-btn, .hero-badge) {
+  min-height: 40px;
+  padding: 9px 18px;
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+}
+
+/* Segmented control buttons */
+.atlas-exam :is(.btn, .exam-item-action-btn, .shui-glass-btn, .hero-btn, .browse-frequency-chip, .shui-segmented-btn, .practice-trend-option, .practice-custom-option, .suite-flow-option, .custom-suite-picked-chip, .practice-summary-toggle, .practice-custom-card__icon-btn) {
+  border: 1px solid var(--anth-border);
+  border-radius: var(--anth-radius-sm);
+  background: var(--anth-surface);
+  color: var(--anth-ink-soft);
+  font-weight: var(--anth-weight-medium);
+}
+
+.atlas-exam :is(.btn, .exam-item-action-btn, .shui-glass-btn, .hero-btn, .browse-frequency-chip, .shui-segmented-btn, .practice-trend-option, .practice-custom-option, .suite-flow-option, .custom-suite-picked-chip, .practice-summary-toggle, .practice-custom-card__icon-btn).active,
+.atlas-exam :is(.btn, .exam-item-action-btn, .shui-glass-btn, .hero-btn, .browse-frequency-chip, .shui-segmented-btn, .practice-trend-option, .practice-custom-option, .suite-flow-option, .custom-suite-picked-chip, .practice-summary-toggle, .practice-custom-card__icon-btn)[aria-pressed="true"] {
+  background: var(--anth-accent-soft);
+  color: var(--anth-accent-strong);
+  border-color: var(--anth-accent-ring);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Form controls — inputs, selects, textareas
+ * ════════════════════════════════════════════════════════════════════ */
+.atlas-exam :is(input, textarea, select) {
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+  padding: 8px 12px;
+  transition: border-color var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-exam :is(input, textarea, select)::placeholder {
+  color: var(--anth-ink-faint);
+}
+
+.atlas-exam :is(input, textarea, select):hover:not(:disabled) {
+  border-color: var(--anth-ink-faint);
+}
+
+.atlas-exam :is(input, textarea, select):focus,
+.atlas-exam :is(input, textarea, select, button, a):focus-visible {
+  outline: 2px solid var(--anth-accent-strong);
+  outline-offset: 2px;
+  border-color: var(--anth-accent);
+  box-shadow: var(--anth-ring-focus);
+}
+
+.atlas-exam :is(input, textarea, select):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.atlas-exam .select-sm {
+  padding: 6px 10px;
+  font-size: var(--anth-text-xs);
+}
+
+.atlas-exam .textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+
+.atlas-exam .settings-page.settings-page,
+.atlas-exam .history-page.history-page,
+.atlas-exam .topic-manage-page.topic-manage-page,
+.atlas-exam .result-page.result-page,
+.atlas-exam .reading-suite-page.reading-suite-page {
+  width: min(var(--anth-shell-max-width), 100%);
+  margin: 0 auto;
+  padding: 8px 0 28px;
+  color: var(--anth-ink);
+}
+
+.atlas-exam .hero-panel__title,
+.atlas-exam .overview-section-title,
+.atlas-exam .backup-list-title {
+  font-family: var(--anth-font-serif);
+  color: var(--anth-ink-strong);
+}
+
+.atlas-exam .hero-panel__eyebrow,
+.atlas-exam .library-workspace-header__eyebrow,
+.atlas-exam .agent-page-header__eyebrow,
+.atlas-exam .agent-panel__eyebrow,
+.atlas-exam .history-eyebrow,
+.atlas-exam .topic-eyebrow,
+.atlas-exam .settings-detail-eyebrow {
+  color: var(--anth-accent);
+  font-size: var(--anth-text-xs);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caps);
+  text-transform: uppercase;
+}
+
+.atlas-exam :is(.category-meta, .exam-meta, .hero-panel__muted, .more-view-subtitle, .record-meta-line, .backup-entry-meta, .practice-trend-card__metric-label) {
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
+}
+
+.atlas-exam :is(.hero-card__value, .stat-number, .practice-trend-card__metric-value, .priority-accuracy__orb span) {
+  font-family: var(--anth-font-serif);
+  color: var(--anth-ink-strong);
+  font-weight: var(--anth-weight-semibold);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Dialogs — the single sanctioned modal implementation.
+ * Markup contract: .dialog-overlay > .dialog (optionally + .card) with
+ * .dialog-actions row. Page-local overrides may set width/height only.
+ * ════════════════════════════════════════════════════════════════════ */
+
+.atlas-exam .dialog-overlay,
+.atlas-exam .overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--anth-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--anth-space-5);
+}
+
+.atlas-exam .dialog-overlay,
+.atlas-exam .overlay,
+.atlas-exam .suite-mode-selector-modal.show {
+  background: var(--lg-bg-scrim);
+}
+
+.atlas-exam .dialog {
+  width: 100%;
+  max-width: min(var(--anth-content-width-narrow), calc(100vw - 48px));
+  max-height: min(86vh, 860px);
+  overflow-y: auto;
+  padding: var(--anth-space-6);
+  box-shadow: var(--anth-shadow-lg);
+}
+
+.atlas-exam .dialog,
+.atlas-exam .suite-mode-selector-content {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-xl);
+}
+
+.atlas-exam .dialog h3 {
+  margin-top: 0;
+}
+
+.atlas-exam .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--anth-space-2);
+  margin-top: var(--anth-space-5);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * Inline messages — the single sanctioned status message.
+ * Markup contract: .inline-message [+ -success | -error | -warning].
+ * ════════════════════════════════════════════════════════════════════ */
+.atlas-exam .inline-message {
+  padding: 10px 14px;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface-sunken);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+  line-height: var(--anth-leading-snug);
+}
+
+.atlas-exam .inline-message-success {
+  border-color: var(--anth-success);
+  background: var(--anth-success-soft);
+  color: var(--anth-success);
+}
+
+.atlas-exam .inline-message-error {
+  border-color: var(--anth-danger);
+  background: var(--anth-danger-soft);
+  color: var(--anth-danger);
+}
+
+.atlas-exam .inline-message-warning {
+  border-color: var(--anth-warning);
+  background: var(--anth-warning-soft);
+  color: var(--anth-warning);
+}
+
+/* Segmented controls */
+.atlas-exam .shui-segmented-control,
+.atlas-exam .agent-segmented-control {
+  position: relative;
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--anth-border-subtle);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface-sunken);
+}
+
+.atlas-exam .shui-segmented-btn,
+.atlas-exam .practice-trend-option,
+.atlas-exam .practice-custom-option,
+.atlas-exam .suite-flow-option,
+.atlas-exam .library-view-tabs__button,
+.atlas-exam .browse-frequency-chip,
+.atlas-exam .custom-suite-picked-chip,
+.atlas-exam .practice-summary-toggle {
+  border: 1px solid transparent;
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  padding: 7px 14px;
+  min-height: 34px;
+  cursor: pointer;
+  transition: background var(--anth-duration-fast) var(--anth-ease), color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-exam .shui-segmented-btn:hover,
+.atlas-exam .practice-trend-option:hover,
+.atlas-exam .practice-custom-option:hover,
+.atlas-exam .suite-flow-option:hover,
+.atlas-exam .library-view-tabs__button:hover,
+.atlas-exam .browse-frequency-chip:hover {
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+}
+
+.atlas-exam .shui-segmented-btn.active,
+.atlas-exam .practice-trend-option.active,
+.atlas-exam .practice-custom-option.active,
+.atlas-exam .suite-flow-option.active,
+.atlas-exam .library-view-tabs__button.active,
+.atlas-exam .browse-frequency-chip.active,
+.atlas-exam .shui-segmented-btn[aria-pressed="true"] {
+  background: var(--anth-surface);
+  color: var(--anth-accent-strong);
+  border-color: var(--anth-accent-ring);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+.atlas-exam .shui-segmented-indicator {
+  display: none;
+}
+
+/* Toggle groups (compose) */
+.atlas-exam .toggle-group {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--anth-border-subtle);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface-sunken);
+}
+
+.atlas-exam .toggle-item {
+  border: 1px solid transparent;
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-medium);
+  padding: 6px 14px;
+  min-height: 32px;
+  cursor: pointer;
+  transition: background var(--anth-duration-fast) var(--anth-ease), color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-exam .toggle-item:hover {
+  background: var(--anth-surface);
+  color: var(--anth-ink);
+}
+
+.atlas-exam .toggle-item.active {
+  background: var(--anth-surface);
+  color: var(--anth-accent-strong);
+  border-color: var(--anth-accent-ring);
+  box-shadow: var(--anth-shadow-xs);
+}
+
+/* Empty states */
+.atlas-exam :is(.loading, .detail-empty-state),
+.atlas-exam :is(.loading, .suite-empty-state),
+.atlas-exam :is(.loading-state, .empty-state),
+.atlas-exam .exam-list-empty,
+.atlas-exam .history-empty-placeholder,
+.atlas-exam .practice-trend-empty {
+  color: var(--anth-ink-faint);
+  text-align: center;
+}
+
+.atlas-exam .exam-list-empty-icon,
+.atlas-exam .practice-trend-empty svg {
+  color: var(--anth-ink-faint);
+}
+
+/* Reading page / suite */
+.atlas-exam .reading-page,
+.atlas-exam .reading-suite-page {
+  color: var(--anth-ink);
+}
+
+.atlas-exam :is(.reading-header, .reading-floating-panel) {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+}
+
+.atlas-exam :is(.practice-left, .compose-editor) {
+  background: var(--anth-surface);
+  border: 1px solid var(--anth-border);
+}

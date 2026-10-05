@@ -1,6 +1,9 @@
 import { computed, ref, unref } from 'vue'
 import { readingCoachApi, readingSessionApi } from './api'
 
+// The whole-attempt AI review is opt-in: nothing in this module starts it on
+// submit or replay. It runs only from the review chip / retry button, and the
+// host returns the stored answer when one already exists.
 const AUTOMATIC_REVIEW_QUERY = '请复盘我本次错题，按优先级给出训练建议'
 
 type AnyRecord = Record<string, any>
@@ -24,6 +27,7 @@ export type ReadingCoachOptions = {
 type CoachTranscriptEntry = {
   id: string
   role: 'assistant' | 'user'
+  status: string
   content: string
   isError: boolean
   followUps: unknown[]
@@ -70,7 +74,7 @@ function errorField(error: unknown, key: 'code' | 'message'): string {
   return record ? String(record[key] || '').trim() : ''
 }
 
-function normalizeCoachTranscript(value: unknown): CoachTranscriptEntry[] {
+function normalizeCoachTranscript(value: unknown, limit = 40): CoachTranscriptEntry[] {
   return (Array.isArray(value) ? value : [])
     .map((entry, index) => {
       const row = asRecord(entry)
@@ -80,7 +84,8 @@ function normalizeCoachTranscript(value: unknown): CoachTranscriptEntry[] {
       if (!content) return null
       return {
         id: String(row.id || row.createdAt || `coach_${index}`),
-        role: row.role === 'assistant' ? 'assistant' as const : 'user' as const,
+        role: row.role === 'assistant' || row.role === 'system' ? 'assistant' as const : 'user' as const,
+        status: String(row.status || (row.role === 'assistant' ? 'completed' : '')).toLowerCase(),
         content,
         isError: Boolean(row.isError || String(row.status || '').toLowerCase() === 'failed'),
         followUps: Array.isArray(row.followUps)
@@ -90,7 +95,7 @@ function normalizeCoachTranscript(value: unknown): CoachTranscriptEntry[] {
       }
     })
     .filter((entry): entry is CoachTranscriptEntry => Boolean(entry))
-    .slice(-40)
+    .slice(-limit)
 }
 
 function hasLlmReview(submission: AnyRecord | null | undefined): boolean {
@@ -151,6 +156,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachTranscriptState = ref<CoachTranscriptEntry[]>([])
   const coachThreadId = ref('')
   let coachRequestSequence = 0
+  let coachHydrationSequence = 0
 
   const submission = computed(() => readSource(options.submissionSource))
   const singleAttemptAnalysisLlm = computed(() => (
@@ -194,6 +200,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   }
 
   function resetReadingCoachState() {
+    coachHydrationSequence += 1
     coachError.value = ''
     coachResponse.value = null
     coachStreamMessage.value = ''
@@ -211,6 +218,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   }
 
   async function hydratePersistedCoachMessages(sessionId: string) {
+    const hydrationId = ++coachHydrationSequence
     if (!sessionId) {
       coachTranscriptState.value = []
       coachThreadId.value = ''
@@ -221,22 +229,32 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         sessionId,
         String(readSource(options.assetIdSource) || '') || null
       )) || {}
-      if (!isCurrentSubmission(sessionId)) return
+      if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachThreadId.value = String(result.threadId || '')
-      coachTranscriptState.value = normalizeCoachTranscript(result.messages)
-      const latestAssistant = [...coachTranscriptState.value].reverse().find((entry) => entry.role === 'assistant')
+      const entries = normalizeCoachTranscript(result.messages, Array.isArray(result.messages) ? result.messages.length : 40)
+      coachTranscriptState.value = entries.slice(-40)
+      const latestAssistant = [...coachTranscriptState.value].reverse().find((entry) => (
+        entry.role === 'assistant' && entry.status === 'completed' && !entry.isError
+      ))
       if (latestAssistant) {
         coachResponse.value = latestAssistant.snapshot || { answer: latestAssistant.content }
       }
-      const hasPersistedReview = coachTranscriptState.value.some((entry) => (
+      const latestReview = [...entries].reverse().find((entry) => (
         entry.role === 'user' && String(entry.snapshot?.action || '') === 'review_set'
       ))
-      if (hasPersistedReview) {
-        llmReviewStatus.value = 'success'
-        llmReviewMessage.value = 'AI 复盘已载入'
+      if (latestReview) {
+        const terminal = [...entries].reverse().find((entry) => (
+          entry.role === 'assistant'
+          && String(entry.snapshot?.userMessageId || '') === latestReview.id
+          && (entry.status === 'completed' || entry.status === 'failed')
+        ))
+        llmReviewStatus.value = terminal?.status === 'completed' ? 'success' : terminal?.status === 'failed' ? 'failed' : 'idle'
+        llmReviewMessage.value = terminal?.status === 'completed'
+          ? 'AI 复盘已载入'
+          : terminal?.status === 'failed' ? `AI 复盘失败：${terminal.content}` : 'AI 复盘待补全'
       }
     } catch (error) {
-      if (!isCurrentSubmission(sessionId)) return
+      if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachError.value = errorField(error, 'message') || 'AI 教练历史加载失败'
     }
   }
@@ -412,6 +430,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscriptState.value = [...coachTranscriptState.value, {
       id: `coach-error-${Date.now()}`,
       role: 'assistant',
+      status: 'failed',
       content: String(message || '阅读教练请求失败').trim(),
       isError: true,
       followUps: [],
@@ -456,6 +475,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   }
 
   function applyCoachResponse(response: unknown) {
+    coachHydrationSequence += 1
     const snapshot = asRecord(response) || { value: response }
     coachResponse.value = snapshot
     if (Array.isArray(snapshot.messages)) {
@@ -641,19 +661,6 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     })
   }
 
-  function queueAutomaticReviewRefresh(sessionId: unknown) {
-    const expectedSessionId = String(sessionId || '').trim()
-    if (!expectedSessionId) return
-    Promise.resolve().then(() => {
-      if (!isReadingCoachEnabled() || !isCurrentSubmission(expectedSessionId) || singleAttemptAnalysisLlm.value || llmReviewStatus.value === 'running') {
-        return null
-      }
-      return runAutomaticReviewCoach({ expectedSessionId })
-    }).catch((refreshFailure) => {
-      console.warn('补全阅读回放 AI 复盘失败:', refreshFailure)
-    })
-  }
-
   return {
     coachQuery,
     coachLoading,
@@ -679,7 +686,6 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     runCoachQuickAction,
     runCoachSelectionAction,
     runAutomaticReviewCoach,
-    queueAutomaticReviewRefresh,
     isCurrentSubmission,
     buildCoachPayload
   }

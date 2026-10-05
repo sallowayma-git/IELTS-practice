@@ -94,6 +94,12 @@ export async function getBackgroundJobStatus() {
   return unwrapCommandResponse(response, 'background_job_status')
 }
 
+/** Finished weekly consolidations (read-only), newest first. */
+export async function getWeeklyDigests(limit = 8) {
+  const response = await invokeCommand('weekly_digest_list', { limit })
+  return unwrapCommandResponse(response, 'weekly_digest_list')
+}
+
 // --- M8 consolidation ---
 
 export async function archiveStaleMemories() {
@@ -112,6 +118,7 @@ export const memoryRepository = {
   triggerDailyDream,
   getDailyJournal,
   getBackgroundJobStatus,
+  getWeeklyDigests,
   archiveStaleMemories
 }
 

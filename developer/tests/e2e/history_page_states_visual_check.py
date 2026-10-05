@@ -67,7 +67,7 @@ def prepare_state(page, state):
             page.evaluate("() => { window.__historyPageStateMode = 'filtered'; }")
             page.locator("#history-search").fill("no matching practice")
             page.wait_for_function(
-                "() => document.querySelector('.history-page > .empty-state')?.textContent.includes('当前筛选条件无结果')"
+                "() => document.querySelector('.history-page > .empty-state')?.textContent.includes('当前筛选条件下没有记录')"
             )
     # State selectors establish readiness; assert_geometry reports CSS failures directly.
 
@@ -80,7 +80,8 @@ def read_geometry(page):
           const rect = (node) => node ? node.getBoundingClientRect() : null;
           const style = (node) => node ? getComputedStyle(node) : null;
           const buttons = [...(state?.querySelectorAll('button') || [])];
-          const headerButtons = [...document.querySelectorAll('.history-page .header-actions button')];
+          const gated = [...document.querySelectorAll('[data-history-toggle="selection"], [data-history-toggle="export"]')];
+          const links = [...(state?.querySelectorAll('a') || [])];
           return {
             viewport: [innerWidth, innerHeight],
             documentWidth: document.documentElement.scrollWidth,
@@ -96,7 +97,9 @@ def read_geometry(page):
             message: state?.textContent.trim() || '',
             hasSpinner: Boolean(state?.querySelector('.history-state-spinner')),
             buttons: buttons.map((node) => ({ text: node.textContent.trim(), rect: rect(node) })),
-            headerDisabled: headerButtons.map((node) => node.disabled),
+            gatedDisabled: gated.map((node) => node.disabled),
+            filtersEnabled: !document.querySelector('[data-history-toggle="filters"]')?.disabled,
+            links: links.map((node) => ({ text: node.textContent.trim(), href: node.getAttribute('href'), rect: rect(node) })),
             calls: window.__historyPageStateCalls
           };
         }
@@ -135,8 +138,16 @@ def assert_geometry(name, state, data):
             raise AssertionError(f"{name}/{state}: recovery action is not a 44px target: {data['buttons']}")
     elif data["buttons"]:
         raise AssertionError(f"{name}/{state}: passive state unexpectedly renders an action")
-    if len(data["headerDisabled"]) != 2 or not all(data["headerDisabled"]):
-        raise AssertionError(f"{name}/{state}: destructive/export header actions are enabled without records")
+    if state == "empty":
+        hrefs = sorted(item["href"] for item in data["links"])
+        if hrefs != ["#/", "#/writing"] or any(item["rect"]["height"] + 0.5 < 44 for item in data["links"]):
+            raise AssertionError(f"{name}/{state}: empty state must offer both ways to start practising: {data['links']}")
+    elif data["links"]:
+        raise AssertionError(f"{name}/{state}: only the empty state links to practice")
+    if len(data["gatedDisabled"]) != 2 or not all(data["gatedDisabled"]):
+        raise AssertionError(f"{name}/{state}: selection/export are enabled without records")
+    if not data["filtersEnabled"]:
+        raise AssertionError(f"{name}/{state}: the filter disclosure must stay reachable")
 
 
 def verify_recovery(page, state):
@@ -146,7 +157,7 @@ def verify_recovery(page, state):
         page.wait_for_selector(".history-page > .history-list-state--empty")
         return "retry"
     if state == "filtered":
-        page.locator(".history-page > .empty-state button", has_text="重置筛选").click()
+        page.locator(".history-page > .empty-state button", has_text="清除筛选").click()
         page.wait_for_function("() => document.querySelector('#history-search')?.value === ''")
         page.wait_for_selector(".history-page > .history-list-state--empty")
         return "reset"

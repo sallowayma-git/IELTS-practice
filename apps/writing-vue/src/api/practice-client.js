@@ -16,11 +16,7 @@ import {
   cancelSuite
 } from '@/api/modes-repository.js'
 import {
-  listHistory,
-  listHistoryAll,
   getHistoryDetail,
-  deleteHistoryAttempt,
-  clearHistory,
   mapHistoryDetailToSubmission
 } from '@/api/history-repository.js'
 import {
@@ -153,52 +149,8 @@ export const practiceReadingSuite = {
   }
 }
 
+/** Reading record archive (backup). Browsing/deleting/exporting live in the unified history page. */
 export const practiceHistory = {
-  async list(filters = {}, pagination = { page: 1, limit: 20 }) {
-    const page = Number(pagination.page || 1)
-    const limit = Number(pagination.limit || 20)
-    const offset = (page - 1) * limit
-    const result = await listHistory({
-      activity: filters.activity || null,
-      limit,
-      offset,
-      search: filters.search || null
-    })
-    return {
-      data: result.items || [],
-      total: result.total,
-      page,
-      limit
-    }
-  },
-
-  async listAll(filters = {}, options = {}) {
-    const result = await listHistoryAll({
-      activity: filters.activity || null,
-      search: filters.search || null
-    })
-    return {
-      data: result.items || [],
-      total: result.total,
-      page: 1,
-      limit: (result.items || []).length
-    }
-  },
-
-  async get(activity, recordId) {
-    const { detail } = await getHistoryDetail(recordId)
-    return detail
-  },
-
-  async delete(activity, recordId) {
-    await deleteHistoryAttempt(recordId)
-    return true
-  },
-
-  async clear(filters = {}) {
-    return { deleted: await clearHistory(filters.activity || null) }
-  },
-
   async exportArchive(filters = { activity: 'reading' }) {
     const activity = String(filters.activity || 'reading').toLowerCase()
     if (activity !== 'reading') {
@@ -244,12 +196,34 @@ export const practiceHistory = {
   }
 }
 
+async function readCoachMessages(threadId) {
+  const messages = []
+  let afterSequence = 0
+  const limit = 100
+  for (let page = 0; page < 1000; page += 1) {
+    const { items } = await listCoachMessages(threadId, afterSequence, limit)
+    if (!Array.isArray(items)) throw new Error('coach messages response is invalid')
+    if (!items.length) break
+    for (const item of items) {
+      const sequence = Number(item?.sequence)
+      if (!Number.isSafeInteger(sequence) || sequence <= afterSequence) {
+        throw new Error('coach messages cursor did not advance')
+      }
+      afterSequence = sequence
+      messages.push(item)
+    }
+    if (items.length < limit) break
+    if (page === 999) throw new Error('coach messages pagination limit exceeded')
+  }
+  return messages
+}
+
 export const practiceCoach = {
   async listMessages(activity, sessionId = null, payload = {}) {
     const { thread } = await ensureCoachThread({
       activity: activity || 'reading',
       attemptId: sessionId || payload?.attemptId || null,
-      assetId: payload?.assetId || null,
+      assetId: payload?.assetId || payload?.examId || null,
       kind: payload?.kind || 'practice'
     })
     const threadId = thread?.id
@@ -258,15 +232,14 @@ export const practiceCoach = {
       error.code = 'coach.error'
       throw error
     }
-    const { items } = await listCoachMessages(threadId, 0, 100)
-    return { threadId, messages: items }
+    return { threadId, messages: await readCoachMessages(threadId) }
   },
 
   async query(activity, payload, sessionId = null, options = {}) {
     const threadCmd = {
       activity: activity || 'reading',
       attemptId: sessionId || payload?.attemptId || null,
-      assetId: payload?.assetId || null,
+      assetId: payload?.assetId || payload?.examId || null,
       kind: payload?.kind || 'practice'
     }
     const { thread } = await ensureCoachThread(threadCmd)
@@ -319,7 +292,7 @@ export const practiceCoach = {
         error.code = 'invalid_response_format'
         throw error
       }
-      const { items } = await listCoachMessages(threadId, 0, 100)
+      const items = await readCoachMessages(threadId)
       notify('generation_complete', { threadId })
       notify('complete', { ...result, threadId, messages: items, answer })
       return { ...result, threadId, messages: items, answer, degraded: false }

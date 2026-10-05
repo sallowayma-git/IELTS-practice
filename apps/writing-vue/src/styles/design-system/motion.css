@@ -6,7 +6,6 @@
  * by a11y-performance.css; nothing here needs its own opt-out except
  * where an animation must not run at all (see per-component rules).
  */
-@import './tokens.css';
 
 @keyframes atlas-fade-in {
   from { opacity: 0; }

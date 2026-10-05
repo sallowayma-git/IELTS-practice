@@ -19,8 +19,8 @@ def read_geometry(page):
     return page.evaluate(
         """
         () => {
-          const bar = document.querySelector('.history-page .batch-actions');
-          const count = bar?.querySelector('.selection-count');
+          const bar = document.querySelector('.history-page .history-selection');
+          const count = bar?.querySelector('.history-selection__count');
           const buttons = [...(bar?.querySelectorAll('button') || [])];
           const rect = (node) => node ? node.getBoundingClientRect() : null;
           const style = (node) => node ? getComputedStyle(node) : null;
@@ -31,6 +31,9 @@ def read_geometry(page):
             barRect: rect(bar),
             barDisplay: style(bar)?.display || '',
             barWrap: style(bar)?.flexWrap || '',
+            barPosition: style(bar)?.position || '',
+            countText: count?.textContent.trim() || '',
+            checked: [...document.querySelectorAll('.history-row[aria-checked="true"]')].length,
             countRect: rect(count),
             buttons: buttons.map((node) => ({ text: node.textContent.trim(), rect: rect(node) })),
           };
@@ -43,17 +46,19 @@ def assert_geometry(name, data):
     width = data["viewport"][0]
     if data["documentWidth"] > width + 1 or data["bodyWidth"] > width + 1:
         raise AssertionError(f"{name}: global History overflows viewport: {json.dumps(data, ensure_ascii=False)}")
-    if data["barDisplay"] != "flex" or data["barWrap"] != "wrap":
-        raise AssertionError(f"{name}: batch bar lost the flex-wrap contract")
+    if data["barDisplay"] != "flex" or data["barWrap"] != "wrap" or data["barPosition"] != "sticky":
+        raise AssertionError(f"{name}: selection bar lost the sticky flex-wrap contract")
+    if data["countText"] != "已选 1 条" or data["checked"] != 1:
+        raise AssertionError(f"{name}: selection count is wrong: {data['countText']} / {data['checked']}")
     if not data["barRect"] or not data["countRect"]:
         raise AssertionError(f"{name}: batch bar did not render")
-    if len(data["buttons"]) != 2 or any(not item["rect"] or item["rect"]["height"] < 44 for item in data["buttons"]):
-        raise AssertionError(f"{name}: batch actions are not stable touch targets")
-    if width <= 640:
-        if data["countRect"]["width"] < width - 80:
-            raise AssertionError(f"{name}: selection count did not receive the mobile row")
-        if any(item["rect"]["right"] > width + 1 for item in data["buttons"]):
-            raise AssertionError(f"{name}: mobile batch action escapes the viewport")
+    labels = [item["text"] for item in data["buttons"]]
+    if labels != ["删除", "全选本页", "取消", "清空全部记录"]:
+        raise AssertionError(f"{name}: selection actions changed: {labels}")
+    if any(not item["rect"] or item["rect"]["height"] < 44 for item in data["buttons"]):
+        raise AssertionError(f"{name}: selection actions are not stable touch targets")
+    if any(item["rect"]["right"] > width + 1 for item in data["buttons"]):
+        raise AssertionError(f"{name}: selection action escapes the viewport")
 
 
 def main():
@@ -65,8 +70,9 @@ def main():
             page = browser.new_page(viewport={"width": width, "height": height})
             install_tauri_mock(page)
             page.goto(f"{BASE_URL}/#/history", wait_until="networkidle")
-            page.wait_for_selector(".history-page .essay-item")
-            page.locator(".essay-item .essay-checkbox input").first.check()
+            page.wait_for_selector(".history-page .history-row")
+            page.locator("[data-history-toggle='selection']").click()
+            page.locator(".history-row").first.click()
             geometry = read_geometry(page)
             assert_geometry(name, geometry)
             page.screenshot(path=str(REPORT_DIR / f"history-batch-{name}-current.png"), full_page=True)

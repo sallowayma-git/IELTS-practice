@@ -4,7 +4,6 @@
       v-if="historyData.length > 0"
       class="line-chart"
       viewBox="0 0 600 240"
-      preserveAspectRatio="none"
     >
       <!-- Grid Lines -->
       <g class="chart-grid">
@@ -32,7 +31,7 @@
         </text>
       </g>
 
-      <!-- Area Fill -->
+      <!-- Area under the line (kept for geometry; drawn without fill) -->
       <path v-if="pathD" :d="areaD" class="chart-area" />
 
       <!-- Line -->
@@ -45,7 +44,7 @@
           :key="'point-' + index"
           :cx="point.x"
           :cy="point.y"
-          r="4"
+          r="3"
           class="data-point"
         >
           <title>{{ visibleHistoryData[index].date }}: {{ formatPointValue(visibleHistoryData[index].score) }}</title>
@@ -137,24 +136,16 @@ const points = computed(() => {
   }))
 })
 
-// Generate Smooth curve using cubic bezier
+// Straight segments: scores are discrete, a spline would overshoot between them.
 const pathD = computed(() => {
   if (points.value.length === 0) return ''
   if (points.value.length === 1) {
     return `M ${padding.left} ${points.value[0].y} L ${width - padding.right} ${points.value[0].y}`
   }
-
-  let d = `M ${points.value[0].x} ${points.value[0].y}`
-  for (let i = 0; i < points.value.length - 1; i++) {
-    const p1 = points.value[i]
-    const p2 = points.value[i + 1]
-    const ctrlX = (p1.x + p2.x) / 2
-    d += ` C ${ctrlX} ${p1.y}, ${ctrlX} ${p2.y}, ${p2.x} ${p2.y}`
-  }
-  return d
+  return points.value.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
 })
 
-// Gradient Area
+// Area outline under the line
 const areaD = computed(() => {
   if (!pathD.value) return ''
   const bottomY = height - padding.bottom
@@ -168,65 +159,66 @@ const areaD = computed(() => {
 </script>
 
 <style scoped>
+/* Thin ink line on paper; hairline grid; no area wash. */
 .line-chart-container {
-  width: 100%;
-  height: 240px;
-  background: var(--surface-0);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
   position: relative;
+  width: 100%;
+  aspect-ratio: 600 / 240; /* the viewBox: text is never stretched */
+  overflow: hidden;
+  border-bottom: 1px solid var(--anth-ink);
 }
 
 .line-chart {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
 }
 
 .chart-grid .grid-line {
-  stroke: var(--line-1);
+  stroke: var(--anth-rule);
   stroke-width: 1;
-  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
 }
 
 .y-labels .axis-label {
-  fill: var(--text-muted);
+  fill: var(--anth-ink-faint);
   font-size: 11px;
+  font-variant-numeric: lining-nums tabular-nums;
   text-anchor: end;
   dominant-baseline: middle;
 }
 
 .chart-line {
   fill: none;
-  stroke: var(--info-color);
-  stroke-width: 3;
-  stroke-linecap: round;
+  stroke: var(--anth-ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .chart-area {
-  fill: var(--anth-accent-softer);
+  fill: none;
+  stroke: none;
 }
 
 .data-points .data-point {
-  fill: var(--surface-0);
-  stroke: var(--info-color);
-  stroke-width: 2;
-  transition: r 0.2s ease;
+  fill: var(--anth-canvas);
+  stroke: var(--anth-ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
 }
 
 .data-points .data-point:hover {
-  r: 6;
-  fill: var(--info-color);
-  stroke: var(--surface-0);
+  fill: var(--anth-accent);
+  stroke: var(--anth-accent);
 }
 
 .empty-chart {
   display: flex;
-  height: 100%;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  font-size: 14px;
+  height: 100%;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
 }
 </style>

@@ -1,11 +1,12 @@
 import json
-import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from visual_test_support import flagged_preview
 
 
-BASE_URL = os.environ.get("AGENT_VISUAL_BASE_URL", "http://127.0.0.1:4175")
+# The workbench is a developer route (/dev/agent) that only exists in builds
+# with VITE_FEATURE_AGENT_WORKSPACE_V1=true, so this check serves its own.
 REPORT_DIR = Path(__file__).parent / "reports"
 CASES = (("desktop", 1440, 900), ("tablet", 980, 720), ("mobile", 390, 844), ("small", 360, 640))
 
@@ -94,6 +95,24 @@ TAURI_AGENT_MOCK = """
     if (command === 'memory_context_preview') {
       return { ok: true, data: { entries: [], source: 'active_memory' }, error: null };
     }
+    if (command === 'learning_observations_get_by_ids') {
+      if (JSON.stringify(args.ids) !== '["obs-evidence"]') throw new Error('unexpected observation IDs');
+      return { ok: true, data: { observations: [{
+        id: 'obs-evidence', userId: 'local', observationType: 'reading_error',
+        observedAt: '2026-08-11T08:00:00Z', scopeKey: 'activity:reading',
+        valueText: '判断题中遗漏了原文限定条件。',
+        evidence: [{ eventId: 'event-evidence', evidenceRole: 'support', ordinal: 0 }]
+      }], missingIds: [], freshness: 'fresh' }, error: null };
+    }
+    if (command === 'learning_events_get_evidence_by_ids') {
+      if (JSON.stringify(args.ids) !== '["event-evidence"]') throw new Error('unexpected event IDs');
+      return { ok: true, data: { events: [{
+        id: 'event-evidence', userId: 'local', eventType: 'reading.question_answered',
+        occurredAt: '2026-08-11T08:00:00Z', sourceKind: 'attempt', sourceId: 'attempt-evidence',
+        activity: 'reading', assetId: 'asset-evidence', attemptId: 'attempt-evidence',
+        questionId: 'question-evidence', payload: { answer: 'TRUE', correct: false }
+      }], missingIds: [] }, error: null };
+    }
     if (command === 'memory_catalog_list') {
       if (window.__memoryCatalogFailOnce) {
         window.__memoryCatalogFailOnce = false;
@@ -164,6 +183,11 @@ TAURI_AGENT_MOCK = """
 
 
 def main():
+    with flagged_preview(VITE_FEATURE_AGENT_WORKSPACE_V1=True) as base_url:
+        run_checks(base_url)
+
+
+def run_checks(base_url):
     report = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -171,7 +195,7 @@ def main():
             for name, width, height in CASES:
                 page = browser.new_page(viewport={"width": width, "height": height})
                 page.add_init_script(f"({TAURI_AGENT_MOCK})()")
-                page.goto(f"{BASE_URL}/#/agent", wait_until="networkidle")
+                page.goto(f"{base_url}/#/dev/agent", wait_until="networkidle")
                 page.wait_for_selector("[data-agent-console]")
                 page.wait_for_selector(".agent-heartbeat")
                 page.wait_for_selector(".agent-evolution-zone")
@@ -288,8 +312,16 @@ def main():
                     if '记忆 archive 的正文' not in archived.inner_text() or '证据 2' not in archived.inner_text():
                         raise AssertionError('archive lost its visible content/evidence')
                     archived.get_by_role('button', name='查看证据', exact=True).click()
-                    if '关联 1 次练习观察' not in archived.inner_text():
-                        raise AssertionError('archive lost its observation evidence in the drawer')
+                    archived.get_by_text('已读取 1 条关联观察。', exact=True).wait_for()
+                    evidence_text = archived.inner_text()
+                    if '判断题中遗漏了原文限定条件。' not in evidence_text or 'event-evidence' not in evidence_text:
+                        raise AssertionError('archive did not render its original observation and event source')
+                    evidence_link = archived.get_by_role('link', name='查看这次练习', exact=True)
+                    if 'asset-evidence' not in (evidence_link.get_attribute('href') or ''):
+                        raise AssertionError('evidence drawer lost the canonical practice navigation')
+                    evidence_commands = page.evaluate("window.__agentCommandLog.filter(x => x.command.startsWith('learning_')).map(x => x.command)")
+                    if evidence_commands != ['learning_observations_get_by_ids', 'learning_events_get_evidence_by_ids']:
+                        raise AssertionError(f'unexpected evidence reads: {evidence_commands}')
                     if page.evaluate("window.__memoryCatalog.find(x => x.id === 'mem-archive').evidenceObservationIds") != ['obs-evidence']:
                         raise AssertionError('archive changed the observation evidence identifiers')
                     archived.get_by_role('button', name='永久遗忘', exact=True).click()  # default dismiss

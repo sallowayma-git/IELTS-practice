@@ -32,7 +32,7 @@ ESSAY_PARAGRAPHS = (
 )
 EXPECTED_ESSAY_TEXT = " ".join("\n\n".join(ESSAY_PARAGRAPHS).split())
 EXPECTED_SUPPORT_HEADINGS = [
-    "AI Evaluation Summary",
+    "总评",
     "整体改进建议",
     "核心提分计划",
     "段落详评",
@@ -436,12 +436,12 @@ def verify_original_view(page, name, data):
 
 
 def verify_annotated_view(page, name, width):
-    annotated_button = page.locator(".view-controls > button", has_text="Annotated Errors")
+    annotated_button = page.locator(".view-controls > button", has_text="逐句批注")
     annotated_button.click()
     page.wait_for_function(
-        "() => document.querySelector('.view-controls > .btn-brand')?.textContent.includes('Annotated Errors')"
+        "() => document.querySelector('.view-controls > .btn-brand')?.textContent.includes('逐句批注')"
     )
-    active_style = verify_active_view_style(page, name, "Annotated Errors")
+    active_style = verify_active_view_style(page, name, "逐句批注")
 
     error_button = page.locator(".essay-body .sentence-container.has-error").first
     error_button.wait_for()
@@ -528,7 +528,7 @@ def main():
                 geometry = read_geometry(page)
                 assert_geometry(name, width, geometry)
                 original = verify_original_view(page, name, geometry)
-                original["activeStyle"] = verify_active_view_style(page, name, "Original View")
+                original["activeStyle"] = verify_active_view_style(page, name, "原文")
                 page.screenshot(
                     path=str(REPORT_DIR / f"writing-result-{name}-original-current.png"),
                     full_page=True,

@@ -77,13 +77,31 @@ function pick(record, camel, snake, fallback) {
   return fallback
 }
 
-function formatJournalDate(value) {
+export function formatJournalDate(value) {
   const raw = String(value || '').trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
   if (match) return `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`
   const date = raw ? new Date(raw) : null
   if (!date || Number.isNaN(date.getTime())) return raw || '今天'
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+export function summarizeBackgroundJob(job) {
+  const kind = String(pick(job, 'jobKind', 'job_kind', ''))
+  const rawStatus = String(job?.status || '')
+  const status = rawStatus === 'queued' ? 'waiting' : rawStatus
+  const labels = { waiting: '等待中', running: '运行中', completed: '已完成', failed: '失败', interrupted: '已中断' }
+  const attempts = pick(job, 'attempts', 'attempts', null)
+  const maxAttempts = pick(job, 'maxAttempts', 'max_attempts', null)
+  return {
+    id: job?.id,
+    kind,
+    title: ({ daily_dream: '每日整理', daily_journal: '学习日记' })[kind] || kind || '后台任务',
+    status,
+    statusLabel: labels[status] || `未知状态（${rawStatus || '未返回'}）`,
+    attemptsLabel: `执行次数 ${attempts ?? '未返回'} / ${maxAttempts ?? '未返回'}`,
+    error: String(pick(job, 'lastError', 'last_error', '') || '')
+  }
 }
 
 export function formatSkillKey(skillKey) {
@@ -126,7 +144,7 @@ function formatWritingEval(summary) {
   const completed = asNumber(pick(record, 'completed', 'completed', 0), 0)
   const degraded = asNumber(pick(record, 'degraded', 'degraded', 0), 0)
   const band = formatBand(pick(record, 'averageBand', 'average_band', null))
-  if (!completed && !degraded && !band) return '今天没有写作评测'
+  if (!completed && !degraded && !band) return '当日没有写作评测'
   const parts = [`完成 ${completed} 篇`]
   if (degraded) parts.push(`降级 ${degraded} 篇`)
   if (band) parts.push(`均分 ${band}`)
@@ -210,8 +228,8 @@ export function summarizeJournal(journal) {
     dateLabel: formatJournalDate(date),
     quiet,
     lede: quiet
-      ? '今天还没有新的练习痕迹。完成一次阅读或写作后，这里会汇总变化。'
-      : '根据今天的练习，系统整理出这些变化。',
+      ? '当日没有新的练习痕迹。'
+      : '根据当日的练习，系统整理出这些变化。',
     rows,
     unresolved
   }
@@ -301,6 +319,94 @@ export function summarizeEvidence(bundle) {
 export function formatFeedbackKind(kind) {
   return ({ accurate: '准确', inaccurate: '不准确', partially_accurate: '部分准确',
     outdated: '已过时', not_about_me: '不属于我', acknowledged: '已知悉' })[kind] || '已记录'
+}
+
+export const MEMORY_EVIDENCE_LIMITS = Object.freeze({ observations: 20, events: 50 })
+
+export function formatStudyProbe(probe) {
+  if (typeof probe === 'string') return probe
+  if (!probe || typeof probe !== 'object') return '待确认技能'
+  return [probe.skillKey, probe.probeKind].filter(Boolean).join(' · ') || '待确认技能'
+}
+
+export function memoryEvidenceIds(values) {
+  return [...new Set(asArray(values).filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))]
+}
+
+export function persistedPlanItems(snapshot, expectedPlanId = '') {
+  const id = snapshot?.plan?.id
+  if (typeof id !== 'string' || !id.trim() || (expectedPlanId && id !== expectedPlanId)
+    || !Array.isArray(snapshot.items)
+    || snapshot.items.some((item) => typeof item?.id !== 'string' || !item.id.trim() || item.planId !== id)
+    || new Set(snapshot.items.map((item) => item.id)).size !== snapshot.items.length) {
+    throw new Error('持久化计划响应无效或不是刚创建的计划，请重新读取。')
+  }
+  return snapshot.items
+}
+
+function evidenceOriginal(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  return text.length > 4000 ? `${text.slice(0, 4000)}\n…（原始记录过长，已截断）` : text
+}
+
+export function memoryEvidenceRoute(event) {
+  if (!event.attemptId) return null
+  if (event.activity === 'reading' && event.assetId) {
+    return { name: 'PracticeReadingReview', params: { assetId: event.assetId, sessionId: event.attemptId } }
+  }
+  if (event.activity === 'writing' && /^attempt-[a-z0-9_-]{1,128}$/i.test(event.attemptId)) {
+    return { name: 'Result', params: { sessionId: event.attemptId } }
+  }
+  return null
+}
+
+// Only explicit memory -> observation -> event references authorize evidence.
+// Readers are injected so the same contract can be exercised without a host.
+export async function resolveMemoryEvidence(observationIds, readers, userId = 'local') {
+  const allIds = memoryEvidenceIds(observationIds)
+  const ids = allIds.slice(0, MEMORY_EVIDENCE_LIMITS.observations)
+  if (!ids.length) return { items: [], warnings: [], truncated: false }
+  const batch = await readers.observations(ids)
+  if (!Array.isArray(batch?.observations) || !Array.isArray(batch?.missingIds)) {
+    throw new Error('观察证据响应无效，请重新读取。')
+  }
+  const byObservation = new Map(batch.observations.filter((row) => ids.includes(row.id) && row.userId === userId).map((row) => [row.id, row]))
+  const observations = ids.map((id) => byObservation.get(id)).filter(Boolean)
+  if (observations.some((row) => !Array.isArray(row.evidence) || row.evidence.some((ref) => !ref || typeof ref.eventId !== 'string' || !ref.eventId.trim()))) {
+    throw new Error('观察证据引用无效，请重新读取。')
+  }
+  const eventIds = memoryEvidenceIds(observations.flatMap((row) => asArray(row.evidence).map((ref) => ref.eventId)))
+  const selectedEventIds = eventIds.slice(0, MEMORY_EVIDENCE_LIMITS.events)
+  const eventsBatch = selectedEventIds.length ? await readers.events(selectedEventIds) : { events: [], missingIds: [] }
+  if (!Array.isArray(eventsBatch?.events) || !Array.isArray(eventsBatch?.missingIds)) {
+    throw new Error('事件证据响应无效，请重新读取。')
+  }
+  const byEvent = new Map(eventsBatch.events.filter((row) => selectedEventIds.includes(row.id) && row.userId === userId).map((row) => [row.id, row]))
+  const warnings = []
+  const missingObservations = ids.filter((id) => !byObservation.has(id)).length
+  const missingEvents = selectedEventIds.filter((id) => !byEvent.has(id)).length
+  if (missingObservations) warnings.push(`${missingObservations} 条关联观察不可用，无法核验其证据。`)
+  if (missingEvents) warnings.push(`${missingEvents} 条关联事件不可用，证据链不完整。`)
+  if (batch.freshness && batch.freshness !== 'fresh') warnings.push('观察投影尚未更新，以下为现有记录。')
+  const truncated = allIds.length > ids.length || eventIds.length > selectedEventIds.length
+  if (truncated) warnings.push('本次最多读取 20 条观察、50 条关联事件；以下不是全部证据。')
+  const items = observations.map((row) => ({
+    id: row.id,
+    source: `${row.id} · ${row.observationType} · ${row.observedAt} · ${row.scopeKey}`,
+    original: evidenceOriginal(row.valueText) || evidenceOriginal(row.payload) || '该观察没有文字原文。',
+    events: asArray(row.evidence).filter((ref) => byEvent.has(ref.eventId)).map((ref) => {
+      const event = byEvent.get(ref.eventId)
+      return {
+        id: `${event.id}:${ref.evidenceRole}:${ref.ordinal}`,
+        source: `${event.id} · ${ref.evidenceRole} · ${event.eventType} · ${event.occurredAt} · ${event.sourceKind}${event.sourceId ? ` / ${event.sourceId}` : ''}`,
+        location: [event.assetId && `材料 ${event.assetId}`, event.attemptId && `练习 ${event.attemptId}`, event.questionId && `题目 ${event.questionId}`].filter(Boolean).join(' · '),
+        original: evidenceOriginal(event.payload) || '该事件没有文字原文。',
+        route: memoryEvidenceRoute(event)
+      }
+    })
+  }))
+  return { items, warnings, truncated }
 }
 
 export { ACTION_KIND_LABELS, SKILL_LABELS }

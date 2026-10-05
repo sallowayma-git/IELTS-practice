@@ -3,7 +3,6 @@
     <div class="backup-list-card">
       <div class="backup-list-header">
         <h3 class="backup-list-title">
-          <span class="backup-list-title-icon ui-icon-text" aria-hidden="true">题库</span>
           <span class="backup-list-title-text">本地题库信息</span>
         </h3>
         <button class="btn btn-secondary backup-list-dismiss" type="button" @click="$emit('close')">收起</button>

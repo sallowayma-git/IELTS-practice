@@ -58,7 +58,6 @@ onMounted(loadLearnerModel)
   <main class="learner-model-page">
     <header class="learner-model-page__header">
       <div>
-        <p class="eyebrow">Learner Model v1</p>
         <h1>技能复习地图</h1>
         <p class="lede">
           这里展示可解释的证据带宽与下一步探针，不把有限样本伪装成精确分数。
@@ -76,7 +75,6 @@ onMounted(loadLearnerModel)
       <article class="panel">
         <div class="panel__heading">
           <div>
-            <p class="eyebrow">Review queue</p>
             <h2>优先复习</h2>
           </div>
           <span class="count-badge">{{ needs.length }}</span>
@@ -112,7 +110,6 @@ onMounted(loadLearnerModel)
       <article class="panel">
         <div class="panel__heading">
           <div>
-            <p class="eyebrow">Evidence state</p>
             <h2>技能状态</h2>
           </div>
           <span class="count-badge">{{ states.length }}</span>
@@ -150,15 +147,10 @@ onMounted(loadLearnerModel)
 </template>
 
 <style scoped>
+/* Learner model (flag-gated): two ruled columns of skills on paper. */
 .learner-model-page {
-  --color-text: var(--anth-ink);
-  --color-text-muted: var(--anth-ink-soft);
-  --color-surface: var(--anth-surface);
-  --color-surface-muted: var(--anth-surface-sunken);
-  --color-border: var(--anth-border);
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 2.5rem clamp(1rem, 4vw, 3.5rem) 4rem;
+  display: grid;
+  gap: 32px;
 }
 
 .learner-model-page__header,
@@ -168,136 +160,107 @@ onMounted(loadLearnerModel)
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .learner-model-page__header {
-  margin-bottom: 2rem;
-}
-
-.eyebrow {
-  margin: 0 0 0.4rem;
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-h1,
-h2 {
-  margin: 0;
-  color: var(--color-text);
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--anth-rule);
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 3.4rem);
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.125rem);
 }
 
 h2 {
-  font-size: 1.35rem;
+  margin: 0;
+  font-size: var(--anth-text-lg);
 }
 
 .lede {
-  max-width: 42rem;
-  margin: 0.8rem 0 0;
-  color: var(--color-text-muted);
-  line-height: 1.6;
+  max-width: var(--anth-measure);
+  margin: 8px 0 0;
+  color: var(--anth-ink-soft);
+  line-height: var(--anth-leading-relaxed);
 }
 
 .feedback {
-  padding: 1rem;
-  border-radius: 0.8rem;
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  margin: 0;
+  color: var(--anth-ink-faint);
 }
 
 .feedback--error {
-  background: var(--anth-danger-soft);
   color: var(--anth-danger);
 }
 
 .learner-model-page__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.25rem;
+  gap: 40px;
 }
 
 .panel {
   min-width: 0;
-  padding: 1.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: 1.1rem;
-  background: var(--color-surface);
-  box-shadow: var(--anth-shadow-sm);
+  padding-top: 14px;
+  border-top: 1px solid var(--anth-ink);
 }
 
-.count-badge,
+.count-badge {
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
 .priority-badge,
 .uncertainty-badge {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  gap: 6px;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-xs);
 }
 
-.count-badge {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+.priority-badge::before,
+.uncertainty-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: var(--anth-ink);
 }
 
-.priority-badge {
-  background: var(--anth-accent-soft);
-  color: var(--anth-accent-strong);
-}
-
-.uncertainty-badge--high {
-  background: var(--anth-danger-soft);
-  color: var(--anth-danger);
-}
-
-.uncertainty-badge--medium {
-  background: var(--anth-warning-soft);
-  color: var(--anth-warning);
-}
-
-.uncertainty-badge--low {
-  background: var(--anth-success-soft);
-  color: var(--anth-success);
-}
+.uncertainty-badge--high::before { background: var(--anth-danger); }
+.uncertainty-badge--medium::before { background: var(--anth-warning); }
+.uncertainty-badge--low::before { background: var(--anth-success); }
 
 .review-list,
 .state-list {
   display: grid;
-  gap: 0.75rem;
-  margin: 1.25rem 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .review-card,
 .state-card {
-  padding: 1rem;
-  border-radius: 0.85rem;
-  background: var(--color-surface-muted);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--anth-rule);
 }
 
 .review-card__reason,
 .state-card__trend,
 .review-card__date {
-  margin: 0.55rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
+  margin: 4px 0 0;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+  line-height: var(--anth-leading-normal);
 }
 
 .metric-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0.9rem 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 8px 0 0;
 }
 
 .metric-list div {
@@ -305,34 +268,29 @@ h2 {
 }
 
 .metric-list dt {
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-xs);
 }
 
 .metric-list dd {
-  margin: 0.2rem 0 0;
-  color: var(--color-text);
-  font-size: 0.85rem;
-  font-weight: 650;
+  margin: 2px 0 0;
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .empty-state {
-  margin: 1.25rem 0 0;
-  color: var(--color-text-muted);
+  margin: 12px 0 0;
+  color: var(--anth-ink-faint);
 }
 
 @media (max-width: 820px) {
-  .learner-model-page__header,
-  .learner-model-page__grid {
-    display: block;
+  .learner-model-page__header {
+    flex-direction: column;
   }
 
-  .btn-warm-sand {
-    margin-top: 1rem;
-  }
-
-  .panel + .panel {
-    margin-top: 1rem;
+  .learner-model-page__grid,
+  .metric-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

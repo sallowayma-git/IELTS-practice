@@ -2,7 +2,6 @@
   <section class="practice-library" data-practice-reading-home data-library-ready>
     <header class="library-workspace-header">
       <div class="library-workspace-header__copy">
-        <p class="library-workspace-header__eyebrow">Reading workspace</p>
         <h1 class="library-workspace-header__title">阅读练习</h1>
       </div>
 
@@ -16,7 +15,6 @@
           :aria-current="activeView === item.value ? 'page' : undefined"
           @click="showView(item.value)"
         >
-          <span class="ui-emoji-icon" v-html="item.icon"></span>
           {{ item.label }}
         </button>
       </nav>
@@ -63,55 +61,11 @@
       @filter-by-type="filterByType"
       @clear-search="clearSearch"
       @toggle-frequency-filter="toggleFrequencyFilter"
-      @retry-load="loadReadingData"
+      @retry-load="loadAssets"
       @browse-primary-action="handleBrowsePrimaryAction"
       @view-pdf="viewPdf"
       @confirm-custom-suite-selection="confirmCustomSuiteSelection"
       @cancel-custom-suite-selection="cancelCustomSuiteSelection"
-    />
-
-    <ReadingHistoryPanel
-      :active-view="activeView"
-      :practice-summary-expanded="practiceSummaryExpanded"
-      :history-stats="historyStats"
-      :practice-trend-summary="practiceTrendSummary"
-      :practice-trend-bars="practiceTrendBars"
-      :practice-trend-ranges="practiceTrendRanges"
-      :practice-trend-range="practiceTrendRange"
-      v-model:practice-widget-selector-open="practiceWidgetSelectorOpen"
-      :active-practice-widget="activePracticeWidget"
-      :active-practice-widget-meta="activePracticeWidgetMeta"
-      :heatmap-month-label="heatmapMonthLabel"
-      :practice-heatmap-days="practiceHeatmapDays"
-      :practice-heatmap-summary="practiceHeatmapSummary"
-      :priority-insight="priorityInsight"
-      :reading-radar-insight="readingRadarInsight"
-      :practice-widget-options="practiceWidgetOptions"
-      :selected-history-type="selectedHistoryType"
-      :history-busy="historyBusy"
-      :bulk-delete-button-label="bulkDeleteButtonLabel"
-      v-model:history-keyword="historyKeyword"
-      :history-error="historyError"
-      :loading-history="loadingHistory"
-      :filtered-history="filteredHistory"
-      :bulk-delete-mode="bulkDeleteMode"
-      :selected-history-ids="selectedHistoryIds"
-      :format-record-date="formatRecordDate"
-      :format-duration-short="formatDurationShort"
-      :get-score-color="getScoreColor"
-      :history-percentage="historyPercentage"
-      @toggle-practice-summary="togglePracticeSummary"
-      @select-practice-trend-range="selectPracticeTrendRange"
-      @shift-heatmap-month="shiftHeatmapMonth"
-      @select-practice-widget="selectPracticeWidget"
-      @filter-records="filterRecords"
-      @export-practice-markdown="exportPracticeMarkdown"
-      @toggle-bulk-delete-mode="toggleBulkDeleteMode"
-      @clear-practice-data="clearPracticeData"
-      @history-item-click="handleHistoryItemClick"
-      @toggle-history-selection="toggleHistorySelection"
-      @open-reading-review="openReadingReview"
-      @delete-history-record="deleteHistoryRecord"
     />
 
     <ReadingMoreToolsPanel
@@ -192,7 +146,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ReadingBrowsePanel from '@/modules/practice-reading/components/ReadingBrowsePanel.vue'
-import ReadingHistoryPanel from '@/modules/practice-reading/components/ReadingHistoryPanel.vue'
 import ReadingMoreToolsPanel from '@/modules/practice-reading/components/ReadingMoreToolsPanel.vue'
 import ReadingOverviewPanel from '@/modules/practice-reading/components/ReadingOverviewPanel.vue'
 import ReadingSettingsPanel from '@/modules/practice-reading/components/ReadingSettingsPanel.vue'
@@ -206,9 +159,7 @@ import {
 import { useReadingHistory } from '@/modules/practice-reading/useReadingHistory'
 import { useReadingLibrary } from '@/modules/practice-reading/useReadingLibrary'
 import { useReadingSuite } from '@/modules/practice-reading/useReadingSuite'
-import { historyPercentage, safeDateMs, sortReadingHistory } from '@/modules/practice-reading/historyStats'
 import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
-import { getScoreColor } from '@/utils/score-color'
 import { createEndless, createMemorize } from '@/api/modes-repository.js'
 import { getReadingPdfDataUrl, pickReadingPracticeAsset } from '@/api/reading-repository.js'
 
@@ -216,18 +167,7 @@ const router = useRouter()
 const route = useRoute()
 const preferences = useTauriPreferences()
 const { loadReadingAssets } = useReadingLibrary()
-const {
-  loadReadingHistory,
-  deleteReadingHistoryRecord,
-  clearReadingHistory,
-  exportReadingHistoryArchive,
-  importReadingHistoryArchive,
-  filterReadingHistory,
-  computeHistoryStats,
-  getPracticeTrendRecords,
-  computePracticeTrendSummary,
-  computePracticeTrendBars
-} = useReadingHistory()
+const { exportReadingHistoryArchive, importReadingHistoryArchive } = useReadingHistory()
 const { createReadingSuite } = useReadingSuite()
 const SUITE_FLOW_MODE_STORAGE_KEY = 'suite_flow_mode'
 const SUITE_FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope'
@@ -236,7 +176,6 @@ const SUITE_AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit'
 const icons = {
   overview: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>',
   book: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
-  edit: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
   more: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>',
   settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
   suite: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path></svg>',
@@ -248,7 +187,6 @@ const icons = {
 const libraryViews = [
   { value: 'overview', label: '总览', icon: icons.overview },
   { value: 'browse', label: '题库浏览', icon: icons.book },
-  { value: 'practice', label: '练习记录', icon: icons.edit },
   { value: 'more', label: '更多', icon: icons.more },
   { value: 'settings', label: '数据工具', icon: icons.settings }
 ]
@@ -263,37 +201,6 @@ const frequencyFilters = [
   { value: 'high', label: '高频' },
   { value: 'medium', label: '中频' },
   { value: 'low', label: '低频' }
-]
-
-const practiceTrendRanges = [
-  { value: 'recent10', label: '最近十次', limit: 10 },
-  { value: 'last7d', label: '最近七天', days: 7 },
-  { value: 'last30d', label: '最近一月', days: 30 },
-  { value: 'recent20', label: '最近20次', limit: 20 }
-]
-
-const practiceWidgetOptions = [
-  {
-    value: 'heatmap',
-    label: '练习热力图',
-    eyebrow: 'Heatmap',
-    title: '练习热力图',
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M8 2v4"></path><path d="M16 2v4"></path><path d="M3 10h18"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 17h.01"></path></svg>'
-  },
-  {
-    value: 'priority',
-    label: '中高频余量',
-    eyebrow: 'Focus',
-    title: '中高频余量',
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></svg>'
-  },
-  {
-    value: 'radar',
-    label: '阅读错题雷达',
-    eyebrow: 'Radar',
-    title: '阅读错题雷达',
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5Z"></path><path d="m3 8 9 13 9-13"></path><path d="M12 13v8"></path></svg>'
-  }
 ]
 
 const suiteFlowOptions = [
@@ -314,17 +221,11 @@ const customSuiteCategories = ['P1', 'P2', 'P3']
 const activeView = ref('overview')
 const selectedCategory = ref('all')
 const selectedType = ref('all')
-const selectedHistoryType = ref('all')
 const frequencyFilter = ref('all')
 const keyword = ref('')
-const historyKeyword = ref('')
 const sortMode = ref('default')
 const browsePreferencePanelOpen = ref(false)
 const browseRememberPosition = ref(readBrowseRememberPosition())
-const practiceSummaryExpanded = ref(true)
-const practiceTrendRange = ref('recent10')
-const activePracticeWidget = ref('heatmap')
-const practiceWidgetSelectorOpen = ref(false)
 const clockOpen = ref(false)
 const clockNow = ref(new Date())
 let clockTimer = 0
@@ -340,21 +241,15 @@ const suiteModeSelectorOpen = ref(false)
 const selectedSuiteFlowMode = ref(resolveSuitePreference().flowMode)
 const selectedSuiteFrequencyScope = ref(resolveSuitePreference().frequencyScope)
 const customSuiteDraft = ref(null)
-const heatmapMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const readingAssets = ref([])
-const readingHistory = ref([])
 const readingSettingsPanel = ref(null)
 const loading = ref(false)
-const loadingHistory = ref(false)
 const historyBusy = ref(false)
 const creatingSuite = ref(false)
 const error = ref('')
-const historyError = ref('')
 const suiteError = ref('')
 const localMessage = ref('')
 const pdfViewer = ref({ open: false, title: '', dataUrl: '' })
-const bulkDeleteMode = ref(false)
-const selectedHistoryIds = ref(new Set())
 const latestAssetReadAt = ref(null)
 let pendingBrowsePositionRestore = false
 
@@ -378,136 +273,6 @@ const filteredReadingAssets = computed(() => {
   })
 })
 
-const sortedHistory = computed(() => sortReadingHistory(readingHistory.value))
-
-const filteredHistory = computed(() => {
-  return filterReadingHistory(readingHistory.value, {
-    keyword: historyKeyword.value,
-    selectedHistoryType: selectedHistoryType.value
-  })
-})
-
-const historyStats = computed(() => computeHistoryStats(readingHistory.value))
-
-const practiceTrendRecords = computed(() => {
-  return getPracticeTrendRecords(readingHistory.value, practiceTrendRange.value, practiceTrendRanges)
-})
-
-const practiceTrendSummary = computed(() => {
-  return computePracticeTrendSummary(readingHistory.value, practiceTrendRange.value, practiceTrendRanges)
-})
-
-const practiceTrendBars = computed(() => computePracticeTrendBars(readingHistory.value, practiceTrendRange.value, practiceTrendRanges))
-
-const priorityInsight = computed(() => {
-  const buckets = {
-    high: buildPriorityBucket('high'),
-    medium: buildPriorityBucket('medium')
-  }
-  return buckets
-})
-
-const activePracticeWidgetMeta = computed(() => (
-  practiceWidgetOptions.find((widget) => widget.value === activePracticeWidget.value)
-  || practiceWidgetOptions[0]
-))
-
-const heatmapMonthLabel = computed(() => {
-  const cursor = heatmapMonth.value
-  const now = new Date()
-  if (cursor.getFullYear() === now.getFullYear() && cursor.getMonth() === now.getMonth()) {
-    return '本月'
-  }
-  return `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`
-})
-
-const practiceHeatmapDays = computed(() => {
-  const cursor = heatmapMonth.value
-  const year = cursor.getFullYear()
-  const month = cursor.getMonth()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const dailySets = new Map()
-  const allActiveDays = new Map()
-  readingHistory.value.forEach((record, index) => {
-    const date = getRecordDate(record)
-    const key = formatDateKey(date)
-    const setId = getPracticeSetId(record, key, index)
-    if (!key || !setId) return
-    if (!allActiveDays.has(key)) allActiveDays.set(key, new Set())
-    allActiveDays.get(key).add(setId)
-    if (date.getFullYear() !== year || date.getMonth() !== month) return
-    if (!dailySets.has(key)) dailySets.set(key, new Set())
-    dailySets.get(key).add(setId)
-  })
-  const averageSetsPerActiveDay = allActiveDays.size
-    ? Array.from(allActiveDays.values()).reduce((sum, set) => sum + set.size, 0) / allActiveDays.size
-    : 1
-  return Array.from({ length: daysInMonth }, (_, index) => {
-    const date = new Date(year, month, index + 1)
-    const key = formatDateKey(date)
-    const count = dailySets.get(key)?.size || 0
-    return {
-      key,
-      label: `${month + 1}月${index + 1}日，做题 ${count} 套`,
-      count,
-      level: resolveHeatmapLevel(count, averageSetsPerActiveDay)
-    }
-  })
-})
-
-const practiceHeatmapSummary = computed(() => {
-  const total = practiceHeatmapDays.value.reduce((sum, day) => sum + day.count, 0)
-  if (!total) return `${heatmapMonthLabel.value}暂无练习记录`
-  return `${heatmapMonthLabel.value}共做题 ${total} 套`
-})
-
-const readingRadarInsight = computed(() => {
-  const counts = new Map()
-  const records = sortedHistory.value.slice(0, 10)
-  records.forEach((record) => {
-    const performance = record?.metadata?.questionTypePerformance
-      || record?.metadata?.analysisArtifacts?.questionTypePerformance
-      || record?.metadata?.singleAttemptAnalysisInput?.questionTypePerformance
-    if (!performance || typeof performance !== 'object') return
-    Object.values(performance).forEach((entry) => {
-      if (!entry || typeof entry !== 'object') return
-      const total = Number(entry.total)
-      const correct = Number(entry.correct ?? entry.correctAnswers)
-      if (!Number.isFinite(total) || !Number.isFinite(correct)) return
-      const wrong = Math.max(0, total - correct)
-      if (!wrong) return
-      const kind = normalizeQuestionKind(entry.kind || entry.type || 'unknown')
-      counts.set(kind, (counts.get(kind) || 0) + wrong)
-    })
-  })
-  const totalErrors = Array.from(counts.values()).reduce((sum, count) => sum + count, 0)
-  const dataPoints = Array.from(counts.entries())
-    .map(([type, count]) => ({
-      type,
-      label: formatQuestionKindLabel(type),
-      count,
-      percent: totalErrors ? Math.round((count / totalErrors) * 100) : 0
-    }))
-    .sort((left, right) => right.count - left.count)
-    .slice(0, 5)
-  return {
-    recordCount: records.length,
-    totalErrors,
-    dataPoints,
-    summary: totalErrors
-      ? `最近${records.length}次阅读共 ${totalErrors} 道错题`
-      : '最近10次阅读暂无可分类错题'
-  }
-})
-
-const bulkDeleteButtonLabel = computed(() => {
-  const selectedCount = selectedHistoryIds.value.size
-  if (bulkDeleteMode.value) {
-    return selectedCount > 0 ? `完成选择 (${selectedCount})` : '完成选择'
-  }
-  return selectedCount > 0 ? `批量删除 (${selectedCount})` : '批量删除'
-})
-
 const htmlAssetCount = computed(() => readingAssets.value.filter(hasReadingPracticePayload).length)
 const pdfAssetCount = computed(() => readingAssets.value.filter((asset) => Boolean(asset?.pdfOnly)).length)
 const libraryStatusLabel = computed(() => readingAssets.value.length ? '本地索引已读取' : '尚未读取')
@@ -523,7 +288,7 @@ onMounted(async () => {
   selectedSuiteFlowMode.value = suitePreference.flowMode
   selectedSuiteFrequencyScope.value = suitePreference.frequencyScope
   syncViewFromRoute()
-  loadReadingData()
+  loadAssets()
   updateSegmentedIndicators()
   scheduleBrowsePositionRestore()
 })
@@ -550,22 +315,11 @@ watch(selectedType, () => {
   nextTick(updateSegmentedIndicators)
 })
 
-watch(selectedHistoryType, () => {
-  nextTick(updateSegmentedIndicators)
-})
-
 watch(filteredReadingAssets, () => {
   if (activeView.value === 'browse') {
     scheduleBrowsePositionRestore()
   }
 })
-
-async function loadReadingData() {
-  await Promise.all([
-    loadAssets(),
-    loadHistory()
-  ])
-}
 
 async function loadAssets() {
   loading.value = true
@@ -596,24 +350,15 @@ async function reloadReadingLibrary(event) {
   }
 }
 
-async function loadHistory() {
-  loadingHistory.value = true
-  historyError.value = ''
-  try {
-    const result = await loadReadingHistory()
-    readingHistory.value = Array.isArray(result?.data) ? result.data : []
-  } catch (loadError) {
-    console.error('加载阅读练习记录失败:', loadError)
-    readingHistory.value = []
-    historyError.value = loadError?.message || '阅读练习记录加载失败'
-  } finally {
-    loadingHistory.value = false
-  }
-}
+// Old deep links into the reading record tab land on the unified history page.
+const LEGACY_RECORD_VIEWS = new Set(['practice', 'records'])
 
 function syncViewFromRoute() {
-  const rawView = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
-  const view = rawView === 'records' ? 'practice' : rawView
+  const view = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
+  if (LEGACY_RECORD_VIEWS.has(view)) {
+    router.replace({ name: 'History', query: { activity: 'reading' } }).catch(() => {})
+    return
+  }
   if (libraryViews.some((item) => item.value === view)) {
     activeView.value = view
   }
@@ -640,22 +385,6 @@ function openGlobalSettings(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   router.push({ name: 'Settings' }).catch(() => {})
-}
-
-function getRecordAssetKey(record) {
-  return String(record?.assetId || record?.examId || record?.metadata?.assetId || record?.metadata?.examId || '').trim()
-}
-
-function getRecordAsset(record) {
-  const assetKey = getRecordAssetKey(record)
-  if (!assetKey) return null
-  return readingAssets.value.find((asset) => String(asset?.id || '').trim() === assetKey) || null
-}
-
-function getRecordFrequency(record) {
-  const direct = normalizeFrequency(record)
-  if (direct !== 'unknown') return direct
-  return normalizeFrequency(getRecordAsset(record))
 }
 
 function readBrowseRememberPosition() {
@@ -691,23 +420,6 @@ function toggleBrowsePreference(event) {
   browsePreferencePanelOpen.value = !browsePreferencePanelOpen.value
 }
 
-function buildPriorityBucket(frequency) {
-  const assets = readingAssets.value.filter((asset) => normalizeFrequency(asset) === frequency)
-  const records = readingHistory.value.filter((record) => getRecordFrequency(record) === frequency)
-  const practicedAssetIds = new Set(records.map(getRecordAssetKey).filter(Boolean))
-  const practiced = assets.length
-    ? assets.filter((asset) => practicedAssetIds.has(String(asset?.id || '').trim())).length
-    : practicedAssetIds.size || records.length
-  const total = assets.length || practiced
-  const totalAccuracy = records.reduce((sum, record) => sum + historyPercentage(record), 0)
-  return {
-    total,
-    practiced,
-    percent: total ? Math.round((practiced / total) * 100) : 0,
-    accuracy: records.length ? Math.round(totalAccuracy / records.length) : 0
-  }
-}
-
 function countByCategory(category) {
   return readingAssets.value.filter((asset) => normalizeCategory(asset.category) === category).length
 }
@@ -719,10 +431,6 @@ function filterByType(type) {
   }
 }
 
-function filterRecords(type) {
-  selectedHistoryType.value = type === 'reading' ? 'reading' : 'all'
-}
-
 function browseCategory(category, type = 'reading') {
   selectedCategory.value = category === 'all' ? 'all' : normalizeCategory(category)
   selectedType.value = type === 'reading' ? 'reading' : 'all'
@@ -732,26 +440,6 @@ function browseCategory(category, type = 'reading') {
 function toggleFrequencyFilter(value) {
   const normalized = frequencyFilters.some((filter) => filter.value === value) ? value : 'all'
   frequencyFilter.value = frequencyFilter.value === normalized ? 'all' : normalized
-}
-
-function togglePracticeSummary() {
-  practiceSummaryExpanded.value = !practiceSummaryExpanded.value
-}
-
-function selectPracticeTrendRange(value) {
-  if (!practiceTrendRanges.some((range) => range.value === value)) return
-  practiceTrendRange.value = value
-}
-
-function selectPracticeWidget(value) {
-  if (!practiceWidgetOptions.some((widget) => widget.value === value)) return
-  activePracticeWidget.value = value
-  practiceWidgetSelectorOpen.value = false
-}
-
-function shiftHeatmapMonth(delta) {
-  const cursor = heatmapMonth.value
-  heatmapMonth.value = new Date(cursor.getFullYear(), cursor.getMonth() + Number(delta || 0), 1)
 }
 
 function clearSearch() {
@@ -1161,172 +849,6 @@ async function startReadingSuite(event, options = {}) {
   }
 }
 
-function openReadingReview(record) {
-  const assetId = String(record?.assetId || record?.asset_id || record?.examId || '').trim()
-  const sessionId = String(record?.sessionId || record?.session_id || record?.attemptId || record?.id || '').trim()
-  if (!assetId || !sessionId) return
-  const suiteSessionId = getReadingHistorySuiteSessionId(record)
-  const target = {
-    name: 'PracticeReadingReview',
-    params: { assetId, sessionId }
-  }
-  if (suiteSessionId) {
-    target.query = { suiteSessionId }
-  }
-  router.push(target)
-}
-
-function getReadingHistorySuiteSessionId(record) {
-  const metadata = record?.metadata || {}
-  return String(
-    record?.suiteId
-    || record?.suite_id
-    || metadata.suiteSessionId
-    || metadata.suite_session_id
-    || ''
-  ).trim()
-}
-
-function handleHistoryItemClick(record, event) {
-  if (bulkDeleteMode.value) {
-    toggleHistorySelection(record.id)
-    return
-  }
-  const actionTarget = event.target?.closest?.('[data-record-action]')
-  if (actionTarget) return
-  openReadingReview(record)
-}
-
-function toggleHistorySelection(recordId) {
-  const id = String(recordId || '').trim()
-  if (!id) return
-  const next = new Set(selectedHistoryIds.value)
-  if (next.has(id)) {
-    next.delete(id)
-  } else {
-    next.add(id)
-  }
-  selectedHistoryIds.value = next
-}
-
-async function toggleBulkDeleteMode() {
-  if (historyBusy.value) return
-  if (!bulkDeleteMode.value) {
-    selectedHistoryIds.value = new Set()
-    bulkDeleteMode.value = true
-    showLocalMessage('批量管理模式已开启，点击记录进行选择')
-    return
-  }
-
-  const selectedIds = Array.from(selectedHistoryIds.value)
-  if (selectedIds.length === 0) {
-    bulkDeleteMode.value = false
-    return
-  }
-
-  if (!window.confirm(`确定要删除选中的 ${selectedIds.length} 条记录吗？此操作不可恢复。`)) {
-    bulkDeleteMode.value = false
-    selectedHistoryIds.value = new Set()
-    return
-  }
-
-  historyBusy.value = true
-  try {
-    await Promise.all(selectedIds.map((recordId) => deleteReadingHistoryRecord(recordId)))
-    selectedHistoryIds.value = new Set()
-    bulkDeleteMode.value = false
-    await loadHistory()
-    showLocalMessage(`已删除 ${selectedIds.length} 条练习记录`)
-  } catch (error) {
-    console.error('批量删除练习记录失败:', error)
-    showLocalMessage(error?.message ? `批量删除失败：${error.message}` : '批量删除失败，请稍后重试')
-  } finally {
-    historyBusy.value = false
-  }
-}
-
-async function deleteHistoryRecord(record) {
-  const recordId = String(record?.id || '').trim()
-  if (!recordId || historyBusy.value) return
-  const title = record?.title || '无标题'
-  const date = formatRecordDate(record)
-  if (!window.confirm(`确定要删除这条练习记录吗？\n\n题目: ${title}\n时间: ${date}\n\n此操作不可恢复。`)) {
-    return
-  }
-
-  historyBusy.value = true
-  try {
-    await deleteReadingHistoryRecord(recordId)
-    selectedHistoryIds.value = new Set(Array.from(selectedHistoryIds.value).filter((id) => id !== recordId))
-    await loadHistory()
-    showLocalMessage('记录已删除')
-  } catch (error) {
-    console.error('删除练习记录失败:', error)
-    showLocalMessage(error?.message ? `删除记录失败：${error.message}` : '删除记录失败，请稍后重试')
-  } finally {
-    historyBusy.value = false
-  }
-}
-
-async function clearPracticeData() {
-  if (historyBusy.value) return
-  if (!window.confirm('确定要清除所有阅读练习记录吗？此操作不可恢复。')) {
-    return
-  }
-
-  historyBusy.value = true
-  try {
-    const result = await clearReadingHistory()
-    selectedHistoryIds.value = new Set()
-    bulkDeleteMode.value = false
-    await loadHistory()
-    showLocalMessage(`练习记录已清除${result?.deletedCount ? `：${result.deletedCount} 条` : ''}`)
-  } catch (error) {
-    console.error('清除练习记录失败:', error)
-    showLocalMessage(error?.message ? `清除记录失败：${error.message}` : '清除记录失败，请稍后重试')
-  } finally {
-    historyBusy.value = false
-  }
-}
-
-function exportPracticeMarkdown() {
-  const records = filteredHistory.value
-  if (!records.length) {
-    showLocalMessage('暂无可导出的练习记录')
-    return
-  }
-  const lines = [
-    '# 阅读练习记录',
-    '',
-    `导出时间: ${new Date().toLocaleString()}`,
-    `记录数量: ${records.length}`,
-    ''
-  ]
-  records.forEach((record, index) => {
-    lines.push(
-      `## ${index + 1}. ${record.title || '无标题'}`,
-      '',
-      `- 提交时间: ${formatRecordDate(record)}`,
-      `- 用时: ${formatDurationShort(record.duration)}`,
-      `- 正确率: ${historyPercentage(record)}%`,
-      `- 得分: ${Number(record.correctAnswers || record.score || 0)} / ${Number(record.totalQuestions || 0)}`,
-      `- Session: ${record.sessionId || ''}`,
-      `- Asset: ${record.assetId || record.examId || ''}`,
-      ''
-    )
-  })
-  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `reading-practice-records-${new Date().toISOString().slice(0, 10)}.md`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
-  showLocalMessage('Markdown 导出完成')
-}
-
 function downloadJsonFile(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -1380,7 +902,6 @@ async function importReadingArchiveFile(file) {
     const result = requireCommittedReadingArchiveImport(
       await importReadingHistoryArchive(payload)
     )
-    await loadHistory()
     showLocalMessage(`阅读记录导入完成：${result?.imported || result?.importedCount || 0} 条`)
   } catch (error) {
     console.error('导入阅读记录失败:', error)
@@ -1413,75 +934,6 @@ function requireCommittedReadingArchiveImport(result) {
 
 function showReadingLibraryConfigList() {
   libraryConfigOpen.value = true
-}
-
-function formatRecordDate(record) {
-  const value = String(record?.submittedAt || record?.endTime || record?.startTime || '').trim()
-  return value ? new Date(value).toLocaleString() : '未知时间'
-}
-
-function getRecordDate(record) {
-  const timestamp = safeDateMs(record?.submittedAt || record?.endTime || record?.startTime)
-  return timestamp ? new Date(timestamp) : null
-}
-
-function formatDateKey(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function getPracticeSetId(record, dateKey, index) {
-  const metadata = record?.metadata && typeof record.metadata === 'object' ? record.metadata : {}
-  const suiteSessionId = String(metadata.suiteSessionId || metadata.suite_session_id || '').trim()
-  if (suiteSessionId) return `suite:${suiteSessionId}`
-  const sessionId = String(record?.sessionId || metadata.sessionId || '').trim()
-  if (sessionId) return `session:${sessionId}`
-  const assetId = String(record?.assetId || record?.examId || metadata.assetId || metadata.examId || '').trim()
-  if (assetId && dateKey) return `asset:${dateKey}:${assetId}`
-  return dateKey ? `record:${dateKey}:${index}` : ''
-}
-
-function resolveHeatmapLevel(count, averageSetsPerActiveDay) {
-  if (!count) return 0
-  const baseline = Math.max(1, Number(averageSetsPerActiveDay) || 1)
-  if (count >= baseline * 2.4) return 4
-  if (count >= baseline * 1.6) return 3
-  if (count >= baseline) return 2
-  return 1
-}
-
-function formatDurationShort(durationSec) {
-  const seconds = Math.max(0, Math.round(Number(durationSec || 0)))
-  if (!seconds) return '0秒'
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  if (!minutes) return `${rest}秒`
-  return `${minutes}分${rest ? `${rest}秒` : ''}`
-}
-
-function normalizeQuestionKind(value) {
-  return String(value || 'unknown').trim().toLowerCase().replace(/[\s_-]+/g, '_') || 'unknown'
-}
-
-function formatQuestionKindLabel(value) {
-  const labels = {
-    matching_headings: '标题匹配',
-    true_false_not_given: '判断题',
-    yes_no_not_given: '判断题',
-    multiple_choice: '选择题',
-    summary_completion: '摘要填空',
-    sentence_completion: '句子填空',
-    table_completion: '表格填空',
-    matching_information: '信息匹配',
-    matching_features: '特征匹配',
-    matching_sentence_endings: '句尾匹配',
-    short_answer: '简答题',
-    unknown: '未分类'
-  }
-  const normalized = normalizeQuestionKind(value)
-  return labels[normalized] || normalized.split('_').filter(Boolean).map((part) => (
-    part.charAt(0).toUpperCase() + part.slice(1)
-  )).join(' ')
 }
 
 function formatExamMetaText(asset) {
@@ -1545,160 +997,240 @@ function updateSegmentedIndicators() {
 
 <style>
 /*
- * This page owns reading-library state and geometry only. All colour, shadow,
- * blur, border and surface decisions belong to styles/opensource-skin.css.
- * Root every selector: extracted panel DOM must never leak legacy .view/.btn
- * rules into unrelated product routes.
+ * Reading library — paper layout. Every selector is rooted at
+ * .practice-library so the shared reading components restyle here without
+ * leaking into the frozen exam routes. Shared vocabulary (buttons, inputs,
+ * text tabs, rules) comes from styles/opensource-skin.css.
  */
 .practice-library {
-  width: min(1200px, 100%);
-  margin: 0 auto;
-  padding: 8px 0 32px;
   display: grid;
-  gap: 24px;
+  gap: 0;
   min-width: 0;
+  color: var(--anth-ink);
 }
 
 .practice-library [hidden] {
   display: none !important;
 }
 
+/* ── Header: title left, text tabs right ───────────────────────────── */
 .practice-library .library-workspace-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
   min-width: 0;
+  padding-bottom: 0;
 }
 
 .practice-library .library-workspace-header__copy {
-  display: grid;
-  gap: 6px;
   min-width: 0;
-}
-
-.practice-library .library-workspace-header__eyebrow {
-  margin: 0;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.practice-library .library-workspace-header__title {
-  margin: 0;
-  font-size: clamp(1.75rem, 4vw, 2.7rem);
-  line-height: 1;
-}
-
-.practice-library .library-view-tabs,
-.practice-library .hero-panel__actions,
-.practice-library .overview-section-actions,
-.practice-library .hero-settings-actions,
-.practice-library .hero-settings-links,
-.practice-library .app-update-details-grid,
-.practice-library .browse-frequency-filter,
-.practice-library .shui-segmented-control,
-.practice-library .practice-trend-options,
-.practice-library .practice-custom-options,
-.practice-library .custom-suite-picked-list,
-.practice-library .exam-actions,
-.practice-library .exam-list-empty-actions,
-.practice-library .custom-suite-selection-actions,
-.practice-library .suite-mode-selector-actions,
-.practice-library .backup-entry-actions,
-.practice-library .practice-heatmap__footer,
-.practice-library .practice-heatmap__legend,
-.practice-library .practice-radar-summary,
-.practice-library .priority-accuracy {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  padding-bottom: 18px;
 }
 
 .practice-library .library-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 4px 24px;
   max-width: 100%;
   min-width: 0;
 }
 
-.practice-library .library-view-tabs__button,
-.practice-library .browse-frequency-chip,
-.practice-library .shui-segmented-btn,
-.practice-library .practice-trend-option,
-.practice-library .practice-custom-option,
-.practice-library .suite-flow-option,
-.practice-library .custom-suite-picked-chip,
-.practice-library .practice-summary-toggle,
-.practice-library .practice-custom-card__icon-btn {
-  position: relative;
+.practice-library .library-view-tabs__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 7px 11px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0 1px;
   border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--anth-ink-faint);
   font: inherit;
+  font-size: var(--anth-text-base);
   white-space: nowrap;
+  cursor: pointer;
 }
 
+.practice-library .library-view-tabs__button:hover {
+  color: var(--anth-ink);
+}
+
+.practice-library .library-view-tabs__button.active {
+  border-bottom-color: var(--anth-ink);
+  color: var(--anth-ink-strong);
+  font-weight: var(--anth-weight-medium);
+}
+
+/* ── Views ─────────────────────────────────────────────────────────── */
 .practice-library .view {
   display: none;
   min-width: 0;
+  padding: 0;
 }
 
 .practice-library .view.active {
   display: block;
 }
 
-.practice-library .hero-panel__header,
-.practice-library .browse-title-bar,
-.practice-library .practice-view__title-row,
-.practice-library .practice-trend-card__header,
-.practice-library .practice-trend-card__title-line,
-.practice-library .practice-custom-card__header-actions,
-.practice-library .practice-heatmap-month-controls,
-.practice-library .priority-progress__head,
-.practice-library .backup-list-header,
-.practice-library .pdf-viewer-header {
+.practice-library :is(.hero-panel__header, .browse-title-bar, .backup-list-header, .pdf-viewer-header) {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.practice-library .hero-panel__header,
-.practice-library .browse-title-bar {
+.practice-library :is(.hero-panel__header, .browse-title-bar) {
   margin-bottom: 20px;
 }
 
+.practice-library :is(.hero-panel__title, .overview-section-title, .backup-list-title) {
+  margin: 0;
+  font-size: var(--anth-text-lg);
+  line-height: var(--anth-leading-snug);
+}
+
+.practice-library :is(.hero-panel__actions, .overview-section-actions, .hero-settings-actions,
+  .hero-settings-links, .browse-frequency-filter,
+  .custom-suite-picked-list, .exam-actions, .exam-list-empty-actions, .custom-suite-selection-actions,
+  .suite-mode-selector-actions, .backup-entry-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.practice-library :is(.category-grid, .more-tools-grid,
+  .exam-list, .hero-settings-group, .backup-list-scroll, .custom-suite-selection-bar,
+  .custom-suite-selection-main, .suite-mode-selector-body, .suite-frequency-selector) {
+  display: grid;
+  gap: 14px;
+}
+
+/* ── Overview: an index of passages ────────────────────────────────── */
+.practice-library .overview-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.practice-library .hero-panel__subtitle {
+  margin: 0;
+  max-width: var(--anth-measure);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-md);
+  line-height: var(--anth-leading-relaxed);
+}
+
+.practice-library .overview-section-actions {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.practice-library .overview-section-title {
+  margin-bottom: 8px;
+}
+
+.practice-library .category-grid {
+  gap: 0;
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.practice-library .category-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 0;
+}
+
+.practice-library :is(.category-header, .exam-info) {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.practice-library .category-icon {
+  flex: 0 0 3.25rem;
+  color: var(--anth-ink-strong);
+  font-family: var(--anth-font-serif);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.practice-library :is(.category-title, .exam-info h4) {
+  margin: 0;
+  color: var(--anth-ink-strong);
+  font-size: var(--anth-text-md);
+  font-weight: var(--anth-weight-medium);
+}
+
+.practice-library :is(.category-meta, .exam-meta, .hero-panel__muted, .more-view-subtitle) {
+  margin: 2px 0 0;
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.practice-library .category-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ── Browse: filters, search, ruled list ───────────────────────────── */
 .practice-library .browse-title-bar {
   position: relative;
+  justify-content: flex-start;
+}
+
+.practice-library .browse-title-bar > .shui-segmented-control {
+  margin-left: auto;
 }
 
 .practice-library .browse-title-trigger {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   flex: 0 0 auto;
   place-items: center;
   padding: 0;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-soft);
+  cursor: pointer;
 }
 
-.practice-library .browse-title-trigger .ui-emoji-icon,
-.practice-library .browse-title-trigger svg {
-  width: 18px;
-  height: 18px;
+.practice-library .browse-title-trigger:hover {
+  border-color: var(--anth-ink);
+  color: var(--anth-ink);
+}
+
+.practice-library .browse-title-dot {
+  display: none;
+}
+
+.practice-library :is(.browse-title-trigger .ui-emoji-icon, .browse-title-trigger svg) {
+  width: 16px;
+  height: 16px;
 }
 
 .practice-library .browse-preference-panel {
   position: absolute;
-  top: 48px;
+  top: 44px;
   left: 0;
-  z-index: 8;
+  z-index: var(--anth-z-raised);
   padding: 10px 12px;
+  border: 1px solid var(--anth-ink);
+  background: var(--anth-canvas);
 }
 
 .practice-library .browse-preference-option {
@@ -1708,168 +1240,17 @@ function updateSegmentedIndicators() {
   white-space: nowrap;
 }
 
-.practice-library .practice-history-header {
-  justify-content: flex-start;
-  gap: 20px;
-}
-
-.practice-library .practice-history-header > .hero-panel__actions:last-child {
-  margin-left: auto;
-}
-
-.practice-library .hero-panel__title,
-.practice-library .overview-section-title,
-.practice-library .backup-list-title {
-  margin: 0;
-}
-
-.practice-library .category-grid,
-.practice-library .practice-stats,
-.practice-library .practice-insights-grid,
-.practice-library .more-tools-grid,
-.practice-library .exam-list,
-.practice-library .practice-history-list,
-.practice-library .hero-settings-group,
-.practice-library .practice-trend-card__metrics,
-.practice-library .practice-radar-bars,
-.practice-library .priority-progress-stack,
-.practice-library .backup-list-scroll,
-.practice-library .custom-suite-selection-bar,
-.practice-library .custom-suite-selection-main,
-.practice-library .suite-mode-selector-body,
-.practice-library .suite-frequency-selector {
-  display: grid;
-  gap: 14px;
-}
-
-.practice-library .category-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.practice-library .custom-suite-selection-bar,
-.practice-library .custom-suite-selection-main {
-  min-width: 0;
-}
-
-.practice-library .custom-suite-picked-list .custom-suite-picked-chip {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.practice-library .practice-history-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.practice-library .overview-section-heading {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 2px 2px 4px;
-}
-
-.practice-library .overview-section-actions {
-  gap: 10px;
-  flex: 0 0 auto;
-}
-
-.practice-library .overview-section-actions .shui-glass-btn {
-  min-width: 132px;
-  justify-content: center;
-  gap: 8px;
-}
-
-.practice-library .overview-action-glyph {
-  display: inline-grid;
-  width: 1.2em;
-  height: 1.2em;
-  place-items: center;
-  font-size: 1.05em;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.practice-library .category-card,
-.practice-library .exam-item,
-.practice-library .tool-card {
-  min-width: 0;
-}
-
-.practice-library .category-card,
-.practice-library .exam-item {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-}
-
-.practice-library .category-card {
-  min-height: 220px;
-  gap: 18px;
-}
-
-.practice-library .category-header,
-.practice-library .exam-info {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.practice-library .exam-info {
-  align-items: flex-start;
-}
-
-.practice-library .exam-info > div,
-.practice-library .tool-card-content,
-.practice-library .record-info,
-.practice-library .record-actions-container {
-  min-width: 0;
-}
-
-.practice-library .category-icon {
-  flex: 0 0 auto;
-  font-size: 2rem;
-}
-
-.practice-library .category-title,
-.practice-library .exam-info h4 {
-  margin: 0;
-  font-size: 1.06rem;
-}
-
-.practice-library .category-meta,
-.practice-library .exam-meta,
-.practice-library .hero-panel__muted,
-.practice-library .more-view-subtitle {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.practice-library .category-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 20px;
-}
-
 .practice-library .search-box {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 .practice-library .search-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 20px;
 }
 
-.practice-library .search-input-wrap,
-.practice-library .browse-sort-wrapper {
+.practice-library :is(.search-input-wrap, .browse-sort-wrapper) {
   position: relative;
   min-width: 0;
 }
@@ -1881,57 +1262,49 @@ function updateSegmentedIndicators() {
 .practice-library .search-leading-icon {
   position: absolute;
   top: 50%;
-  left: 14px;
+  left: 12px;
   z-index: 1;
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
+  color: var(--anth-ink-faint);
   transform: translateY(-50%);
   pointer-events: none;
 }
 
 .practice-library .browse-sort-wrapper {
-  flex: 0 0 min(190px, 40%);
+  flex: 0 0 min(180px, 40%);
   min-width: 130px;
 }
 
-.practice-library .search-input,
-.practice-library .browse-sort-select,
-.practice-library .suite-frequency-select {
+.practice-library :is(.search-input, .browse-sort-select, .suite-frequency-select) {
   width: 100%;
-  min-height: 42px;
-  padding: 0 38px 0 14px;
+  min-height: 40px;
+  padding: 0 34px 0 12px;
   font: inherit;
+  font-size: var(--anth-text-sm);
+  appearance: none;
 }
 
 .practice-library .search-input {
-  padding-left: 42px;
+  padding-left: 36px;
 }
 
-.practice-library .practice-history-search-row {
-  width: 100%;
-  margin-bottom: 16px;
-}
-
-.practice-library .practice-history-search-row .search-input {
-  padding-left: 14px;
-}
-
-.practice-library .practice-history-search-row .search-input-wrap {
-  width: 100%;
-}
-
-.practice-library .search-clear-btn,
-.practice-library .browse-sort-icon {
+.practice-library :is(.search-clear-btn, .browse-sort-icon) {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  color: var(--anth-ink-faint);
 }
 
 .practice-library .search-clear-btn {
-  right: 10px;
-  border: 0;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  min-height: 0;
   padding: 6px;
-  font: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .practice-library .browse-sort-icon {
@@ -1939,318 +1312,250 @@ function updateSegmentedIndicators() {
   pointer-events: none;
 }
 
-.practice-library .shui-segmented-control {
-  position: relative;
+.practice-library .browse-frequency-filter {
+  gap: 16px;
 }
 
-.practice-library .shui-segmented-indicator {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 0;
-  pointer-events: none;
+.practice-library .browse-frequency-chip {
+  min-height: 40px;
+  padding: 0 1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--anth-ink-faint);
+  font: inherit;
+  font-size: var(--anth-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.practice-library .browse-frequency-chip:hover {
+  color: var(--anth-ink);
+}
+
+.practice-library .browse-frequency-chip.active {
+  border-bottom-color: var(--anth-ink);
+  color: var(--anth-ink-strong);
 }
 
 .practice-library .exam-list {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
   align-content: start;
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.practice-library .exam-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 12px 0;
+}
+
+.practice-library .exam-item:hover {
+  background: var(--anth-surface-hover);
+}
+
+.practice-library :is(.exam-info > div, .tool-card-content) {
+  min-width: 0;
 }
 
 .practice-library .exam-actions {
-  margin-top: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 .practice-library .exam-item-action-btn {
-  flex: 1 1 120px;
+  padding: 5px 12px;
 }
 
-.practice-library .exam-list-empty,
-.practice-library .history-empty-placeholder,
-.practice-library .practice-trend-empty {
+.practice-library .exam-list-empty {
   display: grid;
   place-items: center;
-  gap: 8px;
-  min-height: 180px;
+  gap: 6px;
+  min-height: 160px;
   padding: 24px;
   text-align: center;
 }
 
 .practice-library .exam-list-empty-icon {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   place-items: center;
 }
 
 .practice-library .exam-list-empty-icon svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
-.practice-library .practice-stats,
-.practice-library .practice-insights-grid,
-.practice-library .more-tools-grid {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+.practice-library .exam-list-empty-text {
+  margin: 0;
+  color: var(--anth-ink-soft);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-md);
 }
 
-.practice-library .practice-stats {
-  margin-bottom: 20px;
-}
-
-.practice-library .hero-card {
+/* Custom suite workflow: a ruled strip under the list. */
+.practice-library .custom-suite-selection-bar {
   min-width: 0;
-  padding: 18px;
+  margin-top: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--anth-ink);
 }
 
-.practice-library .hero-card__value,
-.practice-library .stat-number {
-  display: block;
-  margin: 6px 0;
-  font-size: clamp(1.6rem, 3vw, 2.35rem);
-  line-height: 1;
-}
-
-.practice-library .practice-summary-toggle__glyph {
-  position: relative;
-  width: 14px;
-  height: 14px;
-}
-
-.practice-library .practice-summary-toggle__glyph::before,
-.practice-library .practice-summary-toggle__glyph::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 10px;
-  height: 2px;
-  content: '';
-  transform: translate(-50%, -50%);
-}
-
-.practice-library .practice-summary-toggle[aria-expanded="false"] .practice-summary-toggle__glyph::after {
-  transform: translate(-50%, -50%) rotate(90deg);
-}
-
-.practice-library .practice-summary-region {
-  margin-top: 16px;
-}
-
-.practice-library .practice-summary-region[hidden] {
-  display: none;
-}
-
-.practice-library .practice-trend-card,
-.practice-library .practice-custom-card {
-  position: relative;
+.practice-library .custom-suite-selection-main {
   min-width: 0;
-  min-height: 270px;
+  gap: 2px;
 }
 
-.practice-library .practice-trend-card__rotor,
-.practice-library .practice-custom-card__rotor {
-  position: relative;
-  height: 100%;
-  min-height: inherit;
-  transform-style: preserve-3d;
-  transition: transform var(--lg-duration-normal) var(--lg-easing-spring);
+.practice-library .custom-suite-selection-main span {
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
 }
 
-.practice-library .practice-custom-card.is-flipped .practice-custom-card__rotor {
-  transform: rotateY(180deg);
+.practice-library .custom-suite-picked-list {
+  gap: 6px 20px;
 }
 
-.practice-library .practice-trend-card__face {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  height: 100%;
-  min-height: inherit;
-  padding: 18px;
-  backface-visibility: hidden;
-}
-
-.practice-library .practice-trend-card__back {
-  position: absolute;
-  inset: 0;
-  transform: rotateY(180deg);
-}
-
-.practice-library .practice-trend-card__metric-value {
-  display: block;
-  font-size: 1.55rem;
-  line-height: 1;
-}
-
-.practice-library .practice-trend-chart-shell,
-.practice-library .practice-radar-chart-shell {
-  position: relative;
-  min-height: 126px;
-}
-
-.practice-library #practice-trend-canvas,
-.practice-library #practice-radar-canvas {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.practice-library .practice-trend-bars {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
-  align-items: end;
-  gap: 5px;
-  min-height: 116px;
-}
-
-.practice-library .practice-trend-bar {
-  min-height: 8px;
-}
-
-.practice-library .practice-heatmap {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.practice-library .practice-heatmap__cell {
-  aspect-ratio: 1;
-  min-width: 0;
-}
-
-.practice-library .practice-heatmap__legend-cell {
-  width: 13px;
-  height: 13px;
-}
-
-.practice-library .practice-radar-bar {
-  display: grid;
-  grid-template-columns: minmax(76px, 1fr) minmax(90px, 2fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.practice-library .practice-radar-bar__track,
-.practice-library .priority-progress__track {
-  overflow: hidden;
-  height: 8px;
-}
-
-.practice-library .practice-radar-bar__fill,
-.practice-library .priority-progress__fill {
-  display: block;
-  height: 100%;
-}
-
-.practice-library .priority-accuracy__orb {
-  display: grid;
-  place-items: center;
-  width: 86px;
-  aspect-ratio: 1;
-  text-align: center;
-}
-
-.practice-library .history-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px;
-}
-
-.practice-library .record-result {
-  display: contents;
-}
-
-.practice-library .practice-record-title {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.practice-library .record-info {
-  min-width: 0;
-}
-
-.practice-library .record-percentage {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-}
-
-.practice-library .practice-history-list > .loading,
-.practice-library .practice-history-list > .history-empty-placeholder {
-  grid-column: 1 / -1;
-}
-
-.practice-library .record-meta-line {
-  display: flex;
-  flex-wrap: wrap;
+.practice-library .custom-suite-picked-chip {
+  display: inline-flex;
+  align-items: baseline;
   gap: 8px;
-  margin-top: 6px;
+  max-width: 100%;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-.practice-library .record-selection-hidden {
-  display: none;
+.practice-library .custom-suite-picked-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
 }
 
-.practice-library .delete-record-btn {
-  border: 0;
-  padding: 6px;
-  font: inherit;
+.practice-library .custom-suite-picked-chip.filled {
+  color: var(--anth-ink);
+}
+
+.practice-library .custom-suite-picked-chip.filled::before {
+  background: currentColor;
+}
+
+/* ── Practice records ──────────────────────────────────────────────── */
+
+/* Summary figures read as one booktabs row, not tiles. */
+
+/* The widget picker swaps faces with a fade, not a 3D flip. */
+
+/* In selection mode the whole row toggles selection; the title is just text. */
+
+/* ── More tools: an annotated list ─────────────────────────────────── */
+.practice-library .more-view-subtitle {
+  margin: -8px 0 20px;
+}
+
+.practice-library .more-tools-grid {
+  gap: 0;
+  border-bottom: 1px solid var(--anth-rule);
 }
 
 .practice-library .tool-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 18px;
-  border: 0;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 0;
+  color: inherit;
   font: inherit;
   text-align: left;
+  cursor: pointer;
 }
 
-.practice-library .tool-card-content h3,
+.practice-library .tool-card:hover {
+  background: var(--anth-surface-hover);
+}
+
+.practice-library .tool-card-content h3 {
+  margin: 0 0 4px;
+  font-size: var(--anth-text-md);
+}
+
+.practice-library .tool-card-content p {
+  margin: 0;
+  max-width: var(--anth-measure);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+}
+
+.practice-library .tool-card-arrow {
+  color: var(--anth-accent-strong);
+  font-size: var(--anth-text-sm);
+  white-space: nowrap;
+}
+
+/* ── Library settings ──────────────────────────────────────────────── */
+.practice-library .hero-settings-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px 40px;
+}
+
+.practice-library :is(.hero-settings-group > .hero-panel, .backup-list-card) {
+  padding: 16px 0 0;
+  border-top: 1px solid var(--anth-ink);
+  background: var(--anth-canvas);
+}
+
 .practice-library .hero-settings-group h3 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
+  font-size: var(--anth-text-md);
 }
 
-.practice-library .hero-settings-group > .hero-panel,
-.practice-library .backup-list-card {
-  padding: 18px;
-  background: var(--anth-surface);
+.practice-library .hero-settings-group .hero-panel__muted {
+  margin: 0 0 14px;
+  max-width: var(--anth-measure);
+  line-height: var(--anth-leading-normal);
 }
 
 .practice-library .settings-file-input {
   display: none;
 }
 
-.practice-library .system-info-surface,
-.practice-library .app-update-details-row {
+.practice-library :is(.system-info-surface, .app-update-details-row) {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 0;
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.practice-library .hero-settings-links {
+  gap: 20px;
+  margin-top: 12px;
+  font-size: var(--anth-text-sm);
+}
+
+.practice-library .hero-settings-links a {
+  color: var(--anth-accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .practice-library .backup-list-container {
-  margin-top: 18px;
-}
-
-.practice-library .backup-list-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  margin-top: 32px;
 }
 
 .practice-library .backup-list-scroll {
   max-height: min(52vh, 520px);
-  margin-top: 14px;
+  margin-top: 12px;
   overflow: auto;
 }
 
@@ -2260,24 +1565,24 @@ function updateSegmentedIndicators() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px;
+  padding: 12px 0;
 }
 
 .practice-library .backup-entry-info {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
-.practice-library .backup-entry-id,
-.practice-library .backup-entry-meta {
+.practice-library :is(.backup-entry-id, .backup-entry-meta) {
   overflow-wrap: anywhere;
 }
 
+/* ── Suite flow dialog ─────────────────────────────────────────────── */
 .practice-library .suite-mode-selector-modal {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--anth-z-floating);
   display: none;
   place-items: center;
   padding: 20px;
@@ -2291,40 +1596,108 @@ function updateSegmentedIndicators() {
   width: min(680px, 100%);
   max-height: min(80vh, 720px);
   overflow: auto;
-  padding: 20px;
+  padding: 24px;
+}
+
+.practice-library .theme-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.practice-library .theme-modal-header h3 {
+  margin: 0 0 4px;
+  font-size: var(--anth-text-lg);
+}
+
+.practice-library .suite-mode-selector-subtitle {
+  margin: 0;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+}
+
+.practice-library .theme-modal-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-soft);
+  font-size: 1.125rem;
+  cursor: pointer;
 }
 
 .practice-library .suite-flow-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0 16px;
+  border-bottom: 1px solid var(--anth-rule);
 }
 
 .practice-library .suite-flow-option {
   display: flex;
   flex-direction: column;
-  white-space: normal;
-  min-height: 96px;
   align-items: flex-start;
   justify-content: flex-start;
+  gap: 4px;
+  min-height: 96px;
+  padding: 14px 4px 14px 0;
+  border: 0;
+  border-top: 2px solid var(--anth-rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--anth-ink);
+  font: inherit;
   text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.practice-library .suite-flow-option span {
+  font-weight: var(--anth-weight-medium);
 }
 
 .practice-library .suite-flow-option small {
   display: block;
-  margin-top: 4px;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-xs);
+  line-height: var(--anth-leading-normal);
 }
 
+.practice-library .suite-flow-option:hover {
+  border-top-color: var(--anth-ink-soft);
+}
+
+.practice-library .suite-flow-option.active {
+  border-top-color: var(--anth-ink);
+}
+
+.practice-library .suite-frequency-selector {
+  gap: 6px;
+  margin-top: 16px;
+  font-size: var(--anth-text-sm);
+}
+
+.practice-library .suite-mode-selector-actions {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ── Clock, PDF viewer, toast ──────────────────────────────────────── */
 .practice-library .clock-overlay {
   position: fixed;
   inset: 0;
+  z-index: 300;
   display: grid;
   place-items: center;
-}
-
-.practice-library .clock-overlay {
-  z-index: 300;
   padding: 24px;
+  background: var(--lg-bg-scrim);
 }
 
 .practice-library .clock-overlay.is-hidden {
@@ -2342,41 +1715,53 @@ function updateSegmentedIndicators() {
 
 .practice-library .clock-close-btn {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 16px;
+  right: 16px;
   display: grid;
   place-items: center;
   width: 40px;
   height: 40px;
-  border: 0;
+  padding: 0;
+  border: 1px solid var(--anth-border-strong);
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-soft);
+  cursor: pointer;
+}
+
+.practice-library .clock-close-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
 }
 
 .practice-library .native-clock {
-  font-variant-numeric: tabular-nums;
   font-size: clamp(3rem, 12vw, 8rem);
   line-height: 1;
 }
 
 .practice-library .pdf-viewer-dialog {
-  max-width: min(960px, calc(100vw - 32px));
-  width: min(960px, calc(100vw - 32px));
-  height: min(82vh, 760px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  width: min(960px, calc(100vw - 32px));
+  max-width: min(960px, calc(100vw - 32px));
+  height: min(82vh, 760px);
   padding: 18px;
 }
 
 .practice-library .pdf-viewer-frame {
   width: 100%;
   min-height: 0;
+  border: 1px solid var(--anth-rule);
 }
 
 .practice-library .practice-local-message {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 400;
+  z-index: var(--anth-z-toast);
   max-width: min(420px, calc(100vw - 40px));
   margin: 0;
   padding: 12px 14px;
@@ -2390,47 +1775,55 @@ function updateSegmentedIndicators() {
   vertical-align: -0.14em;
 }
 
-.practice-library .ui-emoji-icon svg,
-.practice-library .tool-card-icon svg {
+.practice-library .ui-emoji-icon svg {
   width: 100%;
   height: 100%;
 }
 
-@media (max-width: 900px) {
-  .practice-library {
-    gap: 18px;
-  }
+.practice-library .loading {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 32px 0;
+}
 
-  .practice-library .library-workspace-header,
-  .practice-library .search-row,
-  .practice-library .overview-section-heading,
-  .practice-library .hero-panel__header,
-  .practice-library .browse-title-bar {
+.practice-library .spinner {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--anth-rule);
+  border-top-color: var(--anth-ink);
+  border-radius: 50%; /* sanctioned: a progress glyph, not a surface */
+  animation: practice-library-spin 0.9s linear infinite;
+}
+
+@keyframes practice-library-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .practice-library :is(.library-workspace-header, .search-row, .overview-intro, .hero-panel__header:not(.browse-title-bar)) {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .practice-library .browse-title-bar {
+    flex-wrap: wrap;
+  }
+
+  .practice-library .library-workspace-header__copy {
+    padding-bottom: 4px;
+  }
+
   .practice-library .library-view-tabs {
-    width: 100%;
-    min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     justify-content: flex-start;
-    overflow: visible;
   }
 
-  .practice-library .library-view-tabs::-webkit-scrollbar {
-    display: none;
+  .practice-library .browse-title-bar > .shui-segmented-control {
+    flex-basis: 100%;
+    margin-left: 0;
   }
 
-  .practice-library .library-view-tabs__button {
-    min-height: 44px;
-    white-space: normal;
-  }
-
-  .practice-library .category-grid,
-  .practice-library .practice-insights-grid,
-  .practice-library .practice-history-list {
+  .practice-library .hero-settings-group {
     grid-template-columns: 1fr;
   }
 
@@ -2443,63 +1836,36 @@ function updateSegmentedIndicators() {
     grid-template-columns: 1fr;
   }
 
-  .practice-library .history-item {
-    grid-template-columns: auto minmax(0, 1fr);
+  .practice-library .suite-flow-option {
+    min-height: 0;
   }
 
-  .practice-library .history-item .record-info,
-  .practice-library .history-item .record-result {
-    grid-column: 1 / -1;
-  }
+}
 
-  .practice-library .history-item:has(.record-selection:not(.record-selection-hidden)) .record-info {
-    grid-column: 2;
-  }
-
-  .practice-library .history-item:has(.record-selection:not(.record-selection-hidden)) .record-result {
-    grid-column: 2;
-  }
-
-  .practice-library .practice-history-header {
-    gap: 12px;
-  }
-
-  .practice-library .practice-history-header > .hero-panel__actions {
+@media (max-width: 640px) {
+  .practice-library .library-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0 8px;
     width: 100%;
   }
 
-  .practice-library .practice-history-header > .hero-panel__actions button {
-    min-height: 44px;
-    white-space: nowrap;
-  }
-
-  .practice-library .practice-history-header > .hero-panel__actions:last-child {
-    margin-left: 0;
-  }
-
-  .practice-library .record-result {
-    display: flex;
-    grid-column: 2;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .practice-library .record-actions-container {
-    display: flex;
-    min-width: 0;
-    margin-left: auto;
-  }
-
-  .practice-library .record-percentage-container,
-  .practice-library .record-actions-container {
-    grid-column: auto;
+  .practice-library .library-view-tabs__button {
+    justify-content: flex-start;
+    white-space: normal;
   }
 }
 
 @media (max-width: 580px) {
+  .practice-library .category-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .practice-library .exam-item {
+    flex-wrap: wrap;
+  }
+
   .practice-library .custom-suite-picked-list .custom-suite-picked-chip {
     width: 100%;
   }
@@ -2509,33 +1875,14 @@ function updateSegmentedIndicators() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .practice-library .category-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .practice-library .tool-card {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
   .practice-library .tool-card-arrow {
     display: none;
   }
 
-  .practice-library .practice-radar-bar {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
   .practice-library .clock-overlay-inner {
-    min-width: 0;
     width: 100%;
+    min-width: 0;
   }
 }
 
-@media (max-width: 360px) {
-  .practice-library .practice-custom-card__front > .practice-trend-card__header {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-}
 </style>

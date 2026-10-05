@@ -19,8 +19,6 @@ function loadModule(relativePath, injected = {}) {
     .replace(/import\s+\{([^}]+)\}\s+from\s+'vue'/g, 'const {$1} = __deps.vue')
     .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/api'/g, 'const {$1} = __deps.api')
     .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/contracts'/g, 'const {$1} = __deps.contracts')
-    .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/historyStats'/g, 'const {$1} = __deps.historyStats')
-    .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/historyStats\.js'/g, 'const {$1} = __deps.historyStats')
     .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/readingLibraryCore\.js'/g, 'const {$1} = __deps.readingLibraryCore')
     .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/readingAssetCore\.js'/g, 'const {$1} = __deps.readingAssetCore')
     .replace(/import\s+\{([^}]+)\}\s+from\s+'\.\/readingHistoryCore\.js'/g, 'const {$1} = __deps.readingHistoryCore')
@@ -44,7 +42,6 @@ function loadModule(relativePath, injected = {}) {
       },
       api: {},
       contracts: {},
-      historyStats: {},
       readingLibraryCore: {},
       readingAssetCore: {},
       readingHistoryCore: {},
@@ -88,39 +85,30 @@ function testUseReadingLibraryLoadsAssets() {
   })
 }
 
-function testUseReadingHistoryLoadsHistoryAndComputesStats() {
-  const historyStats = loadModule('apps/writing-vue/src/modules/practice-reading/historyStats.js')
-  const readingHistoryCore = loadModule('apps/writing-vue/src/modules/practice-reading/readingHistoryCore.js', {
-    historyStats
-  })
+function testUseReadingHistoryExposesArchiveBackupOnly() {
+  const readingHistoryCore = loadModule('apps/writing-vue/src/modules/practice-reading/readingHistoryCore.js')
   const { useReadingHistoryWithDependencies } = loadModule('apps/writing-vue/src/modules/practice-reading/useReadingHistory.ts', {
     readingHistoryCore
   })
-  const records = [
-    { id: 'r1', accuracy: 0.8, duration: 600, submittedAt: '2026-06-05T08:00:00.000Z' },
-    { id: 'r2', accuracy: 0.6, duration: 300, submittedAt: '2026-06-04T08:00:00.000Z' }
-  ]
+  const calls = []
   const history = useReadingHistoryWithDependencies({
     api: {
-      listAll: async () => ({ data: records }),
-      delete: async () => {},
-      clear: async () => {},
-      exportArchive: async () => ({}),
-      importArchive: async () => ({})
+      exportArchive: async () => { calls.push('export'); return { count: 0 } },
+      importArchive: async (payload) => { calls.push(['import', payload]); return { committed: true } }
     }
   })
 
-  return history.loadReadingHistory().then((result) => {
-    assert.deepStrictEqual(result, { data: records })
-    assert.deepStrictEqual(toPlain(history.computeHistoryStats(result.data, {
-      now: new Date('2026-06-05T12:00:00.000Z')
-    })), {
-      totalPracticed: 2,
-      averageAccuracy: 70,
-      studyMinutes: 15,
-      streakDays: 2
+  // Browsing / deleting / exporting records moved to the unified history page.
+  assert.deepStrictEqual(Object.keys(history).sort(), ['exportReadingHistoryArchive', 'importReadingHistoryArchive'])
+  return history.exportReadingHistoryArchive()
+    .then((archive) => {
+      assert.deepStrictEqual(archive, { count: 0 })
+      return history.importReadingHistoryArchive({ submissions: [] })
     })
-  })
+    .then((result) => {
+      assert.deepStrictEqual(result, { committed: true })
+      assert.deepStrictEqual(calls, ['export', ['import', { submissions: [] }]])
+    })
 }
 
 function testReadingBrowsePanelSearchAndFilter() {
@@ -239,7 +227,7 @@ function testReadingLibraryUsesOnlyNativeArchiveAndIndexTruth() {
 
 async function main() {
   await testUseReadingLibraryLoadsAssets()
-  await testUseReadingHistoryLoadsHistoryAndComputesStats()
+  await testUseReadingHistoryExposesArchiveBackupOnly()
   testReadingBrowsePanelSearchAndFilter()
   await testReadingPageLoadAssetSuccessAndFailure()
   testReadingLibraryUsesOnlyNativeArchiveAndIndexTruth()

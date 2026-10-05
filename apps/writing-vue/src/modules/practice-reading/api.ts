@@ -21,18 +21,6 @@ export const readingLibraryApi = {
 }
 
 export const readingHistoryApi = {
-  async listAll() {
-    return practiceHistory.listAll({ activity: READING_ACTIVITY })
-  },
-
-  async delete(recordId: string) {
-    return practiceHistory.delete(READING_ACTIVITY, normalizeReadingRecordId(recordId))
-  },
-
-  async clear() {
-    return practiceHistory.clear({ activity: READING_ACTIVITY })
-  },
-
   async exportArchive() {
     return practiceHistory.exportArchive({ activity: READING_ACTIVITY })
   },

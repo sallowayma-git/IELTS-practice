@@ -1,84 +1,58 @@
 <template>
   <div class="evaluating-page">
     <div class="evaluating-layout">
-      <!-- 作文内容与渐进式分析 -->
-      <section class="essay-panel card card-whisper">
-        <div class="essay-head border-base">
-          <div>
-            <h2 class="heading-serif display-heading">作文评测</h2>
-            <p class="topic-meta">{{ displayTopicText }}</p>
-          </div>
+      <section class="essay-panel">
+        <header class="essay-head">
+          <h1 class="heading-serif">作文评测</h1>
+          <p class="topic-meta">{{ displayTopicText }}</p>
           <span class="word-badge">{{ displayWordCount }} 词</span>
-        </div>
-        
-        <div class="essay-body relative">
-          <!-- Floating Loader watermark under the text -->
-          <div class="floating-loader" :class="{'fade-out': progress > 98}">
-            <svg class="xl-icon pulse" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 3h8l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 1.5V8h3.5L13 4.5zM8 11h8v1.5H8V11zm0 3h8v1.5H8V14zm0 3h5v1.5H8V17z"/>
-            </svg>
-            <p>正在解析作文内容</p>
-          </div>
-          
-          <!-- Text Typewriter layer -->
-          <div class="typewriter-content" v-if="essayContentFull">
+        </header>
+
+        <div class="essay-body">
+          <p v-if="!essayContentFull" class="essay-placeholder">正在读取作文内容…</p>
+          <div v-else class="typewriter-content">
             {{ displayedEssayContent }}<span class="cursor-blink" v-if="progress < 100"></span>
           </div>
         </div>
       </section>
 
-      <!-- 评测状态 -->
-      <aside class="status-rail right-panel">
-        <div class="ai-hero glass-card">
-          <div class="orb-zone">
-            <!-- Breathing aurora sphere -->
-            <div class="aurora-sphere"></div>
-            <div class="orb-inner">
-              <span class="orb-percentage">{{ progress }}%</span>
-            </div>
-          </div>
-          <h2 class="heading-serif">正在进行智能评测</h2>
-          <p class="subtitle">正在依据 IELTS 评分标准分析你的作文。</p>
-        </div>
-
-        <section class="glass-card rail-section">
-          <div class="rail-head">
-            <h3>实时进度</h3>
-            <span class="status-meta uppercase">{{ progress }}% / {{ currentStageLabel }}</span>
-          </div>
-          <div class="progress-rail mt-3" role="progressbar" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" :aria-label="`评测进度：${progress}%`">
+      <aside class="status-rail">
+        <section class="rail-progress">
+          <h2 class="heading-serif">正在评分</h2>
+          <p class="subtitle">依据 IELTS 写作评分标准逐项分析。</p>
+          <p class="progress-figure"><span>{{ progress }}</span>%</p>
+          <div class="progress-rail" role="progressbar" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" :aria-label="`评测进度：${progress}%`">
             <div class="progress-bar">
               <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
             </div>
           </div>
+          <p class="status-meta">{{ currentStageLabel }}</p>
         </section>
 
-        <section v-if="error" class="glass-card rail-section evaluation-error" role="alert">
+        <section v-if="error" class="rail-section evaluation-error" role="alert">
           <h3>评测未完成</h3>
           <p>{{ error.message }}</p>
           <p class="status-meta">作文已保存在本机；可直接重试，或取消后返回写作页继续修改。</p>
         </section>
 
-        <section class="glass-card rail-section flex-1 overflow-hidden flex-col">
-          <div class="rail-head header-fixed">
-            <h3>实时日志</h3>
-            <span class="status-meta" aria-hidden="true">实时更新</span>
-          </div>
-          <div v-if="recentLogs.length > 0" class="log-list custom-scroll" role="log" aria-live="polite" aria-relevant="additions text" aria-label="评测动态日志">
-            <div v-for="item in recentLogs" :key="item.id" class="log-item fade-in-up">
+        <section class="rail-section rail-log">
+          <h3>过程记录</h3>
+          <div v-if="recentLogs.length > 0" class="log-list" role="log" aria-live="polite" aria-relevant="additions text" aria-label="评测动态日志">
+            <div v-for="item in recentLogs" :key="item.id" class="log-item">
               <span class="log-time">{{ item.time }}</span>
               <span class="log-message">{{ item.message }}</span>
             </div>
           </div>
           <div v-else class="log-list empty-log" role="status" aria-live="polite">
-             <p class="rail-empty">准备进入评测流程…</p>
+            <p class="rail-empty">准备进入评测流程…</p>
           </div>
         </section>
-        <div class="action-row mt-auto">
-          <button class="btn btn-secondary w-full" :disabled="isRetrying || isComplete" @click="handleRetry">
+
+        <div class="action-row">
+          <button class="btn btn-secondary" :disabled="isRetrying || isComplete" @click="handleRetry">
             {{ isRetrying ? '重试中...' : '重试评分' }}
           </button>
-          <button class="btn btn-warn w-full" :disabled="isRetrying || isCancelling" @click="handleCancel">
+          <button class="btn-text" :disabled="isRetrying || isCancelling" @click="handleCancel">
             {{ isCancelling ? '正在返回写作…' : '取消评分' }}
           </button>
         </div>
@@ -495,554 +469,205 @@ function appendLog(kind, message, event = null) {
 
 </script>
 <style scoped>
-.evaluating-page {
-  --evaluate-accent: var(--atlas-accent);
-  --evaluate-accent-alt: var(--atlas-accent-alt);
-  --evaluate-ink: var(--atlas-ink);
-  --evaluate-muted: var(--atlas-ink-soft);
-  --evaluate-line: var(--atlas-line);
-  --evaluate-rim: var(--atlas-rim);
-  position: relative;
-  isolation: isolate;
-  max-width: 1400px;
-  min-height: calc(100vh - 146px);
-  margin: 0 auto;
-  padding: 2px;
-  color: var(--evaluate-ink);
-  background: transparent;
-  border-radius: 32px;
-  animation: evaluate-page-enter 360ms var(--lg-easing-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
+/* Evaluating: the essay as a page of prose, progress as a quiet margin note. */
 .evaluating-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.32fr) minmax(320px, 0.68fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+  align-items: start;
+  gap: 56px;
 }
 
 .essay-panel {
   min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-  padding: 26px;
-  border: 1px solid var(--evaluate-rim);
-  border-radius: 26px;
-  background: var(--atlas-glass);
-  box-shadow: var(--atlas-shadow);
-  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-  animation: evaluate-panel-enter-right 440ms var(--lg-easing-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
-.right-panel {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  animation: evaluate-panel-enter-left 440ms var(--lg-easing-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
-.action-row {
-  display: flex;
-  gap: 9px;
-  padding: 4px;
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: 18px;
-  background: var(--lg-bg-toolbar);
-  box-shadow: var(--lg-shadow-subtle);
-}
-
-.border-base {
-  border-bottom: 1px solid var(--evaluate-line);
-  padding-bottom: 18px;
-  margin-bottom: 18px;
 }
 
 .essay-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: flex-start;
+  display: grid;
+  gap: 6px;
+  padding-bottom: 18px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--anth-rule);
 }
 
-.display-heading {
-  font-size: clamp(1.7rem, 2.8vw, 2.28rem);
-  color: var(--evaluate-ink);
-  margin-bottom: 6px;
-  letter-spacing: -0.035em;
+.essay-head h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.125rem);
 }
 
 .topic-meta {
-  max-width: 58ch;
-  color: var(--evaluate-muted);
-  font-size: 0.94rem;
-  line-height: 1.55;
+  margin: 0;
+  max-width: var(--anth-measure);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+  line-height: var(--anth-leading-normal);
 }
 
 .word-badge {
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--atlas-accent-ring);
-  background: var(--atlas-accent-soft);
-  color: var(--evaluate-accent);
-  font-weight: 700;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .essay-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  position: relative;
-  padding: 21px 22px;
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: 20px;
-  background: var(--lg-bg-primary);
-  box-shadow: var(--lg-shadow-subtle);
-  overscroll-behavior: contain;
-}
-
-.floating-loader {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--evaluate-accent);
-  opacity: 0.13;
-  pointer-events: none;
-  transition: opacity 320ms var(--lg-easing-spring, ease);
-  z-index: 0;
-}
-
-.floating-loader p {
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.05rem;
-  text-transform: uppercase;
-}
-
-.fade-out {
-  opacity: 0 !important;
+  min-height: 320px;
 }
 
 .typewriter-content {
-  position: relative;
-  z-index: 1;
+  max-width: var(--anth-measure);
+  color: var(--anth-ink);
+  font-family: var(--anth-font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.85;
   white-space: pre-wrap;
-  line-height: 1.9;
-  color: var(--evaluate-ink);
-  font-size: 1.02rem;
+}
+
+.essay-placeholder {
+  margin: 0;
+  color: var(--anth-ink-faint);
 }
 
 .cursor-blink {
   display: inline-block;
-  width: 5px;
-  height: 17px;
-  border-radius: 999px;
-  background-color: var(--evaluate-accent);
-  margin-left: 4px;
-  animation: evaluate-blink 1s step-start infinite;
-  vertical-align: middle;
+  width: 1px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--anth-ink);
+  animation: evaluating-blink 1s steps(1) infinite;
 }
 
-@keyframes evaluate-blink {
+@keyframes evaluating-blink {
   50% { opacity: 0; }
 }
 
-.xl-icon {
-  width: 4.5rem;
-  height: 4.5rem;
-  fill: currentColor;
-  margin-bottom: 12px;
-}
-
-.pulse {
-  animation: evaluate-pulse 2.4s ease-in-out infinite;
-}
-
-.glass-card {
-  position: relative;
+.status-rail {
+  position: sticky;
+  top: calc(var(--anth-nav-height) + 24px);
+  display: grid;
+  gap: 28px;
   min-width: 0;
-  border: 1px solid var(--evaluate-rim);
-  border-radius: 22px;
-  background: var(--atlas-glass-elevated);
-  box-shadow: var(--lg-shadow-elevated);
-  padding: 20px;
-  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
 }
 
-.ai-hero {
-  overflow: hidden;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 22px 22px;
-  background: var(--atlas-glass-elevated);
+.rail-progress {
+  padding-top: 14px;
+  border-top: 1px solid var(--anth-ink);
 }
 
-.orb-zone {
-  position: relative;
-  width: 126px;
-  height: 126px;
-  margin-bottom: 19px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.aurora-sphere {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 210deg,
-    rgba(193, 95, 60, 0.16),
-    rgba(168, 75, 42, 0.72),
-    rgba(184, 134, 47, 0.54),
-    rgba(193, 95, 60, 0.16)
-  );
-  filter: blur(15px);
-  opacity: 0.58;
-  animation: evaluate-breathe 4.8s ease-in-out infinite alternate;
-}
-
-.orb-inner {
-  position: relative;
-  z-index: 10;
-  width: 82px;
-  height: 82px;
-  border-radius: 50%;
-  border: 1px solid rgba(241, 228, 220, 0.84);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(245, 244, 238, 0.64));
-  box-shadow:
-    0 10px 22px rgba(193, 95, 60, 0.16),
-    inset 0 1px 1px rgba(255, 255, 255, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.orb-percentage {
-  font-size: 1.45rem;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--evaluate-accent);
-  letter-spacing: -0.05em;
-}
-
-.ai-hero .heading-serif {
-  font-size: 1.42rem;
-  margin-bottom: 7px;
-  color: var(--evaluate-ink);
-  letter-spacing: -0.025em;
+.rail-progress h2 {
+  margin: 0;
+  font-size: var(--anth-text-lg);
 }
 
 .subtitle {
-  max-width: 33ch;
-  color: var(--evaluate-muted);
-  font-size: 0.9rem;
-  line-height: 1.55;
+  margin: 4px 0 0;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
 }
 
-.rail-section {
-  display: flex;
-  flex-direction: column;
+.progress-figure {
+  margin: 20px 0 8px;
+  color: var(--anth-ink-faint);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-lg);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-.rail-section.flex-1 {
-  flex: 1;
-  min-height: 170px;
-}
-
-.rail-section.flex-col {
-  flex-direction: column;
-}
-
-.rail-section.overflow-hidden {
-  overflow: hidden;
-}
-
-.rail-head {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.rail-head h3 {
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--evaluate-ink);
-}
-
-.status-meta {
-  overflow: hidden;
-  color: var(--evaluate-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.uppercase {
-  text-transform: uppercase;
-}
-
-.progress-rail {
-  margin-top: 14px;
+.progress-figure span {
+  color: var(--anth-ink-strong);
+  font-size: 2.75rem;
+  line-height: 1;
 }
 
 .progress-bar {
-  height: 7px;
-  border-radius: 999px;
-  background: var(--atlas-accent-soft);
-  overflow: hidden;
-  box-shadow: var(--lg-shadow-subtle);
+  height: 2px;
+  background: var(--anth-rule);
 }
 
 .progress-bar-fill {
   height: 100%;
-  border-radius: inherit;
-  background: var(--atlas-accent);
-  box-shadow: var(--lg-shadow-subtle);
-  transition: width 320ms var(--lg-easing-spring, ease);
+  background: var(--anth-ink);
+  transition: width var(--anth-duration-slow) var(--anth-ease);
+}
+
+.status-meta {
+  margin: 8px 0 0;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-xs);
+}
+
+.rail-section h3 {
+  margin: 0 0 8px;
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-semibold);
+}
+
+.evaluation-error {
+  padding-left: 14px;
+  border-left: 2px solid var(--anth-danger);
+}
+
+.evaluation-error p {
+  margin: 0;
+  color: var(--anth-danger);
+  font-size: var(--anth-text-sm);
 }
 
 .log-list {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-top: 14px;
+  display: grid;
+  max-height: 300px;
   overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.empty-log {
-  align-items: center;
-  justify-content: center;
-  min-height: 100px;
-  color: var(--evaluate-muted);
+  border-top: 1px solid var(--anth-rule);
 }
 
 .log-item {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
-  gap: 10px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--lg-border-subtle);
-}
-
-.log-item:last-child {
-  border-bottom: none;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--anth-border-subtle);
+  font-size: var(--anth-text-xs);
+  animation: atlas-fade-in var(--anth-duration-normal) var(--anth-ease) both;
 }
 
 .log-time {
-  color: var(--evaluate-muted);
-  font-size: 0.74rem;
-  font-family: var(--font-mono);
+  color: var(--anth-ink-faint);
+  font-family: var(--anth-font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .log-message {
-  color: var(--evaluate-ink);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  color: var(--anth-ink-soft);
 }
 
-.btn-warn {
-  background: var(--lg-bg-interactive);
-  color: var(--evaluate-ink);
+.rail-empty {
+  margin: 0;
+  padding: 10px 0;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
 }
 
-.evaluating-page .btn {
-  min-height: 40px;
-  border: 1px solid var(--lg-border-color);
-  border-radius: 13px;
-  background: var(--lg-bg-interactive);
-  color: var(--evaluate-ink);
-  font-weight: 700;
-  box-shadow:
-    0 6px 14px rgba(31, 31, 31, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88);
-  transition:
-    transform var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
-    box-shadow var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease),
-    background var(--lg-duration-normal, 220ms) var(--lg-easing-spring, ease);
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 0;
+  background: transparent;
 }
 
-.evaluating-page .btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--lg-bg-elevated);
-  box-shadow:
-    0 11px 20px rgba(31, 31, 31, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-
-.evaluating-page .btn-warn {
-  border-color: var(--atlas-accent-ring);
-  background: var(--atlas-accent-soft);
-  color: var(--evaluate-accent);
-}
-
-.evaluating-page .btn:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.evaluating-page .btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-  box-shadow: none;
-}
-
-.evaluating-page .btn:focus-visible {
-  outline: 3px solid var(--atlas-accent-ring);
-  outline-offset: 3px;
-}
-
-.w-full {
-  width: 100%;
-}
-.mt-auto {
-  margin-top: auto;
-}
-
-@keyframes evaluate-breathe {
-  0% { transform: scale(1); opacity: 0.3; }
-  100% { transform: scale(1.15); opacity: 0.6; }
-}
-
-@keyframes evaluate-panel-enter-right {
-  from { transform: translateX(12px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes evaluate-panel-enter-left {
-  from { transform: translateX(-12px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes evaluate-page-enter {
-  from { opacity: 0; transform: translateY(8px) scale(0.992); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes evaluate-pulse {
-  50% { opacity: 0.28; transform: scale(0.96); }
-}
-
-@keyframes evaluate-log-enter {
-  from { transform: translateY(4px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.fade-in-up {
-  animation: evaluate-log-enter 240ms var(--lg-easing-spring, ease) both;
-}
-
-.custom-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 4px;
-  background: var(--atlas-accent-soft);
-  background-clip: padding-box;
-}
-
-@media (max-width: 1040px) {
+@media (max-width: 960px) {
   .evaluating-layout {
     grid-template-columns: 1fr;
+    gap: 32px;
   }
 
-  .essay-panel {
-    min-height: min(62vh, 620px);
-  }
-
-  .right-panel {
-    min-height: auto;
-  }
-
-  .rail-section.flex-1 {
-    min-height: 220px;
-  }
-}
-
-@media (max-width: 640px) {
-  .evaluating-page {
-    border-radius: 22px;
-  }
-
-  .essay-panel {
-    padding: 18px;
-    border-radius: 21px;
-  }
-
-  .essay-head,
-  .action-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .word-badge {
-    width: fit-content;
+  .status-rail {
+    position: static;
+    order: -1;
   }
 
   .essay-body {
-    padding: 16px;
-    border-radius: 16px;
-  }
-
-  .glass-card {
-    padding: 17px;
-    border-radius: 18px;
-  }
-
-  .log-item {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-
-  .action-row .btn {
-    width: 100%;
-  }
-}
-
-@media (prefers-contrast: more) {
-  .evaluating-page :is(.essay-panel, .glass-card, .essay-body, .action-row) {
-    background: #fff;
-    border-color: #4a4a4a;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .evaluating-page,
-  .evaluating-page *,
-  .evaluating-page *::before,
-  .evaluating-page *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
+    min-height: 0;
   }
 }
 </style>

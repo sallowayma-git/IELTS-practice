@@ -78,7 +78,6 @@ export interface ReadingModeFlowOptions {
   setReadOnlyDomControls: (readonly: boolean) => void
   restoreHighlightsFromRecords: (records?: unknown[]) => void
   setReadingCoachOpen: (open: boolean) => void
-  runAutomaticReviewCoach: (options: { expectedSessionId?: string }) => Promise<unknown>
   resetAnswers?: () => void
   recycleSubmittedAttempt?: () => void | Promise<void>
 }
@@ -413,9 +412,6 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
       )
       options.setPracticeTimerElapsedSeconds(Math.max(durationSec, Number(options.submission.value?.duration || 0)))
       snapshotSubmission()
-      if (resolveSource(options.readingCoachEnabled)) {
-        await options.runAutomaticReviewCoach({ expectedSessionId: options.submission.value?.sessionId })
-      }
       maybeAdvanceSuitePassage()
       await scheduleEndlessNext(result?.nextEndlessAssetId || null)
     } catch (submitFailure: any) {

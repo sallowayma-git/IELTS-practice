@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import agentRepository from '@/api/agent-repository.js'
+import { getMemoryEvidence } from '@/api/learning-repository.js'
 import {
   listAgentThreads,
   listPendingApprovals,
@@ -20,9 +21,12 @@ import {
 } from '@/api/memory-repository.js'
 import {
   formatFeedbackKind,
+  formatJournalDate,
   formatMemoryStatement,
+  formatStudyProbe,
+  persistedPlanItems,
   summarizeApproval,
-  summarizeEvidence,
+  summarizeBackgroundJob,
   summarizeJournal
 } from '@/modules/agent-console/format.js'
 
@@ -156,17 +160,29 @@ const actionError = ref('')
 const preview = ref(null)
 const entries = ref([])
 const jobs = ref([])
+const jobsReading = ref(false)
+const jobsReadError = ref('')
+let jobsRequest = 0
 const journals = ref([])
+const journalDate = ref(new Date().toISOString().slice(0, 10))
+const journalReading = ref(false)
+const journalReadError = ref('')
+let journalRequest = 0
 const threads = ref([])
 const approvals = ref([])
 const planItems = ref([])
 const activePlanId = ref('')
 const planDoneIds = ref(new Set())
+const planReadError = ref('')
+const planReading = ref(false)
 const lastVisitAt = ref(readLastVisitAt())
 const deltaBaseline = lastVisitAt.value
 const memoryCatalogStale = ref(false)
 const memoryCatalogLoading = ref(false)
 const evidenceEntryId = ref(null)
+const evidenceState = ref({ status: 'idle', items: [], warnings: [], error: '' })
+let evidenceRequest = 0
+let memoryCatalogVersion = 0
 const feedbackInFlight = ref(new Set())
 const activeTab = ref('changes')
 
@@ -257,7 +273,9 @@ const deltaGroups = computed(() => ([
   { key: 'newPreferences', label: '新偏好', items: delta.value.newPreferences }
 ]).filter((group) => group.items.length))
 
-const dreamJobs = computed(() => jobs.value.filter((j) => String(j.jobKind || '').includes('dream')))
+const jobSummaries = computed(() => jobs.value.map(summarizeBackgroundJob))
+const dreamJobs = computed(() => jobSummaries.value.filter((job) => job.kind === 'daily_dream'))
+const runningDreams = computed(() => dreamJobs.value.filter((job) => job.status === 'running'))
 
 const heartbeat = computed(() => ({
   memories: entries.value.filter((e) => memoryStatus(e) !== 'archived').length,
@@ -309,44 +327,26 @@ async function loadConsole() {
   loading.value = true
   errorMessage.value = ''
   try {
-    let catalogError = null
-    const [catalog, jobList, threadList, approvalList] = await Promise.all([
+    const [, , threadList, approvalList] = await Promise.all([
       // A failed catalog read must surface as a real error, not render as a
       // healthy-looking empty console.
-      getMemoryCatalog({ includeArchived: true }).catch((error) => {
-        catalogError = error
+      refreshMemoryCatalog().catch((error) => {
+        errorMessage.value = error?.message || '记忆目录读取失败，请稍后重试。'
         return null
       }),
-      getBackgroundJobStatus().catch(() => []),
+      readBackgroundJobs(),
       listAgentThreads(20).catch(() => []),
-      listPendingApprovals(20).catch(() => [])
+      listPendingApprovals(20).catch(() => []),
+      loadJournal()
     ])
-    if (catalogError && !errorMessage.value) {
-      errorMessage.value = catalogError?.message || '记忆目录读取失败，请稍后重试。'
-    }
-    const allEntries = (catalog?.entries || []).map(catalogToEntry).filter(Boolean)
-    preview.value = catalog
-      ? { userId: catalog.userId, entries: allEntries, truncated: catalog.truncated }
-      : null
-    entries.value = allEntries
-    jobs.value = jobList || []
     threads.value = threadList || []
     approvals.value = approvalList || []
     writeLastVisitAt(new Date().toISOString())
     lastVisitAt.value = readLastVisitAt()
 
     // Latest plan wins; read the real snapshot — plan IDs are not thread IDs.
-    const planSnapshot = await agentRepository.getLatestStudyPlan('local').catch(() => null)
-    if (planSnapshot?.plan?.id) {
-      activePlanId.value = planSnapshot.plan.id
-      planItems.value = planSnapshot.items || []
-      planDoneIds.value = new Set(planItems.value.filter((i) => i.done).map((i) => i.id))
-    } else {
-      activePlanId.value = ''
-      planItems.value = []
-      planDoneIds.value = new Set()
-    }
-    await loadJournal().catch(() => {})
+    if (!planReadError.value && !planReading.value && !planGenerating.value) activePlanId.value = ''
+    await readStudyPlan()
   } catch (error) {
     errorMessage.value = error?.message || '智能体控制台暂时不可用'
   } finally {
@@ -354,13 +354,51 @@ async function loadConsole() {
   }
 }
 
-async function loadJournal() {
-  const today = new Date().toISOString().slice(0, 10)
+async function readBackgroundJobs() {
+  const request = ++jobsRequest
+  jobsReading.value = true
+  jobsReadError.value = ''
+  jobs.value = []
   try {
-    const journal = await getDailyJournal({ userId: 'local', journalDate: today })
+    const result = await getBackgroundJobStatus()
+    if (request !== jobsRequest) return false
+    if (!Array.isArray(result)) throw new Error('后台任务响应无效。')
+    jobs.value = result
+    return true
+  } catch (error) {
+    if (request !== jobsRequest) return false
+    jobsReadError.value = `后台任务读取失败，请重新读取。${error?.message || ''}`
+    return false
+  } finally {
+    if (request === jobsRequest) jobsReading.value = false
+  }
+}
+
+function switchJournalDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return
+  journalDate.value = date
+  return loadJournal()
+}
+
+async function loadJournal() {
+  const request = ++journalRequest
+  const date = journalDate.value
+  journalReading.value = true
+  journalReadError.value = ''
+  journals.value = []
+  try {
+    const journal = await getDailyJournal({ userId: 'local', journalDate: date })
+    if (request !== journalRequest || date !== journalDate.value) return false
+    const summary = summarizeJournal(journal)
+    if (journal !== null && (!summary || summary.date !== date)) throw new Error('学习日记响应无效或日期不匹配。')
     journals.value = journal ? [journal] : []
-  } catch {
-    journals.value = []
+    return true
+  } catch (error) {
+    if (request !== journalRequest || date !== journalDate.value) return false
+    journalReadError.value = `学习日记读取失败，请重新读取。${error?.message || ''}`
+    return false
+  } finally {
+    if (request === journalRequest && date === journalDate.value) journalReading.value = false
   }
 }
 
@@ -372,11 +410,12 @@ async function runDailyDream() {
     // The command resolves (or deterministically builds) today's journal on
     // the Rust side; the UI only names the day.
     await triggerDailyDream({ userId: 'local', day: today })
-    actionMessage.value = '每日整理已触发，稍后会生成候选更新。'
-    jobs.value = await getBackgroundJobStatus().catch(() => jobs.value)
-    await loadJournal().catch(() => {})
+    actionMessage.value = '今天的日记已整理。'
   } catch (error) {
     actionError.value = error?.message || '每日整理触发失败'
+  } finally {
+    await readBackgroundJobs()
+    await loadJournal()
   }
 }
 
@@ -384,7 +423,9 @@ async function runArchiveStale() {
   actionMessage.value = ''
   actionError.value = ''
   try {
+    invalidateMemoryCatalog()
     await archiveStaleMemories()
+    if (!await refreshAfterMemoryMutation()) return
     actionMessage.value = '已运行过期归档。过期记忆会收进「已归档」，不会删除。'
     await loadConsole()
   } catch (error) {
@@ -396,8 +437,30 @@ async function runArchiveStale() {
 
 const planGenerating = ref(false)
 
+async function readStudyPlan() {
+  if (planReading.value) return false
+  planReading.value = true
+  planReadError.value = ''
+  planItems.value = []
+  planDoneIds.value = new Set()
+  try {
+    const snapshot = await agentRepository.getLatestStudyPlan('local')
+    if (!snapshot && !activePlanId.value) return true
+    const items = persistedPlanItems(snapshot, activePlanId.value)
+    activePlanId.value = snapshot.plan.id
+    planItems.value = items
+    planDoneIds.value = new Set(items.filter((item) => item.done).map((item) => item.id))
+    return true
+  } catch (error) {
+    planReadError.value = `${activePlanId.value ? '计划已创建，但读取失败。' : '计划读取失败。'}请重新读取，不要重复生成。${error?.message || ''}`
+    return false
+  } finally {
+    planReading.value = false
+  }
+}
+
 async function generateStudyPlan() {
-  if (planGenerating.value) return
+  if (planGenerating.value || planReading.value || planReadError.value) return
   planGenerating.value = true
   actionMessage.value = ''
   actionError.value = ''
@@ -408,16 +471,13 @@ async function generateStudyPlan() {
       userGoal: '按当前技能状态安排今日练习',
       availableMinutes: 60
     })
-    const items = Array.isArray(proposal?.items) ? proposal.items : []
     if (!String(proposal?.planId || '').trim()) {
       actionError.value = proposal?.fallbackReason || '规划器没有产出可保存的计划。'
       return
     }
     // Re-read the persisted snapshot: the host assigned canonical item ids.
-    const snapshot = await agentRepository.getLatestStudyPlan('local').catch(() => null)
     activePlanId.value = String(proposal.planId)
-    planItems.value = snapshot?.items || items
-    planDoneIds.value = new Set(planItems.value.filter((i) => i.done).map((i) => i.id))
+    if (!await readStudyPlan()) return
     actionMessage.value = `已生成今日计划（${planItems.value.length} 项）。`
   } catch (error) {
     actionError.value = error?.message || '生成学习计划失败'
@@ -427,6 +487,8 @@ async function generateStudyPlan() {
 }
 
 async function togglePlanItem(item) {
+  if (planGenerating.value || planReading.value || planReadError.value
+    || !item?.id || !planItems.value.some((row) => row.id === item.id && row.planId === activePlanId.value)) return
   const done = !planDoneIds.value.has(item.id)
   const next = new Set(planDoneIds.value)
   if (done) next.add(item.id); else next.delete(item.id)
@@ -471,6 +533,7 @@ async function submitMemoryFeedback(entry, kind) {
   actionMessage.value = ''
   actionError.value = ''
   try {
+    invalidateMemoryCatalog()
     await recordMemoryFeedback(id, kind)
     if (!await refreshAfterMemoryMutation()) return
     actionMessage.value = `已记录反馈：${formatFeedbackKind(kind)}。`
@@ -482,22 +545,43 @@ async function submitMemoryFeedback(entry, kind) {
 }
 
 async function refreshMemoryCatalog() {
-  const catalog = await getMemoryCatalog({ includeArchived: true })
-  entries.value = (catalog?.entries || []).map(catalogToEntry).filter(Boolean)
-  preview.value = catalog ? { userId: catalog.userId, entries: entries.value, truncated: catalog.truncated } : null
+  const version = ++memoryCatalogVersion
+  try {
+    const catalog = await getMemoryCatalog({ includeArchived: true })
+    if (version !== memoryCatalogVersion) return false
+    if (!Array.isArray(catalog?.entries)) throw new Error('记忆目录响应无效。')
+    entries.value = catalog.entries.map(catalogToEntry).filter(Boolean)
+    preview.value = { userId: catalog.userId, entries: entries.value, truncated: catalog.truncated }
+    evidenceEntryId.value = null
+    evidenceRequest += 1
+    memoryCatalogStale.value = false
+    errorMessage.value = ''
+    return true
+  } catch (error) {
+    if (version !== memoryCatalogVersion) return false
+    clearMemoryCatalog()
+    throw error
+  }
+}
+
+function invalidateMemoryCatalog() {
+  memoryCatalogVersion += 1
+}
+
+function clearMemoryCatalog() {
+  entries.value = []
+  preview.value = null
   evidenceEntryId.value = null
-  memoryCatalogStale.value = false
+  evidenceRequest += 1
+  memoryCatalogStale.value = true
 }
 
 async function refreshAfterMemoryMutation() {
+  invalidateMemoryCatalog()
+  clearMemoryCatalog()
   try {
-    await refreshMemoryCatalog()
-    return true
+    return await refreshMemoryCatalog()
   } catch {
-    entries.value = []
-    preview.value = null
-    evidenceEntryId.value = null
-    memoryCatalogStale.value = true
     actionError.value = '操作已保存，但记忆目录读取失败。请重新读取，不要重复提交。'
     return false
   }
@@ -507,7 +591,7 @@ async function retryMemoryCatalog() {
   if (memoryCatalogLoading.value) return
   memoryCatalogLoading.value = true
   try {
-    await refreshMemoryCatalog()
+    if (!await refreshMemoryCatalog()) return
     actionError.value = ''
     actionMessage.value = '已重新读取记忆目录。'
   } catch {
@@ -524,6 +608,7 @@ async function archiveEntry(entry) {
   actionMessage.value = ''
   actionError.value = ''
   try {
+    invalidateMemoryCatalog()
     await archiveMemory({ memoryId: id, expectedVersion: memoryVersion(entry), reason: 'user_agent_console_archive' })
     if (!await refreshAfterMemoryMutation()) return
     actionMessage.value = '已归档该记忆及依赖它的结论，正文与证据保留在「已归档」。'
@@ -542,6 +627,7 @@ async function forgetEntry(entry) {
   actionMessage.value = ''
   actionError.value = ''
   try {
+    invalidateMemoryCatalog()
     await forgetMemory({ memoryId: id, expectedVersion: memoryVersion(entry), reason: 'user_agent_console_forget' })
     if (!await refreshAfterMemoryMutation()) return
     actionMessage.value = '已永久遗忘该记忆，依赖它的结论已停用。原始练习记录保留。'
@@ -559,7 +645,9 @@ async function pinExplicitPreference(entry) {
   setBusy(key, true)
   actionError.value = ''
   try {
+    invalidateMemoryCatalog()
     await putExplicitPreference({ preferenceKey: key, scope: memoryScope(entry) || 'global', value: value ?? true })
+    if (!await refreshAfterMemoryMutation()) return
     actionMessage.value = `已固定这条偏好。`
   } catch (error) {
     actionError.value = error?.message || '固定偏好失败'
@@ -568,28 +656,38 @@ async function pinExplicitPreference(entry) {
   }
 }
 
-// ---------- Evidence Drawer (M9-04, ported verbatim) ----------
+// ---------- Evidence Drawer (M9-04) ----------
 
-function toggleEvidence(entry) {
+async function toggleEvidence(entry) {
   const id = memoryId(entry)
-  evidenceEntryId.value = evidenceEntryId.value === id ? null : id
+  if (evidenceEntryId.value === id) {
+    evidenceEntryId.value = null
+    evidenceRequest += 1
+    return
+  }
+  evidenceEntryId.value = id
+  await loadEvidence(entry)
 }
 
-function evidenceFor(entry) {
-  const supportIds = readMemoryField(entry, 'supportIds', []) || readMemoryField(entry, 'support_ids', []) || []
-  const observationIds = readMemoryField(entry, 'evidenceObservationIds', []) || readMemoryField(entry, 'evidence_observation_ids', []) || []
-  const assetIds = readMemoryField(entry, 'assetIds', []) || readMemoryField(entry, 'asset_ids', []) || []
-  const links = readMemoryField(entry, 'links', []) || []
-  return {
-    supportIds: Array.isArray(supportIds) ? supportIds : [],
-    observationIds: Array.isArray(observationIds) ? observationIds : [],
-    assetIds: Array.isArray(assetIds) ? assetIds : [],
-    links: Array.isArray(links) ? links : []
+async function loadEvidence(entry) {
+  const request = ++evidenceRequest
+  const id = memoryId(entry)
+  evidenceState.value = { status: 'loading', items: [], warnings: [], error: '' }
+  try {
+    const ids = readMemoryField(entry, 'evidenceObservationIds', [])
+    const result = await getMemoryEvidence(ids, preview.value?.userId || 'local')
+    if (request !== evidenceRequest || evidenceEntryId.value !== id) return
+    evidenceState.value = { status: 'ready', items: result.items, warnings: result.warnings, error: '' }
+  } catch (error) {
+    if (request !== evidenceRequest || evidenceEntryId.value !== id) return
+    evidenceState.value = { status: 'error', items: [], warnings: [], error: error?.message || '证据读取失败，请重试。' }
   }
 }
 
-function evidenceCopy(entry) {
-  return summarizeEvidence(evidenceFor(entry))
+function closeEvidence(event) {
+  evidenceEntryId.value = null
+  evidenceRequest += 1
+  event.currentTarget.closest('article')?.querySelector('[data-memory-evidence-toggle]')?.focus()
 }
 
 function approvalCopy(approval) {
@@ -807,7 +905,7 @@ onMounted(() => {
   <section class="agent-page agent-console-page" data-agent-console>
     <header class="agent-page-header">
       <div class="agent-page-header__copy">
-        <p class="agent-page-header__eyebrow">学习闭环</p>
+        <p class="agent-page-header__eyebrow">开发者模式</p>
         <h1>智能体控制台</h1>
         <p class="agent-page-header__lede">练习留下证据，证据长成记忆，记忆再驱动下一步计划。这里只展示对你有用的结果，不展示内部记录。</p>
       </div>
@@ -835,34 +933,48 @@ onMounted(() => {
             <span>待完成的计划项</span>
           </div>
           <div class="agent-heartbeat-card">
-            <strong>{{ heartbeat.jobs }}</strong>
+            <strong>{{ jobsReading ? '读取中' : jobsReadError ? '不可用' : heartbeat.jobs }}</strong>
             <span>后台任务</span>
           </div>
-          <div class="agent-heartbeat-card" :class="{ 'is-dreaming': dreamJobs.length }">
-            <strong>{{ dreamJobs.length }}</strong>
-            <span>整理任务</span>
+          <div class="agent-heartbeat-card" :class="{ 'is-dreaming': runningDreams.length > 0 }">
+            <strong>{{ jobsReading ? '读取中' : jobsReadError ? '不可用' : runningDreams.length }}</strong>
+            <span>运行中的整理任务</span>
           </div>
         </div>
-        <div v-if="journalSummary" class="agent-journal-card">
-          <div class="agent-journal-card__head">
-            <h2>今日整理</h2>
-            <span>{{ journalSummary.dateLabel }}</span>
-          </div>
-          <p class="agent-journal-card__lede">{{ journalSummary.lede }}</p>
-          <dl class="agent-journal-stats">
-            <div v-for="row in journalSummary.rows" :key="row.label">
-              <dt>{{ row.label }}</dt>
-              <dd>{{ row.value }}</dd>
-            </div>
-          </dl>
-          <ul v-if="journalSummary.unresolved.length" class="agent-journal-unresolved">
-            <li v-for="(q, i) in journalSummary.unresolved" :key="i">{{ q }}</li>
+        <div aria-label="后台任务状态" :aria-busy="jobsReading">
+          <p v-if="jobsReading" role="status">正在读取后台任务…</p>
+          <p v-else-if="jobsReadError" class="agent-inline-error" role="alert">{{ jobsReadError }}</p>
+          <ul v-else-if="jobSummaries.length">
+            <li v-for="job in jobSummaries" :key="job.id">
+              {{ job.title }} · {{ job.statusLabel }} · {{ job.attemptsLabel }}
+              <span v-if="job.error"> · 最近错误：{{ job.error }}</span>
+            </li>
           </ul>
-          <button class="agent-text-button" type="button" @click="runDailyDream">重新整理今天</button>
+          <p v-else role="status">暂无后台任务记录。</p>
+          <button class="agent-text-button" type="button" :disabled="jobsReading" @click="readBackgroundJobs">重新读取后台任务</button>
         </div>
-        <div v-else class="agent-journal-card agent-journal-card--empty">
-          <p>今天还没有学习日记。完成一次阅读或写作练习后，系统会自动生成。</p>
-          <button class="agent-text-button" type="button" @click="runDailyDream">手动触发每日整理</button>
+        <div class="agent-journal-card" :aria-busy="journalReading">
+          <div class="agent-journal-card__head">
+            <h2>{{ formatJournalDate(journalDate) }}整理</h2>
+            <label>日期 <input type="date" :value="journalDate" @change="switchJournalDate($event.target.value)"></label>
+          </div>
+          <p v-if="journalReading" role="status">正在读取所选日期的学习日记…</p>
+          <p v-else-if="journalReadError" class="agent-inline-error" role="alert">{{ journalReadError }}</p>
+          <template v-else-if="journalSummary">
+            <p class="agent-journal-card__lede">{{ journalSummary.lede }}</p>
+            <dl class="agent-journal-stats">
+              <div v-for="row in journalSummary.rows" :key="row.label">
+                <dt>{{ row.label }}</dt>
+                <dd>{{ row.value }}</dd>
+              </div>
+            </dl>
+            <ul v-if="journalSummary.unresolved.length" class="agent-journal-unresolved">
+              <li v-for="(q, i) in journalSummary.unresolved" :key="i">{{ q }}</li>
+            </ul>
+          </template>
+          <p v-else role="status">{{ formatJournalDate(journalDate) }}暂无学习日记。</p>
+          <button class="agent-text-button" type="button" :disabled="journalReading" @click="loadJournal">重新读取日记</button>
+          <button class="agent-text-button" type="button" @click="runDailyDream">手动触发今天的整理</button>
         </div>
       </section>
 
@@ -877,11 +989,15 @@ onMounted(() => {
           <button
             class="agent-text-button"
             type="button"
-            :disabled="planGenerating"
+            :disabled="planGenerating || planReading || Boolean(planReadError)"
             @click="generateStudyPlan"
           >
             {{ planGenerating ? '生成中…' : '生成计划' }}
           </button>
+        </div>
+        <div v-if="planReadError" role="alert">
+          <p>{{ planReadError }}</p>
+          <button class="agent-text-button" type="button" :disabled="planReading" @click="readStudyPlan">重新读取计划</button>
         </div>
         <ul v-if="planItems.length" class="agent-plan-list">
           <li
@@ -895,20 +1011,21 @@ onMounted(() => {
               <input
                 type="checkbox"
                 :checked="planDoneIds.has(item.id)"
+                :disabled="planGenerating || planReading || Boolean(planReadError)"
                 aria-label="标记计划项完成"
                 @change="togglePlanItem(item)"
               />
               <span aria-hidden="true"></span>
             </label>
             <div class="agent-plan-item__copy">
-              <strong>{{ item.skillProbe }}</strong>
+              <strong>{{ formatStudyProbe(item.skillProbe) }}</strong>
               <small>{{ item.whyText }}</small>
             </div>
             <span class="agent-plan-item__minutes">约 {{ item.estimatedMinutes }} 分钟</span>
           </li>
         </ul>
         <p v-else class="agent-empty-hint">
-          学习计划会根据你的复习需求自动生成。点击「生成计划」，让规划器依据最近的技能状态安排今天练什么。
+          {{ planReadError ? '读取成功后才能操作计划项。' : '学习计划会根据你的复习需求自动生成。点击「生成计划」，让规划器依据最近的技能状态安排今天练什么。' }}
         </p>
       </section>
 
@@ -968,7 +1085,10 @@ onMounted(() => {
                 <span>{{ statusLabel[memoryStatus(entry)] || memoryStatus(entry) }}</span>
               </footer>
               <div class="agent-memory-card__actions">
-                <button class="agent-text-button" type="button" @click="toggleEvidence(entry)">
+                <button class="agent-text-button" type="button" data-memory-evidence-toggle
+                  :id="`evidence-toggle-${memoryId(entry)}`"
+                  :aria-expanded="evidenceEntryId === memoryId(entry)"
+                  :aria-controls="`evidence-${memoryId(entry)}`" @click="toggleEvidence(entry)">
                   {{ evidenceEntryId === memoryId(entry) ? '收起证据' : '查看证据' }}
                 </button>
                 <button
@@ -1000,9 +1120,35 @@ onMounted(() => {
                   @click="forgetEntry(entry)"
                 >永久遗忘</button>
               </div>
-              <div v-if="evidenceEntryId === memoryId(entry)" class="agent-evidence-drawer">
-                <p v-for="(line, i) in evidenceCopy(entry).lines" :key="i">{{ line }}</p>
-                <small>{{ evidenceCopy(entry).hint }}</small>
+              <div v-if="evidenceEntryId === memoryId(entry)" class="agent-evidence-drawer"
+                :id="`evidence-${memoryId(entry)}`" role="region"
+                :aria-labelledby="`evidence-toggle-${memoryId(entry)}`"
+                :aria-busy="evidenceState.status === 'loading'" tabindex="0" @keydown.esc.stop="closeEvidence">
+                <p v-if="evidenceState.status === 'loading'" role="status">正在读取关联证据…</p>
+                <template v-else-if="evidenceState.status === 'error'">
+                  <p role="alert">{{ evidenceState.error }}</p>
+                  <button class="agent-text-button" type="button" @click="loadEvidence(entry)">重新读取证据</button>
+                </template>
+                <template v-else-if="evidenceState.status === 'ready'">
+                  <p v-if="evidenceState.items.length" role="status">已读取 {{ evidenceState.items.length }} 条关联观察。</p>
+                  <p v-for="warning in evidenceState.warnings" :key="warning" role="status">{{ warning }}</p>
+                  <p v-if="!evidenceState.items.length && !evidenceState.warnings.length" role="status">这条记忆尚未关联具体观察证据。</p>
+                  <section v-for="observation in evidenceState.items" :key="observation.id" aria-label="关联观察">
+                    <p>{{ observation.source }}</p>
+                    <small>观察原文</small>
+                    <pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ observation.original }}</pre>
+                    <p v-if="!observation.events.length">该观察暂无可读取的关联事件。</p>
+                    <div v-for="event in observation.events" :key="event.id">
+                      <p>{{ event.source }}</p>
+                      <p>{{ event.location }}</p>
+                      <details>
+                        <summary>查看事件原始记录</summary>
+                        <pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ event.original }}</pre>
+                      </details>
+                      <router-link v-if="event.route" :to="event.route">查看这次练习</router-link>
+                    </div>
+                  </section>
+                </template>
               </div>
             </article>
           </div>

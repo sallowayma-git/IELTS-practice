@@ -23,7 +23,7 @@ REPORTS = ROOT / "developer/tests/e2e/reports"
 REPORT = REPORTS / "visual-regression-report.json"
 EVIDENCE = REPORTS / "visual-ci-evidence"
 BASE_URL_ENV_NAMES = (
-    "AGENT_VISUAL_BASE_URL",
+    "NOTEBOOK_VISUAL_BASE_URL",
     "NAV_VISUAL_BASE_URL",
     "SETTINGS_VISUAL_BASE_URL",
     "TOPIC_VISUAL_BASE_URL",
@@ -42,6 +42,7 @@ SCRIPT_GROUPS = (
         "shell-route",
         (
             "agent_workspace_visual_check.py",
+            "notebook_visual_check.py",
             "nav_responsive_visual_check.py",
             "settings_modal_visual_check.py",
             "topic_manage_visual_check.py",
@@ -55,6 +56,7 @@ SCRIPT_GROUPS = (
             "history_filter_analytics_visual_check.py",
             "history_record_pagination_visual_check.py",
             "history_page_states_visual_check.py",
+            "history_activity_tabs_visual_check.py",
         ),
     ),
     (
@@ -76,7 +78,6 @@ SCRIPT_GROUPS = (
         "reading-session-history",
         (
             "reading_suite_visual_check.py",
-            "reading_history_widget_visual_check.py",
             "reading_history_record_visual_check.py",
         ),
     ),

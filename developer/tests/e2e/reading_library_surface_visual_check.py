@@ -115,7 +115,7 @@ def read_geometry(page):
               return node ? {
                 position: style(node)?.position || '',
                 innerRect: rect(inner),
-                innerShadow: style(inner)?.boxShadow || '',
+                innerOutline: parseFloat(style(inner)?.borderTopWidth || '0'),
               } : null;
             })(),
             pdf: (() => {
@@ -124,7 +124,7 @@ def read_geometry(page):
               return node ? {
                 position: style(node)?.position || '',
                 dialogRect: rect(dialog),
-                dialogShadow: style(dialog)?.boxShadow || '',
+                dialogOutline: parseFloat(style(dialog)?.borderTopWidth || '0'),
               } : null;
             })(),
             root: rect(root),
@@ -141,8 +141,9 @@ def assert_page_geometry(name, geometry):
     active = geometry["activeRect"]
     if not active or active["width"] <= 0:
         raise AssertionError(f"{name}: active Reading Library view is not bounded")
-    if geometry["activeShadow"] in ("", "none"):
-        raise AssertionError(f"{name}: active Reading Library workspace lost its raised surface")
+    # Paper theme: the active view sits directly on the canvas, never raised.
+    if geometry["activeShadow"] not in ("", "none"):
+        raise AssertionError(f"{name}: active Reading Library workspace is raised off the paper")
 
 
 def assert_tool_surface(name, geometry):
@@ -168,9 +169,10 @@ def assert_overlay(name, geometry, key):
     rect = overlay["innerRect"] if key == "clock" else overlay["dialogRect"]
     if not rect or rect["left"] < -1 or rect["right"] > geometry["viewport"][0] + 1:
         raise AssertionError(f"{name}: {key} surface escapes viewport width")
-    shadow = overlay["innerShadow"] if key == "clock" else overlay["dialogShadow"]
-    if shadow in ("", "none"):
-        raise AssertionError(f"{name}: {key} surface lost its elevated layer")
+    # A floating layer is set off by a ruled outline over the scrim, not a shadow.
+    outline = overlay["innerOutline"] if key == "clock" else overlay["dialogOutline"]
+    if outline < 1:
+        raise AssertionError(f"{name}: {key} surface lost its outlined layer")
 
 
 def main():

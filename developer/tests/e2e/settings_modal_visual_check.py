@@ -77,7 +77,7 @@ def read_detail_surface_geometry(page):
           const sections = [...document.querySelectorAll('.settings-detail-panel > .settings-panel')];
           const nested = [...document.querySelectorAll('.settings-detail-panel > .settings-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel, .about-info, .about-features)')];
           return {
-            panelShadow: panel ? getComputedStyle(panel).boxShadow : '',
+            panelOutline: panel ? parseFloat(getComputedStyle(panel).borderTopWidth) : 0,
             sectionCount: sections.length,
             sectionShadows: sections.map((section) => getComputedStyle(section).boxShadow),
             nestedShadows: nested.map((section) => getComputedStyle(section).boxShadow),
@@ -95,8 +95,8 @@ def read_detail_surface_geometry(page):
 def assert_detail_surfaces(name, geometry):
     if geometry["sectionCount"] == 0:
         raise AssertionError(f"{name}: detail tab has no content section")
-    if geometry["panelShadow"] in ("", "none"):
-        raise AssertionError(f"{name}: detail panel lost its elevated surface")
+    if geometry["panelOutline"] < 1:
+        raise AssertionError(f"{name}: detail panel lost its outlined layer")
     modes = geometry['modes']
     if modes and (sum(mode['active'] for mode in modes) != 1 or len({mode['background'] for mode in modes}) < 2):
         raise AssertionError(f"{name}: selected temperature mode is not visually distinct: {modes}")

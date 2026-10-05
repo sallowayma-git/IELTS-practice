@@ -1,6 +1,15 @@
 """Shared behavioral and current-theme checks for the Vue visual fixtures."""
 
+import os
 import re
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -43,8 +52,10 @@ def assert_flat_surfaces(page, selector, name):
     """The shipping skin permits hairline elevation, not the retired glass layers."""
     surfaces = page.evaluate(
         """selector => {
+          // Probe inside the surface's own theme root: the exam routes keep
+          // their frozen tokens, the paper routes have no elevation at all.
           const probe = document.createElement('span');
-          document.body.append(probe);
+          (document.querySelector(selector)?.parentElement || document.body).append(probe);
           const subtleShadows = ['--anth-shadow-xs', '--anth-shadow-sm'].map(token => {
             probe.style.boxShadow = `var(${token})`;
             return getComputedStyle(probe).boxShadow;
@@ -82,3 +93,39 @@ def assert_document_unlocked(page, name):
     overflow = page.evaluate("() => [document.documentElement, document.body].map(node => getComputedStyle(node).overflowY)")
     if "hidden" in overflow:
         raise AssertionError(f"{name}: closing the overlay did not release document scrolling: {overflow}")
+
+
+@contextmanager
+def flagged_preview(**flags):
+    """Serve a throwaway Vue build with VITE_FEATURE_* flags switched on.
+
+    Developer-only routes (e.g. /dev/agent) are not registered in the shipping
+    build, so their checks build their own bundle instead of the shared dist.
+    """
+    root = Path(__file__).resolve().parents[3]
+    npm = shutil.which('npm.cmd') or shutil.which('npm')
+    with tempfile.TemporaryDirectory(prefix='atlas-flagged-dist-') as out_dir:
+        environment = {**os.environ, **{name: 'true' for name in flags}}
+        subprocess.run(
+            [npm, 'exec', '--', 'vite', 'build', '--outDir', out_dir, '--emptyOutDir', '--logLevel', 'warn'],
+            cwd=root / 'apps/writing-vue', env=environment, check=True, timeout=300,
+        )
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        server = subprocess.Popen(
+            [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1', '--directory', out_dir],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        base_url = f'http://127.0.0.1:{port}'
+        try:
+            for _ in range(80):
+                try:
+                    urllib.request.urlopen(base_url, timeout=1)
+                    break
+                except OSError:
+                    time.sleep(0.25)
+            yield base_url
+        finally:
+            server.kill()
+            server.wait(timeout=5)

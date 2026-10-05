@@ -1,8 +1,9 @@
 /*
- * Shipping style entrypoint.
- *
- * Design-system tokens + aliases + base reset are loaded first, then the
- * Anthropic product skin (opensource-skin.css) which consumes aliases only.
+ * Shipping style entrypoint. Order matters:
+ *   design-system  tokens -> exam theme -> aliases -> base reset -> motion
+ *   exam-frozen    pinned token values + skin for the reading exam routes
+ *   paper skin     shared component vocabulary for every other route
  */
 @import './design-system/index.css';
+@import './design-system/exam-frozen.css';
 @import './opensource-skin.css';

@@ -459,7 +459,7 @@ async def assert_writing_top_nav_stays_in_writing_module(page, entry_url: str) -
 
     await assert_writing_nav_target(page, "历史", "/history", ".history-page")
     history_heading = await page.locator(".history-page .page-header").text_content()
-    if not history_heading or "Performance Analytics" not in history_heading:
+    if not history_heading or "练习历史" not in history_heading:
         raise AssertionError(f"writing_history_heading_mismatch:{history_heading}")
 
     await assert_writing_nav_target(page, "设置", "/settings", "#settings-view")

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveFeatureFlag } from '../../../apps/writing-vue/src/config/feature-flags.js'
+import { featureFlags, resolveFeatureFlag } from '../../../apps/writing-vue/src/config/feature-flags.js'
 import { unwrapCommandResponse } from '../../../apps/writing-vue/src/api/tauri-bridge.js'
 import {
   formatPreferenceValue,
@@ -44,18 +44,22 @@ function testVueRoutesAndShell() {
     "path: '/reading-suite/:sessionId'",
     "path: '/reading/:assetId/review/:sessionId'",
     "path: '/writing'",
-    "path: '/agent'"
+    "path: '/notebook'",
+    "path: '/dev/agent'"
   ]) has(routes, route, 'Vue practice route')
+  has(routes, "redirect: { name: 'Notebook' }", 'retired memory center lands on the notebook')
 
   has(app, 'showShellNav', 'shared App shell nav gate')
   has(app, 'framelessRouteNames', 'immersive-only shell escape hatch')
   lacks(app, "'PracticeLibrary'", 'Library must remain inside the shared App shell')
   has(nav, '<router-link to="/" class="brand-block">', 'product brand route')
-  for (const label of ["label: '阅读'", "label: '写作'", "label: '智能体'", "label: '历史'", "label: '设置'"]) {
+  for (const label of ["label: '阅读'", "label: '写作'", "label: '札记'", "label: '历史'", "label: '设置'"]) {
     has(nav, label, 'global product navigation')
   }
+  lacks(nav, "label: '智能体'", 'agent workbench is not a learner nav entry')
+  lacks(nav, 'featureFlags.agentWorkspaceV1', 'agent workbench stays off the learner nav')
   has(routes, 'featureFlags.agentWorkspaceV1', 'Agent route feature flag')
-  has(nav, 'featureFlags.agentWorkspaceV1', 'Agent navigation feature flag')
+  has(app, "'atlas-exam'", 'exam routes keep their frozen theme root')
   has(flags, 'VITE_FEATURE_AGENT_WORKSPACE_V1', 'Agent build-time rollback flag')
   has(flags, 'VITE_FEATURE_READING_ATTEMPT_REVIEW_V1', 'Attempt Review build-time rollback flag')
   const readingPage = read('apps/writing-vue/src/views/PracticeReadingPage.vue')
@@ -66,8 +70,9 @@ function testVueRoutesAndShell() {
   for (const command of ['learning_compare_attempts', 'agent_run_attempt_review', 'agent_get_run']) {
     has(learningRepository, command, 'Attempt Review Tauri repository command')
   }
-  assert.equal(resolveFeatureFlag(undefined, true), true, 'Agent route remains enabled by default')
-  assert.equal(resolveFeatureFlag('false', true), false, 'explicit false disables the Agent route')
+  assert.equal(featureFlags.agentWorkspaceV1, false, 'developer agent workbench is off by default')
+  assert.equal(resolveFeatureFlag(undefined, true), true, 'unset flags keep their default')
+  assert.equal(resolveFeatureFlag('false', true), false, 'explicit false disables a flag')
   assert.equal(resolveFeatureFlag('TRUE', false), true, 'feature flag parsing is case-insensitive')
 }
 
@@ -86,7 +91,9 @@ function testLibraryHasOneProductShell() {
   lacks(library, 'practice-library-open-source', 'doubled Library skin ownership')
   assert.ok(!/^\.view\b/m.test(library), 'Library stylesheet leaks a naked .view selector')
   assert.ok(!/^\.btn\b/m.test(library), 'Library stylesheet leaks a naked .btn selector')
-  has(skin, '.atlas-source-ui .practice-library', 'canonical Library visual owner')
+  has(skin, '.atlas-paper {', 'paper skin is scoped to non-exam routes')
+  lacks(skin, '.atlas-source-ui .practice-library', 'Library owns its layout in PracticeLibraryPage.vue')
+  assert.ok(/^\.practice-library \.library-view-tabs \{/m.test(library), 'Library styles are rooted at .practice-library')
   for (const retired of [
     'clearPracticeCache',
     'clear-practice-cache',
@@ -127,6 +134,9 @@ function testReadingActionOwnership() {
   has(designSystem, "./exam-theme.css", 'exam theme registered in design system')
   has(examTheme, '--exam-navy:', 'exam navy token')
   has(examTheme, '.reading-page.exam-mode #reading-coach-fab', 'exam mode hides coach chrome')
+  has(designSystem, "./tokens.css", 'paper tokens registered in design system')
+  has(read('apps/writing-vue/src/styles/main.css'), "./design-system/exam-frozen.css", 'exam freeze layer loaded before the paper skin')
+  has(read('apps/writing-vue/src/styles/design-system/exam-frozen.css'), '.atlas-exam {', 'exam token pin')
   has(interactions, 'readOnlyModeSource', 'single read-only interaction source')
   lacks(interactions, 'reviewModeSource', 'split review-only interaction source')
   has(page, 'ref="settingsPanel"', 'Reading settings dialog element ref')

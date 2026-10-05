@@ -17,7 +17,6 @@
   --atlas-accent-alt: var(--anth-accent);
   --atlas-accent-soft: var(--anth-accent-soft);
   --atlas-accent-ring: var(--anth-accent-ring);
-  --atlas-sheen: linear-gradient(135deg, var(--anth-accent-soft), var(--anth-accent-softer));
   --atlas-success: var(--anth-success);
   --atlas-warning: var(--anth-warning);
   --atlas-danger: var(--anth-danger);
@@ -253,7 +252,7 @@
   --lg-bg-toolbar: var(--anth-canvas-soft);
   --lg-bg-interactive: var(--anth-surface-hover);
   --lg-bg-pressed: var(--anth-surface-sunken);
-  --lg-bg-scrim: rgba(31, 31, 31, 0.42);
+  --lg-bg-scrim: var(--anth-scrim);
   --lg-border-color: var(--anth-border);
   --lg-border-subtle: var(--anth-border-subtle);
   --lg-shadow-subtle: var(--anth-shadow-xs);

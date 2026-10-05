@@ -18,26 +18,22 @@ CASES = (
 )
 ROUTES = (
     ("reading", "/?view=browse", "阅读"),
-    ("agent", "/agent", "Agent"),
+    ("notebook", "/notebook", "札记"),
     ("history", "/history", "历史"),
     ("settings", "/settings", "设置"),
 )
 ROUTE_VIEWS = {
     'reading': '.practice-library',
-    'agent': '.agent-page-header',
+    'notebook': '[data-notebook]',
     'history': '.history-page',
     'settings': '.settings-page',
 }
+# 阅读 · 写作 · 札记 · 历史 · 设置 — the agent workbench is a developer route.
+NAV_LABELS = ["阅读", "写作", "札记", "历史", "设置"]
 
 
 def expected_href_for(label):
-    if label == "Agent":
-        return "/agent"
-    if label == "历史":
-        return "/history"
-    if label == "设置":
-        return "/settings"
-    return "/?view=browse"
+    return {"札记": "#/notebook", "历史": "#/history", "设置": "#/settings"}.get(label, "#/")
 
 
 def install_tauri_mock(page):
@@ -138,11 +134,11 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
     width = geometry["viewport"][0]
     if geometry["navLabel"] != "主导航":
         raise AssertionError(f"{case_name}/{route_name}: nav has no accessible label")
-    if len(geometry["itemGeometry"]) != 6:
-        raise AssertionError(f"{case_name}/{route_name}: expected all six nav entries")
+    if [item["label"] for item in geometry["itemGeometry"]] != NAV_LABELS:
+        raise AssertionError(f"{case_name}/{route_name}: nav entries changed: {geometry['itemGeometry']}")
     expected_href = expected_href_for(expected_active)
     current = [item for item in geometry["itemGeometry"] if item["ariaCurrent"] == "page"]
-    if len(current) != 1 or not current[0]["href"].endswith(expected_href):
+    if len(current) != 1 or current[0]["href"] != expected_href:
         raise AssertionError(f"{case_name}/{route_name}: incorrect aria-current state {current}")
     bounds = geometry["linksBounds"]
     for item in geometry["itemGeometry"]:
@@ -154,16 +150,14 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
         raise AssertionError(f"{case_name}/{route_name}: page overflows: {json.dumps(geometry, ensure_ascii=False)}")
 
     if width <= 640:
-        columns = [column for column in geometry["columns"].split(" ") if column]
-        if geometry["navDisplay"] != "grid" or len(columns) != 3:
-            raise AssertionError(f"{case_name}/{route_name}: compact nav is not a three-column grid")
-        if len(geometry["visibleRows"]) != 2:
-            raise AssertionError(f"{case_name}/{route_name}: compact nav does not expose two rows")
+        # Five short text links fit one row; every entry stays visible and tappable.
+        if len(geometry["visibleRows"]) != 1:
+            raise AssertionError(f"{case_name}/{route_name}: compact nav wrapped or hid entries")
         if geometry["navOverflowX"] != "visible":
             raise AssertionError(f"{case_name}/{route_name}: compact nav still hides horizontal content")
         if any(item["height"] < 43.5 for item in geometry["itemGeometry"]):
             raise AssertionError(f"{case_name}/{route_name}: compact nav touch target is below 44px")
-    elif geometry["navDisplay"] != "flex":
+    if geometry["navDisplay"] != "flex":
         raise AssertionError(f"{case_name}/{route_name}: desktop/tablet nav layout changed unexpectedly")
 
 
@@ -208,7 +202,7 @@ def main():
                     page.wait_for_selector(".nav-links .nav-item")
                     expected_href = expected_href_for(expected_active)
                     page.wait_for_function(
-                        "href => [...document.querySelectorAll('.nav-item[aria-current=page]')].some((item) => (item.getAttribute('href') || '').endsWith(href))",
+                        "href => [...document.querySelectorAll('.nav-item[aria-current=page]')].some((item) => (item.getAttribute('href') || '') === href)",
                         arg=expected_href,
                     )
                     wait_for_route_layout(page, ROUTE_VIEWS[route_name])

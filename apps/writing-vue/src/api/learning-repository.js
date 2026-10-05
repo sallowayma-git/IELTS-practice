@@ -4,6 +4,7 @@
  */
 
 import { invokeCommand, unwrapCommandResponse } from '@/api/tauri-bridge.js'
+import { memoryEvidenceIds, resolveMemoryEvidence } from '@/modules/agent-console/format.js'
 
 function requiredText(value, label) {
   const normalized = String(value || '').trim()
@@ -39,10 +40,35 @@ export async function getAgentRun(runId) {
   return unwrapCommandResponse(response, 'agent_get_run')
 }
 
+async function evidenceByIds(command, ids) {
+  const normalized = memoryEvidenceIds(ids)
+  if (!normalized.length || normalized.length > 50) throw new TypeError('evidence IDs must contain 1–50 unique IDs')
+  const response = await invokeCommand(command, { ids: normalized })
+  return unwrapCommandResponse(response, command)
+}
+
+export function getObservationsByIds(ids) {
+  return evidenceByIds('learning_observations_get_by_ids', ids)
+}
+
+export function getEventsEvidenceByIds(ids) {
+  return evidenceByIds('learning_events_get_evidence_by_ids', ids)
+}
+
+export function getMemoryEvidence(observationIds, userId = 'local') {
+  return resolveMemoryEvidence(observationIds, {
+    observations: getObservationsByIds,
+    events: getEventsEvidenceByIds
+  }, userId)
+}
+
 export const learningRepository = {
   compareAttemptsForAsset,
   runAttemptReview,
-  getAgentRun
+  getAgentRun,
+  getObservationsByIds,
+  getEventsEvidenceByIds,
+  getMemoryEvidence
 }
 
 export default learningRepository

@@ -1,42 +1,34 @@
 <template>
   <div id="overview-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'overview' }]" data-reading-overview>
-    <div class="hero-panel__header">
-      <div>
-        <p class="hero-panel__eyebrow">Reading workspace</p>
-        <h2 class="hero-panel__title heading-serif">学习总览</h2>
-        <p class="hero-panel__subtitle">从题库浏览到套题练习，保持稳定的学习节奏。</p>
+    <div class="overview-intro">
+      <p class="hero-panel__subtitle">按篇章挑一篇开始，或用无尽与套题模式保持节奏。</p>
+      <div class="overview-section-actions">
+        <button
+          class="btn shui-glass-btn"
+          type="button"
+          id="endless-mode-btn"
+          data-action="start-endless-mode"
+          data-overview-action="endless"
+          @click="$emit('start-endless-mode', $event)"
+        >
+          无尽模式
+        </button>
+        <button
+          class="btn btn-primary shui-glass-btn"
+          type="button"
+          data-action="start-suite-mode"
+          data-overview-action="suite"
+          data-start-reading-suite
+          :disabled="creatingSuite"
+          @click="$emit('open-suite-mode-selector', $event)"
+        >
+          {{ creatingSuite ? '创建中' : '套题模式' }}
+        </button>
       </div>
     </div>
-    <div class="category-grid" id="category-overview">
-      <div class="overview-section-heading">
-        <h3 class="overview-section-title">阅读</h3>
-        <div class="overview-section-actions">
-          <button
-            class="btn shui-glass-btn"
-            type="button"
-            id="endless-mode-btn"
-            data-action="start-endless-mode"
-            data-overview-action="endless"
-            @click="$emit('start-endless-mode', $event)"
-          >
-            <span class="overview-action-glyph" aria-hidden="true">∞</span>
-            <span>无尽模式</span>
-          </button>
-          <button
-            class="btn shui-glass-btn"
-            type="button"
-            data-action="start-suite-mode"
-            data-overview-action="suite"
-            data-start-reading-suite
-            :disabled="creatingSuite"
-            @click="$emit('open-suite-mode-selector', $event)"
-          >
-            <span class="overview-action-glyph" aria-hidden="true">▦</span>
-            <span>{{ creatingSuite ? '创建中' : '套题模式' }}</span>
-          </button>
-        </div>
-      </div>
 
+    <h2 class="overview-section-title">分篇练习</h2>
+    <div class="category-grid" id="category-overview">
       <div
         v-for="entry in readingCategoryEntries"
         :key="entry.category"
@@ -46,13 +38,13 @@
         <div class="category-header">
           <div class="category-icon" aria-hidden="true">{{ entry.category }}</div>
           <div>
-            <div class="category-title">{{ entry.category }} 阅读</div>
-            <div class="category-meta">{{ entry.total }} 篇</div>
+            <div class="category-title">{{ passageNames[entry.category] || entry.category }}</div>
+            <div class="category-meta">{{ entry.total }} 篇题目</div>
           </div>
         </div>
         <div class="category-actions">
           <button
-            class="btn"
+            class="btn-text"
             type="button"
             data-action="browse-category"
             :data-category="entry.category"
@@ -80,6 +72,8 @@
 </template>
 
 <script setup>
+const passageNames = { P1: '第一篇 · Passage 1', P2: '第二篇 · Passage 2', P3: '第三篇 · Passage 3' }
+
 defineProps({
   activeView: { type: String, required: true },
   readingCategoryEntries: { type: Array, required: true },
