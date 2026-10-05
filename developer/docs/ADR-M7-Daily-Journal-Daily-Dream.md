@@ -4,6 +4,8 @@
 状态：Accepted
 基线：`IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md` 第 M7 章（行 8190-8393）
 
+> **2026-10-05 修订**：daily dream 的 proposal 生成（sidecar `dream.daily`、候选写入）已移除，daily 只做确定性日记摘要；记忆整合只在 weekly。以 [v1.4 Amendment](IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.4_Amendment.md) 第 2.1 / 4 节为准。
+
 ## Context
 
 M6 Reading+Coach 闭环成立后，引入「做梦」机制。M7 的 Daily 不是无限追加的聊天总结，而是：一天的 deterministic facts + 一天的 candidate/memory changes + 一天的 learner-state delta → versioned journal → bounded daily consolidation proposal。M7 必须保证用户每天能看到「今天做了什么 / 发生了什么变化 / 系统有哪些待验证观察」，而不是一段无证据的「AI 日记」。

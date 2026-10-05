@@ -4,6 +4,8 @@
 状态：Accepted
 基线：`IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md` 第 M8 章（行 8396-8666）
 
+> **2026-10-05 修订**：weekly 调度已改为仅本地周末、自上次完成起的窗口（≤28 天）、有界重试，幂等键为周末所在 ISO 周，不再是“上一个已完成 ISO 周”。以 [v1.4 Amendment](IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.4_Amendment.md) 第 2.3 节为准。
+
 ## Context
 
 M7 Daily Dream 完成后，引入跨题型/跨文章/跨时间的可证伪学习模式发现。这是 TechSpar Stage 3 对我们价值最大的部分：从分散低层 observation/memory 发现 cross-scope pattern。但必须比 TechSpar 更强地保留 evidence identity、并发安全和 promotion gate。M8 是 Python orchestration / Rust promotion gate。

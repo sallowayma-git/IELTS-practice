@@ -57,3 +57,12 @@ M4 已验证任务书规定的 vertical slice 合同，但并行 M3 尚未形成
 ## Round 3 Post-Audit Addendum（2026-08-31）
 
 本报告的历史测试数字仅是当时的阶段证据，不代表当前全仓产品状态。Learner Model 是确定性派生投影，不是心理测量真值；默认 feature flag、真实生产调用链和 M6 产品 Go/No-Go 均需按当前代码、限制和 [Round 3 审计报告](PLAN_V1.3_ADVERSARIAL_AUDIT_ROUND3_REPORT.md) 单独判断。
+
+## 生产读取整改验收（2026-10-02）
+
+本次修复范围与限制见[ADR-M4-01](ADR-M4-01-Learner-Model-v1.md)：M2/M4读取freshness、同用户数据及referenceAt隔离、priority游标、同事务typed gateway、learner Rust/Python双向wire。没有启用Python Coach生产编排，不解除M6 No-Go，corpus与Context合同仍待下一批。
+
+- `learner_model` 11/11、`cognitive_read` 2/2、`learning_observations` 11/11；包含真实作答后不手工rebuild的读取与晚失败回滚、热读无写入和真实serde输出Python消费。
+- Coach专项16/16；完整Python432项随静态套件通过。
+- 按顺序执行static29/29（08:28:40 UTC）→重建packaged18/18（08:30:38 UTC）；release binary SHA256 `279c928291a89741c6e8d43f65afe5426d09118e513812ec9d7c0e3e9b2f9686`。打包回归只证明既有shipping流程未回归，不替代新增learner的DB/互操作专项。
+- 本批无UI代码修改，未重跑完整visual17项；保留默认关闭的learner route/flag。核验仍是全量，未进行大规模性能门或冻结跨页快照验收。

@@ -2,6 +2,8 @@
 
 > **冻结历史合同（2026-08-31）**：本 v1.3 文件只保留架构背景、设计决策和历史验收意图，不再作为当前实现状态或下一步执行清单。当前实现事实以代码与测试为准；设计文档冲突按 **Round 3 审计附录 > Accepted ADR > Stage Gate Report > 本文件** 处理。请从 [`developer/docs/INDEX.md`](INDEX.md) 进入当前权威入口；Post-M12 工作必须新建版本文件，禁止继续改写本文件。
 
+> **v1.4 修订案取代本文件的下列条款 —— 见 [`IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.4_Amendment.md`](IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.4_Amendment.md)**：§11.2 Level 1 会话结束 LLM 调用（移除）、§11.12 Dream 成本控制（由修订案第 2 节取代）、§14.14 / §18.2 Agent 工作台与 M12 UI（降为开发者界面）、§18.3–18.4 与 M9 Memory Center（由札记页取代）、§18.6 与 §25.4 D-06 Dream 逐条审批（改为低风险自动生效 + 事后撤销）、§16 与 M10–M12 应用内 shadow/canary（仅开发者侧，不随产品发布）。实现状态以修订案第 1 节为准。
+
 ## Deep Research 与工程落地总计划
 
 > **v1.3 Post-M2 / Python-first Retrieval Revision — 2026-08-12**  

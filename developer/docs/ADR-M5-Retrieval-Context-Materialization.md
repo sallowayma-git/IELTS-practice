@@ -61,6 +61,15 @@ TechSpa 的 `llm_update_profile()` 调 `index_session_memory()` 丢失 session p
 - **Eval 是合成语料基线**：`developer/tests/retrieval_eval/golden_corpus.json`（20 chunks）不依赖真实 provider。证明了 lexical+RRF pipeline 的 soundness，不证明 semantic retrieval 不必要。
 - **Cosine 路径未实测向量**：`planner._embedding_cosine` 读 `embeddings` 表 float32 BLOB，但表在 provider 未接时为空；路径可用但未被 eval 触发。
 - **Rerank 默认 off**：`RetrievalRunConfig.enable_rerank=False`，与 embedding 同样待 eval 证明价值。
+- **生产闭环仍未验收**：canonical Coach 输入、可信 host run → snapshot → invocation 归属及真实调用写入尚待接线；有 trace schema 不等于有调用审计。
+
+## 2026-10-02 合同整改
+
+- Rust camelCase corpus DTO 是 wire 权威，Python 入口使用 closed/strict DTO 再转成既有索引模型；`reading_asset/writing_topic` 是资产类别，内部统一为 `curated` 数据，不能当 system 指令；`normal` 转为本地 `internal`，不是 public。`sourceVersion` 必须整数。manifest 版本标签仅指 schema/chunking，内容新鲜度仍逐块检查 hash。
+- export 参数为 `query: {cursor, limit}`，分页共用 deadline 起点。同步的块/lexical mirror/向量变更使用一个 savepoint；分页失败、重复 ID、循环 cursor、数量与 manifest 不一致都回滚，不 prune 旧索引。失败审计单独保留；hash 漂移删除旧向量，空正文清理旧 lexical mirror。
+- ContextPlan 的所有层级使用 camelCase。每个 ID 只属于最高优先级的一个 section，ranked/section ID 集合严格一致；拒绝重复及 caller-supplied Soul。
+- Rust 从同次 canonical fetch 渲染 JSON 引用的正文，完整 render（含 section/metadata 开销）参与估算、hash 和 snapshot。请求总预算受 32000 上限约束；section 预算超出时舍弃可选区，CurrentTask/Soul 不可丢弃。零预算保持历史默认上限语义。估算是四个 Unicode scalar/单位，不声称等同 provider tokenizer。
+- Webview/sidecar 只能请求 public/internal，不能用 scope 字符串自行获得 restricted/private 权限。内部 trusted service 保留分级授权行为；snapshot rank 原样持久化，section 回读按固定优先级排序，时间采用合法 RFC3339。
 
 ## Consequences
 

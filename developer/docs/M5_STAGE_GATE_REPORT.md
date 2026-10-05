@@ -80,3 +80,13 @@ Frozen query 覆盖任务书行 7817-7828 全部 9 类：exact question/attempt 
 ## Round 3 Post-Audit Addendum（2026-08-31）
 
 本报告只证明 Python retrieval、Rust materialization、trace schema 和合成 eval 合同通过；embedding provider、真实向量评测、rerank 默认启用和生产调用链仍受“诚实限制”约束。Context Chain 是否端到端运行不能由本报告的合成数据结果推断，详见 [Round 3 审计报告](PLAN_V1.3_ADVERSARIAL_AUDIT_ROUND3_REPORT.md)。
+
+## 2026-10-02 产品链路整改：corpus / Context 基础纵切
+
+本次修复真实 wire 错配、索引失败部分提交、目录头冒充正文、调用方 scope 自授权及 snapshot rank 丢失；不代表 M6 产品级 Go，不启用 canary/embedding，也不宣称 Coach/model trace 已闭环。
+
+- application Context 专项 15/15；SQLite corpus 5/5、snapshot 5/5；Python 全套 439 项通过。
+- 双向 wire 回归来自真实 Rust SQLite 导出/序列化，Python 实际同步→检索→规划，再由 Rust 解码分页 query 与 ContextPlan；资产 fixture 是临时 DB 及 payload，不冒充真实用户/provider 验收。
+- 反例覆盖第二页失败保留 chunks/lexical/embeddings、导出数量不符拒绝 prune、重复/cursor 环、hash 漂移失效、等长正文漂移、完整 render exact budget 边界、总/section 截断、caller scope 提权拒绝、错误零写入及 item 插入失败事务回滚。
+- 独立复核发现 RELEASE 失败可被错误审计误提交，主代理已将提交失败纳入完整 rollback，并补 SQLite authorizer 一次性拒绝 RELEASE 的故障注入测试（corpus Python 专项 11/11）。
+- CI 已纳入 corpus 双向测试与 ContextMaterializer 专项；修后按顺序 static 30/30（2026-10-02 09:06:39 UTC，包含 Python 439 项）→ packaged Tauri E2E 18/18（09:08:42 UTC）通过。真实重建 binary SHA256 `5e870c89384ab79257ff41b2fcab8be9bc41f83f40f72548d30867cd1f640606`。本批无 UI 修改，未另跑完整 17 项视觉套件；不沿用第一批视觉回执。

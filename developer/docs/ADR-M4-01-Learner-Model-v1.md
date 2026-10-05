@@ -58,4 +58,14 @@ Scheduler 按任务书的 weakness、uncertainty、overdue、recency gap 权重�
 
 ## 结果
 
+### 2026-10-02 生产读取整改
+
+状态与复习需求读取先修复M2，再在单一M4事务内检查M2未变、verify/rebuild/reverify后返回；失败不返回旧成功快照。纯verify预测首次builtin mapping且逐行比较skill observations，不再只核对数量。热读不重复写投影，不把重建放入作答提交事务；仍是全量确定性核验，尚未引入增量缓存或宣称大规模性能门通过。
+
+桌面生产快照固定当前用户`local`，admin全量投影保留其他用户；referenceAt按用户计算，避免别人的新证据影响本用户hash。独立review分页保持priority降序，以`afterSkillKey`在当前排序结果定位；游标不再字典过滤，若anchor已消失则要求重启分页。证据在跨页期间改变时仍应重新读取，未承诺冻结式跨页快照。
+
+Python gateway使用typed `LearnerSkillSnapshot`，state与needs在同一事务内、同一用户和同一skill page产生，state分页元数据适用于二者；needs在该页内按priority排序，不能把首个skill页当作全库top-priority集合。修复失败是host error，不伪装成空needs。Coach消费`query.skillKeys`及`states[].skillKey/masteryMean`，保持Rust deny_unknown_fields，不引入旧字段别名。本整改不启用Python Coach dispatch、不解除M6 No-Go，不改变默认关闭的Vue flag。
+
+互操作回归由真实SQLite提交构造Rust snapshot，经serde序列化stdin直接喂`developer/tests/ci/learner_wire_probe.py`；Python实际learner请求再由Rust DTO反序列化。该测试纳入已有learner_model集成套件，不能用两份手写mock替代。
+
 M4 的最小完整 vertical slice 已落地：schema → deterministic projection → weighted state → scheduler → bounded Tauri read → feature-gated Vue surface → replay/integration/static checks。M3 并行工作树中的合同失败和 E2E 系统剪贴板失败均不属于 M4 代码路径，已记录在 session progress 中，未通过回滚处理。

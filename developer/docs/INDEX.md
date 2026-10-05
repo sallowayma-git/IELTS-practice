@@ -1,8 +1,12 @@
 # IELTS Atlas 工程文档入口
 
-更新时间：2026-08-31
+更新时间：2026-10-05
 
 这是当前工程文档的入口。`IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md` 已冻结为历史合同，不再承担状态板职责。
+
+## v1.4 修订案（2026-10-05）
+
+[v1.4 Amendment](IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.4_Amendment.md) 定点取代 v1.3 的部分条款，不重写 v1.3：状态实况与迁移清单（0001–0026）、成本模型（仅架构）、产品/UI 决策、被取代条款对照、开放事项。对它第 4 节列出的被取代条款，以修订案为准；代码与测试仍高于任何文档。
 
 ## 权威顺序
 
@@ -26,7 +30,7 @@
 | M6 Coach | [ADR-M6](ADR-M6-Reading-Coach-Closed-Loop.md) | [M6 gate](M6_STAGE_GATE_REPORT.md) | `0017_coach_learning_feedback.sql` | `crates/ielts-application/src/coach.rs`, `crates/ielts-application/src/learning_tools.rs` |
 | M7 Journal + Daily Dream | [ADR-M7](ADR-M7-Daily-Journal-Daily-Dream.md) | [M7 gate](M7_STAGE_GATE_REPORT.md) | `0018_daily_journal_jobs.sql` | `crates/ielts-db/src/journal.rs`, `crates/ielts-db/src/background_jobs.rs` |
 | M8 Weekly Dream + Consolidation | [ADR-M8](ADR-M8-Weekly-Dream-Consolidation.md) | [M8 gate](M8_STAGE_GATE_REPORT.md) | `0019_memory_consolidation_v1.sql` | `crates/ielts-db/src/consolidation.rs`, `src-tauri/src/commands/journal.rs` |
-| M9 Memory Center | [ADR-M9](ADR-M9-Memory-Center-Evidence-UX.md) | [M9 gate](M9_STAGE_GATE_REPORT.md) | uses M14/M19 data | `apps/writing-vue/src/views/MemoryCenterPage.vue`, `apps/writing-vue/src/api/memory-repository.js` |
+| M9 Memory Center | [ADR-M9](ADR-M9-Memory-Center-Evidence-UX.md) | [M9 gate](M9_STAGE_GATE_REPORT.md) | uses M14/M19 data | `apps/writing-vue/src/views/NotebookPage.vue`（v1.4 起取代 Memory Center UI）, `apps/writing-vue/src/api/memory-repository.js` |
 | M10 Teaching Strategy | [ADR-M10](ADR-M10-Teaching-Strategy-Evolution.md) | [M10 gate](M10_STAGE_GATE_REPORT.md) | `0020_teaching_strategy_evolution.sql` | `crates/ielts-db/src/teaching_strategy.rs`, `src-tauri/src/commands/teaching_strategy.rs` |
 | M11 Prompt + Skill Eval | [ADR-M11](ADR-M11-Prompt-Skill-Eval-Evolution.md) | [M11 gate](M11_STAGE_GATE_REPORT.md) | `0021_prompt_skill_evolution.sql` | `crates/ielts-db/src/prompt_skill.rs`, `agent-runtime-python/src/ielts_agent/eval/` |
 | M12 Threads + Planner | [ADR-M12](ADR-M12-Agent-Threads-Planner-Controlled-Actions.md) | [M12 gate](M12_STAGE_GATE_REPORT.md) | `0022_agent_threads_planner.sql` | `crates/ielts-db/src/agent_threads.rs`, `src-tauri/src/commands/agent_thread.rs` |
