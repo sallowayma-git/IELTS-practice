@@ -6179,39 +6179,6 @@
       ]
     }
   },
-  "p2-high-192": {
-    "examId": "p2-high-192",
-    "dataKey": "p2-high-192",
-    "script": "./p2-high-192.js",
-    "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 3.5,
-    "path": "三月/4.P2 次高频/",
-    "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ]
-    }
-  },
   "p2-medium-209": {
     "examId": "p2-medium-209",
     "dataKey": "p2-medium-209",
@@ -6275,72 +6242,6 @@
       ],
       "sentence-completion": [
         "text_entry"
-      ]
-    }
-  },
-  "p2-low-051": {
-    "examId": "p2-low-051",
-    "dataKey": "p2-low-051",
-    "script": "./p2-low-051.js",
-    "title": "The dingo debate 澳洲野犬_澳洲野狗",
-    "category": "P2",
-    "frequency": "低频",
-    "difficultyScore": null,
-    "path": "三月/4.P2 次高频/",
-    "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b008.p2-064.the-dingo-debate",
-    "questionTypes": [
-      "matching-information",
-      "matching-features",
-      "sentence-completion"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ],
-      "sentence-completion": [
-        "text_entry"
-      ]
-    }
-  },
-  "p2-medium-058": {
-    "examId": "p2-medium-058",
-    "dataKey": "p2-medium-058",
-    "script": "./p2-medium-058.js",
-    "title": "Who wrote Shakespeare's plays 莎士比亚",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 4,
-    "path": "三月/4.P2 次高频/",
-    "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
       ]
     }
   },
@@ -7573,6 +7474,22 @@
   }
 };
 
+  // Released duplicates of one passage. A retired ID keeps resolving to the
+  // entry that superseded it, but only canonical entries are listed.
+  const RETIRED_EXAM_IDS = {
+    "p2-high-192": "p2-low-104",
+    "p2-low-051": "p2-low-140",
+    "p2-medium-058": "p2-low-147"
+  };
+  Object.keys(RETIRED_EXAM_IDS).forEach(function aliasRetiredExam(id) {
+    Object.defineProperty(manifest, id, { value: manifest[RETIRED_EXAM_IDS[id]], enumerable: false });
+  });
+
+  function resolveReadingExamId(id) {
+    const key = id == null ? '' : String(id);
+    return Object.prototype.hasOwnProperty.call(RETIRED_EXAM_IDS, key) ? RETIRED_EXAM_IDS[key] : key;
+  }
+
   function clonePathRoot() {
     return Object.assign({}, PATH_ROOT);
   }
@@ -7619,6 +7536,8 @@
   }
 
   global.__READING_EXAM_MANIFEST__ = manifest;
+  global.__READING_EXAM_ALIASES__ = Object.freeze(Object.assign({}, RETIRED_EXAM_IDS));
+  global.resolveReadingExamId = resolveReadingExamId;
   global.__READING_EXAM_INDEX__ = buildReadingExamIndex();
   global.__READING_EXAM_INDEX__.pathRoot = clonePathRoot();
   global.__READING_EXAM_PATH_ROOT__ = clonePathRoot();

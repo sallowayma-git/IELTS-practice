@@ -19,9 +19,21 @@
     const normalizeSortMode = (value) => sortModes.has(String(value || '').trim()) ? String(value).trim() : 'default';
     const byId = (id) => document.getElementById(id);
 
+    // Favorites saved under a retired catalog ID follow the passage's current ID.
+    function currentFavoriteKey(key) {
+        if (typeof global.resolveReadingExamId !== 'function') return key;
+        try {
+            const parts = JSON.parse(key);
+            if (!Array.isArray(parts) || parts.length !== 3) return key;
+            return JSON.stringify([parts[0], parts[1], global.resolveReadingExamId(parts[2])]);
+        } catch (_) {
+            return key;
+        }
+    }
+
     function readFavorites(preferences) {
         return new Set(Object.entries(preferences && preferences.readingFavorites || {})
-            .filter(([, value]) => value === true).map(([key]) => key));
+            .filter(([, value]) => value === true).map(([key]) => currentFavoriteKey(key)));
     }
 
     function ready() {

@@ -72,11 +72,13 @@
     function buildExamResolver(exams) {
         const catalog = (Array.isArray(exams) ? exams : []).filter(exam => exam && exam.type === 'reading');
         const path = value => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        // Re-imports may change only the case or spacing of a saved title.
+        const title = value => String(value || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
         const aliases = item => {
             const metadata = object(item.metadata);
             return [
                 ['id', item.examId || metadata.examId || item.id],
-                ['title', item.title || item.examTitle || metadata.examTitle],
+                ['title', title(item.title || item.examTitle || metadata.examTitle)],
                 ...['path', 'examPath', 'resourcePath', 'legacyPath'].map(field => ['path', path(item[field])]),
                 ...['filename', 'examFile', 'examFilename', 'pdfFilename', 'legacyFilename'].map(field => ['file', path(item[field])])
             ].filter(([, value]) => value).map(([kind, value]) => JSON.stringify([kind, value]));

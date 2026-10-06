@@ -489,8 +489,11 @@
         return template.innerHTML;
     }
 
-    async function loadReadingExplanationPayload(examId) {
-        if (!examId) return null;
+    async function loadReadingExplanationPayload(savedExamId) {
+        if (!savedExamId) return null;
+        // Words saved from a retired catalog ID use the passage's current explanations.
+        const examId = typeof global.resolveReadingExamId === 'function'
+            ? global.resolveReadingExamId(savedExamId) : savedExamId;
 
         const expRegistry = getExplanationRegistry();
         const isExamPage = typeof window !== 'undefined' && window.location && window.location.pathname.includes('/reading-exams/');

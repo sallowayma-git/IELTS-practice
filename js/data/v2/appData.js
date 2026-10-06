@@ -644,6 +644,33 @@
         return jsonValue(joined, 'practice full projection');
     }
 
+    // A retired catalog ID names the same passage as its canonical entry.
+    // Stored records keep what was saved; reads present the current ID.
+    function withCurrentExamIds(record) {
+        const resolve = global.resolveReadingExamId;
+        if (!record || typeof record !== 'object' || typeof resolve !== 'function') return record;
+        const renamed = (item) => {
+            if (!item || typeof item !== 'object') return item;
+            const metadata = asObject(item.metadata);
+            const examId = item.examId ? resolve(item.examId) : item.examId;
+            const metadataExamId = metadata.examId ? resolve(metadata.examId) : metadata.examId;
+            if (examId === item.examId && metadataExamId === metadata.examId) return item;
+            const next = Object.assign({}, item, { examId });
+            if (hasOwn(item, 'metadata')) next.metadata = Object.assign({}, metadata, { examId: metadataExamId });
+            return next;
+        };
+        let result = renamed(record);
+        for (const field of ['suiteEntries', 'suiteEntrySummaries']) {
+            if (!Array.isArray(record[field])) continue;
+            const entries = record[field].map(renamed);
+            if (entries.some((entry, index) => entry !== record[field][index])) {
+                if (result === record) result = Object.assign({}, record);
+                result[field] = entries;
+            }
+        }
+        return result;
+    }
+
     function projectDetail(record) { return joinPracticeRecord(splitPracticeRecord(record).summary, splitPracticeRecord(record).detail, null, 'detail'); }
 
     // “什么算真实练习记录”只有一份定义（js/data/practiceRecordSource.js）。
@@ -1003,7 +1030,9 @@
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
-            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'));
+            if (projection === 'light' || projection === 'summary') {
+                return (await resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'))).map(withCurrentExamIds);
+            }
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;
@@ -1013,10 +1042,10 @@
             return asArray(snapshot.practiceSummaries).map(summary => {
                 const id = practiceLayerId(summary);
                 const detail = details.get(id);
-                return joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection);
+                return withCurrentExamIds(joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection));
             }).filter(Boolean);
         },
-        async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
+        async get(recordId, options = {}) { await ready; return withCurrentExamIds(await joinedPractice(String(recordId || ''), options.projection || 'full')); },
         // Positive journal evidence only: retention can remove old receipts, so
         // absence is never proof that an operation did not commit. This read-only
         // reconciliation does not resubmit, clear recovery, or alter sessions.
@@ -1128,11 +1157,11 @@
                     .localeCompare(String(left.date || left.completedAt || left.timestamp || '')))
                 .slice(0, limit);
             return Promise.all(summaries.map(async (summary) => {
-                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return clone(summary);
+                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return withCurrentExamIds(clone(summary));
                 const detail = await kernel.readEntity('practiceDetails', summary.id);
-                return jsonValue(Object.assign({}, clone(summary), {
+                return withCurrentExamIds(jsonValue(Object.assign({}, clone(summary), {
                     questionTypeErrorCounts: questionTypeErrorCounts(detail)
-                }), 'practice insight');
+                }), 'practice insight'));
             }));
         },
         async getStats() { await ready; return computeStats(await kernel.listEntities('practiceSummaries')); },
@@ -3369,6 +3398,16 @@
         }
         return patch;
     }
+    function currentFavoriteIdentity(key) {
+        try {
+            const parts = JSON.parse(key);
+            if (!Array.isArray(parts) || parts.length !== 3 || typeof global.resolveReadingExamId !== 'function') return key;
+            return JSON.stringify([parts[0], parts[1], global.resolveReadingExamId(parts[2])]);
+        } catch (_) {
+            return key;
+        }
+    }
+
     async function setReadingFavorite(identity, favorite, options = {}) {
         const parts = JSON.parse(identity);
         if (!Array.isArray(parts) || parts.length !== 3 || parts[1] !== 'reading'
@@ -3383,7 +3422,13 @@
             const browse = asObject(values.browse);
             const favorites = Object.assign({}, asObject(browse.readingFavorites));
             if (favorite) favorites[identity] = true;
-            else delete favorites[identity];
+            else {
+                // Also clear keys saved under a retired ID of the same passage.
+                const passage = currentFavoriteIdentity(identity);
+                for (const key of Object.keys(favorites)) {
+                    if (currentFavoriteIdentity(key) === passage) delete favorites[key];
+                }
+            }
             const next = Object.assign({}, values, {
                 browse: Object.assign({}, browse, { readingFavorites: favorites })
             });

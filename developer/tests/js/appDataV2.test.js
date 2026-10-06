@@ -1747,7 +1747,51 @@ async function testCompletionEvidenceThroughLightAnalytics() {
     assert.strictEqual(legacy.coverage.missingSuiteChildren, 1);
 }
 
+async function testRetiredExamIdsReadAsCurrentPassage() {
+    const fixture = harness();
+    fixture.sandbox.resolveReadingExamId = (id) => ({ 'retired-id': 'current-id' }[id] || id);
+    await fixture.app.ready;
+    const reading = { type: 'reading', totalQuestions: 4, correctAnswers: 3, answers: { 1: 'A' } };
+    await fixture.app.practice.completeAttempt({
+        operationId: 'retired-single',
+        record: { ...reading, id: 'retired-single', examId: 'retired-id', metadata: { examId: 'retired-id' } }
+    });
+    await fixture.app.practice.completeAttempt({
+        operationId: 'retired-suite',
+        record: { ...reading, id: 'retired-suite', examId: 'suite', type: 'reading-suite', suiteEntries: [
+            { ...reading, examId: 'retired-id' }, { ...reading, examId: 'other-id' }
+        ] }
+    });
+    const stored = fixture.shared.entities.get('practiceSummaries').get('retired-single');
+    assert.strictEqual(stored.data.examId, 'retired-id', 'stored records keep the ID they were saved with');
+    for (const projection of ['light', 'detail', 'full']) {
+        const records = await fixture.app.practice.list({ projection });
+        const single = records.find(record => record.id === 'retired-single');
+        assert.strictEqual(single.examId, 'current-id', `${projection} list reads the current ID`);
+        assert.strictEqual(single.metadata.examId, 'current-id');
+    }
+    assert.strictEqual((await fixture.app.practice.get('retired-single')).examId, 'current-id');
+    const suite = await fixture.app.practice.get('retired-suite');
+    assert.deepStrictEqual(suite.suiteEntries.map(entry => entry.examId), ['current-id', 'other-id']);
+    const light = (await fixture.app.practice.list({ projection: 'light' })).find(record => record.id === 'retired-suite');
+    assert.deepStrictEqual(light.suiteEntrySummaries.map(entry => entry.examId), ['current-id', 'other-id']);
+    const insights = await fixture.app.practice.listInsights({ limit: 10 });
+    assert.strictEqual(insights.find(record => record.id === 'retired-single').examId, 'current-id');
+
+    const preferences = fixture.app.preferences;
+    const retired = JSON.stringify([null, 'reading', 'retired-id']);
+    const current = JSON.stringify([null, 'reading', 'current-id']);
+    const other = JSON.stringify([null, 'reading', 'other-id']);
+    await preferences.setReadingFavorite(retired, true);
+    await preferences.setReadingFavorite(other, true);
+    await preferences.setReadingFavorite(current, false);
+    const favorites = (await preferences.getBrowse()).readingFavorites;
+    assert.strictEqual(favorites[retired], undefined, 'unfavoriting clears a retired ID of the same passage');
+    assert.strictEqual(favorites[other], true);
+}
+
 async function run() {
+    await testRetiredExamIdsReadAsCurrentPassage();
     await testCompletionEvidenceThroughLightAnalytics();
     await testLegacyBrowseGradingUpgrade();
     await testReadingModelUsesLiveVocabularyOwners();
@@ -2425,6 +2469,6 @@ async function run() {
     await cached.app.practice.delete('cached-old');
     assert.strictEqual((await cached.app.practice.list({ projection: 'light' })).length, 0, 'cache cannot resurrect deleted records');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 61 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 62 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

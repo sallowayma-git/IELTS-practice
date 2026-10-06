@@ -115,6 +115,13 @@ test('compatibility accepts any source but rejects ambiguous aliases and invalid
     }).size, 0);
 });
 
+test('a re-imported passage with an unknown ID matches a title differing only in case or spacing', () => {
+    const { state } = harness();
+    const exams = [{ ...exam(), title: 'Marketing and Mind Control 营销心理学' }];
+    const reimported = record('reimported', { examId: 'never-listed', title: 'Marketing  and mind control 营销心理学' });
+    assert.equal(state.buildIndex([reimported], { exams }).get(state.completionIdentity(exam(), true)).percentage, 50);
+});
+
 test('untyped records count only through a catalog match on every rebuild path', () => {
     const { window, context, state } = harness();
     vm.runInContext(source('views/legacyViewBundle.js'), context);
