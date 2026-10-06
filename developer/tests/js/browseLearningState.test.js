@@ -44,26 +44,26 @@ test('draft, interruption, demo, ungradable and missing-score records cannot rep
     assert.equal(state.buildIndex(invalid).size, 0);
 });
 
-test('provenance and exam identity isolate identical IDs and titles; unknown legacy provenance stays unattempted', () => {
+test('completion uses exam ID regardless of missing, default or custom provenance', () => {
     const { state } = harness();
     const index = state.buildIndex([
         record('default'), record('custom', { metadata: { libraryConfigurationId: 'custom' }, correctAnswers: 9 }),
         record('legacy', { metadata: {}, completedAt: '2026-09-09', correctAnswers: 10 })
     ]);
-    assert.equal(index.size, 2);
-    assert.equal(index.get(state.identity(exam(), true)).percentage, 50);
-    assert.equal(index.get(state.identity(exam('p1', 'custom'), true)).percentage, 90);
-    assert.equal(state.identity({ ...exam(), libraryConfigurationId: undefined }, true), null);
-    assert.equal(state.buildIndex([record('legacy', { metadata: {} })]).size, 0);
+    assert.equal(index.size, 1);
+    assert.equal(index.get(state.completionIdentity(exam(), true)).percentage, 100);
+    assert.equal(state.completionIdentity(exam('p1', 'custom'), true), state.completionIdentity(exam(), true));
+    assert.equal(state.buildIndex([record('legacy', { metadata: {} })]).size, 1);
+    assert.equal(state.completionIdentity({ type: 'reading' }, true), null);
 });
 
-test('suite entries keep their own source, score and completion time without copying parent totals', () => {
+test('suite entries keep their own exam ID, score and completion time without copying parent totals', () => {
     const { state } = harness();
     const suite = record('suite', {
         examId: 'p1', completedAt: '2026-09-05', correctAnswers: 30, totalQuestions: 30,
         suiteEntrySummaries: [
             record('child', { completedAt: '2026-09-02', correctAnswers: 3 }),
-            record('other-library', { examId: 'p1', metadata: { libraryConfigurationId: 'other' }, correctAnswers: 8 }),
+            record('other-library', { examId: 'p3', metadata: { libraryConfigurationId: 'other' }, correctAnswers: 8 }),
             record('unknown-score', { examId: 'p2', browseScore: { earned: null, possible: 10 } })
         ]
     });
@@ -71,8 +71,62 @@ test('suite entries keep their own source, score and completion time without cop
     assert.equal(index.size, 2);
     assert.equal(index.get(state.identity(exam(), true)).percentage, 30);
     assert.equal(index.get(state.identity(exam(), true)).timestamp, Date.parse('2026-09-02'));
-    assert.equal(index.get(state.identity(exam('p1', 'other'), true)).percentage, 80);
+    assert.equal(index.get(state.completionIdentity(exam('p3', 'other'), true)).percentage, 80);
     assert.equal(index.has(state.identity(exam('p2'), true)), false);
+});
+
+test('catalog restores legacy IDs, titles and suite children without changing history', () => {
+    const { window, context, state } = harness();
+    vm.runInContext(source('views/legacyViewBundle.js'), context);
+    const exams = [{ ...exam(), title: 'Termite Mounds 白蚁丘' }, exam('p2')];
+    const legacy = record('legacy', { metadata: {}, examId: 'old-id',
+        title: exams[0].title, type: undefined });
+    const before = JSON.stringify(legacy);
+    const options = { exams };
+    const prepared = window.prepareBrowseCompletionIndex([legacy], options);
+    window.commitBrowseCompletionIndex(prepared);
+    assert.equal(window.getBrowseLearningStatus(exams[0]).percentage, 50);
+    assert.equal(window.LegacyExamListView.prototype._getCompletionStatus(exams[0]).wrong, true);
+    assert.deepEqual(state.filter(exams, { learningState: 'completed' }, new Set(),
+        window.getBrowseLearningStatus), [exams[0]]);
+    assert.equal(JSON.stringify(legacy), before);
+    const suite = record('suite', { metadata: {}, type: 'reading-suite', suiteEntrySummaries: [
+        record('child', { metadata: {}, examId: 'p2', correctAnswers: 8 })
+    ] });
+    assert.equal(state.buildIndex([suite], options).get(state.identity(exam('p2'), true)).percentage, 80);
+    const retake = record('retake', { completedAt: '2026-09-03', correctAnswers: 10 });
+    assert.equal(state.buildIndex([legacy, retake], options).get(state.identity(exam(), true)).wrong, false);
+});
+
+test('compatibility accepts any source but rejects ambiguous aliases and invalid grades', () => {
+    const { state } = harness();
+    const legacy = record('legacy', { metadata: {}, examId: 'obsolete', title: 'Shared' });
+    const exams = [{ ...exam(), title: 'Shared' }, { ...exam('p2'), title: 'Shared' }];
+    const index = state.buildIndex([legacy], { exams });
+    assert.equal(index.has(state.completionIdentity(exam(), true)), false);
+    assert.equal(index.has(state.completionIdentity(exam('p2'), true)), false);
+    assert.equal(state.buildIndex([legacy], { exams: [exams[0]] })
+        .get(state.completionIdentity(exam(), true)).percentage, 50);
+    assert.equal(state.buildIndex([record('legacy', { metadata: {} })], {
+        exams: [exam('p1', 'custom')]
+    }).get(state.completionIdentity(exam('p1', 'custom'), true)).percentage, 50);
+    assert.equal(state.buildIndex([record('legacy', { metadata: {}, status: 'interrupted' })], {
+        exams: [exam()]
+    }).size, 0);
+});
+
+test('untyped records count only through a catalog match on every rebuild path', () => {
+    const { window, context, state } = harness();
+    vm.runInContext(source('views/legacyViewBundle.js'), context);
+    const untyped = record('untyped', { type: undefined, metadata: {} });
+    const unknown = record('unknown', { type: undefined, metadata: {}, examId: 'not-in-catalog' });
+    assert.equal(state.buildIndex([untyped]).size, 0);
+    assert.equal(state.buildIndex([unknown], { exams: [exam()] }).size, 0);
+    const getCardStatus = window.LegacyExamListView.prototype._getCompletionStatus;
+    window.rebuildBrowseCompletionIndex([untyped]);
+    assert.equal(getCardStatus(exam()), null);
+    window.rebuildBrowseCompletionIndex([untyped], { exams: [exam()] });
+    assert.equal(getCardStatus(exam()).percentage, 50);
 });
 
 test('latest ordering ignores migration updates, rejects missing time and deterministically resolves equal timestamps', () => {
@@ -91,7 +145,7 @@ test('latest ordering ignores migration updates, rejects missing time and determ
 
 test('favorite AND single learning state composes within the input scope and excludes listening when active', () => {
     const { state } = harness();
-    const exams = [exam(), exam('p2'), exam('p1', 'other'), { ...exam('l1'), type: 'listening' }];
+    const exams = [exam(), exam('p2'), exam('p3', 'other'), { ...exam('l1'), type: 'listening' }];
     const index = state.buildIndex([record()]);
     const getStatus = (item) => index.get(state.identity(item, true));
     const favorites = new Set([state.identity(exam('p2'), true), state.identity(exam(), true)]);
@@ -175,7 +229,7 @@ test('retrying failed preference hydration cannot overwrite an explicit reset', 
     assert.equal(window.BrowseLearningControls.filter(exams), exams);
 });
 
-test('cards and filters share the accepted provenance-scoped completion projection', () => {
+test('cards and filters share the accepted exam-ID completion projection', () => {
     const { window, context } = harness();
     vm.runInContext(source('views/legacyViewBundle.js'), context);
     const prepared = window.prepareBrowseCompletionIndex([record(), record('ungradable', {
@@ -185,7 +239,7 @@ test('cards and filters share the accepted provenance-scoped completion projecti
     window.commitBrowseCompletionIndex(prepared);
     const getCardStatus = window.LegacyExamListView.prototype._getCompletionStatus;
     assert.equal(getCardStatus(exam()).percentage, 50);
-    assert.equal(getCardStatus(exam('p1', 'other')), null);
+    assert.equal(getCardStatus(exam('p1', 'other')).percentage, 50);
     assert.equal(window.getBrowseLearningStatus(exam()).wrong, true);
     window.rebuildBrowseCompletionIndex([record('retake', { correctAnswers: 10 })]);
     assert.equal(getCardStatus(exam()).percentage, 100);

@@ -26,6 +26,12 @@
         return id && source.known ? JSON.stringify([source.id, 'reading', String(id)]) : null;
     }
 
+    function completionIdentity(record, isExam = false) {
+        const metadata = object(record && record.metadata);
+        const id = isExam ? record && record.id : record && (record.examId || metadata.examId);
+        return id ? JSON.stringify([null, 'reading', String(id)]) : null;
+    }
+
     function number(value) {
         return (typeof value === 'number' || (typeof value === 'string' && value.trim()))
             && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -66,8 +72,45 @@
         return 0;
     }
 
-    function buildIndex(records) {
+    function buildExamResolver(exams) {
+        const catalog = (Array.isArray(exams) ? exams : []).filter(exam => exam && exam.type === 'reading');
+        const path = value => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        const aliases = item => {
+            const metadata = object(item.metadata);
+            return [
+                ['id', item.examId || metadata.examId || item.id],
+                ['title', item.title || item.examTitle || metadata.examTitle],
+                ...['path', 'examPath', 'resourcePath', 'legacyPath'].map(field => ['path', path(item[field])]),
+                ...['filename', 'examFile', 'examFilename', 'pdfFilename', 'legacyFilename'].map(field => ['file', path(item[field])])
+            ].filter(([, value]) => value).map(([kind, value]) => JSON.stringify([kind, value]));
+        };
+        const map = new Map();
+        for (const exam of catalog) {
+            const key = completionIdentity(exam, true);
+            if (!key) continue;
+            for (const alias of aliases({ ...exam, examId: exam.id })) {
+                if (!map.has(alias)) map.set(alias, key);
+                else if (map.get(alias) !== key) map.set(alias, null);
+            }
+        }
+        // Completion is cross-library: the exam ID alone identifies an article.
+        // Without a catalog match, an untyped record cannot be proven reading.
+        return (record, requireCatalog = false) => {
+            const values = aliases(record);
+            const idAlias = values.find(value => JSON.parse(value)[0] === 'id');
+            if (idAlias && map.get(idAlias)) return map.get(idAlias);
+            // Older releases may use another exam ID. Accept a unique catalog
+            // alias, while keeping identical titles from guessing between exams.
+            const matches = new Set(values.map(value => map.get(value)).filter(Boolean));
+            if (matches.size === 1) return matches.values().next().value;
+            if (matches.size > 1 || requireCatalog) return null;
+            return completionIdentity(record);
+        };
+    }
+
+    function buildIndex(records, options = {}) {
         const index = new Map();
+        const resolveExam = buildExamResolver(options.exams);
         for (const parent of Array.isArray(records) ? records : []) {
             if (!eligible(parent)) continue;
             const entries = Array.isArray(parent.suiteEntrySummaries) && parent.suiteEntrySummaries.length
@@ -76,8 +119,8 @@
             for (const record of Array.isArray(entries) && entries.length ? entries : [parent]) {
                 if (!record) continue;
                 const type = String(record.type || object(record.metadata).type || parent.type || '').toLowerCase();
-                if (type !== 'reading' && type !== 'reading-suite') continue;
-                const key = identity(record, false, record === parent ? null : parent);
+                if (type && type !== 'reading' && type !== 'reading-suite') continue;
+                const key = resolveExam(record, !type);
                 const value = percentage(record);
                 const time = timestamp(record) || (record !== parent ? timestamp(parent) : 0);
                 if (!key || value === null || !time) continue;
@@ -119,7 +162,7 @@
         });
     }
 
-    global.BrowseLearningState = { identity, provenance, percentage, buildIndex, normalizeSelection, filter };
+    global.BrowseLearningState = { identity, completionIdentity, provenance, percentage, buildIndex, normalizeSelection, filter };
 })(window);
 
 
@@ -4261,7 +4304,7 @@ class VirtualScroller {
         return Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
     }
 
-    function prepareBrowseCompletionIndex(records) {
+    function prepareBrowseCompletionIndex(records, options = {}) {
         var byExamId = new Map();
         var byTitle = new Map();
         var recordSnapshot = ensureArray(records).slice();
@@ -4299,7 +4342,7 @@ class VirtualScroller {
             byExamId: byExamId,
             byTitle: byTitle,
             learningByIdentity: global.BrowseLearningState
-                ? global.BrowseLearningState.buildIndex(recordSnapshot) : new Map(),
+                ? global.BrowseLearningState.buildIndex(recordSnapshot, options) : new Map(),
             records: recordSnapshot,
             ready: true
         };
@@ -4324,8 +4367,8 @@ class VirtualScroller {
         return true;
     }
 
-    function rebuildBrowseCompletionIndex(records) {
-        var preparedIndex = prepareBrowseCompletionIndex(records);
+    function rebuildBrowseCompletionIndex(records, options) {
+        var preparedIndex = prepareBrowseCompletionIndex(records, options);
         commitBrowseCompletionIndex(preparedIndex);
         return preparedIndex;
     }
@@ -4954,7 +4997,7 @@ class VirtualScroller {
 
     function getBrowseLearningStatus(exam) {
         const index = ensureBrowseCompletionIndex();
-        const key = global.BrowseLearningState && global.BrowseLearningState.identity(exam, true);
+        const key = global.BrowseLearningState && global.BrowseLearningState.completionIdentity(exam, true);
         return key && index.learningByIdentity ? index.learningByIdentity.get(key) || null : null;
     }
 
@@ -22275,7 +22318,9 @@ function refreshBrowseProgressFromRecords(
         // anchor snapshot; durable anchor persistence remains downstream of
         // that accepted projection. The completion commit is then one
         // non-throwing assignment.
-        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot);
+        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot, {
+            exams: indexSnapshot
+        });
         if (!isPreparedBrowseCompletionIndex(preparedCompletionIndex)) {
             return false;
         }
@@ -23049,6 +23094,12 @@ async function initializeBrowseView(options = {}) {
         if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return null;
+        }
+
+        // Completion dots come from the practice projection. A cold start that
+        // opens Browse without visiting Practice must still load it once.
+        if (browsePracticeProjectionGeneration === 0) {
+            startPracticeRecordsSyncInBackground('browse-view');
         }
 
         // 初始化 browseController
