@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:01916870c40954c8e4601559c583c4c5fcfabfa463b391efb6efe874213db187",
+  "buildId": "sha256:5984d79a6f74c8ed5441e34147b7b44d83579d24ae2588d909207cdeffc232b6",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -500,7 +500,7 @@
     },
     {
       "path": "assets/generated/reading-exams/reading-practice-unified.html",
-      "sha256": "4712e1488a1791325d7f75bc3d52dab8eb5d03e681e01c6a1e7ddda57fa5fd53"
+      "sha256": "94ec5484235f632530bb0eceadaeb37982dbaf5577667218a6cc6fd7e5416b3f"
     },
     {
       "path": "assets/generated/reading-explanations/manifest.js",
