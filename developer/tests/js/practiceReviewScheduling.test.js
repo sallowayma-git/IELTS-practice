@@ -748,6 +748,82 @@ test('备份合并分别保留最新排程状态和最新作答回放引用', as
     assert(await local.app.practice.get('imported-older'), '导入的历史作答实体仍应保留');
 });
 
+test('备份合并用 lastReviewed 而非 nextReview 比较缺少 updatedAt 的旧排程', async () => {
+    const local = harness();
+    const imported = harness();
+    await Promise.all([local.app.ready, imported.app.ready]);
+
+    await local.app.practice.completeAttempt({ operationId: 'legacy-schedule-seed', record: readingRecord({
+        id: 'legacy-schedule', sessionId: 'legacy-schedule', completedAt: '2026-09-01T00:00:00.000Z',
+        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
+    }) });
+    const localTask = (await local.app.practice.listReviewQueue()).records[0];
+    await local.app.practice.recordReviewOutcome({
+        recordId: localTask.recordId, reviewPlanId: localTask.reviewPlanId,
+        reviewAttemptId: 'legacy-local-review', quality: 'good', reviewedAt: '2026-09-01T01:00:00.000Z'
+    });
+    const localPlans = local.shared.docs.get('practice.reviewPlans');
+    assert.equal(localPlans.data[0].reviewState.nextReview, '2026-09-07T01:00:00.000Z');
+    delete localPlans.data[0].reviewState.updatedAt;
+    localPlans.checksum = checksum(localPlans.data);
+
+    await imported.app.practice.completeAttempt({ operationId: 'current-schedule-seed', record: readingRecord({
+        id: 'current-schedule', sessionId: 'current-schedule', completedAt: '2026-09-02T00:00:00.000Z',
+        date: '2026-09-02T00:00:00.000Z', correctAnswers: 6
+    }) });
+    const importedTask = (await imported.app.practice.listReviewQueue()).records[0];
+    const newerReview = await imported.app.practice.recordReviewOutcome({
+        recordId: importedTask.recordId, reviewPlanId: importedTask.reviewPlanId,
+        reviewAttemptId: 'current-imported-review', quality: 'good', reviewedAt: '2026-09-05T00:00:00.000Z'
+    });
+
+    const snapshot = await imported.app.backups.export();
+    const importPlan = await local.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
+    await local.app.backups.commitImport(importPlan.id);
+
+    const merged = (await local.app.practice.listReviewQueue()).records[0];
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(merged.reviewState)), JSON.parse(JSON.stringify(newerReview.reviewState)),
+        '缺少 updatedAt 的旧状态必须按 lastReviewed 排序，不能把 nextReview 当作变更时间');
+    assert.equal(merged.reviewState.lastReviewAttemptId, 'current-imported-review');
+});
+
+test('备份合并持久化摘要回退完成时间并拒绝随后到达的更旧作答', async () => {
+    const local = harness();
+    const imported = harness();
+    await Promise.all([local.app.ready, imported.app.ready]);
+
+    await local.app.practice.completeAttempt({ operationId: 'fallback-local-seed', record: readingRecord({
+        id: 'fallback-local', sessionId: 'fallback-local', completedAt: '2026-09-01T00:00:00.000Z',
+        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
+    }) });
+    await imported.app.practice.completeAttempt({ operationId: 'fallback-imported-seed', record: readingRecord({
+        id: 'fallback-imported', sessionId: 'fallback-imported', completedAt: '2026-09-05T00:00:00.000Z',
+        date: '2026-09-05T00:00:00.000Z', correctAnswers: 8
+    }) });
+    const importedPlans = imported.shared.docs.get('practice.reviewPlans');
+    delete importedPlans.data[0].latestCompletedAt;
+    importedPlans.checksum = checksum(importedPlans.data);
+
+    const snapshot = await imported.app.backups.export();
+    const importPlan = await local.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
+    await local.app.backups.commitImport(importPlan.id);
+
+    let merged = (await local.app.practice.listReviewQueue()).records[0];
+    assert.equal(merged.recordId, 'fallback-imported');
+    let mergedPlan = await local.app.practice.getReviewTask(merged.id);
+    assert.equal(mergedPlan.latestCompletedAt, '2026-09-05T00:00:00.000Z',
+        '从摘要得到的完成时间必须规范化并持久化');
+
+    await local.app.practice.completeAttempt({ operationId: 'fallback-delayed-older', record: readingRecord({
+        id: 'fallback-delayed-older', sessionId: 'fallback-delayed-older', completedAt: '2026-09-03T00:00:00.000Z',
+        date: '2026-09-03T00:00:00.000Z', correctAnswers: 4
+    }) });
+    merged = (await local.app.practice.listReviewQueue()).records[0];
+    assert.equal(merged.recordId, 'fallback-imported', '合并后到达的旧作答不得回滚 replay 引用');
+    mergedPlan = await local.app.practice.getReviewTask(merged.id);
+    assert.equal(mergedPlan.latestCompletedAt, '2026-09-05T00:00:00.000Z');
+});
+
 test('套题汇总只迁移最新记录引用，子篇作答不重复计数', async () => {
     const { app } = harness(); await app.ready;
     const child = readingRecord({ id: 'child', sessionId: 'child', correctAnswers: 8 });

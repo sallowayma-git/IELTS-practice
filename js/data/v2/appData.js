@@ -852,7 +852,9 @@
                     && !asArray(plan.summary?.suiteEntrySummaries).length);
                 const previous = position >= 0 ? plans[position] : legacyPosition >= 0 ? plans[legacyPosition] : null;
                 const completedAt = validIso(entry.completedAt || entry.timestamp || entry.date) || reviewReferenceTime(summary);
-                if (previous && (previous.recordId === summary.id || completedAt < previous.latestCompletedAt)) return;
+                const previousCompletedAt = reviewPlanCompletionTime(previous);
+                if (previous && (previous.recordId === summary.id
+                    || (previousCompletedAt && completedAt < previousCompletedAt))) return;
                 // Perfect first attempts do not create a task. An existing task
                 // still advances when its latest reattempt reaches full marks.
                 if (!previous && Number(correct) === Number(total)) return;
@@ -2345,21 +2347,40 @@
             || '';
     }
 
+    function reviewPlanScheduleTime(plan, normalizedState) {
+        const row = asObject(plan);
+        const rawState = asObject(row.reviewState);
+        const state = normalizedState || safeReviewState(rawState);
+        if (!state) return '';
+        // Older accepted states may omit updatedAt. normalizeState substitutes
+        // nextReview, but that is a future due date, not a mutation clock.
+        return validIso(rawState.updatedAt)
+            || state.lastReviewed
+            || (state.reviewCount === 0 ? reviewPlanCompletionTime(row) || state.nextReview : '');
+    }
+
     function mergeReviewPlan(existing, incoming) {
         const stored = asObject(existing);
         const imported = asObject(incoming);
         const merged = Object.assign({}, clone(stored), clone(imported));
         const storedState = safeReviewState(stored.reviewState);
         const importedState = safeReviewState(imported.reviewState);
-        const scheduleSource = storedState && (!importedState || storedState.updatedAt > importedState.updatedAt)
+        const storedScheduleTime = reviewPlanScheduleTime(stored, storedState);
+        const importedScheduleTime = reviewPlanScheduleTime(imported, importedState);
+        const scheduleSource = storedState && (!importedState || storedScheduleTime > importedScheduleTime)
             ? stored : imported;
-        const replaySource = reviewPlanCompletionTime(stored) > reviewPlanCompletionTime(imported)
+        const storedCompletionTime = reviewPlanCompletionTime(stored);
+        const importedCompletionTime = reviewPlanCompletionTime(imported);
+        const replaySource = storedCompletionTime > importedCompletionTime
             ? stored : imported;
+        const replayCompletedAt = replaySource === stored ? storedCompletionTime : importedCompletionTime;
 
-        for (const field of ['recordId', 'entryIndex', 'summary', 'latestCompletedAt']) {
+        for (const field of ['recordId', 'entryIndex', 'summary']) {
             if (hasOwn(replaySource, field)) merged[field] = clone(replaySource[field]);
             else delete merged[field];
         }
+        if (replayCompletedAt) merged.latestCompletedAt = replayCompletedAt;
+        else delete merged.latestCompletedAt;
         if (hasOwn(scheduleSource, 'reviewState')) merged.reviewState = clone(scheduleSource.reviewState);
         else delete merged.reviewState;
         return merged;
