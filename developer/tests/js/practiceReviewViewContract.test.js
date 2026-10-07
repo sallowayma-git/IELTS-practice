@@ -310,8 +310,9 @@ test('晚到的组件偏好会补一次重绘，用户显式选择后不再被�
 // 复盘模式只收窄"显示哪些记录"，其余练习历史行为必须完全不变。
 // 这里在 VM 里跑真实的 js/main.js updatePracticeView，只 stub 渲染出口。
 // ---------------------------------------------------------------------------
-function loadPracticeView(queueRecords) {
+function loadPracticeView(queueRecords, options = {}) {
     const renderCalls = [];
+    const delegates = [];
     const historyContainer = { id: 'history-list', innerHTML: '', addEventListener() {}, contains() { return false; } };
     const quietConsole = { log() {}, warn() {}, error() {}, info() {}, debug() {} };
     const elements = new Map();
@@ -333,6 +334,11 @@ function loadPracticeView(queueRecords) {
     };
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
+    if (options.withDomDelegate) {
+        sandbox.window.DOM = {
+            delegate(type, selector, handler) { delegates.push({ type, selector, handler }); }
+        };
+    }
     sandbox.window.location = { origin: 'http://localhost' };
     sandbox.window.addEventListener = () => {};
     sandbox.window.showMessage = () => {};
@@ -374,7 +380,7 @@ function loadPracticeView(queueRecords) {
     // 本测试只观测 updatePracticeView 的过滤/排序结果：把后台记录同步换成 no-op，
     // 避免真实同步管线在断言之后异步重绘，让结果依赖时序。
     sandbox.startPracticeRecordsSyncInBackground = () => {};
-    return { sandbox, renderCalls, lastRender: () => renderCalls[renderCalls.length - 1] };
+    return { sandbox, delegates, renderCalls, lastRender: () => renderCalls[renderCalls.length - 1] };
 }
 
 const VIEW_RECORDS = [
@@ -430,6 +436,31 @@ test('复盘模式遵守考试类型筛选与搜索', async () => {
     harness.sandbox.searchPracticeHistory('逾期');
     harness.sandbox.updatePracticeView(VIEW_RECORDS, []);
     assert.deepStrictEqual(harness.lastRender().ids, ['read-late'], '搜索必须在复盘模式下继续生效');
+});
+
+test('DOM 委托复盘点击使用文章任务 ID，而不是套题父记录 ID', () => {
+    const harness = loadPracticeView([], { withDomDelegate: true });
+    const started = [];
+    harness.sandbox.window.PracticeReviewFlow = { start(taskId) { started.push(taskId); } };
+    harness.sandbox.updatePracticeView([], []);
+
+    const reviewDelegate = harness.delegates.find((entry) => entry.type === 'click'
+        && entry.selector.includes('[data-record-action="review"]'));
+    assert(reviewDelegate, '应注册复盘按钮的 DOM 委托');
+    const event = {
+        prevented: false,
+        stopped: false,
+        preventDefault() { this.prevented = true; },
+        stopPropagation() { this.stopped = true; }
+    };
+    reviewDelegate.handler.call({
+        dataset: { recordId: 'suite-parent', reviewTaskId: 'article:library-b:shared-exam' }
+    }, event);
+
+    assert.deepStrictEqual(started, ['article:library-b:shared-exam'],
+        '同一套题的多篇文章必须按各自 reviewTaskId 启动');
+    assert.equal(event.prevented, true);
+    assert.equal(event.stopped, true);
 });
 
 // ---------------------------------------------------------------------------

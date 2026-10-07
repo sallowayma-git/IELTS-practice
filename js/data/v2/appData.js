@@ -745,9 +745,65 @@
     }
 
     const REVIEW_PLANS_KEY = 'practice.reviewPlans';
+
+    function normalizeReviewLibraryConfigurationId(value) {
+        const id = value === null || value === undefined ? '' : String(value).trim();
+        return id || null;
+    }
+
+    function reviewPlanLibraryConfigurationId(plan) {
+        if (hasOwn(plan, 'libraryConfigurationId')) {
+            return normalizeReviewLibraryConfigurationId(plan.libraryConfigurationId);
+        }
+        const summary = asObject(asObject(plan).summary);
+        const metadata = asObject(summary.metadata);
+        return normalizeReviewLibraryConfigurationId(metadata.libraryConfigurationId);
+    }
+
+    function articleReviewPlanId(libraryConfigurationId, examId) {
+        const libraryId = normalizeReviewLibraryConfigurationId(libraryConfigurationId) || '';
+        return 'article:' + encodeURIComponent(libraryId) + ':' + encodeURIComponent(String(examId || '').trim());
+    }
+
+    function reviewTaskId(plan) {
+        return plan.unit === 'article' ? 'article:' + encodeURIComponent(plan.id) : plan.recordId;
+    }
+
+    function normalizeReviewPlans(value) {
+        let changed = false;
+        const data = asArray(value).map((raw) => {
+            if (!raw || raw.unit !== 'article') return raw;
+            const libraryConfigurationId = reviewPlanLibraryConfigurationId(raw);
+            const id = articleReviewPlanId(libraryConfigurationId, raw.examId);
+            const metadata = asObject(asObject(raw.summary).metadata);
+            const identityChanged = raw.id !== id || !hasOwn(raw, 'libraryConfigurationId')
+                || raw.libraryConfigurationId !== libraryConfigurationId;
+            const summaryChanged = Boolean(raw.summary) && (!hasOwn(metadata, 'libraryConfigurationId')
+                || metadata.libraryConfigurationId !== libraryConfigurationId);
+            if (!identityChanged && !summaryChanged) return raw;
+            changed = true;
+            const plan = clone(raw);
+            plan.id = id;
+            plan.libraryConfigurationId = libraryConfigurationId;
+            if (plan.summary) {
+                plan.summary = Object.assign({}, plan.summary, {
+                    metadata: Object.assign({}, metadata, { libraryConfigurationId })
+                });
+            }
+            return plan;
+        });
+        return { data, changed };
+    }
+
     async function readReviewPlans() {
         const current = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
-        if (current.envelope) return current;
+        if (current.envelope) {
+            const normalized = normalizeReviewPlans(current.data);
+            return Object.assign({}, current, {
+                data: normalized.data,
+                needsIdentityMigration: normalized.changed
+            });
+        }
         // One-time compatibility import; existing record/suite schedules retain
         // their original unit. Subsequent queue reads never load annotations.
         const snapshot = await kernel.readPracticeSnapshot(null, {
@@ -782,13 +838,17 @@
                 });
                 const examId = String(entry.examId || entry.metadata.examId || '').trim();
                 if (!examId) return;
+                const libraryConfigurationId = normalizeReviewLibraryConfigurationId(entry.metadata.libraryConfigurationId);
+                const planId = articleReviewPlanId(libraryConfigurationId, examId);
                 const grading = entries.length ? lightSuiteEntry(raw, 'reading') : summary;
                 const correct = grading.correctAnswers;
                 const total = grading.totalQuestions;
                 let quality;
                 try { quality = practiceReviewScheduler.qualityFromScore(correct, total); } catch (_) { return; }
-                const position = plans.findIndex(plan => plan.unit === 'article' && plan.examId === examId);
+                const position = plans.findIndex(plan => plan.unit === 'article' && plan.examId === examId
+                    && reviewPlanLibraryConfigurationId(plan) === libraryConfigurationId);
                 const legacyPosition = plans.findIndex(plan => plan.unit === 'legacy' && plan.examId === examId
+                    && reviewPlanLibraryConfigurationId(plan) === libraryConfigurationId
                     && !asArray(plan.summary?.suiteEntrySummaries).length);
                 const previous = position >= 0 ? plans[position] : legacyPosition >= 0 ? plans[legacyPosition] : null;
                 const completedAt = validIso(entry.completedAt || entry.timestamp || entry.date) || reviewReferenceTime(summary);
@@ -801,12 +861,13 @@
                     .filter(key => summary[key] !== undefined).map(key => [key, clone(summary[key])]));
                 const recordSummary = Object.assign({}, compact, {
                     examId, title: entry.title || entry.metadata.examTitle || summary.title,
+                    metadata: Object.assign({}, asObject(compact.metadata), { libraryConfigurationId }),
                     totalQuestions: Number(total), correctAnswers: Number(correct),
                     accuracy: Number(correct) / Number(total), percentage: Number(correct) * 100 / Number(total),
                     date: completedAt, duration: Number(entry.duration) || summary.duration
                 });
                 delete recordSummary.suiteEntrySummaries;
-                const plan = { id: examId, unit: 'article', examId, recordId: summary.id,
+                const plan = { id: planId, unit: 'article', examId, libraryConfigurationId, recordId: summary.id,
                     entryIndex: entries.length ? index : null, summary: recordSummary, latestCompletedAt: completedAt,
                     reviewState: foldedChildIds.includes(previous?.recordId) ? state
                         : practiceReviewScheduler.scheduleOutcome(state, quality, completedAt,
@@ -1288,8 +1349,9 @@
             const nowIsoValue = validIso(options.now) || nowIso();
             const now = new Date(nowIsoValue);
             const current = await readReviewPlans();
-            if (!current.envelope) {
-                try { await kernel.mutate([{ logicalKey: REVIEW_PLANS_KEY, data: current.data, expectedRevision: 0 }],
+            if (!current.envelope || current.needsIdentityMigration) {
+                try { await kernel.mutate([{ logicalKey: REVIEW_PLANS_KEY, data: current.data,
+                    expectedRevision: current.envelope?.revision || 0 }],
                     optionsMutationOptions({}, 'review-plan-migration', current.data)); }
                 catch (error) { if (error.code !== 'CONFLICT') throw error; return practice.listReviewQueue(options); }
             }
@@ -1298,9 +1360,10 @@
                 const reviewState = safeReviewState(plan.reviewState);
                 if (!reviewState || !plan.recordId || !plan.summary) continue;
                 records.push(Object.assign({}, clone(plan.summary), {
-                    id: plan.unit === 'article' ? 'article:' + encodeURIComponent(plan.examId) : plan.recordId,
+                    id: reviewTaskId(plan),
                     recordId: plan.recordId, reviewPlanId: plan.id, reviewUnit: plan.unit,
                     reviewExamId: plan.examId, reviewEntryIndex: plan.entryIndex,
+                    reviewLibraryConfigurationId: reviewPlanLibraryConfigurationId(plan),
                     reviewState, wrongCount: reviewWrongCount(plan.summary), isDue: new Date(reviewState.nextReview) <= now
                 }));
             }
@@ -1316,7 +1379,7 @@
             const { data } = await readReviewPlans();
             const id = String(taskId || '');
             const plan = asArray(data).find(row => row.id === id || row.recordId === id
-                || (row.unit === 'article' && 'article:' + encodeURIComponent(row.examId) === id));
+                || reviewTaskId(row) === id);
             return plan ? clone(plan) : null;
         },
         async getReviewState(recordId) {
@@ -2252,6 +2315,9 @@
     }
 
     function collectionIdentity(logicalKey, value) {
+        if (logicalKey === REVIEW_PLANS_KEY && value && value.unit === 'article') {
+            return articleReviewPlanId(reviewPlanLibraryConfigurationId(value), value.examId);
+        }
         if (logicalKey === 'vocab.readingVocabWords') {
             const word = value && (value.word || value.id);
             return word ? String(word).trim().toLowerCase() : idOf(value, ['id', 'word']);
@@ -2459,7 +2525,8 @@
             const plans = asArray(importedPlans === undefined ? (replacePractice ? [] : planCurrent.data) : importedPlans).map(clone);
             const ownerIds = new Set(snapshot.entities.practiceSummaries.map(row => row.recordId));
             const annotations = new Map(snapshot.entities.practiceAnnotations.map(row => [row.recordId, row.data]));
-            const validPlans = plans.filter(plan => ownerIds.has(plan.recordId) && safeReviewState(plan.reviewState));
+            const validPlans = normalizeReviewPlans(plans).data
+                .filter(plan => ownerIds.has(plan.recordId) && safeReviewState(plan.reviewState));
             for (const row of snapshot.entities.practiceSummaries) {
                 const state = safeReviewState(asObject(annotations.get(row.recordId)).reviewState);
                 if (!state || validPlans.some(plan => plan.recordId === row.recordId)

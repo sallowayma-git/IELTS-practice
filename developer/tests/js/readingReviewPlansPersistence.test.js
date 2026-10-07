@@ -30,7 +30,9 @@ test('article plans and practice records commit atomically across real IndexedDB
         await Promise.all([complete(pages[0], 'one', 'reading-one', '01'), complete(pages[1], 'two', 'reading-two', '01')]);
         assert.equal(await pages[0].evaluate(async () => (await AppData.practice.listReviewQueue()).records.length), 2);
         await complete(pages[1], 'redo', 'reading-one', '02', 8);
-        const task = await pages[0].evaluate(() => AppData.practice.getReviewTask('article:reading-one'));
+        const taskId = await pages[0].evaluate(async () => (await AppData.practice.listReviewQueue()).records
+            .find((record) => record.examId === 'reading-one').id);
+        const task = await pages[0].evaluate((id) => AppData.practice.getReviewTask(id), taskId);
         assert.equal(task.recordId, 'redo');
         assert.equal(task.reviewState.reviewCount, 2);
         assert.equal(task.reviewState.lastQuality, 'good');
@@ -43,14 +45,14 @@ test('article plans and practice records commit atomically across real IndexedDB
         });
         await assert.rejects(complete(pages[0], 'aborted', 'reading-one', '03', 9));
         assert.equal(await pages[1].evaluate(() => AppData.practice.get('aborted')), null, 'plan failure rolls back the practice rows');
-        assert.equal((await pages[1].evaluate(() => AppData.practice.getReviewTask('article:reading-one'))).recordId, 'redo');
+        assert.equal((await pages[1].evaluate((id) => AppData.practice.getReviewTask(id), taskId)).recordId, 'redo');
         await pages[1].evaluate(async () => {
             const snapshot = await AppData.backups.export({ domains: ['practice'] });
             await AppData.practice.clear();
             const plan = await AppData.backups.previewImport(snapshot);
             await AppData.backups.commitImport(plan.id);
         });
-        const restored = await pages[1].evaluate(() => AppData.practice.getReviewTask('article:reading-one'));
+        const restored = await pages[1].evaluate((id) => AppData.practice.getReviewTask(id), taskId);
         assert.deepEqual(restored, task, 'practice-scoped export restores the complete article plan');
         assert.equal(await pages[1].evaluate(async () => (await AppData.practice.get('redo')).notes[0].id), 'redo');
     } finally {

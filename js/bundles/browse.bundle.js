@@ -22378,7 +22378,7 @@ function setupPracticeHistoryInteractions() {
         });
 
         window.DOM.delegate('click', '.practice-history-list [data-record-action="review"], #history-list [data-record-action="review"]', function (event) {
-            handleReview(this.dataset.recordId, event);
+            handleReview(this.dataset.reviewTaskId || this.dataset.recordId, event);
         });
 
         window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function (event) {

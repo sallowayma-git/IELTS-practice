@@ -601,6 +601,68 @@ test('同一考试 ID 去重，重做自动评分，满分重做仍推进已有�
     assert.equal((await app.practice.listReviewQueue()).records.length, 0, '删除最新记录同步删除计划');
 });
 
+test('相同考试 ID 在不同题库配置中保留独立计划与任务路由', async () => {
+    const { app, shared } = harness(); await app.ready;
+    const attempt = (id, libraryConfigurationId, day, correctAnswers = 6) => app.practice.completeAttempt({
+        operationId: id,
+        record: readingRecord({
+            id,
+            sessionId: id,
+            correctAnswers,
+            completedAt: `2026-09-${day}T00:00:00.000Z`,
+            date: `2026-09-${day}T00:00:00.000Z`,
+            metadata: { libraryConfigurationId }
+        })
+    });
+
+    await attempt('library-a-first', 'library-a', '01');
+    await attempt('library-b-first', 'library-b', '02');
+    let queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records.length, 2, '跨题库的同名考试不得合并为一条计划');
+    const byLibrary = new Map(queue.records.map((record) => [record.metadata.libraryConfigurationId, record]));
+    const libraryA = byLibrary.get('library-a');
+    const libraryB = byLibrary.get('library-b');
+    assert(libraryA && libraryB, '队列摘要必须保留各自的题库来源');
+    assert.equal(libraryA.recordId, 'library-a-first');
+    assert.equal(libraryB.recordId, 'library-b-first');
+    assert.notEqual(libraryA.reviewPlanId, libraryB.reviewPlanId, '持久化计划 ID 必须包含题库来源');
+    assert.notEqual(libraryA.id, libraryB.id, 'UI 任务 ID 必须能分别路由两条同名计划');
+    assert.equal((await app.practice.getReviewTask(libraryA.id)).recordId, 'library-a-first');
+    assert.equal((await app.practice.getReviewTask(libraryB.id)).recordId, 'library-b-first');
+
+    await attempt('library-a-redo', 'library-a', '03', 8);
+    queue = await app.practice.listReviewQueue();
+    const afterRedo = new Map(queue.records.map((record) => [record.metadata.libraryConfigurationId, record]));
+    assert.equal(afterRedo.get('library-a').recordId, 'library-a-redo', '重做只更新同一题库的计划');
+    assert.equal(afterRedo.get('library-a').reviewState.reviewCount, 2);
+    assert.equal(afterRedo.get('library-b').recordId, 'library-b-first', '另一题库的计划保持不变');
+    assert.equal(afterRedo.get('library-b').reviewState.reviewCount, 1);
+    const plans = shared.docs.get('practice.reviewPlans').data;
+    assert.deepEqual(new Set(plans.map((plan) => plan.libraryConfigurationId)), new Set(['library-a', 'library-b']));
+});
+
+test('旧文章计划从摘要来源迁移为复合 ID', async () => {
+    const { app, shared } = harness(); await app.ready;
+    await app.practice.completeAttempt({
+        operationId: 'legacy-plan-seed',
+        record: readingRecord({ metadata: { libraryConfigurationId: 'library-a' } })
+    });
+    const stored = shared.docs.get('practice.reviewPlans');
+    const previousRevision = stored.revision;
+    stored.data[0].id = stored.data[0].examId;
+    delete stored.data[0].libraryConfigurationId;
+    stored.checksum = checksum(stored.data);
+
+    const queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records.length, 1);
+    assert.equal(queue.records[0].reviewLibraryConfigurationId, 'library-a');
+    assert.notEqual(queue.records[0].reviewPlanId, 'p1-reading-01');
+    const migrated = shared.docs.get('practice.reviewPlans');
+    assert.equal(migrated.revision, previousRevision + 1, '读取队列时应原子保存身份迁移');
+    assert.equal(migrated.data[0].id, queue.records[0].reviewPlanId);
+    assert.equal(migrated.data[0].libraryConfigurationId, 'library-a');
+});
+
 test('迟到的旧作答和旧回放评分不能替换或推进最新计划', async () => {
     const { app } = harness(); await app.ready;
     await app.practice.completeAttempt({ record: readingRecord({ id: 'newest', completedAt: '2026-09-10T00:00:00.000Z' }) });
@@ -608,7 +670,7 @@ test('迟到的旧作答和旧回放评分不能替换或推进最新计划', as
     const queue = await app.practice.listReviewQueue();
     assert.equal(queue.records[0].recordId, 'newest');
     const error = await expectFailure(() => app.practice.recordReviewOutcome({ recordId: 'older',
-        reviewPlanId: 'p1-reading-01', reviewAttemptId: 'stale', quality: 'easy' }), '旧回放评分必须拒绝');
+        reviewPlanId: queue.records[0].reviewPlanId, reviewAttemptId: 'stale', quality: 'easy' }), '旧回放评分必须拒绝');
     assert.equal(error.code, 'CONFLICT');
     assert.equal((await app.practice.getReviewState('newest')).reviewCount, 1);
 });
