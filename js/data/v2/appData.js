@@ -862,7 +862,8 @@
                 // A completion can be persisted after a later manual review. It is
                 // still the newest replay source, but its automatic grade must not
                 // move an already-newer schedule backwards.
-                const preserveNewerSchedule = Boolean(previous && completedAt < state.updatedAt);
+                const scheduleTime = reviewPlanScheduleTime(previous, state);
+                const preserveNewerSchedule = Boolean(previous && scheduleTime && completedAt < scheduleTime);
                 const compact = Object.fromEntries(['id', 'type', 'title', 'date', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'metadata']
                     .filter(key => summary[key] !== undefined).map(key => [key, clone(summary[key])]));
                 const recordSummary = Object.assign({}, compact, {
@@ -1421,7 +1422,8 @@
                     resultState = normalized;
                     return Object.assign(await kernel.journalNoop(mutation), { noop: true, duplicate: true });
                 }
-                if (reviewedAt < normalized.updatedAt) {
+                const scheduleTime = reviewPlanScheduleTime(task, normalized);
+                if (scheduleTime && reviewedAt < scheduleTime) {
                     throw new AppDataError('CONFLICT', 'Review outcome is older than the current schedule');
                 }
                 resultState = practiceReviewScheduler.scheduleOutcome(normalized, quality, reviewedAt, attemptId);

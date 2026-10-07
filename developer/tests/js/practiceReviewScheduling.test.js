@@ -714,6 +714,59 @@ test('迟到的较新作答更新回放引用但不倒退已人工推进的排�
         '被拒绝的迟到自动评分不得写入幂等记录');
 });
 
+test('自动评分按 lastReviewed 判断缺少 updatedAt 的旧排程', async () => {
+    const { app, shared } = harness(); await app.ready;
+    await app.practice.completeAttempt({ operationId: 'legacy-auto-seed', record: readingRecord({
+        id: 'legacy-auto-before', sessionId: 'legacy-auto-before', completedAt: '2026-09-01T00:00:00.000Z',
+        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
+    }) });
+    const task = (await app.practice.listReviewQueue()).records[0];
+    await app.practice.recordReviewOutcome({
+        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
+        reviewAttemptId: 'legacy-auto-review', quality: 'good', reviewedAt: '2026-09-02T00:00:00.000Z'
+    });
+    const stored = shared.docs.get('practice.reviewPlans');
+    assert.equal(stored.data[0].reviewState.nextReview, '2026-09-08T00:00:00.000Z');
+    delete stored.data[0].reviewState.updatedAt;
+    stored.checksum = checksum(stored.data);
+
+    await app.practice.completeAttempt({ operationId: 'legacy-auto-newer', record: readingRecord({
+        id: 'legacy-auto-after', sessionId: 'legacy-auto-after', completedAt: '2026-09-05T00:00:00.000Z',
+        date: '2026-09-05T00:00:00.000Z', correctAnswers: 4
+    }) });
+
+    const after = (await app.practice.listReviewQueue()).records[0];
+    assert.equal(after.recordId, 'legacy-auto-after');
+    assert.equal(after.reviewState.lastReviewed, '2026-09-05T00:00:00.000Z',
+        '位于 lastReviewed 与 nextReview 之间的新作答必须推进排程');
+    assert(after.reviewState.appliedReviewAttemptIds.includes('completion:legacy-auto-after:p1-reading-01'));
+});
+
+test('手动评分按 lastReviewed 判断缺少 updatedAt 的旧排程', async () => {
+    const { app, shared } = harness(); await app.ready;
+    await app.practice.completeAttempt({ operationId: 'legacy-manual-seed', record: readingRecord({
+        id: 'legacy-manual', sessionId: 'legacy-manual', completedAt: '2026-09-01T00:00:00.000Z',
+        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
+    }) });
+    const task = (await app.practice.listReviewQueue()).records[0];
+    await app.practice.recordReviewOutcome({
+        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
+        reviewAttemptId: 'legacy-manual-first', quality: 'good', reviewedAt: '2026-09-02T00:00:00.000Z'
+    });
+    const stored = shared.docs.get('practice.reviewPlans');
+    assert.equal(stored.data[0].reviewState.nextReview, '2026-09-08T00:00:00.000Z');
+    delete stored.data[0].reviewState.updatedAt;
+    stored.checksum = checksum(stored.data);
+
+    const accepted = await app.practice.recordReviewOutcome({
+        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
+        reviewAttemptId: 'legacy-manual-newer', quality: 'easy', reviewedAt: '2026-09-05T00:00:00.000Z'
+    });
+    assert.equal(accepted.reviewState.lastReviewed, '2026-09-05T00:00:00.000Z',
+        '位于 lastReviewed 与 nextReview 之间的新评分不得被误判为旧结果');
+    assert.equal(accepted.reviewState.lastReviewAttemptId, 'legacy-manual-newer');
+});
+
 test('备份合并分别保留最新排程状态和最新作答回放引用', async () => {
     const local = harness();
     const imported = harness();
