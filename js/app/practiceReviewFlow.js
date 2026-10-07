@@ -17,6 +17,7 @@
     if (global.PracticeReviewFlow && global.PracticeReviewFlow.__v1 === true) return;
 
     const BAR_ID = 'practice-review-pending-bar';
+    const BANNER_STACK_ID = 'app-global-banner-stack';
     const QUALITY_OPTIONS = Object.freeze([
         { quality: 'hard', label: '仍不熟', title: '明天再复盘一次' },
         { quality: 'good', label: '基本掌握', title: '按计划推进间隔' },
@@ -197,6 +198,18 @@
         if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     }
 
+    function getGlobalBannerStack() {
+        const doc = global.document;
+        let stack = doc.getElementById(BANNER_STACK_ID);
+        if (!stack) {
+            stack = doc.createElement('div');
+            stack.id = BANNER_STACK_ID;
+            stack.className = 'app-global-banner-stack';
+            doc.body.appendChild(stack);
+        }
+        return stack;
+    }
+
     function render() {
         if (!global.document || !global.document.body) return;
         if (!state.pending) {
@@ -212,7 +225,7 @@
             bar.setAttribute('role', 'region');
             bar.setAttribute('aria-live', 'polite');
             bar.setAttribute('aria-label', '复盘评分');
-            doc.body.appendChild(bar);
+            getGlobalBannerStack().appendChild(bar);
             bar.addEventListener('click', (event) => {
                 const target = event.target && event.target.closest ? event.target.closest('[data-review-quality]') : null;
                 if (target) {

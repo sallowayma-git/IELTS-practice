@@ -476,6 +476,16 @@ test('同一 reviewAttemptId 只生效一次，冲突会重试而不重复推进
     assert.strictEqual(duplicate.reviewState.nextReview, first.reviewState.nextReview);
     assert.strictEqual(duplicate.reviewState.lastQuality, 'good', '重复提交不得改写已记录的评分');
 
+    // 不同 attempt 若携带更早的评分时间，说明旧标签页/旧回放的结果迟到。
+    // 它不能把 lastReviewed、updatedAt 和 nextReview 一起倒退。
+    const stale = await expectFailure(() => app.practice.recordReviewOutcome({
+        recordId: 'reading-wrong', reviewAttemptId: 'attempt-stale', quality: 'hard',
+        reviewedAt: '2026-09-01T12:00:00.000Z'
+    }), '迟到的旧评分必须拒绝');
+    assert.strictEqual(stale.code, 'CONFLICT');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(await app.practice.getReviewState('reading-wrong'))),
+        JSON.parse(JSON.stringify(first.reviewState)), '迟到评分不得改写当前计划');
+
     // 一次 CAS 冲突（另一个标签页刚写过）应由 retryMergeConflict 吞掉并重算，只推进一次。
     shared.conflictOnce = true;
     const retried = await app.practice.recordReviewOutcome({

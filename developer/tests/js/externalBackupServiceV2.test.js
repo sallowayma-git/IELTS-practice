@@ -1549,6 +1549,62 @@ function reminderDocument() {
         querySelector(selector) { return selector === '.view.active' ? { id: state.view }
             : state.shown || state.anotherDialog ? modal : null; } };
 }
+
+function bannerDocument() {
+    const body = createNode('body');
+    function createNode(tag) {
+        return {
+            tagName: String(tag || 'div').toUpperCase(),
+            id: '', className: '', dataset: {}, attributes: {}, children: [], parentNode: null,
+            get firstChild() { return this.children[0] || null; },
+            appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+            removeChild(child) {
+                const index = this.children.indexOf(child);
+                if (index >= 0) this.children.splice(index, 1);
+                child.parentNode = null;
+                return child;
+            },
+            setAttribute(name, value) { this.attributes[name] = String(value); },
+            addEventListener() {}
+        };
+    }
+    function findById(node, id) {
+        if (node.id === id) return node;
+        for (const child of node.children) {
+            const match = findById(child, id);
+            if (match) return match;
+        }
+        return null;
+    }
+    return {
+        body,
+        visibilityState: 'visible',
+        createElement: createNode,
+        getElementById(id) { return findById(body, String(id)); },
+        querySelector() { return null; },
+        addEventListener() {}
+    };
+}
+
+async function testPermissionBannerUsesSharedStack() {
+    const first = createHarness();
+    await first.ready();
+    await first.service.bindDirectory({ writeNow: true });
+    first.directory.state.permission = 'prompt';
+
+    const reloaded = createHarness({ indexedDB: first.indexedDB, directory: first.directory });
+    await reloaded.ready();
+    const document = bannerDocument();
+    reloaded.setDocument(document);
+    reloaded.service.refreshPanel();
+
+    const stack = document.getElementById('app-global-banner-stack');
+    const banner = document.getElementById('external-backup-permission-banner');
+    assert.ok(stack, 'permission recovery must create the shared global banner stack');
+    assert.ok(banner, 'lost permission must keep its recovery action visible');
+    assert.equal(banner.parentNode, stack, 'the backup action must participate in banner stacking');
+}
+
 async function testReminderCooldownAndNonInterruption() {
     const unbound = createHarness(); await unbound.ready();
     const unboundDocument = reminderDocument(); unbound.setDocument(unboundDocument);
@@ -1581,6 +1637,7 @@ async function testReminderCooldownAndNonInterruption() {
 
 async function main() {
     await testRestoreIdentityFailureReportsCommittedAndPreservesDisk();
+    await testPermissionBannerUsesSharedStack();
     await testReminderCooldownAndNonInterruption();
     await testRebuiltDatabaseCannotOverwriteFolder();
     await testReadinessDoesNotExportWholeDatabase();

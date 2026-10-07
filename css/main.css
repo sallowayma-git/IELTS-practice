@@ -8374,6 +8374,19 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
    复盘调度（阅读）：全局提示条、历史卡片徽标、复盘节奏组件
    ========================================================================== */
 
+.app-global-banner-stack {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(720px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
 .app-global-banner {
     position: fixed;
     left: 50%;
@@ -8392,6 +8405,18 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
     backdrop-filter: blur(10px);
     color: var(--color-gray-900, #0f172a);
+}
+
+.app-global-banner-stack .app-global-banner {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    z-index: auto;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    pointer-events: auto;
 }
 
 .app-global-banner--review {
@@ -8654,12 +8679,26 @@ body.blue-dark-mode .practice-review-load__bar--empty {
 }
 
 @media (max-width: 640px) {
+    .app-global-banner-stack {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        transform: none;
+        width: auto;
+    }
+
     .app-global-banner {
         left: 12px;
         right: 12px;
         bottom: 12px;
         transform: none;
         max-width: none;
+    }
+
+    .app-global-banner-stack .app-global-banner {
+        left: auto;
+        right: auto;
+        bottom: auto;
     }
 
     .app-global-banner__actions {

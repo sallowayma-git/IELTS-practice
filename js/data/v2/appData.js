@@ -1415,6 +1415,9 @@
                     resultState = normalized;
                     return Object.assign(await kernel.journalNoop(mutation), { noop: true, duplicate: true });
                 }
+                if (reviewedAt < normalized.updatedAt) {
+                    throw new AppDataError('CONFLICT', 'Review outcome is older than the current schedule');
+                }
                 resultState = practiceReviewScheduler.scheduleOutcome(normalized, quality, reviewedAt, attemptId);
                 task.reviewState = resultState;
                 const documentChanges = [{ logicalKey: REVIEW_PLANS_KEY, data: plans,

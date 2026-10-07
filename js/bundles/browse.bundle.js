@@ -15958,6 +15958,7 @@ class VirtualScroller {
     if (global.PracticeReviewFlow && global.PracticeReviewFlow.__v1 === true) return;
 
     const BAR_ID = 'practice-review-pending-bar';
+    const BANNER_STACK_ID = 'app-global-banner-stack';
     const QUALITY_OPTIONS = Object.freeze([
         { quality: 'hard', label: '仍不熟', title: '明天再复盘一次' },
         { quality: 'good', label: '基本掌握', title: '按计划推进间隔' },
@@ -16138,6 +16139,18 @@ class VirtualScroller {
         if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     }
 
+    function getGlobalBannerStack() {
+        const doc = global.document;
+        let stack = doc.getElementById(BANNER_STACK_ID);
+        if (!stack) {
+            stack = doc.createElement('div');
+            stack.id = BANNER_STACK_ID;
+            stack.className = 'app-global-banner-stack';
+            doc.body.appendChild(stack);
+        }
+        return stack;
+    }
+
     function render() {
         if (!global.document || !global.document.body) return;
         if (!state.pending) {
@@ -16153,7 +16166,7 @@ class VirtualScroller {
             bar.setAttribute('role', 'region');
             bar.setAttribute('aria-live', 'polite');
             bar.setAttribute('aria-label', '复盘评分');
-            doc.body.appendChild(bar);
+            getGlobalBannerStack().appendChild(bar);
             bar.addEventListener('click', (event) => {
                 const target = event.target && event.target.closest ? event.target.closest('[data-review-quality]') : null;
                 if (target) {
@@ -21022,14 +21035,15 @@ async function syncPracticeRecords(options = {}) {
     }
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
-    if (!recordsUnchanged) {
-        // 复盘徽标与复盘模式排序必须与这批记录同批读取，否则首屏会先画一遍无徽标的列表，
-        // 再被异步回填时"跳"一次。失败时按"没有复盘状态"渲染，不阻断练习历史。
-        try {
-            await loadPracticeReviewQueue();
-        } catch (error) {
-            console.warn('[Review] 同步复盘队列失败:', error);
-        }
+    // 评分只改复盘计划，不改练习摘要。即使摘要签名没有变化，也必须重新读取队列；
+    // 否则其他标签页的评分会让徽标、排序与复盘统计一直停留在旧快照。
+    let reviewQueueChanged = false;
+    try {
+        reviewQueueChanged = await loadPracticeReviewQueue();
+    } catch (error) {
+        console.warn('[Review] 同步复盘队列失败:', error);
+    }
+    if (!recordsUnchanged || reviewQueueChanged) {
         updatePracticeView(records, examIndex);
     } else if (typeof flushPracticeInsightsRender === 'function') {
         // A hidden-view sync may leave insights waiting. Activation must resume
@@ -22512,6 +22526,7 @@ const practiceReviewQueueState = {
     byRecordId: new Map(),
     order: new Map(),
     stats: null,
+    signature: null,
     loading: false,
     pending: null
 };
@@ -22532,16 +22547,32 @@ function isPracticeReviewModeEnabled() {
     return practiceReviewModeEnabled === true;
 }
 
+function computePracticeReviewQueueSignature(records, stats) {
+    try {
+        // generatedAt changes on every read and is deliberately excluded. The records
+        // (including isDue/reviewState) and derived stats contain every render input.
+        return JSON.stringify({ records, stats: stats || null });
+    } catch (_) {
+        // Queue projections are JSON data, but a malformed host stub must not make a
+        // potentially changed snapshot look unchanged.
+        return null;
+    }
+}
+
 async function loadPracticeReviewQueue() {
     const practice = window.AppData && window.AppData.practice;
     if (!practice || typeof practice.listReviewQueue !== 'function') {
-        return null;
+        return false;
     }
     const queue = await practice.listReviewQueue();
     const records = Array.isArray(queue && queue.records) ? queue.records : [];
+    const stats = queue && queue.stats ? queue.stats : null;
+    const nextSignature = computePracticeReviewQueueSignature(records, stats);
+    const changed = nextSignature === null || nextSignature !== practiceReviewQueueState.signature;
     practiceReviewQueueState.generatedAt = queue && queue.generatedAt ? queue.generatedAt : null;
-    practiceReviewQueueState.stats = queue && queue.stats ? queue.stats : null;
+    practiceReviewQueueState.stats = stats;
     practiceReviewQueueState.records = records;
+    practiceReviewQueueState.signature = nextSignature;
     practiceReviewQueueState.byRecordId = new Map();
     records.forEach(record => {
         practiceReviewQueueState.byRecordId.set(String(record.id), record);
@@ -22549,7 +22580,7 @@ async function loadPracticeReviewQueue() {
         if (!practiceReviewQueueState.byRecordId.has(parentId)) practiceReviewQueueState.byRecordId.set(parentId, record);
     });
     practiceReviewQueueState.order = new Map(records.map((record, index) => [String(record.id), index]));
-    return queue;
+    return changed;
 }
 
 function refreshPracticeReviewQueue(trigger = 'default', options = {}) {

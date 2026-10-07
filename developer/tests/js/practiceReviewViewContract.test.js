@@ -556,6 +556,24 @@ test('待评分条要收齐 ACK 才出现，评分提交才写库', async () => 
     assert.strictEqual(harness.windowStub.__refreshCalls, 1, '提交后应刷新复盘队列');
 });
 
+test('复盘与备份横幅共享堆栈，两个操作入口可同时访问', () => {
+    const harness = loadReviewFlow();
+    const stack = harness.documentStub.createElement('div');
+    stack.id = 'app-global-banner-stack';
+    stack.className = 'app-global-banner-stack';
+    const backup = harness.documentStub.createElement('div');
+    backup.id = 'external-backup-permission-banner';
+    backup.className = 'app-global-banner app-global-banner--backup';
+    stack.appendChild(backup);
+    harness.body.appendChild(stack);
+
+    harness.flow.notifyAttemptApplied({ recordId: 'record-1', reviewAttemptId: 'attempt-1' });
+    const review = harness.documentStub.getElementById('practice-review-pending-bar');
+    assert(review, '复盘评分横幅应出现');
+    assert.strictEqual(review.parentNode, stack, '复盘横幅必须复用已有的全局横幅堆栈');
+    assert.deepStrictEqual(stack.children, [backup, review], '备份恢复与复盘评分操作必须同时保留');
+});
+
 test('取消评分与提交失败都不记复盘', async () => {
     const cancelled = loadReviewFlow();
     cancelled.flow.notifyAttemptApplied({ recordId: 'record-1', reviewAttemptId: 'attempt-1' });

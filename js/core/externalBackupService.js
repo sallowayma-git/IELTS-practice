@@ -25,6 +25,7 @@
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
     var BANNER_ID = 'external-backup-permission-banner';
+    var BANNER_STACK_ID = 'app-global-banner-stack';
 
     var state = {
         ready: false,
@@ -1631,6 +1632,17 @@
         }
     };
 
+    function getGlobalBannerStack() {
+        var stack = global.document.getElementById(BANNER_STACK_ID);
+        if (!stack) {
+            stack = global.document.createElement('div');
+            stack.id = BANNER_STACK_ID;
+            stack.className = 'app-global-banner-stack';
+            global.document.body.appendChild(stack);
+        }
+        return stack;
+    }
+
     // 非阻塞的全局横幅：只提示，不拦截任何操作；恢复授权成功后自行消失。
     function renderGlobalBanner() {
         if (!global.document || !global.document.body) return;
@@ -1650,7 +1662,7 @@
             banner.setAttribute('role', 'region');
             banner.setAttribute('aria-live', 'polite');
             banner.setAttribute('aria-label', '本地备份状态');
-            global.document.body.appendChild(banner);
+            getGlobalBannerStack().appendChild(banner);
             banner.addEventListener('click', handleBannerClick);
         }
         banner.dataset.mode = mode;

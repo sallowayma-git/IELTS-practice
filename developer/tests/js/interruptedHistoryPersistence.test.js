@@ -39,12 +39,18 @@ function createHarness() {
         defaultIndex: [{ id: 'reading-p1', title: 'Reading P1', type: 'reading' }],
         configurations: [],
         sourceIndexes: new Map(),
+        reviewQueue: [],
+        reviewStats: {
+            dueToday: 0, overdue: 0, dueNow: 0, completedToday: 0,
+            total: 0, futureSevenDayTotal: 0, buckets: []
+        },
         messages: [], confirmations: [], events: [], warnings: [],
-        completedViews: [], interruptedViews: [], trends: [], summaries: [], browse: [],
+        completedViews: [], reviewSnapshots: [], interruptedViews: [], trends: [], summaries: [], browse: [],
         calls: {
             list: 0, interruptedList: 0, interruptedGet: [], interruptedSave: [], sourceIndex: [],
             configurationList: 0, defaultIndex: 0, activeIndex: 0,
-            draftReads: 0, draftWrites: 0, discard: [], clear: 0, clearInterrupted: 0, clearRecovery: 0
+            draftReads: 0, draftWrites: 0, discard: [], clear: 0, clearInterrupted: 0,
+            clearRecovery: 0, reviewQueue: 0
         }
     };
     const listeners = new Map();
@@ -58,6 +64,16 @@ function createHarness() {
         practice: {
             async list() { state.calls.list += 1; return clone(state.completed); },
             async listInsights() { return clone(state.completed); },
+            async listReviewQueue() {
+                state.calls.reviewQueue += 1;
+                return {
+                    // Deliberately changes on every read. It is observation metadata,
+                    // not a reason to repaint an otherwise identical queue.
+                    generatedAt: `2026-09-06T10:00:${String(state.calls.reviewQueue).padStart(2, '0')}.000Z`,
+                    records: clone(state.reviewQueue),
+                    stats: clone(state.reviewStats)
+                };
+            },
             async get() { throw new Error('Interrupted details must not read formal history'); },
             async delete() { throw new Error('Interrupted deletion must not write formal history'); },
             async clear() {
@@ -163,7 +179,13 @@ function createHarness() {
         },
         PracticeHistoryRenderer: {
             helpers: { computeRecordsSignature: (records) => JSON.stringify(records) },
-            renderView({ records }) { state.completedViews.push(clone(records)); }
+            renderView({ records, reviewQueue }) {
+                state.completedViews.push(clone(records));
+                state.reviewSnapshots.push({
+                    records: clone(reviewQueue && reviewQueue.records || []),
+                    stats: clone(reviewQueue && reviewQueue.stats || null)
+                });
+            }
         },
         InterruptedPracticeHistory: {
             render({ container, records, error, onLoadDetails, onDelete, onRetry }) {
@@ -221,6 +243,45 @@ test('recovery-only changes refresh independently without reaching formal histor
     state.interrupted.length = 0;
     await sandbox.syncPracticeRecords();
     assert.deepEqual(state.interruptedViews.at(-1).records, [], 'Removal must refresh even with the same formal signature');
+});
+
+test('review-plan-only changes refresh badges and stats without rebuilding an unchanged snapshot', async () => {
+    const { sandbox, state } = createHarness();
+    state.reviewQueue = [{
+        id: 'completed-1', recordId: 'completed-1', isDue: true,
+        reviewState: {
+            nextReview: '2026-09-06T10:00:00.000Z',
+            updatedAt: '2026-09-06T09:00:00.000Z'
+        }
+    }];
+    state.reviewStats = Object.assign({}, state.reviewStats, { dueToday: 1, dueNow: 1, total: 1 });
+
+    await sandbox.syncPracticeRecords();
+    assert.equal(state.completedViews.length, 1);
+    assert.equal(state.calls.reviewQueue, 1);
+    assert.equal(state.reviewSnapshots.at(-1).records[0].reviewState.updatedAt,
+        '2026-09-06T09:00:00.000Z');
+
+    // A rating from another tab changes only practice.reviewPlans. The formal
+    // practice-summary signature remains byte-for-byte identical.
+    state.reviewQueue[0].isDue = false;
+    state.reviewQueue[0].reviewState.updatedAt = '2026-09-06T10:05:00.000Z';
+    state.reviewQueue[0].reviewState.nextReview = '2026-09-12T10:05:00.000Z';
+    state.reviewStats = Object.assign({}, state.reviewStats, {
+        dueToday: 0, dueNow: 0, completedToday: 1
+    });
+    await sandbox.syncPracticeRecords();
+
+    assert.equal(state.calls.reviewQueue, 2, 'unchanged summaries must still read review plans');
+    assert.equal(state.completedViews.length, 2, 'a changed queue must repaint the Practice projection');
+    assert.equal(state.reviewSnapshots.at(-1).records[0].reviewState.updatedAt,
+        '2026-09-06T10:05:00.000Z');
+    assert.equal(state.reviewSnapshots.at(-1).stats.completedToday, 1);
+
+    await sandbox.syncPracticeRecords();
+    assert.equal(state.calls.reviewQueue, 3, 'each visibility-style sync must consult review plans');
+    assert.equal(state.completedViews.length, 2,
+        'generatedAt alone must not rebuild an otherwise identical Practice projection');
 });
 
 test('a recovery read failure remains visible and retryable while canonical history stays usable', async () => {
