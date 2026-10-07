@@ -685,6 +685,69 @@ test('迟到的旧作答和旧回放评分不能替换或推进最新计划', as
     assert.equal((await app.practice.getReviewState('newest')).reviewCount, 1);
 });
 
+test('迟到的较新作答更新回放引用但不倒退已人工推进的排程', async () => {
+    const { app } = harness(); await app.ready;
+    await app.practice.completeAttempt({ operationId: 'delayed-seed', record: readingRecord({
+        id: 'before-review', sessionId: 'before-review', completedAt: '2026-09-01T00:00:00.000Z',
+        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
+    }) });
+    const before = (await app.practice.listReviewQueue()).records[0];
+    const reviewed = await app.practice.recordReviewOutcome({
+        recordId: before.recordId, reviewPlanId: before.reviewPlanId,
+        reviewAttemptId: 'manual-after-delayed-attempt', quality: 'easy',
+        reviewedAt: '2026-09-03T00:00:00.000Z'
+    });
+
+    await app.practice.completeAttempt({ operationId: 'delayed-arrival', record: readingRecord({
+        id: 'delayed-newer', sessionId: 'delayed-newer', completedAt: '2026-09-02T00:00:00.000Z',
+        date: '2026-09-02T00:00:00.000Z', correctAnswers: 4
+    }) });
+
+    const after = (await app.practice.listReviewQueue()).records[0];
+    assert.equal(after.recordId, 'delayed-newer', '按完成时间较新的作答仍是回放来源');
+    assert.equal(after.correctAnswers, 4, '回放摘要来自迟到的较新作答');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(after.reviewState)), JSON.parse(JSON.stringify(reviewed.reviewState)),
+        '早于当前排程的自动评分不得改写复盘状态');
+    const plan = await app.practice.getReviewTask(after.id);
+    assert.equal(plan.latestCompletedAt, '2026-09-02T00:00:00.000Z');
+    assert(!plan.reviewState.appliedReviewAttemptIds.includes('completion:delayed-newer:p1-reading-01'),
+        '被拒绝的迟到自动评分不得写入幂等记录');
+});
+
+test('备份合并分别保留最新排程状态和最新作答回放引用', async () => {
+    const local = harness();
+    const imported = harness();
+    await Promise.all([local.app.ready, imported.app.ready]);
+
+    await local.app.practice.completeAttempt({ operationId: 'local-newer-attempt', record: readingRecord({
+        id: 'local-newer', sessionId: 'local-newer', completedAt: '2026-09-10T00:00:00.000Z',
+        date: '2026-09-10T00:00:00.000Z', correctAnswers: 8
+    }) });
+    await imported.app.practice.completeAttempt({ operationId: 'imported-older-attempt', record: readingRecord({
+        id: 'imported-older', sessionId: 'imported-older', completedAt: '2026-09-05T00:00:00.000Z',
+        date: '2026-09-05T00:00:00.000Z', correctAnswers: 4
+    }) });
+    const importedTask = (await imported.app.practice.listReviewQueue()).records[0];
+    const importedReview = await imported.app.practice.recordReviewOutcome({
+        recordId: importedTask.recordId, reviewPlanId: importedTask.reviewPlanId,
+        reviewAttemptId: 'imported-later-review', quality: 'good', reviewedAt: '2026-09-12T00:00:00.000Z'
+    });
+
+    const snapshot = await imported.app.backups.export();
+    const importPlan = await local.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
+    await local.app.backups.commitImport(importPlan.id);
+
+    const merged = (await local.app.practice.listReviewQueue()).records[0];
+    assert.equal(merged.recordId, 'local-newer', '回放引用必须保留完成时间较新的本地作答');
+    assert.equal(merged.correctAnswers, 8, '回放摘要必须与最新作答保持一致');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(merged.reviewState)), JSON.parse(JSON.stringify(importedReview.reviewState)),
+        '排程必须采用 updatedAt 较新的导入复盘状态');
+    const mergedPlan = await local.app.practice.getReviewTask(merged.id);
+    assert.equal(mergedPlan.latestCompletedAt, '2026-09-10T00:00:00.000Z');
+    assert.equal(mergedPlan.summary.id, 'local-newer');
+    assert(await local.app.practice.get('imported-older'), '导入的历史作答实体仍应保留');
+});
+
 test('套题汇总只迁移最新记录引用，子篇作答不重复计数', async () => {
     const { app } = harness(); await app.ready;
     const child = readingRecord({ id: 'child', sessionId: 'child', correctAnswers: 8 });

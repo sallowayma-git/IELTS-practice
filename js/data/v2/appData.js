@@ -857,6 +857,10 @@
                 // still advances when its latest reattempt reaches full marks.
                 if (!previous && Number(correct) === Number(total)) return;
                 const state = safeReviewState(previous?.reviewState) || practiceReviewScheduler.createInitialState(completedAt);
+                // A completion can be persisted after a later manual review. It is
+                // still the newest replay source, but its automatic grade must not
+                // move an already-newer schedule backwards.
+                const preserveNewerSchedule = Boolean(previous && completedAt < state.updatedAt);
                 const compact = Object.fromEntries(['id', 'type', 'title', 'date', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'metadata']
                     .filter(key => summary[key] !== undefined).map(key => [key, clone(summary[key])]));
                 const recordSummary = Object.assign({}, compact, {
@@ -869,7 +873,7 @@
                 delete recordSummary.suiteEntrySummaries;
                 const plan = { id: planId, unit: 'article', examId, libraryConfigurationId, recordId: summary.id,
                     entryIndex: entries.length ? index : null, summary: recordSummary, latestCompletedAt: completedAt,
-                    reviewState: foldedChildIds.includes(previous?.recordId) ? state
+                    reviewState: foldedChildIds.includes(previous?.recordId) || preserveNewerSchedule ? state
                         : practiceReviewScheduler.scheduleOutcome(state, quality, completedAt,
                             'completion:' + summary.id + ':' + examId) };
                 if (position >= 0) plans[position] = plan;
@@ -2333,6 +2337,34 @@
         return logicalKey === 'vocab.words' ? identity.trim().toLowerCase() : identity;
     }
 
+    function reviewPlanCompletionTime(plan) {
+        const row = asObject(plan);
+        const summary = asObject(row.summary);
+        return validIso(row.latestCompletedAt)
+            || validIso(summary.completedAt || summary.timestamp || summary.date)
+            || '';
+    }
+
+    function mergeReviewPlan(existing, incoming) {
+        const stored = asObject(existing);
+        const imported = asObject(incoming);
+        const merged = Object.assign({}, clone(stored), clone(imported));
+        const storedState = safeReviewState(stored.reviewState);
+        const importedState = safeReviewState(imported.reviewState);
+        const scheduleSource = storedState && (!importedState || storedState.updatedAt > importedState.updatedAt)
+            ? stored : imported;
+        const replaySource = reviewPlanCompletionTime(stored) > reviewPlanCompletionTime(imported)
+            ? stored : imported;
+
+        for (const field of ['recordId', 'entryIndex', 'summary', 'latestCompletedAt']) {
+            if (hasOwn(replaySource, field)) merged[field] = clone(replaySource[field]);
+            else delete merged[field];
+        }
+        if (hasOwn(scheduleSource, 'reviewState')) merged.reviewState = clone(scheduleSource.reviewState);
+        else delete merged.reviewState;
+        return merged;
+    }
+
     function mergeCollection(existing, incoming, logicalKey) {
         const result = asArray(existing).map((item) => clone(item));
         const positions = new Map();
@@ -2360,9 +2392,9 @@
                     createdAt: Math.min(Number(existingWord.createdAt) || Date.now(), Number(item.createdAt) || Date.now()),
                     updatedAt: Math.max(Number(existingWord.updatedAt) || 0, Number(item.updatedAt) || 0)
                 });
+            } else if (logicalKey === REVIEW_PLANS_KEY && position !== undefined) {
+                mergedItem = mergeReviewPlan(result[position], item);
             }
-            if (logicalKey === REVIEW_PLANS_KEY && position !== undefined
-                && String(result[position].reviewState?.updatedAt || '') > String(item.reviewState?.updatedAt || '')) continue;
             if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
