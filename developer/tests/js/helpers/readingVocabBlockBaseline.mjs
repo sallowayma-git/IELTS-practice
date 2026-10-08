@@ -4,9 +4,12 @@
 // normalizer change can prove it keeps block sequence, count, content and
 // passage/p-n identities unchanged.
 //
-//   node developer/tests/js/helpers/readingVocabBlockBaseline.mjs --write
+//   node developer/tests/js/helpers/readingVocabBlockBaseline.mjs           check
+//   node developer/tests/js/helpers/readingVocabBlockBaseline.mjs --write   rebuild
 //
-// Regenerate it only when a reading asset's passage content changes on purpose.
+// The check compares the preserved invariants (see compareToBaseline), not the
+// file bytes. Rebuild only when a reading asset's passage content changes on
+// purpose.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,6 +49,45 @@ export function baselineRows(blocks) {
     return blocks.map(block => [block.id, block.letter, block.explicitLabel, digest(block.html), digest(block.text)]);
 }
 
+// The contract shared by the check mode and the tests: every block keeps its
+// passage/p-n id, html, text and explicit-label status. Letters are kept too,
+// except the intentional #239 delta: unlabelled blocks before the first explicit
+// label take no letter and are labelled Intro, or Intro 1, Intro 2, ... in order.
+// Returns the list of violations (empty when the baseline holds).
+export function compareToBaseline(results, baseline) {
+    const problems = [];
+    const ids = results.map(result => result.id).sort();
+    const expectedIds = Object.keys(baseline).sort();
+    if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) problems.push('reading asset set differs from the baseline');
+    for (const { id, blocks } of results) {
+        const before = baseline[id];
+        if (!before) continue;
+        if (blocks.length !== before.length) {
+            problems.push(`${id}: block count ${before.length} -> ${blocks.length}`);
+            continue;
+        }
+        const leads = Math.max(0, blocks.findIndex(block => block.explicitLabel));
+        blocks.forEach((block, index) => {
+            const [beforeId, beforeLetter, beforeExplicit, beforeHtml, beforeText] = before[index];
+            const where = `${id} #${index + 1}`;
+            if (block.id !== beforeId) problems.push(`${where}: id ${beforeId} -> ${block.id}`);
+            if (digest(block.html) !== beforeHtml) problems.push(`${where}: html changed`);
+            if (digest(block.text) !== beforeText) problems.push(`${where}: text changed`);
+            if (block.explicitLabel !== beforeExplicit) problems.push(`${where}: explicit-label status changed`);
+            if (index < leads) {
+                const introLabel = leads === 1 ? 'Intro' : `Intro ${index + 1}`;
+                if (block.letter !== '' || block.introLabel !== introLabel) {
+                    problems.push(`${where}: lead block should be unlettered "${introLabel}"`);
+                }
+            } else {
+                if (block.letter !== beforeLetter) problems.push(`${where}: letter ${beforeLetter} -> ${block.letter}`);
+                if (block.introLabel !== undefined) problems.push(`${where}: unexpected intro label`);
+            }
+        });
+    }
+    return problems;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const { chromium } = await import('playwright');
     const browser = await chromium.launch({ headless: true,
@@ -54,15 +96,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         const page = await browser.newPage();
         await page.addScriptTag({ path: path.join(root, 'js/components/readingVocabContent.js') });
         const results = await page.evaluate(normalizeInPage, loadReadingAssets());
-        const baseline = Object.fromEntries(results.map(({ id, blocks }) => [id, baselineRows(blocks)]));
-        const text = `${JSON.stringify(baseline, null, 0).replace(/\],"/g, '],\n"')}\n`;
         if (process.argv.includes('--write')) {
-            fs.writeFileSync(baselinePath, text);
+            const baseline = Object.fromEntries(results.map(({ id, blocks }) => [id, baselineRows(blocks)]));
+            fs.writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 0).replace(/\],"/g, '],\n"')}\n`);
             console.log(`Wrote ${Object.keys(baseline).length} assets to ${path.relative(root, baselinePath)}`);
         } else {
-            const same = fs.existsSync(baselinePath) && fs.readFileSync(baselinePath, 'utf8') === text;
-            console.log(same ? 'Baseline matches.' : 'Baseline differs.');
-            process.exitCode = same ? 0 : 1;
+            const problems = fs.existsSync(baselinePath)
+                ? compareToBaseline(results, JSON.parse(fs.readFileSync(baselinePath, 'utf8')))
+                : ['baseline file is missing'];
+            if (problems.length) {
+                console.log(`Baseline differs (${problems.length}):\n${problems.slice(0, 20).join('\n')}`);
+                process.exitCode = 1;
+            } else {
+                console.log(`Baseline matches (${results.length} assets).`);
+            }
         }
     } finally {
         await browser.close();

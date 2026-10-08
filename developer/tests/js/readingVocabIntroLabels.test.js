@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createPage } from './helpers/readingVocabReaderHarness.js';
-import { baselinePath, digest, loadReadingAssets, normalizeInPage } from './helpers/readingVocabBlockBaseline.mjs';
+import { baselinePath, compareToBaseline, loadReadingAssets, normalizeInPage } from './helpers/readingVocabBlockBaseline.mjs';
 
 // #239: unlabelled blocks before the first explicit paragraph label render as
 // Intro / Intro 1..n and must not change block sequence, count, content or
@@ -14,7 +16,6 @@ const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
 const launch = () => chromium.launch({ headless: true,
     ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
 const expectedLabel = block => block.letter ? `Para ${block.letter}` : block.introLabel;
-const leadCount = blocks => Math.max(0, blocks.findIndex(block => block.explicitLabel));
 
 test('intro labelling keeps every reading asset block identical to the pre-change baseline', async t => {
     const browser = await launch();
@@ -25,26 +26,7 @@ test('intro labelling keeps every reading asset block identical to the pre-chang
 
         await t.test('every block keeps its identity, content and explicit-label status', () => {
             assert.ok(results.length > 0, 'reading assets are loaded');
-            assert.deepEqual(results.map(result => result.id).sort(), Object.keys(baseline).sort(), 'baseline covers exactly the current reading assets');
-            for (const { id, blocks } of results) {
-                const before = baseline[id];
-                assert.equal(blocks.length, before.length, `${id}: block count is unchanged`);
-                const leads = leadCount(blocks);
-                blocks.forEach((block, index) => {
-                    const [beforeId, beforeLetter, beforeExplicit, beforeHtml, beforeText] = before[index];
-                    assert.equal(block.id, beforeId, `${id} #${index}: passage/p-n identity is unchanged`);
-                    assert.equal(digest(block.html), beforeHtml, `${id} ${block.id}: html is unchanged`);
-                    assert.equal(digest(block.text), beforeText, `${id} ${block.id}: text is unchanged`);
-                    assert.equal(block.explicitLabel, beforeExplicit, `${id} ${block.id}: explicit-label status is unchanged`);
-                    if (index < leads) {
-                        assert.equal(block.letter, '', `${id} ${block.id}: lead block takes no letter`);
-                        assert.equal(block.introLabel, leads === 1 ? 'Intro' : `Intro ${index + 1}`, `${id} ${block.id}: intro label`);
-                    } else {
-                        assert.equal(block.letter, beforeLetter, `${id} ${block.id}: paragraph letter is unchanged`);
-                        assert.equal(block.introLabel, undefined, `${id} ${block.id}: only lead blocks carry an intro label`);
-                    }
-                });
-            }
+            assert.deepEqual(compareToBaseline(results, baseline), [], 'only the approved intro-label delta differs from the pre-change baseline');
         });
 
         await t.test('every reading asset has unique, visible paragraph labels', () => {
@@ -127,4 +109,11 @@ test('the production reader renders matching tab and card labels for every readi
         await page.close();
         await browser.close();
     }
+});
+
+test('the baseline helper check passes against the committed baseline', () => {
+    const helper = fileURLToPath(new URL('./helpers/readingVocabBlockBaseline.mjs', import.meta.url));
+    const run = spawnSync(process.execPath, [helper], { encoding: 'utf8', env: process.env, timeout: 120_000 });
+    assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+    assert.match(run.stdout, /^Baseline matches \(\d+ assets\)\./m);
 });
