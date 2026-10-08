@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:db574b9f9a50768d63e3be341252ce6ac9927197f59f1957c446ff604e9e584f",
+  "buildId": "sha256:b47b78196c61baed54dc98da1095ddb026ff1668692b7437405747202ce4ff50",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -590,11 +590,11 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "fbd2efee95695291df4d6743804f1584614c2068f20a945404ad26888e4826f8"
+      "sha256": "b9037ebdc0709750f03badebea5866b5bf2ed06acba87fa8bde4ebddc244c245"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
-      "sha256": "31738e6a4756e02a428957f109ed88eb90d7dc8b95ad81c81d365496fa4e8981"
+      "sha256": "a2ef8e0a5c57e5e64a414c9903996d5c61e4a90855f356cfa45e1cbfb96f0bf4"
     },
     {
       "path": "js/bundles/runtime-entry.bundle.js",
@@ -1288,31 +1288,31 @@
       {
         "source": "js/components/readingVocabContent.js",
         "startLine": 12279,
-        "endLine": 12471,
+        "endLine": 12481,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabAnchors.js",
-        "startLine": 12475,
-        "endLine": 12736,
+        "startLine": 12485,
+        "endLine": 12746,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabReader.js",
-        "startLine": 12740,
-        "endLine": 14743,
+        "startLine": 12750,
+        "endLine": 14755,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingTimingController.js",
-        "startLine": 14747,
-        "endLine": 15031,
+        "startLine": 14759,
+        "endLine": 15043,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/unifiedReadingPage.js",
-        "startLine": 15035,
-        "endLine": 23753,
+        "startLine": 15047,
+        "endLine": 23765,
         "sourceStartLine": 1
       }
     ],
@@ -1790,19 +1790,19 @@
       {
         "source": "js/components/readingVocabContent.js",
         "startLine": 4,
-        "endLine": 196,
+        "endLine": 206,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabAnchors.js",
-        "startLine": 200,
-        "endLine": 461,
+        "startLine": 210,
+        "endLine": 471,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabReader.js",
-        "startLine": 465,
-        "endLine": 2468,
+        "startLine": 475,
+        "endLine": 2480,
         "sourceStartLine": 1
       }
     ],

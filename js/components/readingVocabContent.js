@@ -180,6 +180,16 @@
             finish();
         }
 
+        // Unlabelled blocks before the first explicit paragraph label are a lead,
+        // not lettered paragraphs. They keep their block and passage/p-n identity
+        // but take no letter, so they cannot duplicate the explicit A, B, ...
+        // labels. Tabs and paragraph cards both show introLabel for them.
+        const firstExplicit = blocks.findIndex(block => block.explicitLabel);
+        for (let index = 0; index < firstExplicit; index += 1) {
+            blocks[index].letter = '';
+            blocks[index].introLabel = firstExplicit === 1 ? 'Intro' : `Intro ${index + 1}`;
+        }
+
         return {
             passageTitle,
             instructionHtml: instructions.join('\n'),
