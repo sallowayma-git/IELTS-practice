@@ -72,14 +72,18 @@ test('intro labelling keeps every reading asset block identical to the pre-chang
                 assert.deepEqual(labelsOf(id), ['Intro 1', 'Intro 2', ...'ABCDEFG'.split('').map(letter => `Para ${letter}`)], id);
                 assert.deepEqual(idsOf(id), nine, `${id}: keeps p-1 through p-9`);
             }
-            const singleLead = ['p1-medium-57', 'p2-high-120', 'p2-high-91', 'p2-low-65', 'p2-medium-129', 'p2-medium-144', 'p3-high-181', 'p3-medium-18'];
+            // #234: the body clock's lead sentence stays a plain block, so its
+            // paragraphs read Intro, Para A–H on the same p-1 through p-9.
+            assert.deepEqual(labelsOf('p2-medium-243'), ['Intro', ...'ABCDEFGH'.split('').map(letter => `Para ${letter}`)], 'p2-medium-243');
+            assert.deepEqual(idsOf('p2-medium-243'), nine, 'p2-medium-243: keeps p-1 through p-9');
+            const singleLead = ['p1-medium-57', 'p2-high-120', 'p2-high-91', 'p2-low-65', 'p2-medium-129', 'p2-medium-144', 'p2-medium-243', 'p3-high-181', 'p3-medium-18'];
             for (const id of singleLead) {
                 const labels = labelsOf(id);
                 assert.equal(labels[0], 'Intro', id);
                 assert.deepEqual(labels.slice(1), labels.slice(1).map((_, index) => `Para ${String.fromCharCode(65 + index)}`), id);
             }
             const withIntro = results.filter(result => result.blocks.some(block => block.introLabel)).map(result => result.id).sort();
-            assert.deepEqual(withIntro, ['p1-medium-251', 'p2-high-250', ...singleLead].sort(), 'only the ten affected assets gain intro labels');
+            assert.deepEqual(withIntro, ['p1-medium-251', 'p2-high-250', ...singleLead].sort(), 'only the affected assets gain intro labels');
         });
     } finally {
         await page.close();
