@@ -6,6 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { loadReadingAsset as readingAsset } from '../js/helpers/readingVocabBlockBaseline.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -384,6 +385,129 @@ async function unresolvedRegression(page, saved) {
     }
 }
 
+// #239: unlabelled lead blocks render as Intro / Intro n while keeping their
+// passage/p-n scopes, so highlights persisted before a content or labelling
+// change restore after a reload.
+function labelledBodyClock(payload) {
+    // In-test A-H form of p2-medium-243: explicit labels on the eight body
+    // paragraphs, with the lead sentence kept as a plain unlabelled block.
+    const labelled = structuredClone(payload);
+    const starts = ['From buffalo', 'But what – and', 'During the 1970s', 'Scientists have since',
+        'But there is no', 'During the late', 'The details of how', 'In the search for'];
+    const block = labelled.passage.blocks[0];
+    const key = block.bodyHtml ? 'bodyHtml' : 'html';
+    starts.forEach((start, index) => {
+        const marker = `<p>${start}`;
+        assert.equal(block[key].split(marker).length, 2, `p2-medium-243 must contain one paragraph starting "${start}"`);
+        block[key] = block[key].replace(marker, `<p><strong>${'ABCDEFGH'[index]}</strong> ${start}`);
+    });
+    return labelled;
+}
+
+async function renderedLabels(page) {
+    return page.evaluate(() => {
+        const tabs = [...document.querySelectorAll('#vocab-reader-tabs .vocab-tab-btn')]
+            .filter(button => !['all', 'questions'].includes(button.dataset.para))
+            .map(button => [button.dataset.para, button.textContent.trim()]);
+        const cards = [...document.querySelectorAll('#vocab-passage-content .vocab-paragraph-card')]
+            .map(card => [card.dataset.paragraphId, card.querySelector('.vocab-para-letter').textContent.trim()]);
+        return { tabs, cards };
+    });
+}
+
+async function emulatePreChangeLabels(page) {
+    // Before #239 every unlabelled lead block took an ordinal letter. Rebuild that
+    // output from the current normalizer (identities and content are unchanged,
+    // as the corpus baseline test proves) so records can be saved as before.
+    await page.evaluate(() => {
+        const current = window.ReadingVocabContent;
+        window.ReadingVocabContent = Object.freeze({
+            normalizePassage(...args) {
+                const data = current.normalizePassage(...args);
+                data.blocks.forEach((block, index) => {
+                    if (!block.introLabel) return;
+                    block.letter = String.fromCharCode(65 + index);
+                    delete block.introLabel;
+                });
+                return data;
+            }
+        });
+    });
+}
+
+async function persistedRestore(context, { id, before, after, picks, expectedLabels, preChangeLabels = null }) {
+    let page = await context.newPage();
+    try {
+        await ready(page);
+        if (preChangeLabels) await emulatePreChangeLabels(page);
+        await open(page, id, before);
+        if (preChangeLabels) {
+            assert.deepEqual((await renderedLabels(page)).tabs, preChangeLabels, `${id}: highlights are saved under the pre-change labels`);
+        }
+        for (const [scope, word] of picks) {
+            const count = (await occurrences(page, null, id)).length;
+            await select(page, `#vocab-card-${scope} .vocab-paragraph-text`, word);
+            const deadline = Date.now() + 15_000;
+            while ((await occurrences(page, null, id)).length !== count + 1) {
+                if (Date.now() >= deadline) throw new Error(`${id}: ${word} in ${scope} was not persisted`);
+                await page.waitForTimeout(50);
+            }
+            await page.waitForFunction(() => ReadingVocabReader._selectionPending.size === 0 && !ReadingVocabReader._occurrenceBusy);
+        }
+        assert.equal((await occurrences(page, null, id)).length, picks.length, `${id}: every pick is persisted before reload`);
+    } finally { await page.close(); }
+
+    page = await context.newPage();
+    try {
+        await ready(page);
+        await open(page, id, after);
+        const restored = await marks(page);
+        const actual = restored.map(mark => [mark.scope, mark.text]).sort();
+        const expected = picks.map(([scope, word]) => [`passage/${scope}`, word]).sort();
+        assert.deepEqual(actual, expected, `${id}: all ${picks.length} persisted highlights restore in their original paragraphs`);
+        const labels = await renderedLabels(page);
+        assert.deepEqual(labels.tabs, expectedLabels, `${id}: tab labels`);
+        assert.deepEqual(labels.cards, expectedLabels, `${id}: tabs and paragraph cards use the same labels`);
+        pass(`${id}-persisted-highlights-restore-${picks.length}-of-${picks.length}`, { restored: actual.length, labels: labels.tabs.map(([, label]) => label) });
+    } finally { await page.close(); }
+}
+
+async function introLabelRegression(context) {
+    const paragraphs = count => Array.from({ length: count }, (_, index) => `p-${index + 1}`);
+    const labels = (count, leads) => paragraphs(count).map((scope, index) => [scope,
+        index < leads ? (leads === 1 ? 'Intro' : `Intro ${index + 1}`) : `Para ${String.fromCharCode(65 + index - leads)}`]);
+
+    const clock = readingAsset('p2-medium-243');
+    await persistedRestore(context, {
+        id: 'p2-medium-243', before: clock, after: labelledBodyClock(clock),
+        picks: [['p-1', 'rhythms'], ['p-2', 'buffalo'], ['p-3', 'timekeeper'], ['p-4', 'manifestations'],
+            ['p-5', 'pseudoscience'], ['p-7', 'suprachiasmatic'], ['p-8', 'culminate'], ['p-9', 'cyanobacterium']],
+        expectedLabels: labels(9, 1)
+    });
+
+    const fruit = readingAsset('p3-high-181');
+    await persistedRestore(context, {
+        id: 'p3-high-181', before: fruit, after: fruit,
+        picks: [['p-1', 'ethnobotanist'], ['p-2', 'dignitary'], ['p-3', 'tributary'], ['p-4', 'seminal'],
+            ['p-5', 'neighbours'], ['p-7', 'piquia'], ['p-9', 'subsistence'], ['p-10', 'literacy']],
+        expectedLabels: labels(10, 1),
+        // Saved by the pre-change reader (duplicate Para A), restored by the new one.
+        preChangeLabels: paragraphs(10).map((scope, index) => [scope, `Para ${String.fromCharCode(65 + Math.max(0, index - 1))}`])
+    });
+
+    const page = await context.newPage();
+    try {
+        await ready(page);
+        for (const id of ['p1-medium-251', 'p2-high-250']) {
+            await open(page, id, readingAsset(id));
+            const rendered = await renderedLabels(page);
+            assert.deepEqual(rendered.tabs, labels(9, 2), `${id}: Intro 1, Intro 2, Para A-G on p-1..p-9`);
+            assert.deepEqual(rendered.cards, labels(9, 2), `${id}: cards match tabs`);
+            pass(`${id}-multi-lead-intro-labels`, { labels: rendered.tabs.map(([, label]) => label) });
+        }
+    } finally { await page.close(); }
+}
+
 try {
     for (const protocol of ['http', 'file']) {
         const context = await browser.newContext({ hasTouch: true });
@@ -397,6 +521,7 @@ try {
                 await rejectedSelections(page);
                 await removalRegression(page, saved, annotationBefore);
                 await unresolvedRegression(page, saved);
+                await introLabelRegression(context);
             }
             const receipts = await page.evaluate(() => window.__occurrenceReceipts);
             assert.ok(receipts.length && receipts.every(row => row.saved === true && Number.isInteger(row.revision)));

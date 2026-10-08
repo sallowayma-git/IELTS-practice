@@ -183,6 +183,16 @@
             finish();
         }
 
+        // Unlabelled blocks before the first explicit paragraph label are a lead,
+        // not lettered paragraphs. They keep their block and passage/p-n identity
+        // but take no letter, so they cannot duplicate the explicit A, B, ...
+        // labels. Tabs and paragraph cards both show introLabel for them.
+        const firstExplicit = blocks.findIndex(block => block.explicitLabel);
+        for (let index = 0; index < firstExplicit; index += 1) {
+            blocks[index].letter = '';
+            blocks[index].introLabel = firstExplicit === 1 ? 'Intro' : `Intro ${index + 1}`;
+        }
+
         return {
             passageTitle,
             instructionHtml: instructions.join('\n'),
@@ -1894,7 +1904,9 @@
             if (tabsContainer) {
                 let tabsHtml = `<button type="button" class="vocab-tab-btn active" data-para="all">全文</button>`;
                 blocks.forEach(b => {
-                    tabsHtml += `<button type="button" class="vocab-tab-btn" data-para="${b.id}">Para ${b.letter}</button>`;
+                    tabsHtml += b.letter
+                        ? `<button type="button" class="vocab-tab-btn" data-para="${b.id}">Para ${b.letter}</button>`
+                        : `<button type="button" class="vocab-tab-btn" data-para="${b.id}">${escapeHtml(b.introLabel)}</button>`;
                 });
                 tabsHtml += `<button type="button" class="vocab-tab-btn vocab-tab-btn--questions" data-para="questions">📝 Questions</button>`;
                 tabsContainer.innerHTML = tabsHtml;
@@ -1909,7 +1921,7 @@
                         passageHtml += `
                             <div class="vocab-paragraph-card" id="vocab-card-${b.id}" data-paragraph-id="${b.id}" data-letter="${b.letter}">
                                 <div class="vocab-paragraph-tag">
-                                    <span class="vocab-para-letter">Para ${b.letter}</span>
+                                    ${b.letter ? `<span class="vocab-para-letter">Para ${b.letter}</span>` : `<span class="vocab-para-letter">${escapeHtml(b.introLabel)}</span>`}
                                 </div>
                                 <div class="vocab-paragraph-text" data-content-id="${b.id}"></div>
                                 <div class="vocab-translation-card" id="vocab-trans-${b.id}" style="display: ${this.showTranslation ? 'block' : 'none'};">
