@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createPage } from './helpers/readingVocabReaderHarness.js';
-import { baselinePath, compareToBaseline, loadReadingAssets, normalizeInPage } from './helpers/readingVocabBlockBaseline.mjs';
+import { baselinePath, compareToBaseline, digest, loadReadingAssets, normalizeInPage } from './helpers/readingVocabBlockBaseline.mjs';
 
 // #239: unlabelled blocks before the first explicit paragraph label render as
 // Intro / Intro 1..n and must not change block sequence, count, content or
@@ -16,6 +16,33 @@ const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
 const launch = () => chromium.launch({ headless: true,
     ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
 const expectedLabel = block => block.letter ? `Para ${block.letter}` : block.introLabel;
+
+test('baseline comparison permits only the approved intro-label delta', () => {
+    const fixture = {
+        sample: [
+            ['p-1', 'A', false, digest('<p>Lead</p>'), digest('Lead')],
+            ['p-2', 'A', true, digest('<p>Paragraph A</p>'), digest('Paragraph A')]
+        ]
+    };
+    const results = [{
+        id: 'sample',
+        blocks: [
+            { id: 'p-1', letter: '', introLabel: 'Intro', explicitLabel: false, html: '<p>Lead</p>', text: 'Lead' },
+            { id: 'p-2', letter: 'A', explicitLabel: true, html: '<p>Paragraph A</p>', text: 'Paragraph A' }
+        ]
+    }];
+    assert.deepEqual(compareToBaseline(results, fixture), []);
+
+    const changed = structuredClone(results);
+    changed[0].blocks[0].introLabel = 'Preface';
+    changed[0].blocks[1].letter = 'B';
+    changed[0].blocks[1].text = 'Changed';
+    assert.deepEqual(compareToBaseline(changed, fixture), [
+        'sample #1: lead block should be unlettered "Intro"',
+        'sample #2: text changed',
+        'sample #2: letter A -> B'
+    ]);
+});
 
 test('intro labelling keeps every reading asset block identical to the pre-change baseline', async t => {
     const browser = await launch();
