@@ -388,20 +388,20 @@ async function unresolvedRegression(page, saved) {
 // #239: unlabelled lead blocks render as Intro / Intro n while keeping their
 // passage/p-n scopes, so highlights persisted before a content or labelling
 // change restore after a reload.
-function labelledBodyClock(payload) {
-    // In-test A-H form of p2-medium-243: explicit labels on the eight body
-    // paragraphs, with the lead sentence kept as a plain unlabelled block.
-    const labelled = structuredClone(payload);
+function unlabelledBodyClock(payload) {
+    // p2-medium-243 as it was before #234: the same passage without the A-H
+    // labels on its eight body paragraphs (the lead sentence was already plain).
+    const unlabelled = structuredClone(payload);
     const starts = ['From buffalo', 'But what – and', 'During the 1970s', 'Scientists have since',
         'But there is no', 'During the late', 'The details of how', 'In the search for'];
-    const block = labelled.passage.blocks[0];
+    const block = unlabelled.passage.blocks[0];
     const key = block.bodyHtml ? 'bodyHtml' : 'html';
     starts.forEach((start, index) => {
-        const marker = `<p>${start}`;
-        assert.equal(block[key].split(marker).length, 2, `p2-medium-243 must contain one paragraph starting "${start}"`);
-        block[key] = block[key].replace(marker, `<p><strong>${'ABCDEFGH'[index]}</strong> ${start}`);
+        const marker = `<p><strong>${'ABCDEFGH'[index]}</strong> ${start}`;
+        assert.equal(block[key].split(marker).length, 2, `p2-medium-243 must contain one paragraph labelled ${'ABCDEFGH'[index]} starting "${start}"`);
+        block[key] = block[key].replace(marker, `<p>${start}`);
     });
-    return labelled;
+    return unlabelled;
 }
 
 async function renderedLabels(page) {
@@ -479,7 +479,7 @@ async function introLabelRegression(context) {
 
     const clock = readingAsset('p2-medium-243');
     await persistedRestore(context, {
-        id: 'p2-medium-243', before: clock, after: labelledBodyClock(clock),
+        id: 'p2-medium-243', before: unlabelledBodyClock(clock), after: clock,
         picks: [['p-1', 'rhythms'], ['p-2', 'buffalo'], ['p-3', 'timekeeper'], ['p-4', 'manifestations'],
             ['p-5', 'pseudoscience'], ['p-7', 'suprachiasmatic'], ['p-8', 'culminate'], ['p-9', 'cyanobacterium']],
         expectedLabels: labels(9, 1)
