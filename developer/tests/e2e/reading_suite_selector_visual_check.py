@@ -78,7 +78,7 @@ def install_tauri_mock(page, assets=ASSETS):
           if (command === 'ai_list_configs') return { ok: true, data: [] };
           if (command === 'writing_prompt_list') return { ok: true, data: [] };
           if (command === 'writing_topic_statistics') return { ok: true, data: { total: 0, byTaskType: [] } };
-          if (command === 'get_app_info') return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri', fastifyEnabled: false };
+          if (command === 'get_app_info') return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri' };
           if (command === 'get_app_data_paths') return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };
           if (command === 'list_backups') return { ok: true, data: [] };
           if (command === 'check_for_updates') return { configured: false, updateAvailable: false, installed: false, requiresRestart: false, currentVersion: '0.1.0', latestVersion: null, body: null, stage: 'unconfigured', message: '此构建未配置签名更新通道。' };

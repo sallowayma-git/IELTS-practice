@@ -17,7 +17,6 @@ pub struct AppInfo {
     pub tauri_version: String,
     pub product_name: String,
     pub host: String,
-    pub fastify_enabled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -28,7 +27,6 @@ pub struct StartupDiagnostics {
     pub app_data: String,
     pub logs_dir: String,
     pub legacy_data_dirs: Vec<String>,
-    pub fastify_enabled: bool,
     pub notes: Vec<String>,
 }
 
@@ -310,8 +308,6 @@ pub fn get_app_info() -> AppInfo {
         tauri_version: tauri::VERSION.into(),
         product_name: "IELTS Practice".into(),
         host: "tauri".into(),
-        // Explicit: Phase 2 shell must not start localhost business API.
-        fastify_enabled: false,
     }
 }
 
@@ -327,7 +323,6 @@ pub fn get_startup_diagnostics(paths: State<'_, AppPaths>) -> StartupDiagnostics
             .iter()
             .map(|p| p.display().to_string())
             .collect(),
-        fastify_enabled: false,
         notes: vec![
             "Phase 10 cutover: Tauri/Rust is the only shipping runtime.".into(),
             "No localhost Fastify business API is started.".into(),

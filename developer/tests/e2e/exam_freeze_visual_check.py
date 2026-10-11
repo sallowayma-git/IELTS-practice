@@ -91,7 +91,7 @@ MOCK = r"""
   };
   const answers = payload.questionOrder.map((questionId, index) => ({
     questionId, answer: index % 3 === 0 ? 'x' : payload.answerKey[questionId],
-    correctAnswer: payload.answerKey[questionId], isCorrect: index % 3 !== 0,
+    isCorrect: index % 3 !== 0,
     weight: 1, marked: index === 4, changeCount: 0, visitCount: 1, elapsedMs: 0
   }));
   const detail = {

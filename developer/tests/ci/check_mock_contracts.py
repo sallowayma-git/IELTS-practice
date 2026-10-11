@@ -113,14 +113,16 @@ def priority_bands() -> set[str]:
     return set(re.findall(r'"([a-z]+)"\.into\(\)', match.group(0)))
 
 
-def rust_literals() -> set[str]:
-    literals: set[str] = set()
-    for directory in RUST_DIRS:
-        for path in directory.rglob("*.rs"):
-            literals.update(re.findall(r'"([a-z][a-z0-9_]*)"', read(path)))
-    for path in MIGRATIONS.glob("*.sql"):
-        literals.update(re.findall(r"'([a-z][a-z0-9_]*)'", read(path)))
-    return literals
+def reason_codes() -> set[str]:
+    """Reason codes the learner model emits: the literals pushed by fn reason_codes."""
+    text = read(ROOT / "crates/ielts-db/src/learner.rs")
+    match = re.search(r"\nfn reason_codes\(.*?\n\}\n", text, re.S)
+    if not match:
+        raise SystemExit("could not parse fn reason_codes from learner.rs")
+    codes = set(re.findall(r'"([a-z][a-z0-9_]*)"\.into\(\)', match.group(0)))
+    if not codes:
+        raise SystemExit("fn reason_codes emits no literal codes")
+    return codes
 
 
 def scanned_files() -> list[Path]:
@@ -165,8 +167,8 @@ def check_file(path: Path, ctx: dict, failures: list[str]) -> None:
 
     for match in REASON_LIST.finditer(text):
         for code in STRING_LITERAL.findall(match.group(1)):
-            if code not in ctx["literals"]:
-                fail(match.start(), f"reason code '{code}' never appears in backend source")
+            if code not in ctx["reasons"]:
+                fail(match.start(), f"reason code '{code}' is not emitted by learner.rs fn reason_codes")
 
     for match in READING_CATEGORY_LOWER.finditer(text):
         fail(match.start(), f"reading category '{match.group(1)}' must be uppercase P1/P2/P3 (stored raw)")
@@ -183,7 +185,7 @@ def main() -> int:
         "criteria": writing_criteria(),
         "probes": probe_kinds(),
         "bands": priority_bands(),
-        "literals": rust_literals(),
+        "reasons": reason_codes(),
     }
     failures: list[str] = []
     files = scanned_files()

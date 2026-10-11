@@ -17,7 +17,7 @@
  *   practiced (any practice fact), events (memory events), quiet (no practice
  *   and no events), notesOnly (no practice, some events), first, gap, longGap.
  * Small sheets for the other fact types: note {kind}, noteAgain {kind},
- * unresolved {items}, practice {count, label}.
+ * practice {count, label}.
  *
  * Wording rules: "这一天" appears only in the opening line of an entry, so a
  * whole entry says it at most once. No narrator filler, no disapproval, no
@@ -388,16 +388,6 @@ export const BANK = {
     ]
   },
 
-  unresolved: {
-    default: [
-      '还没想明白的：{items}。',
-      '留着没解开的问题：{items}。',
-      '仍然悬着的疑问：{items}。',
-      '这次没能弄清的是：{items}。',
-      '还要再想一想：{items}。'
-    ]
-  },
-
   // Closing line above the open study-plan items.
   practice: {
     single: [
@@ -460,7 +450,6 @@ export const RULES = {
   ]),
   note: (facts) => NOTE_KEYS[facts.kind] || 'other',
   noteAgain: (facts) => NOTE_KEYS[facts.kind] || 'other',
-  unresolved: firstMatch([[(f) => f.items.length > 0, 'default']]),
   practice: firstMatch([
     [(f) => f.count === 1, 'single'],
     [(f) => f.count > 1, 'several']

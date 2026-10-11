@@ -78,7 +78,6 @@ const SMALL_SCENARIOS = [
   ['note', 'contradicted', { kind: 'contradicted' }],
   ['note', 'superseded', { kind: 'superseded' }],
   ['note', 'other', { kind: 'something_new' }],
-  ['unresolved', 'default', { items: 'NOT GIVEN 与 FALSE 的边界仍然模糊；第 9 题为何改答' }],
   ['practice', 'single', { count: 1, label: '判断题 · 对照练习' }],
   ['practice', 'several', { count: 3, label: '判断题 · 对照练习' }],
   ...Object.entries({ new: 'new_candidate', reinforced: 'reinforced', promoted: 'promoted', refined: 'refined', improved: 'improved', regressed: 'regressed', contradicted: 'contradicted', superseded: 'superseded', other: 'something_new' })
@@ -160,7 +159,6 @@ test('condition keys pick the edge cases: quiet, first page, long gap, single, z
   assert.equal(key('degraded', { writingEvalSummary: { completed: 0, degraded: 1 } }), null)
   // Open plan items.
   assert.equal(keyFor('practice', { count: 0 }), null)
-  assert.equal(keyFor('unresolved', { items: '' }), null)
 })
 
 test('the same date reads the same: stable across calls, order and what else was rendered', () => {
@@ -316,24 +314,6 @@ test('missing facts omit their sentence: no holes, no dangling punctuation, no s
   assert.equal(bare.observations.length, 2, 'an opening line and the attempt, nothing else')
   assert.ok(!/Band|写作|教练|追问/.test(prose), prose)
   assert.equal(bare.changeLead, '')
-  assert.equal(bare.unresolvedLine, '')
-
-  const rich = buildNotebookEntry({
-    journalDate: DAY,
-    facts: { attemptsCount: 2, timeSpentMs: 600_000, writingEvalSummary: { completed: 2, degraded: 1, averageBand: 6.5 }, coachFeedbackCount: 1, coachReaskCount: 1 },
-    unresolvedQuestions: ['为什么选 B？', '  ', { question: '第 9 题。' }, { text: '' }]
-  }, new Map(), { previousDay: null })
-  for (const line of [...rich.observations, rich.title, rich.unresolvedLine]) {
-    assert.ok(line.trim() === line && line.length > 0, `blank edge in "${line}"`)
-    assert.ok(!/[{}]|undefined|NaN/.test(line), line)
-    assert.ok(!/[，；：、]。|。。|，，|\s{2,}/.test(line), `dangling punctuation in "${line}"`)
-  }
-  for (const sentence of rich.observations) assert.ok(sentence.endsWith('。'), sentence)
-  assert.ok(rich.unresolvedLine.includes('为什么选 B？；第 9 题'), rich.unresolvedLine)
-  assert.ok(!rich.unresolvedLine.includes('？。'), 'a question mark does not also take a full stop')
-  assert.ok(rich.unresolvedLine.endsWith('。'), rich.unresolvedLine)
-  const asked = buildNotebookEntry({ journalDate: DAY, facts: {}, unresolvedQuestions: ['为什么选 B？'] }).unresolvedLine
-  assert.ok(asked.endsWith('为什么选 B？') && !asked.includes('？。'), asked)
 
   // A quiet day still gets one line, so the page is not just a heading.
   const quiet = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 0 } }, new Map(), { previousDay: null })
@@ -438,8 +418,8 @@ test('the day word appears at most once per entry, and only in the opening line'
       memoryEvents: index % 5 ? [{ memoryId: 'm1', changeKind: 'reinforced' }, { memoryId: 'm1', changeKind: 'reinforced' }] : []
     }
     const memories = new Map([['m1', { id: 'm1', statement: '一条记忆', evidenceIds: [] }]])
-    const entry = buildNotebookEntry({ journalDate: day, facts, unresolvedQuestions: ['为什么'] }, memories, { previousDay: index % 4 ? ISO(dayNumber(day) - 2) : null })
-    const text = [entry.title, ...entry.observations, entry.changeLead, entry.unresolvedLine, ...entry.notes.map((note) => `${note.statement}。${note.phrase}`)].join('\n')
+    const entry = buildNotebookEntry({ journalDate: day, facts }, memories, { previousDay: index % 4 ? ISO(dayNumber(day) - 2) : null })
+    const text = [entry.title, ...entry.observations, entry.changeLead, ...entry.notes.map((note) => `${note.statement}。${note.phrase}`)].join('\n')
     assert.ok(text.split('这一天').length - 1 <= 1, `${day} says 这一天 twice:\n${text}`)
     for (const bannedPhrase of ['只做了', '练习只有', '不太理想', '分成两头', '向教练请教过', '对教练的讲解给出了']) {
       assert.ok(!text.includes(bannedPhrase), `${day}: "${bannedPhrase}"`)

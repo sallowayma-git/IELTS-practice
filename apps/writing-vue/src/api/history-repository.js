@@ -172,7 +172,8 @@ export function mapHistoryDetailToSubmission(detail) {
     answerComparison[questionId] = {
       questionId,
       userAnswer: entry.answer,
-      correctAnswer: entry.correctAnswer ?? entry.correct_answer ?? null,
+      // AttemptAnswer carries no answer key; PracticeReadingPage fillCorrectAnswersFromPayload fills it from the asset answerKey.
+      correctAnswer: null,
       isCorrect: entry.isCorrect ?? entry.is_correct ?? null,
       weight: entry.weight ?? 1,
       matchMode: 'single',

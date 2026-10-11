@@ -59,7 +59,7 @@ def install_tauri_mock(page):
             return { ok: true, data: { total: 0, byTaskType: [] } };
           }
           if (command === 'get_app_info') {
-            return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri', fastifyEnabled: false };
+            return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri' };
           }
           if (command === 'get_app_data_paths') {
             return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };

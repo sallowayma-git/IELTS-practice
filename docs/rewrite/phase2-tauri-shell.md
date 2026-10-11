@@ -16,7 +16,7 @@
 | Logging bootstrap | `src-tauri/src/app/logging.rs` |
 | Route allowlist + legacy redirect | `src-tauri/src/app/routes.rs` |
 | Diagnostics commands | `src-tauri/src/commands/diagnostics.rs` |
-| No Fastify | `get_app_info().fastify_enabled == false` |
+| No Fastify | `Cargo.toml` declares no `fastify`; `get_app_info().host == "tauri"` |
 
 ## Commands exposed (main window only)
 

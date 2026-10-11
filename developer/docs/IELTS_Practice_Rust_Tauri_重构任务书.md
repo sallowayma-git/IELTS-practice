@@ -97,7 +97,6 @@
 
 - `apps/writing-vue/src/components/NavBar.vue`
 - `apps/writing-vue/src/views/PracticeLibraryPage.vue`
-- `developer/tests/e2e/writing_compose_draft_restore_e2e.py`
 - `developer/tests/js/practiceVueShell.test.js`
 
 核心变化：
@@ -125,7 +124,7 @@
 
 #### D. E2E 增加失败诊断
 
-`writing_compose_draft_restore_e2e.py` 在等待作文输入失败时采集 URL、标题、导航文字、标题列表和 body 摘要，比单纯 timeout 更利于定位回归。
+（已删除 `writing_compose_draft_restore_e2e.py`：它依赖 file:// 与已退役的 3905 宿主，且无运行器引用。）
 
 ### 2.3 最新提交仍存在的问题
 
@@ -173,7 +172,6 @@
 ```text
 npm run build:writing
 node developer/tests/js/practiceVueShell.test.js
-python developer/tests/e2e/writing_compose_draft_restore_e2e.py
 
 # 历史注记：practice_reading_vue_flow.py / practice_reading_suite_vue_flow.py
 # 已于 2026-08 清理删除（断言与现役代码脱节且无运行器引用）。
@@ -941,7 +939,7 @@ frontend/
 
 ### 阶段出口
 
-Tauri 壳编译通过并挂载现有 Vue `dist/writing`；诊断命令声明 `fastify_enabled=false`；legacy 路由可规范化；Electron 仍可回退。**已达成（updater 签名实操延后至密钥就绪）。**
+Tauri 壳编译通过并挂载现有 Vue `dist/writing`；诊断命令不再携带 Fastify 字段（已移除）；legacy 路由可规范化；Electron 仍可回退。**已达成（updater 签名实操延后至密钥就绪）。**
 
 ### 回滚点
 
@@ -1359,7 +1357,7 @@ checkpoint + boot recovery 覆盖中断；草稿与评分不因 cancel/crash 丢
 1. ⚠️ P0/P1 尚未全部关闭；真实 AI、资源打包、god-page/类型和 packaged E2E 仍缺证据。
 2. ⚠️ 有测试映射，但 CI/打包运行证据尚不完整。
 3. ✅ 旧数据迁移成功且可核验，失败可回滚：`ielts-db` importers + backup dry-run/import report。
-4. ✅ 不再运行 localhost 业务 API：`fastify_enabled=false`；`electron/`/`server/` 已删。
+4. ✅ 不再运行 localhost 业务 API（Fastify 字段已移除）；`electron/`/`server/` 已删。
 5. ✅ 不再由前端合并阅读和写作历史：统一 history repository/command。
 6. ✅ 新写入不包含 legacy alias 和重复 analysis envelope：domain DTO v2/v4。
 7. ✅ 活跃写作评测与阅读草稿可在异常重启后恢复：phase5/6 持久化 + 测试。

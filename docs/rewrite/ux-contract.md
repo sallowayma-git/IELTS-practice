@@ -78,7 +78,7 @@ This document freezes **user-visible behavior** for the rewrite. Any change that
 |---|---|---|---|
 | UX-W-01 | Task 1 / Task 2 switch | Category, min words, prompts update | compose E2E |
 | UX-W-02 | Bank + freeform | Bank stores assetId; freeform stores prompt snapshot | writing fixtures |
-| UX-W-03 | Draft autosave / restore | Malformed draft self-heal; no body loss | `writing_compose_draft_restore_e2e.py` |
+| UX-W-03 | Draft autosave / restore | Malformed draft self-heal; no body loss | none (legacy E2E removed) |
 | UX-W-04 | Submit de-dupe | One evaluation attempt per action | evaluate service tests |
 | UX-W-05 | Structured stage progress | No log-string stage parsing; restart recover/retry | evaluation state machine |
 | UX-W-06 | Stage-2 degradable | Keep scores + plan; mark missing sentence review | degraded fixture |

@@ -176,15 +176,6 @@ export function summarizeJournal(journal) {
   const coach = asNumber(facts.coachFeedbackCount || facts.coach_feedback_count, 0)
   const timeLabel = formatMinutes(facts.timeSpentMs || facts.time_spent_ms)
   const quiet = isQuietFacts(facts)
-  const unresolvedRaw = journal.unresolvedQuestions || journal.unresolved_questions || []
-  const unresolved = asArray(unresolvedRaw).map((item) => {
-    if (typeof item === 'string') return item
-    if (item && typeof item === 'object') {
-      return String(item.question || item.text || item.prompt || '').trim()
-    }
-    return ''
-  }).filter(Boolean)
-
   const rows = [
     { label: '练习次数', value: attempts ? `${attempts} 次` : '还没有练习' },
     { label: '写作评测', value: formatWritingEval(facts.writingEvalSummary || facts.writing_eval_summary) },
@@ -201,8 +192,7 @@ export function summarizeJournal(journal) {
     lede: quiet
       ? '当日没有新的练习痕迹。'
       : '根据当日的练习，系统整理出这些变化。',
-    rows,
-    unresolved
+    rows
   }
 }
 

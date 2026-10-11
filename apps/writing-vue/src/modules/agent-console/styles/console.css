@@ -248,14 +248,6 @@
   color: var(--anth-ink);
 }
 
-.agent-journal-unresolved {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
-}
-
 .agent-journal-card--empty {
   justify-content: center;
   background: transparent;

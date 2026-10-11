@@ -77,7 +77,7 @@
           <h2 class="heading-serif">{{ entry.title }}</h2>
         </header>
 
-        <section v-if="entry.observations.length || entry.notes.length || entry.unresolved.length" class="notebook-section">
+        <section v-if="entry.observations.length || entry.notes.length" class="notebook-section">
           <h3><span class="notebook-mark" aria-hidden="true">§</span>观察</h3>
           <p v-if="entry.observations.length" class="notebook-prose">{{ entry.observations.join('') }}</p>
           <ul v-if="entry.notes.length" class="notebook-notes">
@@ -109,7 +109,6 @@
               </span>
             </li>
           </ul>
-          <p v-if="entry.unresolvedLine" class="notebook-prose notebook-prose--quiet">{{ entry.unresolvedLine }}</p>
         </section>
 
         <section v-if="entry.changes.improved.length || entry.changes.recurring.length" class="notebook-section">
@@ -501,11 +500,6 @@ onMounted(load)
   font-family: var(--anth-font-serif);
   font-size: 1.0625rem;
   line-height: var(--anth-leading-relaxed);
-}
-
-.notebook-prose--quiet {
-  margin-top: 6px;
-  color: var(--anth-ink-soft);
 }
 
 /* A one-line lead-in above a list: quieter than the list it introduces. */

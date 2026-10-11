@@ -229,13 +229,6 @@ export function factSheet(facts, change, day, context = {}) {
 // The 观察 paragraph, in reading order. Each type says nothing when its fact is absent.
 const OBSERVATION_FACTS = ['opening', 'attempts', 'writing', 'degraded', 'coach', 'reask']
 
-function unresolvedQuestions(journal) {
-  return (journal.unresolvedQuestions || journal.unresolved_questions || [])
-    .map((item) => typeof item === 'string' ? item : String(item?.question || item?.text || ''))
-    .map((text) => text.trim().replace(/[。．.\s]+$/u, ''))
-    .filter(Boolean)
-}
-
 /**
  * One dated notebook entry from a persisted daily journal. `context` says
  * where the day sits among the finished days (`previousDay`, see factSheet);
@@ -247,7 +240,6 @@ export function buildNotebookEntry(journal, memoriesById = new Map(), context = 
   const day = String(journal.journalDate || journal.journal_date || facts.journalDate || '')
   const change = changes(facts)
   const sheet = factSheet(facts, change, day, context)
-  const unresolved = unresolvedQuestions(journal)
   return {
     day,
     dateLabel: formatEntryDate(day),
@@ -255,9 +247,7 @@ export function buildNotebookEntry(journal, memoriesById = new Map(), context = 
     observations: OBSERVATION_FACTS.map((type) => phrase(type, sheet, day)).filter(Boolean),
     notes: memoryNotes(facts, memoriesById, day),
     changeLead: phrase('changeLead', sheet, day),
-    changes: change,
-    unresolved,
-    unresolvedLine: phrase('unresolved', { items: unresolved.join('；') }, day)
+    changes: change
   }
 }
 

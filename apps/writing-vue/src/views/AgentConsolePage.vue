@@ -968,9 +968,6 @@ onMounted(() => {
                 <dd>{{ row.value }}</dd>
               </div>
             </dl>
-            <ul v-if="journalSummary.unresolved.length" class="agent-journal-unresolved">
-              <li v-for="(q, i) in journalSummary.unresolved" :key="i">{{ q }}</li>
-            </ul>
           </template>
           <p v-else role="status">{{ formatJournalDate(journalDate) }}暂无学习日记。</p>
           <button class="agent-text-button" type="button" :disabled="journalReading" @click="loadJournal">重新读取日记</button>
