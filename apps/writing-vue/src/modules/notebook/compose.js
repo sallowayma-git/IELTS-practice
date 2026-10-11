@@ -33,8 +33,8 @@ function asNumber(value) {
 }
 
 function shortSkill(skillKey) {
-  const label = formatSkillKey(skillKey)
-  return label.includes('·') ? label.split('·').pop().trim() : label
+  const parts = formatSkillKey(skillKey).split('·').map((part) => part.trim()).filter(Boolean)
+  return (parts.length > 1 ? parts.slice(1) : parts).join('·')
 }
 
 /**

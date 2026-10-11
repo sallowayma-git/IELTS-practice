@@ -1,23 +1,23 @@
 <template>
   <div class="compose-page">
-    <section v-if="showDraftNotification" class="draft-banner draft-notification card card-whisper">
+    <section v-if="showDraftNotification" class="draft-banner draft-notification">
       <div class="draft-banner__copy">
-        <span class="panel-label">草稿恢复</span>
+        <span class="draft-banner__label">草稿恢复</span>
         <strong>检测到未保存的草稿</strong>
         <p>可以直接恢复继续写，也可以丢弃后从空白工作台开始。</p>
       </div>
       <div class="draft-banner__actions">
-        <button class="btn btn-secondary btn-warm-sand" @click="handleDiscardDraft">
+        <button class="btn btn-secondary" @click="handleDiscardDraft">
           放弃
         </button>
-        <button class="btn btn-primary btn-warm-sand" @click="handleRecoverDraft">
+        <button class="btn btn-primary" @click="handleRecoverDraft">
           恢复草稿
         </button>
       </div>
     </section>
 
     <div class="practice-shell">
-      <aside class="practice-left card card-whisper">
+      <aside class="practice-left">
         <header class="compose-hero">
           <h1 class="heading-serif">写作练习</h1>
           <p class="compose-hero__meta">
@@ -30,7 +30,7 @@
         <section class="compose-config-top">
           <div class="config-toolbar">
             <div class="config-section">
-              <span class="config-label">任务分配</span>
+              <span class="config-label">写作任务</span>
               <div class="toggle-group toggle-group--compact">
                 <button
                   :class="['toggle-item', 'task-btn', { active: taskType === 'task1' }]"
@@ -78,52 +78,46 @@
             </div>
             <div v-else class="topic-panel">
               <div class="prompt-content">
-                <div class="prompt-meta">
-                  <div class="prompt-title">
-                    <strong v-if="selectedTopicText">{{ currentTopicLabel }}</strong>
-                    <strong v-else style="opacity: 0.6;">等待选择题目...</strong>
-                  </div>
-                  <div class="field-row inline-topic-selectors">
-                    <select id="topic-category" v-model="selectedCategory" class="select select-sm inline-select">
-                      <option value="">全部分类</option>
-                      <option
-                        v-for="option in categoryOptions"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </option>
-                    </select>
-                    <select
-                      id="topic-select"
-                      :value="selectedTopicId === null ? '' : String(selectedTopicId)"
-                      class="select select-sm inline-select"
-                      :disabled="topicLoading || topicsList.length === 0"
-                      @change="handleTopicChange"
+                <div class="field-row inline-topic-selectors">
+                  <select id="topic-category" v-model="selectedCategory" class="select select-sm inline-select inline-select--category">
+                    <option value="">全部分类</option>
+                    <option
+                      v-for="option in categoryOptions"
+                      :key="option.value"
+                      :value="option.value"
                     >
-                      <option value="">选择具体考题</option>
-                      <option
-                        v-for="topic in topicsList"
-                        :key="topic.id"
-                        :value="String(topic.id)"
-                      >
-                        {{ getTopicOptionLabel(topic) }}
-                      </option>
-                    </select>
-                  </div>
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <select
+                    id="topic-select"
+                    :value="selectedTopicId === null ? '' : String(selectedTopicId)"
+                    class="select select-sm inline-select"
+                    :disabled="topicLoading || topicsList.length === 0"
+                    @change="handleTopicChange"
+                  >
+                    <option value="">选择具体考题</option>
+                    <option
+                      v-for="topic in topicsList"
+                      :key="topic.id"
+                      :value="String(topic.id)"
+                    >
+                      {{ getTopicOptionLabel(topic) }}
+                    </option>
+                  </select>
                 </div>
 
                 <div v-if="topicLoading" class="topic-status">数据同步中...</div>
                 <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
-                <div v-else-if="selectedTopicText">
+                <div v-else-if="selectedTopicText" class="prompt-selected">
+                  <p class="prompt-category">{{ currentTopicLabel }}</p>
                   <p class="prompt-text">{{ selectedTopicText }}</p>
                   <figure v-if="selectedTopicImage" class="prompt-image">
                     <img :src="selectedTopicImage" :alt="`${currentTopicLabel} Task 1 图表`" />
                   </figure>
                 </div>
-                <div v-else class="topic-status topic-status-plain">
-                  <span v-if="topicsList.length === 0" style="opacity: 0.5;">当前分类下无记录</span>
-                  <span v-else style="opacity: 0.5;"></span>
+                <div v-else class="topic-status">
+                  {{ topicsList.length === 0 ? '当前分类下无记录' : '等待选择题目…' }}
                 </div>
               </div>
             </div>
@@ -131,21 +125,16 @@
         </section>
       </aside>
 
-      <section class="practice-right compose-editor card">
+      <section class="practice-right compose-editor">
         <div class="editor-head">
           <div class="editor-head__copy">
             <h2 class="heading-serif">作文</h2>
-            <div class="word-meta">
-              目标 <strong>{{ targetWordCount }}</strong> 词
-            </div>
+            <p class="word-meta">目标 <strong>{{ targetWordCount }}</strong> 词</p>
           </div>
-
-          <div class="editor-head__stats">
-            <div :class="['word-badge', { 'is-warning': isWordCountLow }]">
-              <strong class="word-badge-value">{{ wordCount }}</strong>
-              <span class="word-badge-label">词</span>
-            </div>
-          </div>
+          <p class="word-badge">
+            <strong class="word-badge-value">{{ wordCount }}</strong>
+            <span class="word-badge-label">词</span>
+          </p>
         </div>
 
         <div v-if="error || restoreNotice" class="editor-notices">
@@ -165,12 +154,12 @@
         ></textarea>
 
         <div class="editor-footer">
-          <div class="word-status">
+          <p class="word-status">
             <span class="word-status__label">提交限制</span>
             <strong :class="{ 'is-warning': isWordCountLow }">
               {{ isWordCountLow ? `至少 ${minWordCount} 词` : '已达到字数要求' }}
             </strong>
-          </div>
+          </p>
 
           <div class="editor-actions">
             <button class="btn-text" @click="scheduleSave">
@@ -189,7 +178,7 @@
     </div>
 
     <div v-if="showConfirmDialog" class="dialog-overlay">
-      <div class="dialog card">
+      <div class="dialog">
         <h3>字数不足提醒</h3>
         <p>
           作文字数不足，建议至少达到 <strong>{{ minWordCount }}</strong> 词后再提交评分。
@@ -700,6 +689,7 @@ async function submitEssay() {
 <style scoped>
 /* Compose: the task on the left, the essay on the right, a hairline between. */
 .compose-page {
+  --compose-head-height: 5.5rem;
   display: grid;
   gap: 24px;
   min-width: 0;
@@ -716,15 +706,13 @@ async function submitEssay() {
 .practice-left,
 .compose-editor {
   min-width: 0;
-  border: 0;
-  background: var(--anth-canvas);
 }
 
 .practice-left {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 0 40px 0 0;
+  gap: 24px;
+  padding-right: 40px;
 }
 
 .compose-editor {
@@ -732,17 +720,17 @@ async function submitEssay() {
   flex-direction: column;
   gap: 16px;
   min-height: calc(100vh - 200px);
-  padding: 0 0 0 40px;
+  padding-left: 40px;
   border-left: 1px solid var(--anth-rule);
 }
 
-/* Draft banner: a quiet note with a clay rule on the left. */
+/* Draft banner: a quiet note with a clay rule on the left (global skin). */
 .draft-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 12px 0 12px 16px;
+  padding: 8px 0 8px 16px;
 }
 
 .draft-banner__copy {
@@ -768,7 +756,29 @@ async function submitEssay() {
   gap: 10px;
 }
 
-/* Task column */
+/* The page's single solid action is the submit button; the banner's choice is outlined. */
+.draft-banner__actions .btn-primary {
+  border-color: var(--anth-ink);
+  background: transparent;
+  color: var(--anth-ink);
+}
+
+.draft-banner__actions .btn-primary:hover:not(:disabled) {
+  background: var(--anth-surface-hover);
+  color: var(--anth-ink);
+}
+
+/* Both columns open with a heading that ends on the same ink rule. */
+.compose-hero,
+.editor-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: var(--compose-head-height);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--anth-ink);
+}
+
 .compose-hero h1 {
   margin: 0;
   font-size: clamp(1.75rem, 3vw, 2.125rem);
@@ -779,7 +789,7 @@ async function submitEssay() {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--anth-ink-faint);
   font-size: var(--anth-text-sm);
   font-variant-numeric: lining-nums tabular-nums;
@@ -788,11 +798,11 @@ async function submitEssay() {
 .compose-hero__meta span + span::before {
   content: "·";
   margin-right: 10px;
-  color: var(--anth-ink-faint);
 }
 
 .compose-config-top {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 
@@ -800,8 +810,6 @@ async function submitEssay() {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--anth-ink);
 }
 
 .config-section {
@@ -810,15 +818,17 @@ async function submitEssay() {
   min-width: 0;
 }
 
-.prompt-display {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
+.compose-page .toggle-group {
+  gap: 20px;
 }
 
-.topic-panel {
+.prompt-display,
+.topic-panel,
+.prompt-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
 }
 
 .topic-input {
@@ -828,24 +838,6 @@ async function submitEssay() {
   line-height: var(--anth-leading-normal);
 }
 
-.prompt-content {
-  display: grid;
-  gap: 14px;
-}
-
-.prompt-meta {
-  display: grid;
-  gap: 10px;
-}
-
-.prompt-title strong {
-  color: var(--anth-ink-strong);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-lg);
-  font-weight: var(--anth-weight-semibold);
-}
-
-.field-row,
 .inline-topic-selectors {
   display: flex;
   flex-wrap: wrap;
@@ -853,9 +845,26 @@ async function submitEssay() {
 }
 
 .inline-select {
-  flex: 1 1 160px;
+  flex: 1 1 12rem;
   min-width: 0;
   min-height: 38px;
+}
+
+.inline-select--category {
+  flex: 0 1 9rem;
+}
+
+.prompt-selected {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--anth-rule);
+}
+
+.prompt-category {
+  margin: 0;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
 }
 
 .prompt-text {
@@ -871,7 +880,6 @@ async function submitEssay() {
 .prompt-image {
   margin: 0;
   padding-top: 12px;
-  border-top: 1px solid var(--anth-rule);
 }
 
 .prompt-image img {
@@ -892,41 +900,23 @@ async function submitEssay() {
 
 /* Essay column */
 .editor-head {
-  display: flex;
-  align-items: baseline;
+  flex-direction: row;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--anth-ink);
 }
 
-.editor-head__copy {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  min-width: 0;
-}
-
-.editor-head__copy h2 {
+.editor-head h2 {
   margin: 0;
   font-size: var(--anth-text-xl);
-}
-
-.word-meta {
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-}
-
-.word-meta strong {
-  color: var(--anth-ink-soft);
-  font-weight: var(--anth-weight-medium);
-  font-variant-numeric: lining-nums tabular-nums;
+  line-height: var(--anth-leading-tight);
 }
 
 .word-badge {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  margin: 0;
   color: var(--anth-ink-faint);
   font-size: var(--anth-text-sm);
 }
@@ -937,11 +927,6 @@ async function submitEssay() {
   font-size: var(--anth-text-xl);
   font-weight: var(--anth-weight-semibold);
   font-variant-numeric: lining-nums tabular-nums;
-}
-
-.word-badge.is-warning strong,
-.word-status strong.is-warning {
-  color: var(--anth-warning);
 }
 
 .editor-notices {
@@ -955,7 +940,6 @@ async function submitEssay() {
   min-height: 460px;
   padding: 20px 22px;
   border-color: var(--anth-rule);
-  background: var(--anth-surface-sunken);
   color: var(--anth-ink);
   font-family: var(--anth-font-serif);
   font-size: 1.0625rem;
@@ -978,8 +962,9 @@ async function submitEssay() {
 
 .word-status {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+  margin: 0;
   font-size: var(--anth-text-sm);
 }
 
@@ -988,8 +973,22 @@ async function submitEssay() {
 }
 
 .word-status strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   color: var(--anth-success);
-  font-weight: var(--anth-weight-medium);
+  font-weight: var(--anth-weight-normal);
+}
+
+.word-status strong::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+}
+
+.word-status strong.is-warning {
+  color: var(--anth-warning);
 }
 
 .editor-actions {
@@ -998,28 +997,39 @@ async function submitEssay() {
   gap: 20px;
 }
 
-/* The one clay action on this page. */
-.compose-page .submit-btn {
+.submit-btn {
   min-width: 132px;
-  border-color: var(--anth-accent);
-  background: var(--anth-accent);
-  color: var(--anth-accent-contrast);
 }
 
-.compose-page .submit-btn:hover:not(:disabled) {
-  border-color: var(--anth-accent-strong);
-  background: var(--anth-accent-strong);
-}
-
-.compose-page .submit-btn:disabled {
-  border-color: var(--anth-border-strong);
-  background: transparent;
-  color: var(--anth-ink-faint);
+/* Disabled stays solid (muted ink) so the submit reads as the one primary action, not an outline. */
+.submit-btn:disabled {
+  border-color: var(--anth-ink-disabled);
+  background: var(--anth-ink-disabled);
+  color: var(--anth-canvas);
   opacity: 1;
 }
 
-.compose-page .toggle-group {
-  gap: 20px;
+.editor-head__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.word-meta {
+  margin: 0;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.word-meta strong {
+  color: var(--anth-ink-soft);
+  font-weight: var(--anth-weight-medium);
+}
+
+.draft-banner__label {
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-xs);
 }
 
 @media (max-width: 1100px) {
@@ -1029,14 +1039,18 @@ async function submitEssay() {
   }
 
   .practice-left {
-    padding: 0;
+    padding-right: 0;
+  }
+
+  .compose-hero,
+  .editor-head {
+    min-height: 0;
   }
 
   .compose-editor {
     min-height: 0;
-    padding: 24px 0 0;
+    padding: 0;
     border-left: 0;
-    border-top: 1px solid var(--anth-rule);
   }
 }
 
@@ -1051,6 +1065,7 @@ async function submitEssay() {
     flex-direction: column;
   }
 
+  .draft-banner__actions,
   .editor-actions {
     justify-content: space-between;
   }

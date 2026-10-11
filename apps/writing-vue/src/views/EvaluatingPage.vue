@@ -4,9 +4,13 @@
       <section class="essay-panel">
         <header class="essay-head">
           <h1 class="heading-serif">作文评测</h1>
-          <p class="topic-meta">{{ displayTopicText }}</p>
-          <span class="word-badge">{{ displayWordCount }} 词</span>
+          <p class="word-count">IELTS 写作 · {{ displayWordCount }} 词</p>
         </header>
+
+        <div class="topic-block">
+          <h2 class="topic-block__label">评测题目</h2>
+          <p class="topic-block__text">{{ displayTopicText }}</p>
+        </div>
 
         <div class="essay-body">
           <p v-if="!essayContentFull" class="essay-placeholder">正在读取作文内容…</p>
@@ -18,21 +22,19 @@
 
       <aside class="status-rail">
         <section class="rail-progress">
-          <h2 class="heading-serif">正在评分</h2>
-          <p class="subtitle">依据 IELTS 写作评分标准逐项分析。</p>
+          <h2 class="heading-serif">{{ error ? '评分未完成' : '正在评分' }}</h2>
+          <div v-if="error" class="evaluation-error" role="alert">
+            <p>{{ error.message }}</p>
+            <p class="status-meta">作文已保存在本机；可直接重试，或取消后返回写作页继续修改。</p>
+          </div>
+          <p v-else class="subtitle">依据 IELTS 写作评分标准逐项分析。</p>
           <p class="progress-figure"><span>{{ progress }}</span>%</p>
           <div class="progress-rail" role="progressbar" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" :aria-label="`评测进度：${progress}%`">
             <div class="progress-bar">
               <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
             </div>
           </div>
-          <p class="status-meta">{{ currentStageLabel }}</p>
-        </section>
-
-        <section v-if="error" class="rail-section evaluation-error" role="alert">
-          <h3>评测未完成</h3>
-          <p>{{ error.message }}</p>
-          <p class="status-meta">作文已保存在本机；可直接重试，或取消后返回写作页继续修改。</p>
+          <p class="stage-label" :class="{ 'stage-label--failed': error }">{{ currentStageLabel }}</p>
         </section>
 
         <section class="rail-section rail-log">
@@ -49,7 +51,7 @@
         </section>
 
         <div class="action-row">
-          <button class="btn btn-secondary" :disabled="isRetrying || isComplete" @click="handleRetry">
+          <button :class="['btn', error ? 'btn-brand' : 'btn-text']" :disabled="isRetrying || isComplete" @click="handleRetry">
             {{ isRetrying ? '重试中...' : '重试评分' }}
           </button>
           <button class="btn-text" :disabled="isRetrying || isCancelling" @click="handleCancel">
@@ -66,6 +68,7 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { evaluate, getErrorMessage, resolveApiErrorMessage } from '@/api/client.js'
 import { getDraft } from '@/api/writing-repository.js'
+import { normalizeMap } from '@/utils/evaluation-result.js'
 
 const props = defineProps({
   sessionId: {
@@ -106,6 +109,8 @@ onMounted(() => {
   eventListenerId = evaluate.onEvent(handleEvent)
   if (route.query.startError) {
     error.value = { code: String(route.query.startError), message: getErrorMessage(String(route.query.startError)) }
+    currentStage.value = 'failed'
+    stageMessage.value = error.value.message
     appendLog('error', error.value.message)
   }
   void hydrateSessionState()
@@ -485,7 +490,6 @@ function appendLog(kind, message, event = null) {
   display: grid;
   gap: 6px;
   padding-bottom: 18px;
-  margin-bottom: 24px;
   border-bottom: 1px solid var(--anth-rule);
 }
 
@@ -494,18 +498,32 @@ function appendLog(kind, message, event = null) {
   font-size: clamp(1.75rem, 3vw, 2.125rem);
 }
 
-.topic-meta {
+.word-count {
   margin: 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
-}
-
-.word-badge {
   color: var(--anth-ink-faint);
   font-size: var(--anth-text-sm);
   font-variant-numeric: lining-nums tabular-nums;
+}
+
+.topic-block {
+  margin: 20px 0 28px;
+}
+
+.topic-block__label {
+  margin: 0 0 4px;
+  color: var(--anth-ink-faint);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-normal);
+}
+
+.topic-block__text {
+  max-width: var(--anth-measure);
+  margin: 0;
+  color: var(--anth-ink-soft);
+  font-family: var(--anth-font-serif);
+  font-style: italic;
+  line-height: var(--anth-leading-relaxed);
 }
 
 .essay-body {
@@ -564,6 +582,25 @@ function appendLog(kind, message, event = null) {
   font-size: var(--anth-text-sm);
 }
 
+.evaluation-error {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--anth-danger);
+}
+
+.evaluation-error p {
+  margin: 0;
+  color: var(--anth-danger);
+  font-size: var(--anth-text-sm);
+}
+
+.evaluation-error .status-meta {
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-xs);
+}
+
 .progress-figure {
   margin: 20px 0 8px;
   color: var(--anth-ink-faint);
@@ -589,10 +626,29 @@ function appendLog(kind, message, event = null) {
   transition: width var(--anth-duration-slow) var(--anth-ease);
 }
 
-.status-meta {
-  margin: 8px 0 0;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
+/* Stage: a word with a square marker. */
+.stage-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-sm);
+}
+
+.stage-label::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: var(--anth-ink);
+}
+
+.stage-label--failed {
+  color: var(--anth-danger);
+}
+
+.stage-label--failed::before {
+  background: var(--anth-danger);
 }
 
 .rail-section h3 {
@@ -600,17 +656,6 @@ function appendLog(kind, message, event = null) {
   font-family: var(--anth-font-sans);
   font-size: var(--anth-text-sm);
   font-weight: var(--anth-weight-semibold);
-}
-
-.evaluation-error {
-  padding-left: 14px;
-  border-left: 2px solid var(--anth-danger);
-}
-
-.evaluation-error p {
-  margin: 0;
-  color: var(--anth-danger);
-  font-size: var(--anth-text-sm);
 }
 
 .log-list {
@@ -632,8 +677,7 @@ function appendLog(kind, message, event = null) {
 
 .log-time {
   color: var(--anth-ink-faint);
-  font-family: var(--anth-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .log-message {
@@ -651,8 +695,6 @@ function appendLog(kind, message, event = null) {
   display: flex;
   align-items: center;
   gap: 20px;
-  border: 0;
-  background: transparent;
 }
 
 @media (max-width: 960px) {

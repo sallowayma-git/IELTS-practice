@@ -68,55 +68,52 @@
       </section>
 
       <aside class="right-panel">
-        <div class="glass-card score-summary">
-          <h3>总评</h3>
-          <div class="score-ring-container">
+        <section class="result-section score-section" aria-labelledby="score-heading">
+          <h3 id="score-heading">评分表</h3>
+          <div class="score-total-row">
             <span class="score-total">{{ scoreData?.total_score ?? '-' }}</span>
             <span class="score-label">总分 Band</span>
-            <span class="score-scale" aria-hidden="true">
-              <span class="score-scale__mark" :style="{ left: `${Math.min(100, Math.max(0, (Number(scoreData?.total_score) || 0) / 9 * 100))}%` }"></span>
-            </span>
-            <span class="score-scale__ends" aria-hidden="true"><span>0</span><span>9</span></span>
           </div>
-        </div>
+          <table class="criteria-table">
+            <thead>
+              <tr>
+                <th scope="col">评分标准</th>
+                <th scope="col" class="num">Band</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in criteriaRows" :key="row.key">
+                <th scope="row">{{ row.label }} <span class="criterion-code">{{ row.code }}</span></th>
+                <td class="num">{{ row.band }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <dl v-if="rationaleRows.length > 0" class="rationale-list">
+            <div v-for="row in rationaleRows" :key="row.key" class="rationale-item">
+              <dt>{{ row.label }}</dt>
+              <dd>{{ row.reason }}</dd>
+            </div>
+          </dl>
+        </section>
 
-        <div v-if="reviewDegraded" class="degraded-warning">
+        <div v-if="reviewDegraded" class="degraded-note">
           <h4>详解已降级</h4>
           <p>{{ sentenceEmptyHint }}</p>
         </div>
 
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="metric-label">任务回应 Task Response</div>
-            <div class="metric-value">{{ scoreData?.task_achievement ?? '-' }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">连贯衔接 Coherence</div>
-            <div class="metric-value">{{ scoreData?.coherence_cohesion ?? '-' }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">词汇资源 Lexical</div>
-            <div class="metric-value">{{ scoreData?.lexical_resource ?? '-' }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">语法 Grammar</div>
-            <div class="metric-value">{{ scoreData?.grammatical_range ?? '-' }}</div>
-          </div>
-        </div>
-
-        <div v-if="feedback" class="glass-card">
+        <section v-if="feedback" class="result-section">
           <h3>整体改进建议</h3>
           <p class="prose-text">{{ feedback }}</p>
-        </div>
+        </section>
 
-        <div v-if="improvementPlan && improvementPlan.length > 0" class="glass-card">
+        <section v-if="improvementPlan && improvementPlan.length > 0" class="result-section">
           <h3>核心提分计划</h3>
           <ol class="plan-list">
             <li v-for="(item, idx) in improvementPlan" :key="idx">{{ item }}</li>
           </ol>
-        </div>
+        </section>
 
-        <div v-if="reviewBlocks && reviewBlocks.length > 0" class="glass-card">
+        <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section">
           <h3>段落详评</h3>
           <dl class="rationale-list">
             <div v-for="(item, idx) in reviewBlocks" :key="idx" class="rationale-item">
@@ -124,19 +121,9 @@
               <dd>{{ typeof item === 'object' ? (item.comment || item.analysis || item.feedback || '') : item }}</dd>
             </div>
           </dl>
-        </div>
+        </section>
 
-        <div v-if="bandRationaleEntries && bandRationaleEntries.length > 0" class="glass-card">
-          <h3>得分解析</h3>
-          <dl class="rationale-list">
-            <div v-for="item in bandRationaleEntries" :key="item.label" class="rationale-item">
-              <dt>{{ item.label }}</dt>
-              <dd>{{ item.value }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="glass-card">
+        <section v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="result-section">
           <h3>任务诊断</h3>
           <dl class="rationale-list">
             <div v-for="item in taskAnalysisEntries" :key="item.label" class="rationale-item">
@@ -144,7 +131,7 @@
               <dd>{{ item.value }}</dd>
             </div>
           </dl>
-        </div>
+        </section>
 
         <div class="result-next">
           <button @click="writeNew" class="btn btn-brand">再写一篇</button>
@@ -163,7 +150,8 @@ import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
   buildEvaluationView,
-  formatLabeledEntries
+  formatLabeledEntries,
+  normalizeMap
 } from '@/utils/evaluation-result.js'
 
 const props = defineProps({
@@ -206,9 +194,32 @@ const taskAnalysisEntries = computed(() => (
   formatLabeledEntries(taskAnalysis.value, TASK_ANALYSIS_LABELS)
 ))
 
-const bandRationaleEntries = computed(() => (
-  formatLabeledEntries(bandRationale.value, BAND_RATIONALE_LABELS)
+const CRITERIA = [
+  { key: 'task_achievement', label: '任务回应', code: 'TR' },
+  { key: 'coherence_cohesion', label: '连贯与衔接', code: 'CC' },
+  { key: 'lexical_resource', label: '词汇资源', code: 'LR' },
+  { key: 'grammatical_range', label: '语法范围与准确性', code: 'GRA' }
+]
+
+const criteriaRows = computed(() => (
+  CRITERIA.map((item) => ({
+    ...item,
+    band: scoreData.value?.[item.key] ?? '-'
+  }))
 ))
+
+// Standard criteria first, then any extra rationale keys the engine returned (never dropped).
+const rationaleRows = computed(() => {
+  const rationale = normalizeMap(bandRationale.value)
+  const standardKeys = new Set(CRITERIA.map((item) => item.key))
+  const standard = CRITERIA
+    .filter((item) => typeof rationale[item.key] === 'string' && rationale[item.key].trim())
+    .map((item) => ({ key: item.key, label: item.label, reason: rationale[item.key].trim() }))
+  const extra = Object.entries(rationale)
+    .filter(([key, value]) => !standardKeys.has(key) && typeof value === 'string' && value.trim())
+    .map(([key, value]) => ({ key, label: BAND_RATIONALE_LABELS[key] || key, reason: value.trim() }))
+  return [...standard, ...extra]
+})
 
 const topicSourceLabel = computed(() => {
   if (topicSource.value === 'topic_bank') return '题库题目'
@@ -540,37 +551,37 @@ function writeNew() {
   font-size: var(--anth-text-md);
 }
 
-/* Margin column */
+/* Right column: a marking sheet. Hairlines between sections, one booktabs criteria table. */
 .right-panel {
   display: grid;
-  gap: 32px;
+  gap: 28px;
+  align-content: start;
 }
 
-.right-panel > .glass-card {
-  padding: 14px 0 0;
-  border-top: 1px solid var(--anth-ink);
+.result-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--anth-rule);
 }
 
-.right-panel h3 {
-  margin: 0 0 12px;
+.result-section h3 {
+  margin: 0;
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-md);
+  font-weight: var(--anth-weight-semibold);
 }
 
-.score-summary {
-  padding-top: 14px;
-}
-
-.score-ring-container {
-  display: grid;
-  gap: 2px;
-  width: 170px;
+.score-total-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .score-total {
   color: var(--anth-ink-strong);
   font-family: var(--anth-font-serif);
-  font-size: 3.25rem;
+  font-size: 3rem;
   font-weight: var(--anth-weight-semibold);
   line-height: 1;
   font-variant-numeric: lining-nums tabular-nums;
@@ -581,84 +592,74 @@ function writeNew() {
   font-size: var(--anth-text-sm);
 }
 
-.score-scale {
-  position: relative;
-  height: 1px;
-  margin-top: 14px;
-  background: var(--anth-ink);
+/* Booktabs: heavy top and bottom, hairline under the header, no verticals. */
+.criteria-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1.5px solid var(--anth-rule-heavy);
+  border-bottom: 1.5px solid var(--anth-rule-heavy);
+  font-size: var(--anth-text-sm);
 }
 
-.score-scale__mark {
-  position: absolute;
-  top: -5px;
-  width: 1px;
-  height: 11px;
-  background: var(--anth-accent);
-  transform: translateX(-0.5px);
+.criteria-table th,
+.criteria-table td {
+  padding: 9px 0;
+  text-align: left;
+  font-weight: var(--anth-weight-normal);
 }
 
-.score-scale__ends {
-  display: flex;
-  justify-content: space-between;
+.criteria-table thead th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-xs);
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.criteria-table tbody th {
+  color: var(--anth-ink);
+}
+
+.criteria-table tbody tr + tr th,
+.criteria-table tbody tr + tr td {
+  border-top: 1px solid var(--anth-rule);
+}
+
+.criteria-table .num {
+  width: 5em;
+  text-align: right;
+}
+
+.criteria-table td.num {
+  color: var(--anth-ink-strong);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-lg);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.criterion-code {
+  margin-left: 6px;
   color: var(--anth-ink-faint);
   font-size: var(--anth-text-xs);
   font-variant-numeric: lining-nums tabular-nums;
 }
 
-.degraded-warning {
-  padding-left: 14px;
-  border-left: 2px solid var(--anth-warning);
+.degraded-note {
+  padding-top: 12px;
+  border-top: 1px solid var(--anth-rule);
 }
 
-.degraded-warning h4 {
+.degraded-note h4 {
   margin: 0 0 4px;
-  color: var(--anth-warning);
+  color: var(--anth-ink-strong);
   font-size: var(--anth-text-sm);
+  font-weight: var(--anth-weight-semibold);
 }
 
-.degraded-warning p {
+.degraded-note p {
   margin: 0;
   color: var(--anth-ink-soft);
   font-size: var(--anth-text-sm);
-}
-
-/* Criteria: a 2×2 ruled table of sub-scores. */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-}
-
-.metric-card {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px 10px 0;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.metric-card:nth-child(even) {
-  padding: 10px 0 10px 14px;
-  border-left: 1px solid var(--anth-rule);
-}
-
-.metric-card:nth-last-child(-n + 2) {
-  border-bottom: 0;
-}
-
-.metric-label {
-  min-width: 0;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-xs);
-}
-
-.metric-value {
-  color: var(--anth-ink-strong);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-xl);
-  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .prose-text {
@@ -713,7 +714,7 @@ function writeNew() {
 }
 
 .result-next {
-  padding-top: 8px;
+  padding-top: 4px;
 }
 
 .result-load-error {
@@ -746,23 +747,6 @@ function writeNew() {
   .essay-body {
     max-height: none;
     overflow: visible;
-  }
-}
-
-@media (max-width: 640px) {
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .metric-card,
-  .metric-card:nth-child(even) {
-    padding: 10px 0;
-    border-left: 0;
-    border-bottom: 1px solid var(--anth-rule);
-  }
-
-  .metric-card:last-child {
-    border-bottom: 0;
   }
 }
 </style>

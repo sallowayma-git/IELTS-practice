@@ -6,23 +6,7 @@
  * them as JSON). Every export here returns display strings.
  */
 
-const SKILL_LABELS = {
-  'reading.matching_headings': '阅读 · 段落大意配对',
-  'reading.tfng': '阅读 · 判断题',
-  'reading.yng': '阅读 · 是非题',
-  'reading.multi_choice': '阅读 · 选择题',
-  'reading.single_choice': '阅读 · 单选题',
-  'reading.sentence_completion': '阅读 · 句子填空',
-  'reading.summary_completion': '阅读 · 摘要填空',
-  'reading.notes_completion': '阅读 · 笔记填空',
-  'reading.table_completion': '阅读 · 表格填空',
-  'reading.flow_chart_completion': '阅读 · 流程图',
-  'reading.diagram_completion': '阅读 · 图示填空',
-  'reading.short_answer': '阅读 · 简答题',
-  'reading.classification': '阅读 · 分类题',
-  'writing.task1': '写作 · Task 1',
-  'writing.task2': '写作 · Task 2'
-}
+import { formatSkillKey } from '../learner/labels.js'
 
 const ACTION_KIND_LABELS = {
   create_study_plan_draft: '创建学习计划草稿',
@@ -102,19 +86,6 @@ export function summarizeBackgroundJob(job) {
     attemptsLabel: `执行次数 ${attempts ?? '未返回'} / ${maxAttempts ?? '未返回'}`,
     error: String(pick(job, 'lastError', 'last_error', '') || '')
   }
-}
-
-export function formatSkillKey(skillKey) {
-  const key = String(skillKey || '').trim()
-  if (!key) return '相关技能'
-  if (SKILL_LABELS[key]) return SKILL_LABELS[key]
-  const parent = key.includes('.') ? key.slice(0, key.lastIndexOf('.')) : ''
-  const leaf = key.split('.').pop() || key
-  const leafLabel = leaf.replace(/_/g, ' ')
-  if (parent && SKILL_LABELS[parent]) return `${SKILL_LABELS[parent]} · ${leafLabel}`
-  if (key.startsWith('reading.')) return `阅读 · ${leafLabel}`
-  if (key.startsWith('writing.')) return `写作 · ${leafLabel}`
-  return leafLabel
 }
 
 function formatSignedDelta(delta) {
@@ -409,4 +380,4 @@ export async function resolveMemoryEvidence(observationIds, readers, userId = 'l
   return { items, warnings, truncated }
 }
 
-export { ACTION_KIND_LABELS, SKILL_LABELS }
+export { ACTION_KIND_LABELS, formatSkillKey }

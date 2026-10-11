@@ -831,15 +831,18 @@ onBeforeUnmount(() => {
   color: var(--anth-ink-soft);
 }
 
+/* Task 1 = hollow square, Task 2 = filled ink square: type is a mark, not a colour. */
 .badge::before {
   content: "";
+  box-sizing: border-box;
   width: 7px;
   height: 7px;
-  background: var(--anth-info);
+  border: 1px solid var(--anth-ink);
+  background: transparent;
 }
 
 .badge.task2::before {
-  background: var(--anth-accent);
+  background: var(--anth-ink);
 }
 
 .difficulty {

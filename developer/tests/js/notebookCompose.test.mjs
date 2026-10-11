@@ -73,6 +73,16 @@ test('memories are active plain sentences; plan shows open items only', () => {
     { id: '2', skillProbe: 'reading.tfng', whyText: '已完成', done: true }
   ] })
   assert.deepEqual(practice, [{ id: '1', label: '判断题 · 对照练习', why: '对照', minutes: 15 }])
+  const sub = nextPractice({ items: [
+    { id: 's', skillProbe: { skillKey: 'reading.tfng.false_vs_not_given', probeKind: 'contrastive_pair' }, whyText: '对照', estimatedMinutes: 10, done: false },
+    { id: 'm', skillProbe: { skillKey: 'reading.multi_choice.evidence_completeness', probeKind: 'novel_item' }, whyText: '换材料', estimatedMinutes: 10, done: false },
+    { id: 'w', skillProbe: { skillKey: 'writing.coherence', probeKind: 'writing_rewrite' }, whyText: '重写', estimatedMinutes: 20, done: false }
+  ] })
+  assert.deepEqual(sub.map((item) => item.label), [
+    '判断题·错误与未提及 · 对照练习',
+    '多选题·证据完整度 · 新题',
+    '连贯与衔接 · 改写练习'
+  ])
 })
 
 // Window instants sit at midday UTC so the viewer's local calendar day is the same

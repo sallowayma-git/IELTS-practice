@@ -346,9 +346,9 @@ test('missing facts omit their sentence: no holes, no dangling punctuation, no s
 })
 
 test('the ASCII skill name is set off from the Chinese around it', () => {
-  const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 1, skillDeltas: [{ skillKey: 'writing.task2', delta: 0.5 }] } })
-  assert.ok(entry.title.includes('「Task 2」'), entry.title)
-  assert.deepEqual(entry.changes.improved, ['Task 2'], 'the 变化 rows keep the bare label')
+  const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 1, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: 0.5 }] } })
+  assert.ok(entry.title.includes('「new criterion」'), entry.title)
+  assert.deepEqual(entry.changes.improved, ['new criterion'], 'the 变化 rows keep the bare label')
 })
 
 test('the gap runs back to the previous practiced day, and unknown history stays unknown', () => {
@@ -402,7 +402,7 @@ test('a day with only memory events is titled as a note, not as a quiet or coach
 
 test('names carry the change lead: skills by name, at most three, ASCII names set off', () => {
   const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [
-    { skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: 0.3 }, { skillKey: 'writing.task2', delta: 0.2 }, { skillKey: 'reading.short_answer', delta: 0.1 },
+    { skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: 0.3 }, { skillKey: 'writing.new_criterion', delta: 0.2 }, { skillKey: 'reading.short_answer', delta: 0.1 },
     { skillKey: 'reading.matching_headings', delta: -0.2 }
   ] } }, new Map(), { previousDay: '2026-10-06' })
   const quote = (label) => (/^[ -~]+$/.test(label) ? `「${label}」` : label)
@@ -410,8 +410,8 @@ test('names carry the change lead: skills by name, at most three, ASCII names se
   assert.ok(entry.changeLead.includes(`${first}、${second}、${third}`), entry.changeLead)
   assert.ok(!entry.changeLead.includes(fourth), `only three names: ${entry.changeLead}`)
   assert.ok(entry.changeLead.includes('段落大意配对'), entry.changeLead)
-  const recurring = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [{ skillKey: 'writing.task2', delta: -0.2 }] } }, new Map(), { previousDay: '2026-10-06' })
-  assert.ok(recurring.changeLead.includes('「Task 2」'), recurring.changeLead)
+  const recurring = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: -0.2 }] } }, new Map(), { previousDay: '2026-10-06' })
+  assert.ok(recurring.changeLead.includes('「new criterion」'), recurring.changeLead)
   assert.ok(!entry.changeLead.includes('个方面'), 'no counts in the lead')
 })
 
@@ -516,10 +516,10 @@ test('noteAgain lines stand alone: they never point back at an earlier note', ()
 
 test('an all-ASCII skill list is set off once, not per name', () => {
   const facts = { attemptsCount: 2, skillDeltas: [
-    { skillKey: 'writing.task2', delta: 0.4 }, { skillKey: 'writing.task1', delta: 0.3 }
+    { skillKey: 'writing.new_criterion', delta: 0.4 }, { skillKey: 'writing.task1', delta: 0.3 }
   ] }
   const sheet = factSheet(facts, changes(facts), DAY)
   assert.equal(sheet.improvedNames, '「' + changes(facts).improved.join('、') + '」', sheet.improvedNames)
-  const mixed = factSheet({ attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.task2', delta: 0.3 }] }, changes({ skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.task2', delta: 0.3 }] }), DAY)
+  const mixed = factSheet({ attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.new_criterion', delta: 0.3 }] }, changes({ skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.new_criterion', delta: 0.3 }] }), DAY)
   assert.equal(mixed.improvedNames.split('「').length - 1, 1, 'a mixed list brackets only its ASCII name')
 })

@@ -32,11 +32,10 @@ ESSAY_PARAGRAPHS = (
 )
 EXPECTED_ESSAY_TEXT = " ".join("\n\n".join(ESSAY_PARAGRAPHS).split())
 EXPECTED_SUPPORT_HEADINGS = [
-    "总评",
+    "评分表",
     "整体改进建议",
     "核心提分计划",
     "段落详评",
-    "得分解析",
     "任务诊断",
 ]
 
@@ -191,15 +190,15 @@ def read_geometry(page):
           const essay = node('.result-layout > .essay-panel');
           const essayBody = node('.essay-panel > .essay-body');
           const sidebar = node('.result-layout > .right-panel');
-          const supportCards = nodes('.right-panel > .glass-card');
-          const scoreRing = node('.score-ring-container');
-          const metrics = node('.metrics-grid');
-          const metricCards = nodes('.metrics-grid > .metric-card');
+          const supportCards = nodes('.right-panel > .result-section');
+          const scoreRow = node('.score-total-row');
+          const criteriaTable = node('.criteria-table');
+          const criteriaBands = nodes('.criteria-table tbody td.num');
           const viewControls = node('.view-controls');
           const viewButtons = nodes('.view-controls > button');
           const heading = node('.display-heading');
           const scoreLabel = node('.score-label');
-          const metricLabel = node('.metric-label');
+          const criteriaRowCount = nodes('.criteria-table tbody tr').length;
           const activeViewButton = node('.view-controls > .btn-brand');
           const inactiveViewButton = node('.view-controls > .btn-warm-sand');
           return {
@@ -220,18 +219,17 @@ def read_geometry(page):
             sidebarOverflow: style(sidebar)?.overflowY || '',
             sidebarClientHeight: sidebar?.clientHeight || 0,
             sidebarScrollHeight: sidebar?.scrollHeight || 0,
-            scoreRingBox: box(scoreRing),
+            scoreRowBox: box(scoreRow),
+            criteriaTableBox: box(criteriaTable),
+            criteriaRowCount,
             scoreText: node('.score-total')?.textContent.trim() || '',
-            metricGridColumns: style(metrics)?.gridTemplateColumns || '',
-            metricCards: metricCards.map(box),
-            metricValues: metricCards.map((item) => item.querySelector('.metric-value')?.textContent.trim()),
+            criteriaBands: criteriaBands.map((item) => item.textContent.trim()),
             viewControlsBox: box(viewControls),
             viewButtons: viewButtons.map((item) => ({ box: box(item), text: item.textContent.trim() })),
             supportHeadings: supportCards.map((item) => item.querySelector('h3')?.textContent.trim() || ''),
             resultErrorVisible: Boolean(node('.result-load-error')),
             headingLetterSpacing: style(heading)?.letterSpacing || '',
             scoreLabelLetterSpacing: style(scoreLabel)?.letterSpacing || '',
-            metricLabelLetterSpacing: style(metricLabel)?.letterSpacing || '',
             activeViewButton: activeViewButton ? {
               text: activeViewButton.textContent.trim(),
               color: style(activeViewButton)?.color || '',
@@ -362,18 +360,10 @@ def assert_geometry(name, width, data):
     elif data["sidebarBox"]["top"] < data["essayBox"]["bottom"] - 1:
         raise AssertionError(f"{name}: single-column Result surfaces overlap")
 
-    if data["scoreText"] != "7.5" or not data["scoreRingBox"]:
+    if data["scoreText"] != "7.5" or not data["scoreRowBox"]:
         raise AssertionError(f"{name}: score summary did not render the persisted Band result")
-    if not 150 <= data["scoreRingBox"]["width"] <= 185:
-        raise AssertionError(f"{name}: score ring escaped its stable size: {data['scoreRingBox']}")
-    if len(data["metricCards"]) != 4 or data["metricValues"] != ["7.5", "7", "8", "7.5"]:
-        raise AssertionError(f"{name}: expected four persisted score metrics: {data['metricValues']}")
-
-    expected_metric_columns = 1 if width <= 640 else 2
-    if column_count(data["metricGridColumns"]) != expected_metric_columns:
-        raise AssertionError(
-            f"{name}: expected {expected_metric_columns} metric columns, got {data['metricGridColumns']}"
-        )
+    if data["criteriaRowCount"] != 4 or data["criteriaBands"] != ["7.5", "7", "8", "7.5"]:
+        raise AssertionError(f"{name}: expected four persisted criteria bands: {data['criteriaBands']}")
     if len(data["viewButtons"]) != 2:
         raise AssertionError(f"{name}: full/annotated view controls are incomplete")
     for button in data["viewButtons"]:

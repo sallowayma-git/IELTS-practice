@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { getLearnerReviewNeeds, getLearnerState } from '../api/learner-repository.js'
+import { formatReasonCodes, formatSkillKey } from '../modules/learner/labels.js'
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -18,6 +19,13 @@ const trendLabel = {
   stable: '近期稳定',
   declining: '近期下滑',
   insufficient_evidence: '证据不足'
+}
+
+const priorityLabel = {
+  urgent: '紧急',
+  high: '优先',
+  moderate: '一般',
+  watch: '可缓'
 }
 
 const probeLabel = {
@@ -84,10 +92,10 @@ onMounted(loadLearnerModel)
         <ul v-else class="review-list">
           <li v-for="need in needs" :key="need.skillKey" class="review-card">
             <div class="review-card__topline">
-              <strong>{{ need.skillKey }}</strong>
-              <span class="priority-badge">{{ need.priorityBand }}</span>
+              <strong>{{ formatSkillKey(need.skillKey) }}</strong>
+              <span class="priority-badge">{{ priorityLabel[need.priorityBand] || need.priorityBand }}</span>
             </div>
-            <p class="review-card__reason">{{ need.reasonCodes.join(' · ') }}</p>
+            <p class="review-card__reason">{{ formatReasonCodes(need.reasonCodes) }}</p>
             <dl class="metric-list">
               <div>
                 <dt>建议探针</dt>
@@ -119,7 +127,7 @@ onMounted(loadLearnerModel)
         <ul v-else class="state-list">
           <li v-for="state in states" :key="state.skillKey" class="state-card">
             <div class="state-card__topline">
-              <strong>{{ state.skillKey }}</strong>
+              <strong>{{ formatSkillKey(state.skillKey) }}</strong>
               <span :class="['uncertainty-badge', `uncertainty-badge--${state.uncertaintyBand}`]">
                 {{ bandLabel[state.uncertaintyBand] || state.uncertaintyBand }}
               </span>

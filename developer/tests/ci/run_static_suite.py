@@ -421,6 +421,10 @@ def main() -> int:
             "M4 learner model contract",
             [sys.executable, "developer/tests/ci/check_m4_contracts.py"],
         ),
+        run_command(
+            "Learner skill label contract",
+            ["node", "developer/tests/js/learnerSkillLabels.test.mjs"],
+        ),
     ]
     passed = all(check["status"] == "pass" for check in checks)
     report = {
