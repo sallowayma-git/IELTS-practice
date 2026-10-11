@@ -156,7 +156,7 @@ pub fn create_backup(
     let version = app_version.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     match db.with_conn(|conn| ielts_db::create_backup_package(conn, &version)) {
         Ok(package) => {
-            let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+            let stamp = chrono::Utc::now().timestamp_millis();
             let path = paths.backups.join(format!("ielts-backup-{stamp}.json"));
             if let Err(e) = std::fs::create_dir_all(&paths.backups) {
                 return CommandResponse::failure(ErrorEnvelope {
@@ -257,9 +257,28 @@ pub fn pick_backup_import_path(
     }
 }
 
+/// A restore replaces the current data. Validate it first (dry run); only a
+/// package that passes gets a snapshot of the state it is about to replace.
+/// Returns the rejecting report when the package does not pass.
+fn preflight_restore(
+    db: &AppDb,
+    paths: &AppPaths,
+    package: &ielts_domain::dto::BackupPackage,
+) -> Result<Option<ImportBackupReport>, ErrorEnvelope> {
+    let dry = db
+        .with_conn(|conn| ielts_db::import_backup(conn, package, true))
+        .map_err(map_db_err)?;
+    if !dry.ok {
+        return Ok(Some(dry));
+    }
+    db.snapshot_before(paths, "restore")?;
+    Ok(None)
+}
+
 #[tauri::command]
 pub fn import_backup_path(
     db: State<'_, AppDb>,
+    paths: State<'_, AppPaths>,
     vault: State<'_, AppVault>,
     grants: State<'_, BackupImportGrants>,
     grant_id: String,
@@ -273,6 +292,13 @@ pub fn import_backup_path(
         Ok(p) => p,
         Err(e) => return CommandResponse::failure(map_db_err(e)),
     };
+    if !dry_run {
+        match preflight_restore(&db, &paths, &package) {
+            Ok(None) => {}
+            Ok(Some(rejected)) => return CommandResponse::success(rejected),
+            Err(error) => return CommandResponse::failure(error),
+        }
+    }
     let result = db.with_conn(|conn| {
         let mut report = ielts_db::import_backup(conn, &package, dry_run)?;
         if report.ok && report.secret_refs_imported > 0 {
@@ -316,8 +342,34 @@ pub fn import_backup_path(
 
 #[cfg(test)]
 mod tests {
-    use super::BackupImportGrants;
+    use super::{preflight_restore, BackupImportGrants};
+    use crate::app::state::test_support::{test_db, test_paths};
     use std::{fs, time::Duration};
+
+    #[test]
+    fn a_rejected_restore_takes_no_snapshot_and_a_valid_one_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = test_paths(dir.path());
+        let db = test_db(dir.path());
+        let mut tampered = db
+            .with_conn(|conn| ielts_db::create_backup_package(conn, "t"))
+            .unwrap();
+        tampered.manifest.checksum_sha256 = "tampered".into();
+        let rejected = preflight_restore(&db, &paths, &tampered).unwrap();
+        assert!(rejected.is_some_and(|report| !report.ok));
+        assert!(!paths.backups.exists(), "a rejected restore must not evict restore points");
+
+        let valid = db
+            .with_conn(|conn| ielts_db::create_backup_package(conn, "t"))
+            .unwrap();
+        assert!(preflight_restore(&db, &paths, &valid).unwrap().is_none());
+        let names: Vec<String> = fs::read_dir(&paths.backups)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names.len(), 1, "{names:?}");
+        assert!(names[0].starts_with("pre-restore-"), "{names:?}");
+    }
 
     #[test]
     fn backup_grants_expire_and_are_consumed() {

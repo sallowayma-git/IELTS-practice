@@ -273,9 +273,9 @@ due = 自动学习开启
 
 `PracticeReading`、`PracticeReadingSuite`、`PracticeReadingReview` 三个路由（`main.js:59-77`）是刻意冻结的第二套主题（CD-IELTS 模拟），使用 `styles/design-system/exam-frozen.css` 的独立 token，不跟随外壳换肤。
 
-守卫：`developer/tests/e2e/exam_freeze_visual_check.py`——按桌面 / 平板 / 手机三个视口，对三条路由各抓“冷加载”与“先访问 Library 再进入”两种截图，与基线逐像素比对，用于发现外壳样式泄漏。`--baseline` 生成基线，不带参数则比对。
+守卫：`developer/tests/e2e/exam_freeze_visual_check.py`——按桌面 / 平板 / 手机三个视口，对三条路由各抓“冷加载”与“先访问 Library 再进入”两种截图，与基线比对（计算样式与矩形为硬门禁，像素差异仅作容差内兜底），用于发现外壳样式泄漏；基线随仓库提交于 `developer/tests/e2e/baselines/exam-freeze/`，仅在有意改动后用 `--update-baseline` 显式重写并审阅 diff。
 
-注意：基线在 `developer/tests/e2e/reports/exam-freeze/baseline/`，而 `reports/` 被 `.gitignore` 忽略（`.gitignore:77`），所以**基线只存在于本机**（第 5 节）。
+基线随仓库提交，位于 `developer/tests/e2e/baselines/exam-freeze/`；每次运行的输出写入被 `.gitignore` 忽略的 `developer/tests/e2e/reports/exam-freeze/current/`。
 
 ### 3.3 札记（Notebook）取代面向用户的 agent 控制台
 
@@ -332,10 +332,10 @@ due = 自动学习开启
 1. **Edge WebDriver 版本（已处理）**：`developer/tests/e2e/webdriver_select.py` 现在读取已安装的 WebView2 运行时版本（注册表 `HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` 的 `pv`，再回退 HKLM 原生键与 HKCU），按顺序在本机已有的 driver 里挑**大版本一致**的：`TAURI_NATIVE_DRIVER`、PATH、`%TEMP%\ielts-msedgedriver-<版本>`、`%LOCALAPPDATA%\IELTSAtlas\webdriver`、Edge 安装目录。找不到匹配的则以 blocked 报告并给出可执行的修复步骤；**不下载任何东西**（下载仍由 `install_edge_webdriver.ps1` 在 CI 完成）。所选 driver、被跳过的 driver、运行时版本都写入 E2E 报告 metadata。
 2. **`phase3_migration` 迁移数（已处理）**：`crates/ielts-db/tests/phase3_migration.rs` 的 `migrate_function_transactional_versions` 现在枚举到 `1..=26`（含 0025、0026）。
 3. **Weekly 尚未对真实 provider 验证**：整条链路（周末窗口、周包、有界重试、失败记账、每日重试上界、幂等）有单元 / 合同测试，但没有用真实模型跑过一次。首次真跑要重点看：输出 JSON 的合法率与重试命中率、failed 记账是否按预期阻止同日重试、折叠窗口的行为、写出的 `weekly_dream` 记忆质量；推理模型（DeepSeek / OpenRouter）的真实响应形态是否都被 2.9 的解析覆盖。
-4. **`reports/` 基线被 gitignore**：`exam-freeze` 基线只在本机。换机器或清理 `reports/` 后，需先 `exam_freeze_visual_check.py --baseline`，而且应在已知良好的 dist 上生成，否则守卫失去意义。
+4. **exam-freeze 基线已入库**：基线位于 `developer/tests/e2e/baselines/exam-freeze/`（计算样式与矩形为硬门禁，像素差异为容差内兜底）。有意改动冻结路由后，在已知良好的 dist 上运行 `exam_freeze_visual_check.py --update-baseline`，审阅 diff 后提交；默认运行永不写基线。
 5. **工作树未提交**：札记页、`modules/notebook/`、`notebook_visual_check.py` 等在撰写时仍是未跟踪文件；本文所述行为以该工作树为准。
 6. **M10 / M11 命令（已处理）**：现仅在 `developer-tools` 下编译与注册（见 1.2 末尾）。需要这些命令的开发期流程要带 `--features developer-tools` 构建。
-7. **weekly 的输入来源（已处理）。** 原先 weekly 池只取 `memory_items`，发布构建里写入它的只有用户显式偏好与 weekly 自己，普通用户的 weekly 没有输入。现在输入是窗口内的真实练习记录（2.3 的周包），推断类记忆只由 weekly 写入。仍未做的：回看旧 attempt 只能用“新开 coach 线程”近似（账本没有“重新打开”事件）；coach / review 行引用的是 attempt 得分观察（coach 观察命名空间不在 M3 校验器认得的 reading / writing 之内）；digest 存在 `settings` 而不是 `dream_runs` 的列（备份形状冻结）。
+7. **weekly 的输入来源（已处理）。** 原先 weekly 池只取 `memory_items`，发布构建里写入它的只有用户显式偏好与 weekly 自己，普通用户的 weekly 没有输入。现在输入是窗口内的真实练习记录（2.3 的周包），推断类记忆只由 weekly 写入。仍未做的：回看旧 attempt 只能用“新开 coach 线程”近似（账本没有“重新打开”事件）；coach / review 行引用的是 attempt 得分观察（coach 观察命名空间不在 M3 校验器认得的 reading / writing 之内）；周报摘要已迁入 `weekly_digests` 表（0029，见第 8 节）。
 8. **weekly 的 sidecar 时间预算是按估算设的**（宿主 420 s、sidecar 400 s、3 次调用、退避 2/5 s）；provider 超时默认值与上限（5–300 s）下，最坏情况会因预算用尽而少于 3 次调用，首次真跑后再校准。
 
 ---
@@ -365,3 +365,59 @@ python developer/tests/e2e/suite_practice_flow.py
 另外：`cargo check -p ielts-practice-tauri --features developer-tools --tests --locked`（发布构建不含的开发期命令）已列入静态套件；E2E harness 自检（`test_packaged_receipts`、`test_webdriver_select`）同样在静态套件里。
 
 文档登记：新文件放在 `developer/docs/`，从 [INDEX.md](INDEX.md) 链接。`check_doc_drift.py` 只检查 `ADR-*.md`、`*_STAGE_GATE_REPORT.md` 和 `INDEX.md`（迁移文件引用必须存在、本地 `.md` 链接必须可解析、Tauri 命令上下文里的命令 token 必须已注册）；v1.3 与本文不在其检查范围内，但本文的迁移名与链接仍按同一规则写成可解析的。
+
+---
+
+## 8. 数据隔离与防误删
+
+原则：练习记录与用户写下的文字是**唯一不可再生**的数据；其余一律可以重算或按年龄清理。删除只允许用户明确发起的路径，删除前有快照，备份恢复是替换而不是合并。
+
+### 8.1 数据分类
+
+| 类 | 内容 | 删除规则 |
+|---|---|---|
+| A 原始事实 | `attempts`、`attempt_answers`、`attempt_annotations`、`writing_evaluations`、`writing_drafts`、`coach_threads`、`coach_messages`、`explicit_user_preferences`、`vocabulary_*` | 只能经过删除门（8.2）删除；从不因保留策略自动删除，除非用户自己设了上限 |
+| B 持久派生 | `learning_events`（账本）、记忆、日记、周报摘要 `weekly_digests` | 不被 A 的级联带走（0028 为 RESTRICT）；删 attempt 时由显式路径一并删掉该 attempt 的账本行并重投影 |
+| C 可重建投影 | `learner_observations`、学习者状态、检索元数据 | 随时重建 |
+| D 运行痕迹 | `agent_runs`、`agent_tool_calls`、`agent_context_snapshots`、`llm_invocations`、`retrieval_runs`、已完成的 `background_jobs` | 按 90 天年龄清理（`prune_operational_records`，每日 worker 每 24 小时一次） |
+
+### 8.2 删除门（migration 0030）
+
+- `delete_gate` 单行表；A 类每张表有 `BEFORE DELETE` 触发器，门关闭时 `RAISE(ABORT)`。级联删除也会触发这些触发器，所以不能绕过门删 `attempts` 进而删掉其答案、批注与评分。
+- 唯一的开门方式是 `ielts_db::safety::with_delete_gate`：在 SAVEPOINT 内打开门，成功时还原原值并释放，出错时回滚整段工作并关门。调用方只有显式用户路径：单条 / 批量删除历史、清空历史、用户自选的保留上限裁剪、删除批注与词汇、整组替换答案、备份恢复、档案导入。
+- 已知豁免：`upsert_attempt` 保存草稿时替换该 attempt 的答案集合（学习者清空的答案必须真的消失），同样经由门；这是用户自己的写入，不是删除。
+- 限制（SQLite 规则）：`DROP TABLE` 与 `INSERT OR REPLACE` 的隐式删除不触发触发器。需要重建 A 类表的迁移必须自己负责复制数据（见 0028 的做法）。
+
+### 8.3 快照（pre-destructive snapshot）
+
+- 在以下操作前写 `VACUUM INTO backups/pre-<op>-<unix-ms>.db`，写入后校验 schema 版本与 attempt 数，`.tmp` + fsync + 改名：恢复（`restore`）、清空历史（`clear-history`）、批量删除（`bulk-delete`）、会裁剪的保留上限变更（`retention-prune`）、待执行的迁移（`migrate`，启动时 `migrate_with_snapshot`）。
+- 快照失败则操作不执行（失败关闭）。迁移失败时数据库未被改写，启动给出可读错误而不是 panic。
+- 只保留最近 3 个 `pre-*.db`；不匹配命名模式的文件（如用户自己的 JSON 备份）不动。
+- 没有周期性备份：快照回答的是“刚才那次操作之前是什么”。
+
+### 8.4 默认无限与显式上限
+
+- 迁移 0027：未被用户改过的保留策略（仍带 0008 的 `...Z` 戳且值为 100）改为 `NULL`（不限）。新安装直接为不限。提交练习不会裁剪；只有用户在设置里选了数字才会裁剪。
+
+### 8.5 备份格式 18
+
+- `attempts` 摘要数组不再写入（每条记录只在 `database` 里出现一次）。格式 17 及更早的包仍可恢复，测试 `format_17_backup_with_a_summary_array_still_restores_and_carries_digests` 与 `backup_full_roundtrip` 覆盖。
+- 恢复是替换：干跑（dry run）返回 `delta.current` 与 `delta.incoming`（练习、作文评分、教练消息、记忆），设置页在确认框里逐项展示。
+- 周报摘要移到 `weekly_digests`（0029），旧版 `settings` 里 `weekly_digest` 行在迁移与恢复时搬入；`weekly_digest_list` 的响应形状不变。
+
+### 8.6 宿主白名单与确认令牌
+
+- `upsert_setting` 只接受前端实际写入的命名空间：`app`、`frontend-preferences`（`check_webview_setting`，并拒绝宿主自有的 `app/history_limit`）。`secret_refs`、`weekly_digest`、`reading_draft`、`features` 等一律拒绝。
+- `delete_history_attempts` 单次最多 200 个 id（`HISTORY_DELETE_MAX_IDS`，在 ielts-db 校验）。
+- `clear_history` 需要单次使用的令牌：界面在用户输入确认词后调用 `history_issue_clear_token`，令牌 120 秒内有效、绑定 activity 范围、用一次即失效（`ClearHistoryTokens`）。设置页“清空”与历史页“清空”都走这条路径。
+
+### 8.7 不做的事
+
+- 没有通用的“软删除回收站”。删除门加快照已经覆盖误删的恢复路径，回收站会引入第二套可见性规则。
+- 没有周期性整库备份。
+- 没有对 B / C 类的自动删除。
+
+### 8.8 验证
+
+- `crates/ielts-db/tests/data_safety.rs`：默认不限且提交不裁剪；显式上限才裁剪；门阻止直接删除与级联；门在出错后关闭且回滚；用户路径经由门；账本 RESTRICT 与显式删除只清自己的账本行；快照生成、轮转为 3、非法名与事务内拒绝；待迁移快照；运行痕迹按年龄清理不碰原始数据；周报摘要表迁移；格式 18 原子写入；格式 17 恢复；干跑差值。
+- `src-tauri/src/commands/settings.rs`、`history.rs` 的单元测试：命名空间与键白名单；令牌单次使用、范围绑定、过期、伪造拒绝。

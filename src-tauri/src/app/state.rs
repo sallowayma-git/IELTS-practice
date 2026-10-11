@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use ielts_db::{migrate, open_connection, DbOpenOptions, DbResult, SecretVault};
+use ielts_db::{migrate_with_snapshot, open_connection, DbOpenOptions, DbResult, SecretVault};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,11 +77,27 @@ impl AppDb {
         paths.ensure_layout().map_err(ielts_db::DbError::Io)?;
         let path = paths.v2_db_path();
         let mut conn = open_connection(&DbOpenOptions::create(&path))?;
-        migrate(&mut conn)?;
+        // A pending migration rewrites the user's file, so it is preceded by a
+        // snapshot; if the snapshot cannot be written the migration never runs.
+        migrate_with_snapshot(&mut conn, &paths.backups)?;
         Ok(Self {
             conn: Mutex::new(conn),
             path,
         })
+    }
+
+    /// Pre-destructive snapshot (`VACUUM INTO backups/pre-<op>-<ms>.db`). The
+    /// caller must not run the destructive work when this fails.
+    pub(crate) fn snapshot_before(&self, paths: &AppPaths, op: &str) -> Result<(), ielts_domain::ErrorEnvelope> {
+        self.with_conn(|conn| ielts_db::snapshot_before(conn, &paths.backups, op))
+            .map(|_| ())
+            .map_err(|error| ielts_domain::ErrorEnvelope {
+                code: "db.snapshot_failed".into(),
+                message: format!("nothing was changed: the safety snapshot failed ({error})"),
+                retryable: true,
+                context: None,
+                cause_id: None,
+            })
     }
 
     pub fn with_conn<T>(
@@ -101,6 +117,34 @@ impl AppDb {
             conn: Mutex::new(conn),
             path,
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::{AppDb, AppPaths};
+    use std::path::Path;
+
+    /// Every app path under `root`, so a test can see exactly what a command wrote.
+    pub(crate) fn test_paths(root: &Path) -> AppPaths {
+        AppPaths {
+            app_data: root.into(),
+            logs: root.join("logs"),
+            backups: root.join("backups"),
+            imports: root.join("imports"),
+            exports: root.join("exports"),
+            diagnostics: root.join("diagnostics"),
+            db_dir: root.join("db"),
+            legacy_candidates: Vec::new(),
+        }
+    }
+
+    /// A migrated database file under `root`, wrapped as the app wraps it.
+    pub(crate) fn test_db(root: &Path) -> AppDb {
+        let path = root.join("v2.db");
+        let mut conn = ielts_db::open_connection(&ielts_db::DbOpenOptions::create(&path)).unwrap();
+        ielts_db::migrate(&mut conn).unwrap();
+        AppDb::from_test_connection(conn, path)
     }
 }
 

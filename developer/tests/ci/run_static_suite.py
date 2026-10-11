@@ -220,6 +220,10 @@ def main() -> int:
             ["node", "developer/tests/js/practiceReadingCore10.test.js"],
         ),
         run_command(
+            "Reading asset list boundary",
+            ["node", "developer/tests/js/readingAssetList.test.mjs"],
+        ),
+        run_command(
             "History view-model contract",
             ["node", "developer/tests/js/historyViewModel.test.mjs"],
         ),
@@ -238,6 +242,7 @@ def main() -> int:
         run_command("Memory evidence navigation contract", ["node", "developer/tests/js/memoryEvidence.test.mjs"]),
         run_command("Agent console durable state contract", ["node", "developer/tests/js/agentConsoleState.test.mjs"]),
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
+        run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Vue production build", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "build"]),
@@ -303,12 +308,9 @@ def main() -> int:
                 # Round-3 audit remediation (2026-08-31): these three suites
                 # carry the regression tests for the fixes landed in that pass
                 # and were outside every gate until now.
-                #   consolidation    — M8 weekly-dream validator: byte bound,
-                #                      injection/secret/inference-domain
-                #                      guards, per-owner support scoping, and
-                #                      the stale-sweep COALESCE predicate that
-                #                      otherwise archives a pattern the day it
-                #                      is written.
+                #   consolidation    — M8 memory lifecycle: user feedback and
+                #                      the stale sweep archive (never delete)
+                #                      and propagate to dependent supports.
                 #   prompt_skill     — M11 rollback gate: an actor is required
                 #                      and reinstatement is constrained to
                 #                      status='rollback', so rollback can no
@@ -367,8 +369,8 @@ def main() -> int:
             ["cargo", "test", "-p", "ielts-practice-tauri", "--lib", "app::daily_worker", "--locked", "--offline"],
         ),
         run_command(
-            "Rust trusted consolidation policy",
-            ["cargo", "test", "-p", "ielts-application", "--test", "consolidation", "--locked", "--offline"],
+            "Rust data isolation and delete safety",
+            ["cargo", "test", "-p", "ielts-db", "--test", "data_safety", "--locked", "--offline"],
         ),
         run_command(
             "Rust Coach v0 authority",

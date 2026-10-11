@@ -668,6 +668,18 @@ def seed_closed_daily_attempt(app_data: Path, day: str):
                      ("packaged-daily-yesterday", stamp, stamp, stamp, stamp, stamp))
 
 
+def is_weekly_request(body: dict) -> bool:
+    messages = body.get("messages") or []
+    return bool(messages) and "weekly reviewer" in str(messages[0].get("content", ""))
+
+
+def model_calls(provider) -> int:
+    """Provider requests that the Daily pass could have made. The weekly pass is
+    a separate, weekend-only model call (weekly_window_due), so it is excluded;
+    the harness runs on whatever day the clock says, Saturday and Sunday included."""
+    return sum(1 for body in provider.requests if not is_weekly_request(body))
+
+
 def daily_receipts(app_data: Path, day: str, today: str):
     """The automatic daily pass is a deterministic summary: one `daily_journal`
     job closed against exactly one journal version. No dream run, no candidate,
@@ -684,23 +696,34 @@ def daily_receipts(app_data: Path, day: str, today: str):
         if len(jobs) != 1 or jobs[0]["status"] != "completed":
             return None
         job = jobs[0]
-        journals = conn.execute("SELECT * FROM daily_journals WHERE user_id='local' AND journal_date=?", (day,)).fetchall()
+        binding = json.loads(job["checkpoint_json"])
+        # Scope to the journal this job is bound to. On a weekend the weekly pass
+        # may anchor its own journal version on the same day (its failure receipt
+        # needs one); that row is not the daily pass and is not counted here.
+        journals = conn.execute("SELECT * FROM daily_journals WHERE user_id='local' AND journal_date=? AND id=?",
+                                (day, binding.get("journalId"))).fetchall()
         require(len(journals) == 1, "Daily journal missing or duplicated")
         journal = journals[0]
         require(json.loads(journal["facts_json"])["attemptsCount"] == 1, "Daily journal did not read the yesterday fixture")
-        binding = json.loads(job["checkpoint_json"])
         expected = {"jobId": job["id"], "day": day, "userId": "local",
                     "journalId": journal["id"], "sourceHash": journal["source_hash"]}
         require(all(binding.get(k) == v for k, v in expected.items()) and binding.get("workerId"), "Daily checkpoint binding mismatch")
         require("dreamRunId" not in binding, "Daily checkpoint carries a dream run")
-        for table in ("dream_runs", "dream_candidates"):
-            require(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0, f"automatic Daily wrote {table}")
+        # The weekly pass may legitimately run on a weekend in the same app
+        # session (its runs carry a "weekly:" marker); the daily job may not.
+        require(conn.execute("SELECT COUNT(*) FROM dream_runs WHERE input_hash IS NULL OR input_hash NOT LIKE 'weekly:%'").fetchone()[0] == 0,
+                "automatic Daily wrote dream_runs")
+        require(conn.execute("SELECT COUNT(*) FROM dream_candidates").fetchone()[0] == 0, "automatic Daily wrote dream_candidates")
         require(conn.execute("SELECT COUNT(*) FROM agent_runs WHERE model='daily-dream-v1'").fetchone()[0] == 0,
                 "automatic Daily wrote a model audit row")
         return {"jobIds": [job["id"]], "journalId": journal["id"], "journalSourceHash": journal["source_hash"],
                 "checkpoints": {job["job_kind"]: binding},
                 "counts": {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                           for table in ("background_jobs", "daily_journals", "dream_runs", "dream_candidates")}}
+                           for table in ("background_jobs", "dream_candidates")}
+                | {"daily_journals": conn.execute("SELECT COUNT(*) FROM daily_journals WHERE id=?",
+                                                  (journal["id"],)).fetchone()[0]}
+                | {"dream_runs": conn.execute(
+                    "SELECT COUNT(*) FROM dream_runs WHERE input_hash IS NULL OR input_hash NOT LIKE 'weekly:%'").fetchone()[0]}}
 
 
 def wait_daily_receipts(app_data: Path, day: str, today: str, timeout_seconds: int = 120):
@@ -1123,16 +1146,16 @@ def main() -> int:
             raise RuntimeError(f"provider request header did not win over body completion ID: {trace}")
         if not fake_agent_provider.tool_result_verified:
             raise RuntimeError("fake provider did not observe a successful read_file result")
-        if len(fake_agent_provider.requests) != 2:
+        if model_calls(fake_agent_provider) != 2:
             raise RuntimeError(
-                f"packaged Agent fake provider expected two rounds, got {len(fake_agent_provider.requests)}"
+                f"packaged Agent fake provider expected two rounds, got {model_calls(fake_agent_provider)}"
             )
         metadata["agentWorkspaceRun"] = {
             "runId": run_id,
             "output": agent_outcome.get("content", ""),
             "toolCalls": hydrated_data["toolCalls"],
             "trace": trace,
-            "providerRounds": len(fake_agent_provider.requests),
+            "providerRounds": model_calls(fake_agent_provider),
             "workspacePath": grant_data["displayPath"],
         }
         checks["agentWorkspaceRun"] = "passed"
@@ -1181,7 +1204,7 @@ def main() -> int:
             raise RuntimeError("reading payload is double wrapped")
         checks["bundledResources"] = "passed"
         metadata["coachReceipts"] = check_coach(driver, Path(isolated_app_data.name), str(asset_id), payload_data["payload"], fake_coach_provider)
-        require(len(fake_agent_provider.requests) == 2, "Coach requests contaminated Agent provider")
+        require(model_calls(fake_agent_provider) == 2, "Coach requests contaminated Agent provider")
         checks["coachReceipts"] = "passed"
         navigation_samples = []
         encoded_asset_id = urllib.parse.quote(str(asset_id), safe="")
@@ -1329,20 +1352,21 @@ def main() -> int:
             raise RuntimeError(f"restart_after_update bypassed install state: {restart_without_install}")
         checks["updaterBoundary"] = "passed"
         marker = f"e2e-{int(time.time())}"
-        saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'e2e', key:'restartMarker', value:arguments[0]}})", [marker])
+        saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'frontend-preferences', key:'restartMarker', value:arguments[0]}})", [marker])
         if not isinstance(saved, dict) or not saved.get("ok"): raise RuntimeError(f"upsert_setting failed: {saved}")
         close_native_app(driver, runtime_app)
         utc_day = datetime.now(timezone.utc).date()
         yesterday, today = (utc_day - timedelta(days=1)).isoformat(), utc_day.isoformat()
         seed_closed_daily_attempt(Path(isolated_app_data.name), yesterday)
-        provider_counts = (len(fake_agent_provider.requests), len(fake_coach_provider.requests))
+        provider_counts = (model_calls(fake_agent_provider), model_calls(fake_coach_provider))
         driver.create(str(runtime_app))
         wait_for_vue(driver)
-        restored = driver.script("return window.__TAURI_INTERNALS__.invoke('list_settings', {namespace:'e2e'})")
+        restored = driver.script("return window.__TAURI_INTERNALS__.invoke('list_settings', {namespace:'frontend-preferences'})")
         values = (restored or {}).get("data", []) if isinstance(restored, dict) else []
         checks["sqliteRestart"] = "passed" if any(x.get("key") == "restartMarker" and x.get("value") == marker for x in values) else "failed"
         daily = wait_daily_receipts(Path(isolated_app_data.name), yesterday, today)
-        require(provider_counts == (len(fake_agent_provider.requests), len(fake_coach_provider.requests)), "Daily called a model provider")
+        require(provider_counts == (model_calls(fake_agent_provider), model_calls(fake_coach_provider)),
+                f"Daily called a model provider: {provider_counts} -> {(model_calls(fake_agent_provider), model_calls(fake_coach_provider))}")
         metadata["automaticDaily"] = daily
         checks["automaticDaily"] = "passed"
         close_native_app(driver, runtime_app)
@@ -1353,8 +1377,11 @@ def main() -> int:
         # Recheck after one worker scan interval, so a delayed duplicate cannot pass.
         deadline = time.monotonic() + 65
         while time.monotonic() < deadline:
-            require(daily_receipts(Path(isolated_app_data.name), yesterday, today) == daily, "Daily replay changed receipts or content hashes")
-            require(provider_counts == (len(fake_agent_provider.requests), len(fake_coach_provider.requests)), "Daily replay called a model provider")
+            current = daily_receipts(Path(isolated_app_data.name), yesterday, today)
+            require(current == daily, f"Daily replay changed receipts or content hashes: {daily} -> {current}")
+            require(provider_counts == (model_calls(fake_agent_provider), model_calls(fake_coach_provider)),
+                    f"Daily replay called a model provider: {provider_counts} -> {(model_calls(fake_agent_provider), model_calls(fake_coach_provider))}; "
+                    f"last agent request: {json.dumps(fake_agent_provider.requests[-1], ensure_ascii=False)[:600]}")
             time.sleep(0.25)
         checks["dailyRestartDedupe"] = "passed"
         status = "passed" if all(v == "passed" for v in checks.values()) else "failed"

@@ -323,8 +323,23 @@ export interface ImportBackupReport {
   attemptImported: number
   settingsImported: number
   secretRefsImported: number
+  tablesImported?: number
+  rowsImported?: number
+  delta?: RestoreDelta
   errors: string[]
   warnings: string[]
+}
+
+export interface DataClassCounts {
+  attempts: number
+  essays: number
+  coachMessages: number
+  memories: number
+}
+
+export interface RestoreDelta {
+  current: DataClassCounts
+  incoming: DataClassCounts
 }
 
 export interface CommandResponse<T> {

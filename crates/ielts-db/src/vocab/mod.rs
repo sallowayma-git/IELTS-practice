@@ -4,6 +4,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::safety::with_delete_gate;
 use crate::sqlite::{DbError, DbResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -168,7 +169,10 @@ pub fn list_vocab(conn: &Connection, limit: u32, offset: u32) -> DbResult<Vec<Vo
 }
 
 pub fn delete_vocab(conn: &Connection, id: &str) -> DbResult<bool> {
-    let n = conn.execute("DELETE FROM vocabulary_items WHERE id = ?1", params![id])?;
+    // An explicit user delete (the review state goes with the word by cascade).
+    let n = with_delete_gate(conn, || {
+        Ok(conn.execute("DELETE FROM vocabulary_items WHERE id = ?1", params![id])?)
+    })?;
     Ok(n > 0)
 }
 

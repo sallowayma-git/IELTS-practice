@@ -51,5 +51,6 @@ export function getWritingHistoryStatistics(range?: 'all' | 'monthly' | 'task1' 
 export function exportHistory(format?: string, query?: HistoryQuery): Promise<{ source: 'tauri'; result: unknown }>
 export function deleteHistoryAttempt(attemptId: string): Promise<unknown>
 export function deleteHistoryAttempts(attemptIds: string[]): Promise<number>
+export function issueClearHistoryToken(activity?: 'reading' | 'writing' | null): Promise<{ token: string; expiresAt: string; clearableCount: number }>
 export function clearHistory(activity?: 'reading' | 'writing' | null): Promise<number>
 export function isTauriRuntime(): boolean

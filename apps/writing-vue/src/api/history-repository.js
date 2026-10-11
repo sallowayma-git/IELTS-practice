@@ -132,9 +132,22 @@ export async function deleteHistoryAttempts(attemptIds) {
   return Number(unwrapCommandResponse(response, 'delete_history_attempts') || 0)
 }
 
-export async function clearHistory(activity = null) {
-  const response = await invokeCommand('clear_history', {
+/**
+ * Clearing is two host calls: a token issued for this scope (only after the
+ * user typed the confirmation in the dialog that calls this), then the clear
+ * that consumes it. The host refuses a second use or a different scope.
+ */
+export async function issueClearHistoryToken(activity = null) {
+  const response = await invokeCommand('history_issue_clear_token', {
     cmd: { activity: activity || null }
+  })
+  return unwrapCommandResponse(response, 'history_issue_clear_token')
+}
+
+export async function clearHistory(activity = null) {
+  const { token } = await issueClearHistoryToken(activity)
+  const response = await invokeCommand('clear_history', {
+    cmd: { activity: activity || null, token }
   })
   return Number(unwrapCommandResponse(response, 'clear_history') || 0)
 }

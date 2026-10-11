@@ -215,6 +215,25 @@ pub struct DeleteHistoryAttemptsCommand {
 pub struct ClearHistoryCommand {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activity: Option<Activity>,
+    /// Single-use token from `history_issue_clear_token`, issued after the
+    /// user typed the confirmation. Bound to `activity`; not sent when asking
+    /// for one.
+    #[serde(default)]
+    pub token: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(TS),
+    ts(export, export_to = "../../../apps/writing-vue/src/types/generated/")
+)]
+pub struct IssuedClearHistoryToken {
+    pub token: String,
+    pub expires_at: String,
+    /// Attempts the clear would erase right now.
+    pub clearable_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -463,6 +482,9 @@ pub struct BackupTable {
 )]
 pub struct BackupPackage {
     pub manifest: BackupManifest,
+    /// Legacy attempt summary (schema <= 17 only). Schema 18+ carries the
+    /// attempts once, in `database`; a non-empty list there is rejected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attempts: Vec<AttemptRecord>,
     pub settings: Vec<SettingEntry>,
     /// Only refs; never plaintext secrets in ordinary backups.
@@ -490,8 +512,40 @@ pub struct ImportBackupReport {
     pub tables_imported: u32,
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub rows_imported: u64,
+    /// What a restore replaces (`current`) and what it brings (`incoming`), per
+    /// data class. Present on dry runs and real restores alike.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta: Option<RestoreDelta>,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
+}
+
+/// Record counts of the data classes a restore is most likely to surprise a
+/// learner with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(TS),
+    ts(export, export_to = "../../../apps/writing-vue/src/types/generated/")
+)]
+pub struct DataClassCounts {
+    pub attempts: u32,
+    pub essays: u32,
+    pub coach_messages: u32,
+    pub memories: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(TS),
+    ts(export, export_to = "../../../apps/writing-vue/src/types/generated/")
+)]
+pub struct RestoreDelta {
+    pub current: DataClassCounts,
+    pub incoming: DataClassCounts,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

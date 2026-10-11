@@ -664,49 +664,6 @@ impl DreamStore for ApplicationStore<'_> {
 
 #[cfg(feature = "daily-dream-v1")]
 impl ConsolidationStore for ApplicationStore<'_> {
-    fn load_support_memories(
-        &self,
-        ids: &[String],
-        user_id: &str,
-    ) -> Result<Vec<ielts_db::SupportMemory>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::load_support_memories(conn, ids, user_id))
-            .map_err(dream_error)
-    }
-
-    fn validate_patterns(
-        &self,
-        proposals: &[ielts_domain::PatternProposal],
-        user_id: &str,
-        config: &ielts_domain::ConsolidationConfig,
-    ) -> Result<ielts_domain::PatternValidationReport, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::validate_patterns(conn, proposals, user_id, config))
-            .map_err(dream_error)
-    }
-
-    fn apply_consolidation(
-        &self,
-        pattern: &ielts_domain::ValidatedPattern,
-        user_id: &str,
-        now: &str,
-    ) -> Result<ielts_domain::ConsolidationReceipt, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::apply_consolidation(conn, pattern, user_id, now))
-            .map_err(dream_error)
-    }
-
-    fn propagate_support_change(
-        &self,
-        memory_id: &str,
-        new_status: &str,
-        now: &str,
-    ) -> Result<ielts_domain::SupportChangeOutcome, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::propagate_support_change(conn, memory_id, new_status, now))
-            .map_err(dream_error)
-    }
-
     fn archive_stale(
         &self,
         now: &str,

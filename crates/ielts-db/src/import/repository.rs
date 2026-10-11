@@ -37,10 +37,14 @@ pub fn upsert_writing_evaluation(
         .transpose()
         .map_err(|e| DbError::Import(e.to_string()))?;
 
-    conn.execute(
-        "DELETE FROM writing_evaluations WHERE attempt_id = ?1",
-        params![attempt_id],
-    )?;
+    // A user-initiated import replaces the stored evaluation of the attempt it
+    // brings along; the replacement is inserted right below.
+    crate::safety::with_delete_gate(conn, || {
+        Ok(conn.execute(
+            "DELETE FROM writing_evaluations WHERE attempt_id = ?1",
+            params![attempt_id],
+        )?)
+    })?;
     conn.execute(
         "INSERT INTO writing_evaluations (
             id, attempt_id, status, stage, provider_id, model, rubric_version, prompt_version,

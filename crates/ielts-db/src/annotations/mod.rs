@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use ielts_domain::dto::AttemptAnnotationDto;
 
+use crate::safety::with_delete_gate;
 use crate::sqlite::{DbError, DbResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -238,19 +239,22 @@ pub fn delete_annotation(
     asset_id: &str,
     attempt_id: Option<&str>,
 ) -> DbResult<bool> {
-    let n = if let Some(attempt_id) = attempt_id {
-        conn.execute(
-            "DELETE FROM attempt_annotations
-             WHERE id = ?1 AND asset_id = ?2 AND attempt_id = ?3",
-            params![id, asset_id, attempt_id],
-        )?
-    } else {
-        conn.execute(
-            "DELETE FROM attempt_annotations
-             WHERE id = ?1 AND asset_id = ?2 AND attempt_id IS NULL",
-            params![id, asset_id],
-        )?
-    };
+    // An explicit user delete: the one way an annotation row is erased.
+    let n = with_delete_gate(conn, || {
+        Ok(if let Some(attempt_id) = attempt_id {
+            conn.execute(
+                "DELETE FROM attempt_annotations
+                 WHERE id = ?1 AND asset_id = ?2 AND attempt_id = ?3",
+                params![id, asset_id, attempt_id],
+            )?
+        } else {
+            conn.execute(
+                "DELETE FROM attempt_annotations
+                 WHERE id = ?1 AND asset_id = ?2 AND attempt_id IS NULL",
+                params![id, asset_id],
+            )?
+        })
+    })?;
     Ok(n > 0)
 }
 

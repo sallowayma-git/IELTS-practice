@@ -428,7 +428,7 @@
           <div class="settings-panel__head">
             <div>
               <h3>应用备份文件</h3>
-              <p>来自 backups 目录的完整备份。恢复为合并写入；密钥引用仅为元数据，不含明文 API Key。</p>
+              <p>来自 backups 目录的完整备份。恢复会替换当前全部数据，不是合并写入；恢复前会先保存当前数据的快照。密钥引用仅为元数据，不含明文 API Key。</p>
             </div>
             <span class="settings-badge">{{ nativeBackups.length }} 个文件</span>
           </div>
@@ -1644,15 +1644,15 @@ async function previewAndConfirmRestore(grant) {
     openConfirmDialog({
       kind: 'restore-full-backup',
       section: 'data',
-      title: '恢复完整备份',
+      title: '恢复完整备份（替换当前数据）',
       message: [
         `文件：${displayPath}`,
-        `预检通过，将合并写入练习 ${report?.attemptImported ?? report?.attempt_imported ?? 0} 条、`,
-        `设置 ${report?.settingsImported ?? report?.settings_imported ?? 0} 项`,
-        secretRefs > 0 ? `、密钥引用元数据 ${secretRefs} 条` : '',
-        '。不会恢复明文 API Key / 系统密钥环内容；已有同 id 记录会被覆盖。',
+        '恢复会用备份替换本机当前的全部数据，不是合并写入。',
+        `当前 → 备份：${describeRestoreDelta(report)}`,
+        secretRefs > 0 ? `密钥引用元数据 ${secretRefs} 条。` : '',
+        '恢复前会先把当前数据保存为 backups 目录下的 pre-restore 快照。不会恢复明文 API Key / 系统密钥环内容。',
         warnings.length ? `\n${warnings.join('\n')}` : ''
-      ].join(''),
+      ].join('\n'),
       confirmLabel: '确认恢复',
       danger: true,
       payload: { grantId }
@@ -1662,6 +1662,21 @@ async function previewAndConfirmRestore(grant) {
   } finally {
     backupBusy.value = false
   }
+}
+
+/** "练习 3 → 5，作文 …" from the dry run's per-class counts. */
+function describeRestoreDelta(report) {
+  const delta = report?.delta
+  if (!delta) return '（无法读取当前数据统计）'
+  const rows = [
+    ['练习', 'attempts'],
+    ['作文评分', 'essays'],
+    ['教练消息', 'coachMessages'],
+    ['记忆', 'memories']
+  ]
+  return rows
+    .map(([label, key]) => `${label} ${delta.current?.[key] ?? 0} → ${delta.incoming?.[key] ?? 0}`)
+    .join('；')
 }
 
 async function applyFullBackupRestore(grantId) {
@@ -1676,7 +1691,7 @@ async function applyFullBackupRestore(grantId) {
   const unavailableConfigs = apiConfigs.value.filter((item) => !item.has_secret).length
   setGlobalMessage(
     'success',
-    `完整备份已恢复：练习 ${report.attemptImported ?? report.attempt_imported ?? 0} · 设置 ${report.settingsImported ?? report.settings_imported ?? 0}（未恢复明文 API Key）${unavailableConfigs ? `；${unavailableConfigs} 个 AI 配置需重新填写 Key 后才能评测` : ''}`
+    `完整备份已替换当前数据：练习 ${report.attemptImported ?? report.attempt_imported ?? 0} · 设置 ${report.settingsImported ?? report.settings_imported ?? 0}（未恢复明文 API Key）${unavailableConfigs ? `；${unavailableConfigs} 个 AI 配置需重新填写 Key 后才能评测` : ''}`
   )
 }
 

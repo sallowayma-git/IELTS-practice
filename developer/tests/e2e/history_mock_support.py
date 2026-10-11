@@ -59,7 +59,15 @@ def install_history_mock(page, items, statistics=None):
           window.__historyItems = window.__historyItems.filter((item) => !ids.has(item.id));
           return { ok: true, data: before - window.__historyItems.length };
         }
+        if (command === 'history_issue_clear_token') {
+          const activity = args.cmd?.activity || null;
+          const clearable = window.__historyItems.filter((item) => item.mode !== 'memorize' && (!activity || item.activity === activity)).length;
+          return { ok: true, data: { token: 'mock-clear-token', expiresAt: '2026-10-11T12:30:00Z', clearableCount: clearable } };
+        }
         if (command === 'clear_history') {
+          if (args.cmd?.token !== 'mock-clear-token') {
+            return { ok: false, error: { code: 'history.clear_token', message: 'clear confirmation is missing', retryable: false } };
+          }
           const activity = args.cmd?.activity || null;
           const before = window.__historyItems.length;
           window.__historyItems = window.__historyItems.filter((item) => activity && item.activity !== activity);

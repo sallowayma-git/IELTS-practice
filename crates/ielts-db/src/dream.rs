@@ -317,10 +317,8 @@ const DIGEST_MAX_OBSERVATIONS: usize = 6;
 const DIGEST_MAX_CHANGES: usize = 4;
 const DIGEST_MAX_NEXT: usize = 4;
 
-/// Settings namespace holding one digest per completed weekly run (key: run id).
-/// A settings row, not a column: `dream_runs` is part of the frozen backup
-/// shape, and the digest must survive backup and restore.
-const DIGEST_NAMESPACE: &str = "weekly_digest";
+/// Legacy settings namespace of the digests (before migration 0029).
+const LEGACY_DIGEST_NAMESPACE: &str = "weekly_digest";
 
 impl WeeklyDigestProse {
     pub fn is_empty(&self) -> bool {
@@ -354,9 +352,9 @@ pub fn put_weekly_digest(conn: &Connection, run_id: &str, digest: &WeeklyDigestP
     require_text(run_id, "runId")?;
     let value = serde_json::to_string(digest).map_err(|error| DbError::Message(error.to_string()))?;
     conn.execute(
-        "INSERT INTO settings (namespace, key, value_json, updated_at) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(namespace, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
-        params![DIGEST_NAMESPACE, run_id, value, now],
+        "INSERT INTO weekly_digests (run_id, digest_json, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(run_id) DO UPDATE SET digest_json = excluded.digest_json, updated_at = excluded.updated_at",
+        params![run_id, value, now],
     )?;
     Ok(())
 }
@@ -364,12 +362,33 @@ pub fn put_weekly_digest(conn: &Connection, run_id: &str, digest: &WeeklyDigestP
 fn load_weekly_digest(conn: &Connection, run_id: &str) -> DbResult<WeeklyDigestProse> {
     let raw: Option<String> = conn
         .query_row(
-            "SELECT value_json FROM settings WHERE namespace = ?1 AND key = ?2",
-            params![DIGEST_NAMESPACE, run_id],
+            "SELECT digest_json FROM weekly_digests WHERE run_id = ?1",
+            params![run_id],
             |row| row.get(0),
         )
         .optional()?;
     Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or_default())
+}
+
+/// Migration 0029's data step: digests written before the `weekly_digests`
+/// table lived in `settings` (namespace `weekly_digest`, key = run id). Move the
+/// ones that still belong to a run, then drop the settings rows. Idempotent.
+/// Runs inside the caller's transaction.
+pub fn move_settings_weekly_digests_in_transaction(conn: &Connection) -> DbResult<usize> {
+    conn.execute(
+        "INSERT OR IGNORE INTO weekly_digests (run_id, digest_json, updated_at)
+         SELECT s.key, s.value_json, s.updated_at FROM settings s
+          WHERE s.namespace = ?1 AND json_valid(s.value_json)
+            AND s.key IN (SELECT id FROM dream_runs)",
+        params![LEGACY_DIGEST_NAMESPACE],
+    )?;
+    // Only rows now represented in the table go. Unparseable rows and orphans
+    // (no run) stay where they were, so nothing is dropped without a copy.
+    Ok(conn.execute(
+        "DELETE FROM settings WHERE namespace = ?1
+           AND json_valid(value_json) AND key IN (SELECT run_id FROM weekly_digests)",
+        params![LEGACY_DIGEST_NAMESPACE],
+    )?)
 }
 
 /// One completed weekly pass, as the notebook reads it.

@@ -12,12 +12,29 @@ use ielts_domain::dto::{
 use ielts_domain::{history_item_from_attempt, AttemptRecord, HistoryListItemVm};
 
 use crate::attempts::{parse_writing_task_type, writing_task_type_str};
+use crate::safety::with_delete_gate;
 use crate::sqlite::{DbError, DbResult};
 
 pub const HISTORY_RETENTION_MIN: u32 = 50;
 pub const HISTORY_RETENTION_MAX: u32 = 500;
 pub const HISTORY_RETENTION_STEP: u32 = 50;
-pub const HISTORY_RETENTION_DEFAULT: u32 = 100;
+/// The most attempts one bulk delete may name. A selection is a screenful, not
+/// a table.
+pub const HISTORY_DELETE_MAX_IDS: usize = 200;
+
+/// Migration 0027's statement, verbatim (a test pins them together): a policy
+/// row still carrying migration 0008's untouched-default stamp (`...Z`) is
+/// unlimited. Explicit choices are stamped `+00:00` and survive. Backup restore
+/// runs it too, since a pre-0027 backup carries the old default row.
+const NORMALIZE_UNTOUCHED_RETENTION_SQL: &str = "UPDATE history_retention_policy
+   SET max_terminal_attempts = NULL
+ WHERE max_terminal_attempts = 100 AND updated_at LIKE '%Z'";
+
+/// Turn an untouched pre-0027 default (100, stamped by migration 0008) into the
+/// current default, unlimited. Returns the rows changed.
+pub fn normalize_untouched_retention_default(conn: &Connection) -> DbResult<usize> {
+    Ok(conn.execute(NORMALIZE_UNTOUCHED_RETENTION_SQL, [])?)
+}
 
 const RETAINABLE_TERMINAL_STATUS_SQL: &str =
     "lower(status) IN ('completed', 'cancelled', 'failed', 'interrupted')";
@@ -470,6 +487,26 @@ pub fn delete_attempt(conn: &Connection, attempt_id: &str) -> DbResult<bool> {
     Ok(deleted)
 }
 
+/// Validate a bulk-delete request without changing anything and return how
+/// many of its ids are erasable now. Hosts take a snapshot only when this is
+/// non-zero, so a rejected or empty request never evicts a restore point.
+pub fn count_deletable_history_attempts(conn: &Connection, attempt_ids: &[String]) -> DbResult<u32> {
+    let ids = normalized_history_ids(attempt_ids)?;
+    let mut count = 0;
+    for id in &ids {
+        ensure_history_attempt(conn, id)?;
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM attempts WHERE id = ?1)",
+            params![id],
+            |row| row.get(0),
+        )?;
+        if exists {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 /// Delete a visible history selection atomically. A stale UI must never turn a
 /// bulk operation into a half-deleted list, and it must not be able to erase a
 /// draft/reviewing workflow that history intentionally hides.
@@ -495,33 +532,37 @@ pub fn delete_history_attempts(conn: &Connection, attempt_ids: &[String]) -> DbR
     Ok(deleted)
 }
 
-/// Clear terminal history in one transaction. `None` means every activity,
-/// matching the Settings wording “all history”; unfinished input is preserved.
-pub fn clear_history(conn: &Connection, activity: Option<Activity>) -> DbResult<u32> {
-    let tx = conn.unchecked_transaction()?;
+/// The attempts `clear_history` would erase: terminal history of `activity`
+/// (`None` = every activity). Unfinished input is never clearable.
+fn clearable_attempt_ids(conn: &Connection, activity: Option<Activity>) -> DbResult<Vec<String>> {
     let mut sql = format!(
         "SELECT id FROM attempts
          WHERE mode != 'memorize' AND {RETAINABLE_TERMINAL_STATUS_SQL}"
     );
-    let mut ids = Vec::new();
-    if let Some(activity) = activity {
+    let activity = activity.map(|activity| activity_str(activity).to_string());
+    if activity.is_some() {
         sql.push_str(" AND activity = ?1");
-        let mut stmt = tx.prepare(&sql)?;
-        let rows = stmt.query_map(params![activity_str(activity)], |row| {
-            row.get::<_, String>(0)
-        })?;
-        for row in rows {
-            ids.push(row?);
-        }
-    } else {
-        let mut stmt = tx.prepare(&sql)?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        for row in rows {
-            ids.push(row?);
-        }
     }
+    let mut stmt = conn.prepare(&sql)?;
+    let ids: Result<Vec<String>, rusqlite::Error> = match &activity {
+        Some(activity) => stmt.query_map(params![activity], |row| row.get(0))?.collect(),
+        None => stmt.query_map([], |row| row.get(0))?.collect(),
+    };
+    ids.map_err(Into::into)
+}
+
+/// How many attempts `clear_history(activity)` would erase right now. Hosts use
+/// it to decide whether a pre-destructive snapshot is worth taking.
+pub fn count_clearable_history(conn: &Connection, activity: Option<Activity>) -> DbResult<u32> {
+    Ok(clearable_attempt_ids(conn, activity)?.len() as u32)
+}
+
+/// Clear terminal history in one transaction. `None` means every activity,
+/// matching the Settings wording “all history”; unfinished input is preserved.
+pub fn clear_history(conn: &Connection, activity: Option<Activity>) -> DbResult<u32> {
+    let tx = conn.unchecked_transaction()?;
     let mut deleted = 0u32;
-    for id in ids {
+    for id in clearable_attempt_ids(&tx, activity)? {
         if delete_attempt_graph_in_transaction(&tx, &id)? {
             deleted += 1;
         }
@@ -534,6 +575,11 @@ pub fn clear_history(conn: &Connection, activity: Option<Activity>) -> DbResult<
 }
 
 fn normalized_history_ids(input: &[String]) -> DbResult<Vec<String>> {
+    if input.len() > HISTORY_DELETE_MAX_IDS {
+        return Err(DbError::Validation(format!(
+            "at most {HISTORY_DELETE_MAX_IDS} history records can be deleted in one request"
+        )));
+    }
     let mut ids = Vec::with_capacity(input.len());
     let mut seen = std::collections::HashSet::new();
     for raw in input {
@@ -609,10 +655,18 @@ pub fn set_history_retention_policy(
     })
 }
 
+/// How many terminal attempts a limit of `limit` would prune right now. Hosts
+/// use it to decide whether a retention change needs a pre-destructive snapshot.
+pub fn count_retention_prune_candidates(conn: &Connection, limit: Option<u32>) -> DbResult<u32> {
+    validate_history_retention_limit(limit)?;
+    let Some(limit) = limit else { return Ok(0) };
+    Ok(terminal_attempt_ids_beyond(conn, limit)?.len() as u32)
+}
+
 /// A v3 backup predates the policy table but can contain the old app KV. When
 /// restoring it, migrate that value once and erase the mirror again. If there
-/// is no old value, preserve the target's existing policy (normally the v8
-/// migration default) rather than silently inventing an unlimited policy.
+/// is no old value, preserve the target's existing policy (normally the
+/// migration default, unlimited since 0027) rather than inventing one.
 pub fn restore_legacy_history_retention_policy(conn: &Connection) -> DbResult<()> {
     let raw: Option<String> = conn
         .query_row(
@@ -638,8 +692,8 @@ pub fn restore_legacy_history_retention_policy(conn: &Connection) -> DbResult<()
     } else {
         conn.execute(
             "INSERT OR IGNORE INTO history_retention_policy (singleton, max_terminal_attempts, updated_at)
-             VALUES (1, ?1, ?2)",
-            params![i64::from(HISTORY_RETENTION_DEFAULT), now],
+             VALUES (1, NULL, ?1)",
+            params![now],
         )?;
     }
     conn.execute(
@@ -649,14 +703,8 @@ pub fn restore_legacy_history_retention_policy(conn: &Connection) -> DbResult<()
     Ok(())
 }
 
-/// Apply the canonical policy after a product path has made an attempt
-/// terminal, but before that path commits its own transaction. Cold import and
-/// backup restore intentionally never call this function: they replay durable
-/// facts rather than creating a new learner completion.
-pub fn prune_terminal_attempts_in_transaction(conn: &Connection) -> DbResult<u32> {
-    let Some(limit) = load_history_retention_limit(conn)? else {
-        return Ok(0);
-    };
+/// The terminal attempts beyond the newest `limit`, oldest last.
+fn terminal_attempt_ids_beyond(conn: &Connection, limit: u32) -> DbResult<Vec<String>> {
     let select_sql = format!(
         "SELECT id
          FROM attempts
@@ -664,15 +712,22 @@ pub fn prune_terminal_attempts_in_transaction(conn: &Connection) -> DbResult<u32
          ORDER BY COALESCE(completed_at, submitted_at, started_at, created_at) DESC, id DESC
          LIMIT -1 OFFSET ?1"
     );
-    let ids = {
-        let mut statement = conn.prepare(&select_sql)?;
-        let rows = statement.query_map(params![i64::from(limit)], |row| row.get::<_, String>(0))?;
-        let mut ids = Vec::new();
-        for row in rows {
-            ids.push(row?);
-        }
-        ids
+    let mut statement = conn.prepare(&select_sql)?;
+    let rows = statement.query_map(params![i64::from(limit)], |row| row.get::<_, String>(0))?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+/// Apply the policy the user chose, after a product path has made an attempt
+/// terminal but before that path commits its own transaction. With no limit
+/// (the default, and the only state until the user picks a number in Settings)
+/// this deletes nothing. Cold import and backup restore intentionally never call
+/// this function: they replay durable facts rather than creating a new learner
+/// completion.
+pub fn prune_terminal_attempts_in_transaction(conn: &Connection) -> DbResult<u32> {
+    let Some(limit) = load_history_retention_limit(conn)? else {
+        return Ok(0);
     };
+    let ids = terminal_attempt_ids_beyond(conn, limit)?;
     for attempt_id in &ids {
         delete_attempt_graph_in_transaction(conn, attempt_id)?;
     }
@@ -684,8 +739,14 @@ pub fn prune_terminal_attempts_in_transaction(conn: &Connection) -> DbResult<u32
 
 /// Delete an attempt together with every non-FK logical edge that would
 /// otherwise make a backup or idempotent replay lie about an erased record.
-/// The caller owns the transaction.
+/// The caller owns the transaction. This is the one place raw attempts are
+/// erased: history delete, clear and the user's retention policy all end here,
+/// and it is the one place that opens the raw-data delete gate for them.
 fn delete_attempt_graph_in_transaction(conn: &Connection, attempt_id: &str) -> DbResult<bool> {
+    with_delete_gate(conn, || delete_attempt_graph_gated(conn, attempt_id))
+}
+
+fn delete_attempt_graph_gated(conn: &Connection, attempt_id: &str) -> DbResult<bool> {
     let evaluation_ids = {
         let mut statement =
             conn.prepare("SELECT id FROM writing_evaluations WHERE attempt_id = ?1 ORDER BY id")?;
@@ -741,6 +802,14 @@ fn delete_attempt_graph_in_transaction(conn: &Connection, attempt_id: &str) -> D
         params![attempt_id],
     )?;
     delete_mode_idempotency_replays_for_attempt(conn, attempt_id)?;
+    // The ledger rows of this attempt go with it, deliberately: 0028 made the
+    // foreign key RESTRICT, so nothing else can erase them as a side effect.
+    // Deleting them cascades into the observation evidence they back; the
+    // caller re-projects the observations afterwards.
+    conn.execute(
+        "DELETE FROM learning_events WHERE attempt_id = ?1",
+        params![attempt_id],
+    )?;
     let deleted = conn.execute("DELETE FROM attempts WHERE id = ?1", params![attempt_id])?;
     Ok(deleted > 0)
 }

@@ -108,7 +108,8 @@ fn is_m12_table(name: &str) -> bool {
 }
 
 fn is_newer_than_legacy(name: &str) -> bool {
-    is_memory_table(name)
+    name == "weekly_digests"
+        || is_memory_table(name)
         || is_coach_feedback_table(name)
         || is_m7_table(name)
         || is_m8_table(name)
@@ -531,14 +532,15 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
         .unwrap();
 
     let package = create_backup_package(&source, "roundtrip-test").unwrap();
-    assert_eq!(package.manifest.schema_version, 17);
+    assert_eq!(package.manifest.schema_version, 18);
+    assert!(package.attempts.is_empty(), "format 18 carries attempts once");
     assert_eq!(
         package.manifest.table_count as usize,
         package.database.len()
     );
     assert_eq!(package.manifest.secret_ref_count, 1);
-    assert!(package
-        .attempts
+    assert!(ielts_db::format17_attempt_summaries(&source)
+        .unwrap()
         .iter()
         .find(|attempt| attempt.id == "r1")
         .is_some_and(|attempt| attempt.answers.len() == 1 && attempt.annotations.len() == 1));
@@ -583,7 +585,7 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
 
     let target_package = create_backup_package(&target, "after-restore").unwrap();
     assert_eq!(target_package.database, package.database);
-    assert_eq!(target_package.attempts, package.attempts);
+    assert!(target_package.attempts.is_empty() && package.attempts.is_empty());
     assert_eq!(target_package.settings, package.settings);
     assert_eq!(target_package.secret_refs, package.secret_refs);
 
@@ -735,9 +737,9 @@ fn legacy_v1_package_is_read_explicitly_as_partial_compatibility_import() {
     let source = open_v2(dir.path().join("source.db"));
     seed_complete_user_state(&source);
     let current = create_backup_package(&source, "legacy-source").unwrap();
-    let mut legacy_attempt = current
-        .attempts
-        .iter()
+    let mut legacy_attempt = ielts_db::format17_attempt_summaries(&source)
+        .unwrap()
+        .into_iter()
         .find(|attempt| attempt.id == "w1")
         .unwrap()
         .clone();
@@ -785,6 +787,7 @@ fn legacy_v2_snapshot_without_writing_topics_remains_restorable() {
     let source = open_v2(dir.path().join("source.db"));
     seed_complete_user_state(&source);
     let mut legacy = create_backup_package(&source, "v2-source").unwrap();
+    legacy.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
 
     legacy.manifest.schema_version = 2;
     legacy.manifest.database_schema_version = 5;
@@ -850,6 +853,7 @@ fn legacy_v4_snapshot_projects_prompt_settings_inside_restore_transaction() {
     )
     .unwrap();
     let mut legacy = create_backup_package(&source, "v4-prompt-source").unwrap();
+    legacy.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
     legacy.manifest.schema_version = 4;
     legacy.database.retain(|table| {
         table.name != "writing_prompts"
@@ -889,6 +893,7 @@ fn legacy_v5_snapshot_without_reading_timers_remains_restorable() {
     let source = open_v2(dir.path().join("timer-v5-source.db"));
     seed_complete_user_state(&source);
     let mut legacy = create_backup_package(&source, "timer-v5-source").unwrap();
+    legacy.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
     legacy.manifest.schema_version = 5;
     legacy.manifest.database_schema_version = 9;
     legacy.database.retain(|table| {
@@ -926,6 +931,7 @@ fn legacy_v6_snapshot_without_agent_tables_remains_restorable() {
     let source = open_v2(dir.path().join("agent-v6-source.db"));
     seed_complete_user_state(&source);
     let mut legacy = create_backup_package(&source, "agent-v6-source").unwrap();
+    legacy.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
     legacy.manifest.schema_version = 6;
     legacy.manifest.database_schema_version = 10;
     legacy.database.retain(|table| {
@@ -964,6 +970,7 @@ fn legacy_v8_snapshot_remains_restorable_and_clears_target_memory() {
     let source = open_v2(dir.path().join("memory-v8-source.db"));
     seed_complete_user_state(&source);
     let mut legacy = create_backup_package(&source, "memory-v8-source").unwrap();
+    legacy.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
     legacy.manifest.schema_version = 8;
     legacy.manifest.database_schema_version = 13;
     legacy.database.retain(|table| !is_newer_than_legacy(&table.name));

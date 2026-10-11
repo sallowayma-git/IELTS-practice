@@ -9,16 +9,21 @@ use rusqlite::{params, params_from_iter, Connection, Transaction};
 use sha2::{Digest, Sha256};
 
 use ielts_domain::dto::{
-    AttemptRecord, BackupManifest, BackupPackage, BackupSqlValue, BackupTable, ImportBackupReport,
-    SecretRef, SettingEntry,
+    AttemptRecord, BackupManifest, BackupPackage, BackupSqlValue, BackupTable, DataClassCounts,
+    ImportBackupReport, RestoreDelta, SecretRef, SettingEntry,
 };
 
 use crate::attempts::{parse_writing_task_type, upsert_attempt};
 use crate::migrate::current_version;
+use crate::safety::with_delete_gate;
 use crate::settings::{list_secret_refs, list_settings, put_secret_ref, upsert_setting};
 use crate::sqlite::{DbError, DbResult};
 
-pub const BACKUP_SCHEMA_VERSION: u32 = 17;
+/// Format 18: the attempts are carried once, in `database`. Format 17 also
+/// carried a duplicate `attempts` summary array; it still restores.
+pub const BACKUP_SCHEMA_VERSION: u32 = 18;
+/// First format whose database payload carries `weekly_digests`.
+const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
 const LEGACY_BACKUP_SCHEMA_VERSION: u32 = 1;
 
 // Parent tables precede their children. Restore inserts in this order and
@@ -63,6 +68,7 @@ const CANONICAL_TABLES: &[&str] = &[
     "daily_journal_sources",
     "background_jobs",
     "dream_runs",
+    "weekly_digests",
     "dream_candidates",
     "memory_relations",
     "memory_feedback",
@@ -736,7 +742,17 @@ const V14_CANONICAL_TABLES: &[&str] = &[
     "migration_meta",
 ];
 
-fn snapshot_tables_for_schema(schema_version: u32) -> &'static [&'static str] {
+/// The tables a package of `schema_version` carries. Restore clears every
+/// canonical table and inserts only these.
+fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
+    snapshot_tables_before_digests(schema_version)
+        .iter()
+        .copied()
+        .filter(|table| *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION)
+        .collect()
+}
+
+fn snapshot_tables_before_digests(schema_version: u32) -> &'static [&'static str] {
     if schema_version >= 17 {
         CANONICAL_TABLES
     } else if schema_version == 16 {
@@ -773,7 +789,7 @@ fn snapshot_tables_for_schema(schema_version: u32) -> &'static [&'static str] {
 }
 
 pub fn create_backup_package(conn: &Connection, app_version: &str) -> DbResult<BackupPackage> {
-    let attempts = load_all_attempts(conn)?;
+    let attempt_count: u32 = conn.query_row("SELECT COUNT(*) FROM attempts", [], |row| row.get(0))?;
     let settings = list_settings(conn, None)?;
     let secret_refs = list_secret_refs(conn)?;
     let database = snapshot_database(conn)?;
@@ -789,14 +805,14 @@ pub fn create_backup_package(conn: &Connection, app_version: &str) -> DbResult<B
             created_at: chrono::Utc::now().to_rfc3339(),
             app_version: app_version.to_string(),
             includes_secrets: false,
-            attempt_count: attempts.len() as u32,
+            attempt_count,
             settings_count: settings.len() as u32,
             secret_ref_count: secret_refs.len() as u32,
             table_count: database.len() as u32,
             row_count: database_rows + secret_refs.len() as u64,
             checksum_sha256: String::new(),
         },
-        attempts,
+        attempts: Vec::new(),
         settings,
         secret_refs,
         database,
@@ -809,12 +825,33 @@ pub fn create_backup_package(conn: &Connection, app_version: &str) -> DbResult<B
     Ok(package)
 }
 
+/// Write the package atomically: the bytes reach `<path>.tmp`, are flushed to
+/// disk, and only then take the final name. A crash or a full disk leaves either
+/// the previous file or no file at `path`, never a truncated backup.
 pub fn write_backup_file(package: &BackupPackage, path: &Path) -> DbResult<()> {
+    use std::io::Write;
+
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_vec_pretty(package).map_err(|e| DbError::Message(e.to_string()))?;
-    std::fs::write(path, json)?;
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = std::path::PathBuf::from(temp);
+    let written = (|| -> std::io::Result<()> {
+        let mut file = std::fs::File::create(&temp)?;
+        file.write_all(&json)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = written {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error.into());
+    }
+    if let Err(error) = std::fs::rename(&temp, path) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error.into());
+    }
     Ok(())
 }
 
@@ -859,7 +896,7 @@ pub fn validate_backup(package: &BackupPackage) -> DbResult<Vec<String>> {
     validate_snapshot_counts(package)?;
     let tables = table_map(
         &package.database,
-        snapshot_tables_for_schema(package.manifest.schema_version),
+        &snapshot_tables_for_schema(package.manifest.schema_version),
     )?;
     validate_json_cells(&tables)?;
     validate_logical_references(&tables)?;
@@ -891,6 +928,10 @@ pub fn import_backup(
         report.errors.push(error.to_string());
         return Ok(report);
     }
+    report.delta = Some(RestoreDelta {
+        current: data_class_counts_in_db(conn)?,
+        incoming: data_class_counts_of_package(package),
+    });
 
     // Dry-run executes the exact restore against the real schema, then drops
     // the transaction. This verifies CHECK/UNIQUE/FK constraints without
@@ -918,6 +959,39 @@ pub fn import_backup(
     Ok(report)
 }
 
+/// Per-class record counts of the live database, for the restore preview.
+fn data_class_counts_in_db(conn: &Connection) -> DbResult<DataClassCounts> {
+    let count = |table: &str| -> DbResult<u32> {
+        Ok(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))?)
+    };
+    Ok(DataClassCounts {
+        attempts: count("attempts")?,
+        essays: count("writing_evaluations")?,
+        coach_messages: count("coach_messages")?,
+        memories: count("memory_items")?,
+    })
+}
+
+fn data_class_counts_of_package(package: &BackupPackage) -> DataClassCounts {
+    let rows = |table: &str| {
+        package
+            .database
+            .iter()
+            .find(|candidate| candidate.name == table)
+            .map_or(0, |candidate| candidate.rows.len() as u32)
+    };
+    DataClassCounts {
+        attempts: if package.database.is_empty() {
+            package.attempts.len() as u32
+        } else {
+            rows("attempts")
+        },
+        essays: rows("writing_evaluations"),
+        coach_messages: rows("coach_messages"),
+        memories: rows("memory_items"),
+    }
+}
+
 fn empty_report(dry_run: bool) -> ImportBackupReport {
     ImportBackupReport {
         dry_run,
@@ -928,6 +1002,7 @@ fn empty_report(dry_run: bool) -> ImportBackupReport {
         tables_imported: 0,
         rows_imported: 0,
         errors: Vec::new(),
+        delta: None,
         warnings: Vec::new(),
     }
 }
@@ -1108,20 +1183,25 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
 
     let source_tables = snapshot_tables_for_schema(package.manifest.schema_version);
-    let tables = table_map(&package.database, source_tables)?;
-    for table in CANONICAL_TABLES.iter().rev() {
-        // Old snapshots have no independent policy. Preserve the target row
-        // until the legacy app/settings value below has a chance to migrate.
-        if *table == "history_retention_policy" && !source_tables.contains(table) {
-            continue;
+    let tables = table_map(&package.database, &source_tables)?;
+    // A restore replaces the user's raw data: the only place these deletes run,
+    // and it is an explicit user action (Settings -> restore).
+    with_delete_gate(tx, || {
+        for table in CANONICAL_TABLES.iter().rev() {
+            // Old snapshots have no independent policy. Preserve the target row
+            // until the legacy app/settings value below has a chance to migrate.
+            if *table == "history_retention_policy" && !source_tables.contains(table) {
+                continue;
+            }
+            if *table == "prompt_skill_releases" {
+                clear_release_history(tx)?;
+                continue;
+            }
+            tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
         }
-        if *table == "prompt_skill_releases" {
-            clear_release_history(tx)?;
-            continue;
-        }
-        tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
-    }
-    for table_name in source_tables {
+        Ok(())
+    })?;
+    for table_name in &source_tables {
         let Some(table) = tables.get(table_name) else {
             // Older snapshots may predate tables added in a later schema
             // version. snapshot_tables_for_schema returns the current list, but
@@ -1168,6 +1248,10 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             params![secret.name, value_json, secret.updated_at],
         )?;
     }
+    if !source_tables.contains(&"weekly_digests") {
+        // Packages before format 18 keep the weekly digest prose in `settings`.
+        crate::dream::move_settings_weekly_digests_in_transaction(tx)?;
+    }
     if package.manifest.schema_version == 2 {
         // A v2 package has no canonical writing-topic rows. Its restored
         // settings are the only cold-import source, so discard any checkpoint
@@ -1177,6 +1261,11 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     }
     if package.manifest.schema_version < 4 {
         crate::history::restore_legacy_history_retention_policy(tx)?;
+    }
+    if package.manifest.database_schema_version < 27 {
+        // A pre-0027 package carries the old untouched default (100). Restoring it
+        // verbatim would turn a default back into a silent prune limit.
+        crate::history::normalize_untouched_retention_default(tx)?;
     }
     if package.manifest.schema_version < 5 {
         // An older snapshot has no canonical prompt table. Ignore any stale
@@ -1344,7 +1433,21 @@ fn validate_snapshot_counts(package: &BackupPackage) -> DbResult<()> {
             package.manifest.row_count, row_count
         )));
     }
-    if package.manifest.attempt_count != package.attempts.len() as u32
+    let attempt_count = if package.manifest.schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION {
+        if !package.attempts.is_empty() {
+            return Err(DbError::Validation(
+                "schema 18+ backups carry attempts only in the database payload".into(),
+            ));
+        }
+        package
+            .database
+            .iter()
+            .find(|table| table.name == "attempts")
+            .map_or(0, |table| table.rows.len())
+    } else {
+        package.attempts.len()
+    };
+    if package.manifest.attempt_count as usize != attempt_count
         || package.manifest.settings_count != package.settings.len() as u32
         || package.manifest.secret_ref_count != package.secret_refs.len() as u32
     {
@@ -1390,16 +1493,18 @@ fn validate_redundant_views(
     package: &BackupPackage,
     tables: &HashMap<&str, &BackupTable>,
 ) -> DbResult<()> {
-    let attempt_ids = text_set(tables["attempts"], "id")?;
-    let summary_ids = package
-        .attempts
-        .iter()
-        .map(|attempt| attempt.id.clone())
-        .collect::<HashSet<_>>();
-    if attempt_ids != summary_ids {
-        return Err(DbError::Validation(
-            "attempt summary does not match canonical attempts table".into(),
-        ));
+    if package.manifest.schema_version < WEEKLY_DIGESTS_SCHEMA_VERSION {
+        let attempt_ids = text_set(tables["attempts"], "id")?;
+        let summary_ids = package
+            .attempts
+            .iter()
+            .map(|attempt| attempt.id.clone())
+            .collect::<HashSet<_>>();
+        if attempt_ids != summary_ids {
+            return Err(DbError::Validation(
+                "attempt summary does not match canonical attempts table".into(),
+            ));
+        }
     }
     let setting_keys = composite_text_set(tables["settings"], "namespace", "key")?;
     let summary_setting_keys = package
@@ -1460,6 +1565,9 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
     let suites = text_set(tables["reading_suites"], "id")?;
     let attempts = text_set(tables["attempts"], "id")?;
     let evaluations = text_set(tables["writing_evaluations"], "id")?;
+    if let (Some(digests), Some(runs)) = (tables.get("weekly_digests"), tables.get("dream_runs")) {
+        require_refs(digests, "run_id", &text_set(runs, "id")?)?;
+    }
     let threads = text_set(tables["coach_threads"], "id")?;
     let vocab = text_set(tables["vocabulary_items"], "id")?;
 
@@ -1916,7 +2024,10 @@ fn quote_identifier(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
-fn load_all_attempts(conn: &Connection) -> DbResult<Vec<AttemptRecord>> {
+/// The `attempts` summary array that format 17 carried next to the database
+/// payload. The writer no longer emits it (format 18 carries the attempts once,
+/// in `database`); this stays so tests can fabricate genuine format-17 packages.
+pub fn format17_attempt_summaries(conn: &Connection) -> DbResult<Vec<AttemptRecord>> {
     let mut attempts = load_all_attempt_summaries(conn)?;
     for attempt in &mut attempts {
         let mut answer_stmt = conn.prepare(

@@ -29,8 +29,10 @@ pub fn run() {
     let db = match app::state::AppDb::open(&paths) {
         Ok(db) => db,
         Err(err) => {
-            tracing::error!(error = %err, "failed to open v2 database");
-            panic!("failed to open v2 database: {err}");
+            // Nothing was deleted or rewritten: a failed migration rolls back and
+            // a failed snapshot stops the migration before it starts.
+            app::fatal::report_startup_failure(&paths.logs, &paths.backups, &err.to_string());
+            std::process::exit(1);
         }
     };
     // M7-02/R3: on startup, recover abandoned leases and enqueue missing daily
@@ -88,6 +90,7 @@ pub fn run() {
         .manage(agent::WorkspaceGrants::default())
         .manage(agent::AgentCancelRegistry::default())
         .manage(commands::backup::BackupImportGrants::default())
+        .manage(commands::history::ClearHistoryTokens::default())
         .manage(commands::diagnostics::UpdaterRuntimeState::default())
         .manage(cognitive_runtime::RuntimeManager::default())
         .invoke_handler(tauri::generate_handler![
@@ -148,6 +151,7 @@ pub fn run() {
             commands::history::export_history,
             commands::history::delete_history_attempt,
             commands::history::delete_history_attempts,
+            commands::history::history_issue_clear_token,
             commands::history::clear_history,
             commands::history::import_reading_archive_value,
             commands::history::history_get_retention_policy,

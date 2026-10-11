@@ -273,10 +273,10 @@ fn migration_does_not_invent_a_revision_for_existing_completed_history() {
     let (result, _) = submit(&conn, "single");
     conn.execute_batch(
         "ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
-        DELETE FROM schema_migrations WHERE version=26;",
+        DELETE FROM schema_migrations WHERE version>=26;",
     )
     .unwrap();
-    assert_eq!(migrate(&mut conn).unwrap(), vec![26]);
+    assert_eq!(migrate(&mut conn).unwrap(), vec![26, 27, 28, 29, 30]);
     verify_idempotent(&mut conn).unwrap();
     assert!(revision(&conn, &result.attempt.id).is_none());
     let thread = ensure_coach_thread(
@@ -300,7 +300,7 @@ fn pre_revision_full_backup_restores_as_unversioned_history() {
     source
         .execute_batch(
             "ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
-        DELETE FROM schema_migrations WHERE version=26;",
+        DELETE FROM schema_migrations WHERE version>=26;",
         )
         .unwrap();
     let package = create_backup_package(&source, "pre-revision-test").unwrap();

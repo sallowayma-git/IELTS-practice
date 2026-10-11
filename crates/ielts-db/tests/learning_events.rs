@@ -90,14 +90,14 @@ fn migration_is_forward_only_from_v11_fixture() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
     );
     let version: i64 = conn
         .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(version, 26, "latest migration 0026 was not applied");
+    assert_eq!(version, 30, "latest migration 0030 was not applied");
     let exists: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'learning_events'",
@@ -175,8 +175,9 @@ fn reading_submit_projection_is_atomic_idempotent_rebuildable_and_cascades() {
         hashes
     );
 
-    conn.execute("DELETE FROM attempts WHERE id = 'attempt-ledger-1'", [])
-        .unwrap();
+    // An attempt is erased only through the explicit path, which removes its
+    // ledger rows deliberately (migration 0028 made the foreign key RESTRICT).
+    ielts_db::delete_attempt(&conn, "attempt-ledger-1").unwrap();
     assert!(
         list_learning_events(&conn, None, Some("attempt-ledger-1"), 20)
             .unwrap()

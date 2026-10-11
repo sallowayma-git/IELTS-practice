@@ -229,8 +229,8 @@ fn v8_migration_rejects_lossy_legacy_history_limits() {
             get_history_retention_policy(&conn)
                 .unwrap()
                 .max_terminal_attempts,
-            Some(100),
-            "legacy payload {raw_limit:?} must not be coerced into a policy"
+            None,
+            "legacy payload {raw_limit:?} must not be coerced into a policy; the untouched default is unlimited (0027)"
         );
     }
 }
@@ -252,8 +252,8 @@ fn legacy_backup_restore_uses_the_same_strict_history_limit_parser() {
             get_history_retention_policy(&conn)
                 .unwrap()
                 .max_terminal_attempts,
-            Some(100),
-            "legacy backup payload {raw_limit:?} must not be coerced into a policy"
+            None,
+            "legacy backup payload {raw_limit:?} must not be coerced into a policy; the untouched default is unlimited (0027)"
         );
         let legacy_rows: i64 = conn
             .query_row(

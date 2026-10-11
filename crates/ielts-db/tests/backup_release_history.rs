@@ -22,6 +22,17 @@ fn open_db(path: impl Into<std::path::PathBuf>) -> Connection {
     conn
 }
 
+/// Keep the manifest's table and row counts in step with a fabricated payload.
+fn recount(package: &mut BackupPackage) {
+    package.manifest.table_count = package.database.len() as u32;
+    package.manifest.row_count = package
+        .database
+        .iter()
+        .map(|table| table.rows.len() as u64)
+        .sum::<u64>()
+        + package.secret_refs.len() as u64;
+}
+
 fn rechecksum(package: &mut BackupPackage) {
     package.manifest.table_count = package.database.len() as u32;
     package.manifest.row_count = package
@@ -178,7 +189,7 @@ fn out_of_order_publications_survive_backup_restore_and_all_rollbacks() {
     let prompt = seed_chain(&source, CandidateTargetKind::Prompt);
     let skill = seed_chain(&source, CandidateTargetKind::Skill);
     let package = create_backup_package(&source, "release-history").unwrap();
-    assert_eq!(package.manifest.schema_version, 17);
+    assert_eq!(package.manifest.schema_version, 18);
     assert_eq!(
         package
             .database
@@ -331,6 +342,9 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
     package
         .database
         .retain(|t| t.name != "prompt_skill_releases" && t.name != "prompt_skill_release_heads");
+    package.database.retain(|t| t.name != "weekly_digests");
+    package.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
+    recount(&mut package);
     rechecksum(&mut package);
     validate_backup(&package).unwrap();
     let target = open_db(dir.path().join("target.db"));
@@ -360,7 +374,12 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
         restored
             .database
             .into_iter()
-            .filter(|t| t.name != "prompt_skill_releases" && t.name != "prompt_skill_release_heads")
+            .filter(|t| {
+                !matches!(
+                    t.name.as_str(),
+                    "prompt_skill_releases" | "prompt_skill_release_heads" | "weekly_digests"
+                )
+            })
             .collect::<Vec<_>>()
     );
     let error = rollback_version(
@@ -391,6 +410,7 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
     let dir = tempdir().unwrap();
     let source = open_db(dir.path().join("source.db"));
     let current = create_backup_package(&source, "compatibility").unwrap();
+    let summaries = ielts_db::format17_attempt_summaries(&source).unwrap();
     let target = open_db(dir.path().join("target.db"));
     // Freeze the introduction boundary independently from the implementation's
     // table lists. v9 and v10 have the same snapshot shape.
@@ -444,10 +464,15 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
                 | "agent_action_approvals" => 15,
                 "strategy_candidate_evaluations" => 16,
                 "prompt_skill_releases" | "prompt_skill_release_heads" => 17,
+                "weekly_digests" => 18,
                 _ => 2,
             };
             schema >= introduced
         });
+        if schema < 18 {
+            package.attempts = summaries.clone();
+        }
+        recount(&mut package);
         rechecksum(&mut package);
         validate_backup(&package).unwrap_or_else(|error| panic!("v{schema}: {error}"));
         for dry_run in [true, false] {

@@ -468,10 +468,12 @@ fn import_attempt(conn: &Connection, attempt: &AttemptRecord) -> DbResult<()> {
     // annotations for normal practice writes. An archive is a complete
     // snapshot, so preserving absent annotations here would make restore
     // non-deterministic and leave stale user data behind.
-    conn.execute(
-        "DELETE FROM attempt_annotations WHERE attempt_id = ?1",
-        params![attempt.id],
-    )?;
+    crate::safety::with_delete_gate(conn, || {
+        Ok(conn.execute(
+            "DELETE FROM attempt_annotations WHERE attempt_id = ?1",
+            params![attempt.id],
+        )?)
+    })?;
     upsert_attempt(conn, attempt)
 }
 

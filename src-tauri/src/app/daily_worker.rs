@@ -24,6 +24,7 @@ use crate::cognitive_runtime::{is_weekend, local_day_start_utc, plan_weekly_wind
 /// How often an idle worker looks at the weekly pass. Cheap checks first, so on
 /// an ordinary weekday this is a clock comparison and one indexed lookup.
 const WEEKLY_CHECK_INTERVAL: Duration = Duration::from_secs(600);
+const OPERATIONAL_PRUNE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 pub(crate) fn valid_local_window(user: &str, day: &str) -> bool {
     user == "local"
@@ -225,6 +226,17 @@ fn execute(app: &tauri::AppHandle, job: &BackgroundJob, worker: &str) -> DbResul
     run_daily_journal(&db, job, worker).map(|_| ())
 }
 
+/// Age-based cleanup of operational traces (class D). Raw data is never pruned
+/// here; see `ielts_db::safety`.
+fn prune_operational(db: &AppDb) {
+    let now = chrono::Utc::now();
+    match db.with_conn(|conn| ielts_db::prune_operational_records(conn, now, ielts_db::OPERATIONAL_RETENTION_DAYS)) {
+        Ok(report) if report.total() > 0 => tracing::info!(removed = report.total(), "operational records pruned"),
+        Ok(_) => {}
+        Err(error) => tracing::warn!(%error, "operational record prune failed"),
+    }
+}
+
 /// Spawn only after startup business recovery. The host aborts the handle on
 /// Exit; durable leases retain the receipt.
 pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<()> {
@@ -235,6 +247,7 @@ pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<(
         let mut last_scan = Instant::now();
         let mut last_lease_recovery: Option<Instant> = None;
         let mut last_weekly_check: Option<Instant> = None;
+        let mut last_operational_prune: Option<Instant> = None;
         loop {
             let db = app.state::<AppDb>();
             let now = chrono::Utc::now().to_rfc3339();
@@ -268,6 +281,10 @@ pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<(
                     }
                 }
                 Ok(None) => {
+                    if last_operational_prune.is_none_or(|last| last.elapsed() >= OPERATIONAL_PRUNE_INTERVAL) {
+                        last_operational_prune = Some(Instant::now());
+                        prune_operational(&db);
+                    }
                     // Idle: the weekly pass gets its turn, outside any job lease.
                     if last_weekly_check.is_none_or(|last| last.elapsed() >= WEEKLY_CHECK_INTERVAL) {
                         last_weekly_check = Some(Instant::now());

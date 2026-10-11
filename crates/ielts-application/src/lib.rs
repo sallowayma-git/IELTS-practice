@@ -28,9 +28,7 @@ pub use agent_thread::{AgentThreadService, AgentThreadStore};
 pub use coach::CoachService;
 pub use coach_feedback::{CoachFeedbackService, CoachFeedbackStore};
 pub use cognitive_read::{CognitiveReadService, CognitiveReadStore};
-pub use consolidation::{
-    ConsolidationService, ConsolidationStore, PartialConsolidation, WeeklyDreamResult,
-};
+pub use consolidation::{ConsolidationService, ConsolidationStore};
 pub use context::{ContextMaterializerService, ContextSnapshotStore};
 pub use corpus::{CorpusExportService, CorpusExportStore};
 pub use dream::{DreamService, DreamStore, WeeklyEvidence, WEEKLY_MAX_MUTATIONS};

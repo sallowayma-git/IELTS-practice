@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use ielts_domain::domain::{Activity, AttemptMode, ScoreScale, WritingTaskType};
 use ielts_domain::dto::AttemptRecord;
 
+use crate::safety::with_delete_gate;
 use crate::sqlite::{DbError, DbResult};
 
 pub fn upsert_attempt(conn: &Connection, attempt: &AttemptRecord) -> DbResult<()> {
@@ -69,10 +70,15 @@ pub fn upsert_attempt(conn: &Connection, attempt: &AttemptRecord) -> DbResult<()
         ],
     )?;
 
-    conn.execute(
-        "DELETE FROM attempt_answers WHERE attempt_id = ?1",
-        params![attempt.id],
-    )?;
+    // The record is the whole truth about this attempt's answers: a saved
+    // draft replaces the stored set (an answer the learner cleared must go),
+    // and the replacement is inserted right below in the same transaction.
+    with_delete_gate(conn, || {
+        Ok(conn.execute(
+            "DELETE FROM attempt_answers WHERE attempt_id = ?1",
+            params![attempt.id],
+        )?)
+    })?;
     for answer in &attempt.answers {
         conn.execute(
             "INSERT INTO attempt_answers (
@@ -97,9 +103,16 @@ pub fn upsert_attempt(conn: &Connection, attempt: &AttemptRecord) -> DbResult<()
 
     for ann in &attempt.annotations {
         conn.execute(
-            "INSERT OR REPLACE INTO attempt_annotations (
+            // Not REPLACE: a replacement is an implicit DELETE that bypasses the
+            // delete gate. Update the row in place on id conflict instead.
+            "INSERT INTO attempt_annotations (
                 id, attempt_id, asset_id, scope, question_id, kind, anchor_json, note_text, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ON CONFLICT(id) DO UPDATE SET
+                attempt_id = excluded.attempt_id, asset_id = excluded.asset_id,
+                scope = excluded.scope, question_id = excluded.question_id, kind = excluded.kind,
+                anchor_json = excluded.anchor_json, note_text = excluded.note_text,
+                updated_at = excluded.updated_at",
             params![
                 ann.id,
                 ann.attempt_id,

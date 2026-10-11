@@ -53,11 +53,9 @@ pub fn contains_security_marker(value: &str) -> bool {
     contains_injection_marker(value) || contains_secret_marker(value)
 }
 
-/// Off-limits inference domains (M8-05). The `PatternKind` enum already closes
-/// the *declared* kind set at deserialize time, so a model cannot select one of
-/// these as a kind. This predicate closes the other half the M8-05 contract
-/// promises: a model that smuggles the same claim through as free-text
-/// `statement` while declaring an allowed kind.
+/// Off-limits inference domains (M8-05). Applied to any model-written prose
+/// that is stored or shown (for example the weekly digest lines): a model must
+/// not smuggle a forbidden claim through free text.
 ///
 /// The IELTS coach reasons about study behaviour and language performance. It
 /// has no standing to record a claim about a learner's health, psychiatric
