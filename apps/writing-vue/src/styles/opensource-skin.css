@@ -92,7 +92,7 @@
 }
 
 /* ── Surfaces: everything sits on paper ────────────────────────────── */
-.atlas-paper :is(.card, .surface, .shell, .hero-panel, .glass-card, .glass-surface, .atlas-glass-panel,
+.atlas-paper :is(.card, .surface, .shell, .hero-panel,
   .essay-panel, .action-row, .settings-detail-panel, .hero-surface) {
   border: 0;
   border-radius: 0;
@@ -112,8 +112,8 @@
 
 /* ── Buttons: rectangles; one solid primary; text links for the rest ── */
 .atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-outline,
-  .btn-warning, .btn-success, .btn-info, .action-btn, .page-btn, .hero-btn, .shui-glass-btn, .btn-glass,
-  .btn-white, .exam-item-action-btn) {
+  .btn-warning, .btn-success, .btn-info, .action-btn, .page-btn, .hero-btn, .shui-glass-btn,
+  .exam-item-action-btn) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -133,7 +133,7 @@
 }
 
 .atlas-paper :is(.btn, .btn-secondary, .btn-warm-sand, .btn-outline, .action-btn, .page-btn, .hero-btn,
-  .shui-glass-btn, .btn-glass, .btn-white, .exam-item-action-btn):hover:not(:disabled) {
+  .shui-glass-btn, .exam-item-action-btn):hover:not(:disabled) {
   border-color: var(--anth-ink);
   background: var(--anth-surface-hover);
 }

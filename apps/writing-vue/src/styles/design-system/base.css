@@ -104,21 +104,7 @@ hr {
   gap: var(--anth-space-6);
 }
 
-.hero-panel,
-.glass-panel {
-  background: var(--anth-surface);
-  border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
-  box-shadow: var(--anth-shadow-xs);
-}
-
-.glass-surface {
-  background: var(--anth-surface);
-  border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-md);
-}
-
-.glass-card {
+.hero-panel {
   background: var(--anth-surface);
   border: 1px solid var(--anth-border);
   border-radius: var(--anth-radius-lg);
@@ -142,8 +128,7 @@ hr {
   border-color: var(--anth-accent-strong);
 }
 
-.btn-warm-sand,
-.btn-glass {
+.btn-warm-sand {
   background: var(--anth-surface);
   color: var(--anth-ink);
   padding: 9px 18px;
@@ -155,21 +140,9 @@ hr {
   transition: background var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease);
 }
 
-.btn-warm-sand:hover:not(:disabled),
-.btn-glass:hover:not(:disabled) {
+.btn-warm-sand:hover:not(:disabled) {
   background: var(--anth-surface-hover);
   border-color: var(--anth-border-strong);
-}
-
-.btn-white {
-  background: var(--color-white);
-  color: var(--anth-ink);
-  padding: 7px 14px;
-  border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-sm);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
 }
 
 .btn-dark {

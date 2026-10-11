@@ -237,27 +237,11 @@
   --shui-radius-lg: var(--anth-radius-lg);
   --shui-radius-md: var(--anth-radius-md);
   --shui-radius-sm: var(--anth-radius-sm);
-  --shui-blur: 0;
 
-  /* ── Liquid Glass aliases — collapse to opaque surfaces, no blur ────
-   * Still referenced by ~200 call sites across 8 views. Frozen: new code
-   * must use --anth-* tokens directly; do not add new --lg-* usages. */
-  --lg-blur-sm: 0;
-  --lg-blur-md: 0;
-  --lg-blur-lg: 0;
-  --lg-blur-xl: 0;
-  --lg-saturate: 1;
-  --lg-bg-primary: var(--anth-surface);
-  --lg-bg-elevated: var(--anth-surface-raised);
-  --lg-bg-toolbar: var(--anth-canvas-soft);
-  --lg-bg-interactive: var(--anth-surface-hover);
-  --lg-bg-pressed: var(--anth-surface-sunken);
+  /* ── Liquid Glass legacy aliases: opaque surfaces only, no blur ───── */
   --lg-bg-scrim: var(--anth-scrim);
   --lg-border-color: var(--anth-border);
   --lg-border-subtle: var(--anth-border-subtle);
-  --lg-shadow-subtle: var(--anth-shadow-xs);
-  --lg-shadow-elevated: var(--anth-shadow-sm);
-  --lg-shadow-high: var(--anth-shadow-md);
   --lg-radius-sm: var(--anth-radius-sm);
   --lg-radius-md: var(--anth-radius-md);
   --lg-radius-lg: var(--anth-radius-lg);
