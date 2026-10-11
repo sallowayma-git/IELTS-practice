@@ -82,8 +82,7 @@
           <p v-if="entry.observations.length" class="notebook-prose">{{ entry.observations.join('') }}</p>
           <ul v-if="entry.notes.length" class="notebook-notes">
             <li v-for="(note, noteIndex) in entry.notes" :key="note.id">
-              <span>{{ note.statement }}。{{ note.phrase }}</span>
-              <button
+              <span>{{ note.statement }}。{{ phraseHead(note.phrase) }}<span class="notebook-tail">{{ phraseLast(note.phrase) }}<button
                 v-if="note.evidenceIds.length"
                 class="notebook-ref"
                 type="button"
@@ -91,7 +90,7 @@
                 :aria-controls="`note-${noteKey(entry, note)}`"
                 :aria-label="`查看第 ${noteIndex + 1} 条依据`"
                 @click="toggleNote(entry, note)"
-              >{{ noteIndex + 1 }}</button>
+              >{{ noteIndex + 1 }}</button></span></span>
               <span
                 v-if="openNote === noteKey(entry, note)"
                 :id="`note-${noteKey(entry, note)}`"
@@ -110,13 +109,12 @@
               </span>
             </li>
           </ul>
-          <p v-if="entry.unresolved.length" class="notebook-prose notebook-prose--quiet">
-            还没想明白的：{{ entry.unresolved.join('；') }}。
-          </p>
+          <p v-if="entry.unresolvedLine" class="notebook-prose notebook-prose--quiet">{{ entry.unresolvedLine }}</p>
         </section>
 
         <section v-if="entry.changes.improved.length || entry.changes.recurring.length" class="notebook-section">
           <h3><span class="notebook-mark" aria-hidden="true">§</span>变化</h3>
+          <p v-if="entry.changeLead" class="notebook-prose notebook-lead">{{ entry.changeLead }}</p>
           <dl class="notebook-changes">
             <div v-if="entry.changes.improved.length">
               <dt>在变好</dt>
@@ -131,6 +129,7 @@
 
         <section v-if="entryIndex === 0 && !weeks.length && practice.length" class="notebook-section" data-notebook-next>
           <h3><span class="notebook-mark" aria-hidden="true">§</span>下一步练习</h3>
+          <p v-if="practiceLine" class="notebook-prose notebook-lead">{{ practiceLine }}</p>
           <ol class="notebook-practice">
             <li v-for="item in practice" :key="item.id">
               <strong>{{ item.label }}</strong>
@@ -172,7 +171,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import agentRepository from '@/api/agent-repository.js'
 import { getMemoryEvidence } from '@/api/learning-repository.js'
 import {
@@ -186,9 +185,13 @@ import {
 } from '@/api/memory-repository.js'
 import {
   buildNotebookEntry,
+  ENTRY_LIMIT,
   buildWeeklyEntry,
-  journalDaysFromJobs,
+  isPracticed,
+  journalWindow,
   nextPractice,
+  practiceLead,
+  previousPracticedDay,
   rememberedSentences
 } from '@/modules/notebook/compose.js'
 
@@ -199,6 +202,8 @@ const weeks = ref([])
 const memories = ref([])
 const memoryError = ref('')
 const practice = ref([])
+// Worded for the newest entry's day, where the plan is shown.
+const practiceLine = computed(() => practiceLead(practice.value, entries.value[0]?.day))
 const notice = ref('')
 const actionError = ref('')
 const busy = ref(new Set())
@@ -223,16 +228,34 @@ async function readMemories() {
   return new Map(memories.value.map((memory) => [memory.id, memory]))
 }
 
-// Only days the host has already finished are read; see journalDaysFromJobs.
+// Only days the host has already finished are read; see journalWindow.
+// An entry's gap runs back to the previous day with practice. The first
+// ENTRY_LIMIT days are read; older days are read only while an entry still has
+// no answer, so a notebook with recent practice never reads the whole window.
 async function readEntries(memoriesById) {
-  const days = journalDaysFromJobs(await getBackgroundJobStatus())
-  const journals = await Promise.allSettled(
-    days.map((day) => getDailyJournal({ userId: 'local', journalDate: day }))
-  )
-  return journals
-    .map(settledValue)
-    .map((journal, index) => journal && (journal.journalDate || journal.journal_date) === days[index]
-      ? buildNotebookEntry(journal, memoriesById)
+  const { days, cutOff } = journalWindow(await getBackgroundJobStatus())
+  const journals = new Map()
+  const practiced = new Map()
+  const readBatch = async (batch) => {
+    const reads = await Promise.allSettled(
+      batch.map((day) => getDailyJournal({ userId: 'local', journalDate: day }))
+    )
+    batch.forEach((day, index) => {
+      const journal = settledValue(reads[index])
+      const matches = Boolean(journal) && (journal.journalDate || journal.journal_date) === day
+      journals.set(day, matches ? journal : null)
+      practiced.set(day, matches ? isPracticed(journal) : undefined)
+    })
+  }
+  const shown = () => days.slice(0, ENTRY_LIMIT)
+  const unanswered = () => shown().some((_, index) => previousPracticedDay(days, index, practiced, cutOff) === undefined)
+  for (let next = 0; next < days.length; next += ENTRY_LIMIT) {
+    await readBatch(days.slice(next, next + ENTRY_LIMIT))
+    if (!unanswered()) break
+  }
+  return shown()
+    .map((day, index) => journals.get(day)
+      ? buildNotebookEntry(journals.get(day), memoriesById, { previousDay: previousPracticedDay(days, index, practiced, cutOff) })
       : null)
     .filter(Boolean)
 }
@@ -320,6 +343,15 @@ async function forget(memory) {
   } finally {
     setBusy(memory.id, false)
   }
+}
+
+// The marker must not wrap alone: it stays in one unbreakable run with the last glyph.
+function phraseHead(text) {
+  return [...String(text || '')].slice(0, -1).join('')
+}
+
+function phraseLast(text) {
+  return [...String(text || '')].at(-1) || ''
 }
 
 function noteKey(entry, note) {
@@ -476,12 +508,23 @@ onMounted(load)
   color: var(--anth-ink-soft);
 }
 
+/* A one-line lead-in above a list: quieter than the list it introduces. */
+.notebook-lead {
+  margin-bottom: 6px;
+  color: var(--anth-ink-soft);
+}
+
 .notebook-notes {
   display: grid;
   gap: 4px;
   margin-top: 6px;
   padding: 0;
   list-style: none;
+}
+
+/* The last glyph of a note and its footnote marker never break apart. */
+.notebook-tail {
+  white-space: nowrap;
 }
 
 /* Footnote marker: a small superscript numeral that opens inline. */

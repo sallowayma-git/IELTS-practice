@@ -8,6 +8,7 @@ import {
   nextPractice,
   rememberedSentences
 } from '../../../apps/writing-vue/src/modules/notebook/compose.js'
+import { BANK } from '../../../apps/writing-vue/src/modules/notebook/phrasing.js'
 
 test('only finished journal/dream days are read, newest first, deduplicated', () => {
   const days = journalDaysFromJobs([
@@ -40,7 +41,7 @@ test('entry prose carries words, not machinery or fake precision', () => {
     }
   }, memories)
   assert.equal(entry.dateLabel, '2026年10月2日 · 星期五')
-  assert.equal(entry.title, '判断题开始稳定')
+  assert.ok(BANK.title.improved.map((variant) => variant.replace('{type}', '判断题')).includes(entry.title), entry.title)
   assert.deepEqual(entry.changes, { improved: ['判断题'], recurring: ['段落大意配对'] })
   assert.equal(entry.notes.length, 1, 'inactive candidates stay invisible')
   assert.equal(entry.notes[0].statement, '判断题常把未提及判为错误')
@@ -48,11 +49,13 @@ test('entry prose carries words, not machinery or fake precision', () => {
   for (const forbidden of ['0.41', 'deadbeef', 'candidate', '新候选', '4 ']) {
     assert.ok(!prose.includes(forbidden), `entry leaks ${forbidden}`)
   }
-  assert.ok(entry.observations.join('').includes('约 52 分钟'))
+  assert.match(entry.observations.join(''), /52 分钟/, 'the minutes come through whichever variant the day picks')
 })
 
 test('quiet days and malformed journals degrade honestly', () => {
-  assert.equal(buildNotebookEntry({ journalDate: '2026-10-01', facts: { attemptsCount: 0 } }).title, '安静的一天')
+  const quiet = buildNotebookEntry({ journalDate: '2026-10-01', facts: { attemptsCount: 0 } })
+  assert.ok(BANK.title.quiet.includes(quiet.title), quiet.title)
+  assert.deepEqual(quiet.changes, { improved: [], recurring: [] })
   assert.equal(buildNotebookEntry({ journalDate: '2026-10-01' }), null)
   assert.equal(formatEntryDate('not-a-date'), 'not-a-date')
 })

@@ -33,6 +33,28 @@ MOCK = r"""
       journalDate: '2026-09-30', attemptsCount: 1, timeSpentMs: 1260000,
       writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [] } }
   };
+  // Week scenario: a fortnight-old first page, a long gap, then six practice days
+  // (one of them quiet) so consecutive entries can be read side by side.
+  if (window.__notebookWeek) {
+    const day = (date, attempts, minutes, written, band, degraded, deltas, coach, reask, events = []) => {
+      journals[date] = { id: 'journal-' + date, journalDate: date, status: 'published', facts: {
+        journalDate: date, attemptsCount: attempts, timeSpentMs: minutes * 60000,
+        writingEvalSummary: { completed: written, degraded, averageBand: band },
+        skillDeltas: deltas.map(([skillKey, delta]) => ({ skillKey, delta, evidenceCount: 2 })),
+        coachFeedbackCount: coach, coachReaskCount: reask, memoryEvents: events } };
+    };
+    const tfng = (changeKind) => [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',
+                                     changeKind, evidenceObservationIds: ['obs-tfng'] }];
+    Object.keys(journals).forEach(key => delete journals[key]);
+    day('2026-09-20', 2, 41, 0, null, 0, [['reading.tfng', 0.3], ['reading.matching_headings', -0.2]], 1, 0);
+    day('2026-09-28', 1, 18, 0, null, 0, [], 0, 0);
+    day('2026-09-29', 0, 0, 1, 6, 0, [['writing.task2', -0.2]], 0, 0);
+    day('2026-09-30', 3, 52, 1, 6.5, 0, [['reading.tfng', 0.4], ['reading.matching_headings', -0.3]], 2, 1, tfng('improved'));
+    day('2026-10-01', 2, 35, 0, null, 0, [['reading.short_answer', 0.5]], 0, 0);
+    day('2026-10-02', 4, 71, 2, 6.5, 1, [['reading.tfng', 0.2], ['reading.yng', -0.4]], 3, 0, tfng('reinforced'));
+    day('2026-10-03', 0, 0, 0, null, 0, [], 0, 0);
+    day('2026-10-04', 1, 25, 0, null, 0, [['reading.matching_headings', 0.4]], 0, 2);
+  }
   window.__notebookCalls = [];
   window.__catalog = [
     { id: 'mem-tfng', canonicalKey: 'reading.tfng', statement: '判断题中，你常把“未提及”误判为“错误”。',
@@ -48,7 +70,9 @@ MOCK = r"""
       return { ok: true, data: command === 'background_job_status' ? [] : null };
     }
     switch (command) {
-      case 'background_job_status': return { ok: true, data: [
+      case 'background_job_status': if (window.__notebookWeek) return { ok: true, data: Object.keys(journals).map(date =>
+        ({ id: 'job-' + date, jobKind: 'daily_journal', status: 'completed', dedupeKey: 'daily_journal:local:' + date })) };
+        return { ok: true, data: [
         { id: 'j1', jobKind: 'daily_journal', status: 'completed', dedupeKey: 'daily_journal:local:2026-09-30' },
         { id: 'j2', jobKind: 'daily_dream', status: 'completed', dedupeKey: 'daily_dream:local:2026-10-02' },
         { id: 'j3', jobKind: 'daily_journal', status: 'running', dedupeKey: 'daily_journal:local:2026-10-03' }
@@ -150,6 +174,41 @@ def exercise_actions(page, name):
         raise AssertionError(f"{name}: memory mutations do not match the Rust wire contract: {calls}")
 
 
+WEEK_DAYS = ["2026-10-04", "2026-10-03", "2026-10-02", "2026-10-01", "2026-09-30", "2026-09-29", "2026-09-28", "2026-09-20"]
+
+
+def check_week(browser):
+    """Eight finished days: wording is composed per day, never templated or left half-filled."""
+    page = browser.new_page(viewport={"width": 1440, "height": 900})
+    page.add_init_script("window.__notebookWeek = true")
+    page.add_init_script(MOCK)
+    page.goto(f"{BASE_URL}/#/notebook", wait_until="networkidle")
+    wait_for_route_layout(page, "[data-notebook-entry]")
+    entries = page.evaluate(
+        """() => [...document.querySelectorAll('[data-notebook-entry]')].map(node => ({
+          day: node.dataset.notebookEntry,
+          title: node.querySelector('h2').textContent.trim(),
+          prose: node.querySelector('.notebook-prose')?.textContent.trim() || '',
+          text: node.innerText
+        }))"""
+    )
+    if [entry["day"] for entry in entries] != WEEK_DAYS:
+        raise AssertionError(f"week: unexpected entries {[entry['day'] for entry in entries]}")
+    for entry in entries:
+        for token in ("{", "}", "undefined", "NaN", "null"):
+            if token in entry["text"]:
+                raise AssertionError(f"week: {entry['day']} leaks {token!r}: {entry['text']}")
+    for newer, older in zip(entries, entries[1:]):
+        consecutive = (int(newer["day"][-2:]) - int(older["day"][-2:]) == 1) and newer["day"][:7] == older["day"][:7]
+        if consecutive and (newer["title"] == older["title"] or newer["prose"] == older["prose"]):
+            raise AssertionError(f"week: consecutive days read alike: {newer['day']} / {older['day']}")
+    if "8 天" not in entries[-2]["text"]:
+        raise AssertionError(f"week: the long gap is not named: {entries[-2]['text']}")
+    capture_state(page, "notebook-week-desktop")
+    page.close()
+    return [{"day": entry["day"], "text": entry["text"]} for entry in entries]
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = []
@@ -176,6 +235,7 @@ def main():
                     capture_state(page, "notebook-empty-desktop")
                 report.append({"name": name, "entries": data["entries"], "sections": data["sections"]})
                 page.close()
+            report.append({"name": "week", "entries": check_week(browser)})
         finally:
             browser.close()
     print(json.dumps(report, ensure_ascii=False, indent=2))
