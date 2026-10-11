@@ -45,7 +45,7 @@ def install_tauri_mock(page, initial_mode):
           };
         }
         if (command === 'history_writing_statistics') {
-          return { ok: true, data: { count: 0, latest: null, average: null } };
+          return { ok: true, data: { count: 0 } };
         }
         return { ok: true, data: null };
       };

@@ -15,27 +15,46 @@ CASES = (
     ("small", 360, 800),
 )
 
+# Real AssetIndexEntry rows (see reading_library_surface_visual_check.py).
 ASSETS = [
     {
         "id": "selector-p1",
         "title": "A study of coastal wetlands",
-        "category": "p1",
-        "difficulty": "medium",
-        "questionCount": 13,
+        "category": "P1",
+        "difficulty": None,
+        "frequency": "high",
+        "fingerprint": "fp-selector-p1",
+        "schemaVersion": 2,
+        "contentRef": None,
+        "payloadRef": None,
+        "activity": "reading",
+        "pdfOnly": False,
     },
     {
         "id": "selector-p2",
         "title": "The history of public libraries",
-        "category": "p2",
-        "difficulty": "hard",
-        "questionCount": 13,
+        "category": "P2",
+        "difficulty": None,
+        "frequency": "medium",
+        "fingerprint": "fp-selector-p2",
+        "schemaVersion": 2,
+        "contentRef": None,
+        "payloadRef": None,
+        "activity": "reading",
+        "pdfOnly": False,
     },
     {
         "id": "selector-p3",
         "title": "Language and the changing workplace",
-        "category": "p3",
-        "difficulty": "easy",
-        "questionCount": 13,
+        "category": "P3",
+        "difficulty": None,
+        "frequency": "low",
+        "fingerprint": "fp-selector-p3",
+        "schemaVersion": 2,
+        "contentRef": None,
+        "payloadRef": None,
+        "activity": "reading",
+        "pdfOnly": False,
     },
 ]
 
@@ -51,18 +70,18 @@ def install_tauri_mock(page, assets=ASSETS):
         invoke: async (command) => {
           if (command === 'reading_list_assets') return { ok: true, data: assets };
           if (command === 'list_history') return { ok: true, data: { items: [], total: 0, limit: 20, offset: 0, nextCursor: null } };
-          if (command === 'history_writing_statistics' || command === 'history_reading_statistics') {
-            return { ok: true, data: { count: 0, latest: null, average: null } };
+          if (command === 'history_writing_statistics') {
+            return { ok: true, data: { count: 0 } };
           }
           if (command === 'list_settings') return { ok: true, data: [] };
           if (command === 'history_get_retention_policy') return { ok: true, data: { maxTerminalAttempts: 100 } };
           if (command === 'ai_list_configs') return { ok: true, data: [] };
           if (command === 'writing_prompt_list') return { ok: true, data: [] };
           if (command === 'writing_topic_statistics') return { ok: true, data: { total: 0, byTaskType: [] } };
-          if (command === 'get_app_info') return { host: 'Tauri', tauriVersion: '2', version: '0.1.0' };
-          if (command === 'get_app_data_paths') return { appData: 'C:/atlas/data', backups: 'C:/atlas/backups' };
+          if (command === 'get_app_info') return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri', fastifyEnabled: false };
+          if (command === 'get_app_data_paths') return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };
           if (command === 'list_backups') return { ok: true, data: [] };
-          if (command === 'check_for_updates') return { configured: false, updateAvailable: false, message: '未配置更新源。' };
+          if (command === 'check_for_updates') return { configured: false, updateAvailable: false, installed: false, requiresRestart: false, currentVersion: '0.1.0', latestVersion: null, body: null, stage: 'unconfigured', message: '此构建未配置签名更新通道。' };
           return { ok: true, data: null };
         }
       };

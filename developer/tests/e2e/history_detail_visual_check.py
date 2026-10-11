@@ -81,7 +81,7 @@ def install_tauri_mock(page, items=None):
           return { ok: true, data: { items: visible.slice(0, limit), total: visible.length, limit, offset: 0, nextCursor: null } };
         }
         if (command === 'history_writing_statistics') {
-          return { ok: true, data: { count: 0, latest: null, average: null } };
+          return { ok: true, data: { count: 0 } };
         }
         return { ok: true, data: null };
       };

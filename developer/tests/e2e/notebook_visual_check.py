@@ -19,36 +19,49 @@ CASES = (("desktop", 1440, 900), ("tablet", 768, 1024), ("mobile", 390, 844), ("
 
 MOCK = r"""
 (() => {
+  // Real DailyJournal / JournalFacts envelope (crates/ielts-domain/src/journal.rs).
+  const ZERO_CHANGES = { newCandidates: 0, promoted: 0, reinforced: 0, refined: 0, improved: 0, regressed: 0, contradicted: 0, superseded: 0 };
+  const journalShell = (journalDate, facts) => ({
+    id: 'journal-' + journalDate, userId: 'local', journalDate, version: 1, status: 'published',
+    facts: { journalDate, timeSpentMs: 0, writingEvalSummary: { completed: 0, degraded: 0, averageBand: null },
+             skillDeltas: [], memoryChanges: ZERO_CHANGES, coachFeedbackCount: 0, coachReaskCount: 0,
+             sourceHash: 'source-hash-' + journalDate, todayObservationIds: [], memoryEvents: [], ...facts },
+    sourceHash: 'source-hash-' + journalDate, renderedMarkdown: null, supersededBy: null,
+    createdAt: journalDate + 'T23:00:00Z', updatedAt: journalDate + 'T23:00:00Z' });
+  const withCatalogDefaults = (rows) => rows.map(row => ({ scope: 'activity:reading', confidenceBand: 'medium',
+    supportCount: 1, contradictionCount: 0, firstSeen: row.lastSeen, pendingVerification: false, ...row }));
+  const job = (id, jobKind, status, dedupeKey) => ({ id, jobKind, userId: 'local', status, priority: 0,
+    scheduledAt: '2026-10-03T00:00:00Z', lockedAt: null, heartbeatAt: null, attempts: 1, maxAttempts: 3,
+    dedupeKey, lastError: null, createdAt: '2026-10-03T00:00:00Z', updatedAt: '2026-10-03T00:00:00Z' });
   const journals = {
-    '2026-10-02': { id: 'journal-1002', journalDate: '2026-10-02', status: 'published', facts: {
-      journalDate: '2026-10-02', attemptsCount: 3, timeSpentMs: 3120000,
+    '2026-10-02': journalShell('2026-10-02', {
+      attemptsCount: 3, timeSpentMs: 3120000,
       writingEvalSummary: { completed: 1, degraded: 0, averageBand: 6.5 },
       skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, evidenceCount: 3 },
                     { skillKey: 'reading.matching_headings', delta: -0.3, evidenceCount: 2 }],
       coachFeedbackCount: 2,
       memoryEvents: [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',
-                       changeKind: 'reinforced', evidenceObservationIds: ['obs-tfng'] }]
-    }, unresolvedQuestions: ['NOT GIVEN 与 FALSE 的边界仍然模糊'] },
-    '2026-09-30': { id: 'journal-0930', journalDate: '2026-09-30', status: 'published', facts: {
-      journalDate: '2026-09-30', attemptsCount: 1, timeSpentMs: 1260000,
-      writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [] } }
+                       changeKind: 'reinforced', evidenceObservationIds: ['obs-tfng'] }] }),
+    '2026-09-30': journalShell('2026-09-30', {
+      attemptsCount: 1, timeSpentMs: 1260000,
+      writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [] }),
   };
   // Week scenario: a fortnight-old first page, a long gap, then six practice days
   // (one of them quiet) so consecutive entries can be read side by side.
   if (window.__notebookWeek) {
     const day = (date, attempts, minutes, written, band, degraded, deltas, coach, reask, events = []) => {
-      journals[date] = { id: 'journal-' + date, journalDate: date, status: 'published', facts: {
-        journalDate: date, attemptsCount: attempts, timeSpentMs: minutes * 60000,
+      journals[date] = journalShell(date, {
+        attemptsCount: attempts, timeSpentMs: minutes * 60000,
         writingEvalSummary: { completed: written, degraded, averageBand: band },
         skillDeltas: deltas.map(([skillKey, delta]) => ({ skillKey, delta, evidenceCount: 2 })),
-        coachFeedbackCount: coach, coachReaskCount: reask, memoryEvents: events } };
+        coachFeedbackCount: coach, coachReaskCount: reask, memoryEvents: events });
     };
     const tfng = (changeKind) => [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',
                                      changeKind, evidenceObservationIds: ['obs-tfng'] }];
     Object.keys(journals).forEach(key => delete journals[key]);
     day('2026-09-20', 2, 41, 0, null, 0, [['reading.tfng', 0.3], ['reading.matching_headings', -0.2]], 1, 0);
     day('2026-09-28', 1, 18, 0, null, 0, [], 0, 0);
-    day('2026-09-29', 0, 0, 1, 6, 0, [['writing.task2', -0.2]], 0, 0);
+    day('2026-09-29', 0, 0, 1, 6, 0, [['writing.taskResponse', -0.2]], 0, 0);
     day('2026-09-30', 3, 52, 1, 6.5, 0, [['reading.tfng', 0.4], ['reading.matching_headings', -0.3]], 2, 1, tfng('improved'));
     day('2026-10-01', 2, 35, 0, null, 0, [['reading.short_answer', 0.5]], 0, 0);
     day('2026-10-02', 4, 71, 2, 6.5, 1, [['reading.tfng', 0.2], ['reading.yng', -0.4]], 3, 0, tfng('reinforced'));
@@ -56,45 +69,54 @@ MOCK = r"""
     day('2026-10-04', 1, 25, 0, null, 0, [['reading.matching_headings', 0.4]], 0, 2);
   }
   window.__notebookCalls = [];
-  window.__catalog = [
+  window.__catalog = withCatalogDefaults([
     { id: 'mem-tfng', canonicalKey: 'reading.tfng', statement: '判断题中，你常把“未提及”误判为“错误”。',
       sourceClass: 'observed', namespace: 'skill', status: 'active', version: 2,
       evidenceObservationIds: ['obs-tfng'], lastSeen: '2026-10-02T09:00:00Z' },
     { id: 'mem-pref', canonicalKey: 'pref.examples', statement: '你更喜欢先看例句，再看规则讲解。',
       sourceClass: 'user_explicit', namespace: 'preference', status: 'active', version: 1,
       evidenceObservationIds: [], lastSeen: '2026-09-28T09:00:00Z' }
-  ];
+  ]);
   const invoke = async (command, args = {}) => {
     window.__notebookCalls.push({ command, args });
     if (window.__notebookEmpty && command !== 'memory_catalog_list') {
-      return { ok: true, data: command === 'background_job_status' ? [] : null };
+      if (command === 'background_job_status') return { ok: true, data: [] };
+      if (command === 'journal_get_daily') return { ok: true, data: journalShell(args.query.journalDate, {}) };
+      return { ok: true, data: null };
     }
     switch (command) {
       case 'background_job_status': if (window.__notebookWeek) return { ok: true, data: Object.keys(journals).map(date =>
-        ({ id: 'job-' + date, jobKind: 'daily_journal', status: 'completed', dedupeKey: 'daily_journal:local:' + date })) };
+        job('job-' + date, 'daily_journal', 'completed', 'daily_journal:local:' + date)) };
         return { ok: true, data: [
-        { id: 'j1', jobKind: 'daily_journal', status: 'completed', dedupeKey: 'daily_journal:local:2026-09-30' },
-        { id: 'j2', jobKind: 'daily_dream', status: 'completed', dedupeKey: 'daily_dream:local:2026-10-02' },
-        { id: 'j3', jobKind: 'daily_journal', status: 'running', dedupeKey: 'daily_journal:local:2026-10-03' }
+        job('j1', 'daily_journal', 'completed', 'daily_journal:local:2026-09-30'),
+        job('j2', 'daily_dream', 'completed', 'daily_dream:local:2026-10-02'),
+        job('j3', 'daily_journal', 'running', 'daily_journal:local:2026-10-03')
       ] };
-      case 'journal_get_daily': return { ok: true, data: journals[args.query.journalDate] || null };
+      case 'journal_get_daily': return { ok: true, data: journals[args.query.journalDate] || journalShell(args.query.journalDate, {}) };
       case 'memory_catalog_list': return { ok: true, data: { userId: 'local',
         entries: window.__notebookEmpty ? [] : window.__catalog.filter(row => row.status === 'active'), truncated: false } };
-      case 'study_plan_get_latest': return { ok: true, data: { plan: { id: 'plan-1' }, items: [
+      case 'study_plan_get_latest': return { ok: true, data: { plan: { id: 'plan-1', userId: 'local', goal: '复习判断题边界', availableMinutes: 45, targetDate: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }, items: [
         { id: 'spi-1', planId: 'plan-1', skillProbe: { skillKey: 'reading.tfng', probeKind: 'contrastive_pair' },
-          whyText: '用两组“错误 / 未提及”对照题，练习定位原文证据。', estimatedMinutes: 15, done: false },
+          whyText: '用两组“错误 / 未提及”对照题，练习定位原文证据。', estimatedMinutes: 15, done: false, createdAt: '2026-10-01T00:00:00Z' },
         { id: 'spi-2', planId: 'plan-1', skillProbe: 'reading.matching_headings',
-          whyText: '已完成的项不再出现。', estimatedMinutes: 10, done: true }
+          whyText: '已完成的项不再出现。', estimatedMinutes: 10, done: true, createdAt: '2026-10-01T00:00:00Z' }
       ] } };
-      case 'learning_observations_get_by_ids': return { ok: true, data: { observations: [{
-        id: 'obs-tfng', userId: 'local', observationType: 'question_outcome', observedAt: '2026-10-02',
-        scopeKey: 'reading.tfng', valueText: '第 9 题改答后仍错误：原文没有提到价格变化。',
-        evidence: [{ eventId: 'ev-tfng', evidenceRole: 'support', ordinal: 0 }] }], missingIds: [], freshness: 'fresh' } };
-      case 'learning_events_get_evidence_by_ids': return { ok: true, data: { events: [{
+      case 'learning_observations_get_by_ids': return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations',
+        projectorVersion: 1, ledgerInputHash: 'ledger-hash-notebook', observationOutputHash: 'observation-hash-notebook',
+        generatedAt: '2026-10-02T23:00:00Z', freshness: 'fresh', observations: [{
+        id: 'obs-tfng', userId: 'local', observationType: 'question_outcome', namespace: 'reading', scopeKind: 'skill',
+        scopeKey: 'reading.tfng', polarity: null, valueNum: null, valueText: '第 9 题改答后仍错误：原文没有提到价格变化。',
+        payload: {}, confidence: 0.8, evidenceStrength: 0.7, observedAt: '2026-10-02',
+        projectorKey: 'learning_observations', projectorVersion: 1, sourceFingerprint: 'fp-obs-tfng',
+        sensitivity: 'normal', trust: 'deterministic_projection',
+        evidence: [{ eventId: 'ev-tfng', evidenceRole: 'support', ordinal: 0 }] }], missingIds: [] } };
+      case 'learning_events_get_evidence_by_ids': return { ok: true, data: { schemaVersion: 1, events: [{
         id: 'ev-tfng', userId: 'local', activity: 'reading', assetId: 'p1-high-01', attemptId: 'attempt-9',
-        questionId: 'q9', eventType: 'reading_question_outcome', sourceKind: 'attempt', sourceId: 'attempt-9',
-        occurredAt: '2026-10-02', payload: {} }], missingIds: [] } };
-      case 'memory_record_feedback': return { ok: true, data: { feedbackKind: args.feedbackKind } };
+        questionId: 'q9', skillKey: 'reading.tfng', eventType: 'reading_question_outcome', sourceKind: 'attempt', sourceId: 'attempt-9',
+        occurredAt: '2026-10-02', payload: {}, contentHash: 'content-hash-ev-tfng', schemaVersion: 1,
+        sensitivity: 'normal', trust: 'canonical_learning_truth' }], missingIds: [] } };
+      case 'memory_record_feedback': return { ok: true, data: { id: 'feedback-notebook', memoryId: args.memoryId,
+        feedbackKind: args.feedbackKind, userId: 'local', payload: {}, createdAt: '2026-10-02T23:00:00Z' } };
       case 'memory_forget': {
         const row = window.__catalog.find(item => item.id === args.input.memoryId);
         if (!row || row.version !== args.input.expectedVersion) throw new Error('stale memory');

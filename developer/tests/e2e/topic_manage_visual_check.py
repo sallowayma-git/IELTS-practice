@@ -20,6 +20,8 @@ TOPICS = [
         "imagePath": None,
         "isOfficial": index == 1,
         "usageCount": index * 2,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
     }
     for index in range(1, 7)
 ]
@@ -35,13 +37,10 @@ def install_tauri_mock(page):
       window.__TAURI__.core = {
         invoke: async (command) => {
           if (command === 'writing_topic_list') {
-            return { ok: true, data: { items: topics, total: topics.length, page: 1, limit: 12 } };
+            return { ok: true, data: { items: topics, total: topics.length, limit: 12, offset: 0 } };
           }
           if (command === 'writing_topic_statistics') {
             return { ok: true, data: { total: topics.length, byTaskType: [] } };
-          }
-          if (command === 'settings_get_many') {
-            return { ok: true, data: {} };
           }
           return { ok: true, data: null };
         }

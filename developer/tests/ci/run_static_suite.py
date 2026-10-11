@@ -422,6 +422,10 @@ def main() -> int:
             [sys.executable, "developer/tests/ci/check_m4_contracts.py"],
         ),
         run_command(
+            "Frontend mock contract (commands, skill keys, enums vs Rust)",
+            [sys.executable, "developer/tests/ci/check_mock_contracts.py"],
+        ),
+        run_command(
             "Learner skill label contract",
             ["node", "developer/tests/js/learnerSkillLabels.test.mjs"],
         ),

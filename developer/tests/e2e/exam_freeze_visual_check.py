@@ -92,24 +92,31 @@ MOCK = r"""
   const answers = payload.questionOrder.map((questionId, index) => ({
     questionId, answer: index % 3 === 0 ? 'x' : payload.answerKey[questionId],
     correctAnswer: payload.answerKey[questionId], isCorrect: index % 3 !== 0,
-    weight: 1, marked: index === 4
+    weight: 1, marked: index === 4, changeCount: 0, visitCount: 1, elapsedMs: 0
   }));
   const detail = {
-    summary: { id: '__REVIEW__', activity: 'reading', assetId: '__ASSET__', title: asset.title, status: 'completed' },
+    summary: { id: '__REVIEW__', activity: 'reading', assetId: '__ASSET__', title: asset.title, status: 'completed',
+      mode: 'single', durationMs: 1112000 },
     attempt: {
-      id: '__REVIEW__', activity: 'reading', assetId: '__ASSET__', status: 'completed',
+      schemaVersion: 1, id: '__REVIEW__', activity: 'reading', assetId: '__ASSET__', status: 'completed',
+      mode: 'single', startedAt: '2026-09-30T08:30:00Z',
       answers, scoreValue: 0.69, correctCount: 9, questionCount: 13, durationMs: 1112000,
       submittedAt: '2026-09-30T09:00:00Z', titleSnapshot: asset.title, annotations: []
     }
   };
   const suite = {
-    sessionId: '__SUITE__', status: 'active', currentIndex: 0, flowMode: 'simulation', frequencyScope: 'all',
-    aggregate: { submittedPassages: 1, totalPassages: 3, percentage: 72, correct: 18, totalQuestions: 25 },
+    sessionId: '__SUITE__', activity: 'reading', practiceMode: 'suite', status: 'active', currentIndex: 0,
+    totalPassages: 3, flowMode: 'simulation', frequencyScope: 'all', createdAt: '2026-09-30T09:00:00Z',
+    updatedAt: '2026-09-30T09:30:00Z',
+    timer: { source: 'suite', anchorMs: 0, effectiveStartTimeMs: 0, mode: 'elapsed', limitSeconds: null,
+             pausedOffsetMs: 0, pausedAtMs: null, running: false },
+    aggregate: { submittedPassages: 1, totalPassages: 3, percentage: 72, correct: 18, totalQuestions: 25,
+                 accuracy: 0.72, duration: 0 },
     sequence: [
-      { assetId: '__ASSET__', index: 0, category: 'P1', title: asset.title, status: 'active', sessionId: null, scoreInfo: null },
-      { assetId: 'p2-x', index: 1, category: 'P2', title: 'How coastal wetlands protect cities', status: 'submitted',
+      { assetId: '__ASSET__', examId: '__ASSET__', index: 0, category: 'P1', title: asset.title, status: 'active', sessionId: null, scoreInfo: null },
+      { assetId: 'p2-x', examId: 'p2-x', index: 1, category: 'P2', title: 'How coastal wetlands protect cities', status: 'submitted',
         sessionId: 'attempt-x', scoreInfo: { correct: 18, totalQuestions: 25, percentage: 72 } },
-      { assetId: 'p3-x', index: 2, category: 'P3', title: 'The science of long-distance memory', status: 'pending', sessionId: null, scoreInfo: null }
+      { assetId: 'p3-x', examId: 'p3-x', index: 2, category: 'P3', title: 'The science of long-distance memory', status: 'pending', sessionId: null, scoreInfo: null }
     ]
   };
   const data = {

@@ -210,7 +210,7 @@ test('archive, feedback and explicit preference also invalidate older reads', as
 test('plan retry control only reads; legacy string and structured probes remain readable', () => {
   assert.match(view, /@click="readStudyPlan">重新读取计划/)
   assert.equal(formatStudyProbe('reading.tfng'), 'reading.tfng')
-  assert.equal(formatStudyProbe({ skillKey: 'reading.tfng', probeKind: 'near_transfer' }), 'reading.tfng · near_transfer')
+  assert.equal(formatStudyProbe({ skillKey: 'reading.tfng', probeKind: 'novel_item' }), 'reading.tfng · novel_item')
   assert.equal(formatStudyProbe(null), '待确认技能')
   assert.equal(formatStudyProbe({}), '待确认技能')
 })

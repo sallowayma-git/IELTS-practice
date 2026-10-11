@@ -47,7 +47,7 @@ def install_tauri_mock(page):
             return { ok: true, data: { items: [], total: 0, limit: 20, offset: 0, nextCursor: null } };
           }
           if (command === 'history_writing_statistics') {
-            return { ok: true, data: { count: 0, latest: null, average: null } };
+            return { ok: true, data: { count: 0 } };
           }
           if (command === 'list_settings') return { ok: true, data: [] };
           if (command === 'history_get_retention_policy') {
@@ -59,14 +59,14 @@ def install_tauri_mock(page):
             return { ok: true, data: { total: 0, byTaskType: [] } };
           }
           if (command === 'get_app_info') {
-            return { host: 'Tauri', tauriVersion: '2', version: '0.1.0' };
+            return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri', fastifyEnabled: false };
           }
           if (command === 'get_app_data_paths') {
-            return { appData: 'C:/atlas/data', backups: 'C:/atlas/backups' };
+            return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };
           }
           if (command === 'list_backups') return { ok: true, data: [] };
           if (command === 'check_for_updates') {
-            return { configured: false, updateAvailable: false, message: '未配置更新源。' };
+            return { configured: false, updateAvailable: false, installed: false, requiresRestart: false, currentVersion: '0.1.0', latestVersion: null, body: null, stage: 'unconfigured', message: '此构建未配置签名更新通道。' };
           }
           return { ok: true, data: null };
         }

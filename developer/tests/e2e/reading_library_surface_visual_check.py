@@ -16,14 +16,22 @@ CASES = (
     ("small", 360, 800),
 )
 
+# Real AssetIndexEntry rows: category is stored raw (uppercase P1/P2/P3),
+# difficulty is null for every shipped reading asset, and question counts are
+# not part of the index (they come from the asset payload).
 ASSETS = [
     {
         "id": "pdf-visual-1",
         "title": "A study of coastal wetlands",
-        "category": "p1",
-        "difficulty": "medium",
+        "category": "P1",
+        "difficulty": None,
+        "frequency": "medium",
+        "fingerprint": "fp-pdf-visual-1",
+        "schemaVersion": 2,
+        "contentRef": None,
+        "payloadRef": None,
+        "activity": "reading",
         "pdfOnly": True,
-        "questionCount": 13,
     }
 ]
 
@@ -48,8 +56,8 @@ def install_tauri_mock(page, list_response=REAL_LIST_RESPONSE):
           if (command === 'list_history') {
             return { ok: true, data: { items: [], total: 0, limit: 20, offset: 0, nextCursor: null } };
           }
-          if (command === 'history_writing_statistics' || command === 'history_reading_statistics') {
-            return { ok: true, data: { count: 0, latest: null, average: null } };
+          if (command === 'history_writing_statistics') {
+            return { ok: true, data: { count: 0 } };
           }
           if (command === 'list_settings') return { ok: true, data: [] };
           if (command === 'history_get_retention_policy') {
@@ -60,13 +68,13 @@ def install_tauri_mock(page, list_response=REAL_LIST_RESPONSE):
           if (command === 'writing_topic_statistics') {
             return { ok: true, data: { total: 0, byTaskType: [] } };
           }
-          if (command === 'get_app_info') return { host: 'Tauri', tauriVersion: '2', version: '0.1.0' };
+          if (command === 'get_app_info') return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri', fastifyEnabled: false };
           if (command === 'get_app_data_paths') {
-            return { appData: 'C:/atlas/data', backups: 'C:/atlas/backups' };
+            return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };
           }
           if (command === 'list_backups') return { ok: true, data: [] };
           if (command === 'check_for_updates') {
-            return { configured: false, updateAvailable: false, message: '未配置更新源。' };
+            return { configured: false, updateAvailable: false, installed: false, requiresRestart: false, currentVersion: '0.1.0', latestVersion: null, body: null, stage: 'unconfigured', message: '此构建未配置签名更新通道。' };
           }
           return { ok: true, data: null };
         }

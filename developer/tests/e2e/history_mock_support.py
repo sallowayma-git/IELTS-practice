@@ -51,7 +51,7 @@ def install_history_mock(page, items, statistics=None):
         if (command === 'delete_history_attempt') {
           const before = window.__historyItems.length;
           window.__historyItems = window.__historyItems.filter((item) => item.id !== args.attemptId);
-          return { ok: true, data: before - window.__historyItems.length };
+          return { ok: true, data: window.__historyItems.length < before };
         }
         if (command === 'delete_history_attempts') {
           const ids = new Set(args.cmd?.attemptIds || []);
@@ -74,7 +74,7 @@ def install_history_mock(page, items, statistics=None):
           return { ok: true, data: before - window.__historyItems.length };
         }
         if (command === 'export_history') {
-          return { ok: true, data: { body: 'time,title\n2026-08-07,mock\n', format: 'csv' } };
+          return { ok: true, data: { format: 'csv', body: 'time,title\n2026-08-07,mock\n', recordCount: window.__historyItems.length } };
         }
         return { ok: true, data: null };
       };
@@ -83,7 +83,7 @@ def install_history_mock(page, items, statistics=None):
     })();
     """.replace("__ITEMS__", json.dumps(items, ensure_ascii=False)).replace(
         "__STATISTICS__",
-        json.dumps(statistics or {"count": 0, "latest": None, "average": None}, ensure_ascii=False),
+        json.dumps(statistics or {"count": 0}, ensure_ascii=False),
     )
     page.add_init_script(script)
 

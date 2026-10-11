@@ -14,6 +14,7 @@ TAURI_AGENT_MOCK = """
 () => {
   const outcome = {
     runId: 'run-m0-0001',
+    runKind: 'workspace',
     content: '已读取学习记录，并生成一份可执行的复盘建议。',
     model: 'fake-agent-model',
     actualModel: 'fake-agent-model',
@@ -29,6 +30,7 @@ TAURI_AGENT_MOCK = """
     id: outcome.runId,
     providerId: 'fake-provider',
     model: 'requested-model',
+    runKind: 'workspace',
     status: 'completed',
     rounds: 2,
     toolCallCount: 1,
@@ -62,6 +64,7 @@ TAURI_AGENT_MOCK = """
     id: 'run-m0-failed',
     providerId: 'fake-provider',
     model: 'requested-model-must-not-become-actual',
+    runKind: 'workspace',
     status: 'failed',
     rounds: 1,
     toolCallCount: 0,
@@ -87,30 +90,36 @@ TAURI_AGENT_MOCK = """
     scope: 'activity:reading', status: 'active', version: 1,
     confidenceBand: 'medium', supportCount: 2, contradictionCount: 0,
     evidenceObservationIds: ['obs-evidence'], firstSeen: '2026-08-11T08:00:00Z',
-    lastSeen: '2026-08-11T08:00:00Z'
+    lastSeen: '2026-08-11T08:00:00Z', pendingVerification: false
   }));
   window.__agentShouldFail = false;
   const invokeMock = async (command, args = {}) => {
     window.__agentCommandLog.push({ command, args });
     if (command === 'memory_context_preview') {
-      return { ok: true, data: { entries: [], source: 'active_memory' }, error: null };
+      return { ok: true, data: { userId: 'local', activity: 'reading', entries: [], truncated: false }, error: null };
     }
     if (command === 'learning_observations_get_by_ids') {
       if (JSON.stringify(args.ids) !== '["obs-evidence"]') throw new Error('unexpected observation IDs');
-      return { ok: true, data: { observations: [{
-        id: 'obs-evidence', userId: 'local', observationType: 'reading_error',
-        observedAt: '2026-08-11T08:00:00Z', scopeKey: 'activity:reading',
-        valueText: '判断题中遗漏了原文限定条件。',
+      return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations', projectorVersion: 1,
+        ledgerInputHash: 'ledger-hash-m0', observationOutputHash: 'observation-hash-m0',
+        generatedAt: '2026-08-11T08:00:00Z', freshness: 'fresh', observations: [{
+        id: 'obs-evidence', userId: 'local', observationType: 'reading_error', namespace: 'reading',
+        scopeKind: 'activity', scopeKey: 'activity:reading', polarity: null, valueNum: null,
+        valueText: '判断题中遗漏了原文限定条件。', payload: {}, confidence: 0.8, evidenceStrength: 0.7,
+        observedAt: '2026-08-11T08:00:00Z', projectorKey: 'learning_observations', projectorVersion: 1,
+        sourceFingerprint: 'fp-obs-evidence', sensitivity: 'normal', trust: 'deterministic_projection',
         evidence: [{ eventId: 'event-evidence', evidenceRole: 'support', ordinal: 0 }]
-      }], missingIds: [], freshness: 'fresh' }, error: null };
+      }], missingIds: [] }, error: null };
     }
     if (command === 'learning_events_get_evidence_by_ids') {
       if (JSON.stringify(args.ids) !== '["event-evidence"]') throw new Error('unexpected event IDs');
-      return { ok: true, data: { events: [{
-        id: 'event-evidence', userId: 'local', eventType: 'reading.question_answered',
+      return { ok: true, data: { schemaVersion: 1, events: [{
+        id: 'event-evidence', userId: 'local', eventType: 'reading_question_outcome',
         occurredAt: '2026-08-11T08:00:00Z', sourceKind: 'attempt', sourceId: 'attempt-evidence',
         activity: 'reading', assetId: 'asset-evidence', attemptId: 'attempt-evidence',
-        questionId: 'question-evidence', payload: { answer: 'TRUE', correct: false }
+        questionId: 'question-evidence', skillKey: null, payload: { answer: 'TRUE', correct: false },
+        contentHash: 'content-hash-event-evidence', schemaVersion: 1, sensitivity: 'normal',
+        trust: 'canonical_learning_truth'
       }], missingIds: [] }, error: null };
     }
     if (command === 'memory_catalog_list') {
@@ -137,7 +146,7 @@ TAURI_AGENT_MOCK = """
       if (!['accurate', 'inaccurate'].includes(args.feedbackKind)) throw new Error('bad feedback kind');
       const row = window.__memoryCatalog.find(row => row.id === args.memoryId);
       if (args.feedbackKind === 'inaccurate') { row.status = 'archived'; row.version += 1; }
-      return { ok: true, data: { feedbackKind: args.feedbackKind }, error: null };
+      return { ok: true, data: { id: 'feedback-m0', memoryId: args.memoryId, feedbackKind: args.feedbackKind, userId: 'local', payload: {}, createdAt: '2026-08-11T08:00:00Z' }, error: null };
     }
     if (command === 'study_plan_get_latest') {
       return { ok: true, data: null, error: null };
@@ -146,7 +155,15 @@ TAURI_AGENT_MOCK = """
       return { ok: true, data: [], error: null };
     }
     if (command === 'journal_get_daily') {
-      return { ok: true, data: null, error: null };
+      // The backend always returns a journal for a day (it builds one on demand).
+      const journalDate = args.query?.journalDate || '2026-08-11';
+      return { ok: true, data: { id: 'journal-empty-' + journalDate, userId: 'local', journalDate, version: 1,
+        status: 'published', facts: { journalDate, attemptsCount: 0, timeSpentMs: 0,
+          writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [],
+          memoryChanges: { newCandidates: 0, promoted: 0, reinforced: 0, refined: 0, improved: 0, regressed: 0, contradicted: 0, superseded: 0 },
+          coachFeedbackCount: 0, coachReaskCount: 0, sourceHash: 'source-hash-empty', todayObservationIds: [], memoryEvents: [] },
+        sourceHash: 'source-hash-empty', renderedMarkdown: null, supersededBy: null,
+        createdAt: '2026-08-11T08:00:00Z', updatedAt: '2026-08-11T08:00:00Z' }, error: null };
     }
     if (command === 'agent_thread_list') {
       return { ok: true, data: [], error: null };

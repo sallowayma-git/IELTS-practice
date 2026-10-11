@@ -142,25 +142,28 @@ async def install_api_stub(page) -> None:
             }
           ];
           const LOCAL_API_BASE_URL = 'http://127.0.0.1:3905';
+          // Real AiConfigDto / WritingPromptDto wire shapes (camelCase, string ids).
           const writingConfigFixtures = [
             {
-              id: 1,
-              config_name: 'Default test provider',
+              id: 'cfg-test-1',
+              configName: 'Default test provider',
               provider: 'openai',
-              base_url: 'https://api.openai.com/v1',
-              default_model: 'gpt-4o-mini',
-              is_default: true,
-              is_enabled: true
+              baseUrl: 'https://api.openai.com/v1',
+              defaultModel: 'gpt-4o-mini',
+              isDefault: true,
+              isEnabled: true,
+              hasSecret: true
             }
           ];
           const promptFixtures = [
             {
-              id: 1,
-              task_type: 'task2',
-              name: 'Default prompt',
+              id: 'prompt-test-1',
+              taskType: 'task2',
+              body: 'Default prompt',
               version: 'test',
-              is_active: true,
-              created_at: '2026-01-01T00:00:00.000Z'
+              isActive: true,
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z'
             }
           ];
 

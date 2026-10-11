@@ -18,6 +18,13 @@ SESSION_ID = "suite-visual-1"
 
 SUITE = {
     "sessionId": SESSION_ID,
+    "activity": "reading",
+    "practiceMode": "suite",
+    "totalPassages": 3,
+    "createdAt": "2026-08-10T09:00:00Z",
+    "updatedAt": "2026-08-10T09:30:00Z",
+    "timer": {"source": "suite", "anchorMs": 0, "effectiveStartTimeMs": 0, "mode": "elapsed",
+               "limitSeconds": None, "pausedOffsetMs": 0, "pausedAtMs": None, "running": False},
     "status": "active",
     "currentIndex": 0,
     "flowMode": "simulation",
@@ -28,10 +35,13 @@ SUITE = {
         "percentage": 72,
         "correct": 18,
         "totalQuestions": 25,
+        "accuracy": 0.72,
+        "duration": 0,
     },
     "sequence": [
         {
             "assetId": "reading-active",
+            "examId": "reading-active",
             "index": 0,
             "category": "P1",
             "title": "The future of urban transport",
@@ -41,6 +51,7 @@ SUITE = {
         },
         {
             "assetId": "reading-submitted",
+            "examId": "reading-submitted",
             "index": 1,
             "category": "P2",
             "title": "How coastal wetlands protect cities",
@@ -50,6 +61,7 @@ SUITE = {
         },
         {
             "assetId": "reading-locked",
+            "examId": "reading-locked",
             "index": 2,
             "category": "P3",
             "title": "The science of long-distance memory",
