@@ -31,6 +31,7 @@
       @open-suite-mode-selector="openSuiteModeSelector"
       @browse-category="browseCategory"
       @start-random-practice="startRandomPractice"
+      @retry-load="loadAssets"
     />
 
     <ReadingBrowsePanel
@@ -156,6 +157,7 @@ import {
   normalizeCategory,
   normalizeFrequency
 } from '@/modules/practice-reading/browseFilters'
+import { LIBRARY_LOAD_FAILURE, libraryFailureMessage } from '@/modules/practice-reading/libraryFailure'
 import { useReadingHistory } from '@/modules/practice-reading/useReadingHistory'
 import { useReadingLibrary } from '@/modules/practice-reading/useReadingLibrary'
 import { useReadingSuite } from '@/modules/practice-reading/useReadingSuite'
@@ -242,6 +244,8 @@ const selectedSuiteFlowMode = ref(resolveSuitePreference().flowMode)
 const selectedSuiteFrequencyScope = ref(resolveSuitePreference().frequencyScope)
 const customSuiteDraft = ref(null)
 const readingAssets = ref([])
+// Counts are only real once the index has been read; until then they are unknown, not zero.
+const libraryLoaded = ref(false)
 const readingSettingsPanel = ref(null)
 const loading = ref(false)
 const historyBusy = ref(false)
@@ -256,7 +260,7 @@ let pendingBrowsePositionRestore = false
 const readingCategoryEntries = computed(() => ['P1', 'P2', 'P3'].map((category) => ({
   category,
   type: 'reading',
-  total: countByCategory(category)
+  total: libraryLoaded.value ? countByCategory(category) : null
 })))
 
 const browseTitle = computed(() => {
@@ -326,16 +330,19 @@ async function loadAssets() {
   error.value = ''
   try {
     const result = await loadReadingAssets()
-    readingAssets.value = Array.isArray(result?.data) ? result.data : []
+    // The API layer guarantees an array; anything else is a real failure, not an empty library.
+    if (!Array.isArray(result?.data)) throw new Error('reading library returned no asset list')
+    readingAssets.value = result.data
+    libraryLoaded.value = true
     latestAssetReadAt.value = new Date()
     scheduleBrowsePositionRestore()
     return true
   } catch (loadError) {
+    // Technical detail (IPC/DB/shape errors) is for the console, never the learner.
     console.error('读取阅读题库失败:', loadError)
     readingAssets.value = []
-    error.value = loadError?.message
-      ? `阅读题库读取失败：${loadError.message}`
-      : '阅读题库读取失败，请稍后重试'
+    libraryLoaded.value = false
+    error.value = LIBRARY_LOAD_FAILURE
     return false
   } finally {
     loading.value = false
@@ -534,7 +541,7 @@ async function startRandomPractice(category = 'all') {
   } catch (error) {
     console.error('随机阅读选题失败:', error)
     browseCategory(normalizedCategory, 'reading')
-    showLocalMessage(error?.message ? `随机练习启动失败：${error.message}` : '随机练习启动失败')
+    showLocalMessage(libraryFailureMessage('随机练习启动失败', error))
   }
 }
 
@@ -554,7 +561,7 @@ async function startEndlessMode() {
     const sessionId = String(session?.id || '').trim()
     const assetId = String(session?.currentAssetId || '').trim()
     if (!sessionId || !assetId) {
-      throw new Error('endless session create failed')
+      throw new Error('无尽模式未返回有效会话')
     }
     const title = readingAssets.value.find((asset) => String(asset.id) === assetId)?.title || assetId
     showLocalMessage(`无尽模式已启动，正在打开：${title}`)
@@ -565,7 +572,7 @@ async function startEndlessMode() {
     })
   } catch (error) {
     console.error('创建无尽模式失败:', error)
-    showLocalMessage(error?.message ? `无尽模式启动失败：${error.message}` : '无尽模式启动失败')
+    showLocalMessage(libraryFailureMessage('无尽模式启动失败', error))
   }
 }
 
@@ -599,7 +606,7 @@ async function openReadingMemorize() {
       titleSnapshot: asset.title || null
     })
     const attemptId = String(session?.attempt?.id || '').trim()
-    if (!attemptId) throw new Error('memorize session missing attempt id')
+    if (!attemptId) throw new Error('背题会话未返回有效编号')
     router.push({
       name: 'PracticeReading',
       params: { assetId: asset.id },
@@ -611,7 +618,7 @@ async function openReadingMemorize() {
     })
   } catch (error) {
     console.error('创建背题会话失败:', error)
-    showLocalMessage(error?.message ? `阅读背题启动失败：${error.message}` : '阅读背题启动失败')
+    showLocalMessage(libraryFailureMessage('阅读背题启动失败', error))
   }
 }
 
@@ -829,7 +836,7 @@ async function startReadingSuite(event, options = {}) {
     const suite = await createReadingSuite(createPayload)
     const sessionId = String(suite?.sessionId || '').trim()
     if (!sessionId) {
-      throw new Error('套题 session 创建失败')
+      throw new Error('套题未返回有效会话')
     }
     if (options.closeSelector !== false) {
       suiteModeSelectorOpen.value = false
@@ -841,9 +848,7 @@ async function startReadingSuite(event, options = {}) {
     })
   } catch (createError) {
     console.error('创建阅读套题失败:', createError)
-    suiteError.value = createError?.message
-      ? `阅读套题创建失败：${createError.message}`
-      : '阅读套题创建失败，请稍后重试'
+    suiteError.value = libraryFailureMessage('阅读套题创建失败', createError)
   } finally {
     creatingSuite.value = false
   }
@@ -870,7 +875,7 @@ async function exportReadingArchive() {
     showLocalMessage(`阅读记录已导出：${archive.count} 条`)
   } catch (error) {
     console.error('导出阅读记录失败:', error)
-    showLocalMessage(error?.message ? `导出失败：${error.message}` : '导出失败，请稍后重试')
+    showLocalMessage(libraryFailureMessage('导出失败', error))
   } finally {
     historyBusy.value = false
   }
@@ -905,7 +910,7 @@ async function importReadingArchiveFile(file) {
     showLocalMessage(`阅读记录导入完成：${result?.imported || result?.importedCount || 0} 条`)
   } catch (error) {
     console.error('导入阅读记录失败:', error)
-    showLocalMessage(error?.message ? `导入失败：${error.message}` : '导入失败，请检查 JSON 文件')
+    showLocalMessage(libraryFailureMessage('导入失败', error, '请检查 JSON 文件'))
   } finally {
     historyBusy.value = false
   }
@@ -966,7 +971,8 @@ async function viewPdf(asset) {
       dataUrl: String(dataUrl || '')
     }
   } catch (error) {
-    showLocalMessage(`PDF 打开失败：${error?.message || '资源不可用'}`)
+    console.error('打开 PDF 失败:', error)
+    showLocalMessage(libraryFailureMessage('PDF 打开失败', error, '资源不可用'))
   }
 }
 
@@ -1176,6 +1182,11 @@ function updateSegmentedIndicators() {
   margin: 2px 0 0;
   font-size: var(--anth-text-sm);
   font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Counts not read yet: a faint placeholder, not a value that looks like text. */
+.practice-library .category-meta.is-pending {
+  color: var(--anth-ink-faint);
 }
 
 .practice-library .category-actions {

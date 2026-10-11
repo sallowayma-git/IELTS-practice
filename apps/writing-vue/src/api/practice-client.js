@@ -32,7 +32,7 @@ function newKey(prefix = 'p') {
 export const practiceAssets = {
   async list(filters = {}, pagination = { page: 1, limit: 20 }) {
     const { items } = await listReadingAssets()
-    let rows = items || []
+    let rows = items
     if (filters.activity && filters.activity !== 'reading') {
       rows = []
     }
@@ -59,7 +59,7 @@ export const practiceAssets = {
   async get(activity, assetId) {
     const normalizedAssetId = String(assetId || '').trim()
     const { items } = await listReadingAssets()
-    const meta = (items || []).find((item) => String(item.id) === normalizedAssetId) || null
+    const meta = items.find((item) => String(item.id) === normalizedAssetId) || null
     if (!meta) {
       const err = new Error(`asset not found: ${assetId}`)
       err.code = 'not_found'

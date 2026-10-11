@@ -39,7 +39,7 @@
           <div class="category-icon" aria-hidden="true">{{ entry.category }}</div>
           <div>
             <div class="category-title">{{ passageNames[entry.category] || entry.category }}</div>
-            <div class="category-meta">{{ entry.total }} 篇题目</div>
+            <div :class="['category-meta', { 'is-pending': entry.total === null }]">{{ entry.total === null ? '—' : `${entry.total} 篇题目` }}</div>
           </div>
         </div>
         <div class="category-actions">
@@ -66,7 +66,10 @@
         </div>
       </div>
     </div>
-    <div v-if="error" class="inline-message inline-message-error">{{ error }}</div>
+    <div v-if="error" class="inline-message inline-message-error" data-reading-library-error>
+      <span>{{ error }}</span>
+      <button class="btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
+    </div>
     <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
   </div>
 </template>
@@ -87,6 +90,7 @@ defineEmits([
   'start-endless-mode',
   'open-suite-mode-selector',
   'browse-category',
-  'start-random-practice'
+  'start-random-practice',
+  'retry-load'
 ])
 </script>

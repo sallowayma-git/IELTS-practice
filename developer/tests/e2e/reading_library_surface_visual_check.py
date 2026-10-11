@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -27,7 +28,11 @@ ASSETS = [
 ]
 
 
-def install_tauri_mock(page):
+# Real shape of `reading_list_assets`: CommandResponse<Vec<AssetIndexEntry>>.
+REAL_LIST_RESPONSE = "{ ok: true, data: assets }"
+
+
+def install_tauri_mock(page, list_response=REAL_LIST_RESPONSE):
     assets_json = json.dumps(ASSETS, ensure_ascii=False)
     script = r"""
     (() => {
@@ -36,7 +41,7 @@ def install_tauri_mock(page):
       window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
       window.__TAURI__.core = {
         invoke: async (command) => {
-          if (command === 'reading_list_assets') return { ok: true, data: assets };
+          if (command === 'reading_list_assets') return __LIST_RESPONSE__;
           if (command === 'reading_get_pdf_data_url') {
             return { ok: true, data: 'data:application/pdf;base64,JVBERi0xLjQK' };
           }
@@ -67,8 +72,71 @@ def install_tauri_mock(page):
         }
       };
     })();
-    """.replace("__ASSETS__", assets_json)
+    """.replace("__ASSETS__", assets_json).replace("__LIST_RESPONSE__", list_response)
     page.add_init_script(script)
+
+
+# Overview truth: real counts for the real bare-array response; any other shape
+# (envelope, malformed, backend failure) shows '—' plus one human error line,
+# never exception text.
+OVERVIEW_VARIANTS = (
+    # (name, mock response, expected P1/P2/P3 meta text, error expected)
+    ("array", REAL_LIST_RESPONSE, ("1 篇题目", "0 篇题目", "0 篇题目"), False),
+    ("envelope", "{ ok: true, data: { items: assets, total: 1, limit: 20, offset: 0 } }", ("—", "—", "—"), True),
+    ("empty", "{ ok: true, data: [] }", ("0 篇题目", "0 篇题目", "0 篇题目"), False),
+    ("null", "{ ok: true, data: null }", ("0 篇题目", "0 篇题目", "0 篇题目"), False),
+    ("malformed", "{ ok: true, data: { total: 1 } }", ("—", "—", "—"), True),
+    ("backend-failure", "{ ok: false, error: { code: 'db.locked', message: 'database is locked' } }", ("—", "—", "—"), True),
+)
+RAW_ERROR_PATTERN = re.compile(r"slice|is not a function|TypeError|unexpected response|database is locked|reading_list_assets", re.I)
+
+
+def read_overview(page):
+    return page.evaluate(
+        """
+        () => ({
+          meta: ['P1', 'P2', 'P3'].map((category) => (
+            document.querySelector(`[data-reading-category-card="${category}"] .category-meta`)?.textContent.trim() || ''
+          )),
+          error: document.querySelector('#overview-view [data-reading-library-error]')?.textContent.trim() || '',
+        })
+        """
+    )
+
+
+def check_overview_truth(browser):
+    results = []
+    for name, response, expected_meta, expect_error in OVERVIEW_VARIANTS:
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page_errors = []
+        page.on("pageerror", lambda error: page_errors.append(str(error)))
+        install_tauri_mock(page, response)
+        open_route(page, "/")
+        page.wait_for_selector("[data-reading-category-card='P1']")
+        # The index read is async: wait for its settled outcome, never a fixed timeout.
+        if expect_error:
+            page.wait_for_selector("#overview-view [data-reading-library-error]")
+        else:
+            page.wait_for_function(
+                "() => document.querySelector('[data-reading-category-card=\"P1\"] .category-meta')?.textContent.trim() !== '—'"
+            )
+        overview = read_overview(page)
+        if page_errors:
+            raise AssertionError(f"overview {name}: uncaught page error {page_errors}")
+        if tuple(overview["meta"]) != expected_meta:
+            raise AssertionError(f"overview {name}: category counts {overview['meta']} != {list(expected_meta)}")
+        if expect_error:
+            if not overview["error"].startswith("阅读题库读取失败"):
+                raise AssertionError(f"overview {name}: missing human load error, got {overview['error']!r}")
+            if RAW_ERROR_PATTERN.search(overview["error"]):
+                raise AssertionError(f"overview {name}: raw exception text leaked: {overview['error']!r}")
+        elif overview["error"]:
+            raise AssertionError(f"overview {name}: unexpected error line {overview['error']!r}")
+        if name in ("array", "malformed"):
+            capture_state(page, f"reading-library-overview-{name}-desktop")
+        results.append({"name": name, **overview})
+        page.close()
+    return results
 
 
 def open_route(page, route):
@@ -181,6 +249,7 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
+            overview_truth = check_overview_truth(browser)
             for name, width, height in CASES:
                 page = browser.new_page(viewport={"width": width, "height": height})
                 install_tauri_mock(page)
@@ -229,7 +298,7 @@ def main():
                 page.close()
         finally:
             browser.close()
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(json.dumps({"overviewTruth": overview_truth, "surfaces": report}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

@@ -3,14 +3,19 @@
  */
 
 import { invokeCommand, isTauriRuntime, unwrapCommandResponse } from '@/api/tauri-bridge.js'
+import { normalizeReadingAssetList } from '@/api/reading-asset-list.js'
 
 export function newKey(prefix = 'r') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** `items` is always an array of entries with an id; see reading-asset-list.js. */
 export async function listReadingAssets() {
   const response = await invokeCommand('reading_list_assets')
-  return { source: 'tauri', items: unwrapCommandResponse(response, 'reading_list_assets') || [] }
+  return {
+    source: 'tauri',
+    items: normalizeReadingAssetList(unwrapCommandResponse(response, 'reading_list_assets'))
+  }
 }
 
 export async function getReadingAssetPayload(assetId) {
