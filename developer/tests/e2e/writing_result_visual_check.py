@@ -226,7 +226,7 @@ def read_geometry(page):
             criteriaBands: criteriaBands.map((item) => item.textContent.trim()),
             viewControlsBox: box(viewControls),
             viewButtons: viewButtons.map((item) => ({ box: box(item), text: item.textContent.trim() })),
-            supportHeadings: supportCards.map((item) => item.querySelector('h3')?.textContent.trim() || ''),
+            supportHeadings: supportCards.map((item) => item.querySelector('h2, h3')?.textContent.trim() || ''),
             resultErrorVisible: Boolean(node('.result-load-error')),
             headingLetterSpacing: style(heading)?.letterSpacing || '',
             scoreLabelLetterSpacing: style(scoreLabel)?.letterSpacing || '',

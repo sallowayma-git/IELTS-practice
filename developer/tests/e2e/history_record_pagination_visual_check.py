@@ -110,14 +110,14 @@ def read_geometry(page):
             titleScrollWidth: title?.scrollWidth || 0,
             titleOverflowWrap: style(title)?.overflowWrap || '',
             scoreRect: rect(score),
-            scoreAlign: style(score)?.justifyItems || '',
-            scoreNumerals: style(score?.querySelector('strong'))?.fontVariantNumeric || '',
+            scoreAlign: style(score)?.justifySelf || '',
+            scoreNumerals: style(score?.querySelector('.t-num'))?.fontVariantNumeric || '',
             rowButtons: item ? item.querySelectorAll('button').length : -1,
-            dayHeads: [...document.querySelectorAll('.history-day__head')].map((node) => node.textContent.trim()),
+            dayHeads: [...document.querySelectorAll('.list-group-title')].map((node) => node.textContent.trim()),
             badgeKinds: kinds.map((node) => ({
               className: node.className,
               text: node.textContent.trim(),
-              marker: getComputedStyle(node, '::before').backgroundColor + '|' + getComputedStyle(node, '::before').borderTopWidth
+              background: getComputedStyle(node).backgroundColor,
             })),
             paginationRect: rect(pagination),
             paginationText: pagination?.textContent.replace(/\s+/g, ' ').trim() || '',
@@ -146,22 +146,30 @@ def assert_geometry(name, data):
     if not data["dayHeads"]:
         raise AssertionError(f"{name}: records are not grouped by day")
     score = data["scoreRect"]
-    if not score or score["right"] > data["itemRect"]["right"] + 1 or score["right"] < data["itemRect"]["right"] - 12:
+    # List-row padding is 16px on the right (design-system spec 2.6, list.css).
+    if not score or score["right"] > data["itemRect"]["right"] + 1 or score["right"] < data["itemRect"]["right"] - 16:
         raise AssertionError(f"{name}: score is not right-aligned in the row: {score} / {data['itemRect']}")
     if data["scoreAlign"] != "end" or "tabular-nums" not in data["scoreNumerals"]:
         raise AssertionError(f"{name}: score needs right alignment and tabular numerals: {data['scoreAlign']} {data['scoreNumerals']}")
     kind_classes = {item["className"] for item in data["badgeKinds"]}
     if not any("reading" in value for value in kind_classes) or not any("unlabeled" in value for value in kind_classes):
         raise AssertionError(f"{name}: reading/unlabeled kind markers are missing")
-    # Record kind is a word plus a square marker (filled, or outlined when unlabeled).
-    if any(item["marker"] in ("", "rgba(0, 0, 0, 0)|0px") for item in data["badgeKinds"] if "reading" in item["className"] or "unlabeled" in item["className"]):
-        raise AssertionError(f"{name}: reading/unlabeled kind markers have no visual marker")
+    # Record kind is a design-system tag (spec 2.10): reading and unlabeled must carry distinct tones.
+    fills = {}
+    for item in data["badgeKinds"]:
+        for key in ("reading", "unlabeled"):
+            if key in item["className"]:
+                fills[key] = item["background"]
+    if len(fills) != 2 or fills["reading"] in ("", "rgba(0, 0, 0, 0)") or fills["reading"] == fills["unlabeled"]:
+        raise AssertionError(f"{name}: reading/unlabeled kind tags are not visually distinct: {fills}")
     if not data["paginationRect"] or len(data["pageButtons"]) != 2:
         raise AssertionError(f"{name}: pagination did not render")
     if data["paginationText"] != "‹ 上一页·1 / 2·下一页 ›":
         raise AssertionError(f"{name}: pagination is plain text: {data['paginationText']}")
-    if any(item["rect"]["height"] < 44 or item["rect"]["right"] > width for item in data["pageButtons"]):
-        raise AssertionError(f"{name}: pagination action is below 44px or escapes the viewport")
+    # Desktop/tablet 24px (WCAG 2.5.8); phone widths 44px touch target (button.css).
+    min_target = 44 if width <= 640 else 24
+    if any(item["rect"]["height"] < min_target or item["rect"]["right"] > width for item in data["pageButtons"]):
+        raise AssertionError(f"{name}: pagination action is below {min_target}px or escapes the viewport")
 
 
 def verify_last_page_delete(page):
@@ -221,7 +229,7 @@ def main():
     (REPORT_DIR / "history-record-pagination-visual-report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(json.dumps(report, ensure_ascii=True, indent=2))
 
 
 if __name__ == "__main__":

@@ -79,6 +79,7 @@ def read_geometry(page):
             })),
             confirmDisabled: Boolean(confirm?.disabled),
             confirmOpacity: style(confirm)?.opacity,
+            confirmBackground: style(confirm)?.backgroundColor,
             confirmRect: rect(confirm),
             cancelRect: rect(cancel),
           };
@@ -152,11 +153,14 @@ def main():
 
                 choose(page, "custom-p2", 2)
                 choose(page, "custom-p3", 3)
+                # The enabled primary eases its fill (120ms); read after the transition settles.
+                page.wait_for_timeout(400)
                 ready = read_geometry(page)
                 assert_geometry(f"{name}: ready", ready, 3, ready=True)
-                # Readiness is expressed by the completion text and enabled action,
-                # while the current skin keeps the surrounding card neutral.
-                if ready['currentText'] == selecting['currentText'] or ready['confirmOpacity'] == selecting['confirmOpacity']:
+                # Readiness is expressed by the completion text and the enabled action's fill.
+                # A disabled primary keeps full opacity and a sunken fill (button.css), so the
+                # fill, not opacity, is the signal.
+                if ready['currentText'] == selecting['currentText'] or ready['confirmBackground'] == selecting['confirmBackground']:
                     raise AssertionError(f"{name}: ready workflow lacks a visible completion/action state")
                 page.screenshot(path=str(REPORT_DIR / f"reading-custom-suite-ready-{name}-current.png"))
 

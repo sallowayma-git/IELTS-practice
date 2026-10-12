@@ -84,7 +84,7 @@ function testLibraryHasOneProductShell() {
 
   has(library, 'data-practice-reading-home data-library-ready', 'stable Library ready marker')
   has(library, '<h1 class="library-workspace-header__title">阅读练习</h1>', 'local workspace title')
-  has(library, 'class="library-view-tabs"', 'Library secondary navigation')
+  has(library, 'class="library-view-tabs tabs"', 'Library secondary navigation')
   lacks(library, 'hero-brand-text', 'duplicate Library product brand')
   lacks(library, 'main-nav hero-nav', 'duplicate Library product navigation')
   lacks(library, 'practice-library-legacy', 'legacy Library shell ownership')
@@ -93,7 +93,7 @@ function testLibraryHasOneProductShell() {
   assert.ok(!/^\.btn\b/m.test(library), 'Library stylesheet leaks a naked .btn selector')
   has(skin, '.atlas-paper {', 'paper skin is scoped to non-exam routes')
   lacks(skin, '.atlas-source-ui .practice-library', 'Library owns its layout in PracticeLibraryPage.vue')
-  assert.ok(/^\.practice-library \.library-view-tabs \{/m.test(library), 'Library styles are rooted at .practice-library')
+  assert.ok(/^\.atlas-paper \[data-practice-reading-home\] \.library-view-tabs \{/m.test(library), 'Library styles are rooted at the home root')
   for (const retired of [
     'clearPracticeCache',
     'clear-practice-cache',

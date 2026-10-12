@@ -110,6 +110,7 @@ def assert_page_shape(name, mode, data):
         raise AssertionError(f"{label}: the radar chart is gone from this page")
     if any(item["right"] > width + 1 for item in data["controls"]):
         raise AssertionError(f"{label}: a control escapes the viewport")
+    # Phone widths: 44px touch target (input.css, button.css). Desktop/tablet keep the 36px sizes.
     if width <= 640 and any(item["height"] < 44 for item in data["controls"]):
         raise AssertionError(f"{label}: narrow controls are below 44px: {data['controls']}")
 

@@ -49,27 +49,56 @@ def _computed_color_alpha(color):
 
 
 def assert_flat_surfaces(page, selector, name):
-    """The shipping skin permits hairline elevation, not the retired glass layers."""
+    """Surface gate for routed panels.
+
+    Exam routes (.atlas-exam) stay flat: no shadow beyond the subtle tokens.
+    Paper routes (.atlas-paper) may use only the approved light elevation:
+    --anth-shadow-1/-2, the inset press shadow, the highlight and the focus
+    ring. Blur above 32px, radii above 8px on non-circular elements and any
+    gradient fail everywhere.
+    """
     surfaces = page.evaluate(
         """selector => {
-          // Probe inside the surface's own theme root: the exam routes keep
-          // their frozen tokens, the paper routes have no elevation at all.
           const probe = document.createElement('span');
           (document.querySelector(selector)?.parentElement || document.body).append(probe);
-          const subtleShadows = ['--anth-shadow-xs', '--anth-shadow-sm'].map(token => {
+          const computed = token => {
             probe.style.boxShadow = `var(${token})`;
             return getComputedStyle(probe).boxShadow;
-          });
+          };
+          const approved = ['--anth-shadow-1', '--anth-shadow-2', '--anth-shadow-inset',
+            '--anth-highlight', '--anth-focus-ring'].flatMap(token => {
+              const value = computed(token);
+              return value === 'none' ? [] : splitTop(value);
+            });
+          const subtleShadows = ['--anth-shadow-xs', '--anth-shadow-sm'].map(computed);
           probe.remove();
+          function splitTop(value) {
+            const parts = [];
+            let depth = 0, current = '';
+            for (const ch of value) {
+              if (ch === '(') depth++;
+              if (ch === ')') depth--;
+              if (ch === ',' && depth === 0) { parts.push(current.trim()); current = ''; }
+              else current += ch;
+            }
+            if (current.trim()) parts.push(current.trim());
+            return parts;
+          }
           return [...document.querySelectorAll(selector)].map(node => {
             const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
             return {
               classes: node.className,
+              exam: Boolean(node.closest('.atlas-exam')),
               backgroundImage: style.backgroundImage,
               backgroundColor: style.backgroundColor,
               shadow: style.boxShadow,
+              shadowParts: style.boxShadow === 'none' ? [] : splitTop(style.boxShadow),
+              approved,
               subtleShadows,
-              width: node.getBoundingClientRect().width,
+              radius: style.borderTopLeftRadius,
+              circle: Math.abs(rect.width - rect.height) < 0.5,
+              width: rect.width,
             };
           });
         }""",
@@ -79,13 +108,22 @@ def assert_flat_surfaces(page, selector, name):
         raise AssertionError(f"{name}: no surfaces matched {selector}")
     for surface in surfaces:
         surface['backgroundAlpha'] = _computed_color_alpha(surface['backgroundColor'])
-        if (
-            surface['backgroundImage'] != 'none'
-            or surface['backgroundAlpha'] != 1.0
-            or surface['shadow'] not in ('none', *surface['subtleShadows'])
-        ):
-            raise AssertionError(f"{name}: surface violates the opaque, hairline-elevation theme: {surface}")
-        if surface["width"] <= 0:
+        if surface['backgroundImage'] != 'none' or surface['backgroundAlpha'] != 1.0:
+            raise AssertionError(f"{name}: surface must be opaque, gradient-free: {surface}")
+        if surface['exam']:
+            flat_ok = surface['shadow'] in ('none', *surface['subtleShadows'])
+        else:
+            flat_ok = all(part in surface['approved'] for part in surface['shadowParts'])
+            for part in surface['shadowParts']:
+                px = [float(v) for v in re.findall(r'(-?[\d.]+)px', part)]
+                if len(px) >= 3 and px[2] > 32:
+                    raise AssertionError(f"{name}: shadow blur above 32px: {surface}")
+        if not flat_ok:
+            raise AssertionError(f"{name}: shadow outside the approved tokens: {surface}")
+        radius = surface['radius']
+        if not surface['circle'] and not radius.endswith('%') and float(radius.rstrip('px') or 0) > 8 and not surface['exam']:
+            raise AssertionError(f"{name}: radius above 8px on a non-circular surface: {surface}")
+        if surface['width'] <= 0:
             raise AssertionError(f"{name}: surface collapsed: {surface}")
 
 

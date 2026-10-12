@@ -133,14 +133,16 @@ def assert_geometry(name, state, data):
         if data["ariaBusy"] != "true" or not data["hasSpinner"]:
             raise AssertionError(f"{name}/{state}: loading state has no busy/spinner contract")
     if state in ("error", "filtered"):
-        # Translated DOMRects can report 43.999938px for a 44px CSS target.
-        if len(data["buttons"]) != 1 or data["buttons"][0]["rect"]["height"] + 0.5 < 44:
-            raise AssertionError(f"{name}/{state}: recovery action is not a 44px target: {data['buttons']}")
+        # Desktop/tablet 24px (WCAG 2.5.8); phone widths 44px touch target (button.css).
+        min_target = 44 if width <= 640 else 24
+        if len(data["buttons"]) != 1 or data["buttons"][0]["rect"]["height"] + 0.5 < min_target:
+            raise AssertionError(f"{name}/{state}: recovery action is below {min_target}px: {data['buttons']}")
     elif data["buttons"]:
         raise AssertionError(f"{name}/{state}: passive state unexpectedly renders an action")
     if state == "empty":
         hrefs = sorted(item["href"] for item in data["links"])
-        if hrefs != ["#/", "#/writing"] or any(item["rect"]["height"] + 0.5 < 44 for item in data["links"]):
+        min_target = 44 if width <= 640 else 24
+        if hrefs != ["#/", "#/writing"] or any(item["rect"]["height"] + 0.5 < min_target for item in data["links"]):
             raise AssertionError(f"{name}/{state}: empty state must offer both ways to start practising: {data['links']}")
     elif data["links"]:
         raise AssertionError(f"{name}/{state}: only the empty state links to practice")

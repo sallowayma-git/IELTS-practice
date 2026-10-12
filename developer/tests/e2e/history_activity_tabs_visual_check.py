@@ -111,8 +111,10 @@ def check_layout(name, data):
     width = data["viewport"][0]
     if data["documentWidth"] > width + 1 or data["bodyWidth"] > width + 1:
         raise AssertionError(f"{name}: history page overflows the viewport")
+    # Desktop/tablet 24px (WCAG 2.5.8); phone widths 44px touch target (segmented.css).
+    min_target = 44 if width <= 640 else 24
     for rect in data["tabRects"]:
-        if rect["height"] < 44 or rect["right"] > width + 1:
+        if rect["height"] < min_target or rect["right"] > width + 1:
             raise AssertionError(f"{name}: activity tab is not a stable target: {rect}")
 
 

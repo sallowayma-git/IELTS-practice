@@ -31,7 +31,8 @@ def read_geometry(page):
             barRect: rect(bar),
             barDisplay: style(bar)?.display || '',
             barWrap: style(bar)?.flexWrap || '',
-            barPosition: style(bar)?.position || '',
+            // The bar lives inside the sticky toolbar block, which owns the sticky position.
+            barPosition: style(bar?.closest('.is-sticky'))?.position || '',
             countText: count?.textContent.trim() || '',
             checked: [...document.querySelectorAll('.history-row[aria-checked="true"]')].length,
             countRect: rect(count),
@@ -55,7 +56,9 @@ def assert_geometry(name, data):
     labels = [item["text"] for item in data["buttons"]]
     if labels != ["删除", "全选本页", "取消", "清空全部记录"]:
         raise AssertionError(f"{name}: selection actions changed: {labels}")
-    if any(not item["rect"] or item["rect"]["height"] < 44 for item in data["buttons"]):
+    # Desktop/tablet floor is WCAG 2.5.8 (24px); phone widths use the 44px touch target (button.css).
+    min_target = 44 if width <= 640 else 24
+    if any(not item["rect"] or item["rect"]["height"] < min_target for item in data["buttons"]):
         raise AssertionError(f"{name}: selection actions are not stable touch targets")
     if any(item["rect"]["right"] > width + 1 for item in data["buttons"]):
         raise AssertionError(f"{name}: selection action escapes the viewport")
