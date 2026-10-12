@@ -1,144 +1,184 @@
 <template>
-  <div class="history-page" :data-history-activity="view.activity || 'all'">
-    <header class="page-header history-head">
-      <div class="history-head__copy">
-        <h1 class="heading-serif">练习历史</h1>
-        <p class="history-summary" data-history-summary>{{ summary }}</p>
+  <div class="workspace history-workspace">
+    <div
+      class="history-page scroll-region"
+      :data-history-activity="view.activity || 'all'"
+      :style="{ '--history-toolbar-h': `${toolbarHeight}px` }"
+    >
+      <header class="page-header">
+        <div class="page-header-top">
+          <div class="history-head__copy">
+            <p class="page-header-kicker">HISTORY · 历史</p>
+            <h1>练习记录</h1>
+          </div>
+        </div>
+        <p class="page-header-desc history-summary" data-history-summary>{{ summary }}</p>
+      </header>
+
+      <!-- Sticky: activity tabs, search, and the selection bar when selecting -->
+      <div ref="toolbarRef" class="toolbar is-sticky history-toolbar-bar">
+        <div class="history-bar-row">
+          <nav aria-label="练习类型">
+            <div class="segmented toggle-group history-tabs" role="tablist">
+              <button
+                v-for="tab in tabs"
+                :key="tab.value || 'all'"
+                type="button"
+                role="tab"
+                class="segmented-item toggle-item"
+                :aria-selected="view.activity === tab.value ? 'true' : 'false'"
+                :data-history-tab="tab.value || 'all'"
+                @click="selectActivity(tab.value)"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+          </nav>
+
+          <HistoryToolbar
+            v-model:search="draft.search"
+            v-model:filters-open="filtersOpen"
+            :filtered="hasFilters(view)"
+            @clear="clearAllFilters"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              :aria-pressed="selecting ? 'true' : 'false'"
+              :disabled="loading || total === 0"
+              data-history-toggle="selection"
+              @click="selecting = !selecting"
+            >
+              选择
+            </button>
+            <HistoryExportMenu :disabled="loading || total === 0" @export="exportAs" />
+          </HistoryToolbar>
+        </div>
+
+        <HistorySelectionBar
+          v-if="selecting"
+          :count="selectedIds.length"
+          :has-rows="records.length > 0"
+          :clear-label="clearLabel"
+          @delete="askDelete('batch')"
+          @select-page="selectPage"
+          @cancel="selecting = false"
+          @clear-all="askDelete('all')"
+        />
       </div>
 
-      <!-- 只显示数据里真实存在的活动 -->
-      <nav class="history-tabs" aria-label="练习类型">
-        <div class="toggle-group" role="tablist">
-          <button
-            v-for="tab in tabs"
-            :key="tab.value || 'all'"
-            type="button"
-            role="tab"
-            class="toggle-item"
-            :aria-selected="view.activity === tab.value ? 'true' : 'false'"
-            :data-history-tab="tab.value || 'all'"
-            @click="selectActivity(tab.value)"
-          >
-            {{ tab.label }}
-          </button>
+      <HistoryFilterPanel
+        v-if="filtersOpen"
+        v-model:start-date="draft.startDate"
+        v-model:end-date="draft.endDate"
+        v-model:min-score="draft.minScore"
+        v-model:max-score="draft.maxScore"
+        :kind="view.kind"
+        :score="activityConfig?.score ?? null"
+        :kinds="activityConfig?.kinds ?? []"
+        @update:kind="(kind) => update({ kind })"
+      />
+
+      <div
+        v-if="pageNotice.message"
+        :class="['page-notice', 'inline-message', `inline-message-${pageNotice.type}`, `notice-${pageNotice.type}`]"
+        role="status"
+      >
+        <span>{{ pageNotice.message }}</span>
+        <button class="btn btn-ghost btn-sm" type="button" @click="clearPageNotice" aria-label="关闭提示">关闭</button>
+      </div>
+
+      <div
+        v-if="loading"
+        class="loading history-list-state history-list-state--loading"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span class="history-state-spinner" aria-hidden="true"></span>
+        <p class="state-message">加载历史记录中...</p>
+      </div>
+
+      <div
+        v-else-if="error"
+        class="error-state history-list-state history-list-state--error"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div class="inline-message inline-message-error">
+          <p>{{ error }}</p>
         </div>
+        <button class="btn btn-secondary" type="button" @click="loadRecords()">重试</button>
+      </div>
+
+      <div
+        v-else-if="records.length === 0 && hasFilters(view)"
+        class="empty-state history-list-state history-list-state--filtered"
+        role="status"
+        aria-live="polite"
+      >
+        <h3>没有匹配的记录</h3>
+        <p class="empty-state-desc">当前筛选条件下没有记录。</p>
+        <div class="empty-state-action">
+          <button class="btn btn-secondary btn-sm" type="button" @click="clearAllFilters">清除筛选</button>
+        </div>
+      </div>
+
+      <div
+        v-else-if="records.length === 0"
+        class="empty-state history-list-state history-list-state--empty"
+        role="status"
+        aria-live="polite"
+      >
+        <h3>还没有练习记录</h3>
+        <p class="empty-state-desc">{{ emptyText }}</p>
+        <div v-if="startLinks.length > 0" class="empty-state-action history-start-links">
+          <router-link
+            v-for="(link, index) in startLinks"
+            :key="link.to"
+            :to="link.to"
+            class="btn"
+            :class="index === 0 ? 'btn-primary' : 'btn-secondary'"
+          >
+            {{ link.label }}
+          </router-link>
+        </div>
+      </div>
+
+      <HistoryRecordList
+        v-else
+        :records="records"
+        :selecting="selecting"
+        :selected-ids="selectedIds"
+        @open="openRecord"
+        @toggle="toggleSelection"
+      />
+
+      <nav v-if="total > PAGE_SIZE" class="history-pagination" aria-label="分页">
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="view.page <= 1" @click="update({ page: view.page - 1 })">‹ 上一页</button>
+        <span class="history-pagination__dot" aria-hidden="true">·</span>
+        <span class="history-pagination__info t-num" aria-current="page">{{ view.page }} / {{ totalPages }}</span>
+        <span class="history-pagination__dot" aria-hidden="true">·</span>
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="view.page >= totalPages" @click="update({ page: view.page + 1 })">下一页 ›</button>
       </nav>
-    </header>
 
-    <HistoryToolbar
-      v-model:search="draft.search"
-      v-model:filters-open="filtersOpen"
-      v-model:selecting="selecting"
-      :filtered="hasFilters(view)"
-      :disabled="loading || total === 0"
-      @clear="clearAllFilters"
-      @export="exportAs"
-    />
+      <HistoryTrends
+        v-if="trendSeries.length > 0"
+        :series-list="trendSeries"
+        :criteria="scopeCriteria"
+        :criteria-scope="criteriaScope"
+      />
 
-    <HistoryFilterPanel
-      v-if="filtersOpen"
-      v-model:start-date="draft.startDate"
-      v-model:end-date="draft.endDate"
-      v-model:min-score="draft.minScore"
-      v-model:max-score="draft.maxScore"
-      :kind="view.kind"
-      :score="activityConfig?.score ?? null"
-      :kinds="activityConfig?.kinds ?? []"
-      @update:kind="(kind) => update({ kind })"
-    />
-
-    <div v-if="pageNotice.message" :class="['page-notice', `notice-${pageNotice.type}`]" role="status">
-      <span>{{ pageNotice.message }}</span>
-      <button class="btn-text" type="button" @click="clearPageNotice" aria-label="关闭提示">关闭</button>
+      <HistoryDeleteDialog
+        v-if="deleteMode"
+        :key="deleteMode"
+        :mode="deleteMode"
+        :scope-label="view.activity ? scopeLabel : ''"
+        :count="selectedIds.length"
+        @cancel="deleteMode = ''"
+        @confirm="executeDelete"
+      />
     </div>
-
-    <HistorySelectionBar
-      v-if="selecting"
-      :count="selectedIds.length"
-      :has-rows="records.length > 0"
-      :clear-label="clearLabel"
-      @delete="askDelete('batch')"
-      @select-page="selectPage"
-      @cancel="selecting = false"
-      @clear-all="askDelete('all')"
-    />
-
-    <div
-      v-if="loading"
-      class="loading history-list-state history-list-state--loading"
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <span class="history-state-spinner" aria-hidden="true"></span>
-      <p class="state-message">加载历史记录中...</p>
-    </div>
-
-    <div
-      v-else-if="error"
-      class="error-state history-list-state history-list-state--error"
-      role="alert"
-      aria-live="assertive"
-    >
-      <p class="state-message"><span class="state-icon" aria-hidden="true">!</span>{{ error }}</p>
-      <button class="btn btn-brand" type="button" @click="loadRecords()">重试</button>
-    </div>
-
-    <div
-      v-else-if="records.length === 0 && hasFilters(view)"
-      class="empty-state history-list-state history-list-state--filtered"
-      role="status"
-      aria-live="polite"
-    >
-      <p class="state-message">当前筛选条件下没有记录。</p>
-      <button class="btn-text" type="button" @click="clearAllFilters">清除筛选</button>
-    </div>
-
-    <div
-      v-else-if="records.length === 0"
-      class="empty-state history-list-state history-list-state--empty"
-      role="status"
-      aria-live="polite"
-    >
-      <p class="state-message">{{ emptyText }}</p>
-      <p v-if="startLinks.length > 0" class="state-links">
-        <router-link v-for="link in startLinks" :key="link.to" :to="link.to" class="btn-text">{{ link.label }}</router-link>
-      </p>
-    </div>
-
-    <HistoryRecordList
-      v-else
-      :records="records"
-      :selecting="selecting"
-      :selected-ids="selectedIds"
-      @open="openRecord"
-      @toggle="toggleSelection"
-    />
-
-    <nav v-if="total > PAGE_SIZE" class="history-pagination" aria-label="分页">
-      <button type="button" class="btn-text" :disabled="view.page <= 1" @click="update({ page: view.page - 1 })">‹ 上一页</button>
-      <span class="history-pagination__dot" aria-hidden="true">·</span>
-      <span class="history-pagination__info" aria-current="page">{{ view.page }} / {{ totalPages }}</span>
-      <span class="history-pagination__dot" aria-hidden="true">·</span>
-      <button type="button" class="btn-text" :disabled="view.page >= totalPages" @click="update({ page: view.page + 1 })">下一页 ›</button>
-    </nav>
-
-    <HistoryTrends
-      v-if="trendSeries.length > 0"
-      :series-list="trendSeries"
-      :criteria="scopeCriteria"
-      :criteria-scope="criteriaScope"
-    />
-
-    <HistoryDeleteDialog
-      v-if="deleteMode"
-      :key="deleteMode"
-      :mode="deleteMode"
-      :scope-label="view.activity ? scopeLabel : ''"
-      :count="selectedIds.length"
-      @cancel="deleteMode = ''"
-      @confirm="executeDelete"
-    />
   </div>
 </template>
 
@@ -150,6 +190,7 @@ import { historyRepository } from '@/api/history-repository.js'
 import { debounce } from '@/utils/debounce.js'
 import { createRequestGate } from '@/utils/request-gate.js'
 import HistoryDeleteDialog from '@/modules/history/components/HistoryDeleteDialog.vue'
+import HistoryExportMenu from '@/modules/history/components/HistoryExportMenu.vue'
 import HistoryFilterPanel from '@/modules/history/components/HistoryFilterPanel.vue'
 import HistoryRecordList from '@/modules/history/components/HistoryRecordList.vue'
 import HistorySelectionBar from '@/modules/history/components/HistorySelectionBar.vue'
@@ -473,193 +514,121 @@ async function exportAs(format) {
 // ── Lifecycle ────────────────────────────────────────────────────────
 watch(() => JSON.stringify(view.value), () => loadRecords())
 
+// The sticky toolbar's height: list-group titles stick just below it.
+const toolbarRef = ref(null)
+const toolbarHeight = ref(0)
+let toolbarObserver = null
+
 onMounted(() => {
   loadRecords()
   loadPresentActivities()
+  if (toolbarRef.value && typeof ResizeObserver !== 'undefined') {
+    toolbarObserver = new ResizeObserver(() => { toolbarHeight.value = toolbarRef.value?.offsetHeight ?? 0 })
+    toolbarObserver.observe(toolbarRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   listGate.invalidate()
   scopeGate.invalidate()
   presentGate.invalidate()
+  toolbarObserver?.disconnect()
 })
 </script>
 
 <style scoped>
-/* History: one ledger for every activity. Records first; analysis below;
-   controls stay quiet text until they are needed. */
+/* The page is the scroll region; the header and sticky toolbar scroll with
+   it, so only the workspace grid needs to claim the viewport height. */
+.workspace.history-workspace {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .history-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--anth-space-5);
   min-width: 0;
-}
-
-.history-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 4px;
-  padding-bottom: 0; /* the active tab sits on the header rule */
+  padding-bottom: var(--anth-space-8);
 }
 
 .history-head__copy {
   display: grid;
-  gap: 6px;
+  gap: var(--anth-space-2);
   min-width: 0;
-  padding-bottom: 16px;
 }
 
-.history-summary {
+/* Reserve the summary line so the list does not jump when it arrives. */
+.history-page .history-summary {
   min-height: 1.6em;
-  margin: 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-md);
-  font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* ── Activity tabs: underlined text, the active one sits on the rule ── */
-.history-tabs .toggle-group {
-  justify-content: flex-end;
-  gap: 4px 28px;
-}
-
-.history-tabs .toggle-item {
-  min-height: 44px;
-  margin-bottom: -1px;
-  padding: 0 1px;
-  font-size: var(--anth-text-base);
-  white-space: nowrap;
-}
-
-.page-notice {
+.history-toolbar-bar {
   display: flex;
+  flex-direction: column;
+  gap: var(--anth-space-2);
+}
+
+.history-bar-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0 8px 14px;
-  border-left: 2px solid var(--anth-ink);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
+  gap: var(--anth-space-2) var(--anth-space-4);
 }
 
-.page-notice.notice-error {
-  border-left-color: var(--anth-danger);
-  color: var(--anth-danger);
+.history-tabs {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-/* ── States ───────────────────────────────────────────────────────── */
 .history-list-state {
   display: grid;
   justify-items: center;
-  align-content: center;
-  gap: 14px;
-  min-height: 200px;
-  padding: 28px 20px;
-  border-top: 1px solid var(--anth-rule);
-  border-bottom: 1px solid var(--anth-rule);
+  gap: var(--anth-space-3);
+  min-height: 180px; /* loading, error and empty states never collapse to their text */
+  padding: var(--anth-space-8) var(--anth-space-5);
   text-align: center;
 }
 
-.state-message {
+@media (max-width: 640px) {
+  .history-list-state {
+    min-height: 160px;
+  }
+}
+
+.history-list-state .inline-message {
   max-width: 34rem;
-  margin: 0;
-  color: var(--anth-ink-soft);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
-  line-height: 1.6;
-}
-
-.state-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0 24px;
-  margin: 0;
-}
-
-.state-links .btn-text,
-.history-list-state .btn-text {
-  min-height: 44px;
-}
-
-.error-state .state-message {
-  color: var(--anth-danger);
-}
-
-.state-icon {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 10px;
-  overflow: hidden;
-  vertical-align: 0.15em;
-  background: var(--anth-danger);
-  color: transparent;
+  text-align: left;
 }
 
 .history-state-spinner {
   width: 18px;
   height: 18px;
-  border: 1.5px solid var(--anth-rule);
-  border-top-color: var(--anth-ink);
-  border-radius: 50%; /* sanctioned: a progress glyph */
-  animation: history-state-spin 0.9s linear infinite;
+  border: 1.5px solid var(--anth-rule-strong);
+  border-top-color: var(--anth-accent);
+  border-radius: 50%;
+  animation: history-spin 0.9s linear infinite;
 }
 
-@keyframes history-state-spin {
+@keyframes history-spin {
   to { transform: rotate(1turn); }
 }
 
-/* ── Pagination: plain text ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .history-state-spinner {
+    animation: none;
+  }
+}
+
 .history-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px 12px;
-}
-
-.history-pagination .btn-text {
-  min-width: 44px;
-  min-height: 44px;
-  justify-content: center;
-}
-
-.history-pagination__dot {
-  color: var(--anth-ink-faint);
+  gap: var(--anth-space-3);
 }
 
 .history-pagination__info {
   color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-@media (max-width: 960px) {
-  .history-head {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-  }
-
-  .history-tabs .toggle-group {
-    justify-content: flex-start;
-  }
-
-  .history-head__copy {
-    padding-bottom: 4px;
-  }
-}
-
-@media (max-width: 640px) {
-  .history-page {
-    --history-sticky-top: 85px; /* the stacked mobile nav */
-  }
-
-  .history-list-state {
-    min-height: 180px;
-  }
+  font-size: var(--anth-text-small-size);
 }
 </style>

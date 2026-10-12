@@ -1,8 +1,9 @@
 <template>
-  <div id="browse-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'browse' }]" data-reading-browse>
+  <div id="browse-view" :class="['view', 'hero-section', { active: activeView === 'browse' }]" data-reading-browse>
+    <div class="toolbar is-sticky browse-toolbar">
     <div class="browse-title-bar hero-panel__header">
       <button
-        class="browse-title-trigger"
+        class="btn btn-ghost btn-icon browse-title-trigger"
         id="browse-title-trigger"
         type="button"
         aria-haspopup="true"
@@ -29,7 +30,7 @@
           <span class="browse-preference-text">列表位置记录</span>
         </label>
       </div>
-      <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control">
+      <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control segmented">
         <span class="shui-segmented-indicator" aria-hidden="true"></span>
         <button
           v-for="filter in typeFilters"
@@ -60,7 +61,7 @@
           <input
             :value="keyword"
             type="text"
-            class="search-input"
+            class="input search-input"
             id="exam-search-input"
             placeholder="搜索题目..."
             aria-label="搜索题目"
@@ -86,14 +87,14 @@
           </button>
         </div>
         <div
-          class="browse-frequency-filter"
+          class="browse-frequency-filter segmented"
           id="browse-frequency-filter-buttons"
           aria-label="频率筛选"
         >
           <button
             v-for="filter in frequencyFilters"
             :key="filter.value"
-            class="browse-frequency-chip"
+            class="segmented-item browse-frequency-chip"
             :class="{ active: frequencyFilter === filter.value }"
             type="button"
             :aria-pressed="frequencyFilter === filter.value ? 'true' : 'false'"
@@ -109,7 +110,7 @@
           <select
             :value="sortMode"
             id="browse-sort-select"
-            class="browse-sort-select"
+            class="select browse-sort-select"
             aria-label="题库排序"
             @change="$emit('update:sortMode', $event.target.value)"
           >
@@ -126,46 +127,49 @@
       </div>
     </div>
 
+    </div>
+
+    <div class="browse-body">
     <div v-if="error" class="inline-message inline-message-error">
       <span>{{ error }}</span>
-      <button class="btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
+      <button class="btn btn-ghost btn-sm btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
     </div>
     <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
-    <div id="exam-list-container">
+    <div id="exam-list-container" class="scroll-region">
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
         <p>正在加载题目列表...</p>
       </div>
-      <div v-else-if="filteredReadingAssets.length === 0" class="exam-list-empty" role="status">
-        <div class="exam-list-empty-icon" aria-hidden="true">
+      <div v-else-if="filteredReadingAssets.length === 0" class="empty-state exam-list-empty" role="status">
+        <div class="empty-state-glyph exam-list-empty-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7"></circle>
             <path d="m20 20-4-4M8.5 11h5"></path>
           </svg>
         </div>
-        <p class="exam-list-empty-text">未找到匹配的题目</p>
-        <p class="exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>
-        <div v-if="keyword" class="exam-list-empty-actions">
+        <h3 class="exam-list-empty-text">未找到匹配的题目</h3>
+        <p class="empty-state-desc exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>
+        <div v-if="keyword" class="empty-state-action exam-list-empty-actions">
           <button class="btn btn-secondary exam-list-empty-action" type="button" @click="$emit('clear-search', $event)">清除搜索</button>
         </div>
       </div>
-      <div v-else class="exam-list">
+      <div v-else class="list exam-list">
         <div
           v-for="asset in filteredReadingAssets"
           :key="asset.id"
-          class="exam-item"
+          class="list-row exam-item"
           :data-exam-id="asset.id"
           :data-reading-asset-id="asset.id"
         >
-          <div class="exam-info">
+          <div class="list-row-main exam-info">
             <div>
               <h4>{{ asset.title }}</h4>
               <div class="exam-meta">{{ formatExamMetaText(asset) }}</div>
             </div>
           </div>
-          <div class="exam-actions">
+          <div class="list-row-trail exam-actions">
             <button
-              class="btn exam-item-action-btn"
+              class="btn btn-secondary btn-sm exam-item-action-btn"
               type="button"
               data-action="start"
               :data-exam-id="asset.id"
@@ -176,7 +180,7 @@
             </button>
             <button
               v-if="asset.pdfOnly"
-              class="btn btn-outline exam-item-action-btn"
+              class="btn btn-ghost btn-sm exam-item-action-btn"
               type="button"
               data-action="pdf"
               :data-exam-id="asset.id"
@@ -191,7 +195,7 @@
       <div
         v-if="customSuiteDraft"
         id="custom-suite-selection-bar"
-        class="custom-suite-selection-bar"
+        class="card custom-suite-selection-bar"
         data-custom-suite-selection
       >
         <div class="custom-suite-selection-main">
@@ -211,7 +215,7 @@
         </div>
         <div class="custom-suite-selection-actions">
           <button
-            class="btn btn-primary"
+            class="btn btn-primary btn-lg"
             type="button"
             data-custom-suite-confirm
             :disabled="!customSuiteReady || creatingSuite"
@@ -220,7 +224,7 @@
             确认套题
           </button>
           <button
-            class="btn btn-secondary"
+            class="btn btn-secondary btn-lg"
             type="button"
             data-custom-suite-cancel
             :disabled="creatingSuite"
@@ -230,6 +234,7 @@
           </button>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>

@@ -1,6 +1,6 @@
 <template>
   <div v-if="open" class="backup-list-container reading-library-config-list" data-reading-library-config-list>
-    <div class="backup-list-card">
+    <div class="card backup-list-card">
       <div class="backup-list-header">
         <h3 class="backup-list-title">
           <span class="backup-list-title-text">本地题库信息</span>

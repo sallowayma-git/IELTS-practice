@@ -1,27 +1,27 @@
 <template>
-  <div id="reading-preferences-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'settings' }]" data-reading-settings>
+  <div id="reading-preferences-view" :class="['view', 'hero-section', { active: activeView === 'settings' }]" data-reading-settings>
     <div class="hero-panel__header">
       <h2 class="hero-panel__title heading-serif">阅读题库与归档</h2>
     </div>
     <div class="hero-settings-group">
-      <div class="hero-panel hero-section global-settings-bridge-panel">
+      <div class="card hero-panel global-settings-bridge-panel">
         <h3 class="heading-serif">全局设置入口</h3>
         <p class="hero-panel__muted">主题、更新、引导和系统级选项已统一迁移到全局设置页。</p>
         <div class="hero-settings-actions">
-          <button class="btn hero-btn data-mgmt-btn" id="open-global-settings-btn" type="button" @click="$emit('open-global-settings', $event)">
+          <button class="btn btn-secondary" id="open-global-settings-btn" type="button" @click="$emit('open-global-settings', $event)">
             打开全局设置
           </button>
         </div>
       </div>
 
-      <div class="hero-panel hero-section reading-preferences-panel">
+      <div class="card hero-panel reading-preferences-panel">
         <h3 class="heading-serif">阅读题库</h3>
         <p class="hero-panel__muted">题库由桌面应用的 Rust/SQLite 本地索引提供；重新读取只会读取本机索引，不存在远程题库源切换。</p>
         <div class="hero-settings-actions">
-          <button class="btn hero-btn data-mgmt-btn" id="load-library-btn" type="button" :disabled="loading" @click="$emit('load-reading-data', $event)">
+          <button class="btn btn-secondary" id="load-library-btn" type="button" :disabled="loading" @click="$emit('load-reading-data', $event)">
             重新读取本机题库
           </button>
-          <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" type="button" data-action="library-config" @click="$emit('show-reading-library-config-list', $event)">
+          <button class="btn btn-secondary" id="library-config-btn" type="button" data-action="library-config" @click="$emit('show-reading-library-config-list', $event)">
             <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true">
               <line x1="4" y1="21" x2="4" y2="14"></line>
               <line x1="4" y1="10" x2="4" y2="3"></line>
@@ -38,14 +38,14 @@
         </div>
       </div>
 
-      <div class="hero-panel hero-section data-management-panel">
+      <div class="card hero-panel data-management-panel">
         <h3 class="heading-serif">阅读记录归档</h3>
         <p class="hero-panel__muted">导出由 Rust/SQLite 生成的完整归档；导入会先完整校验，失败时不会写入任何记录。</p>
         <div class="hero-settings-actions">
-          <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" type="button" :disabled="historyBusy" @click="$emit('export-reading-archive', 'export')">
+          <button class="btn btn-secondary" id="export-data-btn" type="button" :disabled="historyBusy" @click="$emit('export-reading-archive', 'export')">
             导出归档
           </button>
-          <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" type="button" :disabled="historyBusy" @click="$emit('trigger-reading-archive-import', $event)">
+          <button class="btn btn-secondary" id="import-data-btn" type="button" :disabled="historyBusy" @click="$emit('trigger-reading-archive-import', $event)">
             导入归档
           </button>
           <input
@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      <div class="hero-panel hero-section system-info-panel">
+      <div class="card hero-panel system-info-panel">
         <h3 class="heading-serif">阅读题库状态</h3>
         <div class="hero-surface settings-system-info system-info-surface">
           <div class="settings-system-info__status system-info-status">题库状态: {{ libraryStatusLabel }}</div>

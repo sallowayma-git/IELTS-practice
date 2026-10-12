@@ -208,7 +208,7 @@
 }
 
 .agent-journal-card__head span {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -241,7 +241,7 @@
 }
 
 .agent-journal-stats dt {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 .agent-journal-stats dd {
@@ -279,7 +279,7 @@
 
 .agent-plan-item.is-done .agent-plan-item__copy strong {
   text-decoration: line-through;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 .agent-plan-item__check {
@@ -329,7 +329,7 @@
 }
 
 .agent-plan-item__minutes {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   white-space: nowrap;
 }
@@ -370,7 +370,7 @@
 }
 
 .agent-evo-tabs button small {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -391,7 +391,7 @@
 }
 
 .agent-delta-group h3 small {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-weight: var(--anth-weight-normal);
 }
 
@@ -434,7 +434,7 @@
 }
 
 .agent-delta-item__copy small {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -492,7 +492,7 @@
 }
 
 .agent-memory-card__band {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -506,7 +506,7 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -532,7 +532,7 @@
 }
 
 .agent-evidence-drawer small {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 .agent-text-button {
@@ -584,7 +584,7 @@
 }
 
 .agent-advanced__summary small {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -745,7 +745,7 @@
 .agent-workspace-location__copy small,
 .agent-file-row__copy small {
   overflow: hidden;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -762,7 +762,7 @@
   display: flex;
   justify-content: space-between;
   padding: 0 5px 4px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   font-weight: var(--anth-weight-semibold);
   letter-spacing: var(--anth-tracking-caps);
@@ -771,7 +771,7 @@
 
 .agent-file-tree__empty {
   margin: 4px 5px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   line-height: var(--anth-leading-snug);
 }
@@ -831,7 +831,7 @@
   margin-top: auto;
   padding: 12px 16px;
   border-top: 1px solid var(--anth-border);
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -882,7 +882,7 @@
   position: absolute;
   right: 28px;
   bottom: 42px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font: var(--anth-text-xs)/1 var(--anth-font-mono);
 }
 
@@ -941,7 +941,7 @@
 }
 
 .agent-prompt-footer__hint {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -1025,7 +1025,7 @@
 }
 
 .agent-run-summary span {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
 }
 
@@ -1053,7 +1053,7 @@
   height: 26px;
   place-items: center;
   border-radius: 0;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   background: var(--anth-surface);
   font: var(--anth-text-xs)/1 var(--anth-font-mono);
 }
@@ -1073,7 +1073,7 @@
 
 .agent-run-step__copy small {
   overflow: hidden;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1123,7 +1123,7 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-xs);
   font-weight: var(--anth-weight-semibold);
   letter-spacing: var(--anth-tracking-wide);
@@ -1160,7 +1160,7 @@
 }
 
 .agent-output-metadata dt {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 .agent-output-metadata dd {
@@ -1261,7 +1261,7 @@
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 .agent-evo-tabs button.is-active {
@@ -1273,5 +1273,5 @@
 .agent-empty-hint {
   border: 0;
   background: transparent;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }

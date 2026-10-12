@@ -1,19 +1,23 @@
 <template>
   <div class="dialog-overlay" @click.self="$emit('cancel')" @keydown.esc="$emit('cancel')">
-    <div class="dialog card" role="dialog" aria-modal="true" :aria-label="title">
-      <h3 class="heading-serif">{{ title }}</h3>
-      <p>{{ message }}</p>
+    <div class="dialog dialog-sm" role="dialog" aria-modal="true" :aria-label="title">
+      <div class="dialog-header">
+        <h3>{{ title }}</h3>
+      </div>
 
-      <input
-        v-if="mode === 'all'"
-        v-model="typed"
-        type="text"
-        placeholder="请输入 &quot;确认删除&quot; 以继续"
-        class="input delete-confirm-input"
-      />
+      <div class="dialog-body">
+        <p class="history-dialog__message">{{ message }}</p>
+        <input
+          v-if="mode === 'all'"
+          v-model="typed"
+          type="text"
+          placeholder="请输入 &quot;确认删除&quot; 以继续"
+          class="input delete-confirm-input"
+        />
+      </div>
 
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-warm-sand" @click="$emit('cancel')">取消</button>
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" @click="$emit('cancel')">取消</button>
         <button type="button" class="btn btn-danger" :disabled="!confirmed" @click="$emit('confirm')">确认删除</button>
       </div>
     </div>
@@ -53,8 +57,16 @@ const message = computed(() => {
 </script>
 
 <style scoped>
+.dialog-overlay .dialog-body {
+  padding-bottom: var(--anth-space-4);
+}
+
+.history-dialog__message {
+  margin: 0 0 var(--anth-space-3);
+  color: var(--anth-ink-soft);
+}
+
 .delete-confirm-input {
-  width: 100%;
-  margin: 12px 0;
+  margin-bottom: 0;
 }
 </style>

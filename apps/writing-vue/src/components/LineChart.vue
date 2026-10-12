@@ -218,7 +218,7 @@ const areaD = computed(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-sm);
 }
 </style>

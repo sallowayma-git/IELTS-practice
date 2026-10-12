@@ -1,109 +1,227 @@
 <template>
   <div id="settings-view" class="settings-page view active" data-writing-settings>
-    <div class="hero-panel__header">
-      <h2 class="hero-panel__title heading-serif">系统设置</h2>
-    </div>
-
-    <div class="hero-settings-group" aria-label="设置主面板">
-      <section class="hero-panel hero-section ai-settings-panel">
-        <h3 class="heading-serif">AI 与评测</h3>
-        <p class="hero-panel__muted">配置模型、提示词与温度。API Key 保存在系统密钥环，不会进入普通备份。</p>
-        <div class="hero-settings-actions">
-          <button class="btn hero-btn" type="button" data-settings-open="api" @click="openSettingsDetail('api')">
-            API 配置
-          </button>
-          <button class="btn hero-btn" type="button" data-settings-open="prompts" @click="openSettingsDetail('prompts')">
-            提示词
-          </button>
-          <button class="btn hero-btn" type="button" data-settings-open="model" @click="openSettingsDetail('model')">
-            模型参数
-          </button>
-          <button class="btn hero-btn" type="button" data-settings-open="about" @click="openSettingsDetail('about')">
-            关于
-          </button>
-        </div>
-        <div class="settings-stat-row">
-          <span class="settings-badge">{{ enabledConfigCount }} 个已启用</span>
-          <span class="settings-badge settings-badge--muted">共 {{ totalConfigCount }} 个配置</span>
-          <span class="settings-badge settings-badge--muted">{{ promptEntries.length }} 个提示词版本</span>
-        </div>
-      </section>
-
-      <section class="hero-panel hero-section data-management-panel">
-        <h3 class="heading-serif">本机数据备份</h3>
-        <p class="hero-panel__muted">
-          完整备份由 Rust 写入应用 backups 目录，包含练习记录与设置元数据；不含明文 API Key。
-        </p>
-        <div class="hero-settings-actions">
-          <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" type="button" :disabled="backupBusy" @click="createFullAppBackup">
-            {{ backupBusy ? '处理中…' : '备份全部数据' }}
-          </button>
-          <button class="btn hero-btn data-mgmt-btn" id="restore-backup-btn" type="button" :disabled="backupBusy" @click="restoreFullAppBackup">
-            从备份恢复…
-          </button>
-          <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" type="button" :disabled="backupBusy" @click="showNativeBackupList">
-            备份列表
-          </button>
-        </div>
-        <div v-if="lastBackupPath" class="settings-backup-result hero-surface" role="status">
-          <div class="settings-backup-result__label">最近完整备份已写入</div>
-          <div class="settings-backup-result__path settings-path-clip">{{ lastBackupPath }}</div>
-          <p v-if="backupsPath" class="settings-backup-result__hint hero-panel__muted">备份目录：{{ backupsPath }}</p>
-        </div>
-        <p v-else-if="backupsPath" class="hero-panel__muted settings-backup-path">备份目录：{{ backupsPath }}</p>
-      </section>
-
-      <section class="hero-panel hero-section system-management-panel">
-        <h3 class="heading-serif">系统与外观</h3>
-        <p class="hero-panel__muted">写作题库入口、新手引导与原生更新工具。</p>
-        <div class="hero-settings-actions">
-          <button class="btn hero-btn" id="load-library-btn" type="button" @click="openWritingTopicLibrary">
-            打开写作题库
-          </button>
-          <button class="btn hero-btn" id="show-onboarding-btn" type="button" @click="startOnboardingTour">
-            显示引导
-          </button>
-          <button class="btn hero-btn" id="library-config-btn" type="button" data-action="library-config" @click="openWritingLibraryConfig">
-            提示词设置
-          </button>
-          <button class="btn hero-btn" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">
-            检查更新
-          </button>
-          <button class="btn hero-btn" type="button" @click="openSettingsDetail('data')">
-            历史保留上限
-          </button>
-        </div>
-      </section>
-
-      <section class="hero-panel hero-section system-info-panel">
-        <h3 class="heading-serif">系统信息</h3>
-        <div class="hero-surface settings-system-info system-info-surface">
-          <div class="settings-system-info__status system-info-status">{{ topicLibraryStatus }}</div>
-          <div class="settings-system-metrics">
-            <div><span>题目总数</span><strong id="total-exams">{{ topicLibraryStats.total }}</strong></div>
-            <div><span>Task 1</span><strong id="html-exams">{{ topicLibraryStats.task1 }}</strong></div>
-            <div><span>Task 2</span><strong id="pdf-exams">{{ topicLibraryStats.task2 }}</strong></div>
-          </div>
-          <p class="hero-panel__muted">最近更新：<span id="last-update">{{ topicLibraryStats.lastUpdate }}</span></p>
-          <details class="settings-technical-details">
-            <summary>技术详情</summary>
-            <dl>
-              <div><dt>桌面宿主</dt><dd>{{ hostName }}</dd></div>
-              <div><dt>Tauri 版本</dt><dd>{{ tauriVersion }}</dd></div>
-              <div><dt>数据目录</dt><dd class="settings-path-clip">{{ userDataPath || pathsLoadingLabel }}</dd></div>
-              <div><dt>备份目录</dt><dd class="settings-path-clip">{{ backupsPath || (pathsResolved ? '未获取' : '加载中...') }}</dd></div>
-            </dl>
-          </details>
-        </div>
-        <div class="settings-credit">
-          <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer" class="inline-hover-link">问题反馈</a>
-          <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer">Salloway呈现</a>
-        </div>
-      </section>
-    </div>
+    <header class="page-header has-rule">
+      <p class="page-header-kicker">写作 · 偏好与数据</p>
+      <h1>设置</h1>
+      <p class="page-header-desc">配置评测通道与提示词，管理本机备份、历史保留与应用信息。</p>
+    </header>
 
     <div v-if="globalMessage.message" :class="['inline-message', `inline-message-${globalMessage.type}`]">
       {{ globalMessage.message }}
+    </div>
+
+    <div class="settings-layout">
+      <nav class="tabs is-vertical settings-rail" aria-label="设置分区">
+        <button class="tab" type="button" @click="jumpToSection('settings-ai')">AI 与评测</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-backup')">本机数据备份</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-system')">系统与外观</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-info')">系统信息</button>
+      </nav>
+
+      <div class="settings-sections">
+        <section id="settings-ai" class="card settings-card ai-settings-panel" aria-labelledby="settings-ai-title">
+          <div class="panel-header">
+            <div class="settings-card__head">
+              <h2 id="settings-ai-title">AI 与评测</h2>
+              <p class="field-help">配置模型、提示词与温度。API Key 保存在系统密钥环，不会进入普通备份。</p>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>评测通道</strong>
+              <span>供应商、默认模型与 API Key</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" data-settings-open="api" @click="openSettingsDetail('api')">API 配置</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>提示词版本</strong>
+              <span>Task 1 / Task 2 的评判提示词</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" data-settings-open="prompts" @click="openSettingsDetail('prompts')">提示词</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>温度与模型参数</strong>
+              <span>影响评分严格程度与反馈详细度</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" data-settings-open="model" @click="openSettingsDetail('model')">模型参数</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>版本与运行环境</strong>
+              <span>应用版本、宿主与数据路径</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" data-settings-open="about" @click="openSettingsDetail('about')">关于</button>
+            </div>
+          </div>
+          <div class="settings-stats">
+            <div class="stat">
+              <span class="stat-label">已启用配置</span>
+              <span class="stat-value">{{ enabledConfigCount }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">全部配置</span>
+              <span class="stat-value">{{ totalConfigCount }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">提示词版本</span>
+              <span class="stat-value">{{ promptEntries.length }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings-backup" class="card settings-card data-management-panel" aria-labelledby="settings-backup-title">
+          <div class="panel-header">
+            <div class="settings-card__head">
+              <h2 id="settings-backup-title">本机数据备份</h2>
+              <p class="field-help">完整备份由 Rust 写入应用 backups 目录，包含练习记录与设置元数据；不含明文 API Key。</p>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>备份全部数据</strong>
+              <span>生成一份可恢复的完整快照</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary data-mgmt-btn" id="create-backup-btn" type="button" :disabled="backupBusy" @click="createFullAppBackup">
+                {{ backupBusy ? '处理中…' : '备份全部数据' }}
+              </button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>从备份恢复</strong>
+              <span>替换当前全部数据，恢复前会先保存快照</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary data-mgmt-btn" id="restore-backup-btn" type="button" :disabled="backupBusy" @click="restoreFullAppBackup">
+                从备份恢复…
+              </button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>备份文件</strong>
+              <span>查看 backups 目录中的完整备份</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary data-mgmt-btn" id="backup-list-btn" type="button" :disabled="backupBusy" @click="showNativeBackupList">
+                备份列表
+              </button>
+            </div>
+          </div>
+          <div v-if="lastBackupPath" class="inline-message inline-message-success" role="status">
+            <div>最近完整备份已写入</div>
+            <code class="settings-path" :title="lastBackupPath">{{ lastBackupPath }}</code>
+          </div>
+          <div v-if="backupsPath" class="setting-row">
+            <div class="setting-row__copy">
+              <strong>备份目录</strong>
+              <span>应用 backups 目录</span>
+            </div>
+            <code class="settings-path" :title="backupsPath">{{ backupsPath }}</code>
+          </div>
+        </section>
+
+        <section id="settings-system" class="card settings-card system-management-panel" aria-labelledby="settings-system-title">
+          <div class="panel-header">
+            <div class="settings-card__head">
+              <h2 id="settings-system-title">系统与外观</h2>
+              <p class="field-help">写作题库入口、新手引导与原生更新工具。</p>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>写作题库</strong>
+              <span>浏览题库并开始练习</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" id="load-library-btn" type="button" @click="openWritingTopicLibrary">打开写作题库</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>新手引导</strong>
+              <span>重新查看快速引导</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" id="show-onboarding-btn" type="button" @click="startOnboardingTour">显示引导</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>提示词设置</strong>
+              <span>题库页使用的提示词与生成参数</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" id="library-config-btn" type="button" data-action="library-config" @click="openWritingLibraryConfig">提示词设置</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>应用更新</strong>
+              <span>检查原生更新通道</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">检查更新</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>历史保留上限</strong>
+              <span>自动保留最近终态记录的数量</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" @click="openSettingsDetail('data')">历史保留上限</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings-info" class="card settings-card system-info-panel" aria-labelledby="settings-info-title">
+          <div class="panel-header">
+            <div class="settings-card__head">
+              <h2 id="settings-info-title">系统信息</h2>
+              <p class="field-help system-info-status">{{ topicLibraryStatus }}</p>
+            </div>
+          </div>
+          <div class="settings-stats">
+            <div class="stat">
+              <span class="stat-label">题目总数</span>
+              <span id="total-exams" class="stat-value">{{ topicLibraryStats.total }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Task 1</span>
+              <span id="html-exams" class="stat-value">{{ topicLibraryStats.task1 }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Task 2</span>
+              <span id="pdf-exams" class="stat-value">{{ topicLibraryStats.task2 }}</span>
+            </div>
+          </div>
+          <p class="field-help">最近更新：<span id="last-update">{{ topicLibraryStats.lastUpdate }}</span></p>
+          <details class="settings-technical-details">
+            <summary>技术详情</summary>
+            <dl class="settings-info-list">
+              <div class="info-row"><dt class="label">桌面宿主</dt><dd class="value">{{ hostName }}</dd></div>
+              <div class="info-row"><dt class="label">Tauri 版本</dt><dd class="value">{{ tauriVersion }}</dd></div>
+              <div class="info-row"><dt class="label">数据目录</dt><dd class="value settings-path" :title="userDataPath || pathsLoadingLabel">{{ userDataPath || pathsLoadingLabel }}</dd></div>
+              <div class="info-row"><dt class="label">备份目录</dt><dd class="value settings-path" :title="backupsPath || ''">{{ backupsPath || (pathsResolved ? '未获取' : '加载中...') }}</dd></div>
+            </dl>
+          </details>
+          <div class="settings-credit">
+            <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer" class="btn btn-link btn-sm inline-hover-link">问题反馈</a>
+            <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer" class="btn btn-link btn-sm">Salloway呈现</a>
+          </div>
+        </section>
+      </div>
     </div>
 
     <div
@@ -114,37 +232,39 @@
       aria-label="写作设置明细"
       @click.self="hideSettingsDetail"
     >
-      <section class="settings-detail-panel hero-panel hero-section">
-        <div class="settings-detail-head">
-          <div>
-            <h3 class="heading-serif">{{ activeTabMeta.title }}</h3>
-            <p>{{ activeTabMeta.description }}</p>
-          </div>
-          <button class="settings-detail-close" type="button" aria-label="关闭写作设置" @click="hideSettingsDetail">×</button>
+      <section class="dialog dialog-lg settings-detail-panel">
+        <div class="settings-detail-chrome">
+          <header class="settings-detail-head">
+            <div class="settings-detail-head__copy">
+              <h3>{{ activeTabMeta.title }}</h3>
+              <p class="field-help">{{ activeTabMeta.description }}</p>
+            </div>
+            <button class="btn btn-icon settings-detail-close" type="button" aria-label="关闭写作设置" @click="hideSettingsDetail">×</button>
+          </header>
+
+          <nav class="tabs settings-tabs" aria-label="写作设置分类">
+            <button
+              v-for="tab in tabs"
+              :key="tab.key"
+              type="button"
+              :class="['tab settings-tab', { active: activeTab === tab.key }]"
+              @click="activeTab = tab.key"
+            >
+              {{ tab.label }}
+            </button>
+          </nav>
         </div>
 
-        <div class="settings-tabs" role="tablist" aria-label="写作设置分类">
-          <button
-            v-for="tab in tabs"
-            :key="tab.key"
-            type="button"
-            :class="['settings-tab', { active: activeTab === tab.key }]"
-            @click="activeTab = tab.key"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-
-      <!-- API 配置 -->
+        <!-- API 配置 -->
         <section v-if="activeTab === 'api'" class="settings-panel">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>评测通道</h3>
               <p>默认配置必须启用且本机可读取 API Key。完整备份只恢复引用：同一设备且本机凭据记录仍在时可复用，换设备必须重新填写 Key。</p>
             </div>
             <div class="settings-badges">
-              <span class="settings-badge">{{ totalConfigCount }} 个配置</span>
-              <span class="settings-badge settings-badge--success">{{ enabledConfigCount }} 个启用</span>
+              <span class="tag tag-neutral">{{ totalConfigCount }} 个配置</span>
+              <span class="tag tag-success">{{ enabledConfigCount }} 个启用</span>
             </div>
           </div>
           <div v-if="sectionMessages.api.message" :class="['inline-message', `inline-message-${sectionMessages.api.type}`]">
@@ -152,67 +272,67 @@
           </div>
           <div v-if="apiLoading" class="settings-loading">加载配置中...</div>
           <div v-else-if="!apiConfigs.length" class="settings-empty">暂无 API 配置。</div>
-          <div v-else class="settings-list">
-            <div v-for="item in apiConfigs" :key="item.id" class="settings-list__row">
-              <div class="settings-list__main">
+          <div v-else class="list settings-list">
+            <div v-for="item in apiConfigs" :key="item.id" class="list-row settings-list__row">
+              <div class="list-row-main">
                 <div class="settings-list__title">
                   <strong>{{ item.config_name }}</strong>
-                  <span v-if="item.is_default" class="settings-badge settings-badge--accent">默认</span>
-                  <span :class="['settings-badge', item.is_enabled ? 'settings-badge--success' : 'settings-badge--muted']">
+                  <span v-if="item.is_default" class="tag tag-accent">默认</span>
+                  <span :class="['tag', item.is_enabled ? 'tag-success' : 'tag-neutral']">
                     {{ item.is_enabled ? '启用' : '禁用' }}
                   </span>
-                  <span v-if="!item.has_secret" class="settings-badge settings-badge--muted">需重新填写 Key</span>
+                  <span v-if="!item.has_secret" class="tag tag-neutral">需重新填写 Key</span>
                 </div>
-                <div class="settings-list__meta">
+                <div class="list-row-meta">
                   <span>{{ item.provider }}</span>
                   <span>{{ item.default_model }}</span>
                 </div>
               </div>
-              <div class="settings-actions">
-                <button class="btn-text" type="button" @click="editConfig(item)">编辑</button>
+              <div class="list-row-trail">
+                <button class="btn btn-ghost btn-sm" type="button" @click="editConfig(item)">编辑</button>
                 <button
-                  class="btn-text"
+                  class="btn btn-ghost btn-sm"
                   type="button"
                   :disabled="testingConfigId === item.id || !item.has_secret"
                   :title="item.has_secret ? '' : '此设备没有该配置的 API Key，请先编辑并重新填写'"
                   @click="testConfig(item.id)"
                 >
-                    {{ testingConfigId === item.id ? '测试中' : '测试' }}
+                  {{ testingConfigId === item.id ? '测试中' : '测试' }}
                 </button>
                 <button
-                    class="btn-text"
-                    type="button"
-                    :disabled="item.is_default || !item.is_enabled || !item.has_secret"
-                    :title="item.is_default ? '当前已是默认配置' : (!item.is_enabled ? '禁用配置不能设为默认' : (!item.has_secret ? '请先在此设备重新填写 API Key' : ''))"
-                    @click="setDefaultConfig(item.id)"
-                  >
-                    设默认
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  :disabled="item.is_default || !item.is_enabled || !item.has_secret"
+                  :title="item.is_default ? '当前已是默认配置' : (!item.is_enabled ? '禁用配置不能设为默认' : (!item.has_secret ? '请先在此设备重新填写 API Key' : ''))"
+                  @click="setDefaultConfig(item.id)"
+                >
+                  设默认
                 </button>
                 <button
-                    class="btn-text"
-                    type="button"
-                    :disabled="isToggleBlocked(item)"
-                    :title="getToggleBlockedReason(item)"
-                    @click="toggleConfig(item.id)"
-                  >
-                    {{ item.is_enabled ? '禁用' : '启用' }}
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  :disabled="isToggleBlocked(item)"
+                  :title="getToggleBlockedReason(item)"
+                  @click="toggleConfig(item.id)"
+                >
+                  {{ item.is_enabled ? '禁用' : '启用' }}
                 </button>
                 <button
-                    class="btn-text danger"
-                    type="button"
-                    :disabled="isDeleteBlocked(item)"
-                    :title="getDeleteBlockedReason(item)"
-                    @click="requestRemoveConfig(item.id)"
-                  >
-                    删除
+                  class="btn btn-danger-ghost btn-sm"
+                  type="button"
+                  :disabled="isDeleteBlocked(item)"
+                  :title="getDeleteBlockedReason(item)"
+                  @click="requestRemoveConfig(item.id)"
+                >
+                  删除
                 </button>
               </div>
             </div>
           </div>
         </section>
 
-        <section v-if="activeTab === 'api'" class="settings-panel settings-panel--split">
-          <div class="settings-panel__head">
+        <section v-if="activeTab === 'api'" class="settings-panel">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>{{ apiForm.id ? '编辑配置' : '新建配置' }}</h3>
               <p>{{ apiForm.id ? (editingConfigNeedsKey ? '该配置来自备份，但此设备无法读取 API Key；请重新填写后保存。' : 'API Key 留空时保持原值。') : '新建配置必须填写 API Key。' }}</p>
@@ -220,47 +340,47 @@
           </div>
           <div class="settings-form-grid">
             <label class="field">
-              <span>配置名称</span>
-              <input v-model="apiForm.config_name" placeholder="例如 OpenAI 主通道" />
+              <span class="field-label">配置名称</span>
+              <input class="input" v-model="apiForm.config_name" placeholder="例如 OpenAI 主通道" />
             </label>
             <label class="field">
-              <span>供应商</span>
-              <select v-model="apiForm.provider">
+              <span class="field-label">供应商</span>
+              <select class="select" v-model="apiForm.provider">
                 <option value="openai">OpenAI</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="deepseek">DeepSeek</option>
               </select>
             </label>
             <label class="field field--wide">
-              <span>Base URL</span>
-              <input v-model="apiForm.base_url" placeholder="https://api.openai.com/v1" />
-              <small>{{ isApiFormUrlLinked ? '跟随供应商默认地址' : '当前使用自定义地址' }}</small>
+              <span class="field-label">Base URL</span>
+              <input class="input" v-model="apiForm.base_url" placeholder="https://api.openai.com/v1" />
+              <small class="field-help">{{ isApiFormUrlLinked ? '跟随供应商默认地址' : '当前使用自定义地址' }}</small>
             </label>
             <label class="field">
-              <span>默认模型</span>
-              <input v-model="apiForm.default_model" placeholder="gpt-4o-mini" />
+              <span class="field-label">默认模型</span>
+              <input class="input" v-model="apiForm.default_model" placeholder="gpt-4o-mini" />
             </label>
             <label class="field">
-              <span>API Key</span>
-              <input v-model="apiForm.api_key" type="password" autocomplete="off" placeholder="编辑时留空表示不变" />
+              <span class="field-label">API Key</span>
+              <input class="input" v-model="apiForm.api_key" type="password" autocomplete="off" placeholder="编辑时留空表示不变" />
             </label>
           </div>
           <div class="form-actions">
-            <button class="btn btn-brand" type="button" @click="saveApiConfig">保存配置</button>
-            <button class="btn btn-warm-sand" type="button" @click="resetApiForm">重置</button>
+            <button class="btn btn-primary" type="button" @click="saveApiConfig">保存配置</button>
+            <button class="btn btn-secondary btn-warm-sand" type="button" @click="resetApiForm">重置</button>
           </div>
         </section>
 
-      <!-- 提示词管理 -->
+        <!-- 提示词管理 -->
         <section v-if="activeTab === 'prompts'" class="settings-panel">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>提示词版本</h3>
               <p>管理 Task 1 / Task 2 的评判提示词版本。</p>
             </div>
             <div class="settings-badges">
-              <span class="settings-badge">{{ promptEntries.length }} 个版本</span>
-              <span class="settings-badge settings-badge--success">{{ activePromptCount }} 个激活</span>
+              <span class="tag tag-neutral">{{ promptEntries.length }} 个版本</span>
+              <span class="tag tag-success">{{ activePromptCount }} 个激活</span>
             </div>
           </div>
           <div v-if="sectionMessages.prompts.message" :class="['inline-message', `inline-message-${sectionMessages.prompts.type}`]">
@@ -268,30 +388,30 @@
           </div>
           <div v-if="promptLoading" class="settings-loading">加载提示词中...</div>
           <div v-else-if="!promptEntries.length" class="settings-empty">暂无提示词版本。</div>
-          <div v-else class="settings-list">
-            <div v-for="item in promptEntries" :key="item.id" class="settings-list__row">
-              <div class="settings-list__main">
+          <div v-else class="list settings-list">
+            <div v-for="item in promptEntries" :key="item.id" class="list-row settings-list__row">
+              <div class="list-row-main">
                 <div class="settings-list__title">
                   <strong>{{ item.task_type }}</strong>
-                  <span :class="['settings-badge', item.is_active ? 'settings-badge--success' : 'settings-badge--muted']">
+                  <span :class="['tag', item.is_active ? 'tag-success' : 'tag-neutral']">
                     {{ item.is_active ? '激活' : '未激活' }}
                   </span>
                 </div>
-                <div class="settings-list__meta">
+                <div class="list-row-meta">
                   <span>ID {{ item.id }}</span>
                   <span>{{ item.version }}</span>
                 </div>
               </div>
-              <div class="settings-actions">
-                <button class="btn-text" type="button" @click="activatePrompt(item.id)">激活</button>
-                <button class="btn-text danger" type="button" @click="requestDeletePrompt(item.id)">删除</button>
+              <div class="list-row-trail">
+                <button class="btn btn-ghost btn-sm" type="button" @click="activatePrompt(item.id)">激活</button>
+                <button class="btn btn-danger-ghost btn-sm" type="button" @click="requestDeletePrompt(item.id)">删除</button>
               </div>
             </div>
           </div>
         </section>
 
         <section v-if="activeTab === 'prompts'" class="settings-panel">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>导入/导出</h3>
               <p>支持完整 JSON 配置或版本数组。</p>
@@ -299,59 +419,57 @@
           </div>
           <textarea
             v-model="importPromptJson"
-            class="json-editor"
+            class="textarea json-editor"
             rows="10"
             placeholder='粘贴 JSON（支持 {version,task1,task2} 或 [{task_type,...}]）'
           ></textarea>
           <div class="form-actions">
-            <button class="btn btn-brand" type="button" @click="importPromptConfig">导入提示词</button>
-            <button class="btn btn-warm-sand" type="button" @click="exportPromptConfig">导出当前激活</button>
+            <button class="btn btn-primary" type="button" @click="importPromptConfig">导入提示词</button>
+            <button class="btn btn-secondary" type="button" @click="exportPromptConfig">导出当前激活</button>
           </div>
         </section>
 
-      <!-- 模型参数 -->
+        <!-- 模型参数 -->
         <section v-if="activeTab === 'model'" class="settings-panel settings-panel--model">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>温度模式</h3>
               <p>温度值影响 AI 评分的严格程度和反馈详细度。</p>
             </div>
-            <span class="settings-badge settings-badge--accent">{{ currentTemperatureSummary }}</span>
+            <span class="tag tag-accent">{{ currentTemperatureSummary }}</span>
           </div>
           <div v-if="sectionMessages.model.message" :class="['inline-message', `inline-message-${sectionMessages.model.type}`]">
             {{ sectionMessages.model.message }}
           </div>
-          
-          <div class="temperature-modes">
+
+          <div class="list temperature-modes">
             <button
-              v-for="mode in temperatureModes" 
+              v-for="mode in temperatureModes"
               :key="mode.value"
-              :class="['mode-card', { active: modelSettings.temperature_mode === mode.value }]"
+              :class="['list-row mode-card', { active: modelSettings.temperature_mode === mode.value, 'is-selected': modelSettings.temperature_mode === mode.value }]"
               type="button"
               @click="modelSettings.temperature_mode = mode.value"
             >
-              <div class="mode-header">
-                <span class="mode-icon" v-html="mode.icon"></span>
-                <span>
-                  <span class="mode-name">{{ mode.name }}</span>
-                  <span class="mode-desc">{{ mode.desc }}</span>
-                </span>
-              </div>
-              <div class="mode-temp">{{ getModeTemperatureLabel(mode) }}</div>
+              <span class="mode-copy">
+                <span class="mode-name">{{ mode.name }}</span>
+                <span class="mode-desc">{{ mode.desc }}</span>
+              </span>
+              <span class="mode-temp">{{ getModeTemperatureLabel(mode) }}</span>
             </button>
           </div>
 
           <div v-if="modelSettings.temperature_mode === 'custom'" class="custom-temperature-panel">
-            <div class="settings-panel__head settings-panel__head--compact">
+            <div class="panel-header settings-panel__head">
               <div>
                 <h4>自定义任务温度</h4>
                 <p>范围 0.0-2.0，分别作用于 Task 1 和 Task 2。</p>
               </div>
             </div>
             <div class="custom-temperature-grid">
-              <label class="custom-temperature-field">
-                <span>Task 1</span>
+              <label class="field">
+                <span class="field-label">Task 1</span>
                 <input
+                  class="input"
                   v-model.number="modelSettings.temperature_task1"
                   type="number"
                   min="0"
@@ -359,9 +477,10 @@
                   step="0.1"
                 />
               </label>
-              <label class="custom-temperature-field">
-                <span>Task 2</span>
+              <label class="field">
+                <span class="field-label">Task 2</span>
                 <input
+                  class="input"
                   v-model.number="modelSettings.temperature_task2"
                   type="number"
                   min="0"
@@ -377,108 +496,109 @@
               <strong>{{ currentMode?.name || '当前模式' }}</strong>
               <span>{{ currentMode?.desc || '保存后应用到后续评测。' }}</span>
             </div>
-            <button class="btn btn-brand" type="button" @click="saveModelSettings" :disabled="modelSaving">
+            <button class="btn btn-primary" type="button" @click="saveModelSettings" :disabled="modelSaving">
               {{ modelSaving ? '保存中...' : '保存设置' }}
             </button>
           </div>
         </section>
 
-      <!-- 数据管理 -->
+        <!-- 数据管理 -->
         <section v-if="activeTab === 'data'" class="settings-panel">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>历史记录</h3>
               <p>由本机 SQLite 在写入终态练习时执行的历史保留策略；草稿、进行中和评测中的记录不会被清理。</p>
             </div>
-            <span class="settings-badge">{{ historyRetentionLabel }}</span>
+            <span class="tag tag-neutral">{{ historyRetentionLabel }}</span>
           </div>
           <div v-if="sectionMessages.data.message" :class="['inline-message', `inline-message-${sectionMessages.data.type}`]">
             {{ sectionMessages.data.message }}
           </div>
-          
-          <div class="setting-control">
-              <div class="setting-control__copy">
-                <strong>自动保留最近记录数量</strong>
-                <span>仅终态记录（完成、取消、失败或中断）会按完成时间裁剪；不限时不自动清理。</span>
-              </div>
-            <label class="setting-control__input">
-              <input v-model="dataSettings.unlimited" type="checkbox" />
-              <span>不限</span>
-            </label>
-            <label v-if="!dataSettings.unlimited" class="setting-control__input">
-              <input
-                type="number"
-                v-model.number="dataSettings.max_terminal_attempts"
-                min="50"
-                max="500"
-                step="50"
-              />
-              <span>条</span>
-            </label>
+
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>自动保留最近记录数量</strong>
+              <span>仅终态记录（完成、取消、失败或中断）会按完成时间裁剪；不限时不自动清理。</span>
+            </div>
+            <div class="setting-row__control">
+              <label class="check-label">
+                <input v-model="dataSettings.unlimited" type="checkbox" />
+                <span>不限</span>
+              </label>
+              <label v-if="!dataSettings.unlimited" class="check-label">
+                <input
+                  class="input settings-number"
+                  type="number"
+                  v-model.number="dataSettings.max_terminal_attempts"
+                  min="50"
+                  max="500"
+                  step="50"
+                />
+                <span>条</span>
+              </label>
+            </div>
           </div>
           <div class="settings-savebar">
             <span>{{ dataSettings.unlimited ? '不限：不自动清理历史。' : '允许范围 50-500，按 50 递增。' }}</span>
-            <button class="btn btn-brand" type="button" @click="saveDataSettings" :disabled="dataSaving">
+            <button class="btn btn-primary" type="button" @click="saveDataSettings" :disabled="dataSaving">
               {{ dataSaving ? '保存中...' : '保存' }}
             </button>
           </div>
         </section>
 
         <section v-if="activeTab === 'data' && settingsBackupListOpen" class="settings-panel" data-writing-settings-backup-list>
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>应用备份文件</h3>
               <p>来自 backups 目录的完整备份。恢复会替换当前全部数据，不是合并写入；恢复前会先保存当前数据的快照。密钥引用仅为元数据，不含明文 API Key。</p>
             </div>
-            <span class="settings-badge">{{ nativeBackups.length }} 个文件</span>
+            <span class="tag tag-neutral">{{ nativeBackups.length }} 个文件</span>
           </div>
           <div v-if="!nativeBackups.length" class="settings-empty">暂无完整备份文件。可先点「备份全部数据」。</div>
-          <div v-else class="settings-list">
-            <div v-for="backup in nativeBackups" :key="backup.grantId" class="settings-list__row">
-              <div class="settings-list__main">
+          <div v-else class="list settings-list">
+            <div v-for="backup in nativeBackups" :key="backup.grantId" class="list-row settings-list__row">
+              <div class="list-row-main">
                 <div class="settings-list__title">
                   <strong>{{ backup.name }}</strong>
-                  <span class="settings-badge settings-badge--muted">{{ formatNativeBackupDate(backup) }}</span>
+                  <span class="tag tag-neutral">{{ formatNativeBackupDate(backup) }}</span>
                 </div>
-                <div class="settings-list__meta">
+                <div class="list-row-meta">
                   <span>{{ formatBytes(backup.sizeBytes || backup.size_bytes || 0) }}</span>
-                  <span class="settings-path-clip">{{ backup.displayPath }}</span>
+                  <span class="settings-path" :title="backup.displayPath">{{ backup.displayPath }}</span>
                 </div>
               </div>
-              <div class="settings-actions">
-                <button class="btn-text" type="button" :disabled="backupBusy" @click="restoreNativeBackupFile(backup)">恢复</button>
+              <div class="list-row-trail">
+                <button class="btn btn-ghost btn-sm" type="button" :disabled="backupBusy" @click="restoreNativeBackupFile(backup)">恢复</button>
               </div>
             </div>
           </div>
         </section>
 
         <section v-if="activeTab === 'data'" class="settings-panel danger-zone">
-          <div class="settings-panel__head">
+          <div class="panel-header settings-panel__head">
             <div>
               <h3>危险操作</h3>
               <p>这些操作会影响本地历史数据。</p>
             </div>
           </div>
-          <div class="danger-item">
-            <div>
-              <h4>清空所有历史记录</h4>
-              <p class="hint">此操作将删除所有评分历史，且不可恢复</p>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>清空所有历史记录</strong>
+              <span>此操作将删除所有评分历史，且不可恢复</span>
             </div>
-            <button class="btn btn-danger" type="button" @click="confirmClearHistory">
-              清空历史
-            </button>
+            <div class="setting-row__control">
+              <button class="btn btn-danger" type="button" @click="confirmClearHistory">清空历史</button>
+            </div>
           </div>
         </section>
 
-      <!-- 关于 -->
+        <!-- 关于 -->
         <section v-if="activeTab === 'about'" class="settings-panel about-section">
           <div class="about-identity">
-            <div>
-              <h2 class="heading-serif">IELTS Atlas</h2>
-              <p class="version">版本 {{ appVersion }}</p>
-            </div>
+            <h2 class="heading-serif">IELTS Atlas</h2>
+            <p class="version">版本 {{ appVersion }}</p>
           </div>
-          
+
           <div class="about-info">
             <div class="info-row">
               <span class="label">应用形态</span>
@@ -498,11 +618,11 @@
             </div>
             <div class="info-row">
               <span class="label">数据目录</span>
-              <span class="value">{{ userDataPath || pathsLoadingLabel }}</span>
+              <span class="value settings-path" :title="userDataPath || pathsLoadingLabel">{{ userDataPath || pathsLoadingLabel }}</span>
             </div>
             <div v-if="backupsPath || pathsResolved" class="info-row">
               <span class="label">备份目录</span>
-              <span class="value">{{ backupsPath || '未获取' }}</span>
+              <span class="value settings-path" :title="backupsPath || ''">{{ backupsPath || '未获取' }}</span>
             </div>
           </div>
 
@@ -522,13 +642,13 @@
     </div>
 
     <div v-if="onboardingOpen" class="dialog-overlay" role="dialog" aria-modal="true" @click.self="onboardingOpen = false">
-      <div class="dialog card onboarding-dialog">
+      <div class="dialog dialog-sm onboarding-dialog">
         <p class="settings-detail-eyebrow">快速引导 {{ onboardingStep + 1 }} / {{ onboardingSteps.length }}</p>
         <h3>{{ onboardingSteps[onboardingStep].title }}</h3>
         <p>{{ onboardingSteps[onboardingStep].body }}</p>
         <div class="dialog-actions">
-          <button class="btn btn-warm-sand" type="button" :disabled="onboardingStep === 0" @click="onboardingStep -= 1">上一步</button>
-          <button class="btn btn-brand" type="button" @click="advanceOnboarding">
+          <button class="btn btn-secondary" type="button" :disabled="onboardingStep === 0" @click="onboardingStep -= 1">上一步</button>
+          <button class="btn btn-primary" type="button" @click="advanceOnboarding">
             {{ onboardingStep === onboardingSteps.length - 1 ? '完成' : '下一步' }}
           </button>
         </div>
@@ -536,7 +656,7 @@
     </div>
 
     <div v-if="updateDialogOpen" class="dialog-overlay" role="dialog" aria-modal="true" @click.self="closeUpdateDialog">
-      <div class="dialog card">
+      <div class="dialog dialog-sm">
         <h3>应用更新</h3>
         <p aria-live="polite">{{ updateStatus.message }}</p>
         <p>当前版本：{{ updateStatus.currentVersion || appVersion }}</p>
@@ -551,13 +671,13 @@
         />
         <p v-if="updateInstalling && updateProgressPercent != null">{{ updateProgressPercent }}%</p>
         <div class="dialog-actions">
-          <button class="btn btn-warm-sand" type="button" :disabled="updateInstalling || updateRestarting" @click="closeUpdateDialog">关闭</button>
-          <button class="btn btn-brand" type="button" :disabled="updateChecking || updateInstalling || updateRestarting" @click="checkUpdates">
+          <button class="btn btn-secondary btn-warm-sand" type="button" :disabled="updateInstalling || updateRestarting" @click="closeUpdateDialog">关闭</button>
+          <button class="btn btn-primary" type="button" :disabled="updateChecking || updateInstalling || updateRestarting" @click="checkUpdates">
             {{ updateChecking ? '检查中...' : '重新检查' }}
           </button>
           <button
             v-if="updateStatus.updateAvailable && !updateStatus.requiresRestart"
-            class="btn btn-brand"
+            class="btn btn-primary"
             type="button"
             :disabled="updateChecking || updateInstalling"
             @click="installAvailableUpdate"
@@ -566,7 +686,7 @@
           </button>
           <button
             v-if="updateStatus.requiresRestart"
-            class="btn btn-brand"
+            class="btn btn-primary"
             type="button"
             :disabled="updateRestarting"
             @click="restartAfterUpdate"
@@ -579,11 +699,11 @@
 
     <!-- 通用确认弹窗 -->
     <div v-if="confirmDialog.visible" class="dialog-overlay" @click.self="closeConfirmDialog">
-      <div class="dialog card">
+      <div class="dialog dialog-sm">
         <h3>{{ confirmDialog.title }}</h3>
         <p>{{ confirmDialog.message }}</p>
         <p v-if="confirmDialog.keyword">请输入 <strong>&quot;{{ confirmDialog.keyword }}&quot;</strong> 以继续。</p>
-        
+
         <input
           v-if="confirmDialog.keyword"
           type="text"
@@ -593,11 +713,11 @@
         />
 
         <div class="dialog-actions">
-          <button class="btn btn-warm-sand" type="button" @click="closeConfirmDialog">
+          <button class="btn btn-secondary" type="button" @click="closeConfirmDialog">
             取消
           </button>
-          <button 
-            :class="['btn', confirmDialog.danger ? 'btn-danger' : 'btn-brand']"
+          <button
+            :class="['btn', confirmDialog.danger ? 'btn-danger' : 'btn-primary']"
             type="button"
             @click="executeConfirmAction"
             :disabled="!confirmDialogReady"
@@ -1725,631 +1845,231 @@ onBeforeUnmount(() => {
   settingsRequestGate.invalidate()
   document.removeEventListener('keydown', handleSettingsKeydown)
 })
+
+// Rail links: scroll the settings card into view. Hash routing means no href anchors.
+function jumpToSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 </script>
 
 <style scoped>
-/* Settings: four ruled sections on paper; details open in one dialog. */
-.settings-page {
+/* Settings: page header, section rail, ruled cards. Tabs live in one detail dialog.
+ * Shared pieces come from the design system; this block only lays out settings rows. */
+.settings-page { min-width: 0; }
+
+.settings-layout {
   display: grid;
-  gap: 32px;
+  grid-template-columns: calc(var(--anth-sidebar-w) * 0.75) minmax(0, 1fr);
+  gap: var(--anth-space-7);
+  align-items: start;
   min-width: 0;
 }
 
-.settings-page > .hero-panel__header {
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--anth-rule);
-}
+.settings-page .settings-rail.tabs.is-vertical { position: sticky; top: var(--anth-space-6); }
 
-.settings-page > .hero-panel__header .hero-panel__title {
-  margin: 0;
-  font-size: clamp(1.75rem, 3vw, 2.125rem);
-  line-height: var(--anth-leading-tight);
-}
+.settings-sections { display: grid; gap: var(--anth-space-5); min-width: 0; }
+.settings-card__head { display: grid; gap: var(--anth-space-1); min-width: 0; }
+.settings-card__head h2 { margin: 0; }
 
-.settings-page > .hero-settings-group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px 48px;
-}
-
-.settings-page > .hero-settings-group > .hero-panel {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  padding: 16px 0 0;
-  border-top: 1px solid var(--anth-ink);
-}
-
-.settings-page > .hero-settings-group > .hero-panel h3 {
-  margin: 0;
-  font-size: var(--anth-text-lg);
-}
-
-.hero-panel__muted {
-  margin: 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
-}
-
-.hero-settings-actions {
+/* One setting per row: copy left, control right, hairline between rows. */
+.setting-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: var(--anth-space-3) var(--anth-space-5);
+  padding: var(--anth-space-3) 0;
 }
 
-.settings-stat-row,
-.settings-badges {
+.setting-row + .setting-row { border-top: 1px solid var(--anth-rule); }
+.setting-row__copy { display: grid; flex: 1 1 240px; gap: 2px; min-width: 0; }
+.setting-row__copy strong { color: var(--anth-ink); font-weight: var(--anth-weight-medium); }
+.setting-row__copy span { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
+
+.setting-row__control {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
+  align-items: center;
+  gap: var(--anth-space-2);
+  min-width: 0;
+  max-width: 100%;
 }
 
-.settings-badge {
-  font-size: var(--anth-text-xs);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.settings-badge--success { color: var(--anth-success); }
-.settings-badge--accent { color: var(--anth-ink); }
-
-.settings-backup-path,
-.settings-path-clip {
-  overflow-wrap: anywhere;
-}
-
-.settings-backup-result {
-  display: grid;
-  gap: 2px;
-  padding-left: 12px;
-  border-left: 2px solid var(--anth-success);
-}
-
-.settings-backup-result__label {
-  color: var(--anth-success);
-  font-size: var(--anth-text-sm);
-}
-
-.settings-backup-result__path {
+/* Long paths: mono, one line, ellipsis; the full value sits in the title tooltip. */
+.settings-path {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--anth-ink-soft);
   font-family: var(--anth-font-mono);
   font-size: var(--anth-text-xs);
-  color: var(--anth-ink-soft);
-  word-break: break-all;
-}
-
-.settings-system-info {
-  display: grid;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: var(--anth-text-sm);
-}
-
-.settings-system-info__status {
-  color: var(--anth-ink-soft);
-}
-
-.settings-system-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-}
-
-.settings-system-metrics > div {
-  display: grid;
-  gap: 2px;
-  padding: 8px 0;
-}
-
-.settings-system-metrics span {
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-}
-
-.settings-system-metrics strong {
-  color: var(--anth-ink-strong);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-xl);
-  font-weight: var(--anth-weight-semibold);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.settings-technical-details summary {
-  color: var(--anth-ink-soft);
-  cursor: pointer;
-}
-
-.settings-technical-details dl {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0 0;
-}
-
-.settings-technical-details dl > div {
-  display: grid;
-  grid-template-columns: 7em minmax(0, 1fr);
-  gap: 10px;
-}
-
-.settings-technical-details dt {
-  color: var(--anth-ink-faint);
-}
-
-.settings-technical-details dd {
-  margin: 0;
-}
-
-.settings-credit {
-  display: flex;
-  gap: 20px;
-  font-size: var(--anth-text-sm);
-}
-
-.settings-credit a {
-  color: var(--anth-accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* ── Detail dialog ────────────────────────────────────────────────── */
-.settings-detail-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: clamp(16px, 4vw, 40px);
-  overflow: auto;
-  background: var(--lg-bg-scrim);
-}
-
-.settings-detail-panel {
-  display: grid;
-  gap: 20px;
-  width: min(1040px, 100%);
-  max-height: min(860px, calc(100vh - 24px));
-  padding: clamp(20px, 3vw, 32px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--anth-ink);
-  border-radius: var(--anth-radius-sm);
-}
-
-.settings-detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.settings-detail-head h3 {
-  margin: 0;
-  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
-}
-
-.settings-detail-head p {
-  margin: 4px 0 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-}
-
-.settings-detail-close {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  padding: 0;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: transparent;
-  color: var(--anth-ink-soft);
-  font-size: 1.25rem;
-  cursor: pointer;
-}
-
-.settings-detail-close:hover {
-  border-color: var(--anth-ink);
-  color: var(--anth-ink);
-}
-
-.settings-tabs {
-  display: flex;
-  gap: 24px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--anth-rule);
-  scrollbar-width: none;
-}
-
-.settings-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-tab {
-  flex: 0 0 auto;
-  min-height: 40px;
-  margin-bottom: -1px;
-  padding: 0 1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
+  text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
 }
 
-.settings-tab:hover {
-  color: var(--anth-ink);
-}
+.setting-row > .settings-path,
+.info-row .settings-path { flex: 1 1 260px; }
 
-.settings-tab.active {
-  border-bottom-color: var(--anth-ink);
-  color: var(--anth-ink-strong);
-  font-weight: var(--anth-weight-medium);
-}
-
-.settings-panel {
-  display: grid;
-  gap: 14px;
-  padding: 0;
-  border: 0;
-  background: var(--anth-canvas);
-  box-shadow: none;
-}
-
-.settings-panel + .settings-panel {
-  padding-top: 20px;
+.settings-stats {
+  display: flex;
+  flex-wrap: wrap;
+  padding-top: var(--anth-space-3);
   border-top: 1px solid var(--anth-rule);
 }
 
-.settings-panel__head {
+.settings-badges { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
+.settings-credit { display: flex; flex-wrap: wrap; gap: var(--anth-space-3); margin-top: var(--anth-space-2); }
+.settings-technical-details summary { color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); cursor: pointer; }
+
+.info-row {
+  display: grid;
+  grid-template-columns: 9em minmax(0, 1fr);
+  gap: var(--anth-space-3);
+  padding: var(--anth-space-2) 0;
+  border-bottom: 1px solid var(--anth-rule);
+  font-size: var(--anth-text-small-size);
+}
+
+.info-row:last-child { border-bottom: 0; }
+.info-row .label { color: var(--anth-ink-muted); }
+.info-row .value { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+
+/* Detail dialog: design-system overlay and dialog with a sticky head and tabs.
+ * The z-index stays under the overlay token so a confirm dialog opened inside it
+ * stacks above (settings_modal_visual_check.py asserts that order). */
+/* Own overlay, not .dialog-overlay: the page-level overlay selectors must match only confirm/update/onboarding. */
+.settings-page .settings-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--anth-z-raised);
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: var(--anth-space-5);
+  background: var(--anth-scrim);
+}
+/* The sticky chrome and tab body own the padding; the dialog surface comes from dialog.css. */
+.settings-page .settings-detail-panel {
+  padding: 0;
 }
 
-.settings-panel__head h3,
-.settings-panel__head h4 {
-  margin: 0;
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
+.settings-detail-chrome {
+  position: sticky;
+  top: 0;
+  z-index: var(--anth-z-raised);
+  padding: var(--anth-space-5) var(--anth-space-6) 0;
+  background: var(--anth-surface-raised);
 }
 
-.settings-panel__head p,
-.field small,
-.hint {
-  margin: 4px 0 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-  line-height: var(--anth-leading-normal);
+.settings-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--anth-space-4); }
+.settings-detail-head h3 { margin: 0; }
+.settings-page .settings-tabs { margin-top: var(--anth-space-4); overflow-x: auto; scrollbar-width: none; }
+
+.settings-page .settings-panel {
+  display: grid;
+  gap: var(--anth-space-4);
+  min-width: 0;
+  padding: var(--anth-space-5) var(--anth-space-6);
+  background: var(--anth-surface-raised);
+}
+
+.settings-page .settings-panel + .settings-panel { border-top: 1px solid var(--anth-rule); }
+.settings-page .settings-panel__head { flex-wrap: wrap; margin-bottom: 0; }
+.settings-page .settings-panel__head :is(h3, h4) { margin: 0; }
+
+.settings-page .settings-panel__head p {
+  max-width: 64ch;
+  margin: var(--anth-space-1) 0 0;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
 }
 
 .settings-loading,
-.settings-empty {
-  padding: 16px 0;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-}
+.settings-empty { padding: var(--anth-space-4) 0; color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
 
-.settings-list {
-  display: grid;
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-}
-
-.settings-list__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--anth-rule);
-  background: var(--anth-canvas);
-  box-shadow: none;
-}
-
-.settings-list__row:last-child {
-  border-bottom: 0;
-}
-
-.settings-list__main {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.settings-list__title,
-.settings-list__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 14px;
-}
-
-.settings-list__title strong {
-  font-weight: var(--anth-weight-medium);
-}
-
-.settings-list__meta {
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-}
-
-.settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-}
-
-.settings-page .btn-text.danger {
-  color: var(--anth-danger);
-}
+/* Design-system list row: copy column, then the action trail. */
+.settings-page .settings-list__row { grid-template-columns: minmax(0, 1fr) auto; }
+.settings-list__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--anth-space-1) var(--anth-space-2); }
 
 .settings-form-grid,
 .custom-temperature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 20px;
+  gap: var(--anth-space-4) var(--anth-space-5);
 }
 
-.field,
-.custom-temperature-field {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
+.settings-page .field--wide { grid-column: 1 / -1; }
 
-.field--wide {
-  grid-column: 1 / -1;
-}
-
-.field span,
-.custom-temperature-field span {
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-}
-
-.field :is(input, select),
-.custom-temperature-field input {
-  width: 100%;
-  min-height: 40px;
-}
-
-.json-editor {
-  width: 100%;
+.settings-page .json-editor {
   min-height: 180px;
   font-family: var(--anth-font-mono);
   font-size: var(--anth-text-xs);
   line-height: 1.6;
 }
 
-.form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
+.form-actions { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
 
-/* Temperature modes: a ruled choice list; the selected row is marked. */
-.temperature-modes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 24px;
-}
-
-.mode-card {
-  display: grid;
-  gap: 4px;
-  padding: 12px 10px;
+/* Temperature modes: a selectable list; the chosen row takes the selected wash. */
+.settings-page .mode-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
   border: 0;
-  border-top: 1px solid var(--anth-rule);
-  border-radius: 0;
-  background: var(--anth-canvas);
+  border-bottom: 1px solid var(--anth-rule);
   color: var(--anth-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.mode-card:hover {
-  background: var(--anth-surface-hover);
+/* Rows and blocks inside a detail tab sit on an opaque surface, never on transparency.
+ * The selected mode card keeps the canonical .is-selected wash from list.css. */
+.settings-page .settings-list__row,
+.settings-page .custom-temperature-panel,
+.settings-page .about-info,
+.settings-page .about-features,
+.settings-page .mode-card:not(.is-selected) {
+  background: var(--anth-surface-raised);
 }
 
-.mode-card.active {
-  border-top: 1px solid var(--anth-ink);
-  background: var(--anth-surface-sunken);
-}
-
-.mode-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.mode-icon {
-  display: none;
-}
-
-.mode-name {
-  display: block;
-  font-weight: var(--anth-weight-medium);
-}
-
-.mode-card.active .mode-name::before {
-  content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 8px;
-  vertical-align: 0.12em;
-  background: var(--anth-ink);
-}
-
-.mode-desc {
-  display: block;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-}
-
-.mode-temp {
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-xs);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.custom-temperature-panel {
-  display: grid;
-  gap: 12px;
-  padding: 14px 0 0;
-  border-top: 1px solid var(--anth-rule);
-  background: var(--anth-canvas);
-  box-shadow: none;
-}
+.mode-copy { display: grid; gap: 2px; min-width: 0; }
+.mode-name { font-weight: var(--anth-weight-medium); }
+.mode-desc,
+.mode-temp { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
+.mode-temp { font-variant-numeric: tabular-nums; }
+.custom-temperature-panel { display: grid; gap: var(--anth-space-4); }
 
 .settings-savebar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
+  gap: var(--anth-space-3);
+  padding-top: var(--anth-space-3);
   border-top: 1px solid var(--anth-rule);
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
 }
 
-.settings-savebar > div {
-  display: grid;
-  gap: 2px;
+.settings-savebar > div { display: grid; gap: 2px; }
+.check-label { display: inline-flex; align-items: center; gap: var(--anth-space-2); color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); }
+.settings-page .settings-number { width: 96px; }
+
+/* Destructive zone inside the data tab: danger-tinted border, danger heading. */
+.settings-page .danger-zone {
+  margin: var(--anth-space-2) var(--anth-space-6) var(--anth-space-6);
+  padding: var(--anth-space-4) var(--anth-space-5);
+  border: 1px solid var(--anth-danger-border);
+  border-radius: var(--anth-radius-md);
 }
 
-.settings-savebar strong {
-  color: var(--anth-ink);
-  font-weight: var(--anth-weight-medium);
-}
-
-.setting-control {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
-}
-
-.setting-control__copy {
-  display: grid;
-  flex: 1 1 260px;
-  gap: 2px;
-}
-
-.setting-control__copy span {
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-}
-
-.setting-control__input {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--anth-text-sm);
-}
-
-.setting-control__input input[type="number"] {
-  width: 96px;
-}
-
-.danger-zone .settings-panel__head h3 {
-  color: var(--anth-danger);
-}
-
-.danger-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-left: 12px;
-  border-left: 2px solid var(--anth-danger);
-}
-
-.danger-item h4 {
-  margin: 0;
-  font-size: var(--anth-text-sm);
-}
-
-.btn-icon-inline {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-}
-
-.btn-icon-inline :deep(svg) {
-  width: 100%;
-  height: 100%;
-}
+.settings-page .danger-zone h3 { color: var(--anth-danger); }
 
 /* About */
-.about-identity h2 {
-  margin: 0;
-  font-size: var(--anth-text-xl);
-}
-
-.version {
-  margin: 2px 0 0;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.about-info,
-.about-features {
-  border: 0;
-  background: var(--anth-canvas);
-  box-shadow: none;
-}
-
-.about-info {
-  display: grid;
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-}
-
-.info-row {
-  display: grid;
-  grid-template-columns: 9em minmax(0, 1fr);
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--anth-rule);
-  font-size: var(--anth-text-sm);
-}
-
-.info-row:last-child {
-  border-bottom: 0;
-}
-
-.info-row .label {
-  color: var(--anth-ink-faint);
-}
-
-.info-row .value {
-  overflow-wrap: anywhere;
-}
-
-.about-features h3 {
-  margin: 0 0 8px;
-  font-size: var(--anth-text-md);
-}
+.about-identity h2 { margin: 0; }
+.version { margin: 2px 0 0; color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); font-variant-numeric: tabular-nums; }
+.about-info { display: grid; border-top: 1.5px solid var(--anth-rule-heavy); border-bottom: 1.5px solid var(--anth-rule-heavy); }
+.about-features h3 { margin: 0 0 var(--anth-space-2); }
 
 .about-features ul {
   display: grid;
@@ -2357,39 +2077,33 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--anth-text-sm);
+  font-size: var(--anth-text-small-size);
 }
 
-.about-features li span {
-  display: inline-block;
-  min-width: 3em;
-  margin-right: 12px;
-  color: var(--anth-ink-faint);
-}
+.about-features li span { display: inline-block; min-width: 3em; margin-right: var(--anth-space-3); color: var(--anth-ink-muted); }
 
-.update-progress {
+.settings-page .update-progress {
   width: 100%;
   height: 4px;
-  accent-color: var(--anth-ink);
+  margin: var(--anth-space-2) 0;
+  accent-color: var(--anth-accent);
 }
 
 @media (max-width: 900px) {
-  .settings-page > .hero-settings-group,
-  .temperature-modes {
-    grid-template-columns: 1fr;
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: var(--anth-space-4); }
+
+  .settings-page .settings-rail.tabs.is-vertical {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--anth-rule);
   }
 }
 
 @media (max-width: 640px) {
   .settings-form-grid,
-  .custom-temperature-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .info-row,
-  .settings-technical-details dl > div {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
+  .custom-temperature-grid { grid-template-columns: minmax(0, 1fr); }
+  .info-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 </style>

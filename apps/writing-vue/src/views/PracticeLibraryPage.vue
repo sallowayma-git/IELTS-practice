@@ -1,25 +1,57 @@
 <template>
-  <section class="practice-library" data-practice-reading-home data-library-ready>
-    <header class="library-workspace-header">
-      <div class="library-workspace-header__copy">
-        <h1 class="library-workspace-header__title">阅读练习</h1>
+  <section class="practice-library" :class="{ workspace: activeView === 'browse' }" data-practice-reading-home data-library-ready>
+    <div class="library-chrome">
+    <header class="page-header library-workspace-header">
+      <div class="page-header-top">
+        <div class="library-workspace-header__copy">
+          <p class="page-header-kicker">READING · 阅读</p>
+          <h1 class="library-workspace-header__title">阅读练习</h1>
+        </div>
+        <div v-if="activeView === 'overview'" class="page-header-actions">
+          <button
+            class="btn btn-secondary"
+            type="button"
+            id="endless-mode-btn"
+            data-action="start-endless-mode"
+            data-overview-action="endless"
+            @click="startEndlessMode"
+          >
+            无尽模式
+          </button>
+          <button
+            class="btn btn-primary"
+            type="button"
+            data-action="start-suite-mode"
+            data-overview-action="suite"
+            data-start-reading-suite
+            :disabled="creatingSuite"
+            @click="openSuiteModeSelector"
+          >
+            {{ creatingSuite ? '创建中' : '套题模式' }}
+          </button>
+        </div>
       </div>
-
-      <nav class="library-view-tabs" aria-label="阅读工作区">
-        <button
-          v-for="item in libraryViews"
-          :key="item.value"
-          type="button"
-          :class="['library-view-tabs__button', { active: activeView === item.value }]"
-          :data-view="item.value"
-          :aria-current="activeView === item.value ? 'page' : undefined"
-          @click="showView(item.value)"
-        >
-          {{ item.label }}
-        </button>
-      </nav>
+      <p v-if="activeView === 'overview'" class="page-header-desc">按篇章挑一篇开始，或用无尽与套题模式保持节奏。</p>
     </header>
 
+    <nav class="library-view-tabs tabs" aria-label="阅读工作区">
+      <button
+        v-for="item in libraryViews"
+        :key="item.value"
+        type="button"
+        :class="['tab', 'library-view-tabs__button', { active: activeView === item.value }]"
+        :data-view="item.value"
+        :aria-current="activeView === item.value ? 'page' : undefined"
+        @click="showView(item.value)"
+      >
+        {{ item.label }}
+      </button>
+    </nav>
+
+    </div>
+
+    <div class="library-body">
+    <div class="library-home-grid">
     <ReadingOverviewPanel
       :active-view="activeView"
       :reading-category-entries="readingCategoryEntries"
@@ -33,6 +65,32 @@
       @start-random-practice="startRandomPractice"
       @retry-load="loadAssets"
     />
+
+    <aside v-if="activeView === 'overview'" class="card library-facts" aria-label="本机题库">
+      <div class="panel-header">
+        <h3>本机题库</h3>
+        <button class="btn btn-ghost btn-sm" type="button" @click="showView('settings')">管理</button>
+      </div>
+      <dl class="library-facts__list">
+        <div>
+          <dt>题目总数</dt>
+          <dd>{{ libraryLoaded ? readingAssets.length : '—' }}</dd>
+        </div>
+        <div>
+          <dt>HTML 题目</dt>
+          <dd>{{ libraryLoaded ? htmlAssetCount : '—' }}</dd>
+        </div>
+        <div>
+          <dt>PDF 题目</dt>
+          <dd>{{ libraryLoaded ? pdfAssetCount : '—' }}</dd>
+        </div>
+        <div>
+          <dt>最近读取</dt>
+          <dd>{{ libraryLoaded ? latestAssetReadLabel : '—' }}</dd>
+        </div>
+      </dl>
+    </aside>
+    </div>
 
     <ReadingBrowsePanel
       :active-view="activeView"
@@ -96,7 +154,7 @@
     >
       <div class="clock-overlay-inner" data-clock-role="overlay-inner">
         <button
-          class="clock-action-btn clock-close-btn"
+          class="btn btn-icon clock-close-btn"
           type="button"
           aria-label="关闭时钟"
           @click="closeClockTool"
@@ -129,11 +187,13 @@
       @reading-archive-import-change="handleReadingArchiveImportChange"
     />
 
+    </div>
+
     <div v-if="pdfViewer.open" class="dialog-overlay pdf-viewer-overlay" @click.self="closePdfViewer">
       <section class="dialog pdf-viewer-dialog" role="dialog" aria-modal="true" :aria-label="pdfViewer.title">
-        <div class="pdf-viewer-header">
+        <div class="dialog-header pdf-viewer-header">
           <strong>{{ pdfViewer.title }}</strong>
-          <button class="btn-text" type="button" aria-label="关闭 PDF" @click="closePdfViewer">关闭</button>
+          <button class="btn btn-ghost btn-sm btn-text" type="button" aria-label="关闭 PDF" @click="closePdfViewer">关闭</button>
         </div>
         <iframe class="pdf-viewer-frame" :src="pdfViewer.dataUrl" :title="pdfViewer.title"></iframe>
       </section>
@@ -1003,662 +1063,265 @@ function updateSegmentedIndicators() {
 
 <style>
 /*
- * Reading library — paper layout. Every selector is rooted at
- * .practice-library so the shared reading components restyle here without
- * leaking into the frozen exam routes. Shared vocabulary (buttons, inputs,
- * text tabs, rules) comes from styles/opensource-skin.css.
+ * Library home (route /). Look and components come from
+ * styles/design-system/components, including the workspace frame and height.
+ * Rooted at .atlas-paper [data-practice-reading-home] so it wins over
+ * opensource-skin.css and page.css without touching the exam routes.
  */
-.practice-library {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  color: var(--anth-ink);
-}
+.atlas-paper [data-practice-reading-home] [hidden] { display: none !important; }
+.atlas-paper [data-practice-reading-home] .view { display: none; min-width: 0; }
+.atlas-paper [data-practice-reading-home] .view.active { display: block; }
 
-.practice-library [hidden] {
-  display: none !important;
-}
-
-/* ── Header: title left, text tabs right ───────────────────────────── */
-.practice-library .library-workspace-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  min-width: 0;
+.atlas-paper [data-practice-reading-home] .library-workspace-header {
+  margin-bottom: var(--anth-space-4);
+  padding-top: 0;
   padding-bottom: 0;
+  border-bottom: 0;
 }
 
-.practice-library .library-workspace-header__copy {
-  min-width: 0;
-  padding-bottom: 18px;
+.atlas-paper [data-practice-reading-home] .library-workspace-header .page-header-top { align-items: flex-end; }
+.atlas-paper [data-practice-reading-home] .library-workspace-header__copy { display: grid; gap: var(--anth-space-1); }
+.atlas-paper [data-practice-reading-home] .library-workspace-header__title {
+  font-size: var(--anth-text-h1-size);
+  line-height: var(--anth-text-h1-line);
 }
 
-.practice-library .library-view-tabs {
+.atlas-paper [data-practice-reading-home] .library-view-tabs {
+  margin-bottom: var(--anth-space-6);
+}
+
+/* Phone: the four view entries fill one row; no hidden horizontal scroll. */
+@media (max-width: 640px) {
+  .atlas-paper [data-practice-reading-home] .library-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.atlas-paper [data-practice-reading-home] .library-body {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 24px;
-  max-width: 100%;
-  min-width: 0;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.practice-library .library-view-tabs__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  margin-bottom: -1px;
-  padding: 0 1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--anth-ink-faint);
-  font: inherit;
-  font-size: var(--anth-text-base);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.practice-library .library-view-tabs__button:hover {
-  color: var(--anth-ink);
-}
-
-.practice-library .library-view-tabs__button.active {
-  border-bottom-color: var(--anth-ink);
-  color: var(--anth-ink-strong);
-  font-weight: var(--anth-weight-medium);
-}
-
-/* ── Views ─────────────────────────────────────────────────────────── */
-.practice-library .view {
-  display: none;
-  min-width: 0;
-  padding: 0;
-}
-
-.practice-library .view.active {
-  display: block;
-}
-
-.practice-library :is(.hero-panel__header, .browse-title-bar, .backup-list-header, .pdf-viewer-header) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.practice-library :is(.hero-panel__header, .browse-title-bar) {
-  margin-bottom: 20px;
-}
-
-.practice-library :is(.hero-panel__title, .overview-section-title, .backup-list-title) {
-  margin: 0;
-  font-size: var(--anth-text-lg);
-  line-height: var(--anth-leading-snug);
-}
-
-.practice-library :is(.hero-panel__actions, .overview-section-actions, .hero-settings-actions,
-  .hero-settings-links, .browse-frequency-filter,
-  .custom-suite-picked-list, .exam-actions, .exam-list-empty-actions, .custom-suite-selection-actions,
-  .suite-mode-selector-actions, .backup-entry-actions) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.practice-library :is(.category-grid, .more-tools-grid,
-  .exam-list, .hero-settings-group, .backup-list-scroll, .custom-suite-selection-bar,
-  .custom-suite-selection-main, .suite-mode-selector-body, .suite-frequency-selector) {
+/* ── Overview: passage index beside the local-library card ───────────── */
+.atlas-paper [data-practice-reading-home] .library-home-grid {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--anth-space-6);
+  align-items: start;
 }
 
-/* ── Overview: an index of passages ────────────────────────────────── */
-.practice-library .overview-intro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.practice-library .hero-panel__subtitle {
-  margin: 0;
-  max-width: var(--anth-measure);
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-md);
-  line-height: var(--anth-leading-relaxed);
-}
-
-.practice-library .overview-section-actions {
-  flex: 0 0 auto;
-  gap: 10px;
-}
-
-.practice-library .overview-section-title {
-  margin-bottom: 8px;
-}
-
-.practice-library .category-grid {
-  gap: 0;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.practice-library .category-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
-  padding: 18px 0;
-}
-
-.practice-library :is(.category-header, .exam-info) {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  min-width: 0;
-}
-
-.practice-library .category-icon {
-  flex: 0 0 3.25rem;
-  color: var(--anth-ink-strong);
+.atlas-paper [data-practice-reading-home] .category-card { grid-template-columns: 40px minmax(0, 1fr) auto; min-height: 72px; }
+.atlas-paper [data-practice-reading-home] .category-icon {
   font-family: var(--anth-font-serif);
-  font-size: 1.75rem;
+  font-size: var(--anth-text-h2-size);
+  font-weight: var(--anth-weight-semibold);
   line-height: 1;
 }
+.atlas-paper [data-practice-reading-home] .category-actions { display: flex; align-items: center; gap: var(--anth-space-2); }
+.atlas-paper [data-practice-reading-home] .category-meta.is-pending { color: var(--anth-ink-faint); }
 
-.practice-library :is(.category-title, .exam-info h4) {
+.atlas-paper [data-practice-reading-home] .library-facts { display: grid; align-content: start; gap: var(--anth-space-3); }
+.atlas-paper [data-practice-reading-home] .library-facts__list { display: grid; margin: 0; }
+.atlas-paper [data-practice-reading-home] .library-facts__list > div {
+  display: grid;
+  gap: 2px;
+  padding: var(--anth-space-3) 0;
+  border-top: 1px solid var(--anth-rule);
+}
+.atlas-paper [data-practice-reading-home] .library-facts__list > div:first-child { border-top: 0; }
+.atlas-paper [data-practice-reading-home] .library-facts__list dt { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .library-facts__list dd {
   margin: 0;
-  color: var(--anth-ink-strong);
-  font-size: var(--anth-text-md);
-  font-weight: var(--anth-weight-medium);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-h3-size);
+  font-variant-numeric: tabular-nums;
+}
+.atlas-paper [data-practice-reading-home] .library-facts__list > div:last-child dd {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-small-size);
 }
 
-.practice-library :is(.category-meta, .exam-meta, .hero-panel__muted, .more-view-subtitle) {
-  margin: 2px 0 0;
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
+/* ── Browse: workspace. Toolbar auto, list fills the rest and scrolls ── */
+.atlas-paper [data-practice-reading-home] #browse-view.active {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
 }
 
-/* Counts not read yet: a faint placeholder, not a value that looks like text. */
-.practice-library .category-meta.is-pending {
-  color: var(--anth-ink-faint);
-}
+.atlas-paper [data-practice-reading-home] .browse-toolbar { display: grid; gap: var(--anth-space-3); }
 
-.practice-library .category-actions {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-/* ── Browse: filters, search, ruled list ───────────────────────────── */
-.practice-library .browse-title-bar {
+.atlas-paper [data-practice-reading-home] .browse-title-bar {
   position: relative;
-  justify-content: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--anth-space-3);
 }
-
-.practice-library .browse-title-bar > .shui-segmented-control {
-  margin-left: auto;
+.atlas-paper [data-practice-reading-home] .browse-title-bar .hero-panel__title {
+  margin: 0;
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-h2-size);
+  line-height: var(--anth-text-h2-line);
 }
-
-.practice-library .browse-title-trigger {
-  display: inline-grid;
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  flex: 0 0 auto;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: transparent;
-  color: var(--anth-ink-soft);
-  cursor: pointer;
-}
-
-.practice-library .browse-title-trigger:hover {
-  border-color: var(--anth-ink);
-  color: var(--anth-ink);
-}
-
-.practice-library .browse-title-dot {
-  display: none;
-}
-
-.practice-library :is(.browse-title-trigger .ui-emoji-icon, .browse-title-trigger svg) {
-  width: 16px;
-  height: 16px;
-}
-
-.practice-library .browse-preference-panel {
+.atlas-paper [data-practice-reading-home] .browse-title-bar > .shui-segmented-control { margin-left: auto; }
+.atlas-paper [data-practice-reading-home] .browse-preference-panel {
   position: absolute;
   top: 44px;
   left: 0;
   z-index: var(--anth-z-raised);
-  padding: 10px 12px;
-  border: 1px solid var(--anth-ink);
-  background: var(--anth-canvas);
+  padding: var(--anth-space-2) var(--anth-space-3);
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-2);
 }
+.atlas-paper [data-practice-reading-home] .browse-preference-option { display: inline-flex; align-items: center; gap: var(--anth-space-2); white-space: nowrap; }
 
-.practice-library .browse-preference-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.practice-library .search-box {
-  margin-bottom: 8px;
-}
-
-.practice-library .search-row {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.practice-library :is(.search-input-wrap, .browse-sort-wrapper) {
-  position: relative;
-  min-width: 0;
-}
-
-.practice-library .search-input-wrap {
-  flex: 1 1 auto;
-}
-
-.practice-library .search-leading-icon {
+.atlas-paper [data-practice-reading-home] .search-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--anth-space-3); }
+.atlas-paper [data-practice-reading-home] .search-input-wrap { position: relative; flex: 1 1 240px; min-width: 0; }
+.atlas-paper [data-practice-reading-home] .search-input { padding: 0 36px; }
+.atlas-paper [data-practice-reading-home] .search-leading-icon {
   position: absolute;
   top: 50%;
   left: 12px;
-  z-index: 1;
   width: 15px;
   height: 15px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   transform: translateY(-50%);
   pointer-events: none;
 }
+.atlas-paper [data-practice-reading-home] .search-clear-btn { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); }
+.atlas-paper [data-practice-reading-home] .browse-sort-wrapper { flex: 0 0 180px; min-width: 130px; }
+/* The native select draws its own chevron in the design system. */
+.atlas-paper [data-practice-reading-home] .browse-sort-icon { display: none; }
 
-.practice-library .browse-sort-wrapper {
-  flex: 0 0 min(180px, 40%);
-  min-width: 130px;
-}
-
-.practice-library :is(.search-input, .browse-sort-select, .suite-frequency-select) {
-  width: 100%;
-  min-height: 40px;
-  padding: 0 34px 0 12px;
-  font: inherit;
-  font-size: var(--anth-text-sm);
-  appearance: none;
-}
-
-.practice-library .search-input {
-  padding-left: 36px;
-}
-
-.practice-library :is(.search-clear-btn, .browse-sort-icon) {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--anth-ink-faint);
-}
-
-.practice-library .search-clear-btn {
-  right: 6px;
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  padding: 6px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.practice-library .browse-sort-icon {
-  right: 12px;
-  pointer-events: none;
-}
-
-.practice-library .browse-frequency-filter {
-  gap: 16px;
-}
-
-.practice-library .browse-frequency-chip {
-  min-height: 40px;
-  padding: 0 1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--anth-ink-faint);
-  font: inherit;
-  font-size: var(--anth-text-sm);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.practice-library .browse-frequency-chip:hover {
-  color: var(--anth-ink);
-}
-
-.practice-library .browse-frequency-chip.active {
-  border-bottom-color: var(--anth-ink);
-  color: var(--anth-ink-strong);
-}
-
-.practice-library .exam-list {
-  gap: 0;
-  align-content: start;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.practice-library .exam-item {
+.atlas-paper [data-practice-reading-home] .browse-body { display: flex; flex-direction: column; min-height: 0; }
+.atlas-paper [data-practice-reading-home] #exam-list-container {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-width: 0;
-  padding: 12px 0;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--anth-space-3) 0 var(--anth-space-5);
 }
-
-.practice-library .exam-item:hover {
-  background: var(--anth-surface-hover);
-}
-
-.practice-library :is(.exam-info > div, .tool-card-content) {
-  min-width: 0;
-}
-
-.practice-library .exam-actions {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-}
-
-.practice-library .exam-item-action-btn {
-  padding: 5px 12px;
-}
-
-.practice-library .exam-list-empty {
-  display: grid;
-  place-items: center;
-  gap: 6px;
-  min-height: 160px;
-  padding: 24px;
-  text-align: center;
-}
-
-.practice-library .exam-list-empty-icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-}
-
-.practice-library .exam-list-empty-icon svg {
-  width: 22px;
-  height: 22px;
-}
-
-.practice-library .exam-list-empty-text {
+.atlas-paper [data-practice-reading-home] .exam-list { flex: 0 0 auto; }
+.atlas-paper [data-practice-reading-home] .exam-item { grid-template-columns: minmax(0, 1fr) auto; min-height: 56px; }
+.atlas-paper [data-practice-reading-home] .exam-info { min-width: 0; }
+.atlas-paper [data-practice-reading-home] .exam-info h4 {
   margin: 0;
-  color: var(--anth-ink-soft);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
+  overflow: hidden;
+  font-size: var(--anth-text-body-size);
+  font-weight: var(--anth-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.atlas-paper [data-practice-reading-home] .exam-meta { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .exam-actions { display: flex; align-items: center; gap: var(--anth-space-2); }
 
-/* Custom suite workflow: a ruled strip under the list. */
-.practice-library .custom-suite-selection-bar {
-  min-width: 0;
-  margin-top: 24px;
-  padding: 16px 0;
-  border-top: 1px solid var(--anth-ink);
+.atlas-paper [data-practice-reading-home] .loading {
+  display: grid;
+  place-items: center;
+  gap: var(--anth-space-2);
+  padding: var(--anth-space-8) 0;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
 }
-
-.practice-library .custom-suite-selection-main {
-  min-width: 0;
-  gap: 2px;
+.atlas-paper [data-practice-reading-home] .spinner {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--anth-rule-strong);
+  border-top-color: var(--anth-accent);
+  border-radius: 50%;
+  animation: practice-library-spin 0.9s linear infinite;
 }
+@keyframes practice-library-spin { to { transform: rotate(360deg); } }
 
-.practice-library .custom-suite-selection-main span {
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-}
+.atlas-paper [data-practice-reading-home] .custom-suite-selection-bar { display: grid; gap: var(--anth-space-3); margin-top: var(--anth-space-4); }
+.atlas-paper [data-practice-reading-home] .custom-suite-selection-main { display: grid; gap: 2px; }
+.atlas-paper [data-practice-reading-home] .custom-suite-selection-main span,
+.atlas-paper [data-practice-reading-home] .custom-suite-picked-chip { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .custom-suite-picked-list { display: flex; flex-wrap: wrap; gap: var(--anth-space-1) var(--anth-space-4); }
+.atlas-paper [data-practice-reading-home] .custom-suite-picked-chip.filled { color: var(--anth-ink); }
+.atlas-paper [data-practice-reading-home] .custom-suite-selection-actions { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
 
-.practice-library .custom-suite-picked-list {
-  gap: 6px 20px;
-}
-
-.practice-library .custom-suite-picked-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  max-width: 100%;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.practice-library .custom-suite-picked-chip::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border: 1px solid currentColor;
-}
-
-.practice-library .custom-suite-picked-chip.filled {
-  color: var(--anth-ink);
-}
-
-.practice-library .custom-suite-picked-chip.filled::before {
-  background: currentColor;
-}
-
-/* ── Practice records ──────────────────────────────────────────────── */
-
-/* Summary figures read as one booktabs row, not tiles. */
-
-/* The widget picker swaps faces with a fade, not a 3D flip. */
-
-/* In selection mode the whole row toggles selection; the title is just text. */
-
-/* ── More tools: an annotated list ─────────────────────────────────── */
-.practice-library .more-view-subtitle {
-  margin: -8px 0 20px;
-}
-
-.practice-library .more-tools-grid {
-  gap: 0;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.practice-library .tool-card {
+/* ── More tools: three interactive cards in a column ─────────────────── */
+.atlas-paper [data-practice-reading-home] .more-view-subtitle { margin: 0 0 var(--anth-space-4); color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .more-tools-grid { display: grid; gap: var(--anth-space-3); }
+.atlas-paper [data-practice-reading-home] .tool-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-width: 0;
-  padding: 18px 0;
-  color: inherit;
-  font: inherit;
+  gap: var(--anth-space-4);
+  width: 100%;
+  font-family: var(--anth-font-sans);
   text-align: left;
-  cursor: pointer;
 }
-
-.practice-library .tool-card:hover {
-  background: var(--anth-surface-hover);
+.atlas-paper [data-practice-reading-home] .tool-card-content h3 {
+  margin: 0 0 var(--anth-space-1);
+  font-size: var(--anth-text-h3-size);
+  line-height: var(--anth-text-h3-line);
 }
-
-.practice-library .tool-card-content h3 {
-  margin: 0 0 4px;
-  font-size: var(--anth-text-md);
-}
-
-.practice-library .tool-card-content p {
+.atlas-paper [data-practice-reading-home] .tool-card-content p {
+  max-width: 64ch;
   margin: 0;
-  max-width: var(--anth-measure);
   color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
+  font-size: var(--anth-text-small-size);
 }
+.atlas-paper [data-practice-reading-home] .tool-card-arrow { color: var(--anth-accent-ink); font-size: var(--anth-text-small-size); white-space: nowrap; }
 
-.practice-library .tool-card-arrow {
-  color: var(--anth-accent-strong);
-  font-size: var(--anth-text-sm);
-  white-space: nowrap;
+/* ── Library settings: panels in a two-column grid ───────────────────── */
+.atlas-paper [data-practice-reading-home] .hero-settings-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--anth-space-5); }
+.atlas-paper [data-practice-reading-home] .hero-settings-group > .hero-panel { min-width: 0; }
+.atlas-paper [data-practice-reading-home] .hero-settings-group h3 {
+  margin: 0 0 var(--anth-space-1);
+  font-size: var(--anth-text-h3-size);
+  line-height: var(--anth-text-h3-line);
 }
+.atlas-paper [data-practice-reading-home] .hero-panel__muted { max-width: 64ch; margin: 0 0 var(--anth-space-3); color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .hero-settings-actions { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
+.atlas-paper [data-practice-reading-home] .system-info-surface { display: grid; gap: 6px; color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); font-variant-numeric: tabular-nums; }
+.atlas-paper [data-practice-reading-home] .hero-settings-links { display: flex; flex-wrap: wrap; gap: var(--anth-space-4); margin-top: var(--anth-space-3); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .settings-file-input { display: none; }
 
-/* ── Library settings ──────────────────────────────────────────────── */
-.practice-library .hero-settings-group {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px 40px;
-}
+.atlas-paper [data-practice-reading-home] .backup-list-container { margin-top: var(--anth-space-6); }
+.atlas-paper [data-practice-reading-home] .backup-list-header { display: flex; align-items: center; justify-content: space-between; gap: var(--anth-space-3); }
+.atlas-paper [data-practice-reading-home] .backup-list-scroll { max-height: min(52vh, 520px); overflow: auto; }
+.atlas-paper [data-practice-reading-home] .backup-entry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--anth-space-3); padding: var(--anth-space-3) 0; }
+.atlas-paper [data-practice-reading-home] .backup-entry-info { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.atlas-paper [data-practice-reading-home] .backup-entry-meta { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
 
-.practice-library :is(.hero-settings-group > .hero-panel, .backup-list-card) {
-  padding: 16px 0 0;
-  border-top: 1px solid var(--anth-ink);
-  background: var(--anth-canvas);
-}
-
-.practice-library .hero-settings-group h3 {
-  margin: 0 0 6px;
-  font-size: var(--anth-text-md);
-}
-
-.practice-library .hero-settings-group .hero-panel__muted {
-  margin: 0 0 14px;
-  max-width: var(--anth-measure);
-  line-height: var(--anth-leading-normal);
-}
-
-.practice-library .settings-file-input {
-  display: none;
-}
-
-.practice-library :is(.system-info-surface, .app-update-details-row) {
-  display: grid;
-  gap: 6px;
-  padding: 10px 0;
-  border-top: 0;
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.practice-library .hero-settings-links {
-  gap: 20px;
-  margin-top: 12px;
-  font-size: var(--anth-text-sm);
-}
-
-.practice-library .hero-settings-links a {
-  color: var(--anth-accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.practice-library .backup-list-container {
-  margin-top: 32px;
-}
-
-.practice-library .backup-list-scroll {
-  max-height: min(52vh, 520px);
-  margin-top: 12px;
-  overflow: auto;
-}
-
-.practice-library .backup-entry {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-}
-
-.practice-library .backup-entry-info {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.practice-library :is(.backup-entry-id, .backup-entry-meta) {
-  overflow-wrap: anywhere;
-}
-
-/* ── Suite flow dialog ─────────────────────────────────────────────── */
-.practice-library .suite-mode-selector-modal {
+/* ── Suite flow dialog: .dialog-overlay > .dialog (shadow-2) ─────────── */
+/* Overlays are not .dialog-overlay while closed: the global scroll lock matches
+   * that class, so a permanently present overlay would lock the page. */
+.atlas-paper [data-practice-reading-home] .suite-mode-selector-modal {
   position: fixed;
   inset: 0;
-  z-index: var(--anth-z-floating);
-  display: none;
-  place-items: center;
-  padding: 20px;
-}
-
-.practice-library .suite-mode-selector-modal.show {
-  display: grid;
-}
-
-.practice-library .suite-mode-selector-content {
-  width: min(680px, 100%);
-  max-height: min(80vh, 720px);
-  overflow: auto;
-  padding: 24px;
-}
-
-.practice-library .theme-modal-header {
+  z-index: var(--anth-z-overlay);
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: var(--anth-space-5);
+  background: var(--anth-scrim);
 }
 
-.practice-library .theme-modal-header h3 {
-  margin: 0 0 4px;
-  font-size: var(--anth-text-lg);
+.atlas-paper [data-practice-reading-home] .suite-mode-selector-modal:not(.show) { display: none; }
+.atlas-paper [data-practice-reading-home] .suite-mode-selector-content .dialog-header h3 {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-h2-size);
+  line-height: var(--anth-text-h2-line);
 }
-
-.practice-library .suite-mode-selector-subtitle {
-  margin: 0;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-}
-
-.practice-library .theme-modal-close {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  padding: 0;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: transparent;
-  color: var(--anth-ink-soft);
-  font-size: 1.125rem;
-  cursor: pointer;
-}
-
-.practice-library .suite-flow-options {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 16px;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.practice-library .suite-flow-option {
+.atlas-paper [data-practice-reading-home] .suite-mode-selector-subtitle { margin: var(--anth-space-1) 0 0; color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .suite-flow-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--anth-space-4); border-bottom: 1px solid var(--anth-rule); }
+.atlas-paper [data-practice-reading-home] .suite-flow-option {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: flex-start;
-  gap: 4px;
+  gap: var(--anth-space-1);
   min-height: 96px;
-  padding: 14px 4px 14px 0;
+  padding: var(--anth-space-3) var(--anth-space-1) var(--anth-space-3) 0;
   border: 0;
   border-top: 2px solid var(--anth-rule);
   border-radius: 0;
@@ -1669,231 +1332,82 @@ function updateSegmentedIndicators() {
   white-space: normal;
   cursor: pointer;
 }
+.atlas-paper [data-practice-reading-home] .suite-flow-option span { font-weight: var(--anth-weight-medium); }
+.atlas-paper [data-practice-reading-home] .suite-flow-option small { color: var(--anth-ink-muted); font-size: var(--anth-text-caption-size); line-height: var(--anth-text-small-line); }
+.atlas-paper [data-practice-reading-home] .suite-flow-option:hover { border-top-color: var(--anth-ink-soft); }
+.atlas-paper [data-practice-reading-home] .suite-flow-option.active { border-top-color: var(--anth-accent); }
+.atlas-paper [data-practice-reading-home] .suite-frequency-selector { display: grid; gap: 6px; margin-top: var(--anth-space-4); color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); }
+.atlas-paper [data-practice-reading-home] .suite-mode-selector-actions { display: flex; justify-content: flex-end; gap: var(--anth-space-2); margin: var(--anth-space-4) 0 var(--anth-space-5); }
 
-.practice-library .suite-flow-option span {
-  font-weight: var(--anth-weight-medium);
-}
-
-.practice-library .suite-flow-option small {
-  display: block;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-  line-height: var(--anth-leading-normal);
-}
-
-.practice-library .suite-flow-option:hover {
-  border-top-color: var(--anth-ink-soft);
-}
-
-.practice-library .suite-flow-option.active {
-  border-top-color: var(--anth-ink);
-}
-
-.practice-library .suite-frequency-selector {
-  gap: 6px;
-  margin-top: 16px;
-  font-size: var(--anth-text-sm);
-}
-
-.practice-library .suite-mode-selector-actions {
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-/* ── Clock, PDF viewer, toast ──────────────────────────────────────── */
-.practice-library .clock-overlay {
+/* ── Clock overlay: fullscreen .dialog-overlay ───────────────────────── */
+.atlas-paper [data-practice-reading-home] .clock-overlay {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: var(--anth-z-overlay);
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: var(--lg-bg-scrim);
+  padding: var(--anth-space-5);
+  background: var(--anth-scrim);
 }
 
-.practice-library .clock-overlay.is-hidden {
-  display: none;
-}
-
-.practice-library .clock-overlay-inner {
+.atlas-paper [data-practice-reading-home] .clock-overlay.is-hidden { display: none; }
+.atlas-paper [data-practice-reading-home] .clock-overlay-inner {
   position: relative;
   display: grid;
   place-items: center;
   min-width: min(680px, 90vw);
   min-height: min(360px, 64vh);
-  padding: 48px;
+  padding: var(--anth-space-8);
 }
-
-.practice-library .clock-close-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: transparent;
-  color: var(--anth-ink-soft);
-  cursor: pointer;
-}
-
-.practice-library .clock-close-btn svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  stroke-width: 1.8;
-}
-
-.practice-library .native-clock {
+.atlas-paper [data-practice-reading-home] .clock-close-btn { position: absolute; top: var(--anth-space-3); right: var(--anth-space-3); }
+.atlas-paper [data-practice-reading-home] .native-clock {
+  font-family: var(--anth-font-serif);
   font-size: clamp(3rem, 12vw, 8rem);
+  font-variant-numeric: lining-nums tabular-nums;
   line-height: 1;
 }
 
-.practice-library .pdf-viewer-dialog {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
-  width: min(960px, calc(100vw - 32px));
-  max-width: min(960px, calc(100vw - 32px));
-  height: min(82vh, 760px);
-  padding: 18px;
-}
+/* ── PDF viewer: .dialog with header and a full-height frame ─────────── */
+.atlas-paper [data-practice-reading-home] .pdf-viewer-dialog { --dialog-width: min(960px, calc(100vw - 32px)); height: min(82vh, 760px); padding: 0; }
+.atlas-paper [data-practice-reading-home] .pdf-viewer-header { padding: var(--anth-space-3) var(--anth-space-4); }
+.atlas-paper [data-practice-reading-home] .pdf-viewer-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-paper [data-practice-reading-home] .pdf-viewer-frame { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; }
 
-.practice-library .pdf-viewer-frame {
-  width: 100%;
-  min-height: 0;
-  border: 1px solid var(--anth-rule);
-}
-
-.practice-library .practice-local-message {
+.atlas-paper [data-practice-reading-home] .practice-local-message {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: var(--anth-space-5);
+  bottom: var(--anth-space-5);
   z-index: var(--anth-z-toast);
   max-width: min(420px, calc(100vw - 40px));
-  margin: 0;
-  padding: 12px 14px;
 }
+.atlas-paper [data-practice-reading-home] .ui-emoji-icon { display: inline-flex; width: 1em; height: 1em; vertical-align: -0.14em; }
+.atlas-paper [data-practice-reading-home] .ui-emoji-icon svg { width: 100%; height: 100%; }
 
-.practice-library .ui-emoji-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.14em;
-}
-
-.practice-library .ui-emoji-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.practice-library .loading {
-  display: grid;
-  place-items: center;
-  gap: 8px;
-  padding: 32px 0;
-}
-
-.practice-library .spinner {
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--anth-rule);
-  border-top-color: var(--anth-ink);
-  border-radius: 50%; /* sanctioned: a progress glyph, not a surface */
-  animation: practice-library-spin 0.9s linear infinite;
-}
-
-@keyframes practice-library-spin {
-  to { transform: rotate(360deg); }
-}
-
+/* ── Narrow widths: columns stack, toolbars wrap ─────────────────────── */
 @media (max-width: 900px) {
-  .practice-library :is(.library-workspace-header, .search-row, .overview-intro, .hero-panel__header:not(.browse-title-bar)) {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .practice-library .browse-title-bar {
-    flex-wrap: wrap;
-  }
-
-  .practice-library .library-workspace-header__copy {
-    padding-bottom: 4px;
-  }
-
-  .practice-library .library-view-tabs {
-    justify-content: flex-start;
-  }
-
-  .practice-library .browse-title-bar > .shui-segmented-control {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-
-  .practice-library .hero-settings-group {
-    grid-template-columns: 1fr;
-  }
-
-  .practice-library .browse-sort-wrapper {
-    flex-basis: auto;
-    width: 100%;
-  }
-
-  .practice-library .suite-flow-options {
-    grid-template-columns: 1fr;
-  }
-
-  .practice-library .suite-flow-option {
-    min-height: 0;
-  }
-
+  .atlas-paper [data-practice-reading-home] .library-home-grid,
+  .atlas-paper [data-practice-reading-home] .hero-settings-group,
+  .atlas-paper [data-practice-reading-home] .suite-flow-options { grid-template-columns: minmax(0, 1fr); }
+  .atlas-paper [data-practice-reading-home] .browse-title-bar > .shui-segmented-control { flex-basis: 100%; margin-left: 0; }
+  .atlas-paper [data-practice-reading-home] .browse-sort-wrapper { flex: 1 1 100%; }
 }
 
 @media (max-width: 640px) {
-  .practice-library .library-view-tabs {
+  .atlas-paper [data-practice-reading-home] .custom-suite-picked-chip { width: 100%; }
+  .atlas-paper [data-practice-reading-home] .custom-suite-selection-actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0 8px;
-    width: 100%;
-  }
-
-  .practice-library .library-view-tabs__button {
-    justify-content: flex-start;
-    white-space: normal;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 580px) {
-  .practice-library .category-card {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .practice-library .exam-item {
-    flex-wrap: wrap;
-  }
-
-  .practice-library .custom-suite-picked-list .custom-suite-picked-chip {
-    width: 100%;
-  }
-
-  .practice-library .custom-suite-selection-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .practice-library .tool-card-arrow {
-    display: none;
-  }
-
-  .practice-library .clock-overlay-inner {
-    width: 100%;
-    min-width: 0;
-  }
+  .atlas-paper [data-practice-reading-home] .category-card { grid-template-columns: minmax(0, 1fr); }
+  .atlas-paper [data-practice-reading-home] .category-actions,
+  .atlas-paper [data-practice-reading-home] .exam-actions { flex-wrap: wrap; }
+  .atlas-paper [data-practice-reading-home] .tool-card-arrow { display: none; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .atlas-paper [data-practice-reading-home] .spinner { animation: none; }
+}
 </style>

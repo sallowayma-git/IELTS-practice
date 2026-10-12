@@ -8,14 +8,14 @@
     aria-labelledby="suite-mode-selector-title"
     @click.self="$emit('close-suite-mode-selector', $event)"
   >
-    <div class="theme-modal-content suite-mode-selector-content">
-      <div class="theme-modal-header">
+    <div class="dialog dialog-lg theme-modal-content suite-mode-selector-content">
+      <div class="dialog-header theme-modal-header">
         <div>
           <h3 id="suite-mode-selector-title">选择套题流程</h3>
           <p class="suite-mode-selector-subtitle">本次会话将锁定所选流程，答题中不再切换。</p>
         </div>
         <button
-          class="theme-modal-close"
+          class="btn btn-icon theme-modal-close"
           type="button"
           data-suite-flow-cancel="1"
           aria-label="取消套题流程选择"
@@ -24,7 +24,7 @@
           ×
         </button>
       </div>
-      <div class="theme-modal-body suite-mode-selector-body">
+      <div class="dialog-body theme-modal-body suite-mode-selector-body">
         <div class="suite-flow-options" aria-label="套题流程">
           <button
             v-for="option in suiteFlowOptions"

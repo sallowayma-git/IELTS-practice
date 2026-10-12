@@ -1,14 +1,19 @@
 <template>
   <div class="evaluating-page">
+    <header class="page-header has-rule">
+      <p class="page-header-kicker">WRITING · 写作评测</p>
+      <h1>作文评测</h1>
+      <p class="page-header-desc word-count">IELTS 写作 · {{ displayWordCount }} 词</p>
+    </header>
+
     <div class="evaluating-layout">
-      <section class="essay-panel">
+      <section class="card evaluating-essay">
         <header class="essay-head">
-          <h1 class="heading-serif">作文评测</h1>
-          <p class="word-count">IELTS 写作 · {{ displayWordCount }} 词</p>
+          <h2>作文</h2>
         </header>
 
         <div class="topic-block">
-          <h2 class="topic-block__label">评测题目</h2>
+          <p class="topic-block__label">评测题目</p>
           <p class="topic-block__text">{{ displayTopicText }}</p>
         </div>
 
@@ -21,8 +26,8 @@
       </section>
 
       <aside class="status-rail">
-        <section class="rail-progress">
-          <h2 class="heading-serif">{{ error ? '评分未完成' : '正在评分' }}</h2>
+        <section class="card rail-progress">
+          <h2>{{ error ? '评分未完成' : '正在评分' }}</h2>
           <div v-if="error" class="evaluation-error" role="alert">
             <p>{{ error.message }}</p>
             <p class="status-meta">作文已保存在本机；可直接重试，或取消后返回写作页继续修改。</p>
@@ -35,11 +40,20 @@
             </div>
           </div>
           <p class="stage-label" :class="{ 'stage-label--failed': error }">{{ currentStageLabel }}</p>
+
+          <div class="rail-actions">
+            <button :class="['btn', error ? 'btn-primary' : 'btn-ghost']" :disabled="isRetrying || isComplete" @click="handleRetry">
+              {{ isRetrying ? '重试中...' : '重试评分' }}
+            </button>
+            <button class="btn btn-secondary" :disabled="isRetrying || isCancelling" @click="handleCancel">
+              {{ isCancelling ? '正在返回写作…' : '取消评分' }}
+            </button>
+          </div>
         </section>
 
-        <section class="rail-section rail-log">
+        <section class="card rail-section rail-log">
           <h3>过程记录</h3>
-          <div v-if="recentLogs.length > 0" class="log-list" role="log" aria-live="polite" aria-relevant="additions text" aria-label="评测动态日志">
+          <div v-if="recentLogs.length > 0" class="log-list scroll-region" role="log" aria-live="polite" aria-relevant="additions text" aria-label="评测动态日志">
             <div v-for="item in recentLogs" :key="item.id" class="log-item">
               <span class="log-time">{{ item.time }}</span>
               <span class="log-message">{{ item.message }}</span>
@@ -49,15 +63,6 @@
             <p class="rail-empty">准备进入评测流程…</p>
           </div>
         </section>
-
-        <div class="action-row">
-          <button :class="['btn', error ? 'btn-brand' : 'btn-text']" :disabled="isRetrying || isComplete" @click="handleRetry">
-            {{ isRetrying ? '重试中...' : '重试评分' }}
-          </button>
-          <button class="btn-text" :disabled="isRetrying || isCancelling" @click="handleCancel">
-            {{ isCancelling ? '正在返回写作…' : '取消评分' }}
-          </button>
-        </div>
       </aside>
     </div>
   </div>
@@ -474,35 +479,25 @@ function appendLog(kind, message, event = null) {
 
 </script>
 <style scoped>
-/* Evaluating: the essay as a page of prose, progress as a quiet margin note. */
+/* Evaluating: the essay as a card of prose, progress as a card in the rail. */
 .evaluating-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
   align-items: start;
-  gap: 56px;
+  gap: var(--anth-space-6);
 }
 
-.essay-panel {
+.evaluating-essay {
   min-width: 0;
 }
 
 .essay-head {
-  display: grid;
-  gap: 6px;
-  padding-bottom: 18px;
+  padding-bottom: var(--anth-space-3);
   border-bottom: 1px solid var(--anth-rule);
 }
 
-.essay-head h1 {
+.essay-head h2 {
   margin: 0;
-  font-size: clamp(1.75rem, 3vw, 2.125rem);
-}
-
-.word-count {
-  margin: 0;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .topic-block {
@@ -511,7 +506,7 @@ function appendLog(kind, message, event = null) {
 
 .topic-block__label {
   margin: 0 0 4px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-family: var(--anth-font-sans);
   font-size: var(--anth-text-sm);
   font-weight: var(--anth-weight-normal);
@@ -566,14 +561,8 @@ function appendLog(kind, message, event = null) {
   min-width: 0;
 }
 
-.rail-progress {
-  padding-top: 14px;
-  border-top: 1px solid var(--anth-ink);
-}
-
 .rail-progress h2 {
   margin: 0;
-  font-size: var(--anth-text-lg);
 }
 
 .subtitle {
@@ -603,7 +592,7 @@ function appendLog(kind, message, event = null) {
 
 .progress-figure {
   margin: 20px 0 8px;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-lg);
   font-variant-numeric: lining-nums tabular-nums;
@@ -661,7 +650,6 @@ function appendLog(kind, message, event = null) {
 .log-list {
   display: grid;
   max-height: 300px;
-  overflow-y: auto;
   border-top: 1px solid var(--anth-rule);
 }
 
@@ -676,7 +664,7 @@ function appendLog(kind, message, event = null) {
 }
 
 .log-time {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-variant-numeric: lining-nums tabular-nums;
 }
 
@@ -687,20 +675,24 @@ function appendLog(kind, message, event = null) {
 .rail-empty {
   margin: 0;
   padding: 10px 0;
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-sm);
 }
 
-.action-row {
+.rail-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: var(--anth-space-3);
+  margin-top: var(--anth-space-5);
+  padding-top: var(--anth-space-4);
+  border-top: 1px solid var(--anth-rule);
 }
 
 @media (max-width: 960px) {
   .evaluating-layout {
     grid-template-columns: 1fr;
-    gap: 32px;
+    gap: var(--anth-space-5);
   }
 
   .status-rail {

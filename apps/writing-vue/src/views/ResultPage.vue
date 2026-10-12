@@ -1,24 +1,35 @@
 <template>
-  <div class="result-page">
-    <router-link v-if="historyBack" :to="historyBack" class="result-back" data-history-back>← 返回历史</router-link>
-    <section v-if="loadError" class="result-load-error" role="alert">
-      <h1 class="heading-serif">无法加载评测结果</h1>
+  <div class="result-page atlas-result">
+    <header class="page-header result-header">
+      <div class="page-header-top">
+        <div class="result-header__copy">
+          <p class="page-header-kicker">IELTS 写作 · {{ essayWordCount }} 词</p>
+          <h1 class="display-heading">评测结果</h1>
+        </div>
+        <div class="score-total-row">
+          <span class="score-label stat-label">总分 Band</span>
+          <span class="score-total t-display t-num">{{ scoreData?.total_score ?? '-' }}</span>
+        </div>
+      </div>
+      <div class="page-header-actions">
+        <router-link v-if="historyBack" :to="historyBack" class="btn btn-secondary" data-history-back>← 返回历史</router-link>
+        <button class="btn btn-primary" type="button" @click="writeNew">再写一篇</button>
+      </div>
+    </header>
+
+    <section v-if="loadError" class="result-load-error card" role="alert">
+      <h2>无法加载评测结果</h2>
       <p>{{ loadError }}</p>
       <div class="result-load-error__actions">
-        <button class="btn btn-brand" type="button" @click="loadResult">重试加载</button>
-        <button class="btn-text" type="button" @click="writeNew">返回写作页</button>
+        <button class="btn btn-secondary" type="button" @click="loadResult">重试加载</button>
+        <button class="btn btn-link" type="button" @click="writeNew">返回写作页</button>
       </div>
     </section>
     <div v-else class="result-layout">
-      <section class="essay-panel">
-        <header class="essay-head">
-          <h1 class="heading-serif display-heading">评测结果</h1>
-          <p class="topic-meta">IELTS 写作 · {{ essayWordCount }} 词</p>
-        </header>
-
+      <section class="essay-panel card">
         <div v-if="topicText" class="topic-block">
-          <h2 class="topic-block__label">{{ topicSourceLabel }}</h2>
-          <p class="topic-block__text">{{ topicText }}</p>
+          <p class="topic-block__label">{{ topicSourceLabel }}</p>
+          <p class="topic-block__text quote t-body-lg">{{ topicText }}</p>
         </div>
 
         <div class="view-controls">
@@ -26,9 +37,9 @@
           <button v-if="sentences.length > 0" :class="['btn', viewMode === 'annotated' ? 'btn-brand' : 'btn-warm-sand']" @click="viewMode = 'annotated'">逐句批注</button>
         </div>
 
-        <div class="essay-body" v-if="viewMode === 'full'">{{ essayText || '没有找到作文正文。' }}</div>
+        <div class="essay-body scroll-region t-body-lg" v-if="viewMode === 'full'">{{ essayText || '没有找到作文正文。' }}</div>
 
-        <div class="essay-body" v-else>
+        <div class="essay-body scroll-region t-body-lg" v-else>
           <div v-if="sentences.length > 0">
             <template v-for="(sentence, index) in sentences" :key="index">
               <component
@@ -41,7 +52,7 @@
                 @click="sentence.errors?.length > 0 ? toggleExpand(index) : null"
               >
                 <span v-html="highlightErrors(sentence)"></span>
-              </component>
+              </component>{{ ' ' }}
 
               <div :id="`sentence-errors-${index}`" v-if="sentence.errors?.length > 0 && expandedSentences.has(index)" class="error-details">
                 <div v-for="(err, errIdx) in sentence.errors" :key="errIdx" class="error-item">
@@ -63,18 +74,17 @@
               </div>
             </template>
           </div>
-          <div v-else class="essay-empty">{{ sentenceEmptyHint }}</div>
+          <div v-else class="essay-empty t-small">{{ sentenceEmptyHint }}</div>
         </div>
       </section>
 
       <aside class="right-panel">
-        <section class="result-section score-section" aria-labelledby="score-heading">
-          <h3 id="score-heading">评分表</h3>
-          <div class="score-total-row">
-            <span class="score-total">{{ scoreData?.total_score ?? '-' }}</span>
-            <span class="score-label">总分 Band</span>
+        <section class="result-section section" aria-labelledby="score-heading">
+          <div class="section-head">
+            <h3 id="score-heading">评分表</h3>
+            <span class="section-meta">四项标准</span>
           </div>
-          <table class="criteria-table">
+          <table class="table criteria-table">
             <thead>
               <tr>
                 <th scope="col">评分标准</th>
@@ -83,7 +93,7 @@
             </thead>
             <tbody>
               <tr v-for="row in criteriaRows" :key="row.key">
-                <th scope="row">{{ row.label }} <span class="criterion-code">{{ row.code }}</span></th>
+                <th scope="row">{{ row.label }} <span class="tag tag-neutral criterion-code">{{ row.code }}</span></th>
                 <td class="num">{{ row.band }}</td>
               </tr>
             </tbody>
@@ -96,25 +106,25 @@
           </dl>
         </section>
 
-        <div v-if="reviewDegraded" class="degraded-note">
+        <div v-if="reviewDegraded" class="inline-message inline-message-warning degraded-note">
           <h4>详解已降级</h4>
           <p>{{ sentenceEmptyHint }}</p>
         </div>
 
-        <section v-if="feedback" class="result-section">
-          <h3>整体改进建议</h3>
-          <p class="prose-text">{{ feedback }}</p>
+        <section v-if="feedback" class="result-section section">
+          <div class="section-head"><h3>整体改进建议</h3></div>
+          <p class="prose-text quote">{{ feedback }}</p>
         </section>
 
-        <section v-if="improvementPlan && improvementPlan.length > 0" class="result-section">
-          <h3>核心提分计划</h3>
+        <section v-if="improvementPlan && improvementPlan.length > 0" class="result-section section">
+          <div class="section-head"><h3>核心提分计划</h3></div>
           <ol class="plan-list">
             <li v-for="(item, idx) in improvementPlan" :key="idx">{{ item }}</li>
           </ol>
         </section>
 
-        <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section">
-          <h3>段落详评</h3>
+        <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section section">
+          <div class="section-head"><h3>段落详评</h3></div>
           <dl class="rationale-list">
             <div v-for="(item, idx) in reviewBlocks" :key="idx" class="rationale-item">
               <dt>第 {{ item.paragraph_index || (idx + 1) }} 段</dt>
@@ -123,8 +133,8 @@
           </dl>
         </section>
 
-        <section v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="result-section">
-          <h3>任务诊断</h3>
+        <section v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="result-section section">
+          <div class="section-head"><h3>任务诊断</h3></div>
           <dl class="rationale-list">
             <div v-for="item in taskAnalysisEntries" :key="item.label" class="rationale-item">
               <dt>{{ item.label }}</dt>
@@ -132,10 +142,6 @@
             </div>
           </dl>
         </section>
-
-        <div class="result-next">
-          <button @click="writeNew" class="btn btn-brand">再写一篇</button>
-        </div>
       </aside>
     </div>
   </div>
@@ -355,125 +361,81 @@ function writeNew() {
 }
 </script>
 <style scoped>
-/* Result: the essay reads as a page; the margin carries the marks. */
-.result-back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin-bottom: 8px;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  text-decoration: underline;
-  text-decoration-color: var(--anth-border-strong);
-  text-underline-offset: 3px;
-}
-
-.result-back:hover {
-  color: var(--anth-ink);
-  text-decoration-color: currentColor;
-}
-
+/* Result: a marking sheet. Essay card on the left, criteria and feedback rules on the right. */
 .result-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
   align-items: start;
-  gap: 56px;
+  gap: var(--anth-space-9);
 }
 
-.essay-panel,
-.right-panel {
-  min-width: 0;
+
+.score-total-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--anth-space-3);
 }
 
-.essay-head {
-  display: grid;
-  gap: 6px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.essay-head h1 {
+/* Quote: prose set off by a left rule. */
+.quote {
   margin: 0;
-  font-size: clamp(1.75rem, 3vw, 2.125rem);
-}
-
-.topic-meta {
-  margin: 0;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-}
-
-.topic-block {
-  margin-top: 20px;
+  padding-left: var(--anth-space-4);
+  border-left: 2px solid var(--anth-rule-strong);
 }
 
 .topic-block__label {
-  margin: 0 0 4px;
-  color: var(--anth-ink-faint);
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-normal);
+  margin: 0 0 var(--anth-space-1);
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
 }
 
 .topic-block__text {
-  margin: 0;
   max-width: var(--anth-measure);
   color: var(--anth-ink-soft);
-  font-family: var(--anth-font-serif);
   font-style: italic;
-  line-height: var(--anth-leading-relaxed);
 }
 
-/* Original / annotated: text tabs. */
+/* Original / annotated: text tabs reuse the button box, drawn as an underline. */
 .view-controls {
   display: flex;
-  gap: 24px;
-  margin: 24px 0 18px;
+  gap: var(--anth-space-5);
+  margin: var(--anth-space-5) 0 var(--anth-space-4);
   border-bottom: 1px solid var(--anth-rule);
 }
 
 .view-controls > .btn {
-  min-height: 40px;
-  margin-bottom: -1px;
-  padding: 0 1px;
+  --btn-bg: transparent;
+  --btn-bg-hover: transparent;
+  --btn-bg-active: transparent;
+  --btn-fg: var(--anth-ink-muted);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border: transparent;
+  --btn-border-hover: transparent;
+  --btn-shadow: none;
+  height: 40px;
+  margin: 0 0 -1px;
+  padding: 0 2px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  background: transparent;
-  color: var(--anth-ink-faint);
-  font-weight: var(--anth-weight-normal);
+  font-weight: var(--anth-weight-regular);
 }
 
-.view-controls > .btn:hover:not(:disabled) {
-  background: transparent;
-  color: var(--anth-ink);
-}
-
-.view-controls > .btn-brand,
-.view-controls > .btn-brand:hover:not(:disabled) {
+.view-controls > .btn-brand {
+  --btn-fg: var(--anth-ink);
+  --btn-border-hover: var(--anth-ink);
   border-bottom-color: var(--anth-ink);
-  background: transparent;
-  color: var(--anth-ink-strong);
   font-weight: var(--anth-weight-medium);
 }
 
+/* Essay body: serif reading column, bounded by the scroll region. */
 .essay-body {
   max-width: var(--anth-measure);
   max-height: min(70vh, 900px);
-  overflow-y: auto;
   color: var(--anth-ink);
-  font-family: var(--anth-font-serif);
-  font-size: 1.0625rem;
-  line-height: 1.85;
   white-space: pre-wrap;
 }
 
-.essay-empty {
-  color: var(--anth-ink-faint);
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-  white-space: normal;
-}
 
 .sentence-container {
   display: inline;
@@ -482,16 +444,12 @@ function writeNew() {
   background: transparent;
   color: inherit;
   font: inherit;
-  line-height: inherit;
   text-align: left;
 }
 
 .sentence-container.has-error {
-  min-height: 0;
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: var(--anth-border-strong);
-  text-decoration-style: dotted;
+  text-decoration: underline dotted var(--anth-border-strong);
   text-underline-offset: 4px;
 }
 
@@ -502,23 +460,14 @@ function writeNew() {
 /* An annotation is a marginal note set into the text. */
 .error-details {
   display: grid;
-  gap: 10px;
-  margin: 10px 0 14px;
-  padding: 2px 0 2px 16px;
+  gap: var(--anth-space-3);
+  margin: var(--anth-space-3) 0 var(--anth-space-4);
+  padding: 2px 0 2px var(--anth-space-4);
   border-left: 2px solid var(--anth-ink);
   font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
   white-space: normal;
-}
-
-.error-item {
-  display: grid;
-  gap: 2px;
-}
-
-.error-type strong {
-  font-weight: var(--anth-weight-semibold);
 }
 
 .text-grammar { color: var(--anth-danger); }
@@ -530,158 +479,41 @@ function writeNew() {
 .label {
   display: inline-block;
   min-width: 2.5em;
-  margin-right: 8px;
-  color: var(--anth-ink-faint);
+  margin-right: var(--anth-space-2);
+  color: var(--anth-ink-muted);
 }
 
 .line-through {
-  color: var(--anth-ink-soft);
   text-decoration: line-through;
 }
 
-.error-reason {
-  color: var(--anth-ink-soft);
-}
-
 .corrected-sentence {
-  padding-top: 8px;
+  padding-top: var(--anth-space-2);
   border-top: 1px solid var(--anth-rule);
-  color: var(--anth-ink);
   font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
+  font-size: var(--anth-text-body-lg-size);
 }
 
-/* Right column: a marking sheet. Hairlines between sections, one booktabs criteria table. */
+/* Right column: sections on a 40px rhythm; the section's own margin is reset. */
 .right-panel {
-  display: grid;
-  gap: 28px;
-  align-content: start;
-}
-
-.result-section {
-  display: grid;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--anth-rule);
-}
-
-.result-section h3 {
-  margin: 0;
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
-  font-weight: var(--anth-weight-semibold);
-}
-
-.score-total-row {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--anth-space-8);
+  min-width: 0;
 }
 
-.score-total {
-  color: var(--anth-ink-strong);
-  font-family: var(--anth-font-serif);
-  font-size: 3rem;
-  font-weight: var(--anth-weight-semibold);
-  line-height: 1;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.score-label {
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-}
-
-/* Booktabs: heavy top and bottom, hairline under the header, no verticals. */
-.criteria-table {
-  width: 100%;
-  border-collapse: collapse;
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-  font-size: var(--anth-text-sm);
-}
-
-.criteria-table th,
-.criteria-table td {
-  padding: 9px 0;
-  text-align: left;
-  font-weight: var(--anth-weight-normal);
-}
-
-.criteria-table thead th {
-  padding-top: 6px;
-  padding-bottom: 6px;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-  border-bottom: 1px solid var(--anth-rule);
-}
-
-.criteria-table tbody th {
-  color: var(--anth-ink);
-}
-
-.criteria-table tbody tr + tr th,
-.criteria-table tbody tr + tr td {
-  border-top: 1px solid var(--anth-rule);
-}
-
-.criteria-table .num {
-  width: 5em;
-  text-align: right;
+.right-panel > .section + .section {
+  margin-top: 0;
 }
 
 .criteria-table td.num {
-  color: var(--anth-ink-strong);
+  color: var(--anth-ink);
   font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-lg);
-  font-variant-numeric: lining-nums tabular-nums;
+  font-size: var(--anth-text-h2-size);
 }
 
 .criterion-code {
-  margin-left: 6px;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-xs);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.degraded-note {
-  padding-top: 12px;
-  border-top: 1px solid var(--anth-rule);
-}
-
-.degraded-note h4 {
-  margin: 0 0 4px;
-  color: var(--anth-ink-strong);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-semibold);
-}
-
-.degraded-note p {
-  margin: 0;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-}
-
-.prose-text {
-  margin: 0;
-  color: var(--anth-ink);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-relaxed);
-}
-
-.plan-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 1.4em;
-  color: var(--anth-ink);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
-}
-
-.plan-list li::marker {
-  color: var(--anth-ink-faint);
-  font-variant-numeric: lining-nums tabular-nums;
+  margin-left: var(--anth-space-2);
 }
 
 .rationale-list {
@@ -692,14 +524,14 @@ function writeNew() {
 .rationale-item {
   display: grid;
   gap: 2px;
-  padding: 8px 0;
+  padding: var(--anth-space-2) 0;
   border-top: 1px solid var(--anth-rule);
-  font-size: var(--anth-text-sm);
+  font-size: var(--anth-text-small-size);
 }
 
 .rationale-item:first-child {
-  border-top: 0;
   padding-top: 0;
+  border-top: 0;
 }
 
 .rationale-item dt {
@@ -710,23 +542,29 @@ function writeNew() {
 .rationale-item dd {
   margin: 0;
   color: var(--anth-ink-soft);
-  line-height: var(--anth-leading-normal);
+  line-height: var(--anth-text-small-line);
 }
 
-.result-next {
-  padding-top: 4px;
+.degraded-note h4 {
+  margin: 0 0 var(--anth-space-1);
+  font-size: var(--anth-text-small-size);
+  font-weight: var(--anth-weight-semibold);
+}
+
+.plan-list {
+  display: grid;
+  gap: var(--anth-space-3);
+  margin: 0;
+  padding-left: 1.4em;
 }
 
 .result-load-error {
   display: grid;
-  gap: 12px;
+  gap: var(--anth-space-3);
   max-width: var(--anth-content-width-narrow);
 }
 
-.result-load-error h1 {
-  margin: 0;
-}
-
+.result-load-error h2,
 .result-load-error p {
   margin: 0;
   color: var(--anth-danger);
@@ -735,13 +573,13 @@ function writeNew() {
 .result-load-error__actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--anth-space-5);
 }
 
 @media (max-width: 1040px) {
   .result-layout {
     grid-template-columns: 1fr;
-    gap: 48px;
+    gap: var(--anth-space-8);
   }
 
   .essay-body {

@@ -1,74 +1,52 @@
 <template>
-  <div id="overview-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'overview' }]" data-reading-overview>
-    <div class="overview-intro">
-      <p class="hero-panel__subtitle">按篇章挑一篇开始，或用无尽与套题模式保持节奏。</p>
-      <div class="overview-section-actions">
-        <button
-          class="btn shui-glass-btn"
-          type="button"
-          id="endless-mode-btn"
-          data-action="start-endless-mode"
-          data-overview-action="endless"
-          @click="$emit('start-endless-mode', $event)"
-        >
-          无尽模式
-        </button>
-        <button
-          class="btn btn-primary shui-glass-btn"
-          type="button"
-          data-action="start-suite-mode"
-          data-overview-action="suite"
-          data-start-reading-suite
-          :disabled="creatingSuite"
-          @click="$emit('open-suite-mode-selector', $event)"
-        >
-          {{ creatingSuite ? '创建中' : '套题模式' }}
-        </button>
+  <div id="overview-view" :class="['view', 'hero-section', { active: activeView === 'overview' }]" data-reading-overview>
+    <section class="section">
+      <div class="section-head">
+        <h2 class="overview-section-title">分篇练习</h2>
+        <span class="section-meta">按篇章浏览题库，或随机抽一篇</span>
       </div>
-    </div>
-
-    <h2 class="overview-section-title">分篇练习</h2>
-    <div class="category-grid" id="category-overview">
-      <div
-        v-for="entry in readingCategoryEntries"
-        :key="entry.category"
-        class="category-card"
-        :data-reading-category-card="entry.category"
-      >
-        <div class="category-header">
-          <div class="category-icon" aria-hidden="true">{{ entry.category }}</div>
-          <div>
-            <div class="category-title">{{ passageNames[entry.category] || entry.category }}</div>
-            <div :class="['category-meta', { 'is-pending': entry.total === null }]">{{ entry.total === null ? '—' : `${entry.total} 篇题目` }}</div>
+      <div class="list category-grid" id="category-overview">
+        <div
+          v-for="entry in readingCategoryEntries"
+          :key="entry.category"
+          class="list-row category-card"
+          :data-reading-category-card="entry.category"
+        >
+          <div class="list-row-lead category-icon" aria-hidden="true">{{ entry.category }}</div>
+          <div class="list-row-main">
+            <div class="list-row-title category-title">{{ passageNames[entry.category] || entry.category }}</div>
+            <div class="list-row-meta">
+              <span :class="['category-meta', { 'is-pending': entry.total === null }]">{{ entry.total === null ? '—' : `${entry.total} 篇题目` }}</span>
+            </div>
+          </div>
+          <div class="list-row-trail category-actions">
+            <button
+              class="btn btn-ghost btn-sm btn-text"
+              type="button"
+              data-action="browse-category"
+              :data-category="entry.category"
+              data-type="reading"
+              @click="$emit('browse-category', entry.category, 'reading')"
+            >
+              浏览题库
+            </button>
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+              data-action="start-random-practice"
+              :data-category="entry.category"
+              data-type="reading"
+              @click="$emit('start-random-practice', entry.category, 'reading')"
+            >
+              随机练习
+            </button>
           </div>
         </div>
-        <div class="category-actions">
-          <button
-            class="btn-text"
-            type="button"
-            data-action="browse-category"
-            :data-category="entry.category"
-            data-type="reading"
-            @click="$emit('browse-category', entry.category, 'reading')"
-          >
-            浏览题库
-          </button>
-          <button
-            class="btn btn-secondary"
-            type="button"
-            data-action="start-random-practice"
-            :data-category="entry.category"
-            data-type="reading"
-            @click="$emit('start-random-practice', entry.category, 'reading')"
-          >
-            随机练习
-          </button>
-        </div>
       </div>
-    </div>
+    </section>
     <div v-if="error" class="inline-message inline-message-error" data-reading-library-error>
       <span>{{ error }}</span>
-      <button class="btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
+      <button class="btn btn-ghost btn-sm btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
     </div>
     <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
   </div>
