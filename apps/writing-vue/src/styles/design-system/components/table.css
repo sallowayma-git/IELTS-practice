@@ -1,0 +1,56 @@
+/*
+ * Table, booktabs: spec section 2.12.
+ */
+
+/* ── Table: booktabs. No verticals; heavy rule top and bottom. ──────── */
+.atlas-paper table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1.5px solid var(--anth-rule-ink);
+  border-bottom: 1.5px solid var(--anth-rule-ink);
+  color: var(--anth-ink);
+  font-size: var(--anth-text-small-size);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.atlas-paper :is(th, td) {
+  padding: 10px 12px 10px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  vertical-align: top;
+}
+
+.atlas-paper thead th {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--anth-rule);
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-caption-size);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caption);
+  line-height: var(--anth-text-caption-line);
+  text-transform: uppercase;
+}
+
+/* Hairlines between rows only when the table is long enough to need them. */
+.atlas-paper table.has-row-rules tbody tr + tr td {
+  border-top: 1px solid var(--anth-rule);
+}
+
+.atlas-paper tbody tr {
+  transition: background-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper tbody tr:hover td {
+  background: var(--anth-surface-raised);
+}
+
+.atlas-paper :is(.num, th.num, td.num) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-paper .table {
+  width: 100%;
+}

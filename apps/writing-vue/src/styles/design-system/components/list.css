@@ -1,0 +1,119 @@
+/*
+ * List and list row — spec section 2.6.
+ *
+ * Rows are separated by hairlines, never boxed. Trailing actions stay at full
+ * opacity; nothing critical is hidden until hover.
+ */
+
+/* clip, not hidden: keeps the radius clipping but lets group titles stick. */
+.atlas-paper .list {
+  min-width: 0;
+  overflow: clip;
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface);
+  box-shadow: var(--anth-shadow-1);
+}
+
+.atlas-paper .list-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--anth-space-3);
+  min-height: 56px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--anth-rule);
+  background: transparent;
+  color: var(--anth-ink);
+  transition: background-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper .list-row:last-child {
+  border-bottom: 0;
+}
+
+.atlas-paper .list-row:hover {
+  background: var(--anth-surface-raised);
+}
+
+/* Selected row: accent-subtle wash with a 3px clay strip on the left.
+ * The strip is a pseudo-element, not an inset box-shadow: the flat-surface
+ * gate only approves the elevation tokens. */
+.atlas-paper .list-row:is(.is-selected, [aria-selected="true"]) {
+  background: var(--anth-accent-subtle);
+}
+
+.atlas-paper .list-row:is(.is-selected, [aria-selected="true"])::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--anth-accent);
+}
+
+.atlas-paper .list-row-lead,
+.atlas-paper .list-row-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--anth-space-2);
+  min-width: 0;
+}
+
+.atlas-paper .list-row-trail {
+  justify-self: end;
+}
+
+.atlas-paper .list-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atlas-paper .list-row-title {
+  overflow: hidden;
+  color: var(--anth-ink);
+  font-size: var(--anth-text-body-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: var(--anth-text-body-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Metadata with middle-dot separators between items. */
+.atlas-paper .list-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper .list-row-meta > * + *::before {
+  content: "\00b7";
+  margin: 0 6px;
+  color: var(--anth-ink-muted);
+}
+
+/* Group heading inside a long list. Sticks to the top of the scroll region. */
+.atlas-paper .list-group-title {
+  position: sticky;
+  top: 0;
+  z-index: var(--anth-z-raised);
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--anth-rule);
+  background: var(--anth-surface-sunken);
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-caption-size);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caption);
+  line-height: var(--anth-text-caption-line);
+  text-transform: uppercase;
+}

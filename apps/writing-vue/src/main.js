@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import { featureFlags } from './config/feature-flags.js'
+import './styles/design-system/fonts.css'
 import './styles/main.css'
 import './styles/a11y-performance.css'
 
@@ -101,6 +102,13 @@ const router = createRouter({
             name: 'Settings',
             component: () => import('./views/SettingsPage.vue')
         },
+        // Living reference for the paper design system. Dev builds only:
+        // the import and the route are dead code in production bundles.
+        ...(import.meta.env.DEV ? [{
+            path: '/dev/design-system',
+            name: 'DesignSystem',
+            component: () => import('./views/DesignSystemPage.vue')
+        }] : []),
         {
             path: '/:pathMatch(.*)*',
             redirect: { name: 'PracticeLibrary' }

@@ -1,0 +1,20 @@
+/*
+ * Paper component layer — spec section 2. Every rule here is scoped under
+ * .atlas-paper; the frozen exam routes (.atlas-exam) never load these.
+ * Order: primitives first, legacy mapping last so it can win ties.
+ */
+@import './button.css';
+@import './input.css';
+@import './segmented.css';
+@import './tabs.css';
+@import './card.css';
+@import './list.css';
+@import './page-header.css';
+@import './dialog.css';
+@import './tag.css';
+@import './stat.css';
+@import './table.css';
+@import './inline-message.css';
+@import './empty-state.css';
+@import './workspace.css';
+@import './legacy-map.css';

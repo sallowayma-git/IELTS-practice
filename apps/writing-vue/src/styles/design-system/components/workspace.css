@@ -1,0 +1,86 @@
+/*
+ * Workspace, scroll region, sticky toolbar and scrollbars — spec section 2.15.
+ *
+ * A workspace fills the viewport under the nav: a fixed header row and one
+ * scrolling body. Long lists scroll inside .scroll-region so the toolbar
+ * above them never leaves the screen.
+ */
+
+/* Workspace routes fill exactly one screen. The shell is the viewport, the
+ * main frame takes whatever the nav row leaves, and the workspace takes what
+ * the frame gives. No nav-height arithmetic: the nav is 57px on desktop (56px
+ * row plus its rule) and wraps to a taller row on phones. */
+.atlas-paper.app-shell:has(> .app-main > .workspace) {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* The frame gives 24px top and 8px bottom (replacing the 72px phone-safe bottom). */
+.atlas-paper .app-main:has(> .workspace) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: var(--anth-space-6);
+  padding-bottom: var(--anth-space-2);
+}
+
+.atlas-paper .workspace {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.atlas-paper .workspace.has-rail {
+  grid-template-columns: var(--anth-sidebar-w) minmax(0, 1fr);
+}
+
+.atlas-paper .scroll-region {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.atlas-paper .toolbar.is-sticky {
+  position: sticky;
+  top: 0;
+  z-index: var(--anth-z-sticky);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--anth-rule);
+  background: var(--anth-surface);
+}
+
+/* Scrollbars: thin, transparent track, a rounded thumb inset by a
+ * transparent border so it reads as a hairline on the paper. */
+.atlas-paper ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.atlas-paper ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.atlas-paper ::-webkit-scrollbar-thumb {
+  background-color: var(--anth-scrollbar-thumb);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 6px;
+}
+
+.atlas-paper ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--anth-scrollbar-thumb-hover);
+}
+
+.atlas-paper ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox has no ::-webkit-scrollbar; it takes the standard properties. */
+@supports not selector(::-webkit-scrollbar) {
+  .atlas-paper * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--anth-scrollbar-thumb) transparent;
+  }
+}

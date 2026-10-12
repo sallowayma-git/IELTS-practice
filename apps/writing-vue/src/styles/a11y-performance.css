@@ -4,8 +4,8 @@
   --a11y-focus-ring: 2px solid var(--anth-accent, #C15F3C);
   --a11y-focus-offset: 2px;
   --a11y-min-target: 44px;
-  --motion-duration-fast: 120ms;
-  --motion-duration: 220ms;
+  --motion-duration-fast: var(--anth-duration-fast);
+  --motion-duration: var(--anth-duration-slow);
 }
 
 /* Keyboard focus visibility (WCAG 2.4.7 / 2.4.11) */

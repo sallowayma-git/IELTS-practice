@@ -32,16 +32,16 @@
   --atlas-surface-soft: var(--anth-surface-hover);
   --atlas-control-surface: var(--anth-surface);
   --atlas-control-surface-hover: var(--anth-surface-hover);
-  --atlas-input-surface: var(--anth-surface);
+  --atlas-input-surface: var(--anth-surface-raised);
   --atlas-input-placeholder: var(--anth-ink-faint);
-  --atlas-nav-surface: var(--anth-canvas-soft);
+  --atlas-nav-surface: var(--anth-surface);
   --atlas-nav-links-surface: transparent;
   --atlas-nav-active-surface: var(--anth-accent-soft);
   --atlas-brand-rim: var(--anth-border);
   --atlas-danger-surface: var(--anth-danger-soft);
   --atlas-info-surface: var(--anth-info-soft);
 
-  /* Shadows flatten to hairline elevation. */
+  /* Shadows: small -> step 1, high -> step 2. */
   --atlas-shadow: var(--anth-shadow-sm);
   --atlas-shadow-high: var(--anth-shadow-md);
   --atlas-nav-active-bg: var(--anth-accent-soft);
@@ -75,13 +75,13 @@
   --atlas-ink-faint: var(--anth-ink-faint);
 
   /* ── Foundational grey scale (warm-shifted) ───────────────────────── */
-  --color-white: #FFFFFF;
+  --color-white: var(--anth-white);
   --color-gray-50: var(--anth-canvas-soft);
   --color-gray-100: var(--anth-canvas);
   --color-gray-200: var(--anth-surface-sunken);
-  --color-gray-300: #DAD7CC;
-  --color-gray-400: #B8B4A8;
-  --color-gray-500: #8F8B7E;
+  --color-gray-300: var(--anth-neutral-300);
+  --color-gray-400: var(--anth-neutral-400);
+  --color-gray-500: var(--anth-neutral-500);
   --color-gray-600: var(--anth-ink-faint);
   --color-gray-700: var(--anth-ink-soft);
   --color-gray-800: var(--anth-ink);
@@ -148,7 +148,7 @@
   /* ── Shadows ──────────────────────────────────────────────────────── */
   --shadow-xs: var(--anth-shadow-xs);
   --shadow-sm: var(--anth-shadow-xs);
-  --shadow-md: var(--anth-shadow-sm);
+  --shadow-md: var(--anth-shadow-md);
   --shadow-lg: var(--anth-shadow-md);
   --shadow-xl: var(--anth-shadow-lg);
   --shadow-warm: var(--anth-shadow-xs);
@@ -252,9 +252,9 @@
   --lg-easing-spring: var(--anth-ease);
 
   /* ── Reading workspace geometry tokens (kept; not visual) ──────────── */
-  --atlas-reading-left-pane-width: min(56ch, 50vw);
-  --atlas-reading-nav-height: 52px;
-  --atlas-reading-divider-width: 1px;
+  --atlas-reading-left-pane-width: var(--anth-reading-left-pane-width);
+  --atlas-reading-nav-height: var(--anth-reading-nav-height);
+  --atlas-reading-divider-width: var(--anth-reading-divider-width);
 
   /* ── Evaluate/Result page local tokens ────────────────────────────── */
   --evaluate-accent: var(--anth-accent);
@@ -262,4 +262,15 @@
   --evaluate-line: var(--anth-border);
   --evaluate-muted: var(--anth-ink-soft);
   --evaluate-rim: var(--anth-border-strong);
+}
+
+/* ── Paper v2 alias overrides ─────────────────────────────────────────
+ * Only aliases whose tier changes on the paper shell. Metadata text moves
+ * from ink-faint to ink-muted; ink-faint is placeholder and disabled only.
+ * The frozen exam reads --text-muted from the root block above, so these
+ * stay scoped to .atlas-paper. */
+.atlas-paper {
+  --text-muted: var(--anth-ink-muted);
+  --text-subtle: var(--anth-ink-muted);
+  --color-warm-silver: var(--anth-ink-muted);
 }

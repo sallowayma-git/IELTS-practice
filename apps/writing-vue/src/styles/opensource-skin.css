@@ -57,13 +57,13 @@
 }
 
 /* ── Page header: serif title, quiet lede, hairline below ──────────── */
-.atlas-paper :is(.page-header, .library-workspace-header, .agent-page-header) {
+.atlas-paper :is(.library-workspace-header, .agent-page-header) {
   border-bottom: 1px solid var(--anth-rule);
   padding-bottom: var(--anth-space-5);
   margin-bottom: var(--anth-space-6);
 }
 
-.atlas-paper :is(.page-header h1, .library-workspace-header__title, .agent-page-header h1) {
+.atlas-paper :is(.library-workspace-header__title, .agent-page-header h1) {
   margin: 0;
   font-size: clamp(1.75rem, 3vw, 2.125rem);
   line-height: var(--anth-leading-tight);
@@ -73,7 +73,7 @@
 .atlas-paper :is(.hero-panel__eyebrow, .library-workspace-header__eyebrow, .agent-page-header__eyebrow,
   .agent-panel__eyebrow, .history-eyebrow, .topic-eyebrow, .settings-detail-eyebrow, .panel-label, .config-label) {
   margin: 0 0 var(--anth-space-1);
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-family: var(--anth-font-sans);
   font-size: var(--anth-text-sm);
   font-weight: var(--anth-weight-normal);
@@ -87,13 +87,13 @@
 }
 
 .atlas-paper :is(.category-meta, .exam-meta, .hero-panel__muted, .more-view-subtitle, .backup-entry-meta) {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
   font-size: var(--anth-text-sm);
 }
 
-/* ── Surfaces: everything sits on paper ────────────────────────────── */
-.atlas-paper :is(.card, .surface, .shell, .hero-panel,
-  .essay-panel, .action-row, .settings-detail-panel, .hero-surface) {
+/* ── Surfaces: flat containers sit on the canvas; design-system cards,
+   panels and dialogs (.card, .dialog, .list) keep their own tiered surface. ── */
+.atlas-paper :is(.surface, .shell, .hero-surface) {
   border: 0;
   border-radius: 0;
   background: var(--anth-canvas);
@@ -110,253 +110,13 @@
   box-shadow: none;
 }
 
-/* ── Buttons: rectangles; one solid primary; text links for the rest ── */
-.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-warm-sand, .btn-danger, .btn-outline,
-  .btn-warning, .btn-success, .btn-info, .action-btn, .page-btn, .hero-btn, .shui-glass-btn,
-  .exam-item-action-btn) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 16px;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: transparent;
-  color: var(--anth-ink);
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  line-height: 1.4;
-  box-shadow: none;
-  transition: background-color var(--anth-duration-fast) var(--anth-ease),
-    border-color var(--anth-duration-fast) var(--anth-ease);
-}
-
-.atlas-paper :is(.btn, .btn-secondary, .btn-warm-sand, .btn-outline, .action-btn, .page-btn, .hero-btn,
-  .shui-glass-btn, .exam-item-action-btn):hover:not(:disabled) {
-  border-color: var(--anth-ink);
-  background: var(--anth-surface-hover);
-}
-
-.atlas-paper :is(.btn-primary, .btn-brand, .primary-action, .vocab-add) {
-  border: 1px solid var(--anth-ink);
-  border-radius: var(--anth-radius-sm);
-  background: var(--anth-ink);
-  color: var(--anth-canvas);
-  box-shadow: none;
-}
-
-.atlas-paper :is(.btn-primary, .btn-brand, .primary-action, .vocab-add):hover:not(:disabled) {
-  border-color: var(--anth-ink-strong);
-  background: var(--anth-ink-strong);
-}
-
-.atlas-paper :is(.btn-danger, .danger, .hero-btn--danger) {
-  border-color: var(--anth-danger);
-  background: transparent;
-  color: var(--anth-danger);
-}
-
-.atlas-paper :is(.btn-danger, .danger, .hero-btn--danger):hover:not(:disabled) {
-  background: var(--anth-danger-soft);
-}
-
-.atlas-paper :is(.btn-warning, .hero-btn--warn) {
-  color: var(--anth-warning);
-}
-
-.atlas-paper .btn-success {
-  color: var(--anth-success);
-}
-
-/* Secondary actions read as underlined text. */
-.atlas-paper .btn-text {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 2px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-normal);
-  text-decoration: underline;
-  text-decoration-color: var(--anth-border-strong);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-
-.atlas-paper .btn-text:hover:not(:disabled) {
-  color: var(--anth-ink);
-  text-decoration-color: currentColor;
-}
-
-.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-brand, .btn-danger, .btn-text, .action-btn,
-  .page-btn, .hero-btn):disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.atlas-paper .btn-sm {
-  padding: 4px 10px;
-  font-size: var(--anth-text-xs);
-}
-
-.atlas-paper :is(.btn-icon, .btn-icon-inline) {
-  padding: 6px;
-}
-
-/* ── Text tabs: segmented choices, underline marks the active one ──── */
-.atlas-paper :is(.shui-segmented-control, .agent-segmented-control, .toggle-group) {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--anth-space-5);
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.atlas-paper :is(.shui-segmented-btn, .toggle-item) {
-  min-height: 32px;
-  padding: 4px 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--anth-ink-faint);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
-  transition: color var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease);
-}
-
-.atlas-paper :is(.shui-segmented-btn, .toggle-item):hover:not(:disabled) {
-  color: var(--anth-ink);
-}
-
-.atlas-paper :is(.shui-segmented-btn, .toggle-item):is(.active, [aria-pressed="true"], [aria-selected="true"]) {
-  border-bottom-color: var(--anth-ink);
-  background: transparent;
-  color: var(--anth-ink-strong);
-}
-
-.atlas-paper .shui-segmented-indicator {
-  display: none;
-}
-
-/* ── Form controls: slightly sunken fields, square, ink focus ──────── */
-/* :where keeps this at class weight so page styles refine fields freely. */
-.atlas-paper :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]), textarea, select) {
-  padding: 8px 10px;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  background: var(--anth-surface-sunken);
-  color: var(--anth-ink);
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-  box-shadow: none;
-  transition: border-color var(--anth-duration-fast) var(--anth-ease);
-}
-
-.atlas-paper :is(input, textarea, select)::placeholder {
-  color: var(--anth-ink-faint);
-}
-
-.atlas-paper :is(input, textarea, select):hover:not(:disabled) {
-  border-color: var(--anth-ink-soft);
-}
-
-.atlas-paper :is(input, textarea, select):focus {
-  border-color: var(--anth-ink);
-  outline: 2px solid var(--anth-accent);
-  outline-offset: 1px;
-  box-shadow: none;
-}
-
-.atlas-paper :is(input, textarea, select):focus:not(:focus-visible) {
-  outline-color: transparent;
-}
-
-.atlas-paper :is(input, textarea, select):disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.atlas-paper :is(input[type="checkbox"], input[type="radio"]) {
-  accent-color: var(--anth-ink);
-}
-
-.atlas-paper .select-sm {
-  padding: 5px 8px;
-  font-size: var(--anth-text-xs);
-}
-
-.atlas-paper .textarea {
-  min-height: 96px;
-  resize: vertical;
-}
-
+/* Transparent outline keeps the control visible in Windows high-contrast mode. */
 .atlas-paper :is(button, a, [role="button"]):focus-visible {
-  outline: 2px solid var(--anth-accent);
+  outline: 2px solid transparent;
   outline-offset: 2px;
-  box-shadow: none;
+  box-shadow: var(--anth-focus-ring);
 }
 
-/* ── Tables: booktabs ──────────────────────────────────────────────── */
-.atlas-paper table {
-  width: 100%;
-  border-collapse: collapse;
-  border-top: 1.5px solid var(--anth-rule-heavy);
-  border-bottom: 1.5px solid var(--anth-rule-heavy);
-  font-size: var(--anth-text-sm);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.atlas-paper :is(th, td) {
-  padding: 8px 12px 8px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  vertical-align: top;
-}
-
-.atlas-paper thead th {
-  border-bottom: 1px solid var(--anth-rule);
-  color: var(--anth-ink-soft);
-  font-weight: var(--anth-weight-semibold);
-}
-
-/* ── Status: a word with a square marker ───────────────────────────── */
-.atlas-paper .inline-message {
-  position: relative;
-  padding: 6px 0 6px 18px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-snug);
-}
-
-.atlas-paper .inline-message::before {
-  content: "";
-  position: absolute;
-  top: calc(6px + 0.5em);
-  left: 2px;
-  width: 7px;
-  height: 7px;
-  background: var(--anth-ink-faint);
-}
-
-.atlas-paper .inline-message-success { color: var(--anth-success); }
-.atlas-paper .inline-message-success::before { background: var(--anth-success); }
-.atlas-paper .inline-message-error { color: var(--anth-danger); }
-.atlas-paper .inline-message-error::before { background: var(--anth-danger); }
-.atlas-paper .inline-message-warning { color: var(--anth-warning); }
-.atlas-paper .inline-message-warning::before { background: var(--anth-warning); }
 
 .atlas-paper :is(.hero-chip, .settings-badge, .visual-system-note) {
   display: inline-flex;
@@ -380,7 +140,7 @@
 }
 
 .atlas-paper .settings-badge--muted {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 /* ── Overlays ───────────────────────────────────────────────────────── */
@@ -396,55 +156,8 @@ body:has(.atlas-source-ui :is(.dialog-overlay, .settings-detail-modal, .suite-mo
   z-index: var(--anth-z-overlay);
 }
 
-.atlas-paper :is(.dialog-overlay, .overlay) {
-  position: fixed;
-  inset: 0;
-  z-index: var(--anth-z-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--anth-space-5);
-}
-
-.atlas-paper :is(.dialog-overlay, .overlay, .suite-mode-selector-modal.show) {
-  background: var(--lg-bg-scrim);
-}
-
-.atlas-paper .dialog {
-  width: 100%;
-  max-width: min(var(--anth-content-width-narrow), calc(100vw - 48px));
-  max-height: min(86vh, 860px);
-  overflow-y: auto;
-  padding: var(--anth-space-6);
-}
-
-.atlas-paper :is(.dialog, .suite-mode-selector-content) {
-  border: 1px solid var(--anth-ink);
-  border-radius: var(--anth-radius-sm);
-  background: var(--anth-canvas);
-  box-shadow: none;
-}
-
-.atlas-paper .dialog h3 {
-  margin-top: 0;
-}
-
-.atlas-paper .dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--anth-space-2);
-  margin-top: var(--anth-space-5);
-}
-
-/* ── Empty / loading states ────────────────────────────────────────── */
-.atlas-paper :is(.loading, .detail-empty-state, .suite-empty-state, .loading-state, .empty-state,
-  .exam-list-empty) {
-  color: var(--anth-ink-faint);
-  text-align: center;
-}
-
 .atlas-paper .exam-list-empty-icon {
-  color: var(--anth-ink-faint);
+  color: var(--anth-ink-muted);
 }
 
 /* Writing annotation washes (data, not decoration). */

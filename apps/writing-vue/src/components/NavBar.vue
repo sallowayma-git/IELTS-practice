@@ -53,7 +53,8 @@ function isNavActive(item) {
   top: 0;
   z-index: var(--anth-z-nav);
   border-bottom: 1px solid var(--anth-rule);
-  background: var(--anth-canvas);
+  background: var(--anth-surface);
+  box-shadow: var(--anth-shadow-1);
 }
 
 .nav-inner {
@@ -76,7 +77,7 @@ function isNavActive(item) {
 
 .brand-title {
   font-family: var(--anth-font-serif);
-  font-size: 1.1875rem;
+  font-size: 18px;
   font-weight: var(--anth-weight-semibold);
   letter-spacing: var(--anth-tracking-tight);
 }
@@ -94,8 +95,9 @@ function isNavActive(item) {
   min-height: var(--anth-nav-height);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  color: var(--anth-ink-soft);
-  font-size: var(--anth-text-base);
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-body-size);
+  font-weight: var(--anth-weight-medium);
   text-decoration: none;
   white-space: nowrap;
   transition: color var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease);
@@ -106,9 +108,8 @@ function isNavActive(item) {
 }
 
 .nav-item.is-active {
-  border-bottom-color: var(--anth-ink);
-  color: var(--anth-ink-strong);
-  font-weight: var(--anth-weight-medium);
+  border-bottom-color: var(--anth-accent);
+  color: var(--anth-ink);
 }
 
 .nav-item:focus-visible {

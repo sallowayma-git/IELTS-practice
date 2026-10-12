@@ -1,0 +1,118 @@
+/*
+ * Dialog — spec section 2.9.
+ *
+ * Markup contract: .dialog-overlay > .dialog, optionally with
+ * .dialog-header / .dialog-body / .dialog-footer. A dialog without those
+ * parts still lays out as one padded box (the legacy shape).
+ *
+ * The scroll lock for open overlays lives in opensource-skin.css, next to
+ * the overlay selectors that trigger it.
+ */
+
+@keyframes atlas-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes atlas-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.atlas-paper :is(.dialog-overlay, .overlay) {
+  position: fixed;
+  inset: 0;
+  z-index: var(--anth-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--anth-space-5);
+  background: var(--anth-scrim);
+  animation: atlas-overlay-in var(--anth-duration-slow) var(--anth-ease) both;
+}
+
+.atlas-paper :is(.dialog-overlay, .overlay, .suite-mode-selector-modal.show) {
+  background: var(--anth-scrim);
+}
+
+.atlas-paper .dialog {
+  --dialog-width: 560px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--dialog-width), calc(100vw - 48px));
+  max-width: 100%;
+  max-height: min(86vh, 860px);
+  padding: var(--anth-space-6);
+  overflow-y: auto;
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-lg);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-2);
+  color: var(--anth-ink);
+  animation: atlas-dialog-in var(--anth-duration-slow) var(--anth-ease-out) both;
+}
+
+.atlas-paper .dialog.dialog-sm {
+  --dialog-width: 420px;
+}
+
+.atlas-paper .dialog.dialog-lg {
+  --dialog-width: 760px;
+}
+
+.atlas-paper .dialog h3 {
+  margin-top: 0;
+}
+
+/* Structured dialog: header, scrolling body, footer. Parts own the padding. */
+.atlas-paper .dialog:has(> .dialog-body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.atlas-paper .dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-3);
+  padding: var(--anth-space-5) var(--anth-space-6) var(--anth-space-3);
+}
+
+.atlas-paper .dialog-header h3 {
+  margin: 0;
+  min-width: 0;
+}
+
+.atlas-paper .dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 var(--anth-space-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.atlas-paper .dialog-footer,
+.atlas-paper .dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
+}
+
+.atlas-paper .dialog-footer {
+  padding: var(--anth-space-4) var(--anth-space-6) var(--anth-space-5);
+  border-top: 1px solid var(--anth-rule);
+}
+
+/* Legacy footer row, outside a structured dialog. */
+.atlas-paper .dialog > .dialog-actions {
+  margin-top: var(--anth-space-5);
+}

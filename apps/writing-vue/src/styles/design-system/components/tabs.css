@@ -1,0 +1,82 @@
+/*
+ * Tabs — spec section 2.4.
+ *
+ * Text tabs on a bottom rule. The active tab is ink with a 2px clay underline
+ * drawn as an inset shadow, so selecting a tab never shifts layout.
+ * `.tabs.is-vertical` is the rail variant used by Settings.
+ */
+
+.atlas-paper .tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--anth-space-5);
+  min-width: 0;
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.atlas-paper .tab {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  min-height: 0; /* desktop size; the legacy 44px chrome floor must not apply (touch: below) */
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--anth-ink-muted);
+  box-shadow: none;
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-body-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper .tab:hover:not(:disabled, [aria-disabled="true"]) {
+  color: var(--anth-ink-soft);
+}
+
+.atlas-paper .tab:is([aria-selected="true"], .is-active, .active) {
+  color: var(--anth-ink);
+  box-shadow: inset 0 -2px 0 var(--anth-accent);
+}
+
+.atlas-paper .tab:focus-visible {
+  outline: none;
+  box-shadow: var(--anth-focus-ring);
+  border-radius: var(--anth-radius-sm);
+}
+
+.atlas-paper .tab:is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Vertical rail: items stack, the active one carries a left bar. */
+.atlas-paper .tabs.is-vertical {
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 0;
+  border-right: 1px solid var(--anth-rule);
+}
+
+.atlas-paper .tabs.is-vertical .tab {
+  height: 36px;
+  padding: 0 12px;
+  justify-content: flex-start;
+}
+
+.atlas-paper .tabs.is-vertical .tab:is([aria-selected="true"], .is-active, .active) {
+  background: var(--anth-accent-subtle);
+  box-shadow: inset 3px 0 0 var(--anth-accent);
+}
+
+/* Touch contexts: 44px tabs (see button.css). */
+@media (pointer: coarse), (max-width: 640px) {
+  .atlas-paper .tab {
+    min-height: var(--anth-touch-target);
+  }
+}

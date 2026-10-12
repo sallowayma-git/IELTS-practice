@@ -1,0 +1,115 @@
+/*
+ * Legacy class map — spec 2.1 (buttons), 2.3 (segmented), 2.14 (empty).
+ *
+ * Templates keep their old class names; this file gives each one the
+ * canonical look by assigning the same --btn-* variables a canonical variant
+ * would. Layout and states come from button.css, which lists every legacy
+ * name that carries a button box. Segmented items are styled directly in
+ * segmented.css. Add new mappings here, never as new rule bodies.
+ *
+ *   btn-brand, btn-dark, submit-btn, primary-action, vocab-add,
+ *   hero-btn, agent-run-button           -> .btn-primary
+ *   btn-warm-sand, btn-outline, page-btn, action-btn, header-btn,
+ *   data-mgmt-btn, shui-glass-btn,
+ *   hero-btn--ghost                      -> .btn (secondary)
+ *   btn-warning, hero-btn--warn          -> .btn with warning text
+ *   btn-success / btn-info               -> .btn with success / info text
+ *   btn-text, agent-text-button          -> .btn-ghost
+ *   btn-text--danger, hero-btn--danger   -> .btn-danger-ghost
+ *   btn-icon-inline, agent-icon-button,
+ *   remove-btn, search-clear-btn,
+ *   clock-close-btn                      -> .btn-icon
+ */
+
+/* ── Primary ────────────────────────────────────────────────────────── */
+.atlas-paper :is(.btn-brand, .btn-dark, .submit-btn, .primary-action, .vocab-add,
+  .hero-btn, .agent-run-button) {
+  --btn-bg: var(--anth-accent);
+  --btn-fg: var(--anth-ink-inverse);
+  --btn-border: var(--anth-accent);
+  --btn-shadow: var(--anth-highlight), var(--anth-shadow-1);
+  --btn-bg-hover: var(--anth-accent-hover);
+  --btn-fg-hover: var(--anth-ink-inverse);
+  --btn-border-hover: var(--anth-accent-hover);
+  --btn-bg-active: var(--anth-accent-press);
+}
+
+/* ── Secondary (the default .btn) ───────────────────────────────────── */
+.atlas-paper :is(.btn-warm-sand, .btn-outline, .btn-warning, .btn-success, .btn-info,
+  .page-btn, .action-btn, .header-btn, .data-mgmt-btn, .shui-glass-btn,
+  .hero-btn--ghost) {
+  --btn-bg: var(--anth-surface-raised);
+  --btn-fg: var(--anth-ink);
+  --btn-border: var(--anth-rule-strong);
+  --btn-shadow: var(--anth-shadow-1);
+  --btn-bg-hover: var(--anth-surface);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: var(--anth-rule-hover);
+  --btn-bg-active: var(--anth-surface-sunken);
+}
+
+.atlas-paper :is(.btn-warning, .hero-btn--warn) {
+  --btn-fg: var(--anth-warning);
+  --btn-fg-hover: var(--anth-warning);
+}
+
+.atlas-paper .btn-success {
+  --btn-fg: var(--anth-success);
+  --btn-fg-hover: var(--anth-success);
+}
+
+.atlas-paper .btn-info {
+  --btn-fg: var(--anth-info);
+  --btn-fg-hover: var(--anth-info);
+}
+
+/* ── Ghost: low emphasis text buttons in toolbars and rows ──────────── */
+.atlas-paper :is(.btn-text, .agent-text-button) {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-ink-soft);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-surface-sunken);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-rule-strong);
+}
+
+/* ── Danger ghost: destructive row actions, never a grey outline ────── */
+.atlas-paper :is(.btn-text--danger, .hero-btn--danger) {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-danger);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-danger-soft);
+  --btn-fg-hover: var(--anth-danger);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-danger-border);
+}
+
+/* ── Icon: square, ghost ────────────────────────────────────────────── */
+.atlas-paper :is(.btn-icon-inline, .agent-icon-button, .remove-btn,
+  .search-clear-btn, .clock-close-btn) {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-ink-soft);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-surface-sunken);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-rule-strong);
+  width: 36px;
+  padding: 0;
+}
+
+/* ── Segmented containers and the hidden legacy indicator ───────────── */
+.atlas-paper .shui-segmented-indicator {
+  display: none;
+}
+
+/* ── Empty and loading copy that used to be a bare grey sentence ────── */
+.atlas-paper :is(.loading, .detail-empty-state, .suite-empty-state,
+  .loading-state, .exam-list-empty) {
+  color: var(--anth-ink-muted);
+  text-align: center;
+}

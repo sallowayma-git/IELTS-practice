@@ -1,0 +1,49 @@
+/*
+ * Inline message — spec section 2.13.
+ *
+ * Soft tint, 1px semantic border, 3px bar in the foreground colour. The
+ * `.inline-message-error` selector is asserted by tests; keep it.
+ */
+
+.atlas-paper .inline-message {
+  --msg-fg: var(--anth-ink-soft);
+  --msg-soft: var(--anth-surface-sunken);
+  --msg-border: var(--anth-rule);
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--msg-border);
+  border-left: 3px solid var(--msg-fg);
+  border-radius: var(--anth-radius-sm);
+  background: var(--msg-soft);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper .inline-message-info {
+  --msg-fg: var(--anth-info);
+  --msg-soft: var(--anth-info-soft);
+  --msg-border: var(--anth-info-border);
+}
+
+.atlas-paper .inline-message-success {
+  --msg-fg: var(--anth-success);
+  --msg-soft: var(--anth-success-soft);
+  --msg-border: var(--anth-success-border);
+}
+
+.atlas-paper .inline-message-warning {
+  --msg-fg: var(--anth-warning);
+  --msg-soft: var(--anth-warning-soft);
+  --msg-border: var(--anth-warning-border);
+}
+
+.atlas-paper .inline-message-error {
+  --msg-fg: var(--anth-danger);
+  --msg-soft: var(--anth-danger-soft);
+  --msg-border: var(--anth-danger-border);
+}
+
+.atlas-paper .inline-message:is(.inline-message-info, .inline-message-success, .inline-message-warning, .inline-message-error) {
+  color: var(--anth-ink);
+}

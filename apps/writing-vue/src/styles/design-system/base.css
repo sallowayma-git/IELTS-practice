@@ -106,71 +106,129 @@ hr {
 
 .hero-panel {
   background: var(--anth-surface);
-  border: 1px solid var(--anth-border);
-  border-radius: var(--anth-radius-lg);
-  box-shadow: var(--anth-shadow-xs);
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-md);
+  box-shadow: var(--anth-shadow-1);
 }
 
-.btn-brand {
-  background: var(--anth-accent);
-  color: var(--anth-accent-contrast);
-  padding: 9px 18px;
-  border: 1px solid var(--anth-accent);
-  border-radius: var(--anth-radius-sm);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
-  transition: background var(--anth-duration-fast) var(--anth-ease);
-}
-
-.btn-brand:hover:not(:disabled) {
-  background: var(--anth-accent-strong);
-  border-color: var(--anth-accent-strong);
-}
-
-.btn-warm-sand {
-  background: var(--anth-surface);
-  color: var(--anth-ink);
-  padding: 9px 18px;
-  border: 1px solid var(--anth-border-strong);
-  border-radius: var(--anth-radius-sm);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
-  transition: background var(--anth-duration-fast) var(--anth-ease), border-color var(--anth-duration-fast) var(--anth-ease);
-}
-
-.btn-warm-sand:hover:not(:disabled) {
-  background: var(--anth-surface-hover);
-  border-color: var(--anth-border-strong);
-}
-
-.btn-dark {
-  background: var(--anth-ink);
-  color: var(--color-white);
-  padding: 8px 16px;
-  border: 1px solid var(--anth-ink);
-  border-radius: var(--anth-radius-sm);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
-}
-
-.btn-danger {
-  background: var(--anth-danger);
-  color: var(--color-white);
-  padding: 9px 18px;
-  border: 1px solid var(--anth-danger);
-  border-radius: var(--anth-radius-sm);
-  font-size: var(--anth-text-sm);
-  font-weight: var(--anth-weight-medium);
-  cursor: pointer;
-}
+/* Button variants live in components/button.css (scoped to .atlas-paper). */
 
 .card {
   background: var(--anth-surface);
-  border-radius: var(--anth-radius-lg);
+  border-radius: var(--anth-radius-md);
   padding: var(--anth-space-6);
-  border: 1px solid var(--anth-border);
-  box-shadow: var(--anth-shadow-xs);
+  border: 1px solid var(--anth-rule);
+  box-shadow: var(--anth-shadow-1);
+}
+
+/* ── Paper v2 typography (.atlas-paper only) ──────────────────────────
+ * The global rules above are inherited by the frozen exam and stay as
+ * they are. Everything below is scoped to the paper shell. */
+.atlas-paper {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+  color: var(--anth-ink);
+  font-feature-settings: var(--anth-font-features);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.atlas-paper :where(h1, .t-h1) {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-h1-size);
+  line-height: var(--anth-text-h1-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-h1);
+  color: var(--anth-ink);
+}
+
+.atlas-paper :where(h2, .t-h2) {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-h2-size);
+  line-height: var(--anth-text-h2-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-h2);
+  color: var(--anth-ink);
+}
+
+.atlas-paper :where(h3, .t-h3) {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-h3-size);
+  line-height: var(--anth-text-h3-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: 0;
+  color: var(--anth-ink);
+}
+
+.atlas-paper :where(small) {
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper :where(code, pre, kbd, samp) {
+  font-family: var(--anth-font-mono);
+}
+
+.atlas-paper :where(code, kbd, samp) {
+  font-size: var(--anth-text-small-size);
+}
+
+.atlas-paper .t-display {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-display-size);
+  line-height: var(--anth-text-display-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-display);
+}
+
+.atlas-paper .t-body-lg {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-body-lg-size);
+  line-height: var(--anth-text-body-lg-line);
+  font-weight: var(--anth-weight-regular);
+}
+
+.atlas-paper .t-body {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+  font-weight: var(--anth-weight-regular);
+}
+
+.atlas-paper .t-small {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+  font-weight: var(--anth-weight-regular);
+}
+
+.atlas-paper .t-caption {
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-caption-size);
+  line-height: var(--anth-text-caption-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caption);
+  text-transform: uppercase;
+}
+
+.atlas-paper .t-stat {
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-stat-size);
+  line-height: var(--anth-text-stat-line);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-stat);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-paper .t-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard focus for every control. Inputs and buttons refine this in
+ * opensource-skin.css; the rule here covers everything else. */
+.atlas-paper :focus-visible {
+  outline: none;
+  box-shadow: var(--anth-focus-ring);
 }

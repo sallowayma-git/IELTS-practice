@@ -1,0 +1,51 @@
+/*
+ * Tag / badge: spec section 2.10.
+ */
+
+.atlas-paper .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--anth-radius-xs);
+  background: var(--anth-surface-sunken);
+  color: var(--anth-ink-soft);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-tag-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.atlas-paper .tag-neutral {
+  background: var(--anth-surface-sunken);
+  color: var(--anth-ink-soft);
+}
+
+.atlas-paper .tag-accent {
+  background: var(--anth-accent-soft);
+  color: var(--anth-accent-ink);
+}
+
+.atlas-paper .tag-success {
+  background: var(--anth-success-soft);
+  color: var(--anth-success);
+}
+
+.atlas-paper .tag-warning {
+  background: var(--anth-warning-soft);
+  color: var(--anth-warning);
+}
+
+.atlas-paper .tag-danger {
+  background: var(--anth-danger-soft);
+  color: var(--anth-danger);
+}
+
+.atlas-paper .tag-info {
+  background: var(--anth-info-soft);
+  color: var(--anth-info);
+}
+

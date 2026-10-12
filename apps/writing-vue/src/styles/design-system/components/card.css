@@ -1,0 +1,61 @@
+/*
+ * Card and panel — spec section 2.5.
+ *
+ * Do not nest cards. Inside a card, group with rules and spacing only.
+ */
+
+.atlas-paper :is(.card, .panel) {
+  min-width: 0;
+  padding: var(--anth-space-5) var(--anth-space-6);
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface);
+  box-shadow: var(--anth-shadow-1);
+  color: var(--anth-ink);
+}
+
+.atlas-paper .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-3);
+  margin-bottom: var(--anth-space-4);
+  padding-bottom: var(--anth-space-3);
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.atlas-paper .panel-header > :is(h3, h2) {
+  margin: 0;
+  min-width: 0;
+}
+
+.atlas-paper .panel-header__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
+}
+
+/* Interactive card: the whole surface is the target. */
+.atlas-paper .card.is-interactive {
+  cursor: pointer;
+  transition:
+    background-color var(--anth-duration-fast) var(--anth-ease),
+    border-color var(--anth-duration-fast) var(--anth-ease),
+    box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper .card.is-interactive:hover {
+  background: var(--anth-surface-raised);
+  border-color: var(--anth-rule-strong);
+}
+
+.atlas-paper .card.is-interactive:active {
+  background: var(--anth-surface-sunken);
+  box-shadow: var(--anth-shadow-inset);
+}
+
+.atlas-paper .card.is-interactive:focus-visible {
+  outline: none;
+  box-shadow: var(--anth-focus-ring);
+}

@@ -1,0 +1,82 @@
+/*
+ * Segmented control — spec section 2.3.
+ *
+ * A sunken track holding raised items. Selection is a raised chip, not an
+ * underline. Legacy item names (.shui-segmented-btn, .mode-btn, .task-btn,
+ * .toggle-item) share the item rules; the legacy containers are mapped in
+ * legacy-map.css.
+ */
+
+.atlas-paper :is(.segmented, .shui-segmented-control, .agent-segmented-control, .toggle-group) {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--anth-radius-md);
+  background: var(--anth-surface-sunken);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--anth-space-2);
+  height: 30px;
+  min-height: 0; /* desktop size; legacy 44px chrome floor does not apply (touch: below) */
+  min-width: 0;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--anth-radius-sm);
+  background: transparent;
+  color: var(--anth-ink-muted);
+  box-shadow: none;
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-small-size);
+  font-weight: var(--anth-weight-regular);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--anth-duration-fast) var(--anth-ease),
+    color var(--anth-duration-fast) var(--anth-ease),
+    box-shadow var(--anth-duration-fast) var(--anth-ease),
+    transform var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item):hover:not(:disabled, [aria-disabled="true"]) {
+  color: var(--anth-ink-soft);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item):active:not(:disabled, [aria-disabled="true"]) {
+  background: var(--anth-rule-strong);
+  transform: translateY(1px);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item):is([aria-selected="true"], [aria-pressed="true"], .is-selected, .is-active, .active) {
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  color: var(--anth-ink);
+  font-weight: var(--anth-weight-medium);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item):focus-visible {
+  outline: none;
+  box-shadow: var(--anth-focus-ring);
+}
+
+.atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item):is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Touch contexts: 44px items (see button.css). */
+@media (pointer: coarse), (max-width: 640px) {
+  .atlas-paper :is(.segmented-item, .shui-segmented-btn, .mode-btn, .task-btn, .toggle-item) {
+    min-height: var(--anth-touch-target);
+  }
+}

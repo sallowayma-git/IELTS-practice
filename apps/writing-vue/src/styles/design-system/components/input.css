@@ -1,0 +1,155 @@
+/*
+ * Inputs — spec section 2.2: .field, .input, .select, .textarea, plus the
+ * native control reset for every input/select/textarea inside .atlas-paper.
+ *
+ * The native base uses :where() so it stays at class weight; page-local
+ * rules can still refine a field. Canonical classes carry real specificity.
+ */
+
+/* Native controls, all of them. */
+.atlas-paper :where(input:not([type="checkbox"], [type="radio"], [type="range"],
+  [type="file"], [type="color"], [type="hidden"]), textarea, select) {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--anth-rule-strong);
+  border-radius: var(--anth-radius-sm);
+  background-color: var(--anth-surface-raised);
+  color: var(--anth-ink);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+  box-shadow: none;
+  transition:
+    border-color var(--anth-duration-fast) var(--anth-ease),
+    box-shadow var(--anth-duration-fast) var(--anth-ease),
+    background-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.atlas-paper :where(textarea) {
+  height: auto;
+  min-height: 96px;
+  padding: 8px 12px;
+  resize: vertical;
+}
+
+.atlas-paper :where(select) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-color: var(--anth-surface-raised);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236E685E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 12px;
+  cursor: pointer;
+}
+
+.atlas-paper :where(select)::-ms-expand {
+  display: none;
+}
+
+.atlas-paper :where(input, textarea, select)::placeholder {
+  color: var(--anth-ink-faint);
+}
+
+.atlas-paper :where(input, textarea, select):hover:not(:disabled) {
+  border-color: var(--anth-rule-hover-strong);
+}
+
+.atlas-paper :where(input, textarea, select):focus {
+  border-color: var(--anth-accent);
+  outline: none;
+  box-shadow: var(--anth-halo-accent);
+}
+
+.atlas-paper :where(input, textarea, select):focus:not(:focus-visible) {
+  outline-color: transparent;
+}
+
+.atlas-paper :where(input, textarea, select):disabled {
+  background-color: var(--anth-surface-sunken);
+  color: var(--anth-ink-faint);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.atlas-paper :where(input, textarea, select)[aria-invalid="true"] {
+  border-color: var(--anth-danger);
+  box-shadow: var(--anth-halo-danger);
+}
+
+/* Checkbox and radio: native shape, clay accent, 16px. */
+.atlas-paper :is(input[type="checkbox"], input[type="radio"]) {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--anth-accent);
+  cursor: pointer;
+}
+
+.atlas-paper :is(input[type="checkbox"], input[type="radio"]):disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ── Canonical classes ──────────────────────────────────────────────── */
+.atlas-paper .input,
+.atlas-paper .select,
+.atlas-paper .textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.atlas-paper .textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+/* Field: label, control, then help or error. */
+.atlas-paper .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.atlas-paper .field-label {
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-small-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper .field-help {
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper .field-error {
+  color: var(--anth-danger);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+/* Compact select used in filter rails and toolbars. */
+.atlas-paper .select-sm {
+  height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: var(--anth-text-small-size);
+}
+
+/* Touch contexts: 44px native controls and checkbox/radio hit areas (see button.css). */
+@media (pointer: coarse), (max-width: 640px) {
+  .atlas-paper :where(input:not([type="range"], [type="file"], [type="color"], [type="hidden"]),
+    select, textarea) {
+    min-height: var(--anth-touch-target);
+  }
+
+  .atlas-paper label:has(> input[type="checkbox"], > input[type="radio"]) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--anth-touch-target);
+  }
+}

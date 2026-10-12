@@ -1,0 +1,290 @@
+/*
+ * Button — spec section 2.1.
+ *
+ * One rule body serves every button. Variants only assign --btn-* custom
+ * properties; the body consumes them. Legacy class names get the same
+ * variables in legacy-map.css, so no legacy name needs a second rule body.
+ * The legacy names that carry a button box are listed in the layout rules
+ * below so they receive the base box. Keep the two lists in step.
+ */
+
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon) {
+  --btn-bg: var(--anth-surface-raised);
+  --btn-fg: var(--anth-ink);
+  --btn-border: var(--anth-rule-strong);
+  --btn-shadow: var(--anth-shadow-1);
+  --btn-bg-hover: var(--anth-surface);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: var(--anth-rule-hover);
+  --btn-bg-active: var(--anth-surface-sunken);
+}
+
+/* Layout and resting state, shared by canonical and legacy button names. */
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon,
+  .btn-brand, .btn-dark, .btn-warm-sand, .btn-outline, .btn-warning, .btn-success,
+  .btn-info, .btn-text, .btn-text--danger, .btn-icon-inline, .submit-btn,
+  .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn, .header-btn,
+  .data-mgmt-btn, .agent-run-button, .agent-text-button, .agent-icon-button,
+  .remove-btn, .search-clear-btn, .clock-close-btn, .shui-glass-btn) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--anth-space-2);
+  height: 36px;
+  /* The app-wide 44px touch floor in a11y-performance.css would override the
+   * spec sizes (28 / 36 / 44). WCAG 2.5.8 needs 24px; the sizes below meet it. */
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--anth-radius-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--btn-shadow);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-body-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--anth-duration-fast) var(--anth-ease),
+    border-color var(--anth-duration-fast) var(--anth-ease),
+    color var(--anth-duration-fast) var(--anth-ease),
+    box-shadow var(--anth-duration-fast) var(--anth-ease),
+    transform var(--anth-duration-fast) var(--anth-ease);
+}
+
+/* Hover and press. Disabled buttons never react. */
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn,
+  .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .shui-glass-btn):hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--btn-bg-hover);
+  border-color: var(--btn-border-hover);
+  color: var(--btn-fg-hover);
+}
+
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn,
+  .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .shui-glass-btn):active:not(:disabled, [aria-disabled="true"]) {
+  background: var(--btn-bg-active);
+  box-shadow: var(--anth-shadow-inset);
+  transform: translateY(1px);
+}
+
+/* Keyboard focus: the ring replaces the resting shadow. */
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .btn-icon-inline, .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn,
+  .action-btn, .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .agent-icon-button, .remove-btn, .search-clear-btn, .clock-close-btn,
+  .shui-glass-btn):focus-visible {
+  outline: none;
+  box-shadow: var(--anth-focus-ring);
+}
+
+/* Disabled: faded, no shadow, no press. */
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .btn-icon-inline, .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn,
+  .action-btn, .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .agent-icon-button, .remove-btn, .search-clear-btn, .clock-close-btn,
+  .shui-glass-btn):is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Filled variants keep full opacity when disabled: a sunken well with muted
+ * ink reads as "unavailable" without a faded white label. */
+.atlas-paper :is(.btn-primary, .btn-danger, .submit-btn, .btn-brand, .btn-dark,
+  .primary-action, .hero-btn, .agent-run-button):is(:disabled, [aria-disabled="true"]) {
+  --btn-bg: var(--anth-surface-sunken);
+  --btn-fg: var(--anth-ink-muted);
+  --btn-border: var(--anth-rule-strong);
+  opacity: 1;
+}
+
+/* Loading: label hidden, spinner centred. The spinner takes --btn-fg, which
+ * stays set while the label colour is transparent. */
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn,
+  .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .shui-glass-btn).is-loading {
+  color: transparent;
+  pointer-events: none;
+}
+
+.atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+  .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+  .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn,
+  .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+  .shui-glass-btn).is-loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid var(--btn-fg);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: atlas-btn-spin 0.8s linear infinite;
+}
+
+@keyframes atlas-btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: the spinner stays as a static arc, it does not rotate. */
+@media (prefers-reduced-motion: reduce) {
+  .atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+    .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+    .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+    .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn, .action-btn,
+    .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+    .shui-glass-btn).is-loading::after {
+    animation: none;
+  }
+}
+
+/* ── Variants: assign --btn-* only ───────────────────────────────────── */
+.atlas-paper .btn-primary {
+  --btn-bg: var(--anth-accent);
+  --btn-fg: var(--anth-ink-inverse);
+  --btn-border: var(--anth-accent);
+  --btn-shadow: var(--anth-highlight), var(--anth-shadow-1);
+  --btn-bg-hover: var(--anth-accent-hover);
+  --btn-fg-hover: var(--anth-ink-inverse);
+  --btn-border-hover: var(--anth-accent-hover);
+  --btn-bg-active: var(--anth-accent-press);
+}
+
+.atlas-paper .btn-ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-ink-soft);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-surface-sunken);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-rule-strong);
+}
+
+.atlas-paper .btn-danger {
+  --btn-bg: var(--anth-danger);
+  --btn-fg: var(--anth-ink-inverse);
+  --btn-border: var(--anth-danger);
+  --btn-shadow: var(--anth-highlight), var(--anth-shadow-1);
+  --btn-bg-hover: var(--anth-danger-hover);
+  --btn-fg-hover: var(--anth-ink-inverse);
+  --btn-border-hover: var(--anth-danger-hover);
+  --btn-bg-active: var(--anth-danger-hover);
+}
+
+.atlas-paper .btn-danger-ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-danger);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-danger-soft);
+  --btn-fg-hover: var(--anth-danger);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-danger-border);
+}
+
+.atlas-paper .btn-link {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-accent-ink);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: transparent;
+  --btn-fg-hover: var(--anth-accent-hover);
+  --btn-border-hover: transparent;
+  --btn-bg-active: transparent;
+  height: auto;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.atlas-paper .btn-icon {
+  --btn-bg: transparent;
+  --btn-fg: var(--anth-ink-soft);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--anth-surface-sunken);
+  --btn-fg-hover: var(--anth-ink);
+  --btn-border-hover: transparent;
+  --btn-bg-active: var(--anth-rule-strong);
+  width: 36px;
+  padding: 0;
+}
+
+/* ── Sizes ───────────────────────────────────────────────────────────── */
+.atlas-paper .btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--anth-text-small-size);
+}
+
+.atlas-paper .btn-sm.btn-icon {
+  width: 28px;
+}
+
+.atlas-paper .btn-lg {
+  height: 44px;
+  padding: 0 20px;
+  font-size: var(--anth-text-button-lg-size);
+}
+
+.atlas-paper .btn-lg.btn-icon {
+  width: 44px;
+}
+
+/* Link-style buttons keep their text height, not the control height. */
+.atlas-paper .btn-link.btn-sm,
+.atlas-paper .btn-link.btn-lg {
+  height: auto;
+  padding: 0;
+}
+
+/* Touch contexts: 44px hit targets on coarse pointers and phone widths.
+ * Desktop keeps the 28 / 36 / 44 sizes above, with the WCAG 2.5.8 24px floor.
+ * min-height beats each size's fixed height, so no variant needs repeating. */
+@media (pointer: coarse), (max-width: 640px) {
+  .atlas-paper :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+    .btn-danger-ghost, .btn-link, .btn-icon, .btn-brand, .btn-dark, .btn-warm-sand,
+    .btn-outline, .btn-warning, .btn-success, .btn-info, .btn-text, .btn-text--danger,
+    .btn-icon-inline, .submit-btn, .primary-action, .vocab-add, .hero-btn, .page-btn,
+    .action-btn, .header-btn, .data-mgmt-btn, .agent-run-button, .agent-text-button,
+    .agent-icon-button, .remove-btn, .search-clear-btn, .clock-close-btn,
+    .shui-glass-btn) {
+    min-height: var(--anth-touch-target);
+  }
+
+  .atlas-paper :is(.btn-icon, .agent-icon-button, .remove-btn, .search-clear-btn,
+    .clock-close-btn) {
+    min-width: var(--anth-touch-target);
+  }
+}

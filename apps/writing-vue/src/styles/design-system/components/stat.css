@@ -1,0 +1,56 @@
+/*
+ * Stat: spec section 2.11.
+ */
+
+/* ── Stat: numeric KPI with a caption above it ──────────────────────── */
+.atlas-paper .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 var(--anth-space-5);
+}
+
+.atlas-paper .stat + .stat {
+  border-left: 1px solid var(--anth-rule);
+}
+
+.atlas-paper .stat:first-child {
+  padding-left: 0;
+}
+
+.atlas-paper .stat-label {
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-caption-size);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caption);
+  line-height: var(--anth-text-caption-line);
+  text-transform: uppercase;
+}
+
+.atlas-paper .stat-value {
+  color: var(--anth-ink);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-stat-size);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-stat);
+  line-height: var(--anth-text-stat-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-paper .stat-delta {
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-paper .stat-delta.is-up {
+  color: var(--anth-success);
+}
+
+.atlas-paper .stat-delta.is-down {
+  color: var(--anth-danger);
+}
+

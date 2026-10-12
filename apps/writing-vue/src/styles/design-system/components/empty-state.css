@@ -1,0 +1,46 @@
+/*
+ * Empty state — spec section 2.14.
+ *
+ * Centred in its container. Glyph, heading, one line of description, and at
+ * most one action. Never a bare grey sentence.
+ */
+
+.atlas-paper .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--anth-space-2);
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 48px var(--anth-space-6);
+  color: var(--anth-ink-muted);
+  text-align: center;
+}
+
+.atlas-paper .empty-state-glyph {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  color: var(--anth-ink-faint);
+}
+
+.atlas-paper .empty-state-glyph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.atlas-paper .empty-state h3 {
+  margin: var(--anth-space-2) 0 0;
+  color: var(--anth-ink);
+}
+
+.atlas-paper .empty-state-desc {
+  margin: 0;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+  line-height: var(--anth-text-small-line);
+}
+
+.atlas-paper .empty-state-action {
+  margin-top: var(--anth-space-3);
+}
