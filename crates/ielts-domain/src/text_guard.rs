@@ -175,3 +175,9 @@ mod tests {
         }
     }
 }
+
+/// Whether a statement may be placed into a model prompt as learner data: no
+/// injection/secret marker and no forbidden inference domain.
+pub fn is_safe_for_prompt(value: &str) -> bool {
+    !contains_security_marker(value) && !contains_forbidden_inference_domain(value)
+}

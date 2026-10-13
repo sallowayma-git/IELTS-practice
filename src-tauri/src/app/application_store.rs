@@ -138,6 +138,15 @@ impl CoachStore for ApplicationStore<'_> {
             .map(|_| ())
             .map_err(enrichment_error)
     }
+
+    fn learner_profile(
+        &self,
+        thread_id: &str,
+    ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::freeze_coach_learner_profile(conn, thread_id))
+            .map_err(enrichment_error)
+    }
 }
 
 impl CoachFeedbackStore for ApplicationStore<'_> {

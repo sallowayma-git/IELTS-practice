@@ -755,6 +755,7 @@ fn migration_does_not_guess_legacy_release_predecessors() {
             "DROP TABLE prompt_skill_release_heads;
              DROP TABLE prompt_skill_releases;
              ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
+             ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
              DELETE FROM schema_migrations WHERE version >= 25;",
         ).unwrap();
         let template = ensure_prompt_template(&conn, PromptModule::AttemptReview, None).unwrap();
