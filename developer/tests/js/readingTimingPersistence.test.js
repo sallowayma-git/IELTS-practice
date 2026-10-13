@@ -13,7 +13,7 @@ test('Reading timing survives ownership changes, transaction failures, suite fol
         const page = await browser.newPage();
         await page.goto(`http://127.0.0.1:${server.address().port}`);
         for (const file of ['data/v2/dataCatalog.js', 'data/v2/dataKernel.js', 'data/practiceRecordSource.js',
-            'services/readingTiming.js', 'data/v2/appData.js']) {
+            'services/readingTiming.js', 'core/vocabScheduler.js', 'core/practiceReviewScheduler.js', 'data/v2/appData.js']) {
             if (file === 'data/v2/appData.js') await page.evaluate(() => { window.TimingTestKernel = __AppDataV2Internals.DataKernel; });
             await page.addScriptTag({ content: fs.readFileSync(new URL(`../../../js/${file}`, import.meta.url), 'utf8') });
         }

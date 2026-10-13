@@ -46,6 +46,9 @@ async function loadAppData(page, seedWords) {
             kernel.close();
         }
     }, seedWords);
+    for (const name of ['core/vocabScheduler.js', 'core/practiceReviewScheduler.js']) {
+        await page.addScriptTag({ content: source(name) });
+    }
     await page.addScriptTag({ content: appDataSource });
     await page.evaluate(() => AppData.ready);
     assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');

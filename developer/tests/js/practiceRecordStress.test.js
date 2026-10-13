@@ -195,6 +195,8 @@ function createHarness(seed = null) {
     sandbox.globalThis = sandbox;
     const context = vm.createContext(sandbox);
     vm.runInContext(source('js/data/practiceRecordSource.js'), context, { filename: 'practiceRecordSource.js' });
+    vm.runInContext(source('js/core/vocabScheduler.js'), context, { filename: 'vocabScheduler.js' });
+    vm.runInContext(source('js/core/practiceReviewScheduler.js'), context, { filename: 'practiceReviewScheduler.js' });
     vm.runInContext(source('js/data/v2/appData.js'), context, { filename: 'appData.js' });
     return {
         app: sandbox.AppData,

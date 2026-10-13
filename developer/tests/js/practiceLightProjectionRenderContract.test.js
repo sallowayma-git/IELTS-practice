@@ -33,6 +33,8 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const APP_DATA_SOURCE = 'js/data/v2/appData.js';
 const MAIN_SOURCE = 'js/main.js';
 const RECORD_SOURCE_MODULE = 'js/data/practiceRecordSource.js';
+const VOCAB_SCHEDULER_SOURCE = 'js/core/vocabScheduler.js';
+const PRACTICE_REVIEW_SCHEDULER_SOURCE = 'js/core/practiceReviewScheduler.js';
 const ONBOARDING_SOURCE = 'js/components/onboardingTour.js';
 
 /**
@@ -264,6 +266,8 @@ function loadRealAppData() {
     sandbox.globalThis = sandbox;
     const context = vm.createContext(sandbox);
     vm.runInContext(recordSource, context, { filename: RECORD_SOURCE_MODULE });
+    vm.runInContext(readSource(VOCAB_SCHEDULER_SOURCE), context, { filename: VOCAB_SCHEDULER_SOURCE });
+    vm.runInContext(readSource(PRACTICE_REVIEW_SCHEDULER_SOURCE), context, { filename: PRACTICE_REVIEW_SCHEDULER_SOURCE });
     vm.runInContext(appDataSource, context, { filename: APP_DATA_SOURCE });
     return sandbox.AppData;
 }

@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 // Exercise full backup import through production AppData and actual IndexedDB.
 const scripts = [
     'data/v2/dataCatalog.js', 'data/v2/dataKernel.js', 'data/practiceRecordSource.js',
-    'data/v2/readingVocabularyModel.js', 'data/v2/appData.js'
+    'data/v2/readingVocabularyModel.js', 'core/vocabScheduler.js', 'core/practiceReviewScheduler.js', 'data/v2/appData.js'
 ].map((name) => fs.readFileSync(new URL(`../../../js/${name}`, import.meta.url), 'utf8'));
 const AT = '2026-09-08T01:00:00.000Z';
 const SOURCE = { kind: 'imported', id: 'membership-backup-library' };

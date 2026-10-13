@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { chromium } from 'playwright';
 const paths = ['data/practiceRecordSource.js', 'data/v2/dataCatalog.js', 'data/v2/dataKernel.js',
-    'data/v2/readingVocabularyModel.js', 'data/v2/readingViewCache.js', 'data/v2/appData.js'];
+    'data/v2/readingVocabularyModel.js', 'data/v2/readingViewCache.js', 'core/vocabScheduler.js', 'core/practiceReviewScheduler.js', 'data/v2/appData.js'];
 const sources = paths.map(path => fs.readFileSync(new URL(`../../../js/${path}`, import.meta.url), 'utf8'));
 test('persistent reading previews survive reload, recover corruption, and reject obsolete pages after restore', async () => {
     const server = http.createServer((_req, res) => res.end('<!doctype html><title>Isolated cache test</title>'));

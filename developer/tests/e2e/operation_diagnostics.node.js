@@ -13,7 +13,7 @@ const fixture = path.join(reports, 'operation-diagnostics-fixture.html');
 const sources = ['js/diagnostics/diagnosticContract.js', 'js/diagnostics/bootstrapCollector.js',
     'js/diagnostics/diagnosticReporter.js', 'js/diagnostics/operationDiagnostics.js',
     'js/data/practiceRecordSource.js', 'js/data/v2/dataCatalog.js', 'js/data/v2/dataKernel.js',
-    'js/data/v2/readingVocabularyModel.js', 'js/data/v2/appData.js', 'js/core/practiceCore.js',
+    'js/data/v2/readingVocabularyModel.js', 'js/core/vocabScheduler.js', 'js/core/practiceReviewScheduler.js', 'js/data/v2/appData.js', 'js/core/practiceCore.js',
     'js/core/practiceRecorder.js', 'js/app/examSessionMixin.js', 'js/app/suitePracticeMixin.js',
     'js/presentation/incident-center.js', 'js/presentation/message-center.js'];
 fs.writeFileSync(fixture, '<!doctype html><meta charset="utf-8"><title>Operation diagnostics fixture</title>'

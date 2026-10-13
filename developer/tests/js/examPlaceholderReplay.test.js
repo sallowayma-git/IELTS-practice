@@ -464,6 +464,53 @@ function testWrongExamInitDoesNotPoisonActiveToken() {
     );
 }
 
+// 复盘调度：占位页只有在宿主明确带了 reviewAttemptId 时才回执 REPLAY_APPLIED，
+// 普通历史回放绝不能产生复盘记账。
+function testScheduledReplayAcknowledgesApplied() {
+    const harness = createHarness();
+    harness.sendMessage({
+        type: 'REPLAY_PRACTICE_RECORD',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            recordId: 'record-1',
+            reviewSessionId: 'review-1',
+            reviewAttemptId: 'attempt-1',
+            reviewEntryIndex: 0,
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'B' },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0 },
+            duration: 120
+        }
+    });
+    const ack = harness.openerMessages.find((item) => item && item.type === 'REPLAY_APPLIED');
+    assert(ack, '带 attempt 的回放必须回执 REPLAY_APPLIED');
+    assert.strictEqual(ack.data.reviewAttemptId, 'attempt-1');
+    assert.strictEqual(ack.data.recordId, 'record-1');
+    assert.strictEqual(ack.data.examId, 'reading-p1');
+    assert.strictEqual(ack.data.reviewEntryIndex, 0);
+    assert.strictEqual(ack.data.reviewSessionId, 'review-1');
+}
+
+function testPlainReplayDoesNotAcknowledgeApplied() {
+    const harness = createHarness();
+    harness.sendMessage({
+        type: 'REPLAY_PRACTICE_RECORD',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'B' },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0 },
+            duration: 120
+        }
+    });
+    assert(
+        !harness.openerMessages.some((item) => item && item.type === 'REPLAY_APPLIED'),
+        '普通历史回放不得回执 REPLAY_APPLIED'
+    );
+}
+
 function run() {
     testReplayUsesCanonicalCorrectAnswerMap();
     testReplayRefusesLegacyCorrectAnswerFallbacks();
@@ -472,6 +519,8 @@ function run() {
     testPracticeCompleteCarriesSubmissionContract();
     testManualNavigationWaitsForTrustedHostState();
     testWrongExamInitDoesNotPoisonActiveToken();
+    testScheduledReplayAcknowledgesApplied();
+    testPlainReplayDoesNotAcknowledgeApplied();
 
     process.stdout.write(JSON.stringify({
         status: 'pass',

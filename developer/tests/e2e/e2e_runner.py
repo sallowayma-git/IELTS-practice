@@ -37,6 +37,7 @@ E2E_CASES = [
     "reading_analytics.py",
     "reading_timing.py",
     "reading_single_flow.py",
+    "practice_review_flow.py",
     "reading_reader_isolation.py",
     "reading_reader_occurrences.py",
     "reading_bookshelf_entrypoints.py",

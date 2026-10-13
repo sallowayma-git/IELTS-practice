@@ -358,6 +358,106 @@ async function testUnifiedReadingReplayCanonicalMapWins() {
     });
 }
 
+// 复盘调度：legacy 增强器只在宿主明确带了 reviewAttemptId 时才回执，
+// 且回执必须带齐宿主校验所需的 record / exam / entryIndex / attempt。
+async function testPracticeEnhancerAcknowledgesScheduledReplay() {
+    const enhancer = loadEnhancer();
+    const sent = [];
+    enhancer.sendMessage = function (type, data) { sent.push({ type, data }); return true; };
+    enhancer.examId = 'reading-p1';
+    enhancer.sessionId = 'session-1';
+    enhancer.reviewSessionId = 'review-1';
+    enhancer.reviewEntryIndex = 0;
+
+    enhancer.acknowledgeReplayApplied({
+        recordId: 'record-1',
+        reviewAttemptId: 'attempt-1',
+        reviewSessionId: 'review-1',
+        reviewEntryIndex: 0
+    }, { examId: 'reading-p1' });
+    assert.strictEqual(sent.length, 1, '带 attempt 的回放必须回执一次');
+    assert.strictEqual(sent[0].type, 'REPLAY_APPLIED');
+    assert.strictEqual(sent[0].data.recordId, 'record-1');
+    assert.strictEqual(sent[0].data.reviewAttemptId, 'attempt-1');
+    assert.strictEqual(sent[0].data.examId, 'reading-p1');
+    assert.strictEqual(sent[0].data.sessionId, 'session-1');
+    assert.strictEqual(sent[0].data.reviewEntryIndex, 0);
+
+    sent.length = 0;
+    enhancer.acknowledgeReplayApplied({ recordId: 'record-1' }, { examId: 'reading-p1' });
+    enhancer.acknowledgeReplayApplied({ reviewAttemptId: 'attempt-1' }, { examId: 'reading-p1' });
+    enhancer.acknowledgeReplayApplied({}, { examId: 'reading-p1' });
+    assert.strictEqual(sent.length, 0, '普通历史回放不得回执 REPLAY_APPLIED');
+    recordResult('practice enhancer acknowledges only scheduled replays', true, {});
+}
+
+// 复盘调度：统一阅读页只在宿主带了 reviewAttemptId 时才回执 REPLAY_APPLIED。
+// 回执发生在解析渲染完成之后（见 applyReplayRecord 末尾），这里验证守卫与载荷。
+async function testUnifiedReadingAcknowledgesScheduledReplay() {
+    const posted = [];
+    const parentStub = {
+        postMessage(message, targetOrigin) { posted.push({ message, targetOrigin }); }
+    };
+    const windowStub = {
+        __IELTS_READING_PAGE_TEST_HOOKS__: true,
+        location: { search: '', href: 'file:///repo/ReadingPractice/reading.html', protocol: 'file:' },
+        opener: parentStub,
+        parent: parentStub,
+        CSS: { escape(value) { return String(value); } },
+        addEventListener() {},
+        removeEventListener() {},
+        AnswerMatchCore: {
+            compareAnswers(userAnswer, correctAnswer) {
+                return String(userAnswer == null ? '' : userAnswer).trim().toLowerCase()
+                    === String(correctAnswer == null ? '' : correctAnswer).trim().toLowerCase();
+            }
+        }
+    };
+    const sandbox = {
+        window: windowStub,
+        globalThis: windowStub,
+        document: createDocumentStub(),
+        console: { log() {}, info() {}, warn() {}, error() {} },
+        URLSearchParams, Date, Math, String, Number, Object, Array, Boolean, Set, Map, Promise,
+        setTimeout() { return 1; },
+        clearTimeout() {},
+        HTMLElement: function HTMLElement() {},
+        HTMLInputElement: function HTMLInputElement() {},
+        HTMLTextAreaElement: function HTMLTextAreaElement() {},
+        HTMLSelectElement: function HTMLSelectElement() {}
+    };
+    const context = vm.createContext(sandbox);
+    runScript('js/core/practiceCore.js', context);
+    runScript('js/runtime/unifiedReadingPage.js', context);
+    const hooks = windowStub.__IELTS_UNIFIED_READING_PAGE_TEST__;
+    assert.strictEqual(typeof hooks.acknowledgeReplayApplied, 'function', '统一阅读页应暴露回执函数以便测试');
+
+    hooks.acknowledgeReplayApplied({
+        recordId: 'record-1',
+        reviewAttemptId: 'attempt-1',
+        reviewSessionId: 'review-1',
+        reviewEntryIndex: 0
+    }, 'reading-p1');
+    const acks = posted.filter((item) => item.message && item.message.type === 'REPLAY_APPLIED');
+    assert.strictEqual(acks.length, 1, '带 attempt 的回放必须回执一次');
+    assert.strictEqual(acks[0].message.data.recordId, 'record-1');
+    assert.strictEqual(acks[0].message.data.reviewAttemptId, 'attempt-1');
+    assert.strictEqual(acks[0].message.data.examId, 'reading-p1');
+    assert.strictEqual(acks[0].message.data.reviewEntryIndex, 0);
+    assert.strictEqual(acks[0].message.source, 'practice_page');
+
+    posted.length = 0;
+    hooks.acknowledgeReplayApplied({ recordId: 'record-1' }, 'reading-p1');
+    hooks.acknowledgeReplayApplied({ reviewAttemptId: 'attempt-1' }, 'reading-p1');
+    hooks.acknowledgeReplayApplied({}, 'reading-p1');
+    assert.strictEqual(
+        posted.filter((item) => item.message && item.message.type === 'REPLAY_APPLIED').length,
+        0,
+        '普通历史回放不得回执 REPLAY_APPLIED'
+    );
+    recordResult('unified reading acknowledges only scheduled replays', true, {});
+}
+
 async function runAllTests() {
     const tests = [
         testPracticeEnhancerReplayCanonicalMapWins,
@@ -365,7 +465,9 @@ async function runAllTests() {
         testPracticeEnhancerSubmissionPayloadCarriesCorrectAnswerMap,
         testPracticeEnhancerCompletionAddsSubmissionContract,
         testUnifiedReadingReplayCanonicalMapWins,
-        testUnifiedReadingReplayRefusesComparisonCorrectAnswerFallback
+        testUnifiedReadingReplayRefusesComparisonCorrectAnswerFallback,
+        testPracticeEnhancerAcknowledgesScheduledReplay,
+        testUnifiedReadingAcknowledgesScheduledReplay
     ];
     for (const testFn of tests) {
         try {

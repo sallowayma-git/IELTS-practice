@@ -79,6 +79,9 @@ async function loadAppData(page, { fault = null, seedBackup = null } = {}) {
         await kernel.mutate([{ logicalKey: 'backups.entries', data: [backup] }], { operationId: 'seed-existing-backup' });
         kernel.close();
     }, seedBackup);
+    for (const name of ['core/vocabScheduler.js', 'core/practiceReviewScheduler.js']) {
+        await page.addScriptTag({ content: source(name) });
+    }
     await page.addScriptTag({ content: appDataSource });
     await page.evaluate(() => AppData.ready);
     assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
