@@ -211,6 +211,8 @@ export function mapHistoryDetailToSubmission(detail) {
     submittedAt: attempt.submittedAt || attempt.submitted_at || attempt.completedAt || attempt.completed_at || null,
     title: attempt.titleSnapshot || attempt.title_snapshot || detail?.summary?.title || null,
     highlights,
+    analysisSignals: detail?.analysisSignals || null,
+    singleAttemptAnalysis: detail?.singleAttemptAnalysis || null,
     source: 'tauri-history'
   }
 }
