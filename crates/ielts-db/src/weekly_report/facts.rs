@@ -106,6 +106,8 @@ pub struct WeekFacts {
     pub redos: Vec<RedoFact>,
     pub writing: Vec<WritingFact>,
     pub coach: Vec<CoachFact>,
+    /// Per question type: (answered right, answered wrong). Blanks are neither.
+    pub type_totals: BTreeMap<String, (u32, u32)>,
 }
 
 impl WeekFacts {
@@ -229,6 +231,19 @@ fn reading_facts(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>, 
             }
         })
         .collect()
+}
+
+fn type_totals(window: &[Obs]) -> BTreeMap<String, (u32, u32)> {
+    let mut totals: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+    for o in window.iter().filter(|o| o.kind == "reading.question.outcome") {
+        let qtype = o.payload.get("questionKind").and_then(Value::as_str).unwrap_or("unknown");
+        match o.polarity.as_deref() {
+            Some("positive") => totals.entry(qtype.to_owned()).or_default().0 += 1,
+            Some("negative") => totals.entry(qtype.to_owned()).or_default().1 += 1,
+            _ => {}
+        }
+    }
+    totals
 }
 
 fn miss_facts(window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -> Vec<MissFact> {
@@ -382,6 +397,7 @@ pub fn week_facts(
         redos: redo_facts(&window, &mut assets, offset),
         writing: writing_facts(conn, &window, offset),
         coach: coach_facts(conn, user_id, &from, &to, offset)?,
+        type_totals: type_totals(&window),
     })
 }
 
