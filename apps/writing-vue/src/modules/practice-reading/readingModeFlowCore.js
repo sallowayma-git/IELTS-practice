@@ -123,10 +123,23 @@ export function canSnapshotReadingAnswers(options = {}) {
   )
 }
 
+/**
+ * A resumable reading draft is owned by exactly one practice scope. Suite and
+ * endless attempts both persist their owning session id in `suite_id`, so the
+ * expected owner is whichever session the page was opened with; a standalone
+ * single-passage draft has no owner.
+ */
+export function readingDraftOwnerMatches(attempt, options = {}) {
+  const expectedOwnerId = String(options.suiteId || options.endlessSessionId || '').trim()
+  const draftOwnerId = String(attempt?.suiteId || attempt?.suite_id || '').trim()
+  return draftOwnerId === expectedOwnerId
+}
+
 export default {
   mapTauriSubmissionToUi,
   findNextActiveSuitePassage,
   buildSuiteReviewNavigationTarget,
   buildEndlessNextRoute,
-  canSnapshotReadingAnswers
+  canSnapshotReadingAnswers,
+  readingDraftOwnerMatches
 }
