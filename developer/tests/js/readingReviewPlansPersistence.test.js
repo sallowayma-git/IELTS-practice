@@ -20,6 +20,21 @@ test('article plans and practice records commit atomically across real IndexedDB
             for (const content of scripts) await page.addScriptTag({ content });
             await page.evaluate(() => AppData.ready);
         }
+        const firstRead = await pages[0].evaluate(async () => {
+            const prototype = IDBObjectStore.prototype;
+            const originals = {}; let writes = 0; let scans = 0;
+            for (const method of ['put', 'getAll', 'openCursor']) {
+                originals[method] = prototype[method];
+                prototype[method] = function(...args) {
+                    if (method === 'put') writes++;
+                    else if (this.name.startsWith('practice')) scans++;
+                    return originals[method].apply(this, args);
+                };
+            }
+            try { return { total: (await AppData.practice.listReviewQueue()).records.length, writes, scans }; }
+            finally { for (const method of Object.keys(originals)) prototype[method] = originals[method]; }
+        });
+        assert.deepEqual(firstRead, { total: 0, writes: 0, scans: 0 }, 'first read never migrates or scans history');
         const complete = (page, id, examId, day, correct = 7) => page.evaluate(async input => {
             return AppData.practice.completeAttempt({ operationId: input.id, record: {
                 ...input, sessionId: input.id, type: 'reading', title: input.examId,

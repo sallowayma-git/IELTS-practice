@@ -677,3 +677,45 @@ test('文章任务只回放套题的目标篇，评分关联该篇计划', async
     assert.equal(h.outcomes[0].reviewPlanId, 'reading-b');
     assert.equal(h.outcomes[0].recordId, 'parent');
 });
+
+
+test('单篇回放使用子篇成绩，缺少子篇指标时不借用套题成绩或标注', async () => {
+    for (const entry of [
+        { examId: 'article-a', scoreInfo: { correct: 5, total: 10 } },
+        { examId: 'article-a', correctAnswers: 5, totalQuestions: 10 },
+        { examId: 'article-a' }
+    ]) {
+        const h = loadReviewFlow({ record: {
+            id: 'parent', examId: 'suite-parent', type: 'reading-suite',
+            correctAnswers: 13, totalQuestions: 20, accuracy: 0.65, percentage: 65,
+            scoreInfo: { correct: 13, total: 20 }, duration: 1200,
+            notes: [{ body: 'parent note' }], highlights: [{ id: 'parent-highlight' }],
+            metadata: { libraryConfigurationId: 'library-a' },
+            suiteEntries: [entry, { examId: 'article-b', scoreInfo: { correct: 8, total: 10 } }]
+        } });
+        h.windowStub.AppData.practice.getReviewTask = async () => ({
+            id: 'article:library-a:article-a', recordId: 'parent', unit: 'article',
+            examId: 'article-a', entryIndex: 0, libraryConfigurationId: 'library-a',
+            reviewState: reviewState('2026-09-05T00:00:00.000Z')
+        });
+        const context = vm.createContext({ window: h.windowStub, document: h.documentStub,
+            console, Date, Math, Map, Set, URL, URLSearchParams, setTimeout, clearTimeout });
+        vm.runInContext(fs.readFileSync(path.join(repoRoot, 'js/app/examSessionMixin.js'), 'utf8'), context);
+        const host = Object.assign({}, h.windowStub.ExamSystemAppMixins.examSession);
+        let replay;
+        h.windowStub.app.openPracticeRecordReplay = async (record, options) => {
+            assert.equal(record.id, 'parent'); assert.equal(record.type, 'reading');
+            assert.equal(record.metadata.libraryConfigurationId, 'library-a');
+            assert.equal(record.notes, undefined); assert.equal(record.highlights, undefined);
+            replay = host._buildReviewSession(record, options);
+            return replay;
+        };
+        await h.flow.start('article-task-a');
+        assert.equal(replay.entries.length, 1);
+        assert.equal(replay.entries[0].examId, 'article-a');
+        const scored = Boolean(entry.scoreInfo || entry.totalQuestions);
+        assert.equal(replay.entries[0].scoreInfo.correct, scored ? 5 : 0);
+        assert.equal(replay.entries[0].scoreInfo.total, scored ? 10 : 0);
+        assert.equal(replay.entries[0].scoreInfo.percentage, scored ? 50 : 0);
+    }
+});

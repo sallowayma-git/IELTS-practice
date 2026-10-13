@@ -20,7 +20,6 @@
     }
 
     function normalizeAppliedAttemptIds(value) {
-        if (value === undefined) return [];
         if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
         const normalized = [];
         const seen = new Set();
@@ -78,7 +77,8 @@
         }
         const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
         const nextReview = validIso(input.nextReview, 'nextReview');
-        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        if (typeof input.updatedAt !== 'string' || !input.updatedAt.trim()) throw new TypeError('updatedAt is required');
+        const updatedAt = validIso(input.updatedAt, 'updatedAt');
         const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
         if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
         const normalizedLastAttemptId = input.lastReviewAttemptId == null
@@ -87,7 +87,7 @@
         const lastReviewAttemptId = normalizedLastAttemptId || null;
         const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
         if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
-            appliedReviewAttemptIds.push(lastReviewAttemptId);
+            throw new TypeError('lastReviewAttemptId must be in appliedReviewAttemptIds');
         }
         return {
             schemaVersion: 1,
@@ -166,7 +166,6 @@
     }
 
     global.PracticeReviewScheduler = Object.freeze({
-        __v1: true,
         __v2: true,
         qualityFromScore,
         QUALITY_VALUES,

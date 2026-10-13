@@ -16044,8 +16044,13 @@ class VirtualScroller {
             if (task && task.unit === 'article' && task.entryIndex !== null) {
                 const entry = record.suiteEntries && record.suiteEntries[task.entryIndex];
                 if (!entry || String(entry.examId) !== task.examId) throw new Error('复盘文章与最新记录不匹配');
-                record = Object.assign({}, record, entry, { id: record.id, examId: task.examId,
-                    suiteEntries: [], suiteEntrySummaries: [], suite: null, mode: 'single' });
+                record = Object.assign({}, entry, {
+                    id: record.id, examId: task.examId, type: 'reading', mode: 'single',
+                    metadata: Object.assign({}, record.metadata, entry.metadata, {
+                        libraryConfigurationId: task.libraryConfigurationId
+                    }),
+                    suiteEntries: [], suiteEntrySummaries: [], suite: null
+                });
             }
             const reviewAttemptId = generateAttemptId();
             state.attempts.set(reviewAttemptId, task);

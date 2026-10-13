@@ -52,30 +52,13 @@ function deepFreeze(value) {
     return Object.freeze(value);
 }
 
-test('v2 upgrades a preloaded v1 scheduler and remains compatible with the v1 guard', () => {
-    const legacyScheduler = Object.freeze({
-        __v1: true,
-        legacy: true
-    });
-    const runtime = createRuntime(legacyScheduler);
+test('loading the current scheduler twice preserves its instance', () => {
+    const runtime = createRuntime();
     runtime.loadScript('js/core/vocabScheduler.js');
     runtime.loadScript('js/core/practiceReviewScheduler.js');
-
-    const upgradedScheduler = runtime.windowStub.PracticeReviewScheduler;
-    assert.notEqual(upgradedScheduler, legacyScheduler);
-    assert.equal(upgradedScheduler.__v1, true);
-    assert.equal(upgradedScheduler.__v2, true);
-    assert.equal(upgradedScheduler.legacy, undefined);
-
-    vm.runInContext(`
-        (function initLegacyScheduler(global) {
-            if (global.PracticeReviewScheduler && global.PracticeReviewScheduler.__v1 === true) return;
-            global.PracticeReviewScheduler = Object.freeze({ __v1: true, legacyOverride: true });
-        })(typeof window !== 'undefined' ? window : globalThis);
-    `, runtime.context, { filename: 'legacy-practiceReviewScheduler.js' });
-
-    assert.equal(runtime.windowStub.PracticeReviewScheduler, upgradedScheduler);
-    assert.equal(runtime.windowStub.PracticeReviewScheduler.legacyOverride, undefined);
+    const scheduler = runtime.windowStub.PracticeReviewScheduler;
+    runtime.loadScript('js/core/practiceReviewScheduler.js');
+    assert.equal(runtime.windowStub.PracticeReviewScheduler, scheduler);
 });
 
 test('replaying a good outcome leaves the scheduled state unchanged', () => {
@@ -162,27 +145,15 @@ test('replaying an older hard attempt after a newer attempt remains idempotent',
     assert.deepEqual(clone(replay), replaySnapshot);
 });
 
-test('normalization migrates legacy attempt state and validates stored history', () => {
+test('normalization requires current schedule clocks and attempt history', () => {
     const scheduler = loadScheduler();
     const initial = clone(scheduler.createInitialState('2026-09-01T08:00:00.000Z'));
-
-    assert.deepEqual(initial.appliedReviewAttemptIds, []);
-
-    delete initial.appliedReviewAttemptIds;
-    initial.lastReviewAttemptId = 'legacy-attempt';
-    const migrated = scheduler.normalizeState(initial);
-    assert.deepEqual(clone(migrated.appliedReviewAttemptIds), ['legacy-attempt']);
-
-    const legacyReplayInput = deepFreeze(clone(migrated));
-    const legacyReplaySnapshot = clone(legacyReplayInput);
-    const legacyReplay = scheduler.scheduleOutcome(
-        legacyReplayInput,
-        'hard',
-        '2026-09-10T08:00:00.000Z',
-        'legacy-attempt'
-    );
-    assert.deepEqual(clone(legacyReplayInput), legacyReplaySnapshot);
-    assert.deepEqual(clone(legacyReplay), legacyReplaySnapshot);
+    const missingClock = clone(initial); delete missingClock.updatedAt;
+    assert.throws(() => scheduler.normalizeState(missingClock), /updatedAt is required/);
+    const missingHistory = clone(initial); delete missingHistory.appliedReviewAttemptIds;
+    assert.throws(() => scheduler.normalizeState(missingHistory), /appliedReviewAttemptIds must be an array/);
+    assert.throws(() => scheduler.normalizeState({ ...initial, lastReviewAttemptId: 'missing-attempt' }),
+        /lastReviewAttemptId must be in appliedReviewAttemptIds/);
 
     const normalized = scheduler.normalizeState({
         ...initial,

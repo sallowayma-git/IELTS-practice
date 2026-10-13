@@ -3,11 +3,10 @@
  * 阅读练习复盘调度 —— 数据层契约。
  *
  * 这一层的不变量（任何改动都不得回退）：
- *   1. 完整 reviewState 只住在 practiceAnnotations 根级，既不进 practiceSummaries/Details，
- *      也不进 annotations.suiteEntries；
+ *   1. 完整 reviewState 只住在 practice.reviewPlans，既不进练习事实也不进标注；
  *   2. 只有“新完成的、真实的、有错题的阅读记录”才自动入队；满分 / 听力 / 既有历史不入队；
- *   3. listReviewQueue 是读取时投影：只读 summaries + annotations，绝不加载 details；
- *   4. recordReviewOutcome 是 reviewState 的唯一推进入口，且对同一 reviewAttemptId 幂等；
+ *   3. listReviewQueue 只读文章计划文档，首次读取不扫描历史或写入；
+ *   4. 新作答自动评分和 recordReviewOutcome 推进 reviewState，且对同一 reviewAttemptId 幂等；
  *   5. 导出/导入必须完整 round-trip 复盘状态。
  */
 
@@ -70,6 +69,7 @@ function harness() {
             return options.withMeta ? { data: clone(data), envelope: clone(value) } : clone(data);
         }
         async mutate(changes, options = {}) {
+            if (shared.documentConflictOnce) { shared.documentConflictOnce = false; throw new AppDataError('CONFLICT', 'forced document conflict'); }
             const op = String(options.operationId || 'doc-' + (++shared.counter));
             const revisions = {};
             for (const change of changes) {
@@ -292,32 +292,28 @@ test('既有记录再次落库既不新建也不重置 reviewState', async () =>
     assert.strictEqual(afterResave.nextReview, scheduled.reviewState.nextReview, '重新落库不得重置 nextReview');
 });
 
-test('导入数据里合法的 reviewState 被保留，非法的被丢弃且不阻断落库', async () => {
-    const { app, shared } = harness();
-    await app.ready;
-    const validState = {
-        schemaVersion: 1, algorithm: 'sm2-practice', algorithmVersion: 1,
-        easeFactor: 2.36, interval: 6, repetitions: 2, reviewCount: 2, lapseCount: 1,
-        lastReviewed: '2026-08-20T00:00:00.000Z', nextReview: '2026-08-26T00:00:00.000Z',
-        lastQuality: 'good', lastReviewAttemptId: 'legacy-attempt', appliedReviewAttemptIds: ['legacy-attempt'], updatedAt: '2026-08-20T00:00:00.000Z'
-    };
-    await app.practice.completeAttempt({
-        operationId: 'op-imported',
-        record: readingRecord({ id: 'imported', sessionId: 's-imported', reviewState: validState })
-    });
-    assert.deepStrictEqual(storedLayer(shared, 'practiceAnnotations', 'imported').reviewState, validState,
-        '导入的合法 reviewState 必须原样保留');
-
-    await app.practice.completeAttempt({
-        operationId: 'op-broken',
-        record: readingRecord({ id: 'broken', examId: 'reading-broken', sessionId: 's-broken', reviewState: { schemaVersion: 99, easeFactor: 'nope' } })
-    });
-    const broken = storedLayer(shared, 'practiceAnnotations', 'broken');
-    assert(broken, '非法 reviewState 不得阻断练习记录落库');
-    assert(!broken.reviewState || broken.reviewState.schemaVersion === 1,
-        '非法 reviewState 必须被丢弃或替换为合法初始状态');
-    const queue = await app.practice.listReviewQueue({ now: '2026-09-05T00:00:00.000Z' });
-    assert(queue.records.some((record) => record.id === 'imported'), '导入的合法状态应参与队列');
+test('首次读取不迁移历史标注，重新完成才建立最新文章计划', async () => {
+    const h = harness(); const { app, shared } = h; await app.ready;
+    await app.practice.completeAttempt({ record: readingRecord({ noteText: 'keep my note', highlights: [{ id: 'keep-highlight' }] }) });
+    shared.docs.delete('practice.reviewPlans');
+    const annotation = shared.entities.get('practiceAnnotations').get('reading-wrong');
+    annotation.data.reviewState = initialReviewState(); annotation.checksum = checksum(annotation.data);
+    shared.snapshotStoreReads.length = 0;
+    assert.equal((await app.practice.listReviewQueue()).records.length, 0);
+    assert.equal(shared.docs.has('practice.reviewPlans'), false, '读取不能创建或迁移文档');
+    assert.equal(shared.snapshotStoreReads.length, 0, '首次读取也不能扫描历史');
+    const history = await app.practice.get('reading-wrong');
+    assert.equal(history.noteText, 'keep my note');
+    assert.equal(history.highlights[0].id, 'keep-highlight');
+    assert.equal(history.reviewState, undefined);
+    await app.practice.completeAttempt({ record: readingRecord({ id: 'first-live', sessionId: 'first-live',
+        completedAt: '2026-09-05T00:00:00.000Z', reviewState: initialReviewState() }) });
+    const queue = await app.practice.listReviewQueue();
+    assert.equal(queue.records.length, 1);
+    assert.equal(queue.records[0].recordId, 'first-live');
+    assert.equal(queue.records[0].reviewState.reviewCount, 1);
+    assert.equal(queue.records[0].reviewState.lastReviewed, '2026-09-05T00:00:00.000Z');
+    assert.equal((await app.practice.get('first-live')).reviewState, undefined);
 });
 
 test('新套题每篇独立调度，状态不复制到套题或子篇标注', async () => {
@@ -368,28 +364,36 @@ function initialReviewState() {
     return { schemaVersion: 1, algorithm: 'sm2-practice', algorithmVersion: 1, easeFactor: 2.5,
         interval: 0, repetitions: 0, reviewCount: 0, lapseCount: 0, lastReviewed: null,
         nextReview: '2026-09-01T00:20:00.000Z', lastQuality: null, lastReviewAttemptId: null,
-        updatedAt: '2026-09-01T00:20:00.000Z' };
+        updatedAt: '2026-09-01T00:20:00.000Z', appliedReviewAttemptIds: [] };
+}
+
+async function seedScheduledRecord(h, record, reviewState) {
+    await h.app.practice.completeAttempt({ record });
+    const stored = h.shared.docs.get('practice.reviewPlans');
+    const plan = stored.data.find(row => row.recordId === record.id);
+    plan.reviewState = clone(h.sandbox.PracticeReviewScheduler.normalizeState(reviewState));
+    stored.checksum = checksum(stored.data);
 }
 
 function daysBetween(fromIso, toIso) {
     return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000);
 }
 
-test('listReviewQueue 只读 summaries + annotations，且按到期/计划/错题数稳定排序', async () => {
-    const { app, shared } = harness();
+test('listReviewQueue 只读计划文档，且按到期/计划/错题数稳定排序', async () => {
+    const h = harness(); const { app, shared } = h;
     await app.ready;
     const state = (nextReview, extra = {}) => Object.assign({
         schemaVersion: 1, algorithm: 'sm2-practice', algorithmVersion: 1,
         easeFactor: 2.5, interval: 1, repetitions: 1, reviewCount: 1, lapseCount: 0,
         lastReviewed: '2026-09-01T00:00:00.000Z', nextReview,
-        lastQuality: 'good', lastReviewAttemptId: 'seed', updatedAt: '2026-09-01T00:00:00.000Z'
+        lastQuality: 'good', lastReviewAttemptId: 'seed', appliedReviewAttemptIds: ['seed'], updatedAt: '2026-09-01T00:00:00.000Z'
     }, extra);
 
-    await app.practice.completeAttempt({ operationId: 'q-future', record: readingRecord({ id: 'future', sessionId: 's1', reviewState: state('2026-09-20T00:00:00.000Z') }) });
-    await app.practice.completeAttempt({ operationId: 'q-overdue', record: readingRecord({ id: 'overdue', sessionId: 's2', reviewState: state('2026-09-01T00:00:00.000Z') }) });
+    await seedScheduledRecord(h, readingRecord({ id: 'future', examId: 'exam-future', sessionId: 's1' }), state('2026-09-20T00:00:00.000Z'));
+    await seedScheduledRecord(h, readingRecord({ id: 'overdue', examId: 'exam-overdue', sessionId: 's2' }), state('2026-09-01T00:00:00.000Z'));
     // 同一 nextReview：错题多的先做。
-    await app.practice.completeAttempt({ operationId: 'q-due-a', record: readingRecord({ id: 'due-a', sessionId: 's3', correctAnswers: 9, reviewState: state('2026-09-05T00:00:00.000Z') }) });
-    await app.practice.completeAttempt({ operationId: 'q-due-b', record: readingRecord({ id: 'due-b', sessionId: 's4', correctAnswers: 2, reviewState: state('2026-09-05T00:00:00.000Z') }) });
+    await seedScheduledRecord(h, readingRecord({ id: 'due-a', examId: 'exam-due-a', sessionId: 's3', correctAnswers: 9 }), state('2026-09-05T00:00:00.000Z'));
+    await seedScheduledRecord(h, readingRecord({ id: 'due-b', examId: 'exam-due-b', sessionId: 's4', correctAnswers: 2 }), state('2026-09-05T00:00:00.000Z'));
 
     shared.snapshotStoreReads.length = 0;
     const queue = await app.practice.listReviewQueue({ now: '2026-09-05T12:00:00.000Z' });
@@ -397,7 +401,7 @@ test('listReviewQueue 只读 summaries + annotations，且按到期/计划/错�
     for (const stores of shared.snapshotStoreReads) {
         assert(!stores.includes('practiceDetails'), '复盘队列投影不得加载 practiceDetails: ' + JSON.stringify(stores));
     }
-    assert.deepStrictEqual(Array.from(queue.records, (record) => record.id), ['overdue', 'due-b', 'due-a', 'future']);
+    assert.deepStrictEqual(Array.from(queue.records, (record) => record.recordId), ['overdue', 'due-b', 'due-a', 'future']);
     assert.deepStrictEqual(Array.from(queue.records, (record) => record.isDue), [true, true, true, false]);
     assert.strictEqual(queue.records[1].wrongCount, 8);
     assert.strictEqual(queue.records[0].suiteEntries, undefined, '队列投影不得带上 detail 字段');
@@ -411,11 +415,11 @@ test('listReviewQueue 只读 summaries + annotations，且按到期/计划/错�
 });
 
 test('三档评分的状态迁移、首次间隔与 EF 下限', async () => {
-    const { app } = harness();
+    const h = harness(); const { app } = h;
     await app.ready;
-    await app.practice.completeAttempt({ operationId: 'grade-good', record: readingRecord({ id: 'good', examId: 'reading-good', sessionId: 'g1', reviewState: initialReviewState() }) });
-    await app.practice.completeAttempt({ operationId: 'grade-easy', record: readingRecord({ id: 'easy', examId: 'reading-easy', sessionId: 'g2', reviewState: initialReviewState() }) });
-    await app.practice.completeAttempt({ operationId: 'grade-hard', record: readingRecord({ id: 'hard', examId: 'reading-hard', sessionId: 'g3', reviewState: initialReviewState() }) });
+    await seedScheduledRecord(h, readingRecord({ id: 'good', examId: 'reading-good', sessionId: 'g1' }), initialReviewState());
+    await seedScheduledRecord(h, readingRecord({ id: 'easy', examId: 'reading-easy', sessionId: 'g2' }), initialReviewState());
+    await seedScheduledRecord(h, readingRecord({ id: 'hard', examId: 'reading-hard', sessionId: 'g3' }), initialReviewState());
 
     const good1 = (await app.practice.recordReviewOutcome({ recordId: 'good', reviewAttemptId: 'a1', quality: 'good', reviewedAt: '2026-09-02T01:00:00.000Z' })).reviewState;
     assert.strictEqual(good1.repetitions, 1);
@@ -458,9 +462,9 @@ test('三档评分的状态迁移、首次间隔与 EF 下限', async () => {
 });
 
 test('同一 reviewAttemptId 只生效一次，冲突会重试而不重复推进', async () => {
-    const { app, shared } = harness();
+    const h = harness(); const { app, shared } = h;
     await app.ready;
-    await app.practice.completeAttempt({ operationId: 'idem-seed', record: readingRecord({ reviewState: initialReviewState() }) });
+    await seedScheduledRecord(h, readingRecord(), initialReviewState());
 
     const first = await app.practice.recordReviewOutcome({
         recordId: 'reading-wrong', reviewAttemptId: 'attempt-x', quality: 'good', reviewedAt: '2026-09-02T01:00:00.000Z'
@@ -487,11 +491,11 @@ test('同一 reviewAttemptId 只生效一次，冲突会重试而不重复推进
         JSON.parse(JSON.stringify(first.reviewState)), '迟到评分不得改写当前计划');
 
     // 一次 CAS 冲突（另一个标签页刚写过）应由 retryMergeConflict 吞掉并重算，只推进一次。
-    shared.conflictOnce = true;
+    shared.documentConflictOnce = true;
     const retried = await app.practice.recordReviewOutcome({
         recordId: 'reading-wrong', reviewAttemptId: 'attempt-y', quality: 'good', reviewedAt: '2026-09-03T01:00:00.000Z'
     });
-    assert.strictEqual(shared.conflictOnce, false, '强制冲突必须真的发生过');
+    assert.strictEqual(shared.documentConflictOnce, false, '强制冲突必须真的发生过');
     assert.strictEqual(retried.reviewState.reviewCount, 2, '冲突重试后只能推进一次');
     assert.strictEqual(retried.reviewState.interval, 6);
 });
@@ -651,26 +655,18 @@ test('相同考试 ID 在不同题库配置中保留独立计划与任务路由'
     assert.deepEqual(new Set(plans.map((plan) => plan.libraryConfigurationId)), new Set(['library-a', 'library-b']));
 });
 
-test('旧文章计划从摘要来源迁移为复合 ID', async () => {
+test('开发期旧计划被忽略，读取不升级 ID，新作答清理旧计划', async () => {
     const { app, shared } = harness(); await app.ready;
-    await app.practice.completeAttempt({
-        operationId: 'legacy-plan-seed',
-        record: readingRecord({ metadata: { libraryConfigurationId: 'library-a' } })
-    });
-    const stored = shared.docs.get('practice.reviewPlans');
-    const previousRevision = stored.revision;
-    stored.data[0].id = stored.data[0].examId;
-    delete stored.data[0].libraryConfigurationId;
+    await app.practice.completeAttempt({ record: readingRecord({ metadata: { libraryConfigurationId: 'library-a' } }) });
+    const stored = shared.docs.get('practice.reviewPlans'); const previousRevision = stored.revision;
+    stored.data[0].id = stored.data[0].examId; delete stored.data[0].libraryConfigurationId;
     stored.checksum = checksum(stored.data);
-
-    const queue = await app.practice.listReviewQueue();
-    assert.equal(queue.records.length, 1);
-    assert.equal(queue.records[0].reviewLibraryConfigurationId, 'library-a');
-    assert.notEqual(queue.records[0].reviewPlanId, 'p1-reading-01');
-    const migrated = shared.docs.get('practice.reviewPlans');
-    assert.equal(migrated.revision, previousRevision + 1, '读取队列时应原子保存身份迁移');
-    assert.equal(migrated.data[0].id, queue.records[0].reviewPlanId);
-    assert.equal(migrated.data[0].libraryConfigurationId, 'library-a');
+    assert.equal((await app.practice.listReviewQueue()).records.length, 0);
+    assert.equal(shared.docs.get('practice.reviewPlans').revision, previousRevision);
+    await app.practice.completeAttempt({ record: readingRecord({ id: 'live-plan', sessionId: 'live-plan',
+        metadata: { libraryConfigurationId: 'library-a' } }) });
+    assert.equal(shared.docs.get('practice.reviewPlans').data.length, 1);
+    assert.equal((await app.practice.listReviewQueue()).records[0].recordId, 'live-plan');
 });
 
 test('迟到的旧作答和旧回放评分不能替换或推进最新计划', async () => {
@@ -714,59 +710,6 @@ test('迟到的较新作答更新回放引用但不倒退已人工推进的排�
         '被拒绝的迟到自动评分不得写入幂等记录');
 });
 
-test('自动评分按 lastReviewed 判断缺少 updatedAt 的旧排程', async () => {
-    const { app, shared } = harness(); await app.ready;
-    await app.practice.completeAttempt({ operationId: 'legacy-auto-seed', record: readingRecord({
-        id: 'legacy-auto-before', sessionId: 'legacy-auto-before', completedAt: '2026-09-01T00:00:00.000Z',
-        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
-    }) });
-    const task = (await app.practice.listReviewQueue()).records[0];
-    await app.practice.recordReviewOutcome({
-        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
-        reviewAttemptId: 'legacy-auto-review', quality: 'good', reviewedAt: '2026-09-02T00:00:00.000Z'
-    });
-    const stored = shared.docs.get('practice.reviewPlans');
-    assert.equal(stored.data[0].reviewState.nextReview, '2026-09-08T00:00:00.000Z');
-    delete stored.data[0].reviewState.updatedAt;
-    stored.checksum = checksum(stored.data);
-
-    await app.practice.completeAttempt({ operationId: 'legacy-auto-newer', record: readingRecord({
-        id: 'legacy-auto-after', sessionId: 'legacy-auto-after', completedAt: '2026-09-05T00:00:00.000Z',
-        date: '2026-09-05T00:00:00.000Z', correctAnswers: 4
-    }) });
-
-    const after = (await app.practice.listReviewQueue()).records[0];
-    assert.equal(after.recordId, 'legacy-auto-after');
-    assert.equal(after.reviewState.lastReviewed, '2026-09-05T00:00:00.000Z',
-        '位于 lastReviewed 与 nextReview 之间的新作答必须推进排程');
-    assert(after.reviewState.appliedReviewAttemptIds.includes('completion:legacy-auto-after:p1-reading-01'));
-});
-
-test('手动评分按 lastReviewed 判断缺少 updatedAt 的旧排程', async () => {
-    const { app, shared } = harness(); await app.ready;
-    await app.practice.completeAttempt({ operationId: 'legacy-manual-seed', record: readingRecord({
-        id: 'legacy-manual', sessionId: 'legacy-manual', completedAt: '2026-09-01T00:00:00.000Z',
-        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
-    }) });
-    const task = (await app.practice.listReviewQueue()).records[0];
-    await app.practice.recordReviewOutcome({
-        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
-        reviewAttemptId: 'legacy-manual-first', quality: 'good', reviewedAt: '2026-09-02T00:00:00.000Z'
-    });
-    const stored = shared.docs.get('practice.reviewPlans');
-    assert.equal(stored.data[0].reviewState.nextReview, '2026-09-08T00:00:00.000Z');
-    delete stored.data[0].reviewState.updatedAt;
-    stored.checksum = checksum(stored.data);
-
-    const accepted = await app.practice.recordReviewOutcome({
-        recordId: task.recordId, reviewPlanId: task.reviewPlanId,
-        reviewAttemptId: 'legacy-manual-newer', quality: 'easy', reviewedAt: '2026-09-05T00:00:00.000Z'
-    });
-    assert.equal(accepted.reviewState.lastReviewed, '2026-09-05T00:00:00.000Z',
-        '位于 lastReviewed 与 nextReview 之间的新评分不得被误判为旧结果');
-    assert.equal(accepted.reviewState.lastReviewAttemptId, 'legacy-manual-newer');
-});
-
 test('备份合并分别保留最新排程状态和最新作答回放引用', async () => {
     const local = harness();
     const imported = harness();
@@ -801,80 +744,41 @@ test('备份合并分别保留最新排程状态和最新作答回放引用', as
     assert(await local.app.practice.get('imported-older'), '导入的历史作答实体仍应保留');
 });
 
-test('备份合并用 lastReviewed 而非 nextReview 比较缺少 updatedAt 的旧排程', async () => {
-    const local = harness();
-    const imported = harness();
-    await Promise.all([local.app.ready, imported.app.ready]);
-
-    await local.app.practice.completeAttempt({ operationId: 'legacy-schedule-seed', record: readingRecord({
-        id: 'legacy-schedule', sessionId: 'legacy-schedule', completedAt: '2026-09-01T00:00:00.000Z',
-        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
-    }) });
-    const localTask = (await local.app.practice.listReviewQueue()).records[0];
-    await local.app.practice.recordReviewOutcome({
-        recordId: localTask.recordId, reviewPlanId: localTask.reviewPlanId,
-        reviewAttemptId: 'legacy-local-review', quality: 'good', reviewedAt: '2026-09-01T01:00:00.000Z'
-    });
-    const localPlans = local.shared.docs.get('practice.reviewPlans');
-    assert.equal(localPlans.data[0].reviewState.nextReview, '2026-09-07T01:00:00.000Z');
-    delete localPlans.data[0].reviewState.updatedAt;
-    localPlans.checksum = checksum(localPlans.data);
-
-    await imported.app.practice.completeAttempt({ operationId: 'current-schedule-seed', record: readingRecord({
-        id: 'current-schedule', sessionId: 'current-schedule', completedAt: '2026-09-02T00:00:00.000Z',
-        date: '2026-09-02T00:00:00.000Z', correctAnswers: 6
-    }) });
-    const importedTask = (await imported.app.practice.listReviewQueue()).records[0];
-    const newerReview = await imported.app.practice.recordReviewOutcome({
-        recordId: importedTask.recordId, reviewPlanId: importedTask.reviewPlanId,
-        reviewAttemptId: 'current-imported-review', quality: 'good', reviewedAt: '2026-09-05T00:00:00.000Z'
-    });
-
-    const snapshot = await imported.app.backups.export();
-    const importPlan = await local.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
-    await local.app.backups.commitImport(importPlan.id);
-
-    const merged = (await local.app.practice.listReviewQueue()).records[0];
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(merged.reviewState)), JSON.parse(JSON.stringify(newerReview.reviewState)),
-        '缺少 updatedAt 的旧状态必须按 lastReviewed 排序，不能把 nextReview 当作变更时间');
-    assert.equal(merged.reviewState.lastReviewAttemptId, 'current-imported-review');
+test('备份不兼容缺少完成时间或更新时间的开发期计划', async () => {
+    for (const field of ['latestCompletedAt', 'updatedAt']) {
+        const local = harness(); const imported = harness();
+        await Promise.all([local.app.ready, imported.app.ready]);
+        await local.app.practice.completeAttempt({ record: readingRecord({ id: 'local-current', sessionId: 'local-current' }) });
+        await imported.app.practice.completeAttempt({ record: readingRecord({ id: 'imported-history', sessionId: 'imported-history',
+            completedAt: '2026-09-05T00:00:00.000Z', noteText: 'keep imported note' }) });
+        const doc = imported.shared.docs.get('practice.reviewPlans');
+        if (field === 'updatedAt') delete doc.data[0].reviewState.updatedAt;
+        else delete doc.data[0].latestCompletedAt;
+        doc.checksum = checksum(doc.data);
+        const preview = await local.app.backups.previewImport(await imported.app.backups.export(), { practiceMode: 'merge' });
+        await local.app.backups.commitImport(preview.id);
+        const queue = await local.app.practice.listReviewQueue();
+        assert.equal(queue.records.length, 1);
+        assert.equal(queue.records[0].recordId, 'local-current');
+        assert.equal((await local.app.practice.get('imported-history')).noteText, 'keep imported note');
+    }
 });
 
-test('备份合并持久化摘要回退完成时间并拒绝随后到达的更旧作答', async () => {
-    const local = harness();
-    const imported = harness();
-    await Promise.all([local.app.ready, imported.app.ready]);
-
-    await local.app.practice.completeAttempt({ operationId: 'fallback-local-seed', record: readingRecord({
-        id: 'fallback-local', sessionId: 'fallback-local', completedAt: '2026-09-01T00:00:00.000Z',
-        date: '2026-09-01T00:00:00.000Z', correctAnswers: 6
-    }) });
-    await imported.app.practice.completeAttempt({ operationId: 'fallback-imported-seed', record: readingRecord({
-        id: 'fallback-imported', sessionId: 'fallback-imported', completedAt: '2026-09-05T00:00:00.000Z',
-        date: '2026-09-05T00:00:00.000Z', correctAnswers: 8
-    }) });
-    const importedPlans = imported.shared.docs.get('practice.reviewPlans');
-    delete importedPlans.data[0].latestCompletedAt;
-    importedPlans.checksum = checksum(importedPlans.data);
-
-    const snapshot = await imported.app.backups.export();
-    const importPlan = await local.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
-    await local.app.backups.commitImport(importPlan.id);
-
-    let merged = (await local.app.practice.listReviewQueue()).records[0];
-    assert.equal(merged.recordId, 'fallback-imported');
-    let mergedPlan = await local.app.practice.getReviewTask(merged.id);
-    assert.equal(mergedPlan.latestCompletedAt, '2026-09-05T00:00:00.000Z',
-        '从摘要得到的完成时间必须规范化并持久化');
-
-    await local.app.practice.completeAttempt({ operationId: 'fallback-delayed-older', record: readingRecord({
-        id: 'fallback-delayed-older', sessionId: 'fallback-delayed-older', completedAt: '2026-09-03T00:00:00.000Z',
-        date: '2026-09-03T00:00:00.000Z', correctAnswers: 4
-    }) });
-    merged = (await local.app.practice.listReviewQueue()).records[0];
-    assert.equal(merged.recordId, 'fallback-imported', '合并后到达的旧作答不得回滚 replay 引用');
-    mergedPlan = await local.app.practice.getReviewTask(merged.id);
-    assert.equal(mergedPlan.latestCompletedAt, '2026-09-05T00:00:00.000Z');
+test('恢复未上线前的历史备份不生成复盘计划，也不恢复开发期标注排程', async () => {
+    const source = harness(); const target = harness(); await Promise.all([source.app.ready, target.app.ready]);
+    await source.app.practice.completeAttempt({ record: readingRecord({ noteText: 'saved note', highlights: [{ id: 'saved-highlight' }] }) });
+    source.shared.docs.delete('practice.reviewPlans');
+    const annotation = source.shared.entities.get('practiceAnnotations').get('reading-wrong');
+    annotation.data.reviewState = initialReviewState(); annotation.checksum = checksum(annotation.data);
+    const snapshot = await source.app.backups.export(); delete snapshot.envelopes['practice.reviewPlans'];
+    snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+    const preview = await target.app.backups.previewImport(snapshot);
+    await target.app.backups.commitImport(preview.id);
+    assert.equal((await target.app.practice.listReviewQueue()).records.length, 0);
+    const record = await target.app.practice.get('reading-wrong');
+    assert.equal(record.noteText, 'saved note'); assert.equal(record.highlights[0].id, 'saved-highlight');
+    assert.equal(storedLayer(target.shared, 'practiceAnnotations', 'reading-wrong').reviewState, undefined);
+    assert.equal((await target.app.practice.list()).length, 1);
 });
 
 test('套题汇总只迁移最新记录引用，子篇作答不重复计数', async () => {

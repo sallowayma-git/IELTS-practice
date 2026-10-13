@@ -76,8 +76,8 @@ try {
             type: 'reading', title: `Performance record ${i}`, duration: 1200, status: 'completed',
             date: new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
             totalQuestions: 40, correctAnswers: i % 41,
-            metadata: { libraryConfigurationId: null, category: `P${i % 3 + 1}` },
-            ...(window.__reviewStress ? { reviewState: PracticeReviewScheduler.createInitialState(new Date(Date.now() + (i % 7 - 3) * 86400000)) } : {}),
+            // Distinct stress-fixture libraries keep repeated exam IDs as independent articles.
+            metadata: { libraryConfigurationId: window.__reviewStress && i > 0 ? `perf-library-${i}` : null, category: `P${i % 3 + 1}` },
             answers: { q1: 'A' }, notes: Array.from({ length: 20 }, (_, n) => ({ id: `${i}-${n}`, body: 'note '.repeat(100) })),
             highlights: Array.from({ length: 20 }, (_, n) => ({ id: `${i}-h-${n}`, text: 'selected text', start: n * 20, end: n * 20 + 13 }))
         }));
@@ -88,6 +88,27 @@ try {
         const stable = v => v && typeof v === 'object' ? Array.isArray(v) ? `[${v.map(stable).join(',')}]`
             : `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v);
         const checksum = v => { let hash = 2166136261; for (const c of stable(v)) { hash ^= c.charCodeAt(0); hash = Math.imul(hash, 16777619); } return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`; };
+        if (window.__reviewStress) {
+            const snapshot = await AppData.backups.export({ domains: ['practice'] });
+            const summaries = await AppData.practice.list({ projection: 'light' });
+            const plans = summaries.map((summary, i) => {
+                const libraryConfigurationId = summary.metadata.libraryConfigurationId;
+                const reviewState = PracticeReviewScheduler.scheduleOutcome(
+                    PracticeReviewScheduler.createInitialState(summary.completedAt),
+                    PracticeReviewScheduler.qualityFromScore(summary.correctAnswers, summary.totalQuestions),
+                    summary.completedAt, `completion:${summary.id}:${summary.examId}`);
+                reviewState.nextReview = new Date(Date.now() + (i % 7 - 3) * 86400000).toISOString();
+                return { id: `article:${encodeURIComponent(libraryConfigurationId || '')}:${encodeURIComponent(summary.examId)}`,
+                    unit: 'article', libraryConfigurationId, examId: summary.examId, recordId: summary.id,
+                    entryIndex: null, summary, latestCompletedAt: summary.completedAt, reviewState };
+            });
+            snapshot.envelopes['practice.reviewPlans'] = {
+                ...snapshot.envelopes['practice.reviewPlans'], state: 'present', data: plans, checksum: checksum(plans)
+            };
+            snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+            const reviewPlan = await AppData.backups.previewImport(snapshot);
+            await AppData.backups.commitImport(reviewPlan.id);
+        }
         await new Promise((resolve, reject) => {
             const request = indexedDB.open('IELTSAtlasDataV2');
             request.onerror = () => reject(request.error);
@@ -142,7 +163,7 @@ try {
             await settle();
         });
         result.review = await page.evaluate(() => ({
-            total: getPracticeReviewQueueSnapshot().byRecordId.size,
+            total: getPracticeReviewQueueSnapshot().records.length,
             details: __detailReads, tasks: __perfTasks.slice()
         }));
         assert.equal(result.review.total, count, 'every scheduled article must remain in the queue');
@@ -183,7 +204,7 @@ try {
         await page.waitForFunction(() => PracticeReviewFlow.getPending()?.recordId === 'perf-0');
         await page.locator('[data-review-quality="good"]').click();
         await page.waitForFunction(() => !PracticeReviewFlow.getPending());
-        assert.equal(await page.evaluate(async () => (await AppData.practice.getReviewState('perf-0')).reviewCount), 1);
+        assert.equal(await page.evaluate(async () => (await AppData.practice.getReviewState('perf-0')).reviewCount), 2);
         await replay.close();
         result.review.singleReplay = 'pass';
         await page.evaluate(async () => {

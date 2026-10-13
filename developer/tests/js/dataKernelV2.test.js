@@ -409,12 +409,6 @@ async function main() {
                 { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { recordId: 'r1', notes: ['review'] }, expectedRevision: 0 }
             ], { operationId: 'entity-1' });
             const practiceProjection = await kernel.readPracticeSnapshot(['r1']);
-            const reviewProjection = await kernel.readPracticeSnapshot(['r1'], {
-                stores: ['practiceSummaries', 'practiceAnnotations'], annotationProjection: 'reviewState'
-            });
-            if (JSON.stringify(reviewProjection.practiceAnnotations) !== JSON.stringify([{ recordId: 'r1' }])) {
-                throw new Error('Review projection must exclude notes and details');
-            }
             let detailsListCode = null;
             try { await kernel.listEntities('practiceDetails'); } catch (error) { detailsListCode = error.code; }
             const snapshot = await kernel.exportSnapshot({ includeSystem: true });
