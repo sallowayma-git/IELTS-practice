@@ -497,7 +497,7 @@ fn map_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<DreamRun> {
     })
 }
 
-fn normalize_user_id(user_id: &str) -> String {
+pub(crate) fn normalize_user_id(user_id: &str) -> String {
     if user_id.trim().is_empty() {
         DEFAULT_USER_ID.into()
     } else {
