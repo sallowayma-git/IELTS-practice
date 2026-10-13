@@ -1,6 +1,7 @@
 use ielts_application::MemoryService;
 use ielts_domain::{
-    Activity, CommandResponse, ErrorEnvelope, ExplicitPreference, ExplicitPreferenceUpsert,
+    Activity, CommandResponse, ErrorEnvelope, ExplicitPreference, ExplicitPreferenceDelete,
+    ExplicitPreferenceUpsert,
     MemoryCatalogQuery, MemoryContextPreview, MemoryContextQuery,
     MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationReceipt,
     MemoryPromotionCommand,
@@ -60,6 +61,14 @@ pub struct PutExplicitPreferenceInput {
     #[serde(default = "default_global_scope")]
     pub scope: String,
     pub value: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteExplicitPreferenceInput {
+    pub preference_key: String,
+    #[serde(default = "default_global_scope")]
+    pub scope: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -337,6 +346,31 @@ pub fn memory_put_explicit_preference(
             scope: input.scope,
             value: input.value,
             source: "user".into(),
+        },
+    ))
+}
+
+/// The learner's own active preferences, for the Notebook "你告诉我们的" list.
+#[tauri::command]
+pub fn memory_list_explicit_preferences(
+    db: State<'_, AppDb>,
+) -> CommandResponse<Vec<ExplicitPreference>> {
+    let store = ApplicationStore::new(db.inner());
+    respond(MemoryService::new(&store).list_explicit_preferences("local"))
+}
+
+/// Erase one preference the learner removed. Returns whether it existed.
+#[tauri::command]
+pub fn memory_delete_explicit_preference(
+    db: State<'_, AppDb>,
+    input: DeleteExplicitPreferenceInput,
+) -> CommandResponse<bool> {
+    let store = ApplicationStore::new(db.inner());
+    respond(MemoryService::new(&store).delete_explicit_preference(
+        &ExplicitPreferenceDelete {
+            user_id: "local".into(),
+            preference_key: input.preference_key,
+            scope: input.scope,
         },
     ))
 }

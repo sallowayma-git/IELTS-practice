@@ -505,6 +505,24 @@ impl MemoryStore for ApplicationStore<'_> {
             .map_err(memory_error)
     }
 
+    fn list_explicit_preferences(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<ielts_domain::ExplicitPreference>, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::list_explicit_preferences(conn, user_id))
+            .map_err(memory_error)
+    }
+
+    fn delete_explicit_preference(
+        &self,
+        command: &ielts_domain::ExplicitPreferenceDelete,
+    ) -> Result<bool, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::delete_explicit_preference(conn, command))
+            .map_err(memory_error)
+    }
+
     fn context_preview(
         &self,
         query: &ielts_domain::MemoryContextQuery,

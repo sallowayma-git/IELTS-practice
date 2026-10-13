@@ -12,14 +12,14 @@ function consoleState(overrides = {}) {
     persistedPlanItems, formatStudyProbe, summarizeBackgroundJob, summarizeJournal, formatJournalDate,
     agentRepository: {}, getMemoryCatalog: async () => ({ userId: 'local', entries: [] }),
     markStudyPlanItemDone: async () => {}, forgetMemory: async () => {}, archiveMemory: async () => {},
-    recordMemoryFeedback: async () => {}, putExplicitPreference: async () => {}, archiveStaleMemories: async () => {},
+    recordMemoryFeedback: async () => {}, archiveStaleMemories: async () => {},
     getBackgroundJobStatus: async () => [], listAgentThreads: async () => [], listPendingApprovals: async () => [],
     getDailyJournal: async () => null, triggerDailyDream: async () => {}
   }
   const deps = { ...defaults, ...overrides }
   return new Function(...Object.keys(deps), `${script}
     return { generateStudyPlan, readStudyPlan, togglePlanItem, refreshMemoryCatalog, retryMemoryCatalog,
-      refreshAfterMemoryMutation, forgetEntry, archiveEntry, submitMemoryFeedback, pinExplicitPreference,
+      refreshAfterMemoryMutation, forgetEntry, archiveEntry, submitMemoryFeedback,
       loadConsole, entries, preview, memoryCatalogStale, actionMessage, actionError, errorMessage,
       planItems, activePlanId, planDoneIds, planReadError, planReading, evidenceEntryId, evidenceState,
       readBackgroundJobs, jobs, jobsReading, jobsReadError, jobSummaries, runningDreams,
@@ -194,8 +194,8 @@ test('forget cancellation preserves body and does not write or invalidate a read
   assert.equal(ui.entries.value[0].value.statement, '旧正文')
 })
 
-test('archive, feedback and explicit preference also invalidate older reads', async () => {
-  for (const action of ['archiveEntry', 'submitMemoryFeedback', 'pinExplicitPreference']) {
+test('archive and feedback also invalidate older reads', async () => {
+  for (const action of ['archiveEntry', 'submitMemoryFeedback']) {
     const pending = deferred()
     let calls = 0
     const ui = consoleState({ getMemoryCatalog: () => ++calls === 1 ? pending.promise : Promise.resolve({ userId: 'local', entries: [] }) })
@@ -357,4 +357,9 @@ test('initial console journal response cannot replace a later date selection', a
   assert.equal(ui.journalSummary.value.date, '2026-09-28')
   assert.equal(ui.journalReadError.value, '')
   assert.equal(ui.journalReading.value, false)
+})
+
+test('the console no longer carries a dead explicit-preference writer', () => {
+  // Learner preferences are written from the Notebook (LearnerPreferences.vue).
+  assert.doesNotMatch(view, /putExplicitPreference|pinExplicitPreference/)
 })

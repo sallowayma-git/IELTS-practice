@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 
 use ielts_domain::{
-    Activity, ExplicitPreference, ExplicitPreferenceUpsert, MemoryCandidateBatchReceipt,
+    is_user_note_key, validate_explicit_preference, Activity, ExplicitPreference,
+    ExplicitPreferenceDelete, ExplicitPreferenceIssue, ExplicitPreferenceUpsert, MemoryCandidateBatchReceipt,
     MemoryCandidateInput,
     MemoryCandidatePersistenceInput, MemoryCatalog, MemoryCatalogQuery, MemoryContextPreview,
     MemoryContextQuery, MemoryArchiveCommand, MemoryForgetCommand,
     MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryPromotionCommand, MemorySourceClass,
-    MemoryValidationSnapshot,
+    MemoryValidationSnapshot, MAX_USER_NOTE_PREFERENCES,
 };
 
 use crate::ApplicationError;
@@ -60,6 +61,12 @@ pub trait MemoryStore {
         &self,
         command: &ExplicitPreferenceUpsert,
     ) -> Result<ExplicitPreference, ApplicationError>;
+
+    /// The learner's active explicit preferences (Notebook "你告诉我们的").
+    fn list_explicit_preferences(&self, user_id: &str) -> Result<Vec<ExplicitPreference>, ApplicationError>;
+
+    /// Erase one explicit preference on the learner's request.
+    fn delete_explicit_preference(&self, command: &ExplicitPreferenceDelete) -> Result<bool, ApplicationError>;
 
     fn context_preview(
         &self,
@@ -178,11 +185,36 @@ impl<'a> MemoryService<'a> {
         self.store.promote_candidate(command)
     }
 
+    /// Validate a learner-authored preference before it reaches the store, so a
+    /// refused write comes back with a stable code and a message the learner
+    /// can read. The store validates again; this is the friendly gate.
     pub fn put_explicit_preference(
         &self,
         command: &ExplicitPreferenceUpsert,
     ) -> Result<ExplicitPreference, ApplicationError> {
-        self.store.upsert_explicit_preference(command)
+        let command = validate_explicit_preference(command).map_err(preference_error)?;
+        if is_user_note_key(&command.preference_key) {
+            let existing = self.store.list_explicit_preferences(&command.user_id)?;
+            let notes = existing.iter().filter(|pref| is_user_note_key(&pref.preference_key));
+            let replaces = existing.iter().any(|pref| {
+                pref.preference_key == command.preference_key && pref.scope == command.scope
+            });
+            if !replaces && notes.count() >= MAX_USER_NOTE_PREFERENCES {
+                return Err(preference_error(ExplicitPreferenceIssue::TooMany));
+            }
+        }
+        self.store.upsert_explicit_preference(&command)
+    }
+
+    pub fn list_explicit_preferences(&self, user_id: &str) -> Result<Vec<ExplicitPreference>, ApplicationError> {
+        self.store.list_explicit_preferences(user_id)
+    }
+
+    pub fn delete_explicit_preference(
+        &self,
+        command: &ExplicitPreferenceDelete,
+    ) -> Result<bool, ApplicationError> {
+        self.store.delete_explicit_preference(command)
     }
 
     pub fn context_preview(
@@ -204,4 +236,8 @@ impl<'a> MemoryService<'a> {
     pub fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError> {
         self.store.forget_memory(command)
     }
+}
+
+fn preference_error(issue: ExplicitPreferenceIssue) -> ApplicationError {
+    ApplicationError::new(issue.code(), issue.message(), false)
 }

@@ -74,7 +74,24 @@ export interface PromoteMemoryCandidateCommand {
 export interface PutExplicitPreferenceCommand {
   preferenceKey: string
   scope?: string
+  /** A short string (<= 60 chars), boolean or number; `user_note.*` keys take a string. */
+  value: string | boolean | number
+}
+
+/** Mirrors ielts_domain::ExplicitPreference. */
+export interface ExplicitPreference {
+  userId: string
+  preferenceKey: string
+  scope: string
   value: unknown
+  status: string
+  source: 'user' | 'import' | 'product_default'
+  updatedAt: string
+}
+
+export interface DeleteExplicitPreferenceCommand {
+  preferenceKey: string
+  scope?: string
 }
 
 export interface ForgetMemoryCommand {
@@ -99,7 +116,9 @@ export interface MemoryContextPreviewResult extends MemoryContextPreview {}
 
 export function getMemoryContextPreview(query?: MemoryContextQuery): Promise<MemoryContextPreviewResult>
 export function promoteMemoryCandidate(command: PromoteMemoryCandidateCommand): Promise<unknown>
-export function putExplicitPreference(command: PutExplicitPreferenceCommand): Promise<unknown>
+export function putExplicitPreference(command: PutExplicitPreferenceCommand): Promise<ExplicitPreference>
+export function listExplicitPreferences(): Promise<ExplicitPreference[]>
+export function deleteExplicitPreference(command: DeleteExplicitPreferenceCommand): Promise<boolean>
 export function forgetMemory(command: ForgetMemoryCommand): Promise<unknown>
 export function archiveMemory(command: ArchiveMemoryCommand): Promise<unknown>
 export function recordCoachFeedback(memoryId: string, feedbackKind: CoachFeedbackKind): Promise<unknown>
@@ -113,6 +132,8 @@ export const memoryRepository: {
   getMemoryContextPreview: typeof getMemoryContextPreview
   promoteMemoryCandidate: typeof promoteMemoryCandidate
   putExplicitPreference: typeof putExplicitPreference
+  listExplicitPreferences: typeof listExplicitPreferences
+  deleteExplicitPreference: typeof deleteExplicitPreference
   forgetMemory: typeof forgetMemory
   archiveMemory: typeof archiveMemory
   recordCoachFeedback: typeof recordCoachFeedback
