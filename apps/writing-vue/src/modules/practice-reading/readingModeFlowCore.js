@@ -44,6 +44,8 @@ export function mapTauriSubmissionToUi(rawSub, options = {}) {
         }
       ])
     ),
+    analysisSignals: rawSub.analysisSignals || null,
+    singleAttemptAnalysis: rawSub.singleAttemptAnalysis || null,
     source
   }
 }

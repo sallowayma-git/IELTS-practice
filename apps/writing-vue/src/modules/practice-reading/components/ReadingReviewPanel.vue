@@ -109,19 +109,19 @@
           </button>
         </div>
         <div v-if="analysisSignals" class="analysis-strip" data-reading-analysis-signals>
-          <div>
+          <div v-if="analysisSignals.unansweredCount != null">
             <span>未作答</span>
             <strong>{{ analysisSignals.unansweredCount }}</strong>
           </div>
-          <div>
+          <div v-if="analysisSignals.changedAnswerCount != null">
             <span>改答</span>
             <strong>{{ analysisSignals.changedAnswerCount }}</strong>
           </div>
-          <div>
+          <div v-if="analysisSignals.markedQuestionCount != null">
             <span>标记</span>
             <strong>{{ analysisSignals.markedQuestionCount }}</strong>
           </div>
-          <div>
+          <div v-if="analysisSignals.interactionDensity != null">
             <span>交互密度</span>
             <strong>{{ formatDensity(analysisSignals.interactionDensity) }}</strong>
           </div>
@@ -131,7 +131,7 @@
             <h3>复盘判断</h3>
             <ul class="analysis-list">
               <li
-                v-for="item in singleAttemptAnalysis.diagnosis"
+                v-for="item in (singleAttemptAnalysis.diagnosis || [])"
                 :key="item.type + item.message"
                 :data-analysis-diagnosis-type="item.type"
               >
@@ -144,7 +144,7 @@
             <h3>下一步</h3>
             <ul class="analysis-list">
               <li
-                v-for="item in singleAttemptAnalysis.nextActions"
+                v-for="item in (singleAttemptAnalysis.nextActions || [])"
                 :key="item.type + item.target"
                 :data-analysis-action-type="item.type"
               >
@@ -226,9 +226,9 @@
             class="kind-bar-row"
             :data-analysis-kind="kind.kind"
           >
-            <span>{{ getQuestionKindLabel(kind.kind) }}</span>
+            <span>{{ kind.label || getQuestionKindLabel(kind.kind) }}</span>
             <div class="kind-bar-track">
-              <i :style="{ width: `${Math.round(kind.accuracy * 100)}%` }" />
+              <i :style="{ width: `${Math.round((Number(kind.accuracy) || 0) * 100)}%` }" />
             </div>
             <strong>{{ kind.correct }}/{{ kind.total }}</strong>
           </div>
