@@ -358,6 +358,13 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
     let input_hash = input_hash(&events);
     let build = build_projection(&events);
 
+    // Coach result rows point at these observations from outside the
+    // projection. The delete below would cascade/null them for EVERY
+    // observation, even though the rebuild recreates the same deterministic
+    // ids, so one history delete used to wipe every coach link. Save them now
+    // and reattach the ones whose observation still exists after the rebuild.
+    let dependents = save_observation_dependents(conn)?;
+
     // This projector owns only its versioned rows. Delete the parent first so
     // SQLite cascades its evidence, then clear legacy orphan evidence without
     // touching rows owned by another projector.
@@ -374,6 +381,7 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
         [],
     )?;
     insert_records(conn, &build.records)?;
+    restore_observation_dependents(conn, &dependents)?;
 
     let output_hash = output_hash(&build.records);
     let run_id = format!("lpr-{}", uuid::Uuid::new_v4());
@@ -412,6 +420,72 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
         input_hash,
         output_hash,
     })
+}
+
+/// Rows outside the projection that reference this projector's observations:
+/// `coach_outcome_links_v0` (ON DELETE CASCADE) and
+/// `teaching_strategy_outcomes.observation_id` (ON DELETE SET NULL).
+struct ObservationDependents {
+    /// (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
+    outcome_links: Vec<(String, String, String, String)>,
+    /// (teaching_strategy_outcomes.id, observation_id)
+    strategy_outcomes: Vec<(String, String)>,
+}
+
+fn save_observation_dependents(conn: &Connection) -> DbResult<ObservationDependents> {
+    let mut statement = conn.prepare(
+        "SELECT l.strategy_assignment_id, l.future_observation_id, l.outcome_kind, l.created_at
+         FROM coach_outcome_links_v0 l
+         JOIN learner_observations o ON o.id = l.future_observation_id
+         WHERE o.projector_key = ?1",
+    )?;
+    let outcome_links = statement
+        .query_map(params![LEARNING_OBSERVATION_PROJECTOR_KEY], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut statement = conn.prepare(
+        "SELECT t.id, t.observation_id
+         FROM teaching_strategy_outcomes t
+         JOIN learner_observations o ON o.id = t.observation_id
+         WHERE o.projector_key = ?1",
+    )?;
+    let strategy_outcomes = statement
+        .query_map(params![LEARNING_OBSERVATION_PROJECTOR_KEY], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ObservationDependents {
+        outcome_links,
+        strategy_outcomes,
+    })
+}
+
+/// Reattach saved dependents whose observation survived the rebuild. A row
+/// whose observation is gone (its source events were deleted) stays removed,
+/// exactly as its declared ON DELETE action intends.
+fn restore_observation_dependents(
+    conn: &Connection,
+    dependents: &ObservationDependents,
+) -> DbResult<()> {
+    let mut link_statement = conn.prepare(
+        "INSERT OR IGNORE INTO coach_outcome_links_v0
+           (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
+         SELECT ?1, ?2, ?3, ?4
+         WHERE EXISTS (SELECT 1 FROM learner_observations WHERE id = ?2)",
+    )?;
+    for (assignment_id, observation_id, kind, created_at) in &dependents.outcome_links {
+        link_statement.execute(params![assignment_id, observation_id, kind, created_at])?;
+    }
+    let mut outcome_statement = conn.prepare(
+        "UPDATE teaching_strategy_outcomes SET observation_id = ?2
+         WHERE id = ?1 AND observation_id IS NULL
+           AND EXISTS (SELECT 1 FROM learner_observations WHERE id = ?2)",
+    )?;
+    for (outcome_id, observation_id) in &dependents.strategy_outcomes {
+        outcome_statement.execute(params![outcome_id, observation_id])?;
+    }
+    Ok(())
 }
 
 /// Verify the current derived rows against a fresh deterministic projection.

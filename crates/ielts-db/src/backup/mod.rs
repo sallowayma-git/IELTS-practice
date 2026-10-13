@@ -21,9 +21,14 @@ use crate::sqlite::{DbError, DbResult};
 
 /// Format 18: the attempts are carried once, in `database`. Format 17 also
 /// carried a duplicate `attempts` summary array; it still restores.
-pub const BACKUP_SCHEMA_VERSION: u32 = 18;
+/// Format 19 also carries the agent context snapshots that coach and teaching
+/// strategy assignments reference.
+pub const BACKUP_SCHEMA_VERSION: u32 = 19;
 /// First format whose database payload carries `weekly_digests`.
 const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
+/// First format whose database payload carries the context snapshot tables.
+const CONTEXT_SNAPSHOTS_SCHEMA_VERSION: u32 = 19;
+const CONTEXT_SNAPSHOT_TABLES: &[&str] = &["agent_context_snapshots", "agent_context_items"];
 const LEGACY_BACKUP_SCHEMA_VERSION: u32 = 1;
 
 // Parent tables precede their children. Restore inserts in this order and
@@ -57,6 +62,11 @@ const CANONICAL_TABLES: &[&str] = &[
     "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
+    // coach_strategy_assignments_v0 / teaching_strategy_assignments
+    // .context_snapshot_id point here; without them a restore on a fresh
+    // device failed the final foreign-key check.
+    "agent_context_snapshots",
+    "agent_context_items",
     "learning_events",
     "explicit_user_preferences",
     "memory_items",
@@ -749,6 +759,10 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
         .iter()
         .copied()
         .filter(|table| *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION)
+        .filter(|table| {
+            !CONTEXT_SNAPSHOT_TABLES.contains(table)
+                || schema_version >= CONTEXT_SNAPSHOTS_SCHEMA_VERSION
+        })
         .collect()
 }
 
@@ -1197,6 +1211,13 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
                 clear_release_history(tx)?;
                 continue;
             }
+            // Packages before format 19 carry no context snapshots. Keep the
+            // target's own rows so restored references to them still resolve;
+            // any that do not are resolved by
+            // `resolve_references_to_unrestored_tables`.
+            if CONTEXT_SNAPSHOT_TABLES.contains(table) && !source_tables.contains(table) {
+                continue;
+            }
             tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
         }
         Ok(())
@@ -1283,9 +1304,89 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     // the restored `learning_events` while this transaction is still open --
     // after commit would be too late for the deferred check below.
     crate::learning_observations::learning_observations_rebuild_in_transaction(tx)?;
+    resolve_references_to_unrestored_tables(tx, &source_tables)?;
 
     assert_no_foreign_key_violations(tx)?;
     Ok(())
+}
+
+/// Resolve restored references whose parent table is NOT carried by this
+/// package (an older package predating it, or a derived table such as
+/// `learner_observations` whose rebuilt rows no longer include the target).
+///
+/// Such a reference can never be satisfied from the package, and aborting
+/// would make the whole backup unrestorable. Apply the foreign key's own
+/// declared ON DELETE action instead: SET NULL clears the pointer and keeps
+/// the row, CASCADE drops only the dangling link row. A violation into a table
+/// the package does carry is real corruption and is left for
+/// `assert_no_foreign_key_violations` to reject.
+fn resolve_references_to_unrestored_tables(
+    tx: &Transaction<'_>,
+    source_tables: &[&str],
+) -> DbResult<()> {
+    let violations = {
+        let mut stmt = tx.prepare("PRAGMA foreign_key_check")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    for (table, rowid, parent, fk_id) in violations {
+        let Some(rowid) = rowid else { continue };
+        if source_tables.contains(&parent.as_str()) {
+            continue;
+        }
+        let (columns, on_delete) = foreign_key_definition(tx, &table, fk_id)?;
+        let table = quote_identifier(&table);
+        match on_delete.as_str() {
+            "SET NULL" => {
+                let assignments = columns
+                    .iter()
+                    .map(|column| format!("{} = NULL", quote_identifier(column)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                tx.execute(
+                    &format!("UPDATE {table} SET {assignments} WHERE rowid = ?1"),
+                    params![rowid],
+                )?;
+            }
+            "CASCADE" => {
+                tx.execute(
+                    &format!("DELETE FROM {table} WHERE rowid = ?1"),
+                    params![rowid],
+                )?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn foreign_key_definition(
+    conn: &Connection,
+    table: &str,
+    fk_id: i64,
+) -> DbResult<(Vec<String>, String)> {
+    let mut stmt = conn.prepare(&format!(
+        "PRAGMA foreign_key_list({})",
+        quote_identifier(table)
+    ))?;
+    let mut rows = stmt.query([])?;
+    let mut columns = Vec::new();
+    let mut on_delete = String::new();
+    while let Some(row) = rows.next()? {
+        if row.get::<_, i64>(0)? != fk_id {
+            continue;
+        }
+        columns.push(row.get::<_, String>(3)?);
+        on_delete = row.get::<_, String>(6)?;
+    }
+    Ok((columns, on_delete))
 }
 
 fn assert_no_foreign_key_violations(conn: &Connection) -> DbResult<()> {
@@ -1692,10 +1793,11 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
         require_refs(assignments, "coach_message_id", &message_ids)?;
         let assignment_ids = text_set(assignments, "id")?;
         require_refs(outcome_links, "strategy_assignment_id", &assignment_ids)?;
-        // context_snapshot_id and future_observation_id reference derived
-        // projection tables (agent_context_snapshots / learner_observations)
-        // that are intentionally not part of the backup snapshot; they are
-        // rebuilt on the target after restore, so we do not validate them.
+        // future_observation_id references the derived learner_observations
+        // projection, which is rebuilt on the target during restore.
+        // context_snapshot_id references agent_context_snapshots, carried
+        // since format 19; older packages lack it and restore resolves those
+        // dangling pointers with the column's ON DELETE SET NULL action.
     }
     if let Some(journals) = tables.get("daily_journals") {
         // superseded_by is a self-reference; validate it points to an existing
