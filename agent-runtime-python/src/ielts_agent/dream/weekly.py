@@ -4,9 +4,13 @@ The one consolidating LLM call of the product. It reads ONE host-built pack
 (``learning.weekly_pack``): the learner's real practice records of the window as
 compact lines (wrong questions with the learner's answer and the key, redo
 results, writing bands, coach feedback, reviews), a deterministic aggregate
-header, and the currently active memories. The model answers once with BOTH
+header, the typed report blocks the host computed (``blocks``: every number the
+weekly report shows), and the currently active memories. The model answers once
+with BOTH
 
-- a digest in plain Chinese prose (本周观察 / 变化 / 下一步练习), and
+- a narrative: a title and at most one plain Chinese sentence per report block,
+  using only numbers present in that block's data (the host refuses any other
+  number), and
 - memory mutations (new / reinforce / supersede / archive) in the wire shape of
   every cognitive proposal.
 
@@ -51,13 +55,16 @@ from .types import (
     REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES,
     WEEKLY_MUTATION_ACTIONS,
     WEEKLY_MUTATION_FIELDS,
-    WeeklyDigest,
+    WEEKLY_SENTENCE_MAX_CHARS,
+    WEEKLY_TITLE_MAX_CHARS,
+    WeeklyNarrative,
     WeeklyDreamResult,
 )
 
 
-# Output ceiling the host requires on every model.invoke.
-WEEKLY_MODEL_MAX_TOKENS = 1_500
+# Output ceiling the host requires on every model.invoke (host accepts 1..=8000).
+# Chinese sentences for up to eight blocks plus mutations need the room.
+WEEKLY_MODEL_MAX_TOKENS = 4_000
 
 # The whole attempt (every model call and backoff) must finish inside this; the
 # host budget for a weekly run (WEEKLY_REQUEST_TIMEOUT, 420 s) is slightly larger.
@@ -78,7 +85,6 @@ MAX_MUTATIONS = 8
 MAX_EVIDENCE_IDS = 8
 MAX_STATEMENT_CHARS = 300
 MAX_KEY_BYTES = 160
-DIGEST_LINE_CHARS = 240
 
 
 class HostBridge(Protocol):
@@ -111,12 +117,17 @@ class _Pack:
     observation_count: int
     observation_ids: frozenset[str]
     memory_ids: frozenset[str]
+    block_ids: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
 class _ModelOutput:
-    digest: WeeklyDigest
+    narrative: WeeklyNarrative
     mutations: list[dict[str, Any]]
+    # Mutations the model proposed that Python refused, reported to the host so
+    # a refusal is never silent.
+    dropped_mutations: int = 0
+    model_available: bool = True
 
 
 class WeeklyDreamOrchestrator:
@@ -159,9 +170,9 @@ class WeeklyDreamOrchestrator:
 
             # Too little evidence, or no model: an empty submission, so the host
             # still records the run. This is a success, not a fallback.
-            if pack.observation_count < MIN_OBSERVATIONS or not self._model_available(
-                run_input.available_host_capabilities
-            ):
+            if not self._model_available(run_input.available_host_capabilities):
+                return self._submit(run_input, _empty_output(model_available=False), started=started)
+            if pack.observation_count < MIN_OBSERVATIONS:
                 return self._submit(run_input, _empty_output(), started=started)
 
             output = self._discover(run_input, pack, started=started)
@@ -219,6 +230,7 @@ class WeeklyDreamOrchestrator:
             observation_count=count,
             observation_ids=frozenset(_line_ids(lines)),
             memory_ids=frozenset(_memory_ids(memories)),
+            block_ids=frozenset(_block_ids(result.get("blocks"))),
         )
 
     # --- LLM discovery -----------------------------------------------------
@@ -291,7 +303,7 @@ class WeeklyDreamOrchestrator:
     def _submit(
         self, run_input: WeeklyDreamInput, output: _ModelOutput, *, started: float
     ) -> WeeklyDreamResult:
-        """Submit the digest and mutations to the Rust ``dream.run_weekly`` authority.
+        """Submit the narrative and mutations to the Rust ``dream.run_weekly`` authority.
 
         The host validates and applies them; an empty submission still goes
         through so the host records the run (a success, not a fallback). Host
@@ -302,8 +314,10 @@ class WeeklyDreamOrchestrator:
                 CAPABILITY_DREAM_RUN_WEEKLY,
                 {
                     "window": run_input.window,
-                    "digest": output.digest.to_wire(),
+                    "narrative": output.narrative.to_wire(),
                     "mutations": output.mutations,
+                    "modelAvailable": output.model_available,
+                    "droppedMutations": output.dropped_mutations,
                 },
                 trace_id=run_input.trace_id,
                 deadline_ms=self._deadline_ms,
@@ -351,8 +365,8 @@ def _is_retryable_provider_error(error: Exception) -> bool:
     return getattr(error, "retryable", False) is True
 
 
-def _empty_output() -> _ModelOutput:
-    return _ModelOutput(digest=WeeklyDigest(), mutations=[])
+def _empty_output(*, model_available: bool = True) -> _ModelOutput:
+    return _ModelOutput(narrative=WeeklyNarrative(), mutations=[], model_available=model_available)
 
 
 def _line_ids(lines: list[Any]) -> list[str]:
@@ -373,17 +387,31 @@ def _memory_ids(memories: list[Any]) -> list[str]:
     return ids
 
 
+def _block_ids(blocks: Any) -> list[str]:
+    """Ids of the report blocks the host computed; a sentence may only name these."""
+    if not isinstance(blocks, list):
+        return []
+    return [
+        block["id"]
+        for block in blocks
+        if isinstance(block, dict) and isinstance(block.get("id"), str) and block["id"]
+    ]
+
+
 # --- model output ----------------------------------------------------------
 
 _WS = re.compile(r"\s+")
 
 
+_ANSWER_KEYS = frozenset({"title", "sentences", "mutations"})
+
+
 def _parse_output(content: str, pack: _Pack) -> _ModelOutput:
-    """Parse the model's JSON object into a digest and the mutations the pack supports.
+    """Parse the model's JSON object into a narrative and the mutations the pack supports.
 
     Malformed JSON or shape is retryable; a valid object with nothing in it is a
-    success. At least one of ``digest`` / ``mutations`` must be present, so a
-    bare ``{}`` is not mistaken for a considered empty answer.
+    success. At least one of ``title`` / ``sentences`` / ``mutations`` must be
+    present, so a bare ``{}`` is not mistaken for a considered empty answer.
     """
 
     def reject_constant(value: str) -> None:
@@ -393,37 +421,41 @@ def _parse_output(content: str, pack: _Pack) -> _ModelOutput:
         raw = json.loads(content, parse_constant=reject_constant)
     except (json.JSONDecodeError, TypeError) as error:
         raise _Retryable("model_output_invalid_json") from error
-    if not isinstance(raw, dict) or not ({"digest", "mutations"} & raw.keys()):
+    if not isinstance(raw, dict) or not (_ANSWER_KEYS & raw.keys()):
         raise _Retryable("model_output_invalid_shape")
-    digest_raw = raw.get("digest", {})
+    title = raw.get("title", "")
+    sentences = raw.get("sentences", {})
     mutations_raw = raw.get("mutations", [])
-    if not isinstance(digest_raw, dict):
-        raise _Retryable("model_output_invalid_digest")
+    if not isinstance(title, str) or not isinstance(sentences, dict):
+        raise _Retryable("model_output_invalid_narrative")
     if not isinstance(mutations_raw, list):
         raise _Retryable("model_output_invalid_mutations")
+    mutations = _build_mutations(mutations_raw, pack)
     return _ModelOutput(
-        digest=_build_digest(digest_raw),
-        mutations=_build_mutations(mutations_raw, pack),
+        narrative=_build_narrative(title, sentences, pack),
+        mutations=mutations,
+        dropped_mutations=len(mutations_raw) - len(mutations),
     )
 
 
-def _digest_lines(value: Any, limit: int) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    lines = [
-        _WS.sub(" ", item).strip()[:DIGEST_LINE_CHARS]
-        for item in value
-        if isinstance(item, str) and item.strip()
-    ]
-    return lines[:limit]
+def _plain(text: str) -> str:
+    return _WS.sub(" ", text).strip()
 
 
-def _build_digest(raw: dict[str, Any]) -> WeeklyDigest:
-    """Bound and clean the prose. The host filters it again."""
-    return WeeklyDigest(
-        observations=_digest_lines(raw.get("observations"), 6),
-        changes=_digest_lines(raw.get("changes"), 4),
-        nextPractice=_digest_lines(raw.get("nextPractice"), 4),
+def _build_narrative(title: str, sentences: dict[str, Any], pack: _Pack) -> WeeklyNarrative:
+    """Bound and clean the words; drop what does not fit. The host re-validates."""
+    clean_title = _plain(title)
+    kept: dict[str, str] = {}
+    for block_id in sorted(key for key in sentences if key in pack.block_ids):
+        sentence = sentences[block_id]
+        if not isinstance(sentence, str):
+            continue
+        sentence = _plain(sentence)
+        if sentence and len(sentence) <= WEEKLY_SENTENCE_MAX_CHARS:
+            kept[block_id] = sentence
+    return WeeklyNarrative(
+        title=clean_title if len(clean_title) <= WEEKLY_TITLE_MAX_CHARS else "",
+        sentences=kept,
     )
 
 
@@ -503,9 +535,11 @@ def _build_system_prompt() -> str:
         "You are the weekly reviewer of an IELTS learner's practice. You receive ONE "
         "pack: the learner's real practice records of the past days as compact lines, "
         "an aggregate header computed from them, and the learner's currently active "
-        "memories. Answer with ONE strict JSON object: "
-        '{"digest":{"observations":string[],"changes":string[],"nextPractice":string[]},'
-        '"mutations":[...]}. '
+        "memories, plus blocks: the report the learner will see, as typed blocks "
+        '{"id","kind","data"} computed by the app (volume, accuracy, question_types, '
+        "repeated_misses, redo_progress, writing_bands, coach_signals, "
+        "next_week_plan). Answer with ONE strict JSON object: "
+        '{"title":string,"sentences":{"<block id>":string},"mutations":[...]}. '
         "Records: lines[].kind is reading (an attempt and its score), miss (a wrong "
         "question: what the learner answered -> the answer key), redo (a repeat of a "
         "passage and how many earlier misses it fixed), writing (task, band, lowest "
@@ -515,11 +549,15 @@ def _build_system_prompt() -> str:
         "types and error types and separates repeated misses across different "
         "passages from repeated misses in the same passage. omitted says older "
         "lines were dropped. "
-        "DIGEST: write in Simplified Chinese, plain sentences a student would "
-        "read; no ids, no JSON, no scores of your own. observations (at most 6) "
-        "name concrete passages and question numbers where useful; changes (at most "
-        "4) compare with earlier attempts and redos; nextPractice (at most 4) aims at "
-        "repeated misses. Say nothing you cannot see in the records. "
+        "NARRATIVE: write in Simplified Chinese, plain sentences a student would "
+        "read; no ids, no JSON, no block names. title (at most 40 characters) names "
+        "the main point of the week. sentences maps a block id from blocks[].id to "
+        "ONE sentence (at most 120 characters) about that block: explain what it "
+        "means and what to do about it, never restate every number; the page "
+        "already shows the numbers. Skip a block when you have nothing useful to "
+        "say. A sentence may only use numbers that appear in that block's data; "
+        "the app refuses any sentence with another number, so prefer words to "
+        "arithmetic. Say nothing you cannot see in the records or blocks. "
         "MUTATIONS (at most 8, usually 0 to 3): "
         '{"action":"ADD","namespace","canonicalKey","scope":{"type":"activity","key":"reading"|"writing"},'
         '"statement","evidenceObservationIds"} records a new, falsifiable claim '
@@ -550,7 +588,8 @@ def _build_user_payload(pack: _Pack) -> str:
         {
             "pack": pack.body,
             "instructions": (
-                "Write the digest and any mutations the records support. "
+                "Write the title, the block sentences and any mutations the "
+                "records support. "
                 "Cite only ids that appear in lines[].ids and memoryIds that "
                 "appear in memories."
             ),
