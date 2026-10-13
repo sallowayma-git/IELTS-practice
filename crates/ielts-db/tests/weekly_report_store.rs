@@ -3,8 +3,8 @@
 
 use ielts_db::{
     build_daily_facts, finish_dream_run, insert_dream_run, insert_journal, list_weekly_reports, migrate,
-    open_connection, put_weekly_digest, put_weekly_report, record_failed_weekly_run, start_dream_run,
-    DbOpenOptions, WeeklyDigestProse,
+    open_connection, put_weekly_report, record_failed_weekly_run, start_dream_run,
+    DbOpenOptions,
 };
 use ielts_domain::{BlockKind, ReportBlock, WeeklyReport, WeeklyReportState, WEEKLY_REPORT_SCHEMA_VERSION};
 use rusqlite::Connection;
@@ -117,8 +117,11 @@ fn v1_prose_rows_runs_without_blocks_and_other_runs_are_skipped() {
     let (_dir, conn) = open_db();
     let journal = journal_for(&conn, "2026-10-10");
     let legacy = complete_run(&conn, &journal, "2026-W33", "2026-08-16T23:59:59Z", "2026-08-17T01:00:00Z");
-    let prose = WeeklyDigestProse { observations: vec!["Read the stem first".into()], ..Default::default() };
-    put_weekly_digest(&conn, &legacy, &prose, "2026-08-17T01:00:00Z").unwrap();
+    conn.execute(
+        "INSERT INTO weekly_digests (run_id, digest_json, updated_at) VALUES (?1, ?2, '2026-08-17T01:00:00Z')",
+        [&legacy, &serde_json::json!({"observations": ["Read the stem first"]}).to_string()],
+    )
+    .unwrap();
 
     let end = "2026-10-10T09:30:00Z";
     let empty_run = complete_run(&conn, &journal, "2026-W41", end, "2026-10-10T09:31:00Z");

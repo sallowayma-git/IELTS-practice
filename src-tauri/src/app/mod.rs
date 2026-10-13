@@ -1,4 +1,5 @@
 pub(crate) mod application_store;
+pub(crate) mod clock;
 pub mod logging;
 pub(crate) mod run_audit;
 #[cfg(feature = "daily-dream-v1")]

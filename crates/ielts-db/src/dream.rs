@@ -299,76 +299,22 @@ pub fn record_failed_weekly_run(
     fail_dream_run(conn, &run.id, error, now)
 }
 
-/// The prose of one weekly pass: what was seen, what changed, what to practise
-/// next. Plain Chinese sentences, no ids, counts or scores of its own.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WeeklyDigestProse {
-    #[serde(default)]
-    pub observations: Vec<String>,
-    #[serde(default)]
-    pub changes: Vec<String>,
-    #[serde(default)]
-    pub next_practice: Vec<String>,
+/// Record a weekly run that completed without a model call (no provider is
+/// configured): the window's blocks are its whole result.
+pub fn record_completed_weekly_run(
+    conn: &Connection,
+    user_id: &str,
+    journal_id: &str,
+    window: &WeeklyWindow,
+    now: &str,
+) -> DbResult<DreamRun> {
+    let run = insert_dream_run(conn, user_id, journal_id, Some(&window.marker()))?;
+    start_dream_run(conn, &run.id, now)?;
+    finish_dream_run(conn, &run.id, "no-model", now)
 }
-
-const DIGEST_LINE_CHARS: usize = 240;
-const DIGEST_MAX_OBSERVATIONS: usize = 6;
-const DIGEST_MAX_CHANGES: usize = 4;
-const DIGEST_MAX_NEXT: usize = 4;
 
 /// Legacy settings namespace of the digests (before migration 0029).
 const LEGACY_DIGEST_NAMESPACE: &str = "weekly_digest";
-
-impl WeeklyDigestProse {
-    pub fn is_empty(&self) -> bool {
-        self.observations.is_empty() && self.changes.is_empty() && self.next_practice.is_empty()
-    }
-
-    /// Bounded, trimmed prose. A line that fails the prompt-injection / secret /
-    /// forbidden-inference guards is dropped, never repaired.
-    pub fn sanitized(self) -> Self {
-        let clean = |lines: Vec<String>, max: usize| -> Vec<String> {
-            lines
-                .into_iter()
-                .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-                .filter(|line| !line.is_empty())
-                .filter(|line| !ielts_domain::contains_security_marker(line))
-                .filter(|line| !ielts_domain::contains_forbidden_inference_domain(line))
-                .map(|line| line.chars().take(DIGEST_LINE_CHARS).collect::<String>())
-                .take(max)
-                .collect()
-        };
-        Self {
-            observations: clean(self.observations, DIGEST_MAX_OBSERVATIONS),
-            changes: clean(self.changes, DIGEST_MAX_CHANGES),
-            next_practice: clean(self.next_practice, DIGEST_MAX_NEXT),
-        }
-    }
-}
-
-/// Store the digest of a weekly run. Idempotent per run.
-pub fn put_weekly_digest(conn: &Connection, run_id: &str, digest: &WeeklyDigestProse, now: &str) -> DbResult<()> {
-    require_text(run_id, "runId")?;
-    let value = serde_json::to_string(digest).map_err(|error| DbError::Message(error.to_string()))?;
-    conn.execute(
-        "INSERT INTO weekly_digests (run_id, digest_json, updated_at) VALUES (?1, ?2, ?3)
-         ON CONFLICT(run_id) DO UPDATE SET digest_json = excluded.digest_json, updated_at = excluded.updated_at",
-        params![run_id, value, now],
-    )?;
-    Ok(())
-}
-
-fn load_weekly_digest(conn: &Connection, run_id: &str) -> DbResult<WeeklyDigestProse> {
-    let raw: Option<String> = conn
-        .query_row(
-            "SELECT digest_json FROM weekly_digests WHERE run_id = ?1",
-            params![run_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or_default())
-}
 
 /// Migration 0029's data step: digests written before the `weekly_digests`
 /// table lived in `settings` (namespace `weekly_digest`, key = run id). Move the
@@ -389,56 +335,6 @@ pub fn move_settings_weekly_digests_in_transaction(conn: &Connection) -> DbResul
            AND json_valid(value_json) AND key IN (SELECT run_id FROM weekly_digests)",
         params![LEGACY_DIGEST_NAMESPACE],
     )?)
-}
-
-/// One completed weekly pass, as the notebook reads it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WeeklyDigest {
-    /// Idempotency key: ISO week of the weekend the run belongs to.
-    pub window: String,
-    /// The span the run actually covered, RFC3339 UTC (start exclusive).
-    pub window_start: String,
-    pub window_end: String,
-    pub finished_at: String,
-    pub observations: Vec<String>,
-    pub changes: Vec<String>,
-    pub next_practice: Vec<String>,
-}
-
-/// Newest completed weekly runs that have something to say. A run whose pass
-/// produced no prose (an empty result is a success) is omitted. Read-only.
-pub fn list_weekly_digests(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyDigest>> {
-    let user_id = normalize_user_id(user_id);
-    let mut runs = conn.prepare(
-        "SELECT id, input_hash, finished_at FROM dream_runs
-          WHERE user_id = ?1 AND status = 'completed' AND finished_at IS NOT NULL
-            AND input_hash LIKE 'weekly:%'
-          ORDER BY finished_at DESC, id DESC LIMIT ?2",
-    )?;
-    let rows = runs
-        .query_map(params![user_id, limit.min(52) as i64], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut digests = Vec::new();
-    for (run_id, marker, finished_at) in rows {
-        let Some(window) = window_of_marker(&marker) else { continue };
-        let prose = load_weekly_digest(conn, &run_id)?;
-        if prose.is_empty() {
-            continue;
-        }
-        digests.push(WeeklyDigest {
-            window_start: rfc3339(window.start),
-            window_end: rfc3339(window.end),
-            window: window.key,
-            finished_at,
-            observations: prose.observations,
-            changes: prose.changes,
-            next_practice: prose.next_practice,
-        });
-    }
-    Ok(digests)
 }
 
 /// Load a dream run by id.

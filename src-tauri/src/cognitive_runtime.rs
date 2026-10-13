@@ -197,9 +197,28 @@ pub(crate) fn weekly_pack_value(
     db: &AppDb,
     window: &ielts_db::WeeklyWindow,
 ) -> Result<Value, RuntimeHostError> {
-    db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end))
-        .map(|pack| pack.to_value())
-        .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
+    let offset = *crate::app::clock::now().offset();
+    db.with_conn(|conn| {
+        let mut pack = ielts_db::weekly_pack(conn, "local", window.start, window.end)?.to_value();
+        // The blocks the model writes its sentences for: data only, the page
+        // renders the rest.
+        let report = ielts_db::build_weekly_report(
+            conn,
+            "local",
+            window,
+            offset,
+            ielts_domain::WeeklyReportState::Live,
+            chrono::Utc::now(),
+        )?;
+        let blocks: Vec<Value> = report
+            .blocks
+            .iter()
+            .map(|block| json!({"id": block.id, "kind": block.kind, "data": block.data}))
+            .collect();
+        pack["blocks"] = Value::Array(blocks);
+        Ok(pack)
+    })
+    .map_err(|error: ielts_db::DbError| RuntimeHostError::InvalidResponse(error.to_string()))
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);

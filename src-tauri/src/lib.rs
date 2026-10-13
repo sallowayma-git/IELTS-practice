@@ -222,7 +222,9 @@ pub fn run() {
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::background_job_status,
             #[cfg(feature = "daily-dream-v1")]
-            commands::journal::weekly_digest_list,
+            commands::journal::weekly_report_list,
+            #[cfg(feature = "daily-dream-v1")]
+            commands::journal::weekly_report_current,
             // Round-3 audit (A3): `dream_run_weekly` is deliberately NOT
             // registered here. Weekly consolidation writes active memory and
             // supersedes supports, so it must never accept webview-supplied

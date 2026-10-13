@@ -9,10 +9,10 @@
 //!   days (once per local day) until it completes.
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use ielts_application::JournalService;
 use ielts_db::{background_jobs, BackgroundJob, DbError, DbResult, WeeklyWindow};
-use ielts_domain::DailyJournalQuery;
+use ielts_domain::{DailyJournalQuery, WeeklyReportState};
 use tauri::Manager;
 
 use super::{
@@ -150,8 +150,24 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
-    db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))
-        .map(|_| ())
+    let run = db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))?;
+    // The blocks are final either way; only the narrative is owed a retry.
+    persist_report(db, window, &run.id, WeeklyReportState::NarrativeFailed, &now)
+}
+
+/// Close a due window without a model (none configured): its blocks become the
+/// week's final report, and the next window starts after it.
+fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
+    let journal_id = ensure_journal(db, &window.anchor_day())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let run = db.with_conn(|conn| ielts_db::record_completed_weekly_run(conn, "local", &journal_id, window, &now))?;
+    persist_report(db, window, &run.id, WeeklyReportState::FinalNoAi, &now)
+}
+
+fn persist_report(db: &AppDb, window: &WeeklyWindow, run_id: &str, state: WeeklyReportState, now: &str) -> DbResult<()> {
+    let report = crate::commands::journal::finished_report(db, window, state, None, &[])
+        .map_err(|error| DbError::Validation(error.to_string()))?;
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, run_id, &report, now))
 }
 
 /// The single weekly consolidation call, for the window that is due now.
@@ -168,12 +184,15 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
 
     let db = app.state::<AppDb>();
     let vault = app.state::<AppVault>();
-    let Some(window) = weekly_window_due(&db, &Local::now())? else { return Ok(false) };
-    // Without a provider the sidecar would record an empty window and burn it.
-    let Ok(provider) = crate::ai::load_provider_config(&db, &vault) else { return Ok(false) };
+    let Some(window) = weekly_window_due(&db, &crate::app::clock::now())? else { return Ok(false) };
     if !weekly_has_evidence(&db, &window)? {
         return Ok(false);
     }
+    // Without a provider there is no narrative to write: the blocks alone close the week.
+    let Ok(provider) = crate::ai::load_provider_config(&db, &vault) else {
+        record_weekly_without_ai(&db, &window)?;
+        return Ok(false);
+    };
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
     db.with_conn(|conn| {
         ielts_db::begin_agent_run(conn, &BeginAgentRunCommand {
