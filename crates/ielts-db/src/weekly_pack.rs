@@ -320,10 +320,14 @@ fn reading_lines(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>) 
         let asset = field(&o.payload, "assetId");
         let correct = o.payload.get("correctCount").and_then(Value::as_f64);
         let total = o.payload.get("questionCount").and_then(Value::as_u64);
-        let score = match (correct, total) {
+        let mut score = match (correct, total) {
             (Some(correct), Some(total)) => format!("correct {correct}/{total}"),
             _ => format!("score {:.2}", o.value_num.unwrap_or_default()),
         };
+        // Blanks are not misses (no miss line); the attempt line still says how many.
+        if let Some(blank) = o.payload.get("unansweredCount").and_then(Value::as_u64).filter(|n| *n > 0) {
+            score += &format!(", {blank} unanswered");
+        }
         let ordinal = o.payload.get("attemptOrdinal").and_then(Value::as_u64).unwrap_or(1);
         let text = format!("{asset} \"{}\" {score}, attempt #{ordinal}", assets.title(asset));
         lines.push(line(vec![o.id.clone()], &o.at, "reading", text, Facet::Attempt));

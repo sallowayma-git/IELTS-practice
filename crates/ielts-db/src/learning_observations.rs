@@ -251,6 +251,10 @@ struct ReadingAttemptPayload {
     correct_count: Option<f64>,
     #[serde(default)]
     question_count: Option<u32>,
+    #[serde(default)]
+    answered_count: Option<u32>,
+    #[serde(default)]
+    unanswered_count: Option<u32>,
     score_value: Option<f64>,
     duration_ms: u64,
     mode: String,
@@ -265,6 +269,9 @@ struct ReadingQuestionPayload {
     attempt_ordinal: u64,
     #[serde(default)]
     is_correct: Option<bool>,
+    /// Absent on events recorded before the answered/unanswered split.
+    #[serde(default)]
+    answered: Option<bool>,
     #[serde(default)]
     question_kind: Option<String>,
     change_count: u64,
@@ -272,6 +279,22 @@ struct ReadingQuestionPayload {
     elapsed_ms: u64,
     #[serde(default)]
     first_try_correct: Option<bool>,
+}
+
+impl ReadingQuestionPayload {
+    fn unanswered(&self) -> bool {
+        self.answered == Some(false)
+    }
+
+    /// Correctness as learning evidence. A blank is scored wrong on the exam
+    /// sheet but carries no skill signal, so it is neither right nor wrong here.
+    fn evidence_correct(&self) -> Option<bool> {
+        if self.unanswered() {
+            None
+        } else {
+            self.is_correct
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -521,10 +544,10 @@ fn build_projection(events: &[LedgerEvent]) -> ProjectionBuild {
                     if let Ok(payload) = decode_payload::<ReadingQuestionPayload>(event) {
                         reading_events.push(ReadingQuestionEvent {
                             event: event.clone(),
+                            is_correct: payload.evidence_correct(),
                             attempt_id: payload.attempt_id,
                             asset_id: payload.asset_id,
                             question_id: payload.question_id,
-                            is_correct: payload.is_correct,
                             attempt_ordinal: payload.attempt_ordinal,
                         });
                     }
@@ -569,6 +592,21 @@ fn project_reading_attempt(event: &LedgerEvent) -> Result<Vec<ObservationCandida
     };
     let asset_id = payload.asset_id.clone();
     let attempt_id = payload.attempt_id.clone();
+    let mut score_payload = json!({
+        "attemptId": attempt_id,
+        "assetId": asset_id,
+        "attemptOrdinal": payload.attempt_ordinal,
+        "correctCount": payload.correct_count,
+        "questionCount": payload.question_count,
+        "durationMs": payload.duration_ms,
+        "mode": payload.mode,
+    });
+    // Events recorded before the answered/unanswered split carry no counts;
+    // their observations stay byte-identical.
+    if let (Some(answered), Some(unanswered)) = (payload.answered_count, payload.unanswered_count) {
+        score_payload["answeredCount"] = json!(answered);
+        score_payload["unansweredCount"] = json!(unanswered);
+    }
     Ok(vec![candidate(
         event,
         vec![event.id.clone()],
@@ -579,15 +617,7 @@ fn project_reading_attempt(event: &LedgerEvent) -> Result<Vec<ObservationCandida
         None,
         Some(score),
         None,
-        json!({
-            "attemptId": attempt_id,
-            "assetId": asset_id,
-            "attemptOrdinal": payload.attempt_ordinal,
-            "correctCount": payload.correct_count,
-            "questionCount": payload.question_count,
-            "durationMs": payload.duration_ms,
-            "mode": payload.mode,
-        }),
+        score_payload,
     )])
 }
 
@@ -603,7 +633,7 @@ fn project_reading_question(event: &LedgerEvent) -> Result<Vec<ObservationCandid
     let elapsed_ms = payload.elapsed_ms;
     let first_try_correct = payload.first_try_correct;
     let scope_key = format!("{asset_id}:{question_id}");
-    let base_payload = json!({
+    let mut base_payload = json!({
         "eventId": event.id,
         "attemptId": payload.attempt_id,
         "assetId": asset_id,
@@ -613,9 +643,13 @@ fn project_reading_question(event: &LedgerEvent) -> Result<Vec<ObservationCandid
         "isCorrect": is_correct,
         "firstTryCorrect": first_try_correct,
     });
-    let outcome = match is_correct {
+    if let Some(answered) = payload.answered {
+        base_payload["answered"] = json!(answered);
+    }
+    let outcome = match payload.evidence_correct() {
         Some(true) => (Some("positive".into()), Some(1.0), "correct"),
         Some(false) => (Some("negative".into()), Some(0.0), "incorrect"),
+        None if payload.unanswered() => (None, None, "unanswered"),
         None => (None, None, "unscored"),
     };
     Ok(vec![

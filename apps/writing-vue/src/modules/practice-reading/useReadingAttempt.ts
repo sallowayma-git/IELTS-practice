@@ -59,6 +59,7 @@ interface ReadingSubmitResult {
   score?: ReadingScoreSnapshot
   comparisons?: AnswerComparisonEntry[]
   idempotentReplay?: boolean
+  analysisSignals?: JsonMap | null
   [key: string]: unknown
 }
 
@@ -166,6 +167,7 @@ export function mapSubmitResultToSubmission(
     questionTimelineLite: extras.questionTimeline || [],
     answerComparison: comparison,
     scoreSummary: score,
+    analysisSignals: result.analysisSignals || null,
     scoreInfo: {
       correct: Number(correctCount) || 0,
       totalQuestions: Number(questionCount) || 0,

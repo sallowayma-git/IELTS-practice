@@ -436,8 +436,10 @@ fn reading_projection_events(
             DbError::Validation("completed reading attempt has no terminal time".into())
         })?;
     let (ordinal, gap_hours) = attempt_ordinal_and_gap(conn, attempt)?;
+    let answered_count = attempt.answers.iter().filter(|answer| answer.is_answered()).count();
+    let unanswered_count = attempt.answers.len() - answered_count;
     let timeline = json!({
-        "answeredCount": attempt.answers.len(),
+        "answeredCount": answered_count,
         "markedCount": attempt.answers.iter().filter(|answer| answer.marked).count(),
         "changeCount": attempt.answers.iter().map(|answer| answer.change_count).sum::<u32>(),
         "visitCount": attempt.answers.iter().map(|answer| answer.visit_count).sum::<u32>(),
@@ -457,6 +459,8 @@ fn reading_projection_events(
             "scoreValue": attempt.score_value,
             "durationMs": attempt.duration_ms,
             "mode": reading_mode(attempt),
+            "answeredCount": answered_count,
+            "unansweredCount": unanswered_count,
             "timelineSummary": timeline,
         }),
         occurred_at.to_string(),
@@ -473,6 +477,7 @@ fn reading_projection_events(
                 "skillKey": Value::Null,
                 "attemptOrdinal": ordinal,
                 "isCorrect": answer.is_correct,
+                "answered": answer.is_answered(),
                 "questionKind": answer.question_kind,
                 "changeCount": answer.change_count,
                 "visitCount": answer.visit_count,
@@ -499,9 +504,31 @@ fn reading_projection_events(
                     event.payload[field] = value.clone();
                 }
             }
+            freeze_pre_unanswered_fields(&mut event.payload, &stored.payload);
         }
     }
     Ok(events)
+}
+
+/// Fields owned by the answered/unanswered split. An event recorded before the
+/// split carries neither marker; it keeps its stored version of these fields so
+/// the immutable ledger row still verifies. Only new events carry the split.
+const UNANSWERED_SPLIT_FIELDS: [&str; 4] =
+    ["answered", "answeredCount", "unansweredCount", "timelineSummary"];
+
+fn freeze_pre_unanswered_fields(payload: &mut Value, stored: &Value) {
+    if stored.get("answered").is_some() || stored.get("unansweredCount").is_some() {
+        return;
+    }
+    let Some(payload) = payload.as_object_mut() else {
+        return;
+    };
+    for field in UNANSWERED_SPLIT_FIELDS {
+        match stored.get(field) {
+            Some(value) => payload.insert(field.into(), value.clone()),
+            None => payload.remove(field),
+        };
+    }
 }
 
 fn completed_reading_attempt_ids(conn: &Connection, limit: u32) -> DbResult<Vec<String>> {

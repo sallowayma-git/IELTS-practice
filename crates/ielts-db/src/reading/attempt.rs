@@ -90,6 +90,46 @@ pub struct ReadingSubmitResult {
     pub score: ScoreSummary,
     pub comparisons: Vec<AnswerComparison>,
     pub idempotent_replay: bool,
+    /// Derived from `attempt` on every read (also on replay of responses
+    /// stored before this field existed); never trusted from storage.
+    #[serde(default)]
+    pub analysis_signals: ReadingAnalysisSignals,
+}
+
+/// Per-attempt counts the review page shows. `answered_count +
+/// unanswered_count == question_count`; "unanswered" is
+/// `AttemptAnswer::is_answered() == false`, the same rule the learning events use.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingAnalysisSignals {
+    pub question_count: u32,
+    pub answered_count: u32,
+    pub unanswered_count: u32,
+    pub changed_answer_count: u32,
+    pub marked_question_count: u32,
+    /// Answer changes plus question visits per minute (minimum one minute).
+    pub interaction_density: f64,
+}
+
+impl ReadingAnalysisSignals {
+    pub fn from_attempt(attempt: &AttemptRecord) -> Self {
+        let answers = &attempt.answers;
+        let count = |keep: fn(&AttemptAnswer) -> bool| answers.iter().filter(|a| keep(a)).count() as u32;
+        let answered_count = count(AttemptAnswer::is_answered);
+        let interactions: u64 = answers
+            .iter()
+            .map(|a| u64::from(a.change_count) + u64::from(a.visit_count))
+            .sum();
+        let minutes = (attempt.duration_ms as f64 / 60_000.0).max(1.0);
+        Self {
+            question_count: answers.len() as u32,
+            answered_count,
+            unanswered_count: answers.len() as u32 - answered_count,
+            changed_answer_count: count(|a| a.change_count > 0),
+            marked_question_count: count(|a| a.marked),
+            interaction_density: interactions as f64 / minutes,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,6 +360,7 @@ pub(crate) fn submit_reading_attempt_in_scope(
         score: summary.clone(),
         comparisons: comparisons.clone(),
         idempotent_replay: false,
+        analysis_signals: ReadingAnalysisSignals::from_attempt(&attempt),
     };
     let response_json =
         serde_json::to_string(&result).map_err(|e| DbError::Message(e.to_string()))?;
@@ -631,6 +672,7 @@ fn lookup_submit_response(
             ));
         }
         result.idempotent_replay = true;
+        result.analysis_signals = ReadingAnalysisSignals::from_attempt(&result.attempt);
         Ok(Some(result))
     } else {
         Ok(None)
