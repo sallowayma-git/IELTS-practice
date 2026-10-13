@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use ielts_domain::{
-    ActiveMemorySummary, Activity, ExplicitPreference, ExplicitPreferenceUpsert,
+    is_user_note_key, validate_explicit_preference, ActiveMemorySummary, Activity,
+    ExplicitPreference, ExplicitPreferenceDelete, ExplicitPreferenceIssue, ExplicitPreferenceUpsert,
     MemoryCandidateActiveSummary, MemoryCandidateInput, MemoryCandidateObservationSummary,
     MemoryCandidatePreferenceSummary,
     MemoryCandidateBatchReceipt, MemoryCandidatePersistenceInput, MemoryCandidateReceipt,
@@ -11,7 +12,8 @@ use ielts_domain::{
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, MAX_ACTIVE_MEMORY_PER_SCOPE,
     MAX_EXPLICIT_PREFERENCES, MAX_MEMORY_CANDIDATE_OBSERVATIONS, MAX_MEMORY_CONTEXT_ITEMS,
-    MAX_MEMORY_PROPOSALS, MAX_MEMORY_STATEMENT_BYTES,
+    MAX_MEMORY_PROPOSALS, MAX_MEMORY_STATEMENT_BYTES, MAX_USER_NOTE_PREFERENCES,
+    USER_NOTE_PREFERENCE_PREFIX,
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde_json::{json, Value};
@@ -436,15 +438,30 @@ pub fn reject_pending_candidate(conn: &Connection, candidate_id: &str) -> DbResu
     Ok(())
 }
 
+/// The one write path for an explicit preference. The value is validated here
+/// as well as in the application service, so no caller can persist text the
+/// guards refuse; a new free-text note is refused once the learner already
+/// keeps [`MAX_USER_NOTE_PREFERENCES`].
 pub fn upsert_explicit_preference(
     conn: &Connection,
     command: &ExplicitPreferenceUpsert,
 ) -> DbResult<ExplicitPreference> {
     require_text(&command.user_id, "userId")?;
-    require_text(&command.preference_key, "preferenceKey")?;
-    require_text(&command.scope, "scope")?;
     if !matches!(command.source.as_str(), "user" | "import" | "product_default") {
         return Err(DbError::Validation("invalid explicit preference source".into()));
+    }
+    let command = validate_explicit_preference(command)
+        .map_err(|issue| DbError::Validation(issue.message().into()))?;
+    if is_user_note_key(&command.preference_key) {
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM explicit_user_preferences
+               WHERE user_id=?1 AND preference_key=?2 AND scope=?3 AND status='active')",
+            params![command.user_id, command.preference_key, command.scope],
+            |row| row.get(0),
+        )?;
+        if !exists && count_user_note_preferences(conn, &command.user_id)? >= MAX_USER_NOTE_PREFERENCES {
+            return Err(DbError::Validation(ExplicitPreferenceIssue::TooMany.message().into()));
+        }
     }
     let now = chrono::Utc::now().to_rfc3339();
     let value_json = serde_json::to_string(&command.value)?;
@@ -472,6 +489,73 @@ pub fn upsert_explicit_preference(
         source: command.source.clone(),
         updated_at: now,
     })
+}
+
+/// Active free-text notes the learner keeps (the `user_note.*` keys).
+pub fn count_user_note_preferences(conn: &Connection, user_id: &str) -> DbResult<usize> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM explicit_user_preferences
+          WHERE user_id=?1 AND status='active' AND substr(preference_key,1,?2)=?3",
+        params![
+            user_id,
+            USER_NOTE_PREFERENCE_PREFIX.len() as i64,
+            USER_NOTE_PREFERENCE_PREFIX
+        ],
+        |row| row.get(0),
+    )?;
+    Ok(count as usize)
+}
+
+/// The learner's active explicit preferences, oldest first so a list the
+/// learner builds keeps its order.
+pub fn list_explicit_preferences(conn: &Connection, user_id: &str) -> DbResult<Vec<ExplicitPreference>> {
+    require_text(user_id, "userId")?;
+    let mut statement = conn.prepare(
+        "SELECT preference_key,scope,value_json,status,source,updated_at
+           FROM explicit_user_preferences
+          WHERE user_id=?1 AND status='active'
+          ORDER BY created_at,preference_key,scope LIMIT ?2",
+    )?;
+    let rows = statement.query_map(params![user_id, MAX_EXPLICIT_PREFERENCES as i64], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (preference_key, scope, value_json, status, source, updated_at) = row?;
+        out.push(ExplicitPreference {
+            user_id: user_id.to_owned(),
+            preference_key,
+            scope,
+            value: serde_json::from_str(&value_json)?,
+            status,
+            source,
+            updated_at,
+        });
+    }
+    Ok(out)
+}
+
+/// Remove one preference the learner asked to delete. The row is erased (not
+/// just disabled): the learner's own words go with it. Returns whether a row
+/// existed.
+pub fn delete_explicit_preference(conn: &Connection, command: &ExplicitPreferenceDelete) -> DbResult<bool> {
+    require_text(&command.user_id, "userId")?;
+    require_text(&command.preference_key, "preferenceKey")?;
+    require_text(&command.scope, "scope")?;
+    let removed = crate::with_delete_gate(conn, || {
+        Ok(conn.execute(
+            "DELETE FROM explicit_user_preferences WHERE user_id=?1 AND preference_key=?2 AND scope=?3",
+            params![command.user_id, command.preference_key, command.scope],
+        )?)
+    })?;
+    Ok(removed > 0)
 }
 
 pub fn memory_context_preview(

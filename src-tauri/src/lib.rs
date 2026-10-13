@@ -181,6 +181,10 @@ pub fn run() {
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_put_explicit_preference,
             #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_list_explicit_preferences,
+            #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_delete_explicit_preference,
+            #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_context_preview,
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_catalog_list,

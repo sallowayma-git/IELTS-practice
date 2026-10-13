@@ -38,6 +38,17 @@ export async function putExplicitPreference(command) {
   return unwrapCommandResponse(response, 'memory_put_explicit_preference')
 }
 
+// The learner's own active preferences (Notebook "你告诉我们的").
+export async function listExplicitPreferences() {
+  const response = await invokeCommand('memory_list_explicit_preferences', {})
+  return unwrapCommandResponse(response, 'memory_list_explicit_preferences')
+}
+
+export async function deleteExplicitPreference(command) {
+  const response = await invokeCommand('memory_delete_explicit_preference', { input: command })
+  return unwrapCommandResponse(response, 'memory_delete_explicit_preference')
+}
+
 export async function archiveMemory(command) {
   const response = await invokeCommand('memory_archive', { input: command })
   return unwrapCommandResponse(response, 'memory_archive')
@@ -161,6 +172,8 @@ export const memoryRepository = {
   getMemoryContextPreview,
   promoteMemoryCandidate,
   putExplicitPreference,
+  listExplicitPreferences,
+  deleteExplicitPreference,
   archiveMemory,
   forgetMemory,
   recordCoachFeedback,
