@@ -40,6 +40,7 @@ const WRITING_CRITERION_LABELS = {
 }
 
 const REASON_LABELS = {
+  insufficient_evidence: '证据不足，暂不排优先级',
   low_mastery_estimate: '掌握度偏低',
   high_uncertainty: '证据不确定',
   recent_errors: '近期连续出错',

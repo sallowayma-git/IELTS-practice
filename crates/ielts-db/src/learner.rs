@@ -8,11 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Duration, Utc};
 use ielts_domain::{
-    apply_skill_observation, familiarity_weights, preferred_probe, priority_band, review_priority,
-    trend_direction, uncertainty_band, LearnerModelConfig, LearnerRebuildReport, LearnerStateQuery,
-    LearnerStateSnapshot, LearnerVerifyReport, SkillObservation, SkillReviewNeed,
-    SkillReviewNeedsQuery, SkillReviewNeedsSnapshot, SkillReviewProbe, SkillState, SkillStateView,
-    TrendDirection, UncertaintyBand, LEARNER_MODEL_SCHEMA_VERSION, LEARNER_SCHEDULER_VERSION,
+    apply_skill_observation, familiarity_weights, has_priority_evidence, preferred_probe,
+    priority_band, review_priority, trend_direction, uncertainty_band, LearnerModelConfig,
+    LearnerRebuildReport, LearnerStateQuery, LearnerStateSnapshot, LearnerVerifyReport,
+    SkillObservation, SkillReviewNeed, SkillReviewNeedsQuery, SkillReviewNeedsSnapshot,
+    SkillReviewProbe, SkillState, SkillStateView, TrendDirection, UncertaintyBand,
+    INSUFFICIENT_EVIDENCE_REASON, LEARNER_MODEL_SCHEMA_VERSION, LEARNER_SCHEDULER_VERSION,
     LEARNER_STATE_MODEL_VERSION, LEARNER_TAXONOMY_VERSION, MAX_LEARNER_LIMIT,
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -1272,6 +1273,9 @@ fn schedule_time_factors(state: &SkillState, as_of: DateTime<Utc>) -> (f64, f64)
 
 fn reason_codes(state: &SkillState, overdue_factor: f64) -> Vec<String> {
     let mut reasons = Vec::new();
+    if !has_priority_evidence(state) {
+        reasons.push(INSUFFICIENT_EVIDENCE_REASON.into());
+    }
     if state.mastery_mean < 0.5 {
         reasons.push("low_mastery_estimate".into());
     }

@@ -685,29 +685,34 @@ fn review_priority_cursor_visits_each_skill_and_combined_filter_matches_state() 
     let (_dir, conn) = open_db();
     // Independent assets avoid same-asset discount obscuring the deliberately
     // reversed priority/lexical order. Real submit freshness is tested above.
-    insert_question(
-        &conn,
-        "page-tfng",
-        "asset-tfng",
-        "q1",
-        "tfng",
-        "2026-08-12T00:00:00Z",
-        false,
-        None,
-    );
-    insert_question(
-        &conn,
-        "page-mcq",
-        "asset-mcq",
-        "q2",
-        "mcq",
-        "2026-08-12T00:00:00Z",
-        true,
-        None,
-    );
+    // Each skill clears the minimum-evidence rule (3 observations, 2 assets)
+    // so priority is driven by mastery rather than being zeroed.
+    for (index, asset) in ["a", "b", "b"].into_iter().enumerate() {
+        insert_question(
+            &conn,
+            &format!("page-tfng-{index}"),
+            &format!("asset-tfng-{asset}"),
+            &format!("q1-{index}"),
+            "tfng",
+            "2026-08-12T00:00:00Z",
+            false,
+            None,
+        );
+        insert_question(
+            &conn,
+            &format!("page-mcq-{index}"),
+            &format!("asset-mcq-{asset}"),
+            &format!("q2-{index}"),
+            "mcq",
+            "2026-08-12T00:00:00Z",
+            true,
+            None,
+        );
+    }
     let full =
         ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default()).unwrap();
     assert_eq!(full.needs[0].skill_key, "reading.tfng"); // priority and lexical order disagree
+    assert!(full.needs[0].priority > full.needs[1].priority);
     let first = ielts_db::skill_review_needs_snapshot(
         &conn,
         &SkillReviewNeedsQuery {
@@ -1161,7 +1166,13 @@ fn real_idle_review_uses_read_clock_without_mutating_evidence_or_replay_hash() {
             .iter()
             .find(|row| row.skill_key == need.skill_key)
             .unwrap();
-        assert!(need.priority > earlier.priority);
+        // One observation per skill on one article: below the minimum-evidence
+        // rule, so staleness reports review_due but never escalates priority.
+        assert_eq!(need.evidence_count, 1);
+        assert_eq!(need.priority, 0.0);
+        assert_eq!(earlier.priority, 0.0);
+        assert_eq!(need.priority_band, "watch");
+        assert!(need.reason_codes.iter().any(|r| r == "insufficient_evidence"));
         assert!(need.reason_codes.iter().any(|r| r == "review_due"));
         assert_eq!(need.due_at, earlier.due_at);
         assert_eq!(
@@ -1194,6 +1205,51 @@ fn real_idle_review_uses_read_clock_without_mutating_evidence_or_replay_hash() {
         initial.state_hash
     );
     assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+fn needs_as_of(conn: &Connection, as_of: &str) -> Vec<ielts_domain::SkillReviewNeed> {
+    let as_of = chrono::DateTime::parse_from_rfc3339(as_of)
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    ielts_db::skill_review_needs_snapshot_as_of(&conn, &SkillReviewNeedsQuery::default(), as_of)
+        .unwrap()
+        .needs
+}
+
+#[test]
+fn single_wrong_answer_is_insufficient_evidence_even_after_twenty_stale_days() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "one-wrong", "asset-new", "q1", "tfng",
+        "2026-08-12T00:00:00Z", false, None);
+    for as_of in ["2026-08-12T00:00:00Z", "2026-09-01T00:00:00Z"] {
+        let needs = needs_as_of(&conn, as_of);
+        assert_eq!(needs.len(), 1);
+        let need = &needs[0];
+        assert_eq!(need.skill_key, "reading.tfng");
+        assert_eq!(need.evidence_count, 1);
+        assert_eq!(need.priority, 0.0, "as_of={as_of}");
+        assert_eq!(need.priority_band, "watch", "as_of={as_of}");
+        assert_eq!(need.reason_codes[0], "insufficient_evidence");
+    }
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn sufficient_evidence_keeps_weakness_priority_and_staleness_escalation() {
+    let (_dir, conn) = open_db();
+    for (index, asset) in ["asset-a", "asset-b", "asset-b"].into_iter().enumerate() {
+        insert_question(&conn, &format!("wrong-{index}"), asset, &format!("q{index}"), "tfng",
+            &format!("2026-08-12T0{index}:00:00Z"), false, None);
+    }
+    let fresh = needs_as_of(&conn, "2026-08-12T02:00:00Z");
+    let stale = needs_as_of(&conn, "2026-09-25T02:00:00Z");
+    assert_eq!(fresh[0].evidence_count, 3);
+    assert_eq!(fresh[0].distinct_asset_count, 2);
+    assert!(fresh[0].priority > 0.0);
+    assert!(!fresh[0].reason_codes.iter().any(|r| r == "insufficient_evidence"));
+    assert!(stale[0].priority > fresh[0].priority);
+    assert_eq!(stale[0].priority_band, "urgent");
+    assert!(stale[0].reason_codes.iter().any(|r| r == "review_due"));
 }
 
 #[test]
