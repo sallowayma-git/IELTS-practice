@@ -357,9 +357,9 @@ mod tests {
 
     #[test]
     fn a_sentence_passes_only_with_numbers_from_the_block() {
-        let data = allowed(json!({"attempts": 4, "accuracy": 0.75, "labels": ["P3 q5"], "band": 6.5}));
+        let data = allowed(json!({"attempts": 4, "accuracy": 0.75, "labels": ["P8 q7"], "band": 6.5}));
         assert!(numbers_whitelisted("这周做了 4 篇，正确率 75%。", &data));
-        assert!(numbers_whitelisted("P3 第5题又错了", &data));
+        assert!(numbers_whitelisted("P8 第7题又错了", &data));
         assert!(numbers_whitelisted("写作 6.50 分", &data));
         assert!(numbers_whitelisted("没有数字的句子", &data));
         assert!(!numbers_whitelisted("这周做了 5 篇", &data));
