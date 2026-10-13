@@ -375,6 +375,7 @@
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
+      :coach-feedback="coachFeedback"
       :coach-query="coachQuery"
       :can-ask-coach="canAskCoach"
       @toggle-panel="toggleReadingCoachPanel"
@@ -383,6 +384,8 @@
       @quick-action="runCoachQuickAction"
       @selection-action="runCoachSelectionAction"
       @follow-up="askCoachFollowUp"
+      @feedback="submitCoachFeedback($event.messageId, $event.kind)"
+      @reask="reaskCoachMessage"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
@@ -734,6 +737,7 @@ const {
   coachStatusText,
   coachTranscript,
   coachFollowUps,
+  coachFeedback,
   resetReadingCoachState,
   setReadingCoachOpen,
   hydrateReadingCoachFromSubmission,
@@ -742,6 +746,8 @@ const {
   clearSelectedContext,
   askCoach,
   askCoachFollowUp,
+  reaskCoachMessage,
+  submitCoachFeedback,
   runCoachQuickAction,
   runCoachSelectionAction,
   runAutomaticReviewCoach
