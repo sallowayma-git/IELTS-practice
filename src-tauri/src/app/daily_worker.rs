@@ -547,4 +547,19 @@ mod tests {
         seed_scored_outcome(&db, ielts_db::WEEKLY_MIN_OBSERVATIONS);
         assert!(weekly_has_evidence(&db, &window).unwrap());
     }
+
+    #[test]
+    fn a_week_without_a_model_closes_with_its_blocks_and_a_failure_keeps_them() {
+        let (_dir, db) = test_db("no-ai.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        record_weekly_without_ai(&db, &window).unwrap();
+        assert!(db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", KEY)).unwrap());
+        assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), Some(window.end));
+        assert!(due(&db, &at(8, SATURDAY)).is_none(), "the weekend is closed");
+
+        let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
+        let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
+        record_weekly_failure(&db, &next, &error).unwrap();
+        assert!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_exists(conn, "local", "2026-W42")).unwrap());
+    }
 }
