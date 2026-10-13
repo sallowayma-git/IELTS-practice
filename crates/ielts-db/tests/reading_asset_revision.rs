@@ -110,6 +110,13 @@ fn all_real_modes_bind_scoring_revision_and_replay_never_rebinds_after_reimport(
         let context = resolve_reading_coach_context(&conn, &thread.id, None).unwrap();
         assert_eq!(context.evidence["identity"]["assetFingerprint"], expected);
         assert_eq!(context.evidence["evidenceLimitations"], json!([]));
+        // The official answer the attempt was scored against, per question.
+        assert_eq!(context.evidence["result"]["answers"][0]["answer"], "FALSE");
+        assert_eq!(
+            context.evidence["result"]["answers"][0]["correctAnswer"],
+            "TRUE"
+        );
+        assert!(!context.evidence.to_string().contains("answerKey"));
         import(&conn, &dir, "P1", "FALSE");
         assert_ne!(
             load_practice_asset_payload(&conn, "P1")
@@ -237,6 +244,19 @@ fn legacy_history_uses_retained_results_without_loading_replaced_or_missing_sour
         context.evidence["evidenceLimitations"][0]["code"],
         "submission_asset_revision_unavailable"
     );
+    // The retained scoring result still names the key it was scored against,
+    // never today's replaced key ("FALSE").
+    assert_eq!(
+        context.evidence["result"]["answers"][0]["correctAnswer"],
+        "TRUE"
+    );
+    assert_eq!(
+        context.evidence["evidenceLimitations"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     let display = resolve_reading_coach_context(
         &conn,
         &thread.id,
@@ -253,6 +273,45 @@ fn legacy_history_uses_retained_results_without_loading_replaced_or_missing_sour
         Some(&json!({"focusQuestionIds": ["q99"]}))
     )
     .is_err());
+}
+
+#[test]
+fn legacy_history_without_retained_scoring_result_states_missing_correct_answers() {
+    let (dir, conn) = fixture();
+    let (result, _) = submit(&conn, "single");
+    conn.execute_batch(&format!(
+        "UPDATE attempts SET submitted_asset_fingerprint=NULL WHERE id='{id}';
+         DELETE FROM attempt_idempotency WHERE attempt_id='{id}';",
+        id = result.attempt.id
+    ))
+    .unwrap();
+    import(&conn, &dir, "P1", "FALSE");
+    let thread = ensure_coach_thread(
+        &conn,
+        &EnsureCoachThreadCommand {
+            thread_id: None,
+            attempt_id: Some(result.attempt.id.clone()),
+            asset_id: None,
+            kind: "practice".into(),
+        },
+    )
+    .unwrap();
+    let first = resolve_reading_coach_context(&conn, &thread.id, None).unwrap();
+    let answer = &first.evidence["result"]["answers"][0];
+    assert_eq!(answer["isCorrect"], false);
+    assert!(answer.get("correctAnswer").is_none());
+    assert_eq!(
+        first.evidence["evidenceLimitations"][1]["code"],
+        "correct_answers_unavailable"
+    );
+    // Byte-stable cache prefix across turns of one attempt.
+    let again = resolve_reading_coach_context(
+        &conn,
+        &thread.id,
+        Some(&json!({"selectedText": "another turn"})),
+    )
+    .unwrap();
+    assert_eq!(first.evidence.to_string(), again.evidence.to_string());
 }
 
 #[test]
