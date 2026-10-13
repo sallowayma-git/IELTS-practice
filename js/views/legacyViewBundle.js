@@ -3719,7 +3719,7 @@
         return Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
     }
 
-    function prepareBrowseCompletionIndex(records) {
+    function prepareBrowseCompletionIndex(records, options = {}) {
         var byExamId = new Map();
         var byTitle = new Map();
         var recordSnapshot = ensureArray(records).slice();
@@ -3757,7 +3757,7 @@
             byExamId: byExamId,
             byTitle: byTitle,
             learningByIdentity: global.BrowseLearningState
-                ? global.BrowseLearningState.buildIndex(recordSnapshot) : new Map(),
+                ? global.BrowseLearningState.buildIndex(recordSnapshot, options) : new Map(),
             records: recordSnapshot,
             ready: true
         };
@@ -3782,8 +3782,8 @@
         return true;
     }
 
-    function rebuildBrowseCompletionIndex(records) {
-        var preparedIndex = prepareBrowseCompletionIndex(records);
+    function rebuildBrowseCompletionIndex(records, options) {
+        var preparedIndex = prepareBrowseCompletionIndex(records, options);
         commitBrowseCompletionIndex(preparedIndex);
         return preparedIndex;
     }
@@ -4412,7 +4412,7 @@
 
     function getBrowseLearningStatus(exam) {
         const index = ensureBrowseCompletionIndex();
-        const key = global.BrowseLearningState && global.BrowseLearningState.identity(exam, true);
+        const key = global.BrowseLearningState && global.BrowseLearningState.completionIdentity(exam, true);
         return key && index.learningByIdentity ? index.learningByIdentity.get(key) || null : null;
     }
 

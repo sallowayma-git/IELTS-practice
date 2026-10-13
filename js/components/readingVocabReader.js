@@ -489,8 +489,11 @@
         return template.innerHTML;
     }
 
-    async function loadReadingExplanationPayload(examId) {
-        if (!examId) return null;
+    async function loadReadingExplanationPayload(savedExamId) {
+        if (!savedExamId) return null;
+        // Words saved from a retired catalog ID use the passage's current explanations.
+        const examId = typeof global.resolveReadingExamId === 'function'
+            ? global.resolveReadingExamId(savedExamId) : savedExamId;
 
         const expRegistry = getExplanationRegistry();
         const isExamPage = typeof window !== 'undefined' && window.location && window.location.pathname.includes('/reading-exams/');
@@ -1427,7 +1430,9 @@
             if (tabsContainer) {
                 let tabsHtml = `<button type="button" class="vocab-tab-btn active" data-para="all">全文</button>`;
                 blocks.forEach(b => {
-                    tabsHtml += `<button type="button" class="vocab-tab-btn" data-para="${b.id}">Para ${b.letter}</button>`;
+                    tabsHtml += b.letter
+                        ? `<button type="button" class="vocab-tab-btn" data-para="${b.id}">Para ${b.letter}</button>`
+                        : `<button type="button" class="vocab-tab-btn" data-para="${b.id}">${escapeHtml(b.introLabel)}</button>`;
                 });
                 tabsHtml += `<button type="button" class="vocab-tab-btn vocab-tab-btn--questions" data-para="questions">📝 Questions</button>`;
                 tabsContainer.innerHTML = tabsHtml;
@@ -1442,7 +1447,7 @@
                         passageHtml += `
                             <div class="vocab-paragraph-card" id="vocab-card-${b.id}" data-paragraph-id="${b.id}" data-letter="${b.letter}">
                                 <div class="vocab-paragraph-tag">
-                                    <span class="vocab-para-letter">Para ${b.letter}</span>
+                                    ${b.letter ? `<span class="vocab-para-letter">Para ${b.letter}</span>` : `<span class="vocab-para-letter">${escapeHtml(b.introLabel)}</span>`}
                                 </div>
                                 <div class="vocab-paragraph-text" data-content-id="${b.id}"></div>
                                 <div class="vocab-translation-card" id="vocab-trans-${b.id}" style="display: ${this.showTranslation ? 'block' : 'none'};">

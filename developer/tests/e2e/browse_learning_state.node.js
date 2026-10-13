@@ -244,7 +244,7 @@ try {
         await page.locator('[name="browse-sort-mode"][value="difficulty-desc"]').check();
         await expectIds(page, [exams[2].id]);
         assert.equal((await committedBrowsePreferences(page)).sortMode, 'difficulty-desc');
-        console.log(`[${mode}] reload and source isolation`);
+        console.log(`[${mode}] reload and cross-library completion identity`);
         await page.reload();
         await page.waitForFunction(() => window.app?.isInitialized === true);
         // The category entry retains the saved learning controls. The top-level
@@ -256,10 +256,10 @@ try {
         await expectIds(page, []);
         await openMenu(page);
         await page.locator('#browse-favorites-only').uncheck();
-        await expectIds(page, exams.map(exam => exam.id));
+        await expectIds(page, [exams[2].id, exams[3].id]);
         assert.equal(await page.locator('.completion-dot').count(), 0);
         await choose(page, 'completed');
-        await expectIds(page, []);
+        await expectIds(page, [exams[0].id, exams[1].id, exams[4].id, exams[5].id]);
         await page.evaluate(() => window.LibraryManager.switchLibraryConfig('browse-a'));
         await syncRecords(page);
         await expectIds(page, [exams[0].id, exams[1].id, exams[4].id, exams[5].id]);

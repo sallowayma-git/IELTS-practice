@@ -2513,7 +2513,9 @@ function refreshBrowseProgressFromRecords(
         // anchor snapshot; durable anchor persistence remains downstream of
         // that accepted projection. The completion commit is then one
         // non-throwing assignment.
-        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot);
+        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot, {
+            exams: indexSnapshot
+        });
         if (!isPreparedBrowseCompletionIndex(preparedCompletionIndex)) {
             return false;
         }
@@ -3287,6 +3289,12 @@ async function initializeBrowseView(options = {}) {
         if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return null;
+        }
+
+        // Completion dots come from the practice projection. A cold start that
+        // opens Browse without visiting Practice must still load it once.
+        if (browsePracticeProjectionGeneration === 0) {
+            startPracticeRecordsSyncInBackground('browse-view');
         }
 
         // 初始化 browseController

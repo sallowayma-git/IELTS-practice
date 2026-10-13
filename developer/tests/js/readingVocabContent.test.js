@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { chromium } from 'playwright';
 
 const contentSource = fs.readFileSync(new URL('../../../js/components/readingVocabContent.js', import.meta.url), 'utf8');
-const ids = ['p1-high-216', 'p2-high-192', 'p2-low-051', 'p1-high-101', 'p1-high-171', 'p1-high-229', 'p2-low-08'];
+const ids = ['p1-high-216', 'p2-high-25', 'p2-low-140', 'p1-high-101', 'p1-high-171', 'p1-high-229', 'p2-low-08'];
 const assets = ids.map(id => {
     let payload;
     const global = { __READING_EXAM_DATA__: { register: (_key, value) => { payload = value; } } };
@@ -54,8 +54,8 @@ test('passage normalization retains production content and assigns structural id
             for (const id of ['p1-high-101', 'p1-high-171', 'p1-high-229']) {
                 assert.ok(results.find(result => result.id === id).explicitLabels.every(value => !value), `${id} ordinary A sentences are not labels`);
             }
-            assert.deepEqual(results.find(result => result.id === 'p2-high-192').labels, 'ABCDEFGHI'.split(''));
-            assert.deepEqual(results.find(result => result.id === 'p2-low-051').labels, 'ABCDEFGH'.split(''));
+            assert.deepEqual(results.find(result => result.id === 'p2-high-25').labels, 'ABCDEFGHI'.split(''));
+            assert.deepEqual(results.find(result => result.id === 'p2-low-140').labels, 'ABCDEFGH'.split(''));
             const petri = results.find(result => result.id === 'p2-low-08');
             assert.match(petri.subtitle, /<h5>A simple piece of scientific equipment/);
             assert.match(petri.instruction, /Questions 14–29/);
