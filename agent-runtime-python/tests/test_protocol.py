@@ -187,10 +187,11 @@ class DreamDispatchBridge:
                 "lines": [{"ids": ["obs-a"], "date": "2026-10-05", "kind": "miss", "text": "P1 q14 [tfng] answered FALSE -> key TRUE"}],
                 "memories": [],
                 "preferences": [],
+                "blocks": [{"id": "accuracy", "kind": "accuracy", "data": {"correct": 9, "answered": 12}}],
             }
         if method == "model.invoke":
             return {"content": json.dumps({
-                "digest": {"observations": ["P1 第 14 题选错"], "changes": [], "nextPractice": []},
+                "title": "判断题需要留意", "sentences": {"accuracy": "P1 第 14 题选错"},
                 "mutations": [{
                     "action": "ADD", "namespace": "strategy", "canonicalKey": "strategy.reading.tfng_boundary",
                     "scope": {"type": "activity", "key": "reading"}, "statement": "判断题容易混淆 False 与 Not Given。",
@@ -263,10 +264,11 @@ class DispatchTests(unittest.TestCase):
         methods = [call[0] for call in bridge.calls]
         self.assertEqual(methods, ["learning.weekly_pack", "model.invoke", "dream.run_weekly"])
         model_request = bridge.calls[1][1]["request"]
-        self.assertEqual(model_request["maxTokens"], 1500)
+        self.assertEqual(model_request["maxTokens"], 4000)
         self.assertEqual(bridge.calls[0][1], {"window": "2026-W40"})
         submitted = bridge.calls[2][1]
-        self.assertEqual(submitted["digest"]["observations"], ["P1 第 14 题选错"])
+        self.assertEqual(submitted["narrative"], {"title": "判断题需要留意", "sentences": {"accuracy": "P1 第 14 题选错"}})
+        self.assertEqual((submitted["modelAvailable"], submitted["droppedMutations"]), (True, 0))
         self.assertEqual(submitted["mutations"][0]["action"], "ADD")
 
     def test_dream_weekly_requires_exactly_window(self) -> None:

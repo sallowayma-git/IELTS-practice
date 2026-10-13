@@ -4,7 +4,7 @@ Pure pydantic data contracts. No canonical DB access, no provider secrets, no
 host bridge. The daily journal is a deterministic summary built by the Rust
 host: there is no daily dream and no daily proposal. The weekly orchestrator
 reads the host-built weekly pack (the learner's practice records of the window)
-and submits one digest plus memory mutations via ``dream.run_weekly`` — Rust is
+and submits one narrative (title + a sentence per report block) plus memory mutations via ``dream.run_weekly`` — Rust is
 the authority.
 
 Conventions mirror :mod:`ielts_agent.retrieval.types`:
@@ -50,7 +50,7 @@ CAPABILITY_VERSION_LEARNING_WEEKLY_PACK = "1"
 # learning.weekly_pack capability returns the bounded record-level pack of the
 # window (one compact line per practice event, each carrying the obs-* ids a
 # mutation may cite, plus the active memories); dream.run_weekly validates the
-# digest and the mutations on the Rust authority.
+# narrative and the mutations on the Rust authority.
 REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES: dict[str, str] = {
     CAPABILITY_DREAM_RUN_WEEKLY: CAPABILITY_VERSION_DREAM_RUN_WEEKLY,
     CAPABILITY_LEARNING_WEEKLY_PACK: CAPABILITY_VERSION_LEARNING_WEEKLY_PACK,
@@ -235,33 +235,41 @@ MEMORY_NAMESPACES: frozenset[str] = frozenset(
 MEMORY_ACTIVITIES: frozenset[str] = frozenset({"reading", "writing"})
 
 
-class WeeklyDigest(_StrictModel):
-    """The prose of one weekly pass, in the three sections the notebook shows.
+# Bounds the host re-validates on a weekly narrative.
+WEEKLY_TITLE_MAX_CHARS = 40
+WEEKLY_SENTENCE_MAX_CHARS = 120
 
-    ``observations`` (本周观察) name concrete passages and questions where useful,
-    ``changes`` (变化) compare with earlier attempts and redos, ``next_practice``
-    (下一步练习) targets repeated misses. Plain sentences: no ids, no numbers of
-    jobs or candidates. The host bounds and filters them again.
+
+class WeeklyNarrative(_StrictModel):
+    """The model's words on one weekly report: a title and one sentence per block.
+
+    ``title`` names the week's main point; ``sentences`` maps a report block id
+    (volume, accuracy, ...) to one plain Chinese sentence interpreting that
+    block. Every number on the page lives in the host-computed block data; the
+    host refuses a sentence citing any number not in its block, and bounds and
+    filters everything again.
     """
 
-    observations: list[str] = Field(default_factory=list, max_length=6)
-    changes: list[str] = Field(default_factory=list, max_length=4)
-    next_practice: list[str] = Field(default_factory=list, max_length=4, alias="nextPractice")
+    title: str = Field(default="", max_length=WEEKLY_TITLE_MAX_CHARS)
+    sentences: dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("observations", "changes", "next_practice")
+    @field_validator("title")
     @classmethod
-    def _plain_lines(cls, value: list[str]) -> list[str]:
-        for line in value:
-            if not isinstance(line, str) or not line.strip() or len(line) > 400:
-                raise ValueError("digest lines must be non-empty strings of at most 400 characters")
-        return [line.strip() for line in value]
+    def _plain_title(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("sentences")
+    @classmethod
+    def _plain_sentences(cls, value: dict[str, str]) -> dict[str, str]:
+        for block_id, sentence in value.items():
+            if not block_id or not sentence.strip() or len(sentence) > WEEKLY_SENTENCE_MAX_CHARS:
+                raise ValueError(
+                    f"sentences must be non-empty strings of at most {WEEKLY_SENTENCE_MAX_CHARS} characters"
+                )
+        return {block_id: value[block_id].strip() for block_id in sorted(value)}
 
     def to_wire(self) -> dict[str, Any]:
-        return {
-            "observations": list(self.observations),
-            "changes": list(self.changes),
-            "nextPractice": list(self.next_practice),
-        }
+        return {"title": self.title, "sentences": dict(self.sentences)}
 
 
 class WeeklyDreamResult(_StrictModel):
@@ -323,12 +331,14 @@ __all__ = [
     "WEEKLY_DREAM_SCHEMA_VERSION",
     "WEEKLY_MUTATION_ACTIONS",
     "WEEKLY_MUTATION_FIELDS",
+    "WEEKLY_SENTENCE_MAX_CHARS",
+    "WEEKLY_TITLE_MAX_CHARS",
     "JournalEnrichment",
     "JournalFacts",
     "JournalMemoryEvent",
     "MemoryChangeSummary",
     "SkillDelta",
-    "WeeklyDigest",
+    "WeeklyNarrative",
     "WeeklyDreamResult",
     "WritingEvalSummary",
 ]
