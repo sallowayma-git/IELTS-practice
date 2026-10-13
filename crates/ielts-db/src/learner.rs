@@ -193,6 +193,14 @@ fn fresh_learner_transaction(conn: &Connection) -> DbResult<Transaction<'_>> {
     Ok(tx)
 }
 
+/// Bring the M2 observation and M4 skill projections up to date, the same
+/// verify-then-repair every learner read performs. Readers of the derived
+/// tables that are not learner snapshots (the daily journal) call this first.
+pub fn learner_projections_refresh(conn: &Connection) -> DbResult<()> {
+    fresh_learner_transaction(conn)?.commit()?;
+    Ok(())
+}
+
 pub fn learner_skill_snapshot(
     conn: &Connection,
     query: &LearnerStateQuery,

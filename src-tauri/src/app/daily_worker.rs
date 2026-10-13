@@ -62,15 +62,8 @@ pub(crate) fn ensure_journal(db: &AppDb, day: &str) -> DbResult<String> {
         user_id: "local".into(),
         journal_date: day.into(),
     };
-    let facts = service
-        .build_facts(&query)
-        .map_err(|error| DbError::Message(error.to_string()))?;
     service
-        .load_latest_journal(&query)
-        .and_then(|journal| match journal {
-            Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
-            _ => service.insert_journal(&facts, None),
-        })
+        .ensure_journal(&query)
         .map(|journal| journal.id)
         .map_err(|error| DbError::Message(error.to_string()))
 }
@@ -354,6 +347,53 @@ mod tests {
             }
             Ok(())
         }).unwrap();
+    }
+
+    #[test]
+    fn a_stored_journal_is_replaced_once_new_practice_lands() {
+        let (dir, db) = test_db("stale.db");
+        // The submit happens "now"; check the UTC and local day alike.
+        let days = [Utc::now().date_naive(), chrono::Local::now().date_naive()]
+            .map(|day| day.format("%Y-%m-%d").to_string());
+        let before = days.clone().map(|day| ensure_journal(&db, &day).unwrap());
+
+        let path = dir.path().join("asset.json");
+        std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+            "examId": "stale-asset", "meta": {"title": "Stale", "category": "P1"},
+            "questionCount": 1, "questionOrder": ["q1"], "answerKey": {"q1": "TRUE"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]}]
+        })).unwrap()).unwrap();
+        db.with_conn(|conn| {
+            let asset = ielts_db::import_asset_payload_file(conn, &path)?;
+            ielts_db::submit_reading_attempt(conn, &ielts_db::ReadingSubmitCommand {
+                attempt_id: "stale-attempt".into(),
+                asset_id: "stale-asset".into(),
+                asset_revision: Some(asset.schema_version),
+                asset_fingerprint: Some(asset.fingerprint),
+                answers: serde_json::json!({"q1": "FALSE"}),
+                marked_questions: vec![],
+                question_timeline: vec![],
+                duration_ms: Some(900),
+                title_snapshot: Some("Stale".into()),
+                idempotency_key: "stale-submit".into(),
+            })?;
+            Ok(())
+        }).unwrap();
+
+        let fresh = days.clone().map(|day| {
+            let id = ensure_journal(&db, &day).unwrap();
+            db.with_conn(|conn| ielts_db::load_latest_journal(conn, "local", &day)).unwrap()
+                .filter(|journal| journal.id == id).unwrap()
+        });
+        // The day holding the submit gets a new version whose skill section was
+        // projected from the new practice, not the stale derived rows.
+        assert!(fresh.iter().zip(&before).any(|(journal, old)| journal.id != *old
+            && journal.version == 2
+            && !journal.facts.today_observation_ids.is_empty()
+            && !journal.facts.skill_deltas.is_empty()));
+        for (journal, day) in fresh.iter().zip(&days) {
+            assert_eq!(ensure_journal(&db, day).unwrap(), journal.id);
+        }
     }
 
     #[test]

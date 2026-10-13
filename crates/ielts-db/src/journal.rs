@@ -223,6 +223,41 @@ pub fn insert_journal_source(
     Ok(())
 }
 
+/// Build the day's facts from up-to-date derived rows. Practice submits only
+/// append to the ledger; the observation/skill projections are repaired on
+/// read, so the journal refreshes them first (the same API learner reads use)
+/// instead of summarising whatever the last rebuild left behind.
+pub fn build_fresh_daily_facts(
+    conn: &Connection,
+    user_id: &str,
+    day: &str,
+) -> DbResult<JournalFacts> {
+    crate::learner::learner_projections_refresh(conn)?;
+    build_daily_facts(conn, user_id, day)
+}
+
+/// Every stored version of a day's journal, newest first (superseded history
+/// included).
+pub fn list_journal_versions(
+    conn: &Connection,
+    user_id: &str,
+    day: &str,
+) -> DbResult<Vec<DailyJournal>> {
+    let user_id = normalize_user_id(user_id);
+    require_text(day, "journalDate")?;
+    let mut statement = conn.prepare(
+        "SELECT id, user_id, journal_date, version, status, facts_json, source_hash,
+                rendered_markdown, superseded_by, created_at, updated_at
+         FROM daily_journals
+         WHERE user_id = ?1 AND journal_date = ?2
+         ORDER BY version DESC",
+    )?;
+    let rows = statement
+        .query_map(params![user_id, day], map_journal)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn map_journal(row: &rusqlite::Row<'_>) -> rusqlite::Result<DailyJournal> {
     let facts_json: String = row.get(5)?;
     let facts: JournalFacts =

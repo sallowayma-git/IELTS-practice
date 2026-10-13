@@ -589,3 +589,105 @@ fn late_contradiction_cannot_hide_behind_128_event_limit_or_borrow_support() {
     assert_eq!(contradiction.change_kind, "contradicted");
     assert_eq!(contradiction.evidence_observation_ids, ["obs-counter"]);
 }
+
+#[test]
+fn list_journal_versions_returns_every_version_newest_first() {
+    let (_dir, conn) = open_db();
+    assert!(ielts_db::list_journal_versions(&conn, "local", DAY).unwrap().is_empty());
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let first = insert_journal(&conn, "local", &facts, None).unwrap();
+    seed_attempt(&conn, "att-1", "2026-08-16T10:00:00Z", 600_000);
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let second = insert_journal(&conn, "local", &facts, None).unwrap();
+    // Another day and another user are not part of this day's history.
+    let other_day = build_daily_facts(&conn, "local", "2026-08-17").unwrap();
+    insert_journal(&conn, "local", &other_day, None).unwrap();
+    insert_journal(&conn, "u2", &build_daily_facts(&conn, "u2", DAY).unwrap(), None).unwrap();
+
+    let versions = ielts_db::list_journal_versions(&conn, "local", DAY).unwrap();
+    let rows = versions
+        .iter()
+        .map(|j| (j.id.as_str(), j.version, j.status))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows,
+        vec![
+            (second.id.as_str(), 2, DailyJournalStatus::Published),
+            (first.id.as_str(), 1, DailyJournalStatus::Superseded),
+        ]
+    );
+    assert_eq!(versions[1].superseded_by.as_deref(), Some(second.id.as_str()));
+}
+
+fn submit_reading(dir: &std::path::Path, conn: &rusqlite::Connection) {
+    let path = dir.join("journal-asset.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({
+            "examId": "journal-asset", "meta": {"title": "Journal", "category": "P1"},
+            "questionCount": 2, "questionOrder": ["q1", "q2"],
+            "answerKey": {"q1": "TRUE", "q2": "B"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]},
+                               {"kind": "mcq", "questionIds": ["q2"]}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let asset = ielts_db::import_asset_payload_file(conn, &path).unwrap();
+    ielts_db::submit_reading_attempt(
+        conn,
+        &ielts_db::ReadingSubmitCommand {
+            attempt_id: "journal-attempt-1".into(),
+            asset_id: "journal-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint),
+            answers: serde_json::json!({"q1": "FALSE", "q2": "B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(900),
+            title_snapshot: Some("Journal".into()),
+            idempotency_key: "journal-submit-1".into(),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn fresh_daily_facts_project_a_new_submit_before_summarising() {
+    let (dir, conn) = open_db();
+    submit_reading(dir.path(), &conn);
+    // A submit only appends to the ledger: the derived rows are stale.
+    assert!(!ielts_db::learning_observations_verify(&conn).unwrap().consistent);
+
+    // The submit happened "now"; cover both the UTC and the local calendar day
+    // so the test does not depend on how day bounds are interpreted.
+    let days = [chrono::Utc::now().date_naive(), chrono::Local::now().date_naive()]
+        .map(|day| day.format("%Y-%m-%d").to_string());
+    let stale = days
+        .iter()
+        .map(|day| build_daily_facts(&conn, "local", day).unwrap())
+        .collect::<Vec<_>>();
+    assert!(stale
+        .iter()
+        .all(|f| f.today_observation_ids.is_empty() && f.skill_deltas.is_empty()));
+
+    let fresh = days
+        .iter()
+        .map(|day| ielts_db::build_fresh_daily_facts(&conn, "local", day).unwrap())
+        .collect::<Vec<_>>();
+    assert!(ielts_db::learning_observations_verify(&conn).unwrap().consistent);
+    assert!(ielts_db::learner_model_verify(&conn).unwrap().consistent);
+    assert!(fresh
+        .iter()
+        .any(|f| !f.today_observation_ids.is_empty() && !f.skill_deltas.is_empty()));
+    for (stale, fresh) in stale.iter().zip(&fresh) {
+        if !fresh.today_observation_ids.is_empty() {
+            assert_ne!(stale.source_hash, fresh.source_hash);
+        }
+    }
+    // Once fresh, another build is a pure read with the same hash.
+    let changes = conn.total_changes();
+    let again = ielts_db::build_fresh_daily_facts(&conn, "local", &days[0]).unwrap();
+    assert_eq!(again.source_hash, fresh[0].source_hash);
+    assert_eq!(conn.total_changes(), changes);
+}
