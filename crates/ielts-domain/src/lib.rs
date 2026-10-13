@@ -23,6 +23,7 @@ pub mod prompt_skill;
 pub mod teaching_strategy;
 pub mod text_guard;
 pub mod view;
+pub mod weekly_report;
 
 pub use agent_thread::*;
 pub use cognitive_read::*;
@@ -44,3 +45,4 @@ pub use prompt_skill::*;
 pub use teaching_strategy::*;
 pub use text_guard::*;
 pub use view::*;
+pub use weekly_report::*;

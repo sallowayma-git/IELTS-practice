@@ -135,7 +135,7 @@ impl WeeklyPack {
     }
 }
 
-fn instant(value: DateTime<Utc>) -> String {
+pub(crate) fn instant(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
@@ -152,21 +152,21 @@ fn clip(text: &str, chars: usize) -> String {
     }
 }
 
-fn field<'a>(payload: &'a Value, key: &str) -> &'a str {
+pub(crate) fn field<'a>(payload: &'a Value, key: &str) -> &'a str {
     payload.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
-struct Obs {
-    id: String,
-    kind: String,
-    polarity: Option<String>,
-    value_num: Option<f64>,
-    value_text: Option<String>,
-    payload: Value,
-    at: String,
+pub(crate) struct Obs {
+    pub(crate) id: String,
+    pub(crate) kind: String,
+    pub(crate) polarity: Option<String>,
+    pub(crate) value_num: Option<f64>,
+    pub(crate) value_text: Option<String>,
+    pub(crate) payload: Value,
+    pub(crate) at: String,
 }
 
-fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
+pub(crate) fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
     let mut statement = conn.prepare(&format!(
         "SELECT id, observation_type, polarity, value_num, value_text, payload_json, observed_at
            FROM learner_observations
@@ -235,13 +235,13 @@ struct AssetInfo {
     display: BTreeMap<String, String>,
 }
 
-struct AssetBook<'c> {
+pub(crate) struct AssetBook<'c> {
     conn: &'c Connection,
     cache: BTreeMap<String, AssetInfo>,
 }
 
 impl<'c> AssetBook<'c> {
-    fn new(conn: &'c Connection) -> Self {
+    pub(crate) fn new(conn: &'c Connection) -> Self {
         Self { conn, cache: BTreeMap::new() }
     }
 
@@ -250,11 +250,11 @@ impl<'c> AssetBook<'c> {
         self.cache.entry(asset.to_owned()).or_insert_with(|| load_asset_info(conn, asset))
     }
 
-    fn title(&mut self, asset: &str) -> String {
+    pub(crate) fn title(&mut self, asset: &str) -> String {
         self.info(asset).title.clone()
     }
 
-    fn label(&mut self, asset: &str, qid: &str) -> String {
+    pub(crate) fn label(&mut self, asset: &str, qid: &str) -> String {
         let normalized = normalize_question_id(qid);
         match self.info(asset).display.get(&normalized) {
             Some(number) => format!("q{number}"),
@@ -630,7 +630,7 @@ fn cap_lines(lines: Vec<WeeklyLine>, budget: u32) -> (Vec<WeeklyLine>, usize) {
     (kept, omitted)
 }
 
-fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackMemory>> {
+pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackMemory>> {
     let mut statement = conn.prepare(
         "SELECT id, namespace, scope, canonical_key, content, version, COALESCE(last_observed_at, updated_at)
            FROM memory_items
