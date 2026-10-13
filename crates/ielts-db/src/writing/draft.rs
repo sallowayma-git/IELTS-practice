@@ -324,14 +324,33 @@ fn ensure_open_writing_draft_scope(
     };
 
     let status = require_open_writing_attempt(&existing, &cmd.attempt_id)?;
-    if existing.asset_id.as_deref() != cmd.asset_id.as_deref()
-        || existing.mode != writing_attempt_mode_name(cmd.mode)
-        || existing.suite_id.is_some()
-    {
+    if existing.suite_id.is_some() {
         return Err(DbError::Validation(
             "writing draft belongs to another mode, session, or asset".into(),
         ));
     }
+    let same_scope = existing.asset_id.as_deref() == cmd.asset_id.as_deref()
+        && existing.mode == writing_attempt_mode_name(cmd.mode);
+    if same_scope {
+        return Ok(Some(status));
+    }
+    // A never-submitted draft is the compose scratch slot: the learner may
+    // switch topic or mode before submitting.  Refusing that write silently
+    // drops every later autosave.  Once an attempt is active its scope is
+    // part of what is being evaluated and stays frozen.
+    if status != AttemptStatus::Draft {
+        return Err(DbError::Validation(
+            "writing draft belongs to another mode, session, or asset".into(),
+        ));
+    }
+    conn.execute(
+        "UPDATE attempts SET asset_id = ?2, mode = ?3 WHERE id = ?1 AND status = 'draft'",
+        params![
+            cmd.attempt_id,
+            cmd.asset_id,
+            writing_attempt_mode_name(cmd.mode)
+        ],
+    )?;
     Ok(Some(status))
 }
 

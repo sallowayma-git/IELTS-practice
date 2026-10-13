@@ -40,3 +40,14 @@ assert.match(retrySource, /function retryTaskType\(\)/)
 assert.doesNotMatch(retrySource, /function buildRetryPayload\(\)/)
 
 console.log('writing mode: ok')
+
+// P0: the "保存草稿" button must not hand its MouseEvent to scheduleSave as a
+// draft override (that persisted a blank essay), and a failed scratch-draft
+// cleanup after a successful submit must not strand the user on a page where
+// retry starts a second billed evaluation.
+const draftSource = fs.readFileSync(path.join(repoRoot, 'apps/writing-vue/src/composables/useDraft.js'), 'utf8')
+assert.doesNotMatch(composeSource, /@click="scheduleSave"/)
+assert.match(draftSource, /function isDraftOverride\(value\)/)
+assert.match(draftSource, /if \(isDraftOverride\(override\)\) return normalizeDraft\(override\)/)
+const submitSource = composeSource.slice(composeSource.indexOf('async function submitEssay()'))
+assert.match(submitSource, /await discardDraft\(\)\.catch\(/)
