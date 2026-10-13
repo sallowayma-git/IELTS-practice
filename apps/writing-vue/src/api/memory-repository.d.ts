@@ -16,7 +16,52 @@ export type MemoryFeedbackKind =
   | 'not_about_me'
   | 'acknowledged'
 
-export type CoachFeedbackKind = 'satisfaction' | 'learning'
+/** Mirrors crates/ielts-domain/src/coach_feedback.rs `CoachFeedbackKind` (snake_case). */
+export type CoachFeedbackKind =
+  | 'thumbs_up'
+  | 'thumbs_down'
+  | 'too_long'
+  | 'too_short'
+  | 'too_abstract'
+  | 'need_example'
+  | 'need_step_by_step'
+  | 'incorrect'
+  | 'not_relevant'
+  | 'reask_same_question'
+  | 'style_correction'
+
+export const COACH_FEEDBACK_KINDS: readonly CoachFeedbackKind[]
+
+/** RecordCoachFeedbackCommand (camelCase, deny_unknown_fields). */
+export interface RecordCoachFeedbackCommand {
+  userId: string
+  coachMessageId: string
+  feedbackKind: CoachFeedbackKind
+  payload?: unknown
+}
+
+export interface CoachFeedbackRecord {
+  id: string
+  userId: string
+  coachMessageId: string
+  feedbackKind: CoachFeedbackKind
+  payload: unknown | null
+  createdAt: string
+}
+
+/** RecordReaskLinkCommand (camelCase, deny_unknown_fields). */
+export interface RecordReaskLinkCommand {
+  userId: string
+  parentAssistantMessageId: string
+  newUserMessageId: string
+}
+
+export interface CoachReaskLinkRecord {
+  parentAssistantMessageId: string
+  newUserMessageId: string
+  feedbackKind: CoachFeedbackKind
+  createdAt: string
+}
 
 export type MemorySourceClass =
   | 'user_explicit'
@@ -102,7 +147,8 @@ export function promoteMemoryCandidate(command: PromoteMemoryCandidateCommand): 
 export function putExplicitPreference(command: PutExplicitPreferenceCommand): Promise<unknown>
 export function forgetMemory(command: ForgetMemoryCommand): Promise<unknown>
 export function archiveMemory(command: ArchiveMemoryCommand): Promise<unknown>
-export function recordCoachFeedback(memoryId: string, feedbackKind: CoachFeedbackKind): Promise<unknown>
+export function recordCoachFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind, payload?: unknown): Promise<CoachFeedbackRecord>
+export function recordCoachReaskLink(parentAssistantMessageId: string, newUserMessageId: string): Promise<CoachReaskLinkRecord>
 export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedbackKind): Promise<unknown>
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
 export function getDailyJournal(query: DailyJournalQuery): Promise<unknown>
@@ -116,6 +162,7 @@ export const memoryRepository: {
   forgetMemory: typeof forgetMemory
   archiveMemory: typeof archiveMemory
   recordCoachFeedback: typeof recordCoachFeedback
+  recordCoachReaskLink: typeof recordCoachReaskLink
   recordMemoryFeedback: typeof recordMemoryFeedback
   triggerDailyDream: typeof triggerDailyDream
   getDailyJournal: typeof getDailyJournal

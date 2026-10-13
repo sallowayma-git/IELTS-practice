@@ -306,10 +306,14 @@ pub fn get_history_detail(conn: &Connection, attempt_id: &str) -> DbResult<Histo
     } else {
         None
     };
+    let (analysis_signals, single_attempt_analysis) =
+        crate::reading::analysis::analyze_reading_attempt(&attempt).unzip();
     Ok(HistoryDetailResponse {
         summary,
         attempt,
         evaluation,
+        analysis_signals,
+        single_attempt_analysis,
     })
 }
 

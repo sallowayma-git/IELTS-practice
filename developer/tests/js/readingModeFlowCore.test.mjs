@@ -43,6 +43,20 @@ assert.deepEqual(ui.answerComparison.q1, {
   weight: 1,
   matchMode: 'exact'
 })
+assert.equal(ui.analysisSignals, null)
+assert.equal(ui.singleAttemptAnalysis, null)
+
+const analysisSignals = { unansweredCount: 1, changedAnswerCount: null, markedQuestionCount: 0, interactionDensity: null }
+const singleAttemptAnalysis = { diagnosis: [], nextActions: [], radar: { byQuestionKind: [] } }
+const withAnalysis = mapTauriSubmissionToUi({
+  attempt: { id: 'att-2' },
+  score: { accuracy: 0, correct: 0, total: 1, percentage: 0 },
+  comparisons: [],
+  analysisSignals,
+  singleAttemptAnalysis
+}, { assetId: 'asset-1' })
+assert.deepEqual(withAnalysis.analysisSignals, analysisSignals)
+assert.deepEqual(withAnalysis.singleAttemptAnalysis, singleAttemptAnalysis)
 
 const sequence = [
   { status: 'submitted', assetId: 'a1', sessionId: 's1' },

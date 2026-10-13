@@ -1,4 +1,6 @@
 import { settings } from '@/api/client.js'
+import { recordCoachFeedback, recordCoachReaskLink } from '@/api/memory-repository.js'
+import type { CoachFeedbackKind } from '@/api/memory-repository.js'
 import { practiceAssets, practiceCoach, practiceHistory, practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import {
   READING_ACTIVITY,
@@ -54,6 +56,14 @@ export const readingCoachApi = {
       requestOptions: CoachOptions
     ) => Promise<unknown>
     return queryCoach(READING_ACTIVITY, payload, sessionId, options)
+  },
+
+  async recordFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind) {
+    return recordCoachFeedback(coachMessageId, feedbackKind)
+  },
+
+  async recordReaskLink(parentAssistantMessageId: string, newUserMessageId: string) {
+    return recordCoachReaskLink(parentAssistantMessageId, newUserMessageId)
   }
 }
 
