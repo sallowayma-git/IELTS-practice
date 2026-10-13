@@ -199,6 +199,9 @@ async fn canonical_evidence_replaces_forged_payload_and_is_never_system() {
     let payload: Value = serde_json::from_str(data.content.split_once('\n').unwrap().1).unwrap();
     assert_ne!(payload["result"]["score"], 999);
     assert_eq!(payload["result"]["answers"][0]["answer"], "FALSE");
+    // The official answer the review page shows rides with each answer.
+    assert_eq!(payload["result"]["answers"][0]["correctAnswer"], "TRUE");
+    assert_eq!(payload["result"]["answers"][1]["correctAnswer"], "FALSE");
     // Volatile controls are NOT part of the cacheable evidence block; they ride
     // with the final turn, ahead of the question.
     assert!(payload.get("request").is_none());
@@ -516,6 +519,8 @@ async fn legacy_coach_explicitly_limits_evidence_and_never_sends_current_source(
     assert!(payload["source"].is_null());
     assert!(payload["identity"]["assetFingerprint"].is_null());
     assert_eq!(payload["result"]["answers"][0]["isCorrect"], false);
+    // Retained scoring result, never the replaced resource's new key.
+    assert_eq!(payload["result"]["answers"][0]["correctAnswer"], "TRUE");
     assert_eq!(
         payload["evidenceLimitations"][0]["code"],
         "submission_asset_revision_unavailable"

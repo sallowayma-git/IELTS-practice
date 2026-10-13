@@ -8,7 +8,7 @@ use tauri::State;
 use crate::app::state::AppDb;
 use ielts_db::{
     export_reading_archive, get_open_reading_draft_with_timer, import_reading_archive_value,
-    list_assets, load_pdf_data_url, load_practice_asset_payload, patch_reading_answer,
+    list_assets, load_pdf_data_url, load_practice_asset_payload_for_view, patch_reading_answer,
     pick_reading_practice_asset, save_reading_draft, submit_reading_attempt, AssetIndexEntry,
     PickReadingPracticeAssetCommand, PickedReadingPracticeAsset, ReadingArchiveImportResult,
     ReadingArchiveSnapshot, ReadingDraftCommand, ReadingOpenDraft, ReadingSubmitCommand,
@@ -50,7 +50,7 @@ pub fn reading_get_asset_payload(
     db: State<'_, AppDb>,
     asset_id: String,
 ) -> CommandResponse<ielts_domain::dto::PracticeAssetV2Payload> {
-    match db.with_conn(|conn| load_practice_asset_payload(conn, &asset_id)) {
+    match db.with_conn(|conn| load_practice_asset_payload_for_view(conn, &asset_id)) {
         Ok(v) => CommandResponse::success(v),
         Err(e) => CommandResponse::failure(map_err(e)),
     }
