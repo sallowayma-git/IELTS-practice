@@ -299,19 +299,33 @@ fn redo_facts(window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -
         .collect()
 }
 
+/// One fact per essay. A re-evaluated attempt emits a fresh overall band and four
+/// criterion scores per evaluation, all keyed by the same attempt; only its latest
+/// evaluation counts, with that evaluation's own criteria (matched by `eventId`)
+/// and the latest finished session, so a retried essay is neither counted twice
+/// nor given a mix of two evaluations' scores.
 fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<WritingFact> {
     let mut criteria: BTreeMap<&str, Vec<(String, f64)>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.criterion_score") {
         if let (Some(name), Some(value)) = (o.value_text.as_deref(), o.value_num) {
-            criteria.entry(field(&o.payload, "attemptId")).or_default().push((name.to_owned(), value));
+            criteria.entry(field(&o.payload, "eventId")).or_default().push((name.to_owned(), value));
         }
     }
-    window
-        .iter()
-        .filter(|o| o.kind == "writing.evaluation.overall_band")
+    let mut latest: BTreeMap<&str, &Obs> = BTreeMap::new();
+    for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
+        let order = |obs: &Obs| (obs.at.clone(), field(&obs.payload, "eventId").to_owned());
+        let slot = latest.entry(field(&o.payload, "attemptId")).or_insert(o);
+        if order(o) > order(slot) {
+            *slot = o;
+        }
+    }
+    let mut essays: Vec<&Obs> = latest.into_values().collect();
+    essays.sort_by(|left, right| left.at.cmp(&right.at).then(left.id.cmp(&right.id)));
+    essays
+        .into_iter()
         .map(|o| {
             let attempt = field(&o.payload, "attemptId");
-            let mut scores = criteria.get(attempt).cloned().unwrap_or_default();
+            let mut scores = criteria.get(field(&o.payload, "eventId")).cloned().unwrap_or_default();
             scores.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(&right.0)));
             WritingFact {
                 obs_id: o.id.clone(),
@@ -418,6 +432,38 @@ mod tests {
         assert_eq!(days.first(), NaiveDate::from_ymd_opt(2026, 10, 4).as_ref());
         assert_eq!(days.last(), NaiveDate::from_ymd_opt(2026, 10, 10).as_ref());
         assert_eq!(days.len(), 7);
+    }
+
+    fn writing_obs(id: &str, kind: &str, event: &str, attempt: &str, at: &str, criterion: Option<&str>, value: f64) -> Obs {
+        Obs {
+            id: id.into(),
+            kind: kind.into(),
+            polarity: None,
+            value_num: Some(value),
+            value_text: criterion.map(str::to_owned),
+            payload: serde_json::json!({"eventId": event, "attemptId": attempt, "taskType": "task2"}),
+            at: at.into(),
+        }
+    }
+
+    /// Review on #243: a completed retry of the same essay emits another overall
+    /// band and four criterion scores under the same attempt.
+    #[test]
+    fn a_re_evaluated_essay_counts_once_with_its_latest_scores() {
+        let conn = Connection::open_in_memory().unwrap();
+        let band = "writing.evaluation.overall_band";
+        let score = "writing.evaluation.criterion_score";
+        let mut window = Vec::new();
+        for (event, at, overall, lexical) in [("ev-1", "2026-10-06T10:00:00Z", 5.5, 5.0), ("ev-2", "2026-10-07T10:00:00Z", 6.5, 7.0)] {
+            window.push(writing_obs(&format!("{event}-band"), band, event, "essay", at, None, overall));
+            window.push(writing_obs(&format!("{event}-lex"), score, event, "essay", at, Some("lexical"), lexical));
+            window.push(writing_obs(&format!("{event}-gra"), score, event, "essay", at, Some("grammar"), 6.0));
+        }
+        let facts = writing_facts(&conn, &window, FixedOffset::east_opt(0).unwrap());
+        assert_eq!(facts.len(), 1, "one essay, evaluated twice");
+        assert_eq!(facts[0].band, 6.5);
+        assert_eq!(facts[0].criteria, vec![("grammar".to_owned(), 6.0), ("lexical".to_owned(), 7.0)]);
+        assert_eq!(facts[0].day, NaiveDate::from_ymd_opt(2026, 10, 7).unwrap());
     }
 
     #[test]

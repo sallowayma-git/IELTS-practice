@@ -423,11 +423,15 @@ fn apply_weekly_submission(
     run_id: &str,
     now: &str,
 ) -> Result<WeeklyOutcome, ApplicationError> {
-    let dream_service = DreamService::new(store);
     let pack = db
         .with_conn(|conn| ielts_db::weekly_pack(conn, &query.user_id, window.start, window.end))
         .map_err(|error| ApplicationError::new("weekly.pack_failed", error.to_string(), true))?;
     let evidence = WeeklyEvidence { observation_ids: pack.evidence_ids(), memory_ids: pack.memory_ids() };
+
+    // Build the report before any memory changes: if the blocks or the narrative
+    // cannot be built, the run fails with memory untouched.
+    let state = if submission.model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
+    let mut report = finished_report(db, window, state, Some(submission.narrative), &[])?;
 
     let (admitted, refused) = evidence.admitted(submission.mutations);
     let mut rejected = refused + submission.unparsed;
@@ -448,12 +452,27 @@ fn apply_weekly_submission(
         )?;
     }
     rejected += outcome.rejected;
-    let state = if submission.model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
-    let report = finished_report(db, window, state, Some(submission.narrative), &outcome.applied)?;
-    db.with_conn(|conn| ielts_db::put_weekly_report(conn, run_id, &report, now))
-        .map_err(|error| ApplicationError::new("weekly.report_failed", error.to_string(), true))?;
-    let output_hash = weekly_output_hash(&report, &outcome.applied);
-    dream_service.finish_dream_run(run_id, &output_hash, now)?;
+    // The report (with what memory changed) and the run's completion commit
+    // together. Should that fail after memory changed, the failed run's error
+    // names the memories, and a retry's validator refuses to apply them twice
+    // (an ADD is a duplicate key, a SUPERSEDE or ARCHIVE target is no longer
+    // active, a REINFORCE has no newer evidence).
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        report.memory_changes = memory_changes(&tx, &outcome.applied);
+        ielts_db::put_weekly_report(&tx, run_id, &report, now)?;
+        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report, &outcome.applied), now)?;
+        tx.commit()?;
+        Ok(())
+    })
+    .map_err(|error: ielts_db::DbError| {
+        let applied: Vec<&str> = outcome.applied.iter().filter_map(|receipt| receipt.memory_id.as_deref()).collect();
+        ApplicationError::new(
+            "weekly.report_failed",
+            format!("{error}; memory changes already applied: {applied:?}"),
+            true,
+        )
+    })?;
     Ok(WeeklyOutcome {
         run_id: run_id.to_owned(),
         validated: outcome.validated,
@@ -750,6 +769,42 @@ mod tests {
             let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
             Ok(rows.collect::<Result<Vec<_>, _>>()?)
         }).unwrap()
+    }
+
+    /// Review on #243: a report that cannot be stored after memory changed must
+    /// leave the run failed and retryable, name the memories it changed, and the
+    /// retry must not apply them twice.
+    #[test]
+    fn a_report_write_failure_fails_the_run_and_the_retry_does_not_repeat_its_mutations() {
+        let (dir, db) = temp_db();
+        import_passage(&db, dir.path(), "P1");
+        submit(&db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        let window = saturday();
+        let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        let miss = pack.lines.iter().find(|line| line.kind == "miss").unwrap().ids[0].clone();
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
+        let submission = || params(serde_json::json!({
+            "narrative": narrative_json(),
+            "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
+        }));
+
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        let error = run_weekly_consolidation(&db, &query, submission(), &window).unwrap_err();
+        let written = memories(&db);
+        assert_eq!(written.len(), 1);
+        assert!(error.to_string().contains(&written[0].0), "the failure names the memory it changed: {error}");
+        assert!(!db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", "2026-W41")).unwrap());
+        assert!(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap().is_empty());
+
+        db.with_conn(|conn| Ok(conn.execute_batch("DROP TRIGGER fail_report;")?)).unwrap();
+        let retry = run_weekly_consolidation(&db, &query, submission(), &window).unwrap();
+        assert_eq!(retry.accepted, 0, "the same ADD is a duplicate the second time");
+        assert_eq!(memories(&db).len(), 1);
+        assert!(db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", "2026-W41")).unwrap());
+        assert_eq!(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap().len(), 1);
     }
 
     /// The whole weekly path with a fake model, on real submissions: the pack the
