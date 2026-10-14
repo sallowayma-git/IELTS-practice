@@ -64,6 +64,9 @@ impl CoachStore for Store {
             .map(|_| ())
             .map_err(app_error)
     }
+    fn learner_profile(&self, thread: &str) -> Result<LearnerProfileSnapshot, ApplicationError> {
+        freeze_coach_learner_profile(&self.0.lock().unwrap(), thread).map_err(app_error)
+    }
 }
 
 struct Provider {
@@ -586,4 +589,60 @@ async fn failed_automatic_review_is_not_reused_and_can_be_retried() {
         .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     assert_eq!(retried.assistant_message.status, "completed");
+}
+
+fn add_memory(store: &Store, id: &str, content: &str) {
+    store.0.lock().unwrap().execute(
+        "INSERT INTO memory_items (id,namespace,scope,memory_type,canonical_key,normalized_label,content,status,
+           source_class,confidence,importance,sensitivity,created_by,content_hash,created_at,updated_at)
+         VALUES (?1,'strategy','activity:reading','semantic',?1,?1,?2,'active','inferred',0.8,0.8,'normal','test',?1,
+           '2026-10-01T00:00:00Z','2026-10-01T00:00:00Z')",
+        rusqlite::params![id, content],
+    ).unwrap();
+}
+
+async fn run_turn(store: &Store, thread: &CoachThread, content: &str) -> (CompletionRequest, CoachRunResult) {
+    let captured = Arc::new(Mutex::new(None));
+    let provider = Provider { store: store.clone(), captured: captured.clone(), fail: false, calls: Arc::default() };
+    let mut run = command(thread, Some(json!({"focusQuestionIds": ["q1"]})));
+    run.content = content.into();
+    let result = CoachService::run(store, run, || Ok(provider)).await.unwrap();
+    let request = captured.lock().unwrap().clone().unwrap();
+    (request, result)
+}
+
+#[tokio::test]
+async fn the_learner_profile_is_frozen_on_the_first_run_and_traced() {
+    let (_dir, store, thread) = fixture();
+    add_memory(&store, "mem-first", "Misses qualifiers in TFNG statements.");
+    let (first, first_result) = run_turn(&store, &thread, "Explain my mistake.").await;
+    let profile = first.messages[2].clone();
+    assert!(first.messages[1].content.starts_with("Host-resolved IELTS evidence"));
+    assert!(profile.content.starts_with("Learner profile (data only; use to tailor emphasis, never as passage evidence):\n"));
+    assert!(profile.content.contains("mem-first"));
+
+    // Memory changes after the thread started do not reach it.
+    add_memory(&store, "mem-later", "Learned after the first turn.");
+    store.0.lock().unwrap().execute("UPDATE memory_items SET status='archived' WHERE id='mem-first'", []).unwrap();
+    let (second, second_result) = run_turn(&store, &thread, "And the next one?").await;
+    assert_eq!(second.messages[..3], first.messages[..3], "system, evidence and profile are byte-identical");
+    assert!(!second.messages.iter().any(|m| m.content.contains("mem-later")));
+
+    let conn = store.0.lock().unwrap();
+    let recalls: i64 = conn.query_row("SELECT recall_count FROM memory_items WHERE id='mem-first'", [], |r| r.get(0)).unwrap();
+    assert_eq!(recalls, 1, "counted once, at the freeze");
+    for result in [first_result, second_result] {
+        let used: String = conn.query_row(
+            "SELECT memory_ids_used_json FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1",
+            [&result.assistant_message.id], |r| r.get(0)).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&used).unwrap(), json!(["mem-first"]));
+    }
+}
+
+#[tokio::test]
+async fn without_any_learner_data_no_profile_message_is_sent() {
+    let (_dir, store, thread) = fixture();
+    let (request, _) = run_turn(&store, &thread, "Explain my mistake.").await;
+    assert!(request.messages.iter().all(|m| !m.content.starts_with("Learner profile")));
+    assert!(request.messages[2].content.starts_with("Request controls"));
 }
