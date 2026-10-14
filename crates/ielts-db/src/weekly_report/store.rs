@@ -7,13 +7,41 @@ use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use ielts_domain::{WeeklyReport, WEEKLY_REPORT_SCHEMA_VERSION};
+use ielts_domain::{WeeklyMemoryChange, WeeklyReport, WEEKLY_REPORT_SCHEMA_VERSION};
 use rusqlite::{params, Connection};
 
-use crate::dream::normalize_user_id;
+use crate::dream::{normalize_user_id, WEEKLY_KEY_MATCH};
 use crate::sqlite::{DbError, DbResult};
 
 const MAX_REPORTS: u32 = 52;
+
+const MUTATION_BATCH_PREFIX: &str = "weekly-mutations-";
+
+/// The memory batch a weekly run submits its mutations under.
+pub fn weekly_mutation_request_id(run_id: &str) -> String {
+    format!("{MUTATION_BATCH_PREFIX}{run_id}")
+}
+
+/// What every weekly run of the window `key` changed in memory, oldest first.
+/// Read from the promotion records of each run's batch, so a change an earlier,
+/// failed attempt already made still reaches the report of the run that closes
+/// the window, though that run's own validator refuses to make it again.
+pub fn weekly_memory_changes(conn: &Connection, user_id: &str, key: &str) -> DbResult<Vec<WeeklyMemoryChange>> {
+    let mut statement = conn.prepare(&format!(
+        "SELECT c.action, c.resolved_memory_id, COALESCE(m.content, '')
+           FROM dream_runs r
+           JOIN memory_candidate_batches b ON b.request_id = ?3 || r.id
+           JOIN memory_candidates c ON c.batch_id = b.id
+           LEFT JOIN memory_items m ON m.id = c.resolved_memory_id
+          WHERE r.user_id = ?1 AND {WEEKLY_KEY_MATCH}
+            AND c.disposition = 'promoted' AND c.resolved_memory_id IS NOT NULL
+          ORDER BY c.updated_at, c.id"
+    ))?;
+    let rows = statement.query_map(params![normalize_user_id(user_id), key, MUTATION_BATCH_PREFIX], |row| {
+        Ok(WeeklyMemoryChange { action: row.get(0)?, memory_id: row.get(1)?, statement: row.get(2)? })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
 
 /// Store the report of a weekly run. Idempotent per run.
 pub fn put_weekly_report(conn: &Connection, run_id: &str, report: &WeeklyReport, now: &str) -> DbResult<()> {
@@ -72,19 +100,17 @@ fn candidates(conn: &Connection, user_id: &str) -> DbResult<Vec<Candidate>> {
         .collect())
 }
 
-fn span(report: &WeeklyReport) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
-    let at = |text: &str| DateTime::parse_from_rfc3339(text).ok().map(|value| value.with_timezone(&Utc));
-    Some((at(&report.window_start)?, at(&report.window_end)?))
+fn end_of(report: &WeeklyReport) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(&report.window_end).ok().map(|end| end.with_timezone(&Utc))
 }
 
 fn window_order(report: &WeeklyReport) -> (Option<DateTime<Utc>>, String) {
-    let end = DateTime::parse_from_rfc3339(&report.window_end).ok().map(|end| end.with_timezone(&Utc));
-    (end, report.window.clone())
+    (end_of(report), report.window.clone())
 }
 
 /// Newest persisted weekly reports (window end descending), one per window.
 /// Rows that are not v2 reports, reports without blocks, and failed reports
-/// whose span a completed report covers are skipped.
+/// that end at or before the latest completed report are skipped.
 pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyReport>> {
     let user_id = normalize_user_id(user_id);
     let mut best: BTreeMap<String, Candidate> = BTreeMap::new();
@@ -94,15 +120,12 @@ pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbRe
             best.insert(candidate.report.window.clone(), candidate);
         }
     }
-    // A failed week whose span a later completed run folded in is superseded:
-    // that run already reports its practice, and the failed one can never retry.
-    let completed: Vec<(DateTime<Utc>, DateTime<Utc>)> =
-        best.values().filter(|candidate| candidate.rank.0).filter_map(|candidate| span(&candidate.report)).collect();
+    // A failed week that a completed run has reached past can never retry: the
+    // weekly boundary moved beyond it. Its practice was folded into that run, or
+    // dropped by the run's lookback cap; either way the failure is retired.
+    let boundary = best.values().filter(|candidate| candidate.rank.0).filter_map(|candidate| end_of(&candidate.report)).max();
     let superseded = |candidate: &Candidate| {
-        !candidate.rank.0
-            && span(&candidate.report).is_some_and(|(start, end)| {
-                completed.iter().any(|(done_start, done_end)| *done_start <= start && end <= *done_end)
-            })
+        !candidate.rank.0 && boundary.zip(end_of(&candidate.report)).is_some_and(|(boundary, end)| end <= boundary)
     };
     let mut reports: Vec<WeeklyReport> =
         best.into_values().filter(|candidate| !superseded(candidate)).map(|candidate| candidate.report).collect();

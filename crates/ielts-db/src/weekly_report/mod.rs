@@ -20,7 +20,7 @@ use rusqlite::Connection;
 
 pub use facts::{criterion_label, question_type_label, week_facts, WeekFacts};
 pub use narrative::apply_narrative;
-pub use store::{list_weekly_reports, put_weekly_report};
+pub use store::{list_weekly_reports, put_weekly_report, weekly_memory_changes, weekly_mutation_request_id};
 
 use crate::dream::WeeklyWindow;
 use crate::sqlite::DbResult;

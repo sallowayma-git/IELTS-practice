@@ -223,7 +223,7 @@ pub fn weekly_key_marker(key: &str) -> String {
 }
 
 /// SQL matching every marker of one weekend key (bare, windowed or legacy).
-const WEEKLY_KEY_MATCH: &str = "(input_hash = 'weekly:' || ?2 OR input_hash LIKE 'weekly:' || ?2 || ':%')";
+pub(crate) const WEEKLY_KEY_MATCH: &str = "(input_hash = 'weekly:' || ?2 OR input_hash LIKE 'weekly:' || ?2 || ':%')";
 
 /// Whether a completed weekly consolidation already exists for the weekend key.
 pub fn weekly_run_completed(conn: &Connection, user_id: &str, key: &str) -> DbResult<bool> {

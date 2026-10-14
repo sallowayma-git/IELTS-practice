@@ -180,7 +180,7 @@ fn weekly_report_without_narrative(
     window: &WeeklyWindow,
     state: WeeklyReportState,
 ) -> DbResult<ielts_domain::WeeklyReport> {
-    crate::commands::journal::finished_report(db, window, state, None, &[])
+    crate::commands::journal::finished_report(db, window, state, None)
         .map_err(|error| DbError::Validation(error.to_string()))
 }
 

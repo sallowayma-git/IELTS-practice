@@ -14,7 +14,7 @@ use ielts_application::{
 };
 use ielts_db::background_jobs::{self, BackgroundJob};
 use ielts_db::WeeklyWindow;
-use ielts_domain::{WeeklyMemoryChange, WeeklyReport, WeeklyReportState};
+use ielts_domain::{WeeklyReport, WeeklyReportState};
 use ielts_domain::{
     CommandResponse, DailyDreamQuery, DailyJournal, DailyJournalQuery, ErrorEnvelope,
     MemoryFeedbackKind, MemoryMutationProposalBatch, MemorySourceClass, WeeklyDreamQuery,
@@ -431,7 +431,7 @@ fn apply_weekly_submission(
     // Build the report before any memory changes: if the blocks or the narrative
     // cannot be built, the run fails with memory untouched.
     let state = if submission.model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
-    let mut report = finished_report(db, window, state, Some(submission.narrative), &[])?;
+    let mut report = finished_report(db, window, state, Some(submission.narrative))?;
 
     let (admitted, refused) = evidence.admitted(submission.mutations);
     let mut rejected = refused + submission.unparsed;
@@ -439,7 +439,7 @@ fn apply_weekly_submission(
     if !admitted.is_empty() {
         outcome = MemoryService::new(store).apply_cognitive_mutations(
             &SubmitMemoryCandidatesCommand {
-                request_id: format!("weekly-mutations-{run_id}"),
+                request_id: ielts_db::weekly_mutation_request_id(run_id),
                 user_id: query.user_id.clone(),
                 run_id: None,
                 batch: MemoryMutationProposalBatch {
@@ -453,15 +453,16 @@ fn apply_weekly_submission(
     }
     rejected += outcome.rejected;
     // The report (with what memory changed) and the run's completion commit
-    // together. Should that fail after memory changed, the failed run's error
-    // names the memories, and a retry's validator refuses to apply them twice
-    // (an ADD is a duplicate key, a SUPERSEDE or ARCHIVE target is no longer
-    // active, a REINFORCE has no newer evidence).
+    // together. Should that fail after memory changed, a retry's validator
+    // refuses to apply the changes twice (an ADD is a duplicate key, a
+    // SUPERSEDE or ARCHIVE target is no longer active, a REINFORCE has no newer
+    // evidence), and the report lists every change any run of this window made,
+    // read from the promotion records, so the retry's report still carries them.
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
-        report.memory_changes = memory_changes(&tx, &outcome.applied);
+        report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id, &window.key)?;
         ielts_db::put_weekly_report(&tx, run_id, &report, now)?;
-        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report, &outcome.applied), now)?;
+        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report), now)?;
         tx.commit()?;
         Ok(())
     })
@@ -489,7 +490,6 @@ pub(crate) fn finished_report(
     window: &WeeklyWindow,
     state: WeeklyReportState,
     narrative: Option<ielts_domain::WeeklyNarrative>,
-    applied: &[ielts_domain::MemoryMutationReceipt],
 ) -> Result<WeeklyReport, ApplicationError> {
     let now = crate::app::clock::now();
     db.with_conn(|conn| {
@@ -501,35 +501,21 @@ pub(crate) fn finished_report(
                 tracing::info!(refused, "weekly narrative items refused by the number whitelist");
             }
         }
-        report.memory_changes = memory_changes(conn, applied);
         Ok(report)
     })
     .map_err(|error: ielts_db::DbError| ApplicationError::new("weekly.report_failed", error.to_string(), true))
 }
 
-fn memory_changes(conn: &rusqlite::Connection, applied: &[ielts_domain::MemoryMutationReceipt]) -> Vec<WeeklyMemoryChange> {
-    applied
-        .iter()
-        .filter_map(|receipt| {
-            let memory_id = receipt.memory_id.clone()?;
-            let statement = conn
-                .query_row("SELECT content FROM memory_items WHERE id = ?1", [&memory_id], |row| row.get(0))
-                .unwrap_or_default();
-            Some(WeeklyMemoryChange { action: receipt.action.clone(), memory_id, statement })
-        })
-        .collect()
-}
-
 /// Deterministic hash over the report and the memories the pass touched.
-fn weekly_output_hash(report: &WeeklyReport, applied: &[ielts_domain::MemoryMutationReceipt]) -> String {
+fn weekly_output_hash(report: &WeeklyReport) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(serde_json::to_string(&report.blocks).unwrap_or_default().as_bytes());
     hasher.update(report.title.as_bytes());
-    for receipt in applied {
+    for change in &report.memory_changes {
         hasher.update(b"|");
-        hasher.update(receipt.memory_id.as_deref().unwrap_or("").as_bytes());
-        hasher.update(receipt.action.as_bytes());
+        hasher.update(change.memory_id.as_bytes());
+        hasher.update(change.action.as_bytes());
     }
     format!("{:x}", hasher.finalize())
 }
@@ -804,7 +790,12 @@ mod tests {
         assert_eq!(retry.accepted, 0, "the same ADD is a duplicate the second time");
         assert_eq!(memories(&db).len(), 1);
         assert!(db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", "2026-W41")).unwrap());
-        assert_eq!(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap().len(), 1);
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        // The change the failed attempt made is still this week's change.
+        let changes: Vec<(&str, &str)> =
+            reports[0].memory_changes.iter().map(|change| (change.action.as_str(), change.memory_id.as_str())).collect();
+        assert_eq!(changes, vec![("ADD", written[0].0.as_str())]);
     }
 
     /// The whole weekly path with a fake model, on real submissions: the pack the

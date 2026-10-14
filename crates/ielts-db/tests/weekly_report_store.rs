@@ -37,10 +37,14 @@ fn failed_run(conn: &Connection, journal: &str, key: &str, at: &str) -> String {
 }
 
 fn report(key: &str, end: &str, state: WeeklyReportState, title: &str) -> WeeklyReport {
+    spanning(key, "2026-01-01T00:00:00Z", end, state, title)
+}
+
+fn spanning(key: &str, start: &str, end: &str, state: WeeklyReportState, title: &str) -> WeeklyReport {
     WeeklyReport {
         schema_version: WEEKLY_REPORT_SCHEMA_VERSION,
         window: key.to_owned(),
-        window_start: "2026-01-01T00:00:00Z".to_owned(),
+        window_start: start.to_owned(),
         window_end: end.to_owned(),
         state,
         generated_at: end.to_owned(),
@@ -178,4 +182,36 @@ fn a_failed_week_folded_into_a_later_completed_run_is_not_listed() {
     let done = complete_run(&conn, &journal, "2026-W42", w42_end, w42_end);
     put_weekly_report(&conn, &done, &report("2026-W42", w42_end, WeeklyReportState::Final, "w42 folded"), w42_end).unwrap();
     assert_eq!(titles(&list_weekly_reports(&conn, "local", 8).unwrap()), vec!["w42 folded"]);
+}
+
+/// Review on #243: after a provider outage longer than the 28-day lookback, the
+/// completed run starts later than the oldest failures. Those weeks only partly
+/// overlap it, or not at all, yet the boundary has passed them: they can never
+/// retry and are not listed as if they would.
+#[test]
+fn failed_weeks_behind_a_capped_completed_run_are_retired() {
+    let (_dir, conn) = open_db();
+    let journal = journal_for(&conn, "2026-10-10");
+    let failed = [
+        ("2026-W36", "2026-08-29T09:30:00Z", "2026-09-05T09:30:00Z"),
+        ("2026-W38", "2026-08-29T09:30:00Z", "2026-09-19T09:30:00Z"),
+        ("2026-W40", "2026-08-29T09:30:00Z", "2026-10-03T09:30:00Z"),
+    ];
+    for (key, start, end) in failed {
+        let run = failed_run(&conn, &journal, key, end);
+        put_weekly_report(&conn, &run, &spanning(key, start, end, WeeklyReportState::NarrativeFailed, key), end).unwrap();
+    }
+    // The capped run starts 28 days before its end, after the W36 and W38 starts.
+    let end = "2026-10-10T09:30:00Z";
+    let done = complete_run(&conn, &journal, "2026-W41", end, end);
+    put_weekly_report(&conn, &done, &spanning("2026-W41", "2026-09-12T09:30:00Z", end, WeeklyReportState::Final, "capped"), end)
+        .unwrap();
+    assert_eq!(titles(&list_weekly_reports(&conn, "local", 8).unwrap()), vec!["capped"]);
+
+    // A failure after the boundary is still owed a retry and stays listed.
+    let later = "2026-10-17T09:30:00Z";
+    let run = failed_run(&conn, &journal, "2026-W42", later);
+    put_weekly_report(&conn, &run, &spanning("2026-W42", end, later, WeeklyReportState::NarrativeFailed, "w42 failed"), later)
+        .unwrap();
+    assert_eq!(titles(&list_weekly_reports(&conn, "local", 8).unwrap()), vec!["w42 failed", "capped"]);
 }

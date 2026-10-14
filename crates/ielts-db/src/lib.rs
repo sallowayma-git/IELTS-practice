@@ -82,6 +82,6 @@ pub use vocab::*;
 pub use weekly_pack::*;
 pub use weekly_report::{
     apply_narrative, build_blocks, build_weekly_report, default_title, list_weekly_reports, put_weekly_report,
-    week_facts, SkillContext, WeekFacts,
+    week_facts, weekly_memory_changes, weekly_mutation_request_id, SkillContext, WeekFacts,
 };
 pub use writing::*;
