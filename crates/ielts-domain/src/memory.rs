@@ -275,6 +275,27 @@ pub struct MemoryValidationSnapshot {
     pub observation_output_hash: String,
     pub observations: Vec<MemoryObservationEvidence>,
     pub active_memory: Vec<ActiveMemorySummary>,
+    /// Memories the learner marked inaccurate (M8-09 feedback). Suppression is
+    /// permanent: a proposal restating one — same identity or the same
+    /// normalized statement — is rejected as `user_marked_inaccurate`.
+    #[serde(default)]
+    pub refuted_memory: Vec<RefutedMemorySummary>,
+}
+
+/// A memory the learner refuted, kept only as the identity and statement that
+/// must not come back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefutedMemorySummary {
+    pub namespace: MemoryNamespace,
+    pub canonical_key: String,
+    pub scope: MemoryScope,
+    pub statement: String,
+}
+
+/// Statement comparison form: case- and whitespace-insensitive.
+pub fn normalize_memory_statement(statement: &str) -> String {
+    statement.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

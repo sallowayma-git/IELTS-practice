@@ -5,7 +5,7 @@ use ielts_application::{
 use ielts_domain::{
     Activity, MemoryMutationProposal, MemoryMutationProposalBatch, MemoryNamespace,
     MemoryProposalDecision, MemoryProposalDisposition, MemoryScope, MemorySourceClass,
-    MemoryStatus, MEMORY_PROPOSAL_SCHEMA_VERSION,
+    MemoryStatus, RefutedMemorySummary, MEMORY_PROPOSAL_SCHEMA_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -95,6 +95,7 @@ fn validation_snapshot() -> MemoryValidationSnapshot {
             status: MemoryStatus::Active,
             version: 1,
         }],
+        refuted_memory: Vec::new(),
     }
 }
 
@@ -735,4 +736,34 @@ fn cross_user_and_cross_scope_evidence_are_rejected() {
     );
     assert_issue(&report.decisions[0], "observation_cross_user");
     assert_issue(&report.decisions[0], "observation_scope_mismatch");
+}
+
+#[test]
+fn a_memory_the_learner_marked_inaccurate_is_not_re_proposed() {
+    let mut snapshot = validation_snapshot();
+    snapshot.refuted_memory.push(RefutedMemorySummary {
+        namespace: MemoryNamespace::Strategy,
+        canonical_key: "strategy.reading.refuted".to_owned(),
+        scope: activity_scope(Activity::Reading),
+        statement: "Rushes   the TFNG questions.".to_owned(),
+    });
+    let same_key = add_proposal("strategy.reading.refuted", &[READING_EVIDENCE_ID]);
+    let same_statement = MemoryMutationProposal::Add {
+        namespace: MemoryNamespace::Strategy,
+        canonical_key: "strategy.reading.renamed".to_owned(),
+        scope: activity_scope(Activity::Reading),
+        statement: "rushes the tfng questions.".to_owned(),
+        evidence_observation_ids: evidence_ids(&[READING_EVIDENCE_ID]),
+    };
+    let unrelated = add_proposal("strategy.reading.fresh", &[READING_EVIDENCE_ID]);
+    let report = MemoryProposalValidator::default().validate(
+        &proposal_batch(vec![same_key, same_statement, unrelated]),
+        cognitive_origin(MemorySourceClass::Consolidated),
+        &snapshot,
+    );
+    for decision in &report.decisions[..2] {
+        assert_eq!(decision.disposition, MemoryProposalDisposition::Rejected);
+        assert_issue(decision, "user_marked_inaccurate");
+    }
+    assert_eq!(report.decisions[2].disposition, MemoryProposalDisposition::Pending);
 }

@@ -6,7 +6,7 @@ use ielts_domain::{
     MemoryProposalDisposition, MemoryProposalIssue, MemoryProposalValidationReport, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, MAX_MEMORY_EVIDENCE_IDS,
     MAX_MEMORY_KEY_BYTES, MAX_MEMORY_PROPOSALS, MAX_MEMORY_STATEMENT_BYTES,
-    MEMORY_PROPOSAL_SCHEMA_VERSION,
+    MEMORY_PROPOSAL_SCHEMA_VERSION, normalize_memory_statement,
 };
 
 const MAX_BATCH_ISSUES: usize = 8;
@@ -151,6 +151,7 @@ impl MemoryProposalValidator {
         let mut scope: Option<MemoryScope> = None;
         let mut target: Option<&ActiveMemorySummary> = None;
         let mut identity: Option<String> = None;
+        let mut restated: Option<&String> = None;
 
         match proposal {
             MemoryMutationProposal::Add {
@@ -166,6 +167,7 @@ impl MemoryProposalValidator {
                 evidence_ids = ids;
                 scope = Some(*proposal_scope);
                 identity = Some(identity_key(*namespace, canonical_key, *proposal_scope));
+                restated = Some(statement);
             }
             MemoryMutationProposal::Supersede {
                 target_memory_id,
@@ -182,6 +184,7 @@ impl MemoryProposalValidator {
                 evidence_ids = ids;
                 scope = Some(*proposal_scope);
                 identity = Some(identity_key(*namespace, canonical_key, *proposal_scope));
+                restated = Some(proposed_statement);
             }
             MemoryMutationProposal::Refine {
                 target_memory_id,
@@ -192,6 +195,7 @@ impl MemoryProposalValidator {
                 issues.extend(validate_statement(proposed_statement));
                 quarantined |= contains_security_marker(proposed_statement);
                 evidence_ids = ids;
+                restated = Some(proposed_statement);
             }
             MemoryMutationProposal::Reinforce {
                 target_memory_id,
@@ -242,6 +246,13 @@ impl MemoryProposalValidator {
                     ));
                 }
             }
+        }
+        if restates_refuted_memory(identity.as_deref(), restated.map(String::as_str), snapshot) {
+            issues.push(issue(
+                "user_marked_inaccurate",
+                Some("canonicalKey"),
+                "the learner marked this memory inaccurate; it is not re-proposed",
+            ));
         }
         if let Some(identity) = identity {
             let superseded_target_id = match proposal {
@@ -475,6 +486,20 @@ use ielts_domain::text_guard::{
     contains_injection_marker, contains_secret_marker, contains_security_marker,
 };
 
+/// Permanent suppression of what the learner refuted: the same identity
+/// (namespace, canonical key, scope) or the same normalized statement.
+fn restates_refuted_memory(
+    identity: Option<&str>,
+    statement: Option<&str>,
+    snapshot: &MemoryValidationSnapshot,
+) -> bool {
+    let statement = statement.map(normalize_memory_statement);
+    snapshot.refuted_memory.iter().any(|refuted| {
+        identity == Some(identity_key(refuted.namespace, &refuted.canonical_key, refuted.scope).as_str())
+            || statement.as_deref() == Some(normalize_memory_statement(&refuted.statement).as_str())
+    })
+}
+
 fn identity_key(namespace: MemoryNamespace, canonical_key: &str, scope: MemoryScope) -> String {
     format!("{}|{}|{:?}", namespace.as_str(), canonical_key, scope)
 }
@@ -536,6 +561,7 @@ mod tests {
                 status: MemoryStatus::Active,
                 version: 2,
             }],
+            refuted_memory: Vec::new(),
         }
     }
 
