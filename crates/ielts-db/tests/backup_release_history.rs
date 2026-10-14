@@ -189,7 +189,7 @@ fn out_of_order_publications_survive_backup_restore_and_all_rollbacks() {
     let prompt = seed_chain(&source, CandidateTargetKind::Prompt);
     let skill = seed_chain(&source, CandidateTargetKind::Skill);
     let package = create_backup_package(&source, "release-history").unwrap();
-    assert_eq!(package.manifest.schema_version, 18);
+    assert_eq!(package.manifest.schema_version, 19);
     assert_eq!(
         package
             .database
@@ -314,6 +314,7 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
         .execute_batch(
             "DROP TABLE prompt_skill_release_heads; DROP TABLE prompt_skill_releases;
          ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
+         ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
          DELETE FROM schema_migrations WHERE version >= 25;",
         )
         .unwrap();
@@ -342,7 +343,9 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
     package
         .database
         .retain(|t| t.name != "prompt_skill_releases" && t.name != "prompt_skill_release_heads");
-    package.database.retain(|t| t.name != "weekly_digests");
+    package
+        .database
+        .retain(|t| t.name != "weekly_digests" && !t.name.starts_with("agent_context_"));
     package.attempts = ielts_db::format17_attempt_summaries(&source).unwrap();
     recount(&mut package);
     rechecksum(&mut package);
@@ -377,7 +380,11 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
             .filter(|t| {
                 !matches!(
                     t.name.as_str(),
-                    "prompt_skill_releases" | "prompt_skill_release_heads" | "weekly_digests"
+                    "prompt_skill_releases"
+                        | "prompt_skill_release_heads"
+                        | "weekly_digests"
+                        | "agent_context_snapshots"
+                        | "agent_context_items"
                 )
             })
             .collect::<Vec<_>>()
@@ -465,6 +472,7 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
                 "strategy_candidate_evaluations" => 16,
                 "prompt_skill_releases" | "prompt_skill_release_heads" => 17,
                 "weekly_digests" => 18,
+                "agent_context_snapshots" | "agent_context_items" => 19,
                 _ => 2,
             };
             schema >= introduced

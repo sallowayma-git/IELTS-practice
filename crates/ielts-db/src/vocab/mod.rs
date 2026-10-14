@@ -76,8 +76,36 @@ pub struct ReviewVocabCommand {
     pub grade: u8,
 }
 
+/// Canonical lookup/dedupe key: trims whitespace and surrounding punctuation
+/// (a highlight like `“Abandon,”` must hit the same key as `abandon`).
 pub fn normalize_term(term: &str) -> String {
-    term.trim().to_ascii_lowercase()
+    const EDGE_PUNCT: &str = ".,;:!?\"'()[]\u{201c}\u{201d}\u{2018}\u{2019}";
+    term.trim_matches(|c: char| c.is_whitespace() || EDGE_PUNCT.contains(c))
+        .to_ascii_lowercase()
+}
+
+/// UI placeholder written by older clients when a lookup missed. Never a real definition.
+pub const PLACEHOLDER_DEFINITION: &str = "待补充释义";
+
+/// `None` for blank text or the placeholder, so a merge never overwrites real data with it.
+fn meaningful(value: &Option<String>) -> Option<&str> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && *v != PLACEHOLDER_DEFINITION)
+}
+
+fn find_vocab_id_by_normalized(conn: &Connection, normalized: &str) -> DbResult<Option<String>> {
+    match conn.query_row(
+        "SELECT id FROM vocabulary_items WHERE normalized_term = ?1
+         ORDER BY created_at ASC, id ASC LIMIT 1",
+        params![normalized],
+        |r| r.get::<_, String>(0),
+    ) {
+        Ok(id) => Ok(Some(id)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn upsert_vocab(conn: &Connection, cmd: &UpsertVocabCommand) -> DbResult<VocabularyItem> {
@@ -87,11 +115,12 @@ pub fn upsert_vocab(conn: &Connection, cmd: &UpsertVocabCommand) -> DbResult<Voc
     }
     let normalized = normalize_term(term);
     let now = chrono::Utc::now().to_rfc3339();
-    let id = cmd
-        .id
-        .clone()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| format!("vocab-{}", Uuid::new_v4()));
+    // One row per normalized word: an id-less save of a known word updates that row.
+    let id = match cmd.id.clone().filter(|s| !s.trim().is_empty()) {
+        Some(id) => id,
+        None => find_vocab_id_by_normalized(conn, &normalized)?
+            .unwrap_or_else(|| format!("vocab-{}", Uuid::new_v4())),
+    };
     let tags_json =
         serde_json::to_string(&cmd.tags).map_err(|e| DbError::Message(e.to_string()))?;
 
@@ -103,26 +132,30 @@ pub fn upsert_vocab(conn: &Connection, cmd: &UpsertVocabCommand) -> DbResult<Voc
          ON CONFLICT(id) DO UPDATE SET
             term = excluded.term,
             normalized_term = excluded.normalized_term,
-            definition = excluded.definition,
-            phonetic = excluded.phonetic,
-            part_of_speech = excluded.part_of_speech,
-            example = excluded.example,
-            source_asset_id = excluded.source_asset_id,
-            source_attempt_id = excluded.source_attempt_id,
+            definition = CASE
+                WHEN excluded.definition IS NOT NULL THEN excluded.definition
+                WHEN definition = ?12 THEN NULL
+                ELSE definition END,
+            phonetic = COALESCE(excluded.phonetic, phonetic),
+            part_of_speech = COALESCE(excluded.part_of_speech, part_of_speech),
+            example = COALESCE(excluded.example, example),
+            source_asset_id = COALESCE(excluded.source_asset_id, source_asset_id),
+            source_attempt_id = COALESCE(excluded.source_attempt_id, source_attempt_id),
             tags_json = excluded.tags_json,
             updated_at = excluded.updated_at",
         params![
             id,
             term,
             normalized,
-            cmd.definition,
-            cmd.phonetic,
-            cmd.part_of_speech,
-            cmd.example,
+            meaningful(&cmd.definition),
+            meaningful(&cmd.phonetic),
+            meaningful(&cmd.part_of_speech),
+            meaningful(&cmd.example),
             cmd.source_asset_id,
             cmd.source_attempt_id,
             tags_json,
             now,
+            PLACEHOLDER_DEFINITION,
         ],
     )?;
 

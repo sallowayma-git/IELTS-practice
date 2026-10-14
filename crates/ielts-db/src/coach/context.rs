@@ -2,13 +2,14 @@
 
 use std::collections::BTreeSet;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::get_thread;
+use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::{DbError, DbResult};
-use crate::{history::load_attempt, load_practice_asset_payload};
+use crate::{history::load_attempt, load_answer_key, load_practice_asset_payload};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedCoachContext {
@@ -97,7 +98,9 @@ pub fn resolve_reading_coach_context(
         return Err(invalid("thread asset conflicts with its bound attempt"));
     }
     validate_identity(&selector, attempt_id, asset_id, &mode)?;
-    let (source, focus, limitations) = if let Some(fingerprint) = fingerprint.as_deref() {
+    let (source, focus, limitations, correct_answers) = if let Some(fingerprint) =
+        fingerprint.as_deref()
+    {
         let source = load_practice_asset_payload(&tx, asset_id)?;
         if source.asset.fingerprint != fingerprint {
             return Err(invalid(
@@ -108,12 +111,15 @@ pub fn resolve_reading_coach_context(
             return Err(invalid("canonical payload identity mismatch"));
         }
         let focus = resolve_focus(&selector, &source.payload)?;
+        // The fingerprint-verified payload is the exact revision the attempt was
+        // scored against, so its answerKey is the key the review page shows.
         (
             json!({"passage": source.payload.get("passage"),
             "questionGroups": source.payload.get("questionGroups"),
             "questionDisplayMap": source.payload.get("questionDisplayMap")}),
             focus,
             json!([]),
+            Some(load_answer_key(&source.payload)),
         )
     } else {
         // Never pair retained grades with today's text for unversioned history.
@@ -138,15 +144,22 @@ pub fn resolve_reading_coach_context(
             .map(|answer| (answer.question_id.clone(), Value::Null))
             .collect();
         let focus = resolve_focus(&retained_selector, &json!({"answerKey": key}))?;
-        (
-            Value::Null,
-            focus,
-            json!([{
-                "code": "submission_asset_revision_unavailable",
-                "message": "Legacy attempt has no submission asset revision. Only retained answers and scores are evidence; passage, questions and display mapping are unavailable."
-            }]),
-        )
+        // Only correct answers persisted with this attempt's own scoring result
+        // are evidence; today's (possibly replaced) answer key never is.
+        let retained = retained_correct_answers(&tx, attempt_id)?;
+        let mut limitations = vec![json!({
+            "code": "submission_asset_revision_unavailable",
+            "message": "Legacy attempt has no submission asset revision. Only retained answers and scores are evidence; passage, questions and display mapping are unavailable."
+        })];
+        if retained.is_none() {
+            limitations.push(json!({
+                "code": "correct_answers_unavailable",
+                "message": "No correct answers were retained with this legacy attempt. Use only the recorded isCorrect flags; do not state what the correct answer was."
+            }));
+        }
+        (Value::Null, focus, Value::Array(limitations), retained)
     };
+    let answers = evidence_answers(&attempt.answers, correct_answers.as_ref())?;
     let selection = selector.selected_context.as_ref();
     let quote = if selector.selected_text.is_empty() {
         selection
@@ -164,9 +177,12 @@ pub fn resolve_reading_coach_context(
         "action": selector.action, "promptKind": selector.prompt_kind,
         "focusQuestionIds": focus,
     });
-    // Explicit fields only: no annotations/private notes, raw client evidence,
-    // answer key or arbitrary root payload attributes. A selection quote is a
-    // user request, NOT source evidence, and remains marked as unverified data.
+    // Explicit fields only: no annotations/private notes, raw client evidence
+    // or arbitrary root payload attributes. Each answer carries the official
+    // `correctAnswer` the attempt was scored against (coach only runs on
+    // completed attempts, whose review already shows it); the whole raw
+    // answerKey map is never forwarded. A selection quote is a user request,
+    // NOT source evidence, and remains marked as unverified data.
     let evidence = json!({
         "identity": {"attemptId": attempt.id, "assetId": asset_id, "mode": mode,
             "sessionOwnerId": attempt.suite_id, "assetFingerprint": fingerprint},
@@ -174,9 +190,10 @@ pub fn resolve_reading_coach_context(
         "evidenceLimitations": limitations,
         "result": {"status": "completed", "score": attempt.score_value,
             "scoreScale": attempt.score_scale, "correctCount": attempt.correct_count,
-            "questionCount": attempt.question_count, "answers": attempt.answers},
+            "questionCount": attempt.question_count, "answers": answers},
     });
-    let request = json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
+    let request =
+        json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
     if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
         return Err(invalid("canonical context exceeds 64 KiB"));
     }
@@ -186,6 +203,62 @@ pub fn resolve_reading_coach_context(
         request,
         message_metadata: metadata,
     })
+}
+
+/// Retained answers plus, when known, the official `correctAnswer` per question.
+/// Deterministic for one attempt so the evidence stays a byte-stable prefix.
+fn evidence_answers(
+    answers: &[ielts_domain::AttemptAnswer],
+    correct: Option<&serde_json::Map<String, Value>>,
+) -> DbResult<Vec<Value>> {
+    answers
+        .iter()
+        .map(|answer| {
+            let mut value = serde_json::to_value(answer)
+                .map_err(|error| DbError::Message(error.to_string()))?;
+            if let (Some(correct), Some(object)) = (correct, value.as_object_mut()) {
+                let expected = correct
+                    .get(&normalize_question_id(&answer.question_id))
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                object.insert("correctAnswer".into(), expected);
+            }
+            Ok(value)
+        })
+        .collect()
+}
+
+/// Correct answers persisted by the scoring path itself (the submit response's
+/// comparisons), for attempts whose asset revision was not recorded.
+fn retained_correct_answers(
+    conn: &Connection,
+    attempt_id: &str,
+) -> DbResult<Option<serde_json::Map<String, Value>>> {
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT response_json FROM attempt_idempotency
+             WHERE scope='reading.submit' AND attempt_id=?1 AND response_json IS NOT NULL
+             ORDER BY created_at, idempotency_key LIMIT 1",
+            params![attempt_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(comparisons) = raw
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|value| value.get("comparisons").cloned())
+        .and_then(|value| value.as_array().cloned())
+    else {
+        return Ok(None);
+    };
+    let map: serde_json::Map<String, Value> = comparisons
+        .iter()
+        .filter_map(|entry| {
+            let id = entry.get("questionId")?.as_str()?;
+            let correct = entry.get("correctAnswer")?.clone();
+            Some((normalize_question_id(id), correct))
+        })
+        .collect();
+    Ok((!map.is_empty()).then_some(map))
 }
 
 fn parse_selector(raw: Option<&Value>) -> DbResult<Selector> {

@@ -6,7 +6,9 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ielts_domain::domain::{Activity, AttemptMode, AttemptStatus, ScoreScale};
-use ielts_domain::dto::{AttemptAnswer, AttemptRecord};
+use ielts_domain::dto::{
+    AttemptAnswer, AttemptRecord, ReadingAnalysisSignals, SingleAttemptAnalysis,
+};
 
 use crate::attempts::upsert_attempt;
 use crate::history::prune_terminal_attempts_in_transaction;
@@ -14,6 +16,7 @@ use crate::learning_events::project_reading_attempt_events_if_enabled;
 use crate::modes::timer::{
     load_reading_timer_state, save_reading_timer_state, TimerOwnerScope, TimerState,
 };
+use crate::reading::analysis::analyze_reading_attempt;
 use crate::reading::assets::{
     load_answer_key, load_controls, load_kinds, load_practice_asset_payload,
 };
@@ -90,45 +93,20 @@ pub struct ReadingSubmitResult {
     pub score: ScoreSummary,
     pub comparisons: Vec<AnswerComparison>,
     pub idempotent_replay: bool,
-    /// Derived from `attempt` on every read (also on replay of responses
-    /// stored before this field existed); never trusted from storage.
-    #[serde(default)]
-    pub analysis_signals: ReadingAnalysisSignals,
+    /// Deterministic review analysis derived from `attempt` (never from an LLM).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_signals: Option<ReadingAnalysisSignals>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub single_attempt_analysis: Option<SingleAttemptAnalysis>,
 }
 
-/// Per-attempt counts the review page shows. `answered_count +
-/// unanswered_count == question_count`; "unanswered" is
-/// `AttemptAnswer::is_answered() == false`, the same rule the learning events use.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadingAnalysisSignals {
-    pub question_count: u32,
-    pub answered_count: u32,
-    pub unanswered_count: u32,
-    pub changed_answer_count: u32,
-    pub marked_question_count: u32,
-    /// Answer changes plus question visits per minute (minimum one minute).
-    pub interaction_density: f64,
-}
-
-impl ReadingAnalysisSignals {
-    pub fn from_attempt(attempt: &AttemptRecord) -> Self {
-        let answers = &attempt.answers;
-        let count = |keep: fn(&AttemptAnswer) -> bool| answers.iter().filter(|a| keep(a)).count() as u32;
-        let answered_count = count(AttemptAnswer::is_answered);
-        let interactions: u64 = answers
-            .iter()
-            .map(|a| u64::from(a.change_count) + u64::from(a.visit_count))
-            .sum();
-        let minutes = (attempt.duration_ms as f64 / 60_000.0).max(1.0);
-        Self {
-            question_count: answers.len() as u32,
-            answered_count,
-            unanswered_count: answers.len() as u32 - answered_count,
-            changed_answer_count: count(|a| a.change_count > 0),
-            marked_question_count: count(|a| a.marked),
-            interaction_density: interactions as f64 / minutes,
-        }
+impl ReadingSubmitResult {
+    /// Recompute the deterministic analysis from the scored attempt.
+    pub fn with_analysis(mut self) -> Self {
+        let (signals, analysis) = analyze_reading_attempt(&self.attempt).unzip();
+        self.analysis_signals = signals;
+        self.single_attempt_analysis = analysis;
+        self
     }
 }
 
@@ -360,8 +338,10 @@ pub(crate) fn submit_reading_attempt_in_scope(
         score: summary.clone(),
         comparisons: comparisons.clone(),
         idempotent_replay: false,
-        analysis_signals: ReadingAnalysisSignals::from_attempt(&attempt),
-    };
+        analysis_signals: None,
+        single_attempt_analysis: None,
+    }
+    .with_analysis();
     let response_json =
         serde_json::to_string(&result).map_err(|e| DbError::Message(e.to_string()))?;
     conn.execute(
@@ -672,8 +652,7 @@ fn lookup_submit_response(
             ));
         }
         result.idempotent_replay = true;
-        result.analysis_signals = ReadingAnalysisSignals::from_attempt(&result.attempt);
-        Ok(Some(result))
+        Ok(Some(result.with_analysis()))
     } else {
         Ok(None)
     }

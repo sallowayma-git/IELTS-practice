@@ -167,7 +167,6 @@ export function mapSubmitResultToSubmission(
     questionTimelineLite: extras.questionTimeline || [],
     answerComparison: comparison,
     scoreSummary: score,
-    analysisSignals: result.analysisSignals || null,
     scoreInfo: {
       correct: Number(correctCount) || 0,
       totalQuestions: Number(questionCount) || 0,
@@ -176,7 +175,9 @@ export function mapSubmitResultToSubmission(
     submittedAt: attempt.submittedAt || attempt.completedAt || null,
     title: attempt.titleSnapshot || extras.titleSnapshot || null,
     source: 'tauri',
-    idempotentReplay: Boolean(result.idempotentReplay)
+    idempotentReplay: Boolean(result.idempotentReplay),
+    analysisSignals: result.analysisSignals ?? null,
+    singleAttemptAnalysis: result.singleAttemptAnalysis ?? null
   }
 }
 

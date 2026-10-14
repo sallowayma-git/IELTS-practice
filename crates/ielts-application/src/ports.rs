@@ -200,4 +200,11 @@ pub trait CoachStore: Send + Sync {
     ) -> Result<CoachMessage, ApplicationError>;
 
     fn record_failure(&self, command: &RecordCoachFailureCommand) -> Result<(), ApplicationError>;
+
+    /// The thread's learner profile, frozen on its first coach run and
+    /// returned verbatim afterwards.
+    fn learner_profile(
+        &self,
+        thread_id: &str,
+    ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError>;
 }

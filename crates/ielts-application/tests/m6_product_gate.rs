@@ -264,6 +264,17 @@ impl MemoryStore for ClosedLoopFakeStore {
         })
     }
 
+    fn list_explicit_preferences(&self, _user_id: &str) -> Result<Vec<ExplicitPreference>, ApplicationError> {
+        Ok(Vec::new())
+    }
+
+    fn delete_explicit_preference(
+        &self,
+        _command: &ielts_domain::ExplicitPreferenceDelete,
+    ) -> Result<bool, ApplicationError> {
+        Ok(false)
+    }
+
         fn load_catalog(
         &self,
         _query: &ielts_domain::MemoryCatalogQuery,

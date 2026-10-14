@@ -79,9 +79,9 @@ fn blank_tfng_answers_are_unanswered_not_tfng_mistakes() {
     assert_eq!(result.score.correct, 1.0);
     assert_eq!(result.score.total, 5.0);
     // The review page's unanswered count has a source.
-    assert_eq!(result.analysis_signals.question_count, 5);
-    assert_eq!(result.analysis_signals.answered_count, 1);
-    assert_eq!(result.analysis_signals.unanswered_count, 4);
+    assert_eq!(result.analysis_signals.as_ref().unwrap().question_count, 5);
+    assert_eq!(result.analysis_signals.as_ref().unwrap().answered_count, 1);
+    assert_eq!(result.analysis_signals.as_ref().unwrap().unanswered_count, 4);
     let wire = serde_json::to_value(&result).unwrap();
     assert_eq!(wire["analysisSignals"]["unansweredCount"], 4);
 
@@ -168,7 +168,7 @@ fn replayed_submit_derives_the_unanswered_count() {
     let command = json!({"attemptId": "a1", "assetId": "P1", "answers": {}, "idempotencyKey": "a1"});
     let replay = submit_reading_attempt(&conn, &serde_json::from_value(command).unwrap()).unwrap();
     assert!(replay.idempotent_replay);
-    assert_eq!(replay.analysis_signals.unanswered_count, 4);
+    assert_eq!(replay.analysis_signals.as_ref().unwrap().unanswered_count, 4);
 }
 
 #[test]

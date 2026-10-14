@@ -54,15 +54,58 @@
         <div v-if="!coachTranscript.length" class="reading-coach-msg assistant">
           你可以先问：这题怎么定位证据？
         </div>
-        <div
-          v-for="entry in coachTranscript"
-          :key="entry.id"
-          class="reading-coach-msg"
-          :class="[entry.role, { error: entry.isError }]"
-          :data-reading-coach-message="entry.role"
-        >
-          {{ entry.content }}
-        </div>
+        <template v-for="entry in coachTranscript" :key="entry.id">
+          <div
+            class="reading-coach-msg"
+            :class="[entry.role, { error: entry.isError }]"
+            :data-reading-coach-message="entry.role"
+          >
+            {{ entry.content }}
+          </div>
+          <div
+            v-if="isFeedbackEligible(entry)"
+            class="reading-coach-feedback"
+            role="group"
+            aria-label="这条回答对你有用吗"
+            data-reading-coach-feedback
+            :data-reading-coach-feedback-message-id="entry.id"
+            :data-reading-coach-feedback-state="feedbackFor(entry.id)?.status || 'idle'"
+          >
+            <button
+              v-for="option in feedbackOptions"
+              :key="option.kind"
+              class="reading-coach-feedback__option"
+              :class="{ 'is-selected': feedbackFor(entry.id)?.kind === option.kind }"
+              type="button"
+              :aria-pressed="feedbackFor(entry.id)?.kind === option.kind ? 'true' : 'false'"
+              :disabled="isFeedbackLocked(entry.id)"
+              :data-reading-coach-feedback-kind="option.kind"
+              @click="$emit('feedback', { messageId: entry.id, kind: option.kind })"
+            >
+              {{ option.label }}
+            </button>
+            <button
+              v-if="entry.id === coachReaskableId"
+              class="reading-coach-feedback__option"
+              type="button"
+              :disabled="coachLoading"
+              data-reading-coach-feedback-reask
+              @click="$emit('reask', entry.id)"
+            >
+              换个讲法
+            </button>
+            <span
+              v-if="feedbackFor(entry.id)?.status === 'saved'"
+              class="reading-coach-feedback__note"
+              data-reading-coach-feedback-note="saved"
+            >已记下</span>
+            <span
+              v-else-if="feedbackFor(entry.id)?.status === 'failed'"
+              class="reading-coach-feedback__note is-error"
+              data-reading-coach-feedback-note="failed"
+            >没保存上，可以再点一次</span>
+          </div>
+        </template>
         <div v-if="coachResponse" class="reading-coach-msg assistant coach-response" data-reading-coach-answer>
           {{ coachResponse.answer || coachResponse.message || '教练已返回结果。' }}
         </div>
@@ -135,7 +178,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { READING_COACH_FEEDBACK_OPTIONS, isFeedbackEligible } from '../useReadingCoach'
+
+const props = defineProps({
   submission: { type: Object, default: null },
   readingCoachOpen: { type: Boolean, default: false },
   coachError: { type: String, default: '' },
@@ -147,6 +192,8 @@ defineProps({
   coachQuickActions: { type: Array, default: () => [] },
   coachSelectionActions: { type: Array, default: () => [] },
   coachFollowUps: { type: Array, default: () => [] },
+  coachFeedback: { type: Object, default: () => ({}) },
+  coachReaskableId: { type: String, default: '' },
   coachQuery: { type: String, default: '' },
   canAskCoach: { type: Boolean, default: false }
 })
@@ -158,8 +205,23 @@ defineEmits([
   'quick-action',
   'selection-action',
   'follow-up',
+  'feedback',
+  'reask',
   'update:coach-query',
   'refresh-selected-context',
   'ask'
 ])
+
+const feedbackOptions = READING_COACH_FEEDBACK_OPTIONS
+
+function feedbackFor(messageId) {
+  return props.coachFeedback?.[messageId] || null
+}
+
+// One feedback per message: locked while saving and once saved; a failed
+// save unlocks so the learner can try again.
+function isFeedbackLocked(messageId) {
+  const state = feedbackFor(messageId)
+  return Boolean(state && state.status !== 'failed')
+}
 </script>

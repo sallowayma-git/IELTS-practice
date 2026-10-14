@@ -139,3 +139,114 @@ pub fn dictionary_count(conn: &Connection) -> DbResult<i64> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM dictionary_entries", [], |r| r.get(0))?;
     Ok(n)
 }
+
+/// Bundled ECDICT subset (`assets/wordlists/ecdict_reading.bundle.js`), read-only and
+/// held in memory. User-imported `dictionary_entries` rows always win over it.
+#[derive(Debug, Default)]
+pub struct BundledDictionary {
+    entries: Vec<BundledRaw>,
+    /// normalized headword or inflected form -> index into `entries`.
+    index: std::collections::HashMap<String, usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BundledRaw {
+    w: String,
+    #[serde(default)]
+    t: String,
+    #[serde(default)]
+    d: String,
+    #[serde(default)]
+    p: Option<String>,
+    #[serde(default)]
+    x: Option<String>,
+}
+
+pub const BUNDLED_DICTIONARY_LABEL: &str = "ECDICT";
+pub const BUNDLED_DICTIONARY_LICENSE: &str = "MIT";
+
+impl BundledDictionary {
+    /// Parses the JS bundle: `... entries: [ {...}, ... ] };` — the array is plain JSON.
+    pub fn from_bundle_js(text: &str) -> DbResult<Self> {
+        let invalid = || DbError::Validation("ECDICT bundle: entries array not found".into());
+        let start = text.find("entries: [").ok_or_else(invalid)? + "entries: ".len();
+        let end = text.rfind("] };").ok_or_else(invalid)? + 1;
+        if end <= start {
+            return Err(invalid());
+        }
+        let entries: Vec<BundledRaw> = serde_json::from_str(&text[start..end])
+            .map_err(|e| DbError::Validation(format!("ECDICT bundle: {e}")))?;
+        Ok(Self::from_entries(entries))
+    }
+
+    pub fn load(path: &std::path::Path) -> DbResult<Self> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| DbError::Message(format!("read {}: {e}", path.display())))?;
+        Self::from_bundle_js(&text)
+    }
+
+    fn from_entries(entries: Vec<BundledRaw>) -> Self {
+        let mut index = std::collections::HashMap::with_capacity(entries.len() * 2);
+        for (i, e) in entries.iter().enumerate() {
+            index.insert(normalize_term(&e.w), i);
+        }
+        // ECDICT exchange field, e.g. `d:abandoned/i:abandoning/3:abandons`: map inflected
+        // forms to their base entry unless the form is itself a headword.
+        for (i, e) in entries.iter().enumerate() {
+            for part in e.x.as_deref().unwrap_or("").split('/') {
+                let Some((kind, form)) = part.split_once(':') else {
+                    continue;
+                };
+                if matches!(kind, "p" | "d" | "i" | "3" | "s" | "r" | "t") {
+                    index.entry(normalize_term(form)).or_insert(i);
+                }
+            }
+        }
+        Self { entries, index }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn get(&self, term: &str) -> Option<DictionaryEntry> {
+        let e = &self.entries[*self.index.get(&normalize_term(term))?];
+        let definition = if e.t.trim().is_empty() { &e.d } else { &e.t };
+        if definition.trim().is_empty() {
+            return None;
+        }
+        Some(DictionaryEntry {
+            term: e.w.clone(),
+            normalized_term: normalize_term(&e.w),
+            definition: definition.trim().to_string(),
+            phonetic: e.p.clone().filter(|p| !p.trim().is_empty()),
+            part_of_speech: None,
+            example: None,
+            source_label: Some(BUNDLED_DICTIONARY_LABEL.into()),
+            license: Some(BUNDLED_DICTIONARY_LICENSE.into()),
+            payload: Some(serde_json::json!({
+                "english": e.d,
+                "exchange": e.x,
+                "requested": term.trim(),
+            })),
+            found: true,
+        })
+    }
+}
+
+/// SQLite (user imports) first, then the bundled ECDICT subset.
+pub fn lookup_term_with_bundled(
+    conn: &Connection,
+    term: &str,
+    bundled: Option<&BundledDictionary>,
+) -> DbResult<DictionaryEntry> {
+    let local = lookup_term(conn, term)?;
+    if local.found {
+        return Ok(local);
+    }
+    Ok(bundled.and_then(|b| b.get(term)).unwrap_or(local))
+}

@@ -138,6 +138,15 @@ impl CoachStore for ApplicationStore<'_> {
             .map(|_| ())
             .map_err(enrichment_error)
     }
+
+    fn learner_profile(
+        &self,
+        thread_id: &str,
+    ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::freeze_coach_learner_profile(conn, thread_id))
+            .map_err(enrichment_error)
+    }
 }
 
 impl CoachFeedbackStore for ApplicationStore<'_> {
@@ -502,6 +511,24 @@ impl MemoryStore for ApplicationStore<'_> {
     ) -> Result<ielts_domain::ExplicitPreference, ApplicationError> {
         self.db
             .with_conn(|conn| ielts_db::upsert_explicit_preference(conn, command))
+            .map_err(memory_error)
+    }
+
+    fn list_explicit_preferences(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<ielts_domain::ExplicitPreference>, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::list_explicit_preferences(conn, user_id))
+            .map_err(memory_error)
+    }
+
+    fn delete_explicit_preference(
+        &self,
+        command: &ielts_domain::ExplicitPreferenceDelete,
+    ) -> Result<bool, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::delete_explicit_preference(conn, command))
             .map_err(memory_error)
     }
 

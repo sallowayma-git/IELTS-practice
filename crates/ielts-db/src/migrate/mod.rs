@@ -204,8 +204,14 @@ fn migrations() -> &'static [Migration] {
             },
             Migration {
                 version: 31,
+                name: "coach_thread_learner_profile",
+                sql: include_str!("../../migrations/0031_coach_thread_learner_profile.sql"),
+                rebuilds: None,
+            },
+            Migration {
+                version: 32,
                 name: "reading_matching_skills",
-                sql: include_str!("../../migrations/0031_reading_matching_skills.sql"),
+                sql: include_str!("../../migrations/0032_reading_matching_skills.sql"),
                 rebuilds: None,
             },
         ]

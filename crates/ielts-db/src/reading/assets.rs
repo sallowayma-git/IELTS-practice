@@ -322,6 +322,119 @@ pub fn load_practice_asset_payload(
     Ok(PracticeAssetV2Payload { asset, payload })
 }
 
+/// Load a reading payload for display in the practice webview.
+///
+/// Identical to [`load_practice_asset_payload`] (same fingerprint check, same
+/// `asset.fingerprint`), except that inline `data-answer` attributes some
+/// generated question HTML carries are removed so answers never sit in the
+/// practice DOM. Scoring keeps using the unmodified payload's `answerKey`.
+pub fn load_practice_asset_payload_for_view(
+    conn: &Connection,
+    asset_id: &str,
+) -> DbResult<PracticeAssetV2Payload> {
+    let mut loaded = load_practice_asset_payload(conn, asset_id)?;
+    strip_answer_attributes(&mut loaded.payload);
+    Ok(loaded)
+}
+
+/// Remove `data-answer` HTML attributes from every string in a payload (the
+/// `answerKey` map itself is left alone). Other `data-answer-*` attributes are
+/// UI hooks, not answers, and are kept.
+pub fn strip_answer_attributes(value: &mut Value) {
+    match value {
+        Value::String(text) => {
+            if let Some(stripped) = strip_data_answer_attrs(text) {
+                *text = stripped;
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(strip_answer_attributes),
+        Value::Object(map) => map
+            .iter_mut()
+            .filter(|(key, _)| key.as_str() != "answerKey")
+            .for_each(|(_, item)| strip_answer_attributes(item)),
+        _ => {}
+    }
+}
+
+/// Returns `None` when the text has no `data-answer` attribute inside a tag.
+fn strip_data_answer_attrs(html: &str) -> Option<String> {
+    let bytes = html.as_bytes();
+    let mut out = String::new();
+    let mut copied = 0;
+    let mut i = 0;
+    while let Some(offset) = find_ascii_ci(&bytes[i..], DATA_ANSWER) {
+        let at = i + offset;
+        i = at + 1;
+        if !is_data_answer_attr(bytes, at) {
+            continue;
+        }
+        let end = attribute_end(bytes, at + DATA_ANSWER.len());
+        let mut start = at;
+        while start > copied && bytes[start - 1].is_ascii_whitespace() {
+            start -= 1;
+        }
+        out.push_str(&html[copied..start]);
+        copied = end;
+        i = end;
+    }
+    if copied == 0 {
+        return None;
+    }
+    out.push_str(&html[copied..]);
+    Some(out)
+}
+
+const DATA_ANSWER: &[u8] = b"data-answer";
+
+fn find_ascii_ci(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
+}
+
+/// An attribute name (not `data-answer-value` etc.) inside an open tag.
+fn is_data_answer_attr(bytes: &[u8], at: usize) -> bool {
+    let name_char = |b: &u8| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b':');
+    let open = bytes[..at].iter().rposition(|b| *b == b'<');
+    let close = bytes[..at].iter().rposition(|b| *b == b'>');
+    at > 0
+        && bytes[at - 1].is_ascii_whitespace()
+        && !bytes.get(at + DATA_ANSWER.len()).is_some_and(name_char)
+        && open.is_some_and(|open| close.is_none_or(|close| open > close))
+}
+
+/// End of the attribute whose name ends at `after`: `="v"`, `='v'`, `=v` or
+/// a bare boolean attribute.
+fn attribute_end(bytes: &[u8], after: usize) -> usize {
+    let skip_ws = |mut at: usize| {
+        while bytes.get(at).is_some_and(u8::is_ascii_whitespace) {
+            at += 1;
+        }
+        at
+    };
+    let eq = skip_ws(after);
+    if bytes.get(eq) != Some(&b'=') {
+        return after;
+    }
+    let value = skip_ws(eq + 1);
+    match bytes.get(value) {
+        Some(&quote) if quote == b'"' || quote == b'\'' => bytes[value + 1..]
+            .iter()
+            .position(|b| *b == quote)
+            .map_or(bytes.len(), |offset| value + offset + 2),
+        _ => {
+            let mut end = value;
+            while bytes
+                .get(end)
+                .is_some_and(|b| !b.is_ascii_whitespace() && *b != b'>')
+            {
+                end += 1;
+            }
+            end
+        }
+    }
+}
+
 fn practice_asset_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PracticeAssetV2> {
     let activity = match row.get::<_, String>(1)?.as_str() {
         "reading" => Activity::Reading,
@@ -506,6 +619,36 @@ mod resource_pack_tests {
                 .payload["answerKey"]["q1"],
             "A"
         );
+    }
+
+    #[test]
+    fn data_answer_attributes_are_stripped_but_ui_hooks_and_text_stay() {
+        let strip = |html: &str| strip_data_answer_attrs(html).unwrap_or_else(|| html.into());
+        assert_eq!(
+            strip(
+                r#"7 <input name="q7" class="blank" data-answer="waterproof cloth" id="q7-anchor"> was"#
+            ),
+            r#"7 <input name="q7" class="blank" id="q7-anchor"> was"#
+        );
+        assert_eq!(
+            strip("<input DATA-ANSWER = 'a b' name=q1><input data-answer=x/y>"),
+            "<input name=q1><input>"
+        );
+        assert_eq!(strip("<input data-answer name=q1>"), "<input name=q1>");
+        let kept = r#"<span data-answer-value="A" data-answer-question-id="q1">the data-answer is prose</span>"#;
+        assert_eq!(strip_data_answer_attrs(kept), None);
+
+        let mut payload = json!({
+            "passage": {"blocks": [{"html": "<p>x</p>"}]},
+            "questionGroups": [{"bodyHtml": "<input name=\"q1\" data-answer=\"1906\">"}],
+            "answerKey": {"q1": "1906"}
+        });
+        strip_answer_attributes(&mut payload);
+        assert_eq!(
+            payload["questionGroups"][0]["bodyHtml"],
+            "<input name=\"q1\">"
+        );
+        assert_eq!(payload["answerKey"]["q1"], "1906");
     }
 }
 

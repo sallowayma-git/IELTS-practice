@@ -538,6 +538,17 @@ fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
         .map_or(("max_tokens", requested), |(_, field, floor)| (*field, requested.max(*floor)))
 }
 
+/// Sampling + output ceiling. The models that need `max_completion_tokens`
+/// (o-series, gpt-5) also reject any non-default `temperature` with HTTP 400,
+/// so they get none; every other model keeps the requested temperature.
+fn apply_output_controls(body: &mut Value, model: &str, temperature: f32, max_tokens: u32) {
+    let (field, value) = output_limit(model, max_tokens);
+    body[field] = json!(value);
+    if field == "max_tokens" {
+        body["temperature"] = json!(temperature);
+    }
+}
+
 /// Prompt-cache routing by endpoint host: (host suffix, request body field that
 /// takes the caller's stable cache key). One lookup, no scattered provider ifs;
 /// an endpoint that is not listed gets nothing extra. Checked 2026-10-05:
@@ -571,12 +582,10 @@ fn cache_routing_field(base_url: &str) -> Option<&'static str> {
 fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> Value {
     let mut body = json!({
         "model": model,
-        "temperature": request.temperature,
         "response_format": { "type": "json_object" },
         "messages": request.messages
     });
-    let (field, value) = output_limit(model, request.max_tokens);
-    body[field] = json!(value);
+    apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
     if let (Some(key), Some(field)) = (&request.cache_key, cache_routing_field(base_url)) {
         body[field] = json!(key);
     }
@@ -605,13 +614,11 @@ fn agent_request_body(model: &str, request: &AgentModelRequest) -> Value {
         .collect::<Vec<_>>();
     let mut body = json!({
         "model": model,
-        "temperature": request.temperature,
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",
     });
-    let (field, value) = output_limit(model, request.max_tokens);
-    body[field] = json!(value);
+    apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
     body
 }
 
@@ -978,6 +985,24 @@ mod tests {
         let none = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":"odd"}"#);
         assert_eq!((none.input_tokens, none.cached_input_tokens), (100, 0));
         assert!(!serde_json::to_string(&none).unwrap().contains("cachedInputTokens"));
+    }
+
+    #[test]
+    fn reasoning_models_get_no_temperature() {
+        let request = CompletionRequest {
+            messages: vec![ielts_application::ChatMessage::new("user", "hello")],
+            temperature: 0.2,
+            max_tokens: 100,
+            cache_key: None,
+        };
+        for model in ["o1", "o3-mini", "o4-mini", "gpt-5", "gpt-5-mini", "openai/o3"] {
+            let body = completion_body(model, "https://api.openai.com/v1", &request);
+            assert!(body.get("temperature").is_none(), "{model}");
+        }
+        for model in ["gpt-4o", "gpt-4.1-mini", "deepseek-chat", "qwen-o3"] {
+            let body = completion_body(model, "https://api.openai.com/v1", &request);
+            assert!(body.get("temperature").is_some(), "{model}");
+        }
     }
 
     #[test]

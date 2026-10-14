@@ -63,6 +63,24 @@ pub fn coach_link_outcome(
     respond(CoachFeedbackService::new(&store).link_outcome(&command))
 }
 
+/// Durable feedback already recorded in a coach thread, so a reopened panel
+/// shows (and keeps locked) the verdict a learner already gave.
+#[tauri::command]
+#[cfg(feature = "learning-observation-v1")]
+pub fn coach_list_feedback(
+    db: State<'_, AppDb>,
+    thread_id: String,
+) -> CommandResponse<Vec<ielts_domain::CoachFeedbackRecord>> {
+    match db.with_conn(|conn| ielts_db::list_coach_feedback_for_thread(conn, &thread_id)) {
+        Ok(records) => CommandResponse::success(records),
+        Err(error) => CommandResponse::failure(ErrorEnvelope::new(
+            "coach_feedback.error",
+            error.to_string(),
+            false,
+        )),
+    }
+}
+
 #[cfg(feature = "learning-observation-v1")]
 fn respond<T>(
     result: Result<T, ielts_application::ApplicationError>,

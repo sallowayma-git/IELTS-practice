@@ -1,4 +1,4 @@
--- Version 31: matching sub-types get their own reading skills.
+-- Version 32: matching sub-types get their own reading skills.
 --
 -- Payloads type every matching group as the generic kind `matching`; until now
 -- all of them fed `reading.matching_headings`, so people/feature and
