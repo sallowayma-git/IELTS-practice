@@ -1452,7 +1452,7 @@ fn prune_projection_runs(conn: &Connection) -> DbResult<()> {
              SELECT id
              FROM learning_projection_runs
              WHERE projector_key = ?1 AND status = 'completed'
-             ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
+             ORDER BY COALESCE(finished_at, started_at) DESC, rowid DESC
              LIMIT ?2
            )",
         params![
@@ -1467,7 +1467,7 @@ fn prune_projection_runs(conn: &Connection) -> DbResult<()> {
            AND id NOT IN (
              SELECT id FROM learning_projection_runs
              WHERE projector_key = ?1 AND status <> 'completed'
-             ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
+             ORDER BY COALESCE(finished_at, started_at) DESC, rowid DESC
              LIMIT ?2
            )",
         params![

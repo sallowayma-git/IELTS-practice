@@ -329,3 +329,40 @@ fn coach_lines_keep_the_most_recent_days_not_the_smallest_attempt_ids() {
     assert!(coach.iter().all(|line| !line.ids.contains(&score_id("a00"))), "the oldest day is the one dropped");
     assert!(coach.iter().any(|line| line.ids.contains(&score_id("a20"))), "the newest day survives");
 }
+
+#[test]
+fn rebuild_then_verify_is_consistent_for_forty_same_passage_submits() {
+    let (_dir, conn) = fixture();
+    for index in 0..40 {
+        let day = format!("2026-10-{:02}T09:{:02}:00Z", 4 + index % 5, index % 60);
+        submit(&conn, &format!("n{index}"), "P1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), &day);
+    }
+    learning_observations_rebuild(&conn).unwrap();
+    let verify = learning_observations_verify(&conn).unwrap();
+    assert!(verify.consistent, "{:?}", verify.mismatches);
+    pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+}
+
+#[test]
+fn projection_runs_with_equal_timestamps_resolve_to_the_last_inserted_run() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "t1", "P1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), "2026-10-04T09:00:00Z");
+    let tie = "2999-01-01T00:00:00+00:00";
+    // A stale run whose id sorts after every random `lpr-<uuid>` id, written first.
+    conn.execute(
+        "INSERT INTO learning_projection_runs
+         (id, projector_key, projector_version, status, input_count, output_count,
+          input_hash, output_hash, started_at, finished_at)
+         VALUES ('lpr-zzzz', ?1, ?2, 'completed', 0, 0, 'stale', 'stale', ?3, ?3)",
+        params![LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION, tie],
+    )
+    .unwrap();
+    let fresh = learning_observations_rebuild(&conn).unwrap();
+    conn.execute(
+        "UPDATE learning_projection_runs SET finished_at = ?1 WHERE id = ?2",
+        params![tie, fresh.run_id],
+    )
+    .unwrap();
+    // Same timestamp: the fresh run was written last, so it must be the latest.
+    pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+}

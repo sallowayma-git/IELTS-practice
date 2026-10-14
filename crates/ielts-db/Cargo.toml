@@ -16,7 +16,10 @@ learner-model-v1 = ["learning-observation-v1"]
 ielts-domain = { path = "../ielts-domain" }
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# float_roundtrip: projection payloads (e.g. gapHours) are re-parsed from
+# SQLite by learning_observations_verify; the default fast float parser can be
+# off by one ULP, which makes rebuild->verify report an output hash mismatch.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

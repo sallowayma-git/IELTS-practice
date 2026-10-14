@@ -156,7 +156,7 @@ fn latest_projection_run(
         "SELECT input_hash, output_hash, status, projector_version, finished_at
          FROM learning_projection_runs
          WHERE projector_key = ?1
-         ORDER BY COALESCE(finished_at, started_at) DESC, id DESC
+         ORDER BY COALESCE(finished_at, started_at) DESC, rowid DESC
          LIMIT 1",
         params![LEARNING_OBSERVATION_PROJECTOR_KEY],
         |row| {
