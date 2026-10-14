@@ -24,6 +24,7 @@ import {
   formatJournalDate,
   formatMemoryStatement,
   formatStudyProbe,
+  localDay,
   persistedPlanItems,
   summarizeApproval,
   summarizeBackgroundJob,
@@ -164,7 +165,7 @@ const jobsReading = ref(false)
 const jobsReadError = ref('')
 let jobsRequest = 0
 const journals = ref([])
-const journalDate = ref(new Date().toISOString().slice(0, 10))
+const journalDate = ref(localDay(new Date()))
 const journalReading = ref(false)
 const journalReadError = ref('')
 let journalRequest = 0
@@ -406,7 +407,7 @@ async function runDailyDream() {
   actionMessage.value = ''
   actionError.value = ''
   try {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDay(new Date())
     // The command resolves (or deterministically builds) today's journal on
     // the Rust side; the UI only names the day.
     await triggerDailyDream({ userId: 'local', day: today })

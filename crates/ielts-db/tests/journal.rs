@@ -10,7 +10,16 @@ use ielts_domain::{
 use rusqlite::params;
 use tempfile::tempdir;
 
+/// Journal days are local calendar days (`ielts_db::local_day`). These fixtures
+/// are written in UTC days, so the harness pins the process zone to UTC; zone
+/// behaviour itself is covered by the fixed-offset unit tests.
+fn pin_utc_local_zone() {
+    static PIN: std::sync::Once = std::sync::Once::new();
+    PIN.call_once(|| std::env::set_var("TZ", "UTC"));
+}
+
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
+    pin_utc_local_zone();
     let dir = tempdir().unwrap();
     let mut conn = open_connection(&DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
     migrate(&mut conn).unwrap();

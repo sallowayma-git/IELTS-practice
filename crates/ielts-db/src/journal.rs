@@ -19,6 +19,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::local_day::day_bounds;
 use crate::sqlite::{DbError, DbResult};
 
 const DEFAULT_USER_ID: &str = "local";
@@ -761,24 +762,6 @@ fn daily_source_hash(
         );
     }
     hex::encode(hasher.finalize())
-}
-
-pub(crate) fn day_bounds(day: &str) -> DbResult<(String, String)> {
-    let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").map_err(|error| {
-        DbError::Validation(format!("journalDate is not a valid date: {error}"))
-    })?;
-    let start = date
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| DbError::Validation("day start midnight overflowed".into()))?;
-    let end = date
-        .succ_opt()
-        .ok_or_else(|| DbError::Validation("journalDate has no successor".into()))?
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| DbError::Validation("day end midnight overflowed".into()))?;
-    // Bind to UTC so the RFC3339 output is well-formed.
-    let start_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(start, chrono::Utc);
-    let end_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(end, chrono::Utc);
-    Ok((start_utc.to_rfc3339(), end_utc.to_rfc3339()))
 }
 
 fn normalize_user_id(user_id: &str) -> String {

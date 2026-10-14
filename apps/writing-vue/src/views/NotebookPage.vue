@@ -248,6 +248,7 @@ import {
   previousPracticedDay,
   rememberedSentences
 } from '@/modules/notebook/compose.js'
+import { localDay } from '@/modules/agent-console/format.js'
 
 const loading = ref(true)
 const loadError = ref('')
@@ -352,7 +353,7 @@ async function tidyToday() {
   notice.value = ''
   actionError.value = ''
   try {
-    await triggerDailyDream({ userId: 'local', day: new Date().toISOString().slice(0, 10) })
+    await triggerDailyDream({ userId: 'local', day: localDay(new Date()) })
     await load()
     notice.value = '今天的练习已整理进札记。'
   } catch {

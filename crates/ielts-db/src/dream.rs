@@ -193,9 +193,10 @@ impl WeeklyWindow {
         format!("{WEEKLY_MARKER_PREFIX}{}", self.token())
     }
 
-    /// UTC day of the window end: the day whose journal the run row is anchored on.
+    /// Local calendar day of the window end: the day whose journal the run row
+    /// is anchored on (the same day notion as the daily journal).
     pub fn anchor_day(&self) -> String {
-        self.end.format("%Y-%m-%d").to_string()
+        crate::local_day::local_day_of(&self.end)
     }
 }
 
@@ -528,7 +529,10 @@ mod tests {
         assert_eq!(window.token(), "2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
         assert_eq!(WeeklyWindow::parse(&window.token()), Some(window.clone()));
         assert_eq!(window.marker(), "weekly:2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
-        assert_eq!(window.anchor_day(), "2026-10-10");
+        assert_eq!(window.anchor_day(), crate::local_day::local_day_of(&window.end));
+        let beijing = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+        let late = WeeklyWindow::new("2026-W41", at("2026-10-03T04:00:00Z"), at("2026-10-10T17:00:00Z"));
+        assert_eq!(crate::local_day::day_of_in(&late.end, &beijing), "2026-10-11");
         for bad in [
             "", "2026-W41", "2026-W41:garbage", "2026-W99:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z",
             "2026-W41:2026-10-10T09:30:00Z..2026-10-03T04:00:00Z",

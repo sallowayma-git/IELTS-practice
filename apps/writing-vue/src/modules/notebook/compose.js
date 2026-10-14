@@ -8,7 +8,7 @@
  * Daily entries are rule-generated from the journal's structured facts and
  * worded by the seeded phrase bank in phrasing.js. No model is involved.
  */
-import { formatJournalDate, formatMemoryStatement, formatSkillKey } from '../agent-console/format.js'
+import { formatJournalDate, formatMemoryStatement, formatSkillKey, localDay } from '../agent-console/format.js'
 import { LONG_GAP_DAYS, daysBetween, keyFor, phrase } from './phrasing.js'
 
 const DAY_KEY = /^(?:daily_journal|daily_dream):local:(\d{4}-\d{2}-\d{2})$/
@@ -254,14 +254,6 @@ export function buildNotebookEntry(journal, memoriesById = new Map(), context = 
     changeLead: phrase('changeLead', sheet, day),
     changes: change
   }
-}
-
-/** The viewer's local calendar day ("YYYY-MM-DD") of an RFC3339 instant, or ''. */
-function localDay(instant) {
-  const time = new Date(String(instant || ''))
-  if (Number.isNaN(time.getTime())) return ''
-  const pad = (value) => String(value).padStart(2, '0')
-  return `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`
 }
 
 /** "2026年10月5日 – 10月11日": the window's date range (year repeated only if it changes). */

@@ -147,10 +147,22 @@ pub fn claim_job(conn: &Connection, now: &str, worker_id: &str) -> DbResult<Opti
     }
 }
 
-/// Claim a specific queued job by id (e.g. the job a command just enqueued).
-/// Automatic client work is limited to local, closed UTC days. Manual current
-/// day work retains its explicit command path and is never stolen by this loop.
+/// Claim the next automatic daily job. Automatic client work is limited to
+/// closed local calendar days (`crate::local_day`). Manual current day work
+/// retains its explicit command path and is never stolen by this loop.
 pub fn claim_closed_daily_job(conn: &Connection, now: &str, worker_id: &str) -> DbResult<Option<BackgroundJob>> {
+    claim_closed_daily_job_in(conn, now, worker_id, &chrono::Local)
+}
+
+fn claim_closed_daily_job_in<Tz: chrono::TimeZone>(
+    conn: &Connection,
+    now: &str,
+    worker_id: &str,
+    tz: &Tz,
+) -> DbResult<Option<BackgroundJob>> {
+    let Some(today) = crate::local_day::day_of_timestamp_in(now, tz) else {
+        return Ok(None);
+    };
     let tx = conn.unchecked_transaction()?;
     if !automatic_learning_enabled(&tx)? {
         return Ok(None);
@@ -159,8 +171,8 @@ pub fn claim_closed_daily_job(conn: &Connection, now: &str, worker_id: &str) -> 
         "SELECT id FROM background_jobs WHERE status='queued' AND user_id='local'
          AND scheduled_at <= ?1 AND job_kind IN ('daily_journal','daily_dream')
          AND dedupe_key = job_kind || ':local:' || substr(dedupe_key,-10)
-         AND date(substr(dedupe_key,-10)) < date(?1)
-         ORDER BY priority DESC, scheduled_at ASC, id LIMIT 1", [now], |r| r.get(0),
+         AND date(substr(dedupe_key,-10)) < ?2
+         ORDER BY priority DESC, scheduled_at ASC, id LIMIT 1", params![now, today], |r| r.get(0),
     ).optional()?;
     let job = match id {
         Some(id) if claim_job_by_id(&tx, &id, now, worker_id)? => load_job(&tx, &id)?,
@@ -341,45 +353,58 @@ fn recover_daily_jobs(
 /// Find canonical activity dates that do not yet have the corresponding daily
 /// derived work. Dates are read from the same source tables used by
 /// `build_daily_facts`; the derived journal/job tables are intentionally not
-/// used to discover activity. SQLite's `date()` accepts the RFC3339 timestamps
-/// written by the Rust stores and ignores malformed values by returning NULL.
+/// used to discover activity. A date is the *local* calendar day of the event
+/// (`crate::local_day`), the same day `build_daily_facts` bounds, and only days
+/// before the local today are closed. Malformed timestamps are ignored.
 fn canonical_activity_windows(conn: &Connection, now: &str) -> DbResult<Vec<ActivityWindow>> {
+    canonical_activity_windows_in(conn, now, &chrono::Local)
+}
+
+fn canonical_activity_windows_in<Tz: chrono::TimeZone>(
+    conn: &Connection,
+    now: &str,
+    tz: &Tz,
+) -> DbResult<Vec<ActivityWindow>> {
+    let Some(today) = crate::local_day::day_of_timestamp_in(now, tz) else {
+        return Ok(Vec::new());
+    };
     let mut statement = conn.prepare(
-        "SELECT user_id, activity_date FROM (
-           SELECT ?1 AS user_id, date(COALESCE(submitted_at, started_at)) AS activity_date
-           FROM attempts
-           UNION
-           SELECT ?1, date(COALESCE(completed_at, updated_at))
-           FROM writing_evaluations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), date(occurred_at)
-           FROM learning_events
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), date(observed_at)
-           FROM learner_observations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), date(observed_at)
-           FROM learner_skill_observations
-           UNION
-           SELECT ?1, date(created_at)
-           FROM memory_mutations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), date(created_at)
-           FROM coach_feedback
-           UNION
-           SELECT ?1, date(created_at)
-           FROM coach_reask_links
-         )
-         WHERE activity_date IS NOT NULL AND activity_date < date(?2)
-         ORDER BY user_id, activity_date",
+        "SELECT ?1 AS user_id, COALESCE(submitted_at, started_at) AS activity_at
+         FROM attempts
+         UNION
+         SELECT ?1, COALESCE(completed_at, updated_at)
+         FROM writing_evaluations
+         UNION
+         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), occurred_at
+         FROM learning_events
+         UNION
+         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+         FROM learner_observations
+         UNION
+         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+         FROM learner_skill_observations
+         UNION
+         SELECT ?1, created_at
+         FROM memory_mutations
+         UNION
+         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), created_at
+         FROM coach_feedback
+         UNION
+         SELECT ?1, created_at
+         FROM coach_reask_links",
     )?;
-    let rows = statement.query_map(params![DEFAULT_USER_ID, now], |row| {
-        Ok(ActivityWindow {
-            user_id: row.get(0)?,
-            day: row.get(1)?,
-        })
+    let rows = statement.query_map(params![DEFAULT_USER_ID], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    let mut windows = std::collections::BTreeSet::new();
+    for row in rows {
+        let (user_id, activity_at) = row?;
+        let day = activity_at.and_then(|at| crate::local_day::day_of_timestamp_in(&at, tz));
+        if let Some(day) = day.filter(|day| *day < today) {
+            windows.insert((user_id, day));
+        }
+    }
+    Ok(windows.into_iter().map(|(user_id, day)| ActivityWindow { user_id, day }).collect())
 }
 
 fn enqueue_missing_daily_jobs(conn: &Connection, now: &str) -> DbResult<u64> {
@@ -674,4 +699,55 @@ pub fn list_recent_jobs(conn: &Connection, limit: u32) -> DbResult<Vec<Backgroun
     )?;
     let rows = statement.query_map(params![bounded], map_job)?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+#[cfg(test)]
+mod local_day_tests {
+    use super::*;
+
+    #[test]
+    fn activity_days_are_local_calendar_days() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn =
+            crate::open_connection(&crate::DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
+        crate::migrate(&mut conn).unwrap();
+        // 01:30 Beijing on Oct 13 is still Oct 12 in UTC.
+        conn.execute(
+            "INSERT INTO attempts
+               (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+             VALUES ('early', 'reading', 'single', 'completed', ?1, 0, 2, ?1, ?1)",
+            ["2026-10-12T17:30:00Z"],
+        )
+        .unwrap();
+        let beijing = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+        let utc = chrono::FixedOffset::east_opt(0).unwrap();
+        let days = |now: &str, tz: &chrono::FixedOffset| {
+            canonical_activity_windows_in(&conn, now, tz)
+                .unwrap()
+                .into_iter()
+                .map(|window| window.day)
+                .collect::<Vec<_>>()
+        };
+        // Beijing Oct 13 is still open at 23:00 local (15:00Z).
+        assert!(days("2026-10-13T15:00:00Z", &beijing).is_empty());
+        assert_eq!(days("2026-10-13T16:00:00Z", &beijing), ["2026-10-13"]);
+        assert_eq!(days("2026-10-13T00:00:00Z", &utc), ["2026-10-12"]);
+    }
+
+    #[test]
+    fn a_local_day_closes_at_local_midnight() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn =
+            crate::open_connection(&crate::DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
+        crate::migrate(&mut conn).unwrap();
+        let day = "2026-10-12";
+        enqueue_job(&conn, "daily_journal", "local", "2026-10-12T00:00:00Z", 5,
+            Some(&format!("daily_journal:local:{day}")), Some(&serde_json::json!({"day": day, "userId": "local"})))
+            .unwrap();
+        let beijing = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+        // 23:30 Beijing on Oct 12: the day is still open even though it is UTC 15:30.
+        assert!(claim_closed_daily_job_in(&conn, "2026-10-12T15:30:00Z", "w", &beijing).unwrap().is_none());
+        // 00:30 Beijing on Oct 13 (still Oct 12 in UTC): closed locally.
+        assert!(claim_closed_daily_job_in(&conn, "2026-10-12T16:30:00Z", "w", &beijing).unwrap().is_some());
+    }
 }

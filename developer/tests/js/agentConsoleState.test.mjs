@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
-import { persistedPlanItems, formatStudyProbe, summarizeBackgroundJob, summarizeJournal, formatJournalDate } from '../../../apps/writing-vue/src/modules/agent-console/format.js'
+import { persistedPlanItems, formatStudyProbe, summarizeBackgroundJob, summarizeJournal, formatJournalDate, localDay } from '../../../apps/writing-vue/src/modules/agent-console/format.js'
 
 const view = readFileSync(new URL('../../../apps/writing-vue/src/views/AgentConsolePage.vue', import.meta.url), 'utf8')
 const script = view.split('<script setup>')[1].split('</script>')[0].replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?\n/gm, '')
@@ -9,7 +9,7 @@ function consoleState(overrides = {}) {
   const defaults = {
     ref: value => ({ value }), computed: getter => ({ get value() { return getter() } }), onMounted: () => {},
     window: { localStorage: { getItem: () => '', setItem: () => {} }, confirm: () => true },
-    persistedPlanItems, formatStudyProbe, summarizeBackgroundJob, summarizeJournal, formatJournalDate,
+    persistedPlanItems, formatStudyProbe, summarizeBackgroundJob, summarizeJournal, formatJournalDate, localDay,
     agentRepository: {}, getMemoryCatalog: async () => ({ userId: 'local', entries: [] }),
     markStudyPlanItemDone: async () => {}, forgetMemory: async () => {}, archiveMemory: async () => {},
     recordMemoryFeedback: async () => {}, putExplicitPreference: async () => {}, archiveStaleMemories: async () => {},
@@ -342,6 +342,21 @@ test('failed daily trigger refreshes failed job diagnostics and preserves select
   assert.equal(ui.jobSummaries.value[0].status, 'failed')
   assert.equal(ui.runningDreams.value.length, 0)
   assert.deepEqual(dates, ['2026-09-29'])
+})
+
+test('today is the local calendar day, never the UTC date of an ISO string', async () => {
+  // 00:30 local on Oct 13: in any zone east of UTC its ISO string still says Oct 12.
+  assert.equal(localDay(new Date(2026, 9, 13, 0, 30)), '2026-10-13')
+  assert.equal(localDay(new Date(2026, 9, 13, 23, 59)), '2026-10-13')
+  assert.equal(localDay('garbage'), '')
+  const days = []
+  const ui = consoleState({ triggerDailyDream: async (query) => { days.push(query.day) } })
+  assert.equal(ui.journalDate.value, localDay(new Date()))
+  await ui.runDailyDream()
+  assert.deepEqual(days, [localDay(new Date())])
+  for (const page of [view, readFileSync(new URL('../../../apps/writing-vue/src/views/NotebookPage.vue', import.meta.url), 'utf8')]) {
+    assert.doesNotMatch(page, /toISOString\(\)\.slice\(0, 10\)/)
+  }
 })
 
 test('initial console journal response cannot replace a later date selection', async () => {
