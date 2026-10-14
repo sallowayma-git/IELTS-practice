@@ -16,8 +16,7 @@
  *   joined with 、), type (strongest improved, else recurring skill),
  *   practiced (any practice fact), events (memory events), quiet (no practice
  *   and no events), notesOnly (no practice, some events), first, gap, longGap.
- * Small sheets for the other fact types: note {kind}, noteAgain {kind},
- * practice {count, label}.
+ * Small sheets for the other fact types: note {kind}, noteAgain {kind}.
  *
  * Wording rules: "这一天" appears only in the opening line of an entry, so a
  * whole entry says it at most once. No narrator filler, no disapproval, no
@@ -386,22 +385,6 @@ export const BANK = {
       '这一条的记录同样有变动。',
       '这一条也有了新的变化。'
     ]
-  },
-
-  // Closing line above the open study-plan items.
-  practice: {
-    single: [
-      '计划里还剩一项没做：{label}，下次练习可以从它开始。',
-      '下一次练习，从「{label}」开始就好。',
-      '计划里只剩「{label}」这一项，留给下一次。',
-      '「{label}」还没做，可以放在下一次。'
-    ],
-    several: [
-      '计划里还有 {count} 项没做，可以从第一项开始。',
-      '还剩 {count} 项练习没做，先做排在最前面的那一项。',
-      '接下来排着 {count} 项练习，不必一次做完，从第一项开始。',
-      '{count} 项练习还在计划里，挑最前面的一项做起。'
-    ]
   }
 }
 
@@ -449,11 +432,7 @@ export const RULES = {
     [(f) => f.recurring.length > 0, 'recurring']
   ]),
   note: (facts) => NOTE_KEYS[facts.kind] || 'other',
-  noteAgain: (facts) => NOTE_KEYS[facts.kind] || 'other',
-  practice: firstMatch([
-    [(f) => f.count === 1, 'single'],
-    [(f) => f.count > 1, 'several']
-  ])
+  noteAgain: (facts) => NOTE_KEYS[facts.kind] || 'other'
 }
 
 const MS_PER_DAY = 86_400_000
