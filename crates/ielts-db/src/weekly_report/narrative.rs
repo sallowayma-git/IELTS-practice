@@ -8,7 +8,8 @@
 use std::collections::BTreeSet;
 
 use ielts_domain::{
-    contains_forbidden_inference_domain, contains_security_marker, numbers_in_value, numbers_whitelisted,
+    contains_forbidden_inference_domain, contains_security_marker, number_key, numbers_in_text,
+    numbers_in_value, numbers_whitelisted,
     ReportBlock, WeeklyNarrative, WeeklyReport, WEEKLY_SENTENCE_CHARS, WEEKLY_TITLE_CHARS,
 };
 use serde_json::Value;
@@ -78,13 +79,15 @@ fn is_safe(text: &str, max_chars: usize, allowed: &BTreeSet<String>) -> bool {
         && numbers_whitelisted(text, allowed)
 }
 
-/// Numbers a block's sentence may use: its data and its examples' text.
+/// Numbers a block's sentence may use: its data, the question references in its
+/// example labels, and the counts in their details (`正确 3/5`, written by the host).
 fn block_numbers(block: &ReportBlock) -> BTreeSet<String> {
     let mut allowed = BTreeSet::new();
     numbers_in_value(&block.data, &mut allowed);
     for example in &block.examples {
-        let texts = std::iter::once(&example.label).chain(example.detail.as_ref());
-        texts.for_each(|text| numbers_in_value(&Value::String(text.clone()), &mut allowed));
+        numbers_in_value(&Value::String(example.label.clone()), &mut allowed);
+        let detail = example.detail.as_deref().map(numbers_in_text).unwrap_or_default();
+        allowed.extend(detail.into_iter().map(number_key));
     }
     allowed
 }

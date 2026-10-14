@@ -189,9 +189,14 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         return Ok(false);
     }
     // Without a provider there is no narrative to write: the blocks alone close the week.
-    let Ok(provider) = crate::ai::load_provider_config(&db, &vault) else {
-        record_weekly_without_ai(&db, &window)?;
-        return Ok(false);
+    // A vault or database read failure is not "no provider": the window stays due.
+    let provider = match crate::ai::load_provider_config(&db, &vault) {
+        Ok(provider) => provider,
+        Err(error) if crate::ai::is_provider_missing(&error) => {
+            record_weekly_without_ai(&db, &window)?;
+            return Ok(false);
+        }
+        Err(error) => return Err(error),
     };
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
     db.with_conn(|conn| {

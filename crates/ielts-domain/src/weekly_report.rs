@@ -299,8 +299,11 @@ fn chinese_number(run: &str) -> Option<f64> {
     Some(f64::from(total + pending))
 }
 
-/// Every number anywhere in a JSON value (keys excluded), as written by the
-/// host. Strings are scanned too, so "q5" and "P3" allow 5 and 3.
+/// The numbers a JSON value states as numbers: every numeric field, plus the
+/// question references (`q5`, `P3`) inside strings. Dates, ids and titles carry
+/// digits that are not statistics, so `"2026-10-05"` or `"Cambridge 18"` allow
+/// nothing and a sentence cannot borrow them to state a count the host never
+/// computed.
 pub fn numbers_in_value(value: &Value, out: &mut BTreeSet<String>) {
     match value {
         Value::Number(number) => {
@@ -313,17 +316,45 @@ pub fn numbers_in_value(value: &Value, out: &mut BTreeSet<String>) {
             }
         }
         Value::String(text) => {
-            for number in numbers_in_text(text) {
+            for number in question_refs(text) {
                 out.insert(number_key(number));
             }
         }
         Value::Array(items) => items.iter().for_each(|item| numbers_in_value(item, out)),
-        Value::Object(map) => map.values().for_each(|item| numbers_in_value(item, out)),
+        Value::Object(map) => map
+            .iter()
+            .filter(|(key, _)| !is_identity_key(key))
+            .for_each(|(_, item)| numbers_in_value(item, out)),
         Value::Bool(_) | Value::Null => {}
     }
 }
 
-fn number_key(value: f64) -> String {
+/// Fields that name or locate something rather than count it.
+fn is_identity_key(key: &str) -> bool {
+    matches!(key, "id" | "day" | "title") || key.ends_with("Id") || key.starts_with("window")
+}
+
+/// `q5`, `P3`, `Q12`: one ASCII letter that starts a word, then 1-3 digits that
+/// end it. Anything else in a string (dates, ids, titles) is not a statistic.
+fn question_refs(text: &str) -> Vec<f64> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut found = Vec::new();
+    for (index, ch) in chars.iter().enumerate() {
+        let starts_word = index == 0 || !chars[index - 1].is_ascii_alphanumeric();
+        if !ch.is_ascii_alphabetic() || !starts_word {
+            continue;
+        }
+        let digits: String = chars[index + 1..].iter().take_while(|c| c.is_ascii_digit()).collect();
+        let end = index + 1 + digits.len();
+        let ends_word = chars.get(end).map_or(true, |next| !next.is_ascii_alphanumeric());
+        if (1..=3).contains(&digits.len()) && ends_word {
+            found.extend(digits.parse::<f64>().ok());
+        }
+    }
+    found
+}
+
+pub fn number_key(value: f64) -> String {
     // 6.50 and 6.5 are the same number; 3.0 and 3 too.
     let rounded = (value * 100.0).round() / 100.0;
     format!("{rounded}")
@@ -364,6 +395,19 @@ mod tests {
         assert!(numbers_whitelisted("没有数字的句子", &data));
         assert!(!numbers_whitelisted("这周做了 5 篇", &data));
         assert!(!numbers_whitelisted("错了三次", &data));
+    }
+
+    #[test]
+    fn dates_ids_and_titles_do_not_widen_the_whitelist() {
+        let data = allowed(json!({
+            "readingAttempts": 2,
+            "perDay": [{"day": "2026-10-05", "reading": 2}],
+            "sameQuestion": [{"assetId": "cam18-t2-p1", "title": "Cambridge 18 Test 2", "question": "q5", "attempts": 2}],
+        }));
+        assert!(numbers_whitelisted("练了 2 篇，q5 又错了", &data));
+        assert!(!numbers_whitelisted("练了十篇", &data));
+        assert!(!numbers_whitelisted("练了 18 篇", &data));
+        assert!(!numbers_whitelisted("2026 年 10 月", &data));
     }
 
     #[test]

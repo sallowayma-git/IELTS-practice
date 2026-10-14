@@ -179,6 +179,18 @@ pub(crate) fn weekend_key<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> S
     format!("{}-W{:02}", week.year(), week.week())
 }
 
+/// ISO week of the first weekend at or after `now`: the weekend whose run will
+/// close what is practised now. Saturday and Sunday are their own weekend.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn upcoming_weekend_key<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> String {
+    use chrono::{Datelike, Duration, Weekday};
+    let ahead = match now.weekday() {
+        Weekday::Sat | Weekday::Sun => 0,
+        weekday => 5 - i64::from(weekday.num_days_from_monday()),
+    };
+    weekend_key(&(now.clone() + Duration::days(ahead)))
+}
+
 /// Start of `now`'s calendar day in `now`'s zone, as a UTC instant: the retry
 /// bound is one weekly attempt per local day.
 #[cfg(feature = "daily-dream-v1")]

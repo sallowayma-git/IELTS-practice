@@ -228,7 +228,11 @@ pub(crate) fn live_weekly_report(
     now: chrono::DateTime<chrono::FixedOffset>,
 ) -> ielts_db::DbResult<Option<ielts_domain::WeeklyReport>> {
     let last_end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local"))?;
-    let Some(window) = crate::cognitive_runtime::plan_weekly_window(&now, last_end) else { return Ok(None) };
+    let Some(planned) = crate::cognitive_runtime::plan_weekly_window(&now, last_end) else { return Ok(None) };
+    // Named after the weekend that will close it, never the retry key of the
+    // weekend before: that week may already have its own finished report.
+    let key = live_window_key(db, &now)?;
+    let window = ielts_db::WeeklyWindow::new(key, planned.start, planned.end);
     let report = db.with_conn(|conn| {
         ielts_db::build_weekly_report(
             conn,
@@ -240,6 +244,14 @@ pub(crate) fn live_weekly_report(
         )
     })?;
     Ok((!report.is_empty()).then_some(report))
+}
+
+fn live_window_key(db: &AppDb, now: &chrono::DateTime<chrono::FixedOffset>) -> ielts_db::DbResult<String> {
+    let this_weekend = crate::cognitive_runtime::upcoming_weekend_key(now);
+    if db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", &this_weekend))? {
+        return Ok(crate::cognitive_runtime::upcoming_weekend_key(&(*now + chrono::Duration::days(7))));
+    }
+    Ok(this_weekend)
 }
 
 fn respond_weekly<T: Serialize>(result: ielts_db::DbResult<T>) -> CommandResponse<T> {
@@ -588,6 +600,23 @@ mod tests {
 
     fn saturday() -> WeeklyWindow {
         window("2026-W41", "2026-10-03T04:00:00Z", "2026-10-10T09:30:00Z")
+    }
+
+    /// Codex review on #243: midweek the retry key still names last weekend, so a
+    /// live report keyed by it collided with that weekend's finished report.
+    #[test]
+    fn the_live_report_is_named_after_the_weekend_that_will_close_it() {
+        let (_dir, db) = temp_db();
+        let local = |value: &str| chrono::DateTime::parse_from_rfc3339(value).unwrap();
+        let key = |value: &str| live_window_key(&db, &local(value)).unwrap();
+        assert_eq!(key("2026-10-07T12:00:00+08:00"), "2026-W41", "Wednesday belongs to the coming weekend");
+        assert_eq!(key("2026-10-11T12:00:00+08:00"), "2026-W41", "Sunday before its run");
+
+        let journal_id = seed_journal(&db, "local");
+        db.with_conn(|conn| ielts_db::record_completed_weekly_run(conn, "local", &journal_id, &saturday(), "2026-10-10T09:30:00Z"))
+            .unwrap();
+        assert_eq!(key("2026-10-11T12:00:00+08:00"), "2026-W42", "after the weekend closed");
+        assert_eq!(key("2026-10-12T09:00:00+08:00"), "2026-W42", "Monday after a finished weekend");
     }
 
     fn dream_run_status(db: &AppDb, run_id: &str) -> Option<String> {
