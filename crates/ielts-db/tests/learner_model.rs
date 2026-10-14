@@ -42,11 +42,11 @@ fn v11_database_upgrade_applies_m4_after_m3_without_skipping_versions() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
     );
     assert!(
-        current_version(&conn).unwrap() == 30,
-        "latest migration 0030 was not applied"
+        current_version(&conn).unwrap() == 31,
+        "latest migration 0031 was not applied"
     );
     verify_idempotent(&mut conn).unwrap();
     for table in [
@@ -1304,4 +1304,108 @@ fn rust_snapshot_is_consumed_by_python_and_python_query_is_accepted_by_rust() {
     )
     .is_err());
     assert!(serde_json::from_value::<LearnerStateQuery>(serde_json::Value::Null).is_err());
+}
+
+fn skill_rows(conn: &Connection, sql: &str) -> Vec<(String, String, Option<String>)> {
+    let mut statement = conn.prepare(sql).unwrap();
+    statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
+#[test]
+fn matching_groups_feed_their_own_sub_type_skill_and_unknown_matching_is_not_headings() {
+    let (dir, conn) = open_db();
+    let group = |id: &str, html: &str| json!({"kind": "matching", "questionIds": [id], "bodyHtml": html});
+    let path = dir.path().join("matching-asset.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&json!({
+            "examId": "matching-asset", "meta": {"title": "Matching", "category": "P2"},
+            "questionCount": 5, "questionOrder": ["q1", "q2", "q3", "q4", "q5"],
+            "answerKey": {"q1": "iv", "q2": "C", "q3": "B", "q4": "D", "q5": "A"},
+            "questionGroups": [
+                group("q1", "<p>Choose the correct heading for each paragraph from the list of headings below.</p>"),
+                group("q2", "<p>Reading Passage 2 has six paragraphs, <strong>A-F</strong>. Which paragraph contains the following information?</p>"),
+                group("q3", "<p>Look at the following statements and the list of people below.</p><p>Match each statement with the correct person, A-E.</p>"),
+                group("q4", "<p>Complete each sentence with the correct ending, A-G, below.</p>"),
+                group("q5", "<p>Questions 27-30</p>")
+            ]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let asset = import_asset_payload_file(&conn, &path).unwrap();
+    submit_reading_attempt(
+        &conn,
+        &ReadingSubmitCommand {
+            attempt_id: "matching-attempt".into(),
+            asset_id: "matching-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint),
+            answers: json!({"q1": "ii", "q2": "A", "q3": "A", "q4": "A", "q5": "B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(900),
+            title_snapshot: Some("Matching".into()),
+            idempotency_key: "matching-submit".into(),
+        },
+    )
+    .unwrap();
+    // A read refreshes the projection.
+    assert_eq!(state(&conn).states.len(), 5);
+
+    let rows = skill_rows(
+        &conn,
+        "SELECT question_id, skill_key, error_type FROM learner_skill_observations ORDER BY question_id",
+    );
+    let keys: Vec<(&str, &str)> = rows.iter().map(|row| (row.0.as_str(), row.1.as_str())).collect();
+    assert_eq!(
+        keys,
+        vec![
+            ("q1", "reading.matching_headings"),
+            ("q2", "reading.matching_information"),
+            ("q3", "reading.matching_features"),
+            ("q4", "reading.matching_sentence_endings"),
+            ("q5", "reading.matching"),
+        ]
+    );
+    assert_eq!(rows[2].2.as_deref(), Some("reading.matching_features.evidence_selection"));
+}
+
+#[test]
+fn tfng_aliases_resolve_to_one_skill_and_one_error_naming() {
+    let (_dir, conn) = open_db();
+    let kinds = ["tfng", "true_false_not_given", "True-False-Not-Given", "reading.tfng", "matching"];
+    for (index, kind) in kinds.iter().enumerate() {
+        insert_question(
+            &conn,
+            &format!("event-alias-{index}"),
+            &format!("asset-alias-{index}"),
+            "q1",
+            kind,
+            &format!("2026-08-1{index}T00:00:00Z"),
+            false,
+            None,
+        );
+    }
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let rows = skill_rows(
+        &conn,
+        "SELECT DISTINCT skill_key, error_type, NULL FROM learner_skill_observations ORDER BY skill_key",
+    );
+    let pairs: Vec<(&str, &str)> = rows.iter().map(|row| (row.0.as_str(), row.1.as_str())).collect();
+    // A generic matching event that carries no sub-type is not a headings miss.
+    assert_eq!(
+        pairs,
+        vec![
+            ("reading.matching", "reading.matching.evidence_selection"),
+            ("reading.tfng", "reading.tfng.boundary"),
+        ]
+    );
+    assert_eq!(ielts_db::canonical_reading_skill_key("yes_no_not_given"), "reading.yng");
+    assert_eq!(ielts_db::canonical_reading_skill_key("multiple_choice"), "reading.multi_choice");
 }

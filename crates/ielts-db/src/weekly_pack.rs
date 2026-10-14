@@ -28,6 +28,7 @@ use crate::cognitive_read::ensure_observations_fresh;
 use crate::learning_observations::{
     LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION,
 };
+use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 
@@ -340,11 +341,12 @@ fn reading_lines(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>) 
     }
     for o in window.iter().filter(|o| o.kind == "reading.question.outcome" && o.polarity.as_deref() == Some("negative")) {
         let (asset, attempt, qid) = (field(&o.payload, "assetId"), field(&o.payload, "attemptId"), field(&o.payload, "questionId"));
-        let qtype = o.payload.get("questionKind").and_then(Value::as_str).unwrap_or("unknown");
+        // One naming for question-type and error-cause stats: the skill key.
+        let qtype = canonical_reading_skill_key(o.payload.get("questionKind").and_then(Value::as_str).unwrap_or("unknown"));
         let given = show_answer(&learner_answer(conn, attempt, qid));
         let key = assets.key(asset, qid).map_or_else(|| "(key unavailable)".to_owned(), |key| show_answer(&key));
         let text = format!("{asset} {} [{qtype}] answered {given} -> key {key}", assets.label(asset, qid));
-        let facet = Facet::Miss { qtype: qtype.into(), asset: asset.into(), attempt: attempt.into(), qid: normalize_question_id(qid) };
+        let facet = Facet::Miss { qtype, asset: asset.into(), attempt: attempt.into(), qid: normalize_question_id(qid) };
         lines.push(line(vec![o.id.clone()], &o.at, "miss", text, facet));
     }
     lines
@@ -789,7 +791,7 @@ mod tests {
             day,
             "miss",
             format!("{asset} {qid} [{qtype}] {}", "x".repeat(filler)),
-            Facet::Miss { qtype: qtype.into(), asset: asset.into(), attempt: format!("a-{asset}-{day}"), qid: qid.into() },
+            Facet::Miss { qtype: canonical_reading_skill_key(qtype), asset: asset.into(), attempt: format!("a-{asset}-{day}"), qid: qid.into() },
         )
     }
 
@@ -833,7 +835,7 @@ mod tests {
     #[test]
     fn the_header_separates_passages_from_repeats_of_one_passage() {
         let mut again = miss("2026-10-04", "tfng", "P1", "q1", 1);
-        again.facet = Facet::Miss { qtype: "tfng".into(), asset: "P1".into(), attempt: "later".into(), qid: "q1".into() };
+        again.facet = Facet::Miss { qtype: "reading.tfng".into(), asset: "P1".into(), attempt: "later".into(), qid: "q1".into() };
         let lines = vec![
             miss("2026-10-01", "tfng", "P1", "q1", 1),
             miss("2026-10-02", "tfng", "P2", "q5", 1),
@@ -842,10 +844,23 @@ mod tests {
         ];
         let header = header(&lines);
         assert_eq!(header["reading"]["wrongQuestions"], 4);
-        assert_eq!(header["reading"]["byQuestionType"]["tfng"], json!({"wrong": 3, "passages": 2}));
-        assert_eq!(header["reading"]["missedAcrossPassages"], json!(["tfng (2 passages)"]));
+        assert_eq!(header["reading"]["byQuestionType"]["reading.tfng"], json!({"wrong": 3, "passages": 2}));
+        assert_eq!(header["reading"]["missedAcrossPassages"], json!(["reading.tfng (2 passages)"]));
         assert_eq!(header["reading"]["missedAgainInSamePassage"], json!(["P1 q1 (2 attempts)"]));
-        assert_eq!(header["reading"]["byErrorType"]["tfng.boundary"], 3);
+        assert_eq!(header["reading"]["byErrorType"]["reading.tfng.boundary"], 3);
+    }
+
+    #[test]
+    fn question_type_and_error_cause_stats_share_one_naming() {
+        // Payload kind, short alias and skill key are one question type.
+        let lines = vec![
+            miss("2026-10-01", "true_false_not_given", "P1", "q1", 1),
+            miss("2026-10-02", "tfng", "P2", "q2", 1),
+            miss("2026-10-03", "reading.tfng", "P3", "q3", 1),
+        ];
+        let header = header(&lines);
+        assert_eq!(header["reading"]["byQuestionType"], json!({"reading.tfng": {"wrong": 3, "passages": 3}}));
+        assert_eq!(header["reading"]["byErrorType"], json!({"reading.tfng.boundary": 3}));
     }
 
     #[test]

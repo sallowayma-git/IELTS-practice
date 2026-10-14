@@ -871,6 +871,15 @@ class EnrichmentAndSubmissionTests(unittest.TestCase):
         self.assertEqual(kinds["writing.task2"], QuestionKind.WRITING_TASK2)
         self.assertEqual(kinds["listening.section1"], QuestionKind.LISTENING)
 
+    def test_question_kind_uses_the_catalog_skill_keys(self) -> None:
+        # Keys are the Rust skill catalog's (`learner::canonical_reading_skill_key`).
+        kind_for = StudyPlannerOrchestrator._question_kind_for
+        self.assertEqual(kind_for("reading.multi_choice"), QuestionKind.READING_MULTIPLE_CHOICE)
+        self.assertEqual(kind_for("reading.matching_headings"), QuestionKind.READING_MATCHING_HEADINGS)
+        # Other matching sub-types are not a headings drill.
+        for key in ("reading.matching", "reading.matching_information", "reading.matching_features"):
+            self.assertEqual(kind_for(key), QuestionKind.COACH_DRILL, key)
+
     def test_writing_rewrite_bumps_estimate(self) -> None:
         bridge = FakeHostBridge()
         orch = StudyPlannerOrchestrator(bridge)

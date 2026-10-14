@@ -102,8 +102,8 @@ fn wrong_questions_carry_the_learners_answer_the_key_and_a_citable_id() {
     assert_eq!(
         texts(&pack, "miss"),
         vec![
-            "P1 q14 [tfng] answered FALSE -> key TRUE".to_string(),
-            "P1 q16 [matching] answered A -> key B".to_string(),
+            "P1 q14 [reading.tfng] answered FALSE -> key TRUE".to_string(),
+            "P1 q16 [reading.matching] answered A -> key B".to_string(),
         ]
     );
     let attempt = &texts(&pack, "reading")[0];
@@ -137,11 +137,11 @@ fn the_header_counts_types_and_separates_passages_from_repeats() {
     submit(&conn, "a3", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-06T09:00:00Z");
     let reading = &pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z").header["reading"];
 
-    assert_eq!(reading["byQuestionType"]["tfng"], json!({"wrong": 4, "passages": 2}));
-    assert_eq!(reading["byQuestionType"]["matching"], json!({"wrong": 1, "passages": 1}));
-    assert_eq!(reading["missedAcrossPassages"], json!(["tfng (2 passages)"]));
+    assert_eq!(reading["byQuestionType"]["reading.tfng"], json!({"wrong": 4, "passages": 2}));
+    assert_eq!(reading["byQuestionType"]["reading.matching"], json!({"wrong": 1, "passages": 1}));
+    assert_eq!(reading["missedAcrossPassages"], json!(["reading.tfng (2 passages)"]));
     assert_eq!(reading["missedAgainInSamePassage"], json!(["P1 q1 (2 attempts)"]));
-    assert_eq!(reading["byErrorType"]["tfng.boundary"], 4);
+    assert_eq!(reading["byErrorType"]["reading.tfng.boundary"], 4);
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn a_busy_window_fits_the_cap_keeps_repeated_types_and_says_what_it_omitted() {
     assert!(pack.estimated_tokens() <= WEEKLY_PACK_TOKEN_CAP, "{}", pack.estimated_tokens());
     assert!(pack.omitted > 0);
     assert_eq!(pack.to_value()["omitted"], json!(format!("omitted {} older items", pack.omitted)));
-    let kept_matching = texts(&pack, "miss").into_iter().filter(|text| text.contains("[matching]")).count();
+    let kept_matching = texts(&pack, "miss").into_iter().filter(|text| text.contains("[reading.matching]")).count();
     assert_eq!(kept_matching, 3, "every line of a repeatedly missed question type survives");
     // The header still counts everything, omitted lines included.
     assert_eq!(pack.header["reading"]["wrongQuestions"], 123);
