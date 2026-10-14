@@ -25,6 +25,9 @@ pub fn begin_coach_trace(
             "coach trace requires its persisted user message".into(),
         ));
     }
+    // The thread's frozen learner profile is part of the request; its memory
+    // ids are the host-owned record of which memories this run used.
+    let memory_ids = super::frozen_profile_memory_ids(&tx, thread_id)?;
     let rendered = request.to_string();
     let used = estimate_tokens(&rendered);
     if used > budget {
@@ -53,10 +56,15 @@ pub fn begin_coach_trace(
     tx.execute("INSERT INTO agent_context_items (snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json)
         VALUES (?1,'CURRENT_TASK',?2,0,1,?3,'exact host assembled request',?4)",
         params![snapshot,user_message_id,used,json!({"sourceKind":"coach_request", "sourceId":user_message_id,"contentHash":hash,"sensitivity":"normal"}).to_string()])?;
+    for (rank, memory_id) in memory_ids.iter().enumerate() {
+        tx.execute("INSERT INTO agent_context_items (snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json)
+            VALUES (?1,'ACTIVE_MEMORY',?2,?3,1,0,'frozen coach learner profile',?4)",
+            params![snapshot,memory_id,rank as i64 + 1,json!({"sourceKind":"coach_learner_profile","sourceId":thread_id,"sensitivity":"normal"}).to_string()])?;
+    }
     tx.execute("INSERT INTO llm_invocations (id,run_id,kind,provider,model,request_hash,created_at) VALUES (?1,?2,'completion',?3,?4,?5,?6)",
         params![invocation,id,provider,model,hash,now])?;
     tx.execute("UPDATE agent_runs SET result_json=?1 WHERE id=?2",
-        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"strategyId":HOST_COACH_STRATEGY}).to_string(),id])?;
+        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"strategyId":HOST_COACH_STRATEGY,"memoryIdsUsed":memory_ids}).to_string(),id])?;
     tx.commit()?;
     Ok(id)
 }
@@ -98,9 +106,11 @@ pub fn complete_traced_coach(
     tx.execute(
         "INSERT INTO coach_strategy_assignments_v0
          (id,user_id,coach_message_id,strategy_id,skills_addressed_json,memory_ids_used_json,context_snapshot_id,followup_type,created_at)
-         VALUES (?1,'local',?2,?3,'[]','[]',?4,'explain',?5)",
+         VALUES (?1,'local',?2,?3,'[]',
+                 COALESCE((SELECT json_extract(result_json,'$.memoryIdsUsed') FROM agent_runs WHERE id=?6),'[]'),
+                 ?4,'explain',?5)",
         params![assignment_id, message.id, HOST_COACH_STRATEGY,
-            format!("context-{run_id}"), chrono::Utc::now().to_rfc3339()],
+            format!("context-{run_id}"), chrono::Utc::now().to_rfc3339(), run_id],
     )?;
     tx.execute(
         "UPDATE coach_threads SET status='active',last_error_json=NULL WHERE id=?1",

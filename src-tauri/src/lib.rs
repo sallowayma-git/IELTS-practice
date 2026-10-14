@@ -181,6 +181,10 @@ pub fn run() {
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_put_explicit_preference,
             #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_list_explicit_preferences,
+            #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_delete_explicit_preference,
+            #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_context_preview,
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_catalog_list,
@@ -302,6 +306,8 @@ pub fn run() {
             commands::enrichment::coach_run,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
+            #[cfg(feature = "learning-observation-v1")]
+            commands::coach_feedback::coach_list_feedback,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_reask_link,
             #[cfg(feature = "learning-observation-v1")]

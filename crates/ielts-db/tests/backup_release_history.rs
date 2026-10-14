@@ -314,6 +314,7 @@ fn legacy_v16_restore_clears_release_history_without_guessing_predecessors() {
         .execute_batch(
             "DROP TABLE prompt_skill_release_heads; DROP TABLE prompt_skill_releases;
          ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
+         ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
          DELETE FROM schema_migrations WHERE version >= 25;",
         )
         .unwrap();

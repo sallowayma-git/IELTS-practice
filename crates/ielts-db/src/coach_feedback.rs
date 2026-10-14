@@ -69,6 +69,13 @@ pub(crate) fn record_coach_feedback_in_transaction(
             Ok(text)
         })
         .transpose()?;
+    // One verdict per answer: a second, different verdict never becomes a
+    // contradictory fact; the caller gets the durable one back instead.
+    if command.feedback_kind.is_verdict() {
+        if let Some(existing) = load_verdict(conn, &command.coach_message_id)? {
+            return require_local_owner(existing);
+        }
+    }
     let id = format!("cfb-{}", Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     let user_id = normalize_user_id(&command.user_id);
@@ -116,14 +123,72 @@ pub(crate) fn record_coach_feedback_in_transaction(
     }
     load_coach_feedback(conn, &command.coach_message_id, command.feedback_kind)?
         .ok_or_else(|| DbError::Message("coach feedback insert did not hydrate".into()))
-        .and_then(|record| {
-            if record.user_id != DEFAULT_USER_ID {
-                return Err(DbError::Validation(
-                    "coach feedback owner must be local".into(),
-                ));
+        .and_then(require_local_owner)
+}
+
+fn require_local_owner(record: CoachFeedbackRecord) -> DbResult<CoachFeedbackRecord> {
+    if record.user_id != DEFAULT_USER_ID {
+        return Err(DbError::Validation("coach feedback owner must be local".into()));
+    }
+    Ok(record)
+}
+
+fn feedback_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<CoachFeedbackRecord>> {
+    let kind: String = row.get(3)?;
+    let Some(feedback_kind) = CoachFeedbackKind::parse(&kind) else {
+        return Ok(None);
+    };
+    let payload_text: Option<String> = row.get(4)?;
+    Ok(Some(CoachFeedbackRecord {
+        id: row.get(0)?,
+        user_id: row.get(1)?,
+        coach_message_id: row.get(2)?,
+        feedback_kind,
+        payload: payload_text.and_then(|text| serde_json::from_str::<Value>(&text).ok()),
+        created_at: row.get(5)?,
+    }))
+}
+
+/// The earliest verdict recorded on a message, if any.
+fn load_verdict(conn: &Connection, coach_message_id: &str) -> DbResult<Option<CoachFeedbackRecord>> {
+    let mut statement = conn.prepare(
+        "SELECT id, user_id, coach_message_id, feedback_kind, payload_json, created_at
+         FROM coach_feedback WHERE coach_message_id = ?1
+         ORDER BY created_at, id",
+    )?;
+    let rows = statement.query_map(params![coach_message_id], feedback_from_row)?;
+    for row in rows {
+        if let Some(record) = row? {
+            if record.feedback_kind.is_verdict() {
+                return Ok(Some(record));
             }
-            Ok(record)
-        })
+        }
+    }
+    Ok(None)
+}
+
+/// Durable feedback for every message of a coach thread, oldest first, so a
+/// reopened panel shows the choices already made.
+pub fn list_coach_feedback_for_thread(
+    conn: &Connection,
+    thread_id: &str,
+) -> DbResult<Vec<CoachFeedbackRecord>> {
+    require_text(thread_id, "thread_id")?;
+    let mut statement = conn.prepare(
+        "SELECT f.id, f.user_id, f.coach_message_id, f.feedback_kind, f.payload_json, f.created_at
+         FROM coach_feedback f
+         JOIN coach_messages m ON m.id = f.coach_message_id
+         WHERE m.thread_id = ?1
+         ORDER BY f.created_at, f.id",
+    )?;
+    let rows = statement.query_map(params![thread_id], feedback_from_row)?;
+    let mut records = Vec::new();
+    for row in rows {
+        if let Some(record) = row? {
+            records.push(record);
+        }
+    }
+    Ok(records)
 }
 
 fn load_coach_feedback(
@@ -557,6 +622,24 @@ mod tests {
         ).unwrap();
         assert_eq!(events, 0);
         record_coach_feedback(&conn, &command).unwrap();
+    }
+
+    #[test]
+    fn one_verdict_per_message_and_thread_listing_returns_it() {
+        let (_dir, conn) = open_db();
+        let first =
+            record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::ThumbsUp)).unwrap();
+        // A different verdict after a reload returns the durable one, no new row.
+        let second =
+            record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::Incorrect)).unwrap();
+        assert_eq!(second.id, first.id);
+        assert_eq!(second.feedback_kind, CoachFeedbackKind::ThumbsUp);
+        // Non-verdict remarks still coexist with the verdict.
+        record_coach_feedback(&conn, &feedback_command(CoachFeedbackKind::TooLong)).unwrap();
+        let listed = list_coach_feedback_for_thread(&conn, "thread-1").unwrap();
+        let kinds: Vec<_> = listed.iter().map(|record| record.feedback_kind).collect();
+        assert_eq!(kinds, vec![CoachFeedbackKind::ThumbsUp, CoachFeedbackKind::TooLong]);
+        assert!(list_coach_feedback_for_thread(&conn, "thread-other").unwrap().is_empty());
     }
 
     #[test]

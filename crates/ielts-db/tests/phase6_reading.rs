@@ -5,9 +5,10 @@ use tempfile::tempdir;
 
 use ielts_db::{
     compare_answer, get_open_reading_draft_with_timer, import_asset_payload_file,
-    load_pdf_data_url, load_practice_asset_payload, migrate, open_connection, patch_reading_answer,
-    save_reading_draft, score_attempt, submit_reading_attempt, DbOpenOptions, MatchMode,
-    ReadingDraftCommand, ReadingQuestionProgress, ReadingSubmitCommand, TimerState,
+    load_pdf_data_url, load_practice_asset_payload, load_practice_asset_payload_for_view, migrate,
+    open_connection, patch_reading_answer, save_reading_draft, score_attempt,
+    submit_reading_attempt, DbOpenOptions, MatchMode, ReadingDraftCommand, ReadingQuestionProgress,
+    ReadingSubmitCommand, TimerState,
 };
 
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
@@ -32,6 +33,57 @@ fn complete_asset_payload_is_loaded_and_verified() {
     std::fs::write(&path, br#"{"examId":"p1-demo","questionCount":99}"#).unwrap();
     let err = load_practice_asset_payload(&conn, "p1-demo").unwrap_err();
     assert!(err.to_string().contains("fingerprint mismatch"));
+}
+
+#[test]
+fn view_payload_hides_inline_data_answer_while_answer_key_scoring_still_works() {
+    let (dir, conn) = open_db();
+    let mut payload = sample_payload();
+    payload["examId"] = json!("p1-leak");
+    payload["passage"] = json!({"blocks": [{"blockId": "p", "kind": "html",
+        "html": "<p>In 1906 she <input name=\"q5\" class=\"blank\" data-answer=\"moved\"></p>"}]});
+    payload["questionGroups"] = json!([{"groupId": "g", "kind": "gap_fill", "questionIds": ["q5"],
+        "bodyHtml": "<p>8 <input name=\"q5\" class=\"blank\" data-answer=\"Australia\" id=\"q5-anchor\"></p>"}]);
+    payload["answerKey"]["q5"] = json!("Australia");
+    let path = dir.path().join("p1-leak.json");
+    std::fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+    import_asset_payload_file(&conn, &path).unwrap();
+
+    let raw = load_practice_asset_payload(&conn, "p1-leak").unwrap();
+    let view = load_practice_asset_payload_for_view(&conn, "p1-leak").unwrap();
+    let html = view.payload.to_string();
+    assert!(raw.payload.to_string().contains("data-answer"));
+    assert!(!html.contains("data-answer"), "{html}");
+    assert_eq!(
+        view.payload["questionGroups"][0]["bodyHtml"],
+        "<p>8 <input name=\"q5\" class=\"blank\" id=\"q5-anchor\"></p>"
+    );
+    // Same submitted identity; answer key untouched; scoring unaffected.
+    assert_eq!(view.asset.fingerprint, raw.asset.fingerprint);
+    assert_eq!(view.payload["answerKey"], raw.payload["answerKey"]);
+    let result = submit_reading_attempt(
+        &conn,
+        &ReadingSubmitCommand {
+            attempt_id: "att-leak".into(),
+            asset_id: "p1-leak".into(),
+            asset_revision: None,
+            asset_fingerprint: Some(view.asset.fingerprint.clone()),
+            answers: json!({"q5": "australia"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(1),
+            title_snapshot: None,
+            idempotency_key: "submit-leak".into(),
+        },
+    )
+    .unwrap();
+    let q5 = result
+        .comparisons
+        .iter()
+        .find(|c| c.question_id == "q5")
+        .unwrap();
+    assert_eq!(q5.is_correct, Some(true));
+    assert_eq!(q5.correct_answer, json!("Australia"));
 }
 
 #[test]

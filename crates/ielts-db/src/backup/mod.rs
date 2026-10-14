@@ -1125,6 +1125,14 @@ fn sql_value(value: &BackupSqlValue) -> SqlValue {
     }
 }
 
+/// (table, column, database schema version that added it) for migrations that
+/// only add a nullable column: 26 (submission revision), 31 (the coach
+/// thread's frozen learner profile).
+const NULLABLE_COLUMN_ADDITIONS: &[(&str, &str, i64)] = &[
+    ("attempts", "submitted_asset_fingerprint", 26),
+    ("coach_threads", "learner_profile_json", 31),
+];
+
 fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResult<()> {
     let target_version = current_version(conn)?;
     if target_version < package.manifest.database_schema_version as i64 {
@@ -1135,18 +1143,20 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
     }
     for table in &package.database {
         let target_columns = table_columns(conn, &table.name)?;
-        // Migration 26 adds only a nullable submission revision. Historical
-        // snapshots cannot invent it; INSERT with the old columns leaves NULL.
-        // Keep every other column and all modern snapshots strictly checked.
-        let pre_revision_attempt = table.name == "attempts"
-            && package.manifest.database_schema_version < 26
-            && table.columns
-                == target_columns
-                    .iter()
-                    .filter(|column| column.as_str() != "submitted_asset_fingerprint")
-                    .cloned()
-                    .collect::<Vec<_>>();
-        if table.columns != target_columns && !pre_revision_attempt {
+        // Some migrations add only a nullable column. Historical snapshots
+        // cannot invent it; INSERT with the old columns leaves NULL. Keep every
+        // other column and all modern snapshots strictly checked.
+        let schema = package.manifest.database_schema_version as i64;
+        let historical_columns: Vec<String> = target_columns
+            .iter()
+            .filter(|column| {
+                !NULLABLE_COLUMN_ADDITIONS.iter().any(|(added_table, added_column, version)| {
+                    *added_table == table.name && column.as_str() == *added_column && schema < *version
+                })
+            })
+            .cloned()
+            .collect();
+        if table.columns != target_columns && table.columns != historical_columns {
             return Err(DbError::Validation(format!(
                 "backup table {} columns do not match target schema",
                 table.name

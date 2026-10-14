@@ -2028,6 +2028,55 @@
   color: var(--atlas-danger);
 }
 
+.reading-coach-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  margin-top: -4px;
+}
+
+.reading-coach-feedback__option {
+  padding: 2px 8px;
+  border: 1px solid var(--atlas-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--atlas-ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--anth-text-xs);
+}
+
+.reading-coach-feedback__option:hover:not(:disabled) {
+  border-color: var(--atlas-accent-ring);
+  color: var(--atlas-accent-strong);
+}
+
+.reading-coach-feedback__option.is-selected {
+  border-color: var(--atlas-accent-ring);
+  background: var(--atlas-accent-soft);
+  color: var(--atlas-accent-strong);
+  font-weight: 600;
+}
+
+.reading-coach-feedback__option:disabled {
+  cursor: default;
+}
+
+.reading-coach-feedback__option:disabled:not(.is-selected) {
+  opacity: 0.55;
+}
+
+.reading-coach-feedback__note {
+  color: var(--atlas-ink-faint);
+  font-size: var(--anth-text-xs);
+}
+
+.reading-coach-feedback__note.is-error {
+  color: var(--atlas-danger);
+}
+
 .reading-coach-panel__actions,
 .reading-coach-panel__followups {
   display: flex;

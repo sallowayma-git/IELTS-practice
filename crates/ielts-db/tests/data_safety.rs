@@ -410,7 +410,12 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
     assert!(!backups.exists() || std::fs::read_dir(&backups).unwrap().next().is_none());
 
     // Pretend the last migration has not run yet.
-    conn.execute("DELETE FROM schema_migrations WHERE version = 30", []).unwrap();
+    // 0031 adds a column, so undo it before forgetting it ran.
+    conn.execute_batch(
+        "ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
+         DELETE FROM schema_migrations WHERE version = 31;",
+    )
+    .unwrap();
     assert!(ielts_db::has_pending_migrations(&conn).unwrap());
     ielts_db::migrate_with_snapshot(&mut conn, &backups).unwrap();
     let snapshots: Vec<_> = std::fs::read_dir(&backups)
@@ -419,7 +424,7 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
         .collect();
     assert_eq!(snapshots.len(), 1, "{snapshots:?}");
     assert!(snapshots[0].starts_with("pre-migrate-"));
-    assert_eq!(ielts_db::current_version(&conn).unwrap(), 30);
+    assert_eq!(ielts_db::current_version(&conn).unwrap(), 31);
 }
 
 #[test]
