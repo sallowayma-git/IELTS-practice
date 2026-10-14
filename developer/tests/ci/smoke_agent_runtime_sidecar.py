@@ -155,7 +155,6 @@ def main() -> int:
                     "requestedCapabilities": [
                         "runtime.health",
                         "runtime.shutdown",
-                        "memory.candidates.extract",
                         "memory.candidates.generate",
                     ],
                     "hostCapabilities": {"model.invoke": "1", "tool.invoke": "1"},
@@ -169,7 +168,6 @@ def main() -> int:
         expected_capabilities = {
             "runtime.health": "1",
             "runtime.shutdown": "1",
-            "memory.candidates.extract": "1",
             "memory.candidates.generate": "1",
             "dream.weekly": "1",
             "planner.study_plan": "1",

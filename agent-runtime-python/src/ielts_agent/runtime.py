@@ -8,7 +8,6 @@ from typing import Any, BinaryIO
 
 from pydantic import ValidationError
 
-from .memory_extractor import MemoryCandidateInput, extract_memory_candidates
 from .host_bridge import FramedHostBridge
 from .memory_manager import HostBridge, run_memory_candidate_generation
 from .dream import (
@@ -85,8 +84,6 @@ class RuntimeServer:
         if request.method == "runtime.shutdown":
             self.stopping = True
             return {"state": "stopped"}
-        if request.method == "memory.candidates.extract":
-            return self._extract_memory_candidates(request.params)
         if request.method == "memory.candidates.generate":
             return self._generate_memory_candidates(request)
         if request.method == "dream.weekly":
@@ -94,28 +91,6 @@ class RuntimeServer:
         if request.method == "planner.study_plan":
             return self._run_study_planner(request)
         raise ProtocolError("method_not_found", f"unsupported method: {request.method}")
-
-    def _extract_memory_candidates(self, params: dict[str, Any]) -> dict[str, Any]:
-        if set(params) != {"input", "modelOutput"}:
-            raise ProtocolError(
-                "schema_invalid_fields",
-                "memory.candidates.extract requires exactly input and modelOutput",
-            )
-        if not isinstance(params["modelOutput"], str):
-            raise ProtocolError("schema_type_error", "modelOutput must be text")
-        try:
-            candidate_input = MemoryCandidateInput.model_validate(params["input"])
-        except ValidationError as error:
-            raise ProtocolError(
-                "candidate_input_invalid",
-                "memory candidate input is invalid",
-                details={"errors": error.errors(include_url=False, include_input=False)},
-            ) from error
-        batch, fallback_used = extract_memory_candidates(
-            candidate_input,
-            params["modelOutput"],
-        )
-        return {"batch": batch.to_wire(), "fallbackUsed": fallback_used}
 
     def _generate_memory_candidates(self, request: RequestEnvelope) -> dict[str, Any]:
         if self.host_bridge is None:

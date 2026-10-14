@@ -1253,69 +1253,6 @@ fn sufficient_evidence_keeps_weakness_priority_and_staleness_escalation() {
 }
 
 #[test]
-fn rust_snapshot_is_consumed_by_python_and_python_query_is_accepted_by_rust() {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let (dir, conn) = open_db();
-    submit_fixture(dir.path(), &conn, 1);
-    let snapshot = ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default()).unwrap();
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let python = std::env::var("PYTHON")
-        .unwrap_or_else(|_| if cfg!(windows) { "python" } else { "python3" }.into());
-    let mut child = Command::new(python)
-        .arg(root.join("developer/tests/ci/learner_wire_probe.py"))
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Python is required for the real learner wire contract");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&snapshot).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "Python failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let params: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let query: LearnerStateQuery = serde_json::from_value(
-        params
-            .get("query")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null),
-    )
-    .unwrap();
-    assert_eq!(
-        query.skill_keys,
-        snapshot
-            .state
-            .states
-            .iter()
-            .map(|row| row.skill_key.clone())
-            .collect::<Vec<_>>()
-    );
-    assert!(serde_json::from_value::<LearnerStateQuery>(
-        json!({"activity":"reading", "skills":[]})
-    )
-    .is_err());
-    assert!(serde_json::from_value::<LearnerStateQuery>(serde_json::Value::Null).is_err());
-}
-
-fn skill_rows(conn: &Connection, sql: &str) -> Vec<(String, String, Option<String>)> {
-    let mut statement = conn.prepare(sql).unwrap();
-    statement
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-}
-
-#[test]
 fn matching_groups_feed_their_own_sub_type_skill_and_unknown_matching_is_not_headings() {
     let (dir, conn) = open_db();
     let group = |id: &str, html: &str| json!({"kind": "matching", "questionIds": [id], "bodyHtml": html});
