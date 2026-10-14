@@ -160,3 +160,22 @@ fn reports_are_newest_window_first_and_limited() {
     assert_eq!(titles(&list_weekly_reports(&conn, "local", 0).unwrap()), vec!["2026-W42"]);
     assert!(list_weekly_reports(&conn, "someone-else", 8).unwrap().is_empty());
 }
+
+/// Review on #243: W41 kept failing, then the W42 run folded W41's span in and
+/// completed. The failed W41 report is superseded, not shown beside it.
+#[test]
+fn a_failed_week_folded_into_a_later_completed_run_is_not_listed() {
+    let (_dir, conn) = open_db();
+    let journal = journal_for(&conn, "2026-10-10");
+    let w41_end = "2026-10-12T09:30:00Z";
+    let failed = failed_run(&conn, &journal, "2026-W41", w41_end);
+    put_weekly_report(&conn, &failed, &report("2026-W41", w41_end, WeeklyReportState::NarrativeFailed, "w41 failed"), w41_end)
+        .unwrap();
+    assert_eq!(titles(&list_weekly_reports(&conn, "local", 8).unwrap()), vec!["w41 failed"]);
+
+    // Same start (the last completed boundary), later end.
+    let w42_end = "2026-10-17T09:30:00Z";
+    let done = complete_run(&conn, &journal, "2026-W42", w42_end, w42_end);
+    put_weekly_report(&conn, &done, &report("2026-W42", w42_end, WeeklyReportState::Final, "w42 folded"), w42_end).unwrap();
+    assert_eq!(titles(&list_weekly_reports(&conn, "local", 8).unwrap()), vec!["w42 folded"]);
+}

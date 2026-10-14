@@ -72,13 +72,19 @@ fn candidates(conn: &Connection, user_id: &str) -> DbResult<Vec<Candidate>> {
         .collect())
 }
 
+fn span(report: &WeeklyReport) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    let at = |text: &str| DateTime::parse_from_rfc3339(text).ok().map(|value| value.with_timezone(&Utc));
+    Some((at(&report.window_start)?, at(&report.window_end)?))
+}
+
 fn window_order(report: &WeeklyReport) -> (Option<DateTime<Utc>>, String) {
     let end = DateTime::parse_from_rfc3339(&report.window_end).ok().map(|end| end.with_timezone(&Utc));
     (end, report.window.clone())
 }
 
 /// Newest persisted weekly reports (window end descending), one per window.
-/// Rows that are not v2 reports and reports without blocks are skipped.
+/// Rows that are not v2 reports, reports without blocks, and failed reports
+/// whose span a completed report covers are skipped.
 pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyReport>> {
     let user_id = normalize_user_id(user_id);
     let mut best: BTreeMap<String, Candidate> = BTreeMap::new();
@@ -88,7 +94,18 @@ pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbRe
             best.insert(candidate.report.window.clone(), candidate);
         }
     }
-    let mut reports: Vec<WeeklyReport> = best.into_values().map(|candidate| candidate.report).collect();
+    // A failed week whose span a later completed run folded in is superseded:
+    // that run already reports its practice, and the failed one can never retry.
+    let completed: Vec<(DateTime<Utc>, DateTime<Utc>)> =
+        best.values().filter(|candidate| candidate.rank.0).filter_map(|candidate| span(&candidate.report)).collect();
+    let superseded = |candidate: &Candidate| {
+        !candidate.rank.0
+            && span(&candidate.report).is_some_and(|(start, end)| {
+                completed.iter().any(|(done_start, done_end)| *done_start <= start && end <= *done_end)
+            })
+    };
+    let mut reports: Vec<WeeklyReport> =
+        best.into_values().filter(|candidate| !superseded(candidate)).map(|candidate| candidate.report).collect();
     reports.sort_by_key(|report| Reverse(window_order(report)));
     reports.truncate(limit.clamp(1, MAX_REPORTS) as usize);
     Ok(reports)

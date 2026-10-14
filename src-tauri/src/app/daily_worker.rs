@@ -150,24 +150,38 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
+    // The failed run commits on its own: it is what bounds retries to one a day,
+    // and it does not close the window, so a missing report costs nothing lasting.
     let run = db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))?;
     // The blocks are final either way; only the narrative is owed a retry.
-    persist_report(db, window, &run.id, WeeklyReportState::NarrativeFailed, &now)
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed)?;
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run.id, &report, &now))
 }
 
 /// Close a due window without a model (none configured): its blocks become the
-/// week's final report, and the next window starts after it.
+/// week's final report, and the next window starts after it. The report is built
+/// first and stored in the same transaction as the run that closes the window,
+/// so a report that cannot be built or stored leaves the window due.
 fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
-    let run = db.with_conn(|conn| ielts_db::record_completed_weekly_run(conn, "local", &journal_id, window, &now))?;
-    persist_report(db, window, &run.id, WeeklyReportState::FinalNoAi, &now)
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi)?;
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let run = ielts_db::record_completed_weekly_run(&tx, "local", &journal_id, window, &now)?;
+        ielts_db::put_weekly_report(&tx, &run.id, &report, &now)?;
+        tx.commit()?;
+        Ok(())
+    })
 }
 
-fn persist_report(db: &AppDb, window: &WeeklyWindow, run_id: &str, state: WeeklyReportState, now: &str) -> DbResult<()> {
-    let report = crate::commands::journal::finished_report(db, window, state, None, &[])
-        .map_err(|error| DbError::Validation(error.to_string()))?;
-    db.with_conn(|conn| ielts_db::put_weekly_report(conn, run_id, &report, now))
+fn weekly_report_without_narrative(
+    db: &AppDb,
+    window: &WeeklyWindow,
+    state: WeeklyReportState,
+) -> DbResult<ielts_domain::WeeklyReport> {
+    crate::commands::journal::finished_report(db, window, state, None, &[])
+        .map_err(|error| DbError::Validation(error.to_string()))
 }
 
 /// The single weekly consolidation call, for the window that is due now.
@@ -551,6 +565,22 @@ mod tests {
         assert!(!weekly_has_evidence(&db, &window).unwrap());
         seed_scored_outcome(&db, ielts_db::WEEKLY_MIN_OBSERVATIONS);
         assert!(weekly_has_evidence(&db, &window).unwrap());
+    }
+
+    /// Review on #243: the no-model path closed the window before storing its
+    /// report, so a failed write dropped the report and the window for good.
+    #[test]
+    fn a_no_model_week_whose_report_cannot_be_stored_stays_due() {
+        let (_dir, db) = test_db("no-ai-fail.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        assert!(record_weekly_without_ai(&db, &window).is_err());
+        assert!(!db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", KEY)).unwrap());
+        assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), None);
+        assert!(due(&db, &at(8, SATURDAY)).is_some(), "the weekend is still owed its report");
     }
 
     #[test]
