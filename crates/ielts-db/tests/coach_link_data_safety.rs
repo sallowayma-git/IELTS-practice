@@ -309,9 +309,16 @@ fn older_backup_without_context_snapshots_still_restores() {
         hex::encode(Sha256::digest(serde_json::to_vec(&package).unwrap()))
     };
 
+    // A non-empty target: its own later snapshots must not survive a restore
+    // that replaces the user's data.
     let target = open(&dir.path().join("target.db"));
+    insert_context_snapshot(&target, "ctx-target-only");
     let report = ielts_db::import_backup(&target, &package, false).unwrap();
     assert!(report.ok, "format 18 backup must restore: {:?}", report.errors);
+    let snapshots: i64 = target
+        .query_row("SELECT COUNT(*) FROM agent_context_snapshots", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(snapshots, 0);
     assert_eq!(
         snapshot_ref(&target, "coach_strategy_assignments_v0", "asg-1"),
         None

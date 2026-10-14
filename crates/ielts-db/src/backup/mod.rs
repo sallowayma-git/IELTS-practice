@@ -1211,13 +1211,6 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
                 clear_release_history(tx)?;
                 continue;
             }
-            // Packages before format 19 carry no context snapshots. Keep the
-            // target's own rows so restored references to them still resolve;
-            // any that do not are resolved by
-            // `resolve_references_to_unrestored_tables`.
-            if CONTEXT_SNAPSHOT_TABLES.contains(table) && !source_tables.contains(table) {
-                continue;
-            }
             tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
         }
         Ok(())
