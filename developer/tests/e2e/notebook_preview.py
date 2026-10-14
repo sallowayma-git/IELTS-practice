@@ -6,12 +6,14 @@
 Starts the Vite dev server on port 4186 with the learner-model feature flag
 set in the dev-server environment (test side only; production builds keep the
 flag false). The Tauri commands are mocked in the page with an init script:
-four weeks of finished journal days, weekly digests, a study plan, a memory
-catalog and a learner review queue of twelve items.
+four weeks of finished journal days, weekly reports (notebook_weekly_mock.py),
+a memory catalog and a learner review queue of twelve items.
 
     reports/notebook-dev.png          notebook, 1440x900, full page
     reports/notebook-dev-1024.png     notebook, 1024x768, full page
     reports/notebook-empty-dev.png    notebook with no journal days, 1440x900
+    reports/notebook-no-ai-dev.png    a finished week without AI, 390x844
+    reports/notebook-failed-dev.png   a finished week whose narrative failed, 1024x768
     reports/learner-dev.png           learner model, 1440x900, full page
 
 Prints the computed heights of the notebook index rows so the sticky rail
@@ -28,6 +30,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 from design_system_preview import APP, REPORTS, VITE_BIN, stop_process, wait_for_server
+from notebook_weekly_mock import WEEKLY_MOCK
 
 PORT = 4186
 BASE_URL = f"http://127.0.0.1:{PORT}"
@@ -35,6 +38,8 @@ BASE_URL = f"http://127.0.0.1:{PORT}"
 MOCK = r"""
 (() => {
   const scenario = window.__notebookScenario || 'full';
+  // The daily scenario 'full' pairs with this week live + two finished weeks.
+  const weeklyScenario = scenario === 'full' ? 'live_final' : scenario;
   const ZERO = { newCandidates: 0, promoted: 0, reinforced: 0, refined: 0, improved: 0,
                  regressed: 0, contradicted: 0, superseded: 0 };
   const dayList = [];
@@ -73,25 +78,6 @@ MOCK = r"""
         memoryEvents: events });
     });
   }
-
-  const WEEKS = [
-    { window: '2026-W38', windowStart: '2026-09-14', windowEnd: '2026-09-20',
-      observations: ['判断题里，未提及与错误仍然混在一起', '段落大意配对的干扰项命中率在下降', '写作的衔接词开始有意识地使用'],
-      changes: ['判断题的正确率从四成回升到六成', '词汇资源的分数稳定在六分上下'],
-      nextPractice: ['针对判断题做两组对照练习', '每周一篇小作文，重点看段落衔接'] },
-    { window: '2026-W39', windowStart: '2026-09-21', windowEnd: '2026-09-27',
-      observations: ['段落大意题的错误集中在细节型干扰项', '简答题开始能把原文的同义替换找出来'],
-      changes: ['简答题的定位速度明显变快', '是非题仍然把作者观点当成事实'],
-      nextPractice: ['练习是非题与判断题的边界', '做一套限时简答题'] },
-    { window: '2026-W40', windowStart: '2026-09-28', windowEnd: '2026-10-04',
-      observations: ['摘要填空的语法形式判断更稳定', '写作语法的错误集中在从句与时态'],
-      changes: ['摘要填空的得分从五分提到六分半'],
-      nextPractice: ['针对从句结构做一组语法修正', '摘要填空做两篇计时练习'] },
-    { window: '2026-W41', windowStart: '2026-10-05', windowEnd: '2026-10-11',
-      observations: ['判断题的证据定位已经能给出原文句子', '阅读整体节奏偏慢，后半部分容易赶时间'],
-      changes: ['判断题的错误与未提及开始分开判断', '写作任务回应的分数持续上升'],
-      nextPractice: ['阅读计时：每篇控制在二十分钟内', '继续练习段落大意配对'] },
-  ];
 
   const job = (id, jobKind, status, dedupeKey) => ({ id, jobKind, userId: 'local', status, priority: 0,
     scheduledAt: '2026-10-03T00:00:00Z', lockedAt: null, heartbeatAt: null, attempts: 1, maxAttempts: 3,
@@ -152,14 +138,8 @@ MOCK = r"""
         dayList.map((d) => job('job-' + d, 'daily_journal', 'completed', 'daily_journal:local:' + d)) };
       case 'journal_get_daily': return { ok: true, data: journals[args.query.journalDate] || journalShell(args.query.journalDate, {}) };
       case 'memory_catalog_list': return { ok: true, data: { userId: 'local', entries: catalog, truncated: false } };
-      case 'weekly_digest_list': return { ok: true, data: scenario === 'empty' ? [] : WEEKS };
-      case 'study_plan_get_latest': return { ok: true, data: { plan: { id: 'plan-1', userId: 'local', goal: '复习判断题边界', availableMinutes: 45,
-        targetDate: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }, items: [
-        { id: 'spi-1', planId: 'plan-1', skillProbe: { skillKey: 'reading.tfng', probeKind: 'contrastive_pair' },
-          whyText: '用两组“错误 / 未提及”对照题，练习定位原文证据。', estimatedMinutes: 15, done: false, createdAt: '2026-10-01T00:00:00Z' },
-        { id: 'spi-2', planId: 'plan-1', skillProbe: 'reading.matching_headings',
-          whyText: '段落大意的干扰项要逐段排除。', estimatedMinutes: 10, done: false, createdAt: '2026-10-01T00:00:00Z' }
-      ] } };
+      case 'weekly_report_current': return { ok: true, data: window.__weeklyReports(weeklyScenario).current };
+      case 'weekly_report_list': return { ok: true, data: window.__weeklyReports(weeklyScenario).list };
       case 'learning_observations_get_by_ids': return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations',
         projectorVersion: 1, ledgerInputHash: 'ledger', observationOutputHash: 'obs', generatedAt: '2026-10-02T23:00:00Z',
         freshness: 'fresh', observations: observations(args.ids || []), missingIds: [] } };
@@ -200,11 +180,22 @@ def settle(page, selector: str) -> None:
 
 def capture(browser, scenario: str, filename: str, width: int, height: int, route: str, ready: str,
             metrics: dict, errors: list[str]) -> None:
-    page = browser.new_page(viewport={"width": width, "height": height}, reduced_motion="reduce")
+    page = browser.new_page(viewport={"width": width, "height": height}, reduced_motion="reduce",
+                            timezone_id="Asia/Shanghai")
     page.on("pageerror", lambda error: errors.append(f"pageerror: {error}"))
-    page.add_init_script(f"window.__notebookScenario = {json.dumps(scenario)};\n{MOCK}")
+    page.add_init_script(f"window.__notebookScenario = {json.dumps(scenario)};\n{WEEKLY_MOCK}\n{MOCK}")
     page.goto(f"{BASE_URL}/#{route}", wait_until="domcontentloaded", timeout=60_000)
     settle(page, ready)
+    if route == "/notebook":
+        metrics[f"{filename}:weeks"] = page.evaluate(
+            """() => [...document.querySelectorAll('[data-notebook-week]')].map((node) => ({
+              window: node.dataset.notebookWeek,
+              state: node.dataset.weekState,
+              stateLine: node.querySelector('[data-week-state-line]')?.textContent.trim() || '',
+              blocks: [...node.querySelectorAll('[data-week-block]')].map((block) => block.dataset.weekBlock),
+              charts: node.querySelectorAll('svg[role=img][aria-label]').length,
+            }))"""
+        )
     if route == "/notebook" and scenario == "full":
         metrics[filename] = page.evaluate(
             """() => [...document.querySelectorAll('[data-notebook-index] .notebook-index__row')].map((node) => ({
@@ -215,6 +206,29 @@ def capture(browser, scenario: str, filename: str, width: int, height: int, rout
         )
     page.screenshot(path=str(REPORTS / filename), full_page=True)
     page.close()
+
+
+EXPECTED_WEEKS = {
+    "notebook-dev.png:weeks": [("2026-W42", "live"), ("2026-W41", "final"), ("2026-W40", "final")],
+    "notebook-empty-dev.png:weeks": [],
+    "notebook-no-ai-dev.png:weeks": [("2026-W41", "final_no_ai")],
+    "notebook-failed-dev.png:weeks": [("2026-W41", "narrative_failed")],
+}
+
+
+def weekly_problems(metrics: dict) -> list[str]:
+    """The weekly entries each scenario must render: order, state, and the full W41 block set."""
+    problems = []
+    for key, expected in EXPECTED_WEEKS.items():
+        weeks = metrics.get(key, [])
+        if [(week["window"], week["state"]) for week in weeks] != expected:
+            problems.append(f"{key}: unexpected weeks {weeks}")
+        for week in weeks:
+            if week["window"] == "2026-W41" and len(week["blocks"]) != 8:
+                problems.append(f"{key}: W41 should show all eight blocks, got {week['blocks']}")
+            if week["charts"] == 0:
+                problems.append(f"{key}: {week['window']} drew no chart")
+    return problems
 
 
 def main() -> int:
@@ -233,6 +247,10 @@ def main() -> int:
                         "[data-notebook] .notebook-entry", metrics, errors)
                 capture(browser, "empty", "notebook-empty-dev.png", 1440, 900, "/notebook",
                         "[data-notebook] .notebook-empty", metrics, errors)
+                capture(browser, "final_no_ai", "notebook-no-ai-dev.png", 390, 844, "/notebook",
+                        "[data-notebook-week]", metrics, errors)
+                capture(browser, "narrative_failed", "notebook-failed-dev.png", 1024, 768, "/notebook",
+                        "[data-notebook-week]", metrics, errors)
                 capture(browser, "full", "learner-dev.png", 1440, 900, "/reading/learner",
                         ".learner-model-page .list-row", metrics, errors)
             finally:
@@ -245,7 +263,9 @@ def main() -> int:
     print(json.dumps(metrics, ensure_ascii=False, indent=1))
     for line in errors:
         print(line, file=sys.stderr)
-    for name in ("notebook-dev.png", "notebook-dev-1024.png", "notebook-empty-dev.png", "learner-dev.png"):
+    errors.extend(weekly_problems(metrics))
+    for name in ("notebook-dev.png", "notebook-dev-1024.png", "notebook-empty-dev.png", "notebook-no-ai-dev.png",
+                 "notebook-failed-dev.png", "learner-dev.png"):
         print(f"wrote {REPORTS / name}")
     return 1 if errors else 0
 

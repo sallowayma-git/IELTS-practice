@@ -243,6 +243,7 @@ def main() -> int:
         run_command("Agent console durable state contract", ["node", "developer/tests/js/agentConsoleState.test.mjs"]),
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
         run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
+        run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Vue production build", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "build"]),
