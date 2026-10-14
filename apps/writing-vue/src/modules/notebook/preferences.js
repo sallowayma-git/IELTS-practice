@@ -34,6 +34,8 @@ export function userPreferenceNotes(preferences) {
       && typeof row.value === 'string'
       && row.value.trim())
     .map((row) => ({
+      // A preference is identified by scope + key; the same key may exist in two scopes.
+      id: `${row.scope || 'global'}:${row.preferenceKey}`,
       key: row.preferenceKey,
       scope: row.scope || 'global',
       text: row.value.trim(),

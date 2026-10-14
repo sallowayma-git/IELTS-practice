@@ -120,6 +120,23 @@ fn ratio(numerator: u32, denominator: u32) -> f64 {
     }
 }
 
+fn weighted_ratio(numerator: f64, denominator: f64) -> f64 {
+    if denominator > 0.0 {
+        round4(numerator / denominator)
+    } else {
+        0.0
+    }
+}
+
+/// Score weight as the formal scorer stored it; legacy or corrupt rows count once.
+fn score_weight(answer: &AttemptAnswer) -> f64 {
+    if answer.weight.is_finite() && answer.weight > 0.0 {
+        answer.weight
+    } else {
+        1.0
+    }
+}
+
 fn round4(value: f64) -> f64 {
     (value * 10_000.0).round() / 10_000.0
 }
@@ -136,6 +153,9 @@ struct KindAccumulator {
     unanswered: u32,
     elapsed_ms: u64,
     timed: u32,
+    /// Weighted like the submit score, so accuracy matches the formal result.
+    correct_weight: f64,
+    graded_weight: f64,
 }
 
 /// Build `(analysisSignals, singleAttemptAnalysis)` for a reading attempt.
@@ -164,6 +184,8 @@ pub fn build_reading_attempt_analysis(
     let mut kinds: BTreeMap<String, KindAccumulator> = BTreeMap::new();
     let mut kind_incorrect_ids: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut slowest_incorrect: Option<(&AttemptAnswer, u64)> = None;
+    let mut correct_weight = 0.0;
+    let mut graded_weight = 0.0;
 
     for answer in &rows {
         let outcome = question_outcome(answer);
@@ -172,6 +194,15 @@ pub fn build_reading_attempt_analysis(
         if answer.elapsed_ms > 0 {
             acc.elapsed_ms += answer.elapsed_ms;
             acc.timed += 1;
+        }
+        if outcome != QuestionOutcome::Ungraded {
+            let weight = score_weight(answer);
+            acc.graded_weight += weight;
+            graded_weight += weight;
+            if outcome == QuestionOutcome::Correct {
+                acc.correct_weight += weight;
+                correct_weight += weight;
+            }
         }
         match outcome {
             QuestionOutcome::Correct => {
@@ -216,7 +247,7 @@ pub fn build_reading_attempt_analysis(
     let incorrect = incorrect_ids.len() as u32;
     let unanswered = unanswered_ids.len() as u32;
     let graded_total = correct + incorrect + unanswered;
-    let accuracy = ratio(correct, graded_total);
+    let accuracy = weighted_ratio(correct_weight, graded_weight);
     let unanswered_rate = ratio(unanswered, graded_total);
     let changed_answer_count = timeline_available.then_some(changed_ids.len() as u32);
     let changed_answer_rate = changed_answer_count.map(|c| ratio(c, graded_total));
@@ -247,7 +278,7 @@ pub fn build_reading_attempt_analysis(
             correct: acc.correct,
             incorrect: acc.incorrect,
             unanswered: acc.unanswered,
-            accuracy: ratio(acc.correct, acc.total),
+            accuracy: weighted_ratio(acc.correct_weight, acc.graded_weight),
             avg_elapsed_ms: (acc.timed > 0).then(|| acc.elapsed_ms / u64::from(acc.timed)),
         })
         .collect();
@@ -452,6 +483,19 @@ mod tests {
             marked: false,
             answered_at: None,
         }
+    }
+
+    #[test]
+    fn accuracy_uses_the_stored_score_weight() {
+        // A 3-point checkbox right and a 1-point question wrong is 75%, as submit scores it.
+        let mut multi = answer("q1", json!(["A", "C", "E"]), Some(true), "checkbox");
+        multi.weight = 3.0;
+        let answers = vec![multi, answer("q2", json!("B"), Some(false), "checkbox")];
+        let (signals, analysis) = build_reading_attempt_analysis(&answers, 60_000).unwrap();
+        assert_eq!(analysis.summary.accuracy, 0.75);
+        assert_eq!(analysis.radar.by_question_kind[0].accuracy, 0.75);
+        assert_eq!((signals.correct_count, signals.incorrect_count), (1, 1));
+        assert!(analysis.diagnosis.iter().all(|d| d.kind != "overall_accuracy_low"));
     }
 
     #[test]

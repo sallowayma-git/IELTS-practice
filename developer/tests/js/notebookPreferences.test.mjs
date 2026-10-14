@@ -39,8 +39,15 @@ test('only the learner\'s own active text notes are listed', () => {
     { preferenceKey: 'user_note.b2', scope: 'global', value: true, status: 'active' },
     { preferenceKey: 'user_note.c3', scope: 'global', value: '解释用中文', status: 'disabled' }
   ])
-  assert.deepEqual(notes, [{ key: 'user_note.a1', scope: 'global', text: '先给我看例句', updatedAt: 't1' }])
+  assert.deepEqual(notes, [{ id: 'global:user_note.a1', key: 'user_note.a1', scope: 'global', text: '先给我看例句', updatedAt: 't1' }])
   assert.deepEqual(userPreferenceNotes(null), [])
+  // The same key in two scopes is two notes with distinct identities.
+  const scoped = userPreferenceNotes([
+    { preferenceKey: 'user_note.a1', scope: 'global', value: 'x', status: 'active' },
+    { preferenceKey: 'user_note.a1', scope: 'activity:reading', value: 'y', status: 'active' }
+  ])
+  assert.deepEqual(scoped.map((note) => note.id), ['global:user_note.a1', 'activity:reading:user_note.a1'])
+  assert.ok(component.includes(':key="note.id"') && !/busy\.has\(note\.key\)|editingKey === note\.key/.test(component))
 })
 
 test('new keys satisfy the host key rule', () => {

@@ -10,19 +10,19 @@
     <ul v-else-if="notes.length" class="list learner-prefs__list" aria-labelledby="learner-prefs-title">
       <li
         v-for="note in notes"
-        :key="note.key"
+        :key="note.id"
         class="list-row learner-prefs__row"
         :data-preference-key="note.key"
       >
         <form
-          v-if="editingKey === note.key"
+          v-if="editingKey === note.id"
           class="learner-prefs__form"
           data-preference-edit-form
           @submit.prevent="saveEdit(note)"
         >
-          <label class="sr-only" :for="`pref-edit-${note.key}`">修改这条偏好</label>
+          <label class="sr-only" :for="`pref-edit-${note.id}`">修改这条偏好</label>
           <input
-            :id="`pref-edit-${note.key}`"
+            :id="`pref-edit-${note.id}`"
             ref="editInput"
             v-model="editText"
             class="input"
@@ -34,8 +34,8 @@
             @keydown.esc.prevent="cancelEdit"
           >
           <span class="learner-prefs__count" aria-live="polite">{{ editLength }}/{{ MAX_PREFERENCE_CHARS }}</span>
-          <button class="btn btn-secondary btn-sm" type="submit" :disabled="busy.has(note.key)" data-preference-save>保存</button>
-          <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.key)" @click="cancelEdit">取消</button>
+          <button class="btn btn-secondary btn-sm" type="submit" :disabled="busy.has(note.id)" data-preference-save>保存</button>
+          <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.id)" @click="cancelEdit">取消</button>
         </form>
         <template v-else>
           <p class="learner-prefs__text">
@@ -43,8 +43,8 @@
             <span data-preference-text>{{ note.text }}</span>
           </p>
           <div class="learner-prefs__actions">
-            <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.key)" data-preference-edit @click="startEdit(note)">修改</button>
-            <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.key)" data-preference-delete @click="remove(note)">删除</button>
+            <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.id)" data-preference-edit @click="startEdit(note)">修改</button>
+            <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(note.id)" data-preference-delete @click="remove(note)">删除</button>
           </div>
         </template>
       </li>
@@ -158,7 +158,7 @@ async function add() {
 
 async function startEdit(note) {
   clearMessages()
-  editingKey.value = note.key
+  editingKey.value = note.id
   editText.value = note.text
   await nextTick()
   const input = Array.isArray(editInput.value) ? editInput.value[0] : editInput.value
@@ -175,7 +175,7 @@ async function saveEdit(note) {
   const problem = preferenceDraftProblem(editText.value)
   if (problem) { error.value = problem; return }
   if (editText.value.trim() === note.text) { cancelEdit(); return }
-  setBusy(note.key, true)
+  setBusy(note.id, true)
   try {
     await putExplicitPreference({ preferenceKey: note.key, scope: note.scope, value: editText.value.trim() })
     cancelEdit()
@@ -184,14 +184,14 @@ async function saveEdit(note) {
   } catch (failure) {
     error.value = preferenceErrorMessage(failure, '没能修改这条偏好，请稍后再试。')
   } finally {
-    setBusy(note.key, false)
+    setBusy(note.id, false)
   }
 }
 
 async function remove(note) {
   if (!window.confirm(`删除这条偏好？\n「${note.text}」`)) return
   clearMessages()
-  setBusy(note.key, true)
+  setBusy(note.id, true)
   try {
     await deleteExplicitPreference({ preferenceKey: note.key, scope: note.scope })
     notice.value = '已删除。'
@@ -199,7 +199,7 @@ async function remove(note) {
   } catch (failure) {
     error.value = preferenceErrorMessage(failure, '没能删除这条偏好，请稍后再试。')
   } finally {
-    setBusy(note.key, false)
+    setBusy(note.id, false)
   }
 }
 
