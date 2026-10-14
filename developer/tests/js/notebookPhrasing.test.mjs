@@ -33,8 +33,8 @@ const BAND = { completed: 1, degraded: 0, averageBand: 6.5 }
 // One scenario per (fact type, condition key): journal facts + context that must select it.
 const DAILY_SCENARIOS = [
   ['title', 'quiet', { attemptsCount: 0 }],
-  ['title', 'improved', { attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }] }],
-  ['title', 'recurring', { attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: -0.4 }] }],
+  ['title', 'improved', { attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }] }],
+  ['title', 'recurring', { attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: -0.4, trend: 'recurring' }] }],
   ['title', 'first', { attemptsCount: 2 }, { previousDay: null }],
   ['title', 'gap', { attemptsCount: 2 }, { previousDay: '2026-10-01' }],
   ['title', 'several', { attemptsCount: 2 }],
@@ -59,9 +59,9 @@ const DAILY_SCENARIOS = [
   ['degraded', 'several', { writingEvalSummary: { completed: 3, degraded: 2, averageBand: 6 } }],
   ['coach', 'default', { coachFeedbackCount: 3 }],
   ['reask', 'default', { coachReaskCount: 2 }],
-  ['changeLead', 'both', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: -0.2 }] }],
-  ['changeLead', 'improved', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }] }],
-  ['changeLead', 'recurring', { skillDeltas: [{ skillKey: 'reading.tfng', delta: -0.4 }] }]
+  ['changeLead', 'both', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'reading.yng', delta: -0.2, trend: 'recurring' }] }],
+  ['changeLead', 'improved', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }] }],
+  ['changeLead', 'recurring', { skillDeltas: [{ skillKey: 'reading.tfng', delta: -0.4, trend: 'recurring' }] }]
 ]
 
 const sheetOf = (facts, context = { previousDay: '2026-10-06' }, day = DAY) => factSheet(facts, changes(facts), day, context)
@@ -149,8 +149,8 @@ test('condition keys pick the edge cases: quiet, first page, long gap, single, z
   assert.equal(key('opening', { attemptsCount: 1 }, {}), 'default')
   assert.equal(key('opening', { attemptsCount: 1 }, { previousDay: undefined }), 'default')
   // Zero misses: nothing recurring means no lead about trouble, only the good half.
-  assert.equal(key('changeLead', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.2 }] }), 'improved')
-  assert.equal(key('changeLead', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0 }] }), null)
+  assert.equal(key('changeLead', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.2, trend: 'improving' }] }), 'improved')
+  assert.equal(key('changeLead', { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0, trend: 'steady' }] }), null)
   assert.equal(key('changeLead', {}), null)
   // Singular / plural and timed / untimed.
   assert.equal(key('attempts', { attemptsCount: 1, timeSpentMs: 29_000 }), 'single', 'under half a minute is not a time')
@@ -168,7 +168,7 @@ test('the same date reads the same: stable across calls, order and what else was
     writingEvalSummary: BAND,
     coachFeedbackCount: 2,
     coachReaskCount: 1,
-    skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: -0.2 }]
+    skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'reading.yng', delta: -0.2, trend: 'recurring' }]
   }
   const render = (day) => JSON.stringify(buildNotebookEntry({ journalDate: day, facts }, new Map(), { previousDay: '2026-10-01' }))
   const once = sweep('2026-10-02', 14).map(render)
@@ -285,7 +285,7 @@ test('numbers and names come through verbatim; nothing is invented', () => {
         writingEvalSummary: { completed: 2, degraded: 1, averageBand: 6.5 },
         coachFeedbackCount: 11,
         coachReaskCount: 3,
-        skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: -0.1 }, { skillKey: 'reading.short_answer', delta: 0.9 }]
+        skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'reading.yng', delta: -0.1, trend: 'recurring' }, { skillKey: 'reading.short_answer', delta: 0.9, trend: 'improving' }]
       }
     }, new Map(), { previousDay: ISO(dayNumber(day) - 9) })
     const prose = entry.observations.join('')
@@ -326,7 +326,7 @@ test('missing facts omit their sentence: no holes, no dangling punctuation, no s
 })
 
 test('the ASCII skill name is set off from the Chinese around it', () => {
-  const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 1, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: 0.5 }] } })
+  const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 1, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: 0.5, trend: 'improving' }] } })
   assert.ok(entry.title.includes('「new criterion」'), entry.title)
   assert.deepEqual(entry.changes.improved, ['new criterion'], 'the 变化 rows keep the bare label')
 })
@@ -370,7 +370,7 @@ test('isPracticed: practice facts count, memory events alone do not', () => {
   assert.equal(isPracticed({ facts: { attemptsCount: 0 } }), false)
   assert.equal(isPracticed({ facts: { attemptsCount: 1 } }), true)
   assert.equal(isPracticed({ facts: { attemptsCount: 0, memoryEvents: [{ memoryId: 'x', changeKind: 'reinforced' }] } }), false)
-  assert.equal(isPracticed({ facts: { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.2 }] } }), true)
+  assert.equal(isPracticed({ facts: { skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.2, trend: 'improving' }] } }), true)
   assert.equal(isPracticed(null), false)
 })
 
@@ -382,15 +382,15 @@ test('a day with only memory events is titled as a note, not as a quiet or coach
 
 test('names carry the change lead: skills by name, at most three, ASCII names set off', () => {
   const entry = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [
-    { skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'reading.yng', delta: 0.3 }, { skillKey: 'writing.new_criterion', delta: 0.2 }, { skillKey: 'reading.short_answer', delta: 0.1 },
-    { skillKey: 'reading.matching_headings', delta: -0.2 }
+    { skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'reading.yng', delta: 0.3, trend: 'improving' }, { skillKey: 'writing.new_criterion', delta: 0.2, trend: 'improving' }, { skillKey: 'reading.short_answer', delta: 0.1, trend: 'improving' },
+    { skillKey: 'reading.matching_headings', delta: -0.2, trend: 'recurring' }
   ] } }, new Map(), { previousDay: '2026-10-06' })
   const quote = (label) => (/^[ -~]+$/.test(label) ? `「${label}」` : label)
   const [first, second, third, fourth] = entry.changes.improved.map(quote)
   assert.ok(entry.changeLead.includes(`${first}、${second}、${third}`), entry.changeLead)
   assert.ok(!entry.changeLead.includes(fourth), `only three names: ${entry.changeLead}`)
   assert.ok(entry.changeLead.includes('段落大意配对'), entry.changeLead)
-  const recurring = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: -0.2 }] } }, new Map(), { previousDay: '2026-10-06' })
+  const recurring = buildNotebookEntry({ journalDate: DAY, facts: { attemptsCount: 2, skillDeltas: [{ skillKey: 'writing.new_criterion', delta: -0.2, trend: 'recurring' }] } }, new Map(), { previousDay: '2026-10-06' })
   assert.ok(recurring.changeLead.includes('「new criterion」'), recurring.changeLead)
   assert.ok(!entry.changeLead.includes('个方面'), 'no counts in the lead')
 })
@@ -414,7 +414,7 @@ test('the day word appears at most once per entry, and only in the opening line'
       attemptsCount: 1 + (index % 4), timeSpentMs: index % 2 ? 0 : 1_500_000,
       writingEvalSummary: { completed: index % 3, degraded: index % 2, averageBand: 6 },
       coachFeedbackCount: index % 3, coachReaskCount: index % 2,
-      skillDeltas: [{ skillKey: 'reading.tfng', delta: index % 2 ? 0.3 : -0.3 }],
+      skillDeltas: [{ skillKey: 'reading.tfng', delta: index % 2 ? 0.3 : -0.3, trend: index % 2 ? 'improving' : 'recurring' }],
       memoryEvents: index % 5 ? [{ memoryId: 'm1', changeKind: 'reinforced' }, { memoryId: 'm1', changeKind: 'reinforced' }] : []
     }
     const memories = new Map([['m1', { id: 'm1', statement: '一条记忆', evidenceIds: [] }]])
@@ -496,10 +496,10 @@ test('noteAgain lines stand alone: they never point back at an earlier note', ()
 
 test('an all-ASCII skill list is set off once, not per name', () => {
   const facts = { attemptsCount: 2, skillDeltas: [
-    { skillKey: 'writing.new_criterion', delta: 0.4 }, { skillKey: 'writing.task1', delta: 0.3 }
+    { skillKey: 'writing.new_criterion', delta: 0.4, trend: 'improving' }, { skillKey: 'writing.task1', delta: 0.3, trend: 'improving' }
   ] }
   const sheet = factSheet(facts, changes(facts), DAY)
   assert.equal(sheet.improvedNames, '「' + changes(facts).improved.join('、') + '」', sheet.improvedNames)
-  const mixed = factSheet({ attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.new_criterion', delta: 0.3 }] }, changes({ skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4 }, { skillKey: 'writing.new_criterion', delta: 0.3 }] }), DAY)
+  const mixed = factSheet({ attemptsCount: 2, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'writing.new_criterion', delta: 0.3, trend: 'improving' }] }, changes({ skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, trend: 'improving' }, { skillKey: 'writing.new_criterion', delta: 0.3, trend: 'improving' }] }), DAY)
   assert.equal(mixed.improvedNames.split('「').length - 1, 1, 'a mixed list brackets only its ASCII name')
 })

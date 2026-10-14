@@ -31,7 +31,11 @@ test('entry prose carries words, not machinery or fake precision', () => {
       attemptsCount: 3,
       timeSpentMs: 3_120_000,
       writingEvalSummary: { completed: 1, degraded: 0, averageBand: 6.5 },
-      skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4123 }, { skillKey: 'reading.matching_headings', delta: -0.3 }],
+      skillDeltas: [
+        { skillKey: 'reading.tfng', delta: 0.4123, trend: 'improving' },
+        { skillKey: 'reading.matching_headings', delta: 0, trend: 'recurring' },
+        { skillKey: 'reading.summary_completion', delta: -0.2, trend: 'steady' }
+      ],
       memoryChanges: { newCandidates: 4 },
       memoryEvents: [
         { memoryId: 'mem-1', changeKind: 'reinforced', evidenceObservationIds: ['obs-1'] },
@@ -56,6 +60,13 @@ test('quiet days and malformed journals degrade honestly', () => {
   const quiet = buildNotebookEntry({ journalDate: '2026-10-01', facts: { attemptsCount: 0 } })
   assert.ok(BANK.title.quiet.includes(quiet.title), quiet.title)
   assert.deepEqual(quiet.changes, { improved: [], recurring: [] })
+  // Legacy journals stored the raw day mean as `delta` (always >= 0) with no
+  // trend; that must not be read as "在变好".
+  const legacy = buildNotebookEntry({
+    journalDate: '2026-10-01',
+    facts: { attemptsCount: 1, skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.8, evidenceCount: 2 }] }
+  })
+  assert.deepEqual(legacy.changes, { improved: [], recurring: [] })
   assert.equal(buildNotebookEntry({ journalDate: '2026-10-01' }), null)
   assert.equal(formatEntryDate('not-a-date'), 'not-a-date')
 })

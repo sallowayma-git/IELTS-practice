@@ -4,7 +4,9 @@
 use ielts_db::{
     build_daily_facts, insert_journal, load_latest_journal, migrate, open_connection, DbOpenOptions,
 };
-use ielts_domain::{DailyJournalStatus, MemoryChangeSummary, WritingEvalSummary};
+use ielts_domain::{
+    DailyJournalStatus, MemoryChangeSummary, SkillTrend, WritingEvalSummary, WritingEvaluationV4,
+};
 use rusqlite::params;
 use tempfile::tempdir;
 
@@ -48,7 +50,21 @@ fn seed_writing_eval(
         params![
             eval_id,
             attempt_id,
-            serde_json::json!({"overallBand": overall_band}).to_string(),
+            // Real persisted shape: a WritingEvaluationV4 with `score.overall`.
+            serde_json::json!({
+                "schemaVersion": 4,
+                "id": eval_id,
+                "status": "completed",
+                "stage": "finalizing",
+                "score": {
+                    "overall": overall_band,
+                    "taskResponse": overall_band,
+                    "coherence": overall_band,
+                    "lexical": overall_band,
+                    "grammar": overall_band
+                }
+            })
+            .to_string(),
             completed_at
         ],
     )
@@ -119,6 +135,104 @@ fn deterministic_facts_aggregate_writing_evals() {
     assert_eq!(facts.writing_eval_summary.completed, 2);
     assert_eq!(facts.writing_eval_summary.degraded, 0);
     assert!((facts.writing_eval_summary.average_band.unwrap() - 6.75).abs() < 0.01);
+}
+
+#[test]
+fn writing_eval_fixture_matches_persisted_dto() {
+    let (_dir, conn) = open_db();
+    seed_attempt(&conn, "att-w1", "2026-08-16T10:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-1", "att-w1", 7.0, "2026-08-16T10:30:00Z");
+    let json: String = conn
+        .query_row("SELECT result_json FROM writing_evaluations", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let parsed: WritingEvaluationV4 = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.score.unwrap().overall, 7.0);
+}
+
+#[test]
+fn writing_eval_average_is_none_when_no_completed_eval_has_a_score() {
+    let (_dir, conn) = open_db();
+    seed_attempt(&conn, "att-w1", "2026-08-16T10:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-1", "att-w1", 7.0, "2026-08-16T10:30:00Z");
+    // A completed evaluation without a score must not be averaged in as 0,
+    // and alone must not produce a fake 0 average.
+    conn.execute(
+        r#"UPDATE writing_evaluations SET result_json = '{"schemaVersion":4}'"#,
+        [],
+    )
+    .unwrap();
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.writing_eval_summary.completed, 1);
+    assert_eq!(facts.writing_eval_summary.average_band, None);
+
+    seed_attempt(&conn, "att-w2", "2026-08-16T11:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-2", "att-w2", 6.0, "2026-08-16T11:30:00Z");
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.writing_eval_summary.completed, 2);
+    assert_eq!(facts.writing_eval_summary.average_band, Some(6.0));
+}
+
+fn seed_skill_obs(conn: &rusqlite::Connection, id: &str, skill: &str, outcome: f64, at: &str) {
+    // Facts only read this projection; skip the event/catalog FKs.
+    conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
+    conn.execute(
+        "INSERT INTO learner_skill_observations (
+           id, user_id, event_id, skill_key, outcome, mapping_weight, evidence_weight,
+           novelty_weight, familiarity_weight, time_weight, error_type, context_json,
+           observed_at, asset_id, question_id
+         ) VALUES (?1, 'local', ?1, ?2, ?3, 1, 1, 1, 1, 1, NULL, '{}', ?4, 'asset', 'q')",
+        params![id, skill, outcome, at],
+    )
+    .unwrap();
+}
+
+#[test]
+fn skill_deltas_compare_today_with_prior_baseline_and_classify() {
+    let (_dir, conn) = open_db();
+    // improving: wrong before, right today.
+    seed_skill_obs(&conn, "o1", "reading.improve", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o2", "reading.improve", 1.0, "2026-08-16T10:00:00Z");
+    // recurring: failed before and fails again today.
+    seed_skill_obs(&conn, "o3", "reading.recur", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o4", "reading.recur", 0.0, "2026-08-16T10:00:00Z");
+    // recurring without history: failed twice today.
+    seed_skill_obs(&conn, "o5", "reading.twice", 0.0, "2026-08-16T10:00:00Z");
+    seed_skill_obs(&conn, "o6", "reading.twice", 0.0, "2026-08-16T11:00:00Z");
+    // steady: first contact, one correct answer, no baseline.
+    seed_skill_obs(&conn, "o7", "reading.new", 1.0, "2026-08-16T10:00:00Z");
+    // steady: a single slip on a skill that never failed before.
+    seed_skill_obs(&conn, "o8", "reading.slip", 1.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o9", "reading.slip", 0.0, "2026-08-16T10:00:00Z");
+    // Not practised today: no entry; tomorrow's observation is ignored.
+    seed_skill_obs(&conn, "o10", "reading.old", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o11", "reading.improve", 0.0, "2026-08-17T10:00:00Z");
+
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let got: Vec<(&str, f64, u64, SkillTrend)> = facts
+        .skill_deltas
+        .iter()
+        .map(|d| (d.skill_key.as_str(), d.delta, d.evidence_count, d.trend))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("reading.improve", 1.0, 1, SkillTrend::Improving),
+            ("reading.new", 0.0, 1, SkillTrend::Steady),
+            ("reading.recur", 0.0, 1, SkillTrend::Recurring),
+            ("reading.slip", -1.0, 1, SkillTrend::Steady),
+            ("reading.twice", 0.0, 2, SkillTrend::Recurring),
+        ]
+    );
+
+    // The trend survives persistence; legacy rows without it read as steady.
+    insert_journal(&conn, "local", &facts, None).unwrap();
+    let reloaded = load_latest_journal(&conn, "local", DAY).unwrap().unwrap();
+    assert_eq!(reloaded.facts.skill_deltas, facts.skill_deltas);
+    let legacy: ielts_domain::SkillDelta =
+        serde_json::from_str(r#"{"skillKey":"s","delta":0.8,"evidenceCount":2}"#).unwrap();
+    assert_eq!(legacy.trend, SkillTrend::Steady);
 }
 
 #[test]

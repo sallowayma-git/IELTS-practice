@@ -84,6 +84,13 @@ class JournalFactsTests(unittest.TestCase):
             SkillDelta(skillKey="s", delta=2.0)
         with self.assertRaises(ValidationError):
             SkillDelta(skillKey="s", delta=0.1, evidenceCount=-1)
+        self.assertEqual(delta.trend, "steady")
+        self.assertEqual(
+            SkillDelta(skillKey="s", delta=0.0, evidenceCount=2, trend="recurring").trend,
+            "recurring",
+        )
+        with self.assertRaises(ValidationError):
+            SkillDelta(skillKey="s", delta=0.1, trend="better")
 
     def test_writing_eval_summary(self) -> None:
         summary = WritingEvalSummary(completed=2, degraded=0, averageBand=6.5)

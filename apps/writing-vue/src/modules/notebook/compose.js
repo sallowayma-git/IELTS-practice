@@ -148,7 +148,11 @@ function memoryNotes(facts, memoriesById, day) {
   return notes
 }
 
-/** Skill labels that went up / down on the day, strongest first. */
+/**
+ * Skill labels the host classified as improving / recurring, strongest first.
+ * The host owns the rule (ielts-db journal `skill_trend`); a delta without a
+ * trend (journals written before it existed) is never read as a change.
+ */
 export function changes(facts) {
   const deltas = pick(facts, 'skillDeltas', 'skill_deltas')
   const improved = []
@@ -156,8 +160,9 @@ export function changes(facts) {
   for (const item of Array.isArray(deltas) ? deltas : []) {
     const delta = asNumber(pick(item, 'delta', 'delta'))
     const label = shortSkill(pick(item, 'skillKey', 'skill_key'))
-    if (delta > 0) improved.push({ label, delta })
-    if (delta < 0) recurring.push({ label, delta })
+    const trend = pick(item, 'trend', 'trend')
+    if (trend === 'improving') improved.push({ label, delta })
+    if (trend === 'recurring') recurring.push({ label, delta })
   }
   improved.sort((left, right) => right.delta - left.delta)
   recurring.sort((left, right) => left.delta - right.delta)

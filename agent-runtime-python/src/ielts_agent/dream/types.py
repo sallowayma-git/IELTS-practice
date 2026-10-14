@@ -17,7 +17,7 @@ Conventions mirror :mod:`ielts_agent.retrieval.types`:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -74,13 +74,17 @@ class SkillDelta(_StrictModel):
     """A single learner-skill proficiency change for the day (M7-03).
 
     Wire shape mirrors the Rust ``ielts_domain::SkillDelta`` serde projection:
-    only the skill key, signed delta, and supporting-evidence count leave the
-    host (private learner content is redacted before serialization).
+    only the skill key, signed delta, supporting-evidence count and the
+    host-derived trend leave the host (private learner content is redacted
+    before serialization). ``delta`` is today's mean outcome minus the prior
+    mean (0 without a baseline); ``trend`` defaults to ``steady`` for journals
+    written before it existed.
     """
 
     skill_key: str = Field(min_length=1, max_length=64, alias="skillKey")
     delta: float = Field(ge=-1.0, le=1.0)
     evidence_count: int = Field(default=0, ge=0, alias="evidenceCount")
+    trend: Literal["improving", "recurring", "steady"] = "steady"
 
 
 class JournalMemoryEvent(_StrictModel):

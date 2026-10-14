@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use ielts_domain::{
     DailyJournal, DailyJournalStatus, JournalFacts, JournalMemoryEvent, MemoryChangeSummary,
-    SkillDelta, WritingEvalSummary,
+    SkillDelta, SkillTrend, WritingEvalSummary,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
@@ -344,25 +344,18 @@ fn writing_eval_summary(
         )
         .optional()?
         .unwrap_or(0);
-    let avg_band: Option<f64> = {
-        let avg: f64 = conn
-            .query_row(
-                "SELECT COALESCE(AVG(json_extract(result_json, '$.overallBand')), 0)
-                 FROM writing_evaluations
-                 WHERE status = 'completed' AND result_json IS NOT NULL
-                   AND COALESCE(completed_at, updated_at) >= ?1
-                   AND COALESCE(completed_at, updated_at) < ?2",
-                params![day_start, day_end],
-                |row| row.get(0),
-            )
-            .optional()?
-            .unwrap_or(0.0);
-        if completed > 0 {
-            Some(avg)
-        } else {
-            None
-        }
-    };
+    // The persisted result is a `WritingEvaluationV4`: the band lives at
+    // `score.overall`. AVG ignores rows without a score, and yields NULL (None)
+    // when no completed evaluation carries one; never report 0 as an average.
+    let avg_band: Option<f64> = conn.query_row(
+        "SELECT AVG(json_extract(result_json, '$.score.overall'))
+         FROM writing_evaluations
+         WHERE status = 'completed' AND result_json IS NOT NULL
+           AND COALESCE(completed_at, updated_at) >= ?1
+           AND COALESCE(completed_at, updated_at) < ?2",
+        params![day_start, day_end],
+        |row| row.get(0),
+    )?;
     Ok(WritingEvalSummary {
         completed: completed as u64,
         degraded: degraded as u64,
@@ -370,35 +363,81 @@ fn writing_eval_summary(
     })
 }
 
+/// An observation with an outcome below this counts as a failed attempt.
+const SKILL_FAIL_OUTCOME: f64 = 0.5;
+/// Minimum rise of today's mean over the prior baseline to call it improving.
+const SKILL_IMPROVING_MIN_DELTA: f64 = 0.15;
+
+/// Per-skill change for the day against the learner's own history.
+///
+/// `delta = mean(outcome today) - mean(outcome before day_start)`, or 0 when
+/// the skill has no prior observation. Trend rule (first match wins):
+/// - `improving`: a prior baseline exists and `delta >= 0.15`;
+/// - `recurring`: today has a failed observation (outcome < 0.5) and the
+///   mistake repeats, i.e. the skill also failed before today, or failed at
+///   least twice today;
+/// - `steady`: everything else (including first contact with a skill).
 fn skill_deltas(
     conn: &Connection,
     user_id: &str,
     day_start: &str,
     day_end: &str,
 ) -> DbResult<Vec<SkillDelta>> {
-    // Aggregate skill observations for the day; the delta is the mean outcome
-    // change compared to the prior state. For determinism, we compute the mean
-    // outcome for the day per skill (bounded count).
     let mut stmt = conn.prepare(
-        "SELECT skill_key, COUNT(*), AVG(outcome)
+        "SELECT skill_key,
+                SUM(observed_at >= ?2),
+                AVG(CASE WHEN observed_at >= ?2 THEN outcome END),
+                SUM(observed_at >= ?2 AND outcome < ?5),
+                AVG(CASE WHEN observed_at < ?2 THEN outcome END),
+                SUM(observed_at < ?2 AND outcome < ?5)
          FROM learner_skill_observations
-         WHERE user_id = ?1 AND observed_at >= ?2 AND observed_at < ?3
+         WHERE user_id = ?1 AND observed_at < ?3
          GROUP BY skill_key
+         HAVING SUM(observed_at >= ?2) > 0
          ORDER BY skill_key
          LIMIT ?4",
     )?;
-    let rows = stmt.query_map(params![user_id, day_start, day_end, MAX_SKILL_DELTAS as i64], |row| {
-        Ok(SkillDelta {
-            skill_key: row.get(0)?,
-            evidence_count: row.get::<_, i64>(1)? as u64,
-            delta: row.get(2)?,
-        })
-    })?;
+    let rows = stmt.query_map(
+        params![
+            user_id,
+            day_start,
+            day_end,
+            MAX_SKILL_DELTAS as i64,
+            SKILL_FAIL_OUTCOME
+        ],
+        |row| {
+            let today_mean: f64 = row.get(2)?;
+            let prior_mean: Option<f64> = row.get(4)?;
+            let delta = prior_mean.map_or(0.0, |prior| today_mean - prior);
+            let trend = skill_trend(
+                prior_mean.is_some(),
+                delta,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(5)?,
+            );
+            Ok(SkillDelta {
+                skill_key: row.get(0)?,
+                evidence_count: row.get::<_, i64>(1)? as u64,
+                delta,
+                trend,
+            })
+        },
+    )?;
     let mut deltas = Vec::new();
     for row in rows {
         deltas.push(row?);
     }
     Ok(deltas)
+}
+
+fn skill_trend(has_baseline: bool, delta: f64, failed_today: i64, failed_before: i64) -> SkillTrend {
+    if has_baseline && delta >= SKILL_IMPROVING_MIN_DELTA {
+        return SkillTrend::Improving;
+    }
+    if failed_today >= 1 && (failed_before >= 1 || failed_today >= 2) {
+        return SkillTrend::Recurring;
+    }
+    SkillTrend::Steady
 }
 
 /// Today-scoped observation IDs for Dream evidence (M7-06). Most-recent-first,
@@ -676,13 +715,16 @@ fn daily_source_hash(
         )
         .as_bytes(),
     );
-    let mut skill_map: BTreeMap<&str, (u64, f64)> = BTreeMap::new();
+    let mut skill_map: BTreeMap<&str, (u64, f64, SkillTrend)> = BTreeMap::new();
     for delta in skill_deltas {
-        skill_map.insert(&delta.skill_key, (delta.evidence_count, delta.delta));
+        skill_map.insert(
+            &delta.skill_key,
+            (delta.evidence_count, delta.delta, delta.trend),
+        );
     }
     hasher.update(b":skills=");
-    for (key, (count, delta)) in &skill_map {
-        hasher.update(format!("{key}={count}:{delta};").as_bytes());
+    for (key, (count, delta, trend)) in &skill_map {
+        hasher.update(format!("{key}={count}:{delta}:{};", trend.as_str()).as_bytes());
     }
     hasher.update(
         format!(

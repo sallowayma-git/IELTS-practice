@@ -80,9 +80,13 @@ pub struct WritingEvalSummary {
     pub average_band: Option<f64>,
 }
 
-/// Learner skill delta for a single skill over the day. Private memory redaction
-/// is applied before any value leaves the host; only the skill_key and signed
-/// delta are exposed.
+/// Learner skill change for a single skill over the day. Private memory
+/// redaction is applied before any value leaves the host; only the skill_key,
+/// signed delta, evidence count and derived trend are exposed.
+///
+/// `delta` is today's mean outcome minus the learner's prior mean outcome for
+/// the skill (observations before the day). It is `0.0` when there is no prior
+/// baseline: a first-time skill has no measurable change.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(
@@ -94,6 +98,36 @@ pub struct SkillDelta {
     pub skill_key: String,
     pub delta: f64,
     pub evidence_count: u64,
+    /// Classification derived by the host. Journals persisted before this
+    /// field existed deserialize as `steady` (their `delta` was a raw mean,
+    /// not a change, so it must not be read as improvement).
+    #[serde(default)]
+    pub trend: SkillTrend,
+}
+
+/// Day-over-baseline classification of a skill (see `ielts_db::journal`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(TS),
+    ts(export, export_to = "../../apps/writing-vue/src/types/generated/")
+)]
+pub enum SkillTrend {
+    Improving,
+    Recurring,
+    #[default]
+    Steady,
+}
+
+impl SkillTrend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Improving => "improving",
+            Self::Recurring => "recurring",
+            Self::Steady => "steady",
+        }
+    }
 }
 
 /// Memory mutation summary for a day. Private memory content is never copied;
