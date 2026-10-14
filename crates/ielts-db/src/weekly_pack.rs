@@ -166,7 +166,13 @@ pub(crate) struct Obs {
     pub(crate) at: String,
 }
 
+/// The window's observations, with each essay's writing scores reduced to its
+/// canonical evaluation (see `canonical_writing`).
 pub(crate) fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
+    Ok(canonical_writing(conn, raw_window_observations(conn, user_id, from, to)?))
+}
+
+fn raw_window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
     let mut statement = conn.prepare(&format!(
         "SELECT id, observation_type, polarity, value_num, value_text, payload_json, observed_at
            FROM learner_observations
@@ -193,6 +199,57 @@ pub(crate) fn window_observations(conn: &Connection, user_id: &str, from: &str, 
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+fn is_writing_score(observation: &Obs) -> bool {
+    matches!(observation.kind.as_str(), "writing.evaluation.overall_band" | "writing.evaluation.criterion_score")
+}
+
+/// The evaluation a writing ledger event reports on.
+pub(crate) fn evaluation_of(conn: &Connection, event: &str) -> String {
+    conn.query_row(
+        "SELECT COALESCE(json_extract(payload_json, '$.evaluationId'), '') FROM learning_events WHERE id = ?1",
+        [event],
+        |row| row.get(0),
+    )
+    .unwrap_or_default()
+}
+
+/// Creation order of the attempt's evaluations, oldest first: the order
+/// `load_evaluation_for_attempt` picks the canonical one by.
+fn evaluation_ranks(conn: &Connection, attempt: &str) -> BTreeMap<String, usize> {
+    let ids = conn
+        .prepare(
+            "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
+              ORDER BY COALESCE(started_at, updated_at), rowid, id",
+        )
+        .and_then(|mut statement| {
+            statement.query_map([attempt], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+    ids.into_iter().enumerate().map(|(rank, id)| (id, rank)).collect()
+}
+
+/// A re-evaluated essay emits an overall band and four criterion scores per
+/// evaluation, all under one attempt. Keep only the scores of its canonical
+/// evaluation: the newest by creation, as history shows it, even when an older
+/// provider call finished after its retry. Everything downstream (the pack's
+/// lines, header, count and citable ids; the report's writing facts) then sees
+/// one essay with one consistent set of scores.
+pub(crate) fn canonical_writing(conn: &Connection, window: Vec<Obs>) -> Vec<Obs> {
+    type Rank = (Option<usize>, String, String);
+    let mut best: BTreeMap<String, (Rank, String)> = BTreeMap::new();
+    let mut ranks: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
+        let (attempt, event) = (field(&o.payload, "attemptId"), field(&o.payload, "eventId"));
+        let order = ranks.entry(attempt.to_owned()).or_insert_with(|| evaluation_ranks(conn, attempt));
+        let rank = (order.get(&evaluation_of(conn, event)).copied(), o.at.clone(), o.id.clone());
+        if best.get(attempt).is_none_or(|(current, _)| rank > *current) {
+            best.insert(attempt.to_owned(), (rank, event.to_owned()));
+        }
+    }
+    let canonical: BTreeSet<String> = best.into_values().map(|(_, event)| event).collect();
+    window.into_iter().filter(|o| !is_writing_score(o) || canonical.contains(field(&o.payload, "eventId"))).collect()
+}
+
 fn is_scored(observation: &Obs) -> bool {
     match observation.kind.as_str() {
         "reading.question.outcome" => observation.polarity.is_some(),
@@ -210,22 +267,8 @@ pub fn weekly_observation_count(
     end: DateTime<Utc>,
 ) -> DbResult<usize> {
     ensure_observations_fresh(conn)?;
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM learner_observations
-          WHERE user_id = ?1 AND projector_key = ?2 AND projector_version = ?3
-            AND ((observation_type = 'reading.question.outcome' AND polarity IS NOT NULL)
-                 OR observation_type = 'writing.evaluation.overall_band')
-            AND julianday(observed_at) > julianday(?4) AND julianday(observed_at) <= julianday(?5)",
-        params![
-            user_id,
-            LEARNING_OBSERVATION_PROJECTOR_KEY,
-            LEARNING_OBSERVATION_PROJECTOR_VERSION,
-            instant(start),
-            instant(end)
-        ],
-        |row| row.get(0),
-    )?;
-    Ok(count as usize)
+    let window = window_observations(conn, user_id, &instant(start), &instant(end))?;
+    Ok(window.iter().filter(|o| is_scored(o)).count())
 }
 
 /// A reading passage as the learner met it: title and the answer key, never its text.
@@ -388,12 +431,12 @@ fn writing_lines(window: &[Obs]) -> Vec<WeeklyLine> {
     let mut criteria: BTreeMap<&str, Vec<(&str, f64)>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.criterion_score") {
         if let (Some(name), Some(value)) = (o.value_text.as_deref(), o.value_num) {
-            criteria.entry(field(&o.payload, "attemptId")).or_default().push((name, value));
+            criteria.entry(field(&o.payload, "eventId")).or_default().push((name, value));
         }
     }
     let mut lines = Vec::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
-        let mut scores = criteria.get(field(&o.payload, "attemptId")).cloned().unwrap_or_default();
+        let mut scores = criteria.get(field(&o.payload, "eventId")).cloned().unwrap_or_default();
         scores.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(right.0)));
         let lowest: Vec<String> = scores.iter().take(2).map(|(name, value)| format!("{name} {value}")).collect();
         let task = o.payload.get("taskType").and_then(Value::as_str).unwrap_or("writing");

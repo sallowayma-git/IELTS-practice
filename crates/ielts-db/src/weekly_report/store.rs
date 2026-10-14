@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use ielts_domain::{WeeklyMemoryChange, WeeklyReport, WEEKLY_REPORT_SCHEMA_VERSION};
 use rusqlite::{params, Connection};
 
-use crate::dream::{normalize_user_id, WEEKLY_KEY_MATCH};
+use crate::dream::normalize_user_id;
 use crate::sqlite::{DbError, DbResult};
 
 const MAX_REPORTS: u32 = 52;
@@ -22,22 +22,28 @@ pub fn weekly_mutation_request_id(run_id: &str) -> String {
     format!("{MUTATION_BATCH_PREFIX}{run_id}")
 }
 
-/// What every weekly run of the window `key` changed in memory, oldest first.
-/// Read from the promotion records of each run's batch, so a change an earlier,
-/// failed attempt already made still reaches the report of the run that closes
-/// the window, though that run's own validator refuses to make it again.
-pub fn weekly_memory_changes(conn: &Connection, user_id: &str, key: &str) -> DbResult<Vec<WeeklyMemoryChange>> {
-    let mut statement = conn.prepare(&format!(
+/// What weekly runs changed in memory since the last completed weekly run,
+/// oldest first: the changes the next completed report owes. Read from the
+/// promotion records of each run's batch, so a change an earlier, failed
+/// attempt already made (of this weekend or of one the closing run folds in)
+/// still reaches the report, though no later run makes it again. Each change
+/// lands in exactly one completed report: the first one after it.
+pub fn weekly_memory_changes(conn: &Connection, user_id: &str) -> DbResult<Vec<WeeklyMemoryChange>> {
+    let mut statement = conn.prepare(
         "SELECT c.action, c.resolved_memory_id, COALESCE(m.content, '')
            FROM dream_runs r
-           JOIN memory_candidate_batches b ON b.request_id = ?3 || r.id
+           JOIN memory_candidate_batches b ON b.request_id = ?2 || r.id
            JOIN memory_candidates c ON c.batch_id = b.id
            LEFT JOIN memory_items m ON m.id = c.resolved_memory_id
-          WHERE r.user_id = ?1 AND {WEEKLY_KEY_MATCH}
+          WHERE r.user_id = ?1 AND r.input_hash LIKE 'weekly:%'
+            AND julianday(r.created_at) > COALESCE(
+                  (SELECT MAX(julianday(done.created_at)) FROM dream_runs done
+                    WHERE done.user_id = ?1 AND done.status = 'completed' AND done.input_hash LIKE 'weekly:%'),
+                  0)
             AND c.disposition = 'promoted' AND c.resolved_memory_id IS NOT NULL
-          ORDER BY c.updated_at, c.id"
-    ))?;
-    let rows = statement.query_map(params![normalize_user_id(user_id), key, MUTATION_BATCH_PREFIX], |row| {
+          ORDER BY c.updated_at, c.id",
+    )?;
+    let rows = statement.query_map(params![normalize_user_id(user_id), MUTATION_BATCH_PREFIX], |row| {
         Ok(WeeklyMemoryChange { action: row.get(0)?, memory_id: row.get(1)?, statement: row.get(2)? })
     })?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)

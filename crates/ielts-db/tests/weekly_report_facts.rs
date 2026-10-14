@@ -1,11 +1,13 @@
-//! Weekly facts read the essay the history view shows: the newest evaluation by
-//! creation, not the provider call that happened to finish last.
+//! Weekly facts and the weekly model pack read the essay the history view
+//! shows: the newest evaluation by creation, not the provider call that
+//! happened to finish last.
 
 use chrono::{Duration, FixedOffset, Utc};
 use ielts_db::weekly_report::week_facts;
 use ielts_db::{
     finish_evaluation, load_evaluation_for_attempt, migrate, open_connection, prepare_evaluation,
-    save_writing_draft, start_evaluation, DbOpenOptions, DeterministicProvider, StartEvaluationCommand,
+    save_writing_draft, start_evaluation, weekly_observation_count, weekly_pack, DbOpenOptions,
+    DeterministicProvider, StartEvaluationCommand,
 };
 use ielts_domain::domain::{Activity, AttemptMode, WritingTaskType};
 use ielts_domain::dto::{SaveDraftCommand, WritingScoreV4};
@@ -59,4 +61,23 @@ fn a_retry_beats_the_original_call_that_finishes_after_it() {
     assert!(essay.criteria.iter().all(|(_, value)| *value != 3.0), "no criterion of the late call: {:?}", essay.criteria);
     assert_eq!(essay.criteria.len(), 4);
     assert_eq!(essay.session_id.as_deref(), Some(retry.session.id.as_str()));
+
+    // The model pack sees the same single essay: one line, one scored
+    // observation, and the stale call's band is not a citable id.
+    let stale: Vec<String> = {
+        let mut statement = conn
+            .prepare("SELECT id FROM learner_observations WHERE observation_type LIKE 'writing.evaluation.%' AND value_num = 3.0")
+            .unwrap();
+        statement.query_map([], |row| row.get(0)).unwrap().map(Result::unwrap).collect()
+    };
+    assert_eq!(stale.len(), 5, "the late call's band and four criteria were projected");
+    let (start, end) = (now - Duration::days(1), now + Duration::days(1));
+    let pack = weekly_pack(&conn, "local", start, end).unwrap();
+    let writing: Vec<_> = pack.lines.iter().filter(|line| line.kind == "writing").collect();
+    assert_eq!(writing.len(), 1, "{writing:?}");
+    assert!(writing[0].text.contains(&format!("band {}", score.overall)), "{}", writing[0].text);
+    assert_eq!(writing[0].ids, vec![essay.obs_id.clone()]);
+    assert!(stale.iter().all(|id| !pack.evidence_ids().contains(id)));
+    assert_eq!(pack.observation_count, 1);
+    assert_eq!(weekly_observation_count(&conn, "local", start, end).unwrap(), 1);
 }

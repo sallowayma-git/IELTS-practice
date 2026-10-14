@@ -147,7 +147,7 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 /// Record a failed weekly attempt (anchored on the journal of the window's end
 /// day) so the weekend is retried on a later day instead of being treated as an
 /// empty success.
-fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
+pub(crate) fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
     // The failed run commits on its own: it is what bounds retries to one a day,
@@ -162,7 +162,7 @@ fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::
 /// week's final report, and the next window starts after it. The report is built
 /// first and stored in the same transaction as the run that closes the window,
 /// so a report that cannot be built or stored leaves the window due.
-fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
+pub(crate) fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
     let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi)?;

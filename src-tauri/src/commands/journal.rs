@@ -456,11 +456,11 @@ fn apply_weekly_submission(
     // together. Should that fail after memory changed, a retry's validator
     // refuses to apply the changes twice (an ADD is a duplicate key, a
     // SUPERSEDE or ARCHIVE target is no longer active, a REINFORCE has no newer
-    // evidence), and the report lists every change any run of this window made,
-    // read from the promotion records, so the retry's report still carries them.
+    // evidence), and the report lists every change made since the last
+    // completed run, read from the promotion records, so it still carries them.
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
-        report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id, &window.key)?;
+        report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id)?;
         ielts_db::put_weekly_report(&tx, run_id, &report, now)?;
         ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report), now)?;
         tx.commit()?;
@@ -483,8 +483,9 @@ fn apply_weekly_submission(
 }
 
 /// The report a weekly run leaves behind: the window's blocks as they stand
-/// now, the narrative that passed the number whitelist, and what the run
-/// changed in memory.
+/// now, the narrative that passed the number whitelist, and what weekly runs
+/// changed in memory since the last completed one. A failed or no-model report
+/// carries those changes too: a failed attempt may already have made them.
 pub(crate) fn finished_report(
     db: &AppDb,
     window: &WeeklyWindow,
@@ -501,6 +502,7 @@ pub(crate) fn finished_report(
                 tracing::info!(refused, "weekly narrative items refused by the number whitelist");
             }
         }
+        report.memory_changes = ielts_db::weekly_memory_changes(conn, "local")?;
         Ok(report)
     })
     .map_err(|error: ielts_db::DbError| ApplicationError::new("weekly.report_failed", error.to_string(), true))
@@ -796,6 +798,73 @@ mod tests {
         let changes: Vec<(&str, &str)> =
             reports[0].memory_changes.iter().map(|change| (change.action.as_str(), change.memory_id.as_str())).collect();
         assert_eq!(changes, vec![("ADD", written[0].0.as_str())]);
+    }
+
+    /// Changes of one run, by action and memory id.
+    fn changes(report: &WeeklyReport) -> Vec<(String, String)> {
+        report.memory_changes.iter().map(|change| (change.action.clone(), change.memory_id.clone())).collect()
+    }
+
+    /// Fail W41's run after its ADD was promoted (the report write aborts).
+    fn a_week_whose_report_write_failed(db: &AppDb, dir: &std::path::Path) -> (WeeklyWindow, Vec<(String, String)>) {
+        import_passage(db, dir, "P1");
+        submit(db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        let window = saturday();
+        let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        let miss = pack.lines.iter().find(|line| line.kind == "miss").unwrap().ids[0].clone();
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(db, "local") };
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        let submission = params(serde_json::json!({
+            "narrative": narrative_json(),
+            "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
+        }));
+        run_weekly_consolidation(db, &query, submission, &window).unwrap_err();
+        db.with_conn(|conn| Ok(conn.execute_batch("DROP TRIGGER fail_report;")?)).unwrap();
+        let written = memories(db);
+        assert_eq!(written.len(), 1);
+        (window, vec![("ADD".to_owned(), written[0].0.clone())])
+    }
+
+    /// Review on #243: the change a failed attempt made is shown on the failed
+    /// report, and the W42 run that folds W41 in reports it as its own.
+    #[test]
+    fn a_change_made_before_a_report_failure_reaches_the_failed_and_the_folded_reports() {
+        let (dir, db) = temp_db();
+        let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
+        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}))
+            .unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, WeeklyReportState::NarrativeFailed);
+        assert_eq!(changes(&reports[0]), added);
+
+        let w42 = window("2026-W42", "2026-10-03T04:00:00Z", "2026-10-17T09:30:00Z");
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
+        let folded = run_weekly_consolidation(&db, &query, params(serde_json::json!({"narrative": narrative_json()})), &w42)
+            .unwrap();
+        assert_eq!(folded.accepted, 0);
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.iter().map(|report| report.window.as_str()).collect::<Vec<_>>(), vec!["2026-W42"]);
+        assert_eq!(changes(&reports[0]), added, "the folded week's change is on the report that closes it");
+
+        // Reported once: nothing is owed to the next week's report.
+        assert!(db.with_conn(|conn| ielts_db::weekly_memory_changes(conn, "local")).unwrap().is_empty());
+    }
+
+    /// Review on #243: with the model gone, the no-model report that closes the
+    /// week still lists the change the failed attempt made.
+    #[test]
+    fn a_change_made_before_a_report_failure_reaches_the_no_model_report() {
+        let (dir, db) = temp_db();
+        let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
+        crate::app::daily_worker::record_weekly_without_ai(&db, &w41).unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, WeeklyReportState::FinalNoAi);
+        assert_eq!(changes(&reports[0]), added);
     }
 
     /// The whole weekly path with a fake model, on real submissions: the pack the

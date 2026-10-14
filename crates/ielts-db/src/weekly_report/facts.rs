@@ -14,7 +14,7 @@ use serde_json::Value;
 use crate::cognitive_read::ensure_observations_fresh;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
-use crate::weekly_pack::{field, instant, window_observations, AssetBook, Obs};
+use crate::weekly_pack::{evaluation_of, field, instant, window_observations, AssetBook, Obs};
 
 /// One finished reading attempt.
 #[derive(Debug, Clone, PartialEq)]
@@ -194,32 +194,6 @@ fn writing_session(conn: &Connection, evaluation: &str) -> Option<String> {
     .ok()
 }
 
-/// The evaluation a writing ledger event reports on.
-fn evaluation_of(conn: &Connection, event: &str) -> String {
-    conn.query_row(
-        "SELECT COALESCE(json_extract(payload_json, '$.evaluationId'), '') FROM learning_events WHERE id = ?1",
-        [event],
-        |row| row.get(0),
-    )
-    .unwrap_or_default()
-}
-
-/// Creation order of the attempt's evaluations, oldest first: the order
-/// `load_evaluation_for_attempt` picks the canonical one by. A retry outranks
-/// the call it retried even when that older call finishes last.
-fn evaluation_ranks(conn: &Connection, attempt: &str) -> BTreeMap<String, usize> {
-    let ids = conn
-        .prepare(
-            "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
-              ORDER BY COALESCE(started_at, updated_at), rowid, id",
-        )
-        .and_then(|mut statement| {
-            statement.query_map([attempt], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()
-        })
-        .unwrap_or_default();
-    ids.into_iter().enumerate().map(|(rank, id)| (id, rank)).collect()
-}
-
 fn reading_facts(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -> Vec<ReadingAttemptFact> {
     let mut outcomes: BTreeMap<&str, (u32, u32)> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "reading.question.outcome") {
@@ -326,12 +300,9 @@ fn redo_facts(window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -
         .collect()
 }
 
-/// One fact per essay. A re-evaluated attempt emits a fresh overall band and four
-/// criterion scores per evaluation, all keyed by the same attempt. Only its
-/// canonical evaluation counts: the newest by creation, as the history view
-/// shows it, not the one that finished last. Its criteria are matched by
-/// `eventId` and its session by evaluation id, so a retried essay is neither
-/// counted twice nor given a mix of two evaluations' scores.
+/// One fact per essay. The window already holds only each essay's canonical
+/// evaluation (`weekly_pack::canonical_writing`), so a band's criteria are the
+/// scores of its own ledger event and its session is that evaluation's.
 fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<WritingFact> {
     let mut criteria: BTreeMap<&str, Vec<(String, f64)>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.criterion_score") {
@@ -339,30 +310,17 @@ fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<
             criteria.entry(field(&o.payload, "eventId")).or_default().push((name.to_owned(), value));
         }
     }
-    let mut by_attempt: BTreeMap<&str, Vec<&Obs>> = BTreeMap::new();
-    for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
-        by_attempt.entry(field(&o.payload, "attemptId")).or_default().push(o);
-    }
-    let mut essays: Vec<(&Obs, String)> = by_attempt
-        .into_iter()
-        .filter_map(|(attempt, bands)| {
-            let ranks = evaluation_ranks(conn, attempt);
-            let ranked = bands.into_iter().map(|o| (evaluation_of(conn, field(&o.payload, "eventId")), o));
-            let order = |(evaluation, o): &(String, &Obs)| (ranks.get(evaluation).copied(), o.at.clone(), o.id.clone());
-            let (evaluation, band) = ranked.max_by_key(order)?;
-            Some((band, evaluation))
-        })
-        .collect();
-    essays.sort_by(|left, right| left.0.at.cmp(&right.0.at).then(left.0.id.cmp(&right.0.id)));
-    essays
-        .into_iter()
-        .map(|(o, evaluation)| {
-            let mut scores = criteria.get(field(&o.payload, "eventId")).cloned().unwrap_or_default();
+    window
+        .iter()
+        .filter(|o| o.kind == "writing.evaluation.overall_band")
+        .map(|o| {
+            let event = field(&o.payload, "eventId");
+            let mut scores = criteria.get(event).cloned().unwrap_or_default();
             scores.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(&right.0)));
             WritingFact {
                 obs_id: o.id.clone(),
                 attempt_id: field(&o.payload, "attemptId").to_owned(),
-                session_id: writing_session(conn, &evaluation),
+                session_id: writing_session(conn, &evaluation_of(conn, event)),
                 task_type: o.payload.get("taskType").and_then(Value::as_str).unwrap_or("writing").to_owned(),
                 band: o.value_num.unwrap_or_default(),
                 criteria: scores,
@@ -491,6 +449,7 @@ mod tests {
             window.push(writing_obs(&format!("{event}-lex"), score, event, "essay", at, Some("lexical"), lexical));
             window.push(writing_obs(&format!("{event}-gra"), score, event, "essay", at, Some("grammar"), 6.0));
         }
+        let window = crate::weekly_pack::canonical_writing(&conn, window);
         let facts = writing_facts(&conn, &window, FixedOffset::east_opt(0).unwrap());
         assert_eq!(facts.len(), 1, "one essay, evaluated twice");
         assert_eq!(facts[0].band, 6.5);
