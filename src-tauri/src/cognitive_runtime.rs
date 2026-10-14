@@ -1,6 +1,6 @@
 //! M3 host-owned Python sidecar lifecycle and framed protocol boundary.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -39,6 +39,17 @@ const COGNITIVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const WEEKLY_REQUEST_TIMEOUT: Duration = Duration::from_secs(420);
 const START_TIMEOUT: Duration = Duration::from_secs(30);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+/// Delay before the first automatic restart after a sidecar failure; doubled
+/// for every further consecutive failure, up to `RESTART_BACKOFF_MAX`.
+const RESTART_BACKOFF_BASE: Duration = Duration::from_secs(1);
+const RESTART_BACKOFF_MAX: Duration = Duration::from_secs(60);
+/// Consecutive failures (no successful handshake in between) after which the
+/// host stops restarting the sidecar on its own.
+const RESTART_MAX_CONSECUTIVE_FAILURES: u32 = 5;
+/// Sidecar stderr is logged locally, line by line, within these bounds.
+const STDERR_LINE_CAP: usize = 2 * 1024;
+const STDERR_LOG_BUDGET: usize = 64 * 1024;
+const STDERR_TAIL_LINES: usize = 20;
 /// Methods the HOST calls ON the sidecar. Every entry must be a method the host
 /// actually sends, and every method the host sends must be listed here —
 /// otherwise the handshake succeeds against a sidecar that cannot serve the
@@ -300,6 +311,10 @@ pub(crate) enum RuntimeHostError {
     Process(String),
     #[error("runtime request timed out")]
     Timeout,
+    #[error("The study assistant stopped unexpectedly and is restarting; try again after {retry_after_secs}s.")]
+    RestartBackoff { retry_after_secs: u64 },
+    #[error("The study assistant stopped unexpectedly {failures} times in a row and will not restart automatically. Restart the app to try again.")]
+    RestartGaveUp { failures: u32 },
     /// The model provider failed; `retryable` is the gateway's own verdict
     /// (5xx / 429 / timeout / connect), which the sidecar's retry loop honours.
     #[error("{message}")]
@@ -392,6 +407,164 @@ impl RuntimeLifecycle {
     }
 }
 
+/// Crash-loop guard for automatic sidecar restarts. Every failed run (crash,
+/// process error, failed startup) of a distinct generation counts once; a
+/// successful handshake or an explicit shutdown/restart clears the history.
+#[derive(Debug, Default)]
+struct RestartBackoff {
+    consecutive_failures: u32,
+    last_failure_at: Option<Instant>,
+    last_failed_generation: Option<u64>,
+}
+
+impl RestartBackoff {
+    fn record_failure(&mut self, generation: u64, now: Instant) {
+        if self.last_failed_generation == Some(generation) {
+            return;
+        }
+        self.last_failed_generation = Some(generation);
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+        self.last_failure_at = Some(now);
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn check(&self, now: Instant) -> Result<(), RuntimeHostError> {
+        restart_decision(self.consecutive_failures, self.last_failure_at, now)
+    }
+}
+
+/// Backoff before the restart that follows `failures` consecutive failures:
+/// 1 s, 2 s, 4 s, ... capped at `RESTART_BACKOFF_MAX`.
+fn restart_delay(failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(16);
+    RESTART_BACKOFF_BASE
+        .saturating_mul(1u32 << doublings)
+        .min(RESTART_BACKOFF_MAX)
+}
+
+/// Pure restart gate (the clock is the caller's `now`). Never sleeps: a start
+/// inside the backoff window is rejected with the time left, and after
+/// `RESTART_MAX_CONSECUTIVE_FAILURES` it is rejected until an explicit restart.
+fn restart_decision(
+    failures: u32,
+    last_failure_at: Option<Instant>,
+    now: Instant,
+) -> Result<(), RuntimeHostError> {
+    if failures == 0 {
+        return Ok(());
+    }
+    if failures >= RESTART_MAX_CONSECUTIVE_FAILURES {
+        return Err(RuntimeHostError::RestartGaveUp { failures });
+    }
+    let Some(last) = last_failure_at else {
+        return Ok(());
+    };
+    let elapsed = now.saturating_duration_since(last);
+    let delay = restart_delay(failures);
+    if elapsed >= delay {
+        return Ok(());
+    }
+    let remaining = delay - elapsed;
+    // Round up so the message never says "after 0s" while still blocked.
+    let retry_after_secs = remaining.as_secs() + u64::from(remaining.subsec_nanos() > 0);
+    Err(RuntimeHostError::RestartBackoff { retry_after_secs })
+}
+
+/// What one chunk of sidecar stderr turns into for the local log.
+#[derive(Debug, PartialEq, Eq)]
+enum StderrOutput {
+    Line(String),
+    /// Emitted once, when the per-process log budget is spent.
+    BudgetExhausted,
+}
+
+/// Line-splits raw sidecar stderr with bounds: each line is capped at
+/// `STDERR_LINE_CAP` bytes, at most `STDERR_LOG_BUDGET` bytes are logged per
+/// process, and the last `STDERR_TAIL_LINES` lines are kept (even past the
+/// budget) for the termination log event. Logs stay local.
+#[derive(Debug, Default)]
+struct StderrCapture {
+    partial: Vec<u8>,
+    partial_truncated: bool,
+    logged_bytes: usize,
+    budget_exhausted: bool,
+    tail: VecDeque<String>,
+}
+
+impl StderrCapture {
+    fn push(&mut self, bytes: &[u8]) -> Vec<StderrOutput> {
+        let mut out = Vec::new();
+        for chunk in bytes.split_inclusive(|byte| *byte == b'\n') {
+            let (body, complete) = match chunk.split_last() {
+                Some((b'\n', body)) => (body, true),
+                _ => (chunk, false),
+            };
+            let room = STDERR_LINE_CAP.saturating_sub(self.partial.len());
+            if body.len() > room {
+                self.partial.extend_from_slice(&body[..room]);
+                self.partial_truncated = true;
+            } else {
+                self.partial.extend_from_slice(body);
+            }
+            if complete {
+                self.complete_line(&mut out);
+            }
+        }
+        out
+    }
+
+    /// Flush an unterminated last line (the process has exited).
+    fn finish(&mut self) -> Vec<StderrOutput> {
+        let mut out = Vec::new();
+        if !self.partial.is_empty() || self.partial_truncated {
+            self.complete_line(&mut out);
+        }
+        out
+    }
+
+    fn complete_line(&mut self, out: &mut Vec<StderrOutput>) {
+        let raw = std::mem::take(&mut self.partial);
+        let raw = raw.strip_suffix(b"\r").unwrap_or(&raw);
+        let mut line = String::from_utf8_lossy(raw).into_owned();
+        if std::mem::take(&mut self.partial_truncated) {
+            line.push_str(" [line truncated]");
+        }
+        if self.tail.len() == STDERR_TAIL_LINES {
+            self.tail.pop_front();
+        }
+        self.tail.push_back(line.clone());
+        if self.logged_bytes + line.len() <= STDERR_LOG_BUDGET {
+            self.logged_bytes += line.len();
+            out.push(StderrOutput::Line(line));
+        } else if !self.budget_exhausted {
+            self.budget_exhausted = true;
+            out.push(StderrOutput::BudgetExhausted);
+        }
+    }
+
+    fn tail(&self) -> String {
+        self.tail.iter().map(String::as_str).collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn log_stderr(outputs: Vec<StderrOutput>) {
+    for output in outputs {
+        match output {
+            StderrOutput::Line(line) => {
+                tracing::warn!(target: "ielts_agent_runtime::stderr", "{line}");
+            }
+            StderrOutput::BudgetExhausted => tracing::warn!(
+                target: "ielts_agent_runtime::stderr",
+                budget_bytes = STDERR_LOG_BUDGET,
+                "Python cognitive runtime stderr exceeded its log budget; further lines are not logged",
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeMetrics {
@@ -420,6 +593,7 @@ struct RuntimeProcess {
     generation: u64,
     termination: Option<Arc<Notify>>,
     metrics: RuntimeMetrics,
+    restart: RestartBackoff,
 }
 
 #[derive(Clone)]
@@ -614,6 +788,7 @@ impl RuntimeManager {
         if self.inner.lock().await.lifecycle.state() == RuntimeState::Ready {
             return Ok(());
         }
+        self.inner.lock().await.restart.check(Instant::now())?;
         verify_sidecar_hash()?;
         let generation = {
             let mut process = self.inner.lock().await;
@@ -650,8 +825,9 @@ impl RuntimeManager {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             let mut stdout = Vec::new();
+            let mut stderr = StderrCapture::default();
             while let Some(event) = events.recv().await {
-                manager.handle_event(&app, generation, event, &mut stdout).await;
+                manager.handle_event(&app, generation, event, &mut stdout, &mut stderr).await;
             }
         });
 
@@ -719,7 +895,9 @@ impl RuntimeManager {
             if process.generation != generation {
                 return Err(RuntimeHostError::Process("sidecar generation changed during startup".into()));
             }
-            process.lifecycle.mark_ready()
+            process.lifecycle.mark_ready()?;
+            process.restart.reset();
+            Ok(())
         }
         .await;
         if let Err(error) = startup {
@@ -970,7 +1148,10 @@ impl RuntimeManager {
         }
     }
 
+    /// Explicit stop (developer restart command, app exit). Clears the
+    /// crash-loop guard so the next start is not held back by old failures.
     pub(crate) async fn shutdown(&self) -> Result<(), RuntimeHostError> {
+        self.inner.lock().await.restart.reset();
         let request_guard = match self.request_operation.clone().try_lock_owned() {
             Ok(guard) => guard,
             Err(_) => return self.force_stop_inner().await,
@@ -1056,6 +1237,7 @@ impl RuntimeManager {
         generation: u64,
         event: CommandEvent,
         stdout: &mut Vec<u8>,
+        stderr: &mut StderrCapture,
     ) {
         match event {
             CommandEvent::Stdout(bytes) => {
@@ -1075,17 +1257,17 @@ impl RuntimeManager {
                     }
                 }
             }
-            CommandEvent::Stderr(bytes) => {
-                let digest = hex::encode(Sha256::digest(&bytes));
-                tracing::warn!(stderr_bytes = bytes.len(), stderr_sha256 = %digest, "Python cognitive runtime stderr");
-            }
+            CommandEvent::Stderr(bytes) => log_stderr(stderr.push(&bytes)),
             CommandEvent::Error(error) => {
                 tracing::error!(%error, "Python cognitive runtime process error");
                 self.mark_crashed(generation).await;
             }
             CommandEvent::Terminated(payload) => {
+                log_stderr(stderr.finish());
+                let stderr_tail = stderr.tail();
                 let mut process = self.inner.lock().await;
                 if process.generation != generation {
+                    tracing::info!(code = ?payload.code, signal = ?payload.signal, %stderr_tail, "stopped Python cognitive runtime exited");
                     return;
                 }
                 process.child = None;
@@ -1094,13 +1276,23 @@ impl RuntimeManager {
                 let termination = process.termination.take();
                 if process.lifecycle.state() == RuntimeState::Stopping {
                     process.lifecycle.shutdown();
-                } else if !matches!(
-                    process.lifecycle.state(),
-                    RuntimeState::Crashed | RuntimeState::Unavailable
-                ) {
-                    process.lifecycle.mark_crashed();
-                    process.metrics.crashes += 1;
-                    tracing::error!(code = ?payload.code, signal = ?payload.signal, "Python cognitive runtime crashed");
+                    tracing::info!(code = ?payload.code, signal = ?payload.signal, %stderr_tail, "Python cognitive runtime exited");
+                } else {
+                    if !matches!(
+                        process.lifecycle.state(),
+                        RuntimeState::Crashed | RuntimeState::Unavailable
+                    ) {
+                        process.lifecycle.mark_crashed();
+                        process.metrics.crashes += 1;
+                    }
+                    process.restart.record_failure(generation, Instant::now());
+                    tracing::error!(
+                        code = ?payload.code,
+                        signal = ?payload.signal,
+                        consecutive_failures = process.restart.consecutive_failures,
+                        %stderr_tail,
+                        "Python cognitive runtime crashed",
+                    );
                 }
                 drop(process);
                 if let Some(termination) = termination {
@@ -2070,6 +2262,8 @@ impl RuntimeManager {
 
     async fn mark_unavailable(&self) {
         let mut process = self.inner.lock().await;
+        let generation = process.generation;
+        process.restart.record_failure(generation, Instant::now());
         process.lifecycle.mark_unavailable();
         process.active_run = None;
         process.metrics.unavailable += 1;
@@ -2085,6 +2279,7 @@ impl RuntimeManager {
             process.lifecycle.mark_crashed();
             process.metrics.crashes += 1;
         }
+        process.restart.record_failure(generation, Instant::now());
         process.active_run = None;
         fail_pending(&mut process, "sidecar crashed");
         if let Some(child) = process.child.take() {
@@ -2104,6 +2299,7 @@ impl RuntimeManager {
         process.active_run = None;
         process.lifecycle.mark_unavailable();
         process.metrics.unavailable += 1;
+        process.restart.record_failure(generation, Instant::now());
         fail_pending(&mut process, "sidecar startup failed");
     }
 
@@ -2920,6 +3116,101 @@ mod tests {
         lifecycle.begin_start().unwrap();
         assert_eq!(lifecycle.state(), RuntimeState::Starting);
         assert!(lifecycle.handshake().is_none());
+    }
+
+    #[test]
+    fn restart_backoff_doubles_and_caps() {
+        assert_eq!(restart_delay(1), Duration::from_secs(1));
+        assert_eq!(restart_delay(2), Duration::from_secs(2));
+        assert_eq!(restart_delay(3), Duration::from_secs(4));
+        assert_eq!(restart_delay(7), Duration::from_secs(60));
+        assert_eq!(restart_delay(u32::MAX), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn restart_decision_rejects_inside_the_window_without_sleeping() {
+        let t0 = Instant::now();
+        assert_eq!(restart_decision(0, None, t0), Ok(()));
+        assert_eq!(
+            restart_decision(1, Some(t0), t0 + Duration::from_millis(200)),
+            Err(RuntimeHostError::RestartBackoff { retry_after_secs: 1 })
+        );
+        assert_eq!(restart_decision(1, Some(t0), t0 + Duration::from_secs(1)), Ok(()));
+        assert_eq!(
+            restart_decision(3, Some(t0), t0 + Duration::from_secs(1)),
+            Err(RuntimeHostError::RestartBackoff { retry_after_secs: 3 })
+        );
+        assert_eq!(restart_decision(3, Some(t0), t0 + Duration::from_secs(4)), Ok(()));
+        let message = restart_decision(2, Some(t0), t0).unwrap_err().to_string();
+        assert!(message.contains("try again after 2s"), "{message}");
+    }
+
+    #[test]
+    fn restart_gives_up_after_consecutive_failures_until_reset() {
+        let t0 = Instant::now();
+        let mut backoff = RestartBackoff::default();
+        for generation in 1..=u64::from(RESTART_MAX_CONSECUTIVE_FAILURES) {
+            backoff.record_failure(generation, t0);
+            // The same generation failing through several paths counts once.
+            backoff.record_failure(generation, t0);
+        }
+        assert_eq!(backoff.consecutive_failures, RESTART_MAX_CONSECUTIVE_FAILURES);
+        let error = backoff.check(t0 + Duration::from_secs(3600)).unwrap_err();
+        assert_eq!(error, RuntimeHostError::RestartGaveUp { failures: 5 });
+        assert!(error.to_string().contains("will not restart automatically"));
+        backoff.reset();
+        assert_eq!(backoff.check(t0), Ok(()));
+    }
+
+    #[test]
+    fn stderr_capture_splits_lines_and_keeps_a_tail() {
+        let mut capture = StderrCapture::default();
+        assert_eq!(capture.push(b"Traceback (most"), vec![]);
+        assert_eq!(
+            capture.push(b" recent call last):\r\n  File x\nValueError"),
+            vec![
+                StderrOutput::Line("Traceback (most recent call last):".into()),
+                StderrOutput::Line("  File x".into()),
+            ]
+        );
+        assert_eq!(capture.finish(), vec![StderrOutput::Line("ValueError".into())]);
+        assert_eq!(capture.tail(), "Traceback (most recent call last):\n  File x\nValueError");
+        for index in 0..STDERR_TAIL_LINES + 5 {
+            capture.push(format!("line {index}\n").as_bytes());
+        }
+        assert_eq!(capture.tail.len(), STDERR_TAIL_LINES);
+        let last = format!("line {}", STDERR_TAIL_LINES + 4);
+        assert_eq!(capture.tail.back(), Some(&last));
+    }
+
+    #[test]
+    fn stderr_capture_caps_lines_and_total_budget() {
+        let mut capture = StderrCapture::default();
+        let long = vec![b'x'; STDERR_LINE_CAP * 3];
+        assert_eq!(capture.push(&long[..STDERR_LINE_CAP]), vec![]);
+        let out = capture.push(&[&long[STDERR_LINE_CAP..], b"\n".as_slice()].concat());
+        let [StderrOutput::Line(line)] = out.as_slice() else { panic!("{out:?}") };
+        assert_eq!(line.len(), STDERR_LINE_CAP + " [line truncated]".len());
+        assert!(line.ends_with(" [line truncated]"));
+
+        let mut capture = StderrCapture::default();
+        let mut line = vec![b'y'; 1023];
+        line.push(b'\n');
+        let mut emitted = Vec::new();
+        for _ in 0..200 {
+            emitted.extend(capture.push(&line));
+        }
+        let logged: usize = emitted
+            .iter()
+            .map(|item| match item {
+                StderrOutput::Line(line) => line.len(),
+                StderrOutput::BudgetExhausted => 0,
+            })
+            .sum();
+        assert!(logged <= STDERR_LOG_BUDGET);
+        assert_eq!(emitted.iter().filter(|item| **item == StderrOutput::BudgetExhausted).count(), 1);
+        assert_eq!(emitted.last(), Some(&StderrOutput::BudgetExhausted));
+        assert_eq!(capture.tail.len(), STDERR_TAIL_LINES);
     }
 
     #[test]
