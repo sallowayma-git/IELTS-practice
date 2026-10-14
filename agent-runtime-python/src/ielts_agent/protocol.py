@@ -14,7 +14,7 @@ SUPPORTED_CAPABILITIES = {
     "memory.candidates.extract": "1",
     "memory.candidates.generate": "1",
     # Weekly consolidation entry: ONE model call over the host-built pack of the
-    # learner's practice records; the digest and memory mutations go back through
+    # learner's practice records; the weekly narrative and memory mutations go back through
     # dream.run_weekly for host validation.
     "dream.weekly": "1",
     # M12-04 study-planner orchestration entry: deterministic plan proposal,

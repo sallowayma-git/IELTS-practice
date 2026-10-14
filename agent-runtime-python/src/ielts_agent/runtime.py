@@ -174,7 +174,7 @@ class RuntimeServer:
         """Weekly consolidation: one model call over the host-built pack.
 
         Rust stays the authority: the pack of the learner's practice records
-        comes from ``learning.weekly_pack`` and the digest and memory mutations
+        comes from ``learning.weekly_pack`` and the weekly narrative and memory mutations
         are submitted via ``dream.run_weekly`` for validation by the host. Host
         failures stay inside the orchestrator's fail-closed fallback result; an
         empty result is a success.
