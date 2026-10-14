@@ -72,18 +72,38 @@ pub fn contains_injection_marker(value: &str) -> bool {
 /// Credential-shaped markers. A model that echoes a secret out of its context
 /// must not get that secret persisted into long-term memory.
 pub fn contains_secret_marker(value: &str) -> bool {
-    let value = normalize(value);
+    let value = tighten_separators(&normalize(value));
     [
         "api_key=",
+        "api_key:",
+        "api-key=",
         "api-key:",
+        "apikey=",
         "apikey:",
-        "authorization: bearer ",
+        "authorization:bearer",
         "password=",
         "secret=",
         "-----begin private key-----",
     ]
     .iter()
     .any(|marker| value.contains(marker))
+}
+
+/// Drop whitespace that touches `=` or `:` so `password = x`, `api_key : x`
+/// and `Authorization : Bearer x` match the same markers as their compact
+/// forms. Other spacing is kept, so ordinary prose is not glued together.
+fn tighten_separators(normalized: &str) -> String {
+    let chars: Vec<char> = normalized.chars().collect();
+    let mut out = String::with_capacity(normalized.len());
+    for (index, ch) in chars.iter().enumerate() {
+        let touches_separator = ch.is_whitespace()
+            && (matches!(index.checked_sub(1).map(|i| chars[i]), Some('=' | ':'))
+                || matches!(chars.get(index + 1), Some('=' | ':')));
+        if !touches_separator {
+            out.push(*ch);
+        }
+    }
+    out
 }
 
 /// Either of the above. This is the predicate a persistence boundary should
@@ -582,6 +602,30 @@ mod tests {
         assert!(contains_secret_marker("-----BEGIN PRIVATE KEY-----"));
         assert!(contains_secret_marker("ｐａｓｓｗｏｒｄ＝hunter2"));
         assert!(!contains_secret_marker("the learner keeps a secret diary"));
+    }
+
+    #[test]
+    fn secret_markers_ignore_whitespace_around_separators() {
+        for value in [
+            "password = hunter2",
+            "api_key = sk-abc",
+            "API-KEY :sk-abc",
+            "apikey  =  sk-abc",
+            "Authorization : Bearer eyJhbGciOi",
+            "authorization:bearer eyJhbGciOi",
+            "secret\t=\tvalue",
+            "我的 password ＝ hunter2",
+        ] {
+            assert!(contains_secret_marker(value), "{value}");
+            assert!(!is_safe_for_prompt(value), "{value}");
+        }
+        for value in [
+            "ratio = 3 : 2 in the chart",
+            "the password question was hard",
+            "Task 2: discuss both views",
+        ] {
+            assert!(!contains_secret_marker(value), "{value}");
+        }
     }
 
     #[test]

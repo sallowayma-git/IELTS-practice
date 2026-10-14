@@ -307,6 +307,8 @@ pub fn run() {
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]
+            commands::coach_feedback::coach_list_feedback,
+            #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_reask_link,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_strategy_assignment,

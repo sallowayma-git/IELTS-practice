@@ -1,5 +1,5 @@
 import { settings } from '@/api/client.js'
-import { recordCoachFeedback, recordCoachReaskLink } from '@/api/memory-repository.js'
+import { listCoachFeedback, recordCoachFeedback, recordCoachReaskLink } from '@/api/memory-repository.js'
 import type { CoachFeedbackKind } from '@/api/memory-repository.js'
 import { practiceAssets, practiceCoach, practiceHistory, practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import {
@@ -64,6 +64,10 @@ export const readingCoachApi = {
 
   async recordReaskLink(parentAssistantMessageId: string, newUserMessageId: string) {
     return recordCoachReaskLink(parentAssistantMessageId, newUserMessageId)
+  },
+
+  async listFeedback(threadId: string) {
+    return listCoachFeedback(threadId)
   }
 }
 

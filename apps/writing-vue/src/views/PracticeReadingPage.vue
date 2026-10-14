@@ -376,6 +376,7 @@
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
       :coach-feedback="coachFeedback"
+      :coach-reaskable-id="coachReaskableId"
       :coach-query="coachQuery"
       :can-ask-coach="canAskCoach"
       @toggle-panel="toggleReadingCoachPanel"
@@ -738,6 +739,7 @@ const {
   coachTranscript,
   coachFollowUps,
   coachFeedback,
+  coachReaskableId,
   resetReadingCoachState,
   setReadingCoachOpen,
   hydrateReadingCoachFromSubmission,

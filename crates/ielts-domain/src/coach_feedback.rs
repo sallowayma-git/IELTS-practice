@@ -74,6 +74,13 @@ impl CoachFeedbackKind {
             .into_iter()
             .find(|kind| kind.as_str() == value)
     }
+
+    /// Mutually exclusive verdicts on one answer (helpful / not helpful /
+    /// wrong). A message keeps at most one; the other kinds are independent
+    /// remarks and may coexist.
+    pub const fn is_verdict(self) -> bool {
+        matches!(self, Self::ThumbsUp | Self::ThumbsDown | Self::Incorrect)
+    }
 }
 
 /// M6-09: fixed M6 teaching-strategy catalog. The LLM may only select from

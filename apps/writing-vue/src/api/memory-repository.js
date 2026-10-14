@@ -90,8 +90,9 @@ function requireText(value, field) {
 /**
  * M6-05 coach_record_feedback. Command shape mirrors RecordCoachFeedbackCommand
  * (deny_unknown_fields): userId, coachMessageId, feedbackKind, payload?.
- * The backend is idempotent on (coachMessageId, feedbackKind); it does not
- * replace an earlier kind on the same message.
+ * The backend is idempotent on (coachMessageId, feedbackKind) and keeps one
+ * verdict (thumbs_up / thumbs_down / incorrect) per message: a different
+ * verdict returns the one already stored.
  */
 export async function recordCoachFeedback(coachMessageId, feedbackKind, payload = undefined) {
   if (!COACH_FEEDBACK_KINDS.includes(feedbackKind)) {
@@ -122,6 +123,18 @@ export async function recordCoachReaskLink(parentAssistantMessageId, newUserMess
   }
   const response = await invokeCommand('coach_record_reask_link', { command })
   return unwrapCommandResponse(response, 'coach_record_reask_link')
+}
+
+/**
+ * Durable feedback recorded in a coach thread (oldest first), used to restore
+ * the one-verdict-per-answer lock when a past attempt is reopened.
+ */
+export async function listCoachFeedback(threadId) {
+  const response = await invokeCommand('coach_list_feedback', {
+    threadId: requireText(threadId, 'threadId')
+  })
+  const records = unwrapCommandResponse(response, 'coach_list_feedback')
+  return Array.isArray(records) ? records : []
 }
 
 export async function recordMemoryFeedback(memoryId, feedbackKind) {
@@ -178,6 +191,7 @@ export const memoryRepository = {
   forgetMemory,
   recordCoachFeedback,
   recordCoachReaskLink,
+  listCoachFeedback,
   recordMemoryFeedback,
   triggerDailyDream,
   getDailyJournal,

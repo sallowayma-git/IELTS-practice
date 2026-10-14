@@ -121,6 +121,33 @@ function normalizeCoachTranscript(value: unknown, limit = 40): CoachTranscriptEn
     .slice(-limit)
 }
 
+function isPanelFeedbackKind(kind: unknown): kind is ReadingCoachFeedbackKind {
+  return READING_COACH_FEEDBACK_OPTIONS.some((option) => option.kind === kind)
+}
+
+/** Durable verdict rows (coach_list_feedback) as panel state, keyed by message id. */
+export function feedbackStateFromRecords(records: unknown): Record<string, ReadingCoachFeedbackState> {
+  const state: Record<string, ReadingCoachFeedbackState> = {}
+  for (const item of Array.isArray(records) ? records : []) {
+    const row = asRecord(item)
+    const messageId = String(row?.coachMessageId || '').trim()
+    if (!messageId || state[messageId] || !isPanelFeedbackKind(row?.feedbackKind)) continue
+    state[messageId] = { kind: row!.feedbackKind, status: 'saved' }
+  }
+  return state
+}
+
+/**
+ * Coach generation always continues from the latest persisted turn, so
+ * "explain that again" is only honest for the answer that ends the thread.
+ * Local/system notes are not turns; an older answer, or a thread ending in a
+ * user message or failed answer, offers no re-ask target.
+ */
+export function latestReaskableId(transcript: CoachTranscriptEntry[]): string {
+  const last = [...transcript].reverse().find((entry) => entry.persisted)
+  return isFeedbackEligible(last) ? last!.id : ''
+}
+
 export function isFeedbackEligible(entry: CoachTranscriptEntry | null | undefined): boolean {
   return Boolean(
     entry
@@ -215,6 +242,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     return null
   })
   const coachFollowUps = computed(() => coachFollowUpSource.value?.followUps || [])
+  const coachReaskableId = computed(() => latestReaskableId(coachTranscriptState.value))
   const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
   const coachStatusText = computed(() => {
     if (coachLoading.value) return coachStreamMessage.value || 'AI 教练正在思考...'
@@ -278,6 +306,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       const latestReview = [...entries].reverse().find((entry) => (
         entry.role === 'user' && String(entry.snapshot?.action || '') === 'review_set'
       ))
+      if (coachThreadId.value) void hydrateCoachFeedback(sessionId, hydrationId, coachThreadId.value)
       if (latestReview) {
         const terminal = [...entries].reverse().find((entry) => (
           entry.role === 'assistant'
@@ -292,6 +321,18 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     } catch (error) {
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachError.value = errorField(error, 'message') || 'AI 教练历史加载失败'
+    }
+  }
+
+  // A verdict is stored once per answer; reloading must show it as already
+  // given so the panel never offers a second, silently ignored choice.
+  async function hydrateCoachFeedback(sessionId: string, hydrationId: number, threadId: string) {
+    try {
+      const records = await readingCoachApi.listFeedback(threadId)
+      if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
+      coachFeedback.value = { ...feedbackStateFromRecords(records), ...coachFeedback.value }
+    } catch (feedbackFailure) {
+      console.warn('阅读教练反馈加载失败:', feedbackFailure)
     }
   }
 
@@ -675,12 +716,12 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (!isReadingCoachEnabled()) {
       return
     }
-    const source = coachFollowUpSource.value?.entry
+    const sourceId = coachFollowUpSource.value?.entry.id || ''
     await sendCoachQuery(query, {
       surface: 'chat_widget',
       action: 'chat',
       promptKind: 'followup',
-      reaskParentId: isFeedbackEligible(source) ? source!.id : ''
+      reaskParentId: sourceId && sourceId === coachReaskableId.value ? sourceId : ''
     })
   }
 
@@ -689,7 +730,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       return
     }
     const entry = findFeedbackEligibleEntry(messageId)
-    if (!entry) return
+    if (!entry || entry.id !== coachReaskableId.value) return
     await sendCoachQuery(READING_COACH_REASK_QUERY, {
       surface: 'chat_widget',
       action: 'chat',
@@ -698,9 +739,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     })
   }
 
-  // M6-05: one feedback per assistant message. The backend keeps one row per
-  // (message, kind) and never replaces an earlier kind, so a saved choice is
-  // final; a failed save clears the selection so the learner can retry.
+  // M6-05: one verdict per assistant message. The backend keeps the first
+  // verdict and returns it for any later one, so the saved state shows the
+  // durable kind; a failed save clears the selection so the learner can retry.
   async function submitCoachFeedback(messageId: unknown, feedbackKind: unknown) {
     const entry = findFeedbackEligibleEntry(messageId)
     const option = READING_COACH_FEEDBACK_OPTIONS.find((item) => item.kind === feedbackKind)
@@ -711,8 +752,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachFeedback.value = { ...coachFeedback.value, [entry.id]: { kind: option.kind, status: 'saving' } }
     let next: ReadingCoachFeedbackState
     try {
-      await readingCoachApi.recordFeedback(entry.id, option.kind)
-      next = { kind: option.kind, status: 'saved' }
+      const record = asRecord(await readingCoachApi.recordFeedback(entry.id, option.kind))
+      const durableKind = isPanelFeedbackKind(record?.feedbackKind) ? record!.feedbackKind : option.kind
+      next = { kind: durableKind, status: 'saved' }
     } catch (feedbackFailure) {
       console.warn('阅读教练反馈保存失败:', feedbackFailure)
       next = { kind: null, status: 'failed' }
@@ -776,6 +818,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscript,
     coachFollowUps,
     coachFeedback,
+    coachReaskableId,
     resetReadingCoachState,
     setReadingCoachOpen,
     hydrateReadingCoachFromSubmission,

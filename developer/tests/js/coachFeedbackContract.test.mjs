@@ -43,7 +43,7 @@ function loadMemoryRepository() {
     return { ok: true }
   }
   const exported = new Function('invokeCommand', 'unwrapCommandResponse',
-    `${source}\nreturn { COACH_FEEDBACK_KINDS, recordCoachFeedback, recordCoachReaskLink }`)(
+    `${source}\nreturn { COACH_FEEDBACK_KINDS, recordCoachFeedback, recordCoachReaskLink, listCoachFeedback }`)(
     invokeCommand, (response) => response
   )
   return { ...exported, calls }
@@ -92,7 +92,15 @@ test('wrapper commands carry exactly the Rust command struct keys', async () => 
   // Tauri command parameter names must match the wrapper argument key.
   const host = readRepo('src-tauri/src/commands/coach_feedback.rs')
   assert.match(host, /pub fn coach_record_feedback\([^)]*\bcommand: RecordCoachFeedbackCommand/)
+  assert.match(host, /pub fn coach_list_feedback\([^)]*\bthread_id: String/)
+  assert.ok(readRepo('src-tauri/src/lib.rs').includes('coach_list_feedback'), 'coach_list_feedback not registered')
   assert.match(host, /pub fn coach_record_reask_link\([^)]*\bcommand: RecordReaskLinkCommand/)
+})
+
+test('listCoachFeedback sends threadId and tolerates a missing list', async () => {
+  const repo = loadMemoryRepository()
+  assert.deepEqual(await repo.listCoachFeedback('thread-9'), [])
+  assert.deepEqual(repo.calls, [{ command: 'coach_list_feedback', args: { threadId: 'thread-9' } }])
 })
 
 test('wrapper rejects unknown kinds and empty ids before invoking', async () => {
@@ -111,7 +119,7 @@ const compiled = ts.transpileModule(readApp('modules/practice-reading/useReading
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
-function harness({ messages, feedbackFails = false, reaskFails = false } = {}) {
+function harness({ messages, feedbackFails = false, reaskFails = false, savedFeedback = [], durableKind = null } = {}) {
   const feedback = []
   const reasks = []
   const queries = []
@@ -119,6 +127,7 @@ function harness({ messages, feedbackFails = false, reaskFails = false } = {}) {
   const api = {
     readingCoachApi: {
       listMessages: async () => ({ threadId: 'thread-1', messages: transcript }),
+      listFeedback: async (threadId) => (threadId === 'thread-1' ? savedFeedback : []),
       query: async (payload) => {
         queries.push(payload)
         const userId = `u-new-${queries.length}`
@@ -132,7 +141,7 @@ function harness({ messages, feedbackFails = false, reaskFails = false } = {}) {
       recordFeedback: async (messageId, kind) => {
         feedback.push([messageId, kind])
         if (feedbackFails) throw { code: 'validation', message: 'coach message not found' }
-        return { id: 'cfb-1' }
+        return { id: 'cfb-1', coachMessageId: messageId, feedbackKind: durableKind || kind }
       },
       recordReaskLink: async (parent, child) => {
         reasks.push([parent, child])
@@ -235,6 +244,58 @@ test('a failed re-ask link never breaks the chat', async () => {
   assert.equal(coach.coachTranscript.value.at(-1).id, 'a-new-1')
 })
 
+test('saved verdicts are restored on reload and lock the panel', async () => {
+  const { coach, feedback } = harness({
+    messages: baseMessages,
+    savedFeedback: [
+      { coachMessageId: 'a1', feedbackKind: 'incorrect' },
+      { coachMessageId: 'a1', feedbackKind: 'thumbs_up' },
+      { coachMessageId: 'a0', feedbackKind: 'too_long' }
+    ]
+  })
+  await settle()
+  await settle()
+  assert.deepEqual(coach.coachFeedback.value, { a1: { kind: 'incorrect', status: 'saved' } })
+  await coach.submitCoachFeedback('a1', 'thumbs_up')
+  assert.deepEqual(feedback, [])
+})
+
+test('the saved state shows the verdict the host kept, not the click', async () => {
+  const { coach } = harness({ messages: baseMessages, durableKind: 'thumbs_down' })
+  await settle()
+  await coach.submitCoachFeedback('a1', 'thumbs_up')
+  assert.deepEqual(coach.coachFeedback.value.a1, { kind: 'thumbs_down', status: 'saved' })
+})
+
+test('re-ask is offered and linked only for the answer that ends the thread', async () => {
+  const { coach, reasks, queries } = harness({ messages: baseMessages })
+  await settle()
+  assert.equal(coach.coachReaskableId.value, 'a1')
+  coach.coachQuery.value = '第 7 题为什么选 B？'
+  await coach.askCoach()
+  await settle()
+  assert.equal(coach.coachReaskableId.value, 'a-new-1')
+  // a1 is no longer the latest answer: no stale re-ask, and its chip is unlinked.
+  await coach.reaskCoachMessage('a1')
+  assert.equal(queries.length, 1)
+  assert.deepEqual(coach.coachFollowUps.value, ['那第 5 题呢？'])
+  await coach.askCoachFollowUp('那第 5 题呢？')
+  await settle()
+  assert.equal(queries.length, 2)
+  assert.deepEqual(reasks, [])
+  await coach.reaskCoachMessage('a-new-2')
+  await settle()
+  assert.deepEqual(reasks, [['a-new-2', 'u-new-3']])
+})
+
+test('a thread ending in a user turn or failed answer has no re-ask target', () => {
+  const { module } = harness({ messages: [] })
+  const row = (id, role, extra = {}) => ({ id, role, status: 'completed', isError: false, persisted: true, content: id, ...extra })
+  assert.equal(module.latestReaskableId([row('a1', 'assistant'), row('u2', 'user')]), '')
+  assert.equal(module.latestReaskableId([row('a1', 'assistant'), row('a2', 'assistant', { status: 'failed', isError: true })]), '')
+  assert.equal(module.latestReaskableId([row('a1', 'assistant'), row('n', 'assistant', { persisted: false, isError: true })]), 'a1')
+})
+
 test('reset clears per-message feedback state', async () => {
   const { coach } = harness({ messages: baseMessages })
   await settle()
@@ -249,6 +310,8 @@ test('panel renders feedback hooks and the page wires the events', () => {
     assert.ok(panel.includes(hook), hook)
   }
   assert.ok(panel.includes('isFeedbackEligible(entry)'))
+  assert.ok(panel.includes('v-if="entry.id === coachReaskableId"'))
+  assert.ok(readApp('views/PracticeReadingPage.vue').includes(':coach-reaskable-id="coachReaskableId"'))
   const page = readApp('views/PracticeReadingPage.vue')
   assert.ok(page.includes(':coach-feedback="coachFeedback"'))
   assert.ok(page.includes('@feedback="submitCoachFeedback($event.messageId, $event.kind)"'))

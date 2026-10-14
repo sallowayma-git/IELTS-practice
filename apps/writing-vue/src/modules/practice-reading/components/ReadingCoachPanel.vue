@@ -85,6 +85,7 @@
               {{ option.label }}
             </button>
             <button
+              v-if="entry.id === coachReaskableId"
               class="reading-coach-feedback__option"
               type="button"
               :disabled="coachLoading"
@@ -192,6 +193,7 @@ const props = defineProps({
   coachSelectionActions: { type: Array, default: () => [] },
   coachFollowUps: { type: Array, default: () => [] },
   coachFeedback: { type: Object, default: () => ({}) },
+  coachReaskableId: { type: String, default: '' },
   coachQuery: { type: String, default: '' },
   canAskCoach: { type: Boolean, default: false }
 })

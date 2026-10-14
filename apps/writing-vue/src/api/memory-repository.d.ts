@@ -168,6 +168,7 @@ export function forgetMemory(command: ForgetMemoryCommand): Promise<unknown>
 export function archiveMemory(command: ArchiveMemoryCommand): Promise<unknown>
 export function recordCoachFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind, payload?: unknown): Promise<CoachFeedbackRecord>
 export function recordCoachReaskLink(parentAssistantMessageId: string, newUserMessageId: string): Promise<CoachReaskLinkRecord>
+export function listCoachFeedback(threadId: string): Promise<CoachFeedbackRecord[]>
 export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedbackKind): Promise<unknown>
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
 export function getDailyJournal(query: DailyJournalQuery): Promise<unknown>
@@ -184,6 +185,7 @@ export const memoryRepository: {
   archiveMemory: typeof archiveMemory
   recordCoachFeedback: typeof recordCoachFeedback
   recordCoachReaskLink: typeof recordCoachReaskLink
+  listCoachFeedback: typeof listCoachFeedback
   recordMemoryFeedback: typeof recordMemoryFeedback
   triggerDailyDream: typeof triggerDailyDream
   getDailyJournal: typeof getDailyJournal
