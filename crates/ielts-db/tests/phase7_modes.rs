@@ -6,12 +6,13 @@ use tempfile::tempdir;
 use ielts_db::{
     advance_endless, cancel_endless, create_endless_session, create_memorize_session,
     create_suite_session, finish_memorize_session, get_endless_session, get_open_reading_draft,
-    get_open_reading_draft_for_scope, get_suite_session, import_asset_payload_file, list_history,
-    migrate, open_connection, patch_reading_answer, pick_reading_practice_asset, remaining_pool,
-    save_reading_draft, save_suite_passage_draft, submit_endless_passage, submit_reading_attempt,
-    submit_suite_passage, AdvanceEndlessCommand, CreateEndlessCommand, CreateMemorizeCommand,
-    CreateSuiteCommand, DbOpenOptions, PassageStatus, PickReadingPracticeAssetCommand,
-    ReadingDraftCommand, ReadingQuestionProgress, ReadingSubmitCommand,
+    get_open_reading_draft_for_scope, get_open_reading_draft_with_timer, get_suite_session,
+    import_asset_payload_file, list_history, migrate, open_connection, patch_reading_answer,
+    pick_reading_practice_asset, remaining_pool, save_endless_passage_draft, save_reading_draft,
+    save_suite_passage_draft, submit_endless_passage, submit_reading_attempt, submit_suite_passage,
+    AdvanceEndlessCommand, CreateEndlessCommand, CreateMemorizeCommand, CreateSuiteCommand,
+    DbOpenOptions, PassageStatus, PickReadingPracticeAssetCommand, ReadingDraftCommand,
+    ReadingQuestionProgress, ReadingSubmitCommand, SaveEndlessPassageDraftCommand,
     SaveSuitePassageDraftCommand, SubmitEndlessCommand, SubmitSuitePassageCommand, SuiteAssetSeed,
     TimerMode, TimerState,
 };
@@ -897,4 +898,69 @@ fn generic_reading_writes_cannot_mutate_a_memorize_attempt() {
     assert_eq!(persisted.0, "memorize");
     assert_eq!(persisted.1, None);
     assert_eq!(persisted.2, "active");
+}
+
+/// Reload contract for endless mode: the open draft is found through the
+/// endless session scope and carries that session id as its owner (`suite_id`),
+/// which is what the UI checks before hydrating answers. A later autosave with
+/// the hydrated (full) answer map keeps earlier answers.
+#[test]
+fn endless_draft_resumes_under_its_session_owner_after_reload() {
+    let (dir, conn) = open_db();
+    seed_assets(&conn, &dir, &["a", "b"]);
+    let session = create_endless_session(
+        &conn,
+        &CreateEndlessCommand {
+            pool_policy: None,
+            seed: Some("endless-reload".into()),
+            idempotency_key: Some("e-reload".into()),
+        },
+    )
+    .unwrap();
+    let asset = session.current_asset_id.clone().unwrap();
+    let draft = |answers: serde_json::Value, key: &str| SaveEndlessPassageDraftCommand {
+        session_id: session.id.clone(),
+        asset_id: asset.clone(),
+        asset_revision: None,
+        asset_fingerprint: None,
+        answers,
+        marked_questions: vec![],
+        question_timeline: vec![],
+        title_snapshot: None,
+        timer_snapshot: None,
+        idempotency_key: key.into(),
+    };
+    save_endless_passage_draft(&conn, &draft(json!({ "q1": "TRUE" }), "d1")).unwrap();
+
+    let restored = get_open_reading_draft_with_timer(&conn, &asset, None, Some(&session.id))
+        .unwrap()
+        .expect("endless draft must be resumable");
+    assert_eq!(restored.attempt.mode, AttemptMode::Endless);
+    assert_eq!(
+        restored.attempt.suite_id.as_deref(),
+        Some(session.id.as_str())
+    );
+    assert!(restored
+        .attempt
+        .answers
+        .iter()
+        .any(|a| a.question_id == "q1" && a.answer == json!("TRUE")));
+    // Single-passage scope never sees the endless draft.
+    assert!(get_open_reading_draft_with_timer(&conn, &asset, None, None)
+        .unwrap()
+        .is_none());
+
+    // After hydration the UI autosaves the merged map; the earlier answer survives.
+    save_endless_passage_draft(&conn, &draft(json!({ "q1": "TRUE", "q2": "A" }), "d2")).unwrap();
+    let merged = get_open_reading_draft_with_timer(&conn, &asset, None, Some(&session.id))
+        .unwrap()
+        .unwrap();
+    assert_eq!(merged.attempt.id, restored.attempt.id);
+    let ids: Vec<&str> = merged
+        .attempt
+        .answers
+        .iter()
+        .map(|a| a.question_id.as_str())
+        .collect();
+    assert_eq!(ids, vec!["q1", "q2"]);
 }
