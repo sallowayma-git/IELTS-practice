@@ -5,13 +5,7 @@ framed protocol; facts and mutations remain Rust host capabilities.
 """
 
 from .protocol import PROTOCOL_VERSION, RuntimeMetadata
-from .coach import (
-    CoachShadowResult,
-    PythonPersonalizedCoach,
-    select_strategy,
-)
 from .dream import (
-    JournalEnricher,
     WeeklyDreamInput,
     WeeklyDreamOrchestrator,
 )
@@ -19,10 +13,6 @@ from .dream import (
 __all__ = [
     "PROTOCOL_VERSION",
     "RuntimeMetadata",
-    "CoachShadowResult",
-    "PythonPersonalizedCoach",
-    "select_strategy",
-    "JournalEnricher",
     "WeeklyDreamInput",
     "WeeklyDreamOrchestrator",
 ]

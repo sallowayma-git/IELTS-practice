@@ -11,7 +11,6 @@ MAX_FRAME_BYTES = 1024 * 1024
 SUPPORTED_CAPABILITIES = {
     "runtime.health": "1",
     "runtime.shutdown": "1",
-    "memory.candidates.extract": "1",
     "memory.candidates.generate": "1",
     # Weekly consolidation entry: ONE model call over the host-built pack of the
     # learner's practice records; the digest and memory mutations go back through

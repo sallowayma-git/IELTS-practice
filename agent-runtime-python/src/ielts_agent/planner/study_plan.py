@@ -36,8 +36,7 @@ Hard rules enforced here (M12 plan §9204-9384):
   mutation, or schema migration. The M3 contract gate re-validates this at CI
   time.
 
-This module does NOT touch ``coach/``, ``dream/``, ``eval/``, ``memory_*``, or
-``retrieval/``. It only READS the M4 learner skill state and M3/M5 memory context
+This module does NOT touch ``dream/`` or ``memory_*``. It only READS the M4 learner skill state and M3/M5 memory context
 via the host gateway (best-effort enrichment) and SUBMITS via
 ``study_plan.create``.
 """

@@ -69,7 +69,6 @@ const STDERR_TAIL_LINES: usize = 20;
 const REQUIRED_RUNTIME_CAPABILITIES: &[(&str, &str)] = &[
     ("runtime.health", "1"),
     ("runtime.shutdown", "1"),
-    ("memory.candidates.extract", "1"),
     ("memory.candidates.generate", "1"),
     ("dream.weekly", "1"),
     ("planner.study_plan", "1"),

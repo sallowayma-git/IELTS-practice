@@ -8,8 +8,7 @@ study-plan proposal (today practice what / why / which skill probe / how long),
 and submits it via ``study_plan.create`` — Rust is the controlled-actions
 authority and the only writer of canonical study-plan state.
 
-Conventions mirror :mod:`ielts_agent.dream.types` and
-:mod:`ielts_agent.coach.types`:
+Conventions mirror :mod:`ielts_agent.dream.types`:
 
 - ``_StrictModel`` base: closed, frozen, strict, camelCase wire aliases,
   ``extra="forbid"`` so no unexpected field survives validation.

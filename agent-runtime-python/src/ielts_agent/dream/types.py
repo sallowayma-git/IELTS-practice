@@ -7,7 +7,7 @@ reads the host-built weekly pack (the learner's practice records of the window)
 and submits one digest plus memory mutations via ``dream.run_weekly`` — Rust is
 the authority.
 
-Conventions mirror :mod:`ielts_agent.retrieval.types`:
+Conventions:
 
 - ``_StrictModel`` base: closed, frozen, strict, camelCase wire aliases,
   ``extra="forbid"`` so no unexpected field survives validation.
