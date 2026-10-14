@@ -355,7 +355,7 @@ def main() -> int:
         ),
         run_command(
             "Rust weekly dream receipts, weekly report blocks and input pack",
-            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--test", "weekly_report_store", "--locked", "--offline"],
+            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--test", "weekly_report_store", "--test", "weekly_report_facts", "--locked", "--offline"],
         ),
         run_command(
             "Rust weekly report block skills and narrative whitelist",

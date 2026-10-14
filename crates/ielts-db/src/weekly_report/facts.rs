@@ -183,14 +183,41 @@ fn attempt_duration(conn: &Connection, attempt: &str) -> i64 {
     conn.query_row("SELECT duration_ms FROM attempts WHERE id = ?1", [attempt], |row| row.get(0)).unwrap_or(0)
 }
 
-fn writing_session(conn: &Connection, attempt: &str) -> Option<String> {
+/// The session that produced `evaluation`, the one the example opens.
+fn writing_session(conn: &Connection, evaluation: &str) -> Option<String> {
     conn.query_row(
-        "SELECT id FROM evaluation_sessions WHERE attempt_id = ?1 AND status IN ('completed','degraded')
-          ORDER BY COALESCE(completed_at, updated_at) DESC, id DESC LIMIT 1",
-        [attempt],
+        "SELECT id FROM evaluation_sessions WHERE evaluation_id = ?1
+          ORDER BY started_at DESC, id DESC LIMIT 1",
+        [evaluation],
         |row| row.get(0),
     )
     .ok()
+}
+
+/// The evaluation a writing ledger event reports on.
+fn evaluation_of(conn: &Connection, event: &str) -> String {
+    conn.query_row(
+        "SELECT COALESCE(json_extract(payload_json, '$.evaluationId'), '') FROM learning_events WHERE id = ?1",
+        [event],
+        |row| row.get(0),
+    )
+    .unwrap_or_default()
+}
+
+/// Creation order of the attempt's evaluations, oldest first: the order
+/// `load_evaluation_for_attempt` picks the canonical one by. A retry outranks
+/// the call it retried even when that older call finishes last.
+fn evaluation_ranks(conn: &Connection, attempt: &str) -> BTreeMap<String, usize> {
+    let ids = conn
+        .prepare(
+            "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
+              ORDER BY COALESCE(started_at, updated_at), rowid, id",
+        )
+        .and_then(|mut statement| {
+            statement.query_map([attempt], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap_or_default();
+    ids.into_iter().enumerate().map(|(rank, id)| (id, rank)).collect()
 }
 
 fn reading_facts(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -> Vec<ReadingAttemptFact> {
@@ -300,10 +327,11 @@ fn redo_facts(window: &[Obs], assets: &mut AssetBook<'_>, offset: FixedOffset) -
 }
 
 /// One fact per essay. A re-evaluated attempt emits a fresh overall band and four
-/// criterion scores per evaluation, all keyed by the same attempt; only its latest
-/// evaluation counts, with that evaluation's own criteria (matched by `eventId`)
-/// and the latest finished session, so a retried essay is neither counted twice
-/// nor given a mix of two evaluations' scores.
+/// criterion scores per evaluation, all keyed by the same attempt. Only its
+/// canonical evaluation counts: the newest by creation, as the history view
+/// shows it, not the one that finished last. Its criteria are matched by
+/// `eventId` and its session by evaluation id, so a retried essay is neither
+/// counted twice nor given a mix of two evaluations' scores.
 fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<WritingFact> {
     let mut criteria: BTreeMap<&str, Vec<(String, f64)>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.criterion_score") {
@@ -311,26 +339,30 @@ fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<
             criteria.entry(field(&o.payload, "eventId")).or_default().push((name.to_owned(), value));
         }
     }
-    let mut latest: BTreeMap<&str, &Obs> = BTreeMap::new();
+    let mut by_attempt: BTreeMap<&str, Vec<&Obs>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
-        let order = |obs: &Obs| (obs.at.clone(), field(&obs.payload, "eventId").to_owned());
-        let slot = latest.entry(field(&o.payload, "attemptId")).or_insert(o);
-        if order(o) > order(slot) {
-            *slot = o;
-        }
+        by_attempt.entry(field(&o.payload, "attemptId")).or_default().push(o);
     }
-    let mut essays: Vec<&Obs> = latest.into_values().collect();
-    essays.sort_by(|left, right| left.at.cmp(&right.at).then(left.id.cmp(&right.id)));
+    let mut essays: Vec<(&Obs, String)> = by_attempt
+        .into_iter()
+        .filter_map(|(attempt, bands)| {
+            let ranks = evaluation_ranks(conn, attempt);
+            let ranked = bands.into_iter().map(|o| (evaluation_of(conn, field(&o.payload, "eventId")), o));
+            let order = |(evaluation, o): &(String, &Obs)| (ranks.get(evaluation).copied(), o.at.clone(), o.id.clone());
+            let (evaluation, band) = ranked.max_by_key(order)?;
+            Some((band, evaluation))
+        })
+        .collect();
+    essays.sort_by(|left, right| left.0.at.cmp(&right.0.at).then(left.0.id.cmp(&right.0.id)));
     essays
         .into_iter()
-        .map(|o| {
-            let attempt = field(&o.payload, "attemptId");
+        .map(|(o, evaluation)| {
             let mut scores = criteria.get(field(&o.payload, "eventId")).cloned().unwrap_or_default();
             scores.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(&right.0)));
             WritingFact {
                 obs_id: o.id.clone(),
-                attempt_id: attempt.to_owned(),
-                session_id: writing_session(conn, attempt),
+                attempt_id: field(&o.payload, "attemptId").to_owned(),
+                session_id: writing_session(conn, &evaluation),
                 task_type: o.payload.get("taskType").and_then(Value::as_str).unwrap_or("writing").to_owned(),
                 band: o.value_num.unwrap_or_default(),
                 criteria: scores,
