@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::text_guard::{contains_forbidden_inference_domain, contains_security_marker};
+use crate::text_guard::is_safe_for_prompt;
 use crate::{ExplicitPreferenceUpsert, MemoryScope};
 
 /// Key prefix for the learner's own free-text preference notes.
@@ -114,7 +114,7 @@ pub fn normalize_preference_text(text: &str) -> Result<String, ExplicitPreferenc
     }
     // Same predicate as `text_guard::is_safe_for_prompt`: the note is placed in
     // the coach prompt, so it gets the guard every prompt-bound text gets.
-    if contains_security_marker(trimmed) || contains_forbidden_inference_domain(trimmed) {
+    if !is_safe_for_prompt(trimmed) {
         return Err(ExplicitPreferenceIssue::UnsafeText);
     }
     Ok(trimmed.to_owned())
