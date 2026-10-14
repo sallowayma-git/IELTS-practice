@@ -6,7 +6,9 @@
 //! * the weekly pass: the single weekly consolidation, the only model call the
 //!   worker makes and the only place memory is written. It is first attempted on
 //!   a Saturday or Sunday, and an attempt that failed is retried on the following
-//!   days (once per local day) until it completes.
+//!   days (once per local day) until it completes or has failed
+//!   `WEEKLY_MAX_FAILED_ATTEMPTS` times; then that weekend is given up and the
+//!   next weekend's window folds its records in.
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Local};
@@ -24,6 +26,9 @@ use crate::cognitive_runtime::{is_weekend, local_day_start_utc, plan_weekly_wind
 /// How often an idle worker looks at the weekly pass. Cheap checks first, so on
 /// an ordinary weekday this is a clock comparison and one indexed lookup.
 const WEEKLY_CHECK_INTERVAL: Duration = Duration::from_secs(600);
+/// Failed attempts one weekend gets before it is given up until the next weekend.
+/// The failed runs stay in `dream_runs`, so the failure remains visible.
+const WEEKLY_MAX_FAILED_ATTEMPTS: usize = 3;
 const OPERATIONAL_PRUNE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 pub(crate) fn valid_local_window(user: &str, day: &str) -> bool {
@@ -107,7 +112,8 @@ pub(crate) fn run_daily_journal(db: &AppDb, job: &BackgroundJob, worker: &str) -
 /// this window belongs to (the latest Saturday or Sunday at or before now) has no
 /// completed run, none was attempted today, and either today is a weekend day (the
 /// first attempt) or that weekend's earlier attempt failed (the retry, on any
-/// following day). Automatic learning must be on.
+/// following day), and it has not yet failed `WEEKLY_MAX_FAILED_ATTEMPTS` times.
+/// Automatic learning must be on.
 fn weekly_window_due<Tz: chrono::TimeZone>(
     db: &AppDb,
     now: &DateTime<Tz>,
@@ -118,15 +124,19 @@ fn weekly_window_due<Tz: chrono::TimeZone>(
     let last_end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local"))?;
     let Some(window) = plan_weekly_window(now, last_end) else { return Ok(None) };
     let since = local_day_start_utc(now).to_rfc3339();
-    let (completed, attempted_today, failed) = db.with_conn(|conn| {
+    let (completed, attempted_today, failures) = db.with_conn(|conn| {
         Ok((
             ielts_db::weekly_run_completed(conn, "local", &window.key)?,
             ielts_db::weekly_attempted_since(conn, "local", &window.key, &since)?,
-            ielts_db::weekly_failed_attempt_exists(conn, "local", &window.key)?,
+            ielts_db::weekly_failed_attempt_count(conn, "local", &window.key)?,
         ))
     })?;
-    let due = !completed && !attempted_today && (is_weekend(now) || failed);
-    Ok(due.then_some(window))
+    Ok(weekly_attempt_due(completed, attempted_today, failures, is_weekend(now)).then_some(window))
+}
+
+/// The pure decision behind `weekly_window_due`.
+fn weekly_attempt_due(completed: bool, attempted_today: bool, failures: usize, weekend: bool) -> bool {
+    !completed && !attempted_today && failures < WEEKLY_MAX_FAILED_ATTEMPTS && (weekend || failures > 0)
 }
 
 /// Whether the window holds enough scored observations to be worth a model call.
@@ -519,13 +529,19 @@ mod tests {
         );
         complete_at(&db, &earlier, "2026-10-03T03:06:00Z");
 
-        // The weekend and every weekday after it fail, one attempt per day.
-        for day in 10..=16 {
+        // The weekend and the Monday after it fail, one attempt per day; then the
+        // weekend is given up for the rest of the week.
+        for day in 10..=12 {
             let now = at(8, &format!("2026-10-{day:02}T03:00:00Z"));
             assert_eq!(due(&db, &now).unwrap().key, KEY, "day {day}");
             fail_at(&db, KEY, &format!("2026-10-{day:02}T03:05:00Z"));
             assert!(due(&db, &now).is_none(), "one attempt per day, day {day}");
         }
+        for day in 13..=16 {
+            assert!(due(&db, &at(8, &format!("2026-10-{day:02}T03:00:00Z"))).is_none(), "given up, day {day}");
+        }
+        let failures = db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", KEY)).unwrap();
+        assert_eq!(failures, WEEKLY_MAX_FAILED_ATTEMPTS, "the failures stay in the run ledger");
         // The next Saturday is a new weekend whose window reaches back to the last success.
         let next = due(&db, &at(8, "2026-10-17T03:00:00Z")).unwrap();
         assert_eq!(next.key, "2026-W42");
@@ -534,6 +550,20 @@ mod tests {
         // Completing it ends the retries of the old, failed weekend for good.
         complete_at(&db, &next, "2026-10-17T03:06:00Z");
         assert!(due(&db, &at(8, "2026-10-19T03:00:00Z")).is_none());
+    }
+
+    #[test]
+    fn retries_stop_after_the_failure_cap() {
+        let first = |weekend| weekly_attempt_due(false, false, 0, weekend);
+        assert!(first(true) && !first(false), "the first attempt is weekend-only");
+        for failures in 1..WEEKLY_MAX_FAILED_ATTEMPTS {
+            assert!(weekly_attempt_due(false, false, failures, false), "retry {failures}");
+        }
+        for weekend in [true, false] {
+            assert!(!weekly_attempt_due(false, false, WEEKLY_MAX_FAILED_ATTEMPTS, weekend), "capped");
+            assert!(!weekly_attempt_due(false, true, 1, weekend), "once per local day");
+            assert!(!weekly_attempt_due(true, false, 0, weekend), "completed");
+        }
     }
 
     fn seed_scored_outcome(db: &AppDb, index: usize) {

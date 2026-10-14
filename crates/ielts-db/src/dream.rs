@@ -254,18 +254,19 @@ pub fn weekly_attempted_since(conn: &Connection, user_id: &str, key: &str, since
     Ok(exists != 0)
 }
 
-/// Whether a weekly attempt for the weekend key failed (and so is still owed a
-/// retry unless a completed run exists for the key).
-pub fn weekly_failed_attempt_exists(conn: &Connection, user_id: &str, key: &str) -> DbResult<bool> {
-    let exists: i64 = conn.query_row(
+/// How many weekly attempts for the weekend key failed. A failed weekend is owed
+/// a retry unless a completed run exists for the key, up to the worker's cap;
+/// the failed rows stay in the ledger either way.
+pub fn weekly_failed_attempt_count(conn: &Connection, user_id: &str, key: &str) -> DbResult<usize> {
+    let count: i64 = conn.query_row(
         &format!(
-            "SELECT EXISTS(SELECT 1 FROM dream_runs
-              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH})"
+            "SELECT COUNT(*) FROM dream_runs
+              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH}"
         ),
         params![normalize_user_id(user_id), key],
         |row| row.get(0),
     )?;
-    Ok(exists != 0)
+    Ok(count as usize)
 }
 
 /// End of the newest completed weekly window: where the next window starts.
