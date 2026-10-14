@@ -95,7 +95,9 @@ fn memories_are_active_normal_reading_and_guarded() {
         },
     )
     .unwrap();
-    upsert_explicit_preference(
+    // The write path refuses unsafe values; a row that predates that check
+    // must still be filtered out by the profile reader.
+    assert!(upsert_explicit_preference(
         &conn,
         &ielts_domain::ExplicitPreferenceUpsert {
             user_id: "local".into(),
@@ -104,6 +106,12 @@ fn memories_are_active_normal_reading_and_guarded() {
             value: json!("api_key=abc"),
             source: "user".into(),
         },
+    )
+    .is_err());
+    conn.execute(
+        "INSERT INTO explicit_user_preferences (user_id,preference_key,scope,value_json,status,source,created_at,updated_at)
+         VALUES ('local','coach.secret','global','\"api_key=abc\"','active','user','2026-10-01T00:00:00Z','2026-10-01T00:00:00Z')",
+        [],
     )
     .unwrap();
 
