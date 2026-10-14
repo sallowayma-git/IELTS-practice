@@ -213,41 +213,40 @@ pub(crate) fn evaluation_of(conn: &Connection, event: &str) -> String {
     .unwrap_or_default()
 }
 
-/// Creation order of the attempt's evaluations, oldest first: the order
-/// `load_evaluation_for_attempt` picks the canonical one by.
-fn evaluation_ranks(conn: &Connection, attempt: &str) -> BTreeMap<String, usize> {
-    let ids = conn
-        .prepare(
-            "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
-              ORDER BY COALESCE(started_at, updated_at), rowid, id",
-        )
-        .and_then(|mut statement| {
-            statement.query_map([attempt], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()
-        })
-        .unwrap_or_default();
-    ids.into_iter().enumerate().map(|(rank, id)| (id, rank)).collect()
+/// The attempt's canonical evaluation: the newest by creation, exactly the one
+/// `load_evaluation_for_attempt` (and so history) shows.
+fn canonical_evaluation(conn: &Connection, attempt: &str) -> String {
+    conn.query_row(
+        "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
+          ORDER BY COALESCE(started_at, updated_at) DESC, rowid DESC, id DESC LIMIT 1",
+        [attempt],
+        |row| row.get(0),
+    )
+    .unwrap_or_default()
 }
 
 /// A re-evaluated essay emits an overall band and four criterion scores per
 /// evaluation, all under one attempt. Keep only the scores of its canonical
-/// evaluation: the newest by creation, as history shows it, even when an older
-/// provider call finished after its retry. Everything downstream (the pack's
-/// lines, header, count and citable ids; the report's writing facts) then sees
-/// one essay with one consistent set of scores.
+/// evaluation, judged over the attempt's whole lineage rather than this
+/// window: an older provider call that finishes after its retry (even in a
+/// later window) never counts. Everything downstream (the pack's lines,
+/// header, count and citable ids; the report's writing facts) then sees each
+/// essay at most once, with the scores history shows.
 pub(crate) fn canonical_writing(conn: &Connection, window: Vec<Obs>) -> Vec<Obs> {
-    type Rank = (Option<usize>, String, String);
-    let mut best: BTreeMap<String, (Rank, String)> = BTreeMap::new();
-    let mut ranks: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
-    for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
-        let (attempt, event) = (field(&o.payload, "attemptId"), field(&o.payload, "eventId"));
-        let order = ranks.entry(attempt.to_owned()).or_insert_with(|| evaluation_ranks(conn, attempt));
-        let rank = (order.get(&evaluation_of(conn, event)).copied(), o.at.clone(), o.id.clone());
-        if best.get(attempt).is_none_or(|(current, _)| rank > *current) {
-            best.insert(attempt.to_owned(), (rank, event.to_owned()));
-        }
-    }
-    let canonical: BTreeSet<String> = best.into_values().map(|(_, event)| event).collect();
-    window.into_iter().filter(|o| !is_writing_score(o) || canonical.contains(field(&o.payload, "eventId"))).collect()
+    let mut canonical: BTreeMap<String, String> = BTreeMap::new();
+    window
+        .into_iter()
+        .filter(|o| {
+            if !is_writing_score(o) {
+                return true;
+            }
+            let attempt = field(&o.payload, "attemptId");
+            let evaluation = canonical.entry(attempt.to_owned()).or_insert_with(|| canonical_evaluation(conn, attempt));
+            // A ledger event with no evaluation row (imported history) has no
+            // lineage to judge against and stands as recorded.
+            evaluation.is_empty() || *evaluation == evaluation_of(conn, field(&o.payload, "eventId"))
+        })
+        .collect()
 }
 
 fn is_scored(observation: &Obs) -> bool {

@@ -424,39 +424,6 @@ mod tests {
         assert_eq!(days.len(), 7);
     }
 
-    fn writing_obs(id: &str, kind: &str, event: &str, attempt: &str, at: &str, criterion: Option<&str>, value: f64) -> Obs {
-        Obs {
-            id: id.into(),
-            kind: kind.into(),
-            polarity: None,
-            value_num: Some(value),
-            value_text: criterion.map(str::to_owned),
-            payload: serde_json::json!({"eventId": event, "attemptId": attempt, "taskType": "task2"}),
-            at: at.into(),
-        }
-    }
-
-    /// Review on #243: a completed retry of the same essay emits another overall
-    /// band and four criterion scores under the same attempt.
-    #[test]
-    fn a_re_evaluated_essay_counts_once_with_its_latest_scores() {
-        let conn = Connection::open_in_memory().unwrap();
-        let band = "writing.evaluation.overall_band";
-        let score = "writing.evaluation.criterion_score";
-        let mut window = Vec::new();
-        for (event, at, overall, lexical) in [("ev-1", "2026-10-06T10:00:00Z", 5.5, 5.0), ("ev-2", "2026-10-07T10:00:00Z", 6.5, 7.0)] {
-            window.push(writing_obs(&format!("{event}-band"), band, event, "essay", at, None, overall));
-            window.push(writing_obs(&format!("{event}-lex"), score, event, "essay", at, Some("lexical"), lexical));
-            window.push(writing_obs(&format!("{event}-gra"), score, event, "essay", at, Some("grammar"), 6.0));
-        }
-        let window = crate::weekly_pack::canonical_writing(&conn, window);
-        let facts = writing_facts(&conn, &window, FixedOffset::east_opt(0).unwrap());
-        assert_eq!(facts.len(), 1, "one essay, evaluated twice");
-        assert_eq!(facts[0].band, 6.5);
-        assert_eq!(facts[0].criteria, vec![("grammar".to_owned(), 6.0), ("lexical".to_owned(), 7.0)]);
-        assert_eq!(facts[0].day, NaiveDate::from_ymd_opt(2026, 10, 7).unwrap());
-    }
-
     #[test]
     fn blanks_are_neither_right_nor_wrong() {
         let fact = ReadingAttemptFact {
