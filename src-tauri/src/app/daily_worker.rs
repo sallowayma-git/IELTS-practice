@@ -407,6 +407,53 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_readers_and_writes_never_publish_a_stale_or_duplicate_version() {
+        let (_dir, db) = test_db("race.db");
+        let db = std::sync::Arc::new(db);
+        let day = "2026-10-01";
+        let writer = {
+            let db = db.clone();
+            std::thread::spawn(move || {
+                for index in 0..40 {
+                    db.with_conn(|conn| {
+                        conn.execute(
+                            "INSERT INTO attempts
+                               (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+                             VALUES (?1, 'reading', 'single', 'completed', '2026-10-01T12:00:00Z', 1000, 2,
+                                     '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z')",
+                            [format!("race-{index}")],
+                        )?;
+                        Ok(())
+                    }).unwrap();
+                }
+            })
+        };
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..20 {
+                        ensure_journal(&db, day).unwrap();
+                    }
+                })
+            })
+            .collect();
+        writer.join().unwrap();
+        readers.into_iter().for_each(|reader| reader.join().unwrap());
+
+        let latest = ensure_journal(&db, day).unwrap();
+        db.with_conn(|conn| {
+            let versions = ielts_db::list_journal_versions(conn, "local", day)?;
+            assert_eq!(versions[0].id, latest);
+            assert_eq!(versions[0].facts.attempts_count, 40, "the newest version saw every write");
+            for pair in versions.windows(2) {
+                assert_ne!(pair[0].source_hash, pair[1].source_hash, "a version republished unchanged facts");
+            }
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
     fn a_worker_retry_completes_the_same_journal_version() {
         let (_dir, db) = test_db("retry.db");
         let job = claimed_daily_job(&db, "2026-10-01", "worker-one");

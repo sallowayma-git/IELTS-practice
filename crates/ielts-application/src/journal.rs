@@ -35,6 +35,12 @@ pub trait JournalStore {
         &self,
         query: &DailyJournalQuery,
     ) -> Result<Vec<DailyJournal>, ApplicationError>;
+
+    /// The day's current journal: build fresh facts, reuse the latest version
+    /// when its `source_hash` matches, otherwise insert a new version. One
+    /// atomic store operation, so no write can land between the build and the
+    /// publication.
+    fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError>;
 }
 
 pub struct JournalService<'a> {
@@ -75,11 +81,7 @@ impl<'a> JournalService<'a> {
     /// path every reader (command, worker, weekly anchor) goes through, so a
     /// stored journal can never outlive the practice it summarises.
     pub fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError> {
-        let facts = self.store.build_facts(query)?;
-        match self.store.load_latest_journal(query)? {
-            Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
-            _ => self.store.insert_journal(&facts, None),
-        }
+        self.store.ensure_journal(query)
     }
 
     /// Every stored version of a day's journal, newest first.
@@ -161,6 +163,14 @@ mod tests {
             _query: &DailyJournalQuery,
         ) -> Result<Vec<DailyJournal>, ApplicationError> {
             Ok(self.journals.lock().unwrap().iter().rev().cloned().collect())
+        }
+
+        fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError> {
+            let facts = self.build_facts(query)?;
+            match self.load_latest_journal(query)? {
+                Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
+                _ => self.insert_journal(&facts, None),
+            }
         }
     }
 

@@ -641,6 +641,15 @@ impl JournalStore for ApplicationStore<'_> {
             .map_err(journal_error)
     }
 
+    fn ensure_journal(
+        &self,
+        query: &ielts_domain::DailyJournalQuery,
+    ) -> Result<ielts_domain::DailyJournal, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::ensure_journal(conn, &query.user_id, &query.journal_date))
+            .map_err(journal_error)
+    }
+
     fn list_journal_versions(
         &self,
         query: &ielts_domain::DailyJournalQuery,

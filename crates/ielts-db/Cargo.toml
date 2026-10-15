@@ -14,7 +14,7 @@ learner-model-v1 = ["learning-observation-v1"]
 
 [dependencies]
 ielts-domain = { path = "../ielts-domain" }
-rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+rusqlite = { version = "0.32", features = ["bundled", "backup", "functions"] }
 serde = { version = "1", features = ["derive"] }
 # float_roundtrip: projection payloads (e.g. gapHours) are re-parsed from
 # SQLite by learning_observations_verify; the default fast float parser can be

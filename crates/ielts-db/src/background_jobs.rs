@@ -360,7 +360,7 @@ fn canonical_activity_windows(conn: &Connection, now: &str) -> DbResult<Vec<Acti
     canonical_activity_windows_in(conn, now, &chrono::Local)
 }
 
-fn canonical_activity_windows_in<Tz: chrono::TimeZone>(
+fn canonical_activity_windows_in<Tz: chrono::TimeZone + Send + 'static>(
     conn: &Connection,
     now: &str,
     tz: &Tz,
@@ -368,43 +368,43 @@ fn canonical_activity_windows_in<Tz: chrono::TimeZone>(
     let Some(today) = crate::local_day::day_of_timestamp_in(now, tz) else {
         return Ok(Vec::new());
     };
+    crate::local_day::register_local_day_fn(conn, tz.clone())?;
     let mut statement = conn.prepare(
-        "SELECT ?1 AS user_id, COALESCE(submitted_at, started_at) AS activity_at
-         FROM attempts
-         UNION
-         SELECT ?1, COALESCE(completed_at, updated_at)
-         FROM writing_evaluations
-         UNION
-         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), occurred_at
-         FROM learning_events
-         UNION
-         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
-         FROM learner_observations
-         UNION
-         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
-         FROM learner_skill_observations
-         UNION
-         SELECT ?1, created_at
-         FROM memory_mutations
-         UNION
-         SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), created_at
-         FROM coach_feedback
-         UNION
-         SELECT ?1, created_at
-         FROM coach_reask_links",
+        "SELECT DISTINCT user_id, ielts_local_day(activity_at) AS activity_day FROM (
+           SELECT ?1 AS user_id, COALESCE(submitted_at, started_at) AS activity_at
+           FROM attempts
+           UNION
+           SELECT ?1, COALESCE(completed_at, updated_at)
+           FROM writing_evaluations
+           UNION
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), occurred_at
+           FROM learning_events
+           UNION
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+           FROM learner_observations
+           UNION
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+           FROM learner_skill_observations
+           UNION
+           SELECT ?1, created_at
+           FROM memory_mutations
+           UNION
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), created_at
+           FROM coach_feedback
+           UNION
+           SELECT ?1, created_at
+           FROM coach_reask_links
+         )
+         WHERE activity_day IS NOT NULL AND activity_day < ?2
+         ORDER BY user_id, activity_day",
     )?;
-    let rows = statement.query_map(params![DEFAULT_USER_ID], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+    let rows = statement.query_map(params![DEFAULT_USER_ID, today], |row| {
+        Ok(ActivityWindow {
+            user_id: row.get(0)?,
+            day: row.get(1)?,
+        })
     })?;
-    let mut windows = std::collections::BTreeSet::new();
-    for row in rows {
-        let (user_id, activity_at) = row?;
-        let day = activity_at.and_then(|at| crate::local_day::day_of_timestamp_in(&at, tz));
-        if let Some(day) = day.filter(|day| *day < today) {
-            windows.insert((user_id, day));
-        }
-    }
-    Ok(windows.into_iter().map(|(user_id, day)| ActivityWindow { user_id, day }).collect())
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
 fn enqueue_missing_daily_jobs(conn: &Connection, now: &str) -> DbResult<u64> {

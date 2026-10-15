@@ -132,6 +132,23 @@ fn deterministic_facts_aggregate_attempts_and_time() {
 }
 
 #[test]
+fn imported_offsets_are_bounded_as_instants_not_text() {
+    let (_dir, conn) = open_db();
+    // Inside 2026-08-16 UTC, though the text sorts after the day's end / before its start.
+    seed_attempt(&conn, "plus-14", "2026-08-17T08:30:00+14:00", 60_000); // 2026-08-16T18:30Z
+    seed_attempt(&conn, "minus-12", "2026-08-15T13:00:00-12:00", 120_000); // 2026-08-16T01:00Z
+    // Outside, though the text falls inside the day.
+    seed_attempt(&conn, "plus-14-early", "2026-08-16T05:00:00+14:00", 240_000); // 2026-08-15T15:00Z
+    seed_attempt(&conn, "minus-12-late", "2026-08-16T20:00:00-12:00", 480_000); // 2026-08-17T08:00Z
+    seed_coach_feedback(&conn, "msg-offset", "2026-08-17T09:00:00+14:00"); // 2026-08-16T19:00Z
+
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.attempts_count, 2);
+    assert_eq!(facts.time_spent_ms, 180_000);
+    assert_eq!(facts.coach_feedback_count, 1);
+}
+
+#[test]
 fn deterministic_facts_aggregate_writing_evals() {
     let (_dir, conn) = open_db();
     // Need attempts for the FK.

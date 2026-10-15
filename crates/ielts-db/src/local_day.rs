@@ -1,7 +1,8 @@
 //! The one notion of "a day" the journal uses: a calendar day in the machine's
 //! local time zone. A `YYYY-MM-DD` journal date names the local day; its bounds
-//! are the UTC instants of that day's local midnights, written in the same
-//! `to_rfc3339()` form the stores use so lexicographic range checks stay valid.
+//! are the UTC instants of that day's local midnights. Imports keep the source
+//! RFC3339 offset, so SQL must compare bounds as instants (`julianday(col) >=
+//! julianday(?)`), never as text.
 //! Each function has a `*_in(tz)` core so tests can pin a zone; production
 //! passes `chrono::Local`.
 
@@ -32,6 +33,22 @@ pub fn local_day_of<Z: TimeZone>(instant: &DateTime<Z>) -> String {
 /// Calendar day of `instant` as seen in `tz`.
 pub fn day_of_in<Z: TimeZone, Tz: TimeZone>(instant: &DateTime<Z>, tz: &Tz) -> String {
     instant.with_timezone(tz).date_naive().format("%Y-%m-%d").to_string()
+}
+
+/// Register `ielts_local_day(ts)` on `conn`: the calendar day in `tz` of an
+/// RFC3339 timestamp, or NULL when malformed. Lets SQLite group by local day so
+/// only distinct days, not every event, leave the database.
+pub(crate) fn register_local_day_fn<Tz>(conn: &rusqlite::Connection, tz: Tz) -> DbResult<()>
+where
+    Tz: TimeZone + Send + 'static,
+{
+    conn.create_scalar_function(
+        "ielts_local_day",
+        1,
+        rusqlite::functions::FunctionFlags::SQLITE_UTF8 | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+        move |ctx| Ok(ctx.get::<Option<String>>(0)?.and_then(|at| day_of_timestamp_in(&at, &tz))),
+    )?;
+    Ok(())
 }
 
 /// Calendar day in `tz` of a stored RFC3339 timestamp; `None` when malformed.

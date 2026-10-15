@@ -237,6 +237,20 @@ pub fn build_fresh_daily_facts(
     build_daily_facts(conn, user_id, day)
 }
 
+/// The day's current journal, decided and published in one step: refresh the
+/// projections, build the facts, reuse the latest version when its
+/// `source_hash` matches, otherwise insert a new version. The caller must hold
+/// the connection exclusively for the whole call (the app's `AppDb` mutex), so
+/// no practice write can land between the build and the publication and two
+/// readers cannot publish the same facts twice.
+pub fn ensure_journal(conn: &Connection, user_id: &str, day: &str) -> DbResult<DailyJournal> {
+    let facts = build_fresh_daily_facts(conn, user_id, day)?;
+    match load_latest_journal(conn, user_id, day)? {
+        Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
+        _ => insert_journal(conn, user_id, &facts, None),
+    }
+}
+
 /// Every stored version of a day's journal, newest first (superseded history
 /// included).
 pub fn list_journal_versions(
@@ -304,8 +318,8 @@ fn count_attempts(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM attempts
-             WHERE COALESCE(submitted_at, started_at) >= ?1
-               AND COALESCE(submitted_at, started_at) < ?2",
+             WHERE julianday(COALESCE(submitted_at, started_at)) >= julianday(?1)
+               AND julianday(COALESCE(submitted_at, started_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -327,8 +341,8 @@ fn writing_eval_summary(
         .query_row(
             "SELECT COUNT(*) FROM writing_evaluations
              WHERE status = 'completed'
-               AND COALESCE(completed_at, updated_at) >= ?1
-               AND COALESCE(completed_at, updated_at) < ?2",
+               AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+               AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -338,8 +352,8 @@ fn writing_eval_summary(
         .query_row(
             "SELECT COUNT(*) FROM writing_evaluations
              WHERE degradation_json IS NOT NULL AND degradation_json != '[]'
-               AND COALESCE(completed_at, updated_at) >= ?1
-               AND COALESCE(completed_at, updated_at) < ?2",
+               AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+               AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -352,8 +366,8 @@ fn writing_eval_summary(
         "SELECT AVG(json_extract(result_json, '$.score.overall'))
          FROM writing_evaluations
          WHERE status = 'completed' AND result_json IS NOT NULL
-           AND COALESCE(completed_at, updated_at) >= ?1
-           AND COALESCE(completed_at, updated_at) < ?2",
+           AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+           AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
         params![day_start, day_end],
         |row| row.get(0),
     )?;
@@ -386,15 +400,15 @@ fn skill_deltas(
 ) -> DbResult<Vec<SkillDelta>> {
     let mut stmt = conn.prepare(
         "SELECT skill_key,
-                SUM(observed_at >= ?2),
-                AVG(CASE WHEN observed_at >= ?2 THEN outcome END),
-                SUM(observed_at >= ?2 AND outcome < ?5),
-                AVG(CASE WHEN observed_at < ?2 THEN outcome END),
-                SUM(observed_at < ?2 AND outcome < ?5)
+                SUM(julianday(observed_at) >= julianday(?2)),
+                AVG(CASE WHEN julianday(observed_at) >= julianday(?2) THEN outcome END),
+                SUM(julianday(observed_at) >= julianday(?2) AND outcome < ?5),
+                AVG(CASE WHEN julianday(observed_at) < julianday(?2) THEN outcome END),
+                SUM(julianday(observed_at) < julianday(?2) AND outcome < ?5)
          FROM learner_skill_observations
-         WHERE user_id = ?1 AND observed_at < ?3
+         WHERE user_id = ?1 AND julianday(observed_at) < julianday(?3)
          GROUP BY skill_key
-         HAVING SUM(observed_at >= ?2) > 0
+         HAVING SUM(julianday(observed_at) >= julianday(?2)) > 0
          ORDER BY skill_key
          LIMIT ?4",
     )?;
@@ -490,7 +504,7 @@ fn memory_events(
     let event_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.sensitivity = 'normal' AND mi.user_id = ?3",
         params![day_start, day_end, user_id],
         |row| row.get(0),
@@ -502,7 +516,7 @@ fn memory_events(
         "SELECT m.id, m.memory_id, mi.namespace, mi.canonical_key, m.operation
          FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.sensitivity = 'normal'
            AND mi.user_id = ?4
          ORDER BY m.created_at ASC, m.id ASC
@@ -592,7 +606,7 @@ fn memory_mutations(
         "SELECT m.operation, COUNT(*)
          FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.user_id = ?3
          GROUP BY m.operation",
     )?;
@@ -642,7 +656,7 @@ fn coach_feedback_count(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM coach_feedback
-             WHERE created_at >= ?1 AND created_at < ?2",
+             WHERE julianday(created_at) >= julianday(?1) AND julianday(created_at) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -661,7 +675,7 @@ fn coach_reask_count(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM coach_reask_links
-             WHERE created_at >= ?1 AND created_at < ?2",
+             WHERE julianday(created_at) >= julianday(?1) AND julianday(created_at) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -680,8 +694,8 @@ fn time_spent(
     let total: Option<i64> = conn
         .query_row(
             "SELECT COALESCE(SUM(duration_ms), 0) FROM attempts
-             WHERE COALESCE(submitted_at, started_at) >= ?1
-               AND COALESCE(submitted_at, started_at) < ?2",
+             WHERE julianday(COALESCE(submitted_at, started_at)) >= julianday(?1)
+               AND julianday(COALESCE(submitted_at, started_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
