@@ -7,7 +7,10 @@
  *     vietnamese; the UI copy is Latin, CJK falls back to system YaHei/PingFang).
  *   - Source Serif 4 Variable: Latin subset.
  *   - Noto Serif SC: weight 600 only, split into unicode-range chunks so the
- *     browser downloads only the glyph blocks a page uses.
+ *     browser downloads only the glyph blocks a page uses. Registered as
+ *     'Atlas Noto Serif SC', not the package's 'Noto Serif SC': the frozen exam
+ *     stack (exam-frozen.css) names the system 'Noto Serif SC', and a bundled
+ *     face under that name would change exam headings' glyphs.
  * Regenerate from node_modules when a fontsource package is upgraded.
  */
 
@@ -40,7 +43,7 @@
 
 /* noto-serif-sc-[4]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -50,7 +53,7 @@
 
 /* noto-serif-sc-[5]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -60,7 +63,7 @@
 
 /* noto-serif-sc-[6]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -70,7 +73,7 @@
 
 /* noto-serif-sc-[21]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -80,7 +83,7 @@
 
 /* noto-serif-sc-[22]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -90,7 +93,7 @@
 
 /* noto-serif-sc-[23]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -100,7 +103,7 @@
 
 /* noto-serif-sc-[24]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -110,7 +113,7 @@
 
 /* noto-serif-sc-[25]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -120,7 +123,7 @@
 
 /* noto-serif-sc-[26]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -130,7 +133,7 @@
 
 /* noto-serif-sc-[27]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -140,7 +143,7 @@
 
 /* noto-serif-sc-[28]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -150,7 +153,7 @@
 
 /* noto-serif-sc-[29]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -160,7 +163,7 @@
 
 /* noto-serif-sc-[30]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -170,7 +173,7 @@
 
 /* noto-serif-sc-[31]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -180,7 +183,7 @@
 
 /* noto-serif-sc-[32]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -190,7 +193,7 @@
 
 /* noto-serif-sc-[33]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -200,7 +203,7 @@
 
 /* noto-serif-sc-[34]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -210,7 +213,7 @@
 
 /* noto-serif-sc-[35]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -220,7 +223,7 @@
 
 /* noto-serif-sc-[36]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -230,7 +233,7 @@
 
 /* noto-serif-sc-[37]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -240,7 +243,7 @@
 
 /* noto-serif-sc-[38]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -250,7 +253,7 @@
 
 /* noto-serif-sc-[39]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -260,7 +263,7 @@
 
 /* noto-serif-sc-[40]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -270,7 +273,7 @@
 
 /* noto-serif-sc-[41]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -280,7 +283,7 @@
 
 /* noto-serif-sc-[42]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -290,7 +293,7 @@
 
 /* noto-serif-sc-[43]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -300,7 +303,7 @@
 
 /* noto-serif-sc-[44]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -310,7 +313,7 @@
 
 /* noto-serif-sc-[45]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -320,7 +323,7 @@
 
 /* noto-serif-sc-[46]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -330,7 +333,7 @@
 
 /* noto-serif-sc-[47]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -340,7 +343,7 @@
 
 /* noto-serif-sc-[48]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -350,7 +353,7 @@
 
 /* noto-serif-sc-[49]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -360,7 +363,7 @@
 
 /* noto-serif-sc-[50]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -370,7 +373,7 @@
 
 /* noto-serif-sc-[51]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -380,7 +383,7 @@
 
 /* noto-serif-sc-[52]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -390,7 +393,7 @@
 
 /* noto-serif-sc-[53]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -400,7 +403,7 @@
 
 /* noto-serif-sc-[54]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -410,7 +413,7 @@
 
 /* noto-serif-sc-[55]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -420,7 +423,7 @@
 
 /* noto-serif-sc-[56]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -430,7 +433,7 @@
 
 /* noto-serif-sc-[57]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -440,7 +443,7 @@
 
 /* noto-serif-sc-[58]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -450,7 +453,7 @@
 
 /* noto-serif-sc-[59]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -460,7 +463,7 @@
 
 /* noto-serif-sc-[60]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -470,7 +473,7 @@
 
 /* noto-serif-sc-[61]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -480,7 +483,7 @@
 
 /* noto-serif-sc-[62]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -490,7 +493,7 @@
 
 /* noto-serif-sc-[63]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -500,7 +503,7 @@
 
 /* noto-serif-sc-[64]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -510,7 +513,7 @@
 
 /* noto-serif-sc-[65]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -520,7 +523,7 @@
 
 /* noto-serif-sc-[66]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -530,7 +533,7 @@
 
 /* noto-serif-sc-[67]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -540,7 +543,7 @@
 
 /* noto-serif-sc-[68]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -550,7 +553,7 @@
 
 /* noto-serif-sc-[69]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -560,7 +563,7 @@
 
 /* noto-serif-sc-[70]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -570,7 +573,7 @@
 
 /* noto-serif-sc-[71]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -580,7 +583,7 @@
 
 /* noto-serif-sc-[72]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -590,7 +593,7 @@
 
 /* noto-serif-sc-[73]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -600,7 +603,7 @@
 
 /* noto-serif-sc-[74]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -610,7 +613,7 @@
 
 /* noto-serif-sc-[75]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -620,7 +623,7 @@
 
 /* noto-serif-sc-[76]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -630,7 +633,7 @@
 
 /* noto-serif-sc-[77]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -640,7 +643,7 @@
 
 /* noto-serif-sc-[78]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -650,7 +653,7 @@
 
 /* noto-serif-sc-[79]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -660,7 +663,7 @@
 
 /* noto-serif-sc-[80]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -670,7 +673,7 @@
 
 /* noto-serif-sc-[81]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -680,7 +683,7 @@
 
 /* noto-serif-sc-[82]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -690,7 +693,7 @@
 
 /* noto-serif-sc-[83]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -700,7 +703,7 @@
 
 /* noto-serif-sc-[84]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -710,7 +713,7 @@
 
 /* noto-serif-sc-[85]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -720,7 +723,7 @@
 
 /* noto-serif-sc-[86]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -730,7 +733,7 @@
 
 /* noto-serif-sc-[87]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -740,7 +743,7 @@
 
 /* noto-serif-sc-[88]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -750,7 +753,7 @@
 
 /* noto-serif-sc-[89]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -760,7 +763,7 @@
 
 /* noto-serif-sc-[90]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -770,7 +773,7 @@
 
 /* noto-serif-sc-[91]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -780,7 +783,7 @@
 
 /* noto-serif-sc-[97]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -790,7 +793,7 @@
 
 /* noto-serif-sc-[98]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -800,7 +803,7 @@
 
 /* noto-serif-sc-[99]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -810,7 +813,7 @@
 
 /* noto-serif-sc-[100]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -820,7 +823,7 @@
 
 /* noto-serif-sc-[101]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -830,7 +833,7 @@
 
 /* noto-serif-sc-[102]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -840,7 +843,7 @@
 
 /* noto-serif-sc-[103]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -850,7 +853,7 @@
 
 /* noto-serif-sc-[104]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -860,7 +863,7 @@
 
 /* noto-serif-sc-[105]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -870,7 +873,7 @@
 
 /* noto-serif-sc-[106]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -880,7 +883,7 @@
 
 /* noto-serif-sc-[107]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -890,7 +893,7 @@
 
 /* noto-serif-sc-[108]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -900,7 +903,7 @@
 
 /* noto-serif-sc-[109]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -910,7 +913,7 @@
 
 /* noto-serif-sc-[110]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -920,7 +923,7 @@
 
 /* noto-serif-sc-[111]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -930,7 +933,7 @@
 
 /* noto-serif-sc-[112]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -940,7 +943,7 @@
 
 /* noto-serif-sc-[113]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -950,7 +953,7 @@
 
 /* noto-serif-sc-[114]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -960,7 +963,7 @@
 
 /* noto-serif-sc-[115]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -970,7 +973,7 @@
 
 /* noto-serif-sc-[116]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -980,7 +983,7 @@
 
 /* noto-serif-sc-[117]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -990,7 +993,7 @@
 
 /* noto-serif-sc-[118]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -1000,7 +1003,7 @@
 
 /* noto-serif-sc-[119]-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -1010,7 +1013,7 @@
 
 /* noto-serif-sc-cyrillic-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -1020,7 +1023,7 @@
 
 /* noto-serif-sc-vietnamese-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -1030,7 +1033,7 @@
 
 /* noto-serif-sc-latin-ext-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
@@ -1040,7 +1043,7 @@
 
 /* noto-serif-sc-latin-600-normal */
 @font-face {
-  font-family: 'Noto Serif SC';
+  font-family: 'Atlas Noto Serif SC';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
