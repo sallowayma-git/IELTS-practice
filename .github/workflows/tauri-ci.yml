@@ -98,11 +98,6 @@ jobs:
         run: python -m unittest discover -s developer/tests/e2e -p visual_test_support_test.py -v
       - name: Run visual regression matrix
         run: python developer/tests/e2e/run_visual_regressions.py
-      - name: TEMP capture exam-freeze baseline on the CI runner
-        if: always()
-        run: |
-          python developer/tests/e2e/exam_freeze_visual_check.py --update-baseline
-          python -c "import base64,io,tarfile,textwrap; b=io.BytesIO(); t=tarfile.open(fileobj=b,mode='w:gz'); t.add('developer/tests/e2e/baselines/exam-freeze',arcname='exam-freeze'); t.close(); print('BASELINE-B64-BEGIN'); print(chr(10).join(textwrap.wrap(base64.b64encode(b.getvalue()).decode(),2000))); print('BASELINE-B64-END')"
       - name: Upload visual regression evidence
         if: always()
         uses: actions/upload-artifact@v4
