@@ -42,8 +42,14 @@ HISTORY_SCREENSHOT = ROOT / "developer/tests/e2e/reports/history-current.png"
 COMPOSE_SCREENSHOT = ROOT / "developer/tests/e2e/reports/compose-current.png"
 TOPICS_SCREENSHOT = ROOT / "developer/tests/e2e/reports/topics-current.png"
 NOTEBOOK_SCREENSHOT = ROOT / "developer/tests/e2e/reports/notebook-current.png"
+NOTEBOOK_WEEKLY_SCREENSHOT = ROOT / "developer/tests/e2e/reports/notebook-weekly-current.png"
 DRIVER_LOG = ROOT / "developer/tests/e2e/reports/tauri-driver.log"
 READING_P95_BUDGET_MS = 3000
+FAKE_NOW_ENV = "IELTS_ATLAS_FAKE_NOW"
+WEEKLY_MIN_OBSERVATIONS = 8  # ielts_db::WEEKLY_MIN_OBSERVATIONS
+WEEKLY_TITLE = "这一周的练习回顾"
+# Number-free on purpose: a weekly sentence may only cite numbers in its block's data.
+WEEKLY_SENTENCE = "这一块的数据值得留意。"
 
 
 def sha256_file(path: Path) -> str:
@@ -187,7 +193,7 @@ def blocked(reason: str, missing: list[str]) -> int:
                          "updaterBoundary": "blocked",
                          "sqliteRestart": "blocked",
                          "coachReceipts": "blocked", "automaticDaily": "blocked",
-                         "dailyRestartDedupe": "blocked",
+                         "dailyRestartDedupe": "blocked", "weeklyReport": "blocked",
                          "promptAuthorityBoundary": "blocked"}}
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -289,6 +295,103 @@ def free_tcp_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def pick_ports(configured_port: int | None) -> tuple[int, int]:
+    driver_port = configured_port or free_tcp_port()
+    native_port = free_tcp_port()
+    while native_port == driver_port:
+        native_port = free_tcp_port()
+    return driver_port, native_port
+
+
+def start_tauri_driver(driver: "Driver", tauri: str, native: str, ports: tuple[int, int],
+                       env: dict, driver_log) -> subprocess.Popen:
+    """Start tauri-driver (the app inherits `env`) and wait for its /status."""
+    proc = subprocess.Popen(
+        [tauri, "--port", str(ports[0]), "--native-port", str(ports[1]), "--native-driver", native],
+        cwd=ROOT, stdout=driver_log, stderr=subprocess.STDOUT, text=True, env=env,
+    )
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            driver_log.flush()
+            raise RuntimeError(f"tauri-driver exited with code {proc.returncode}: {log_tail(DRIVER_LOG)}")
+        try:
+            driver.call("GET", "/status", timeout_seconds=1)
+        except Exception:
+            time.sleep(0.25)
+            continue
+        if proc.poll() is not None:
+            raise RuntimeError(f"tauri-driver exited with code {proc.returncode}: {log_tail(DRIVER_LOG)}")
+        return proc
+    driver_log.flush()
+    stop_process(proc)
+    raise RuntimeError(f"tauri-driver was not ready after 30s: {log_tail(DRIVER_LOG)}")
+
+
+def is_weekly_request(body: dict) -> bool:
+    messages = body.get("messages") or []
+    return any(message.get("role") == "system"
+               and "weekly reviewer" in str(message.get("content", "")).lower()
+               for message in messages)
+
+
+def _first_json_object(text: str):
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        if start < 0:
+            return None
+        try:
+            return json.JSONDecoder().raw_decode(text, start)[0]
+        except json.JSONDecodeError:
+            return None
+
+
+def weekly_block_ids(body: dict) -> list[str]:
+    """Block ids of the weekly pack (`pack.blocks[].id`) in the request's user message."""
+    for message in body.get("messages") or []:
+        if message.get("role") != "user" or not isinstance(message.get("content"), str):
+            continue
+        value = _first_json_object(message["content"])
+        pack = value.get("pack", value) if isinstance(value, dict) else None
+        blocks = pack.get("blocks") if isinstance(pack, dict) else None
+        if isinstance(blocks, list):
+            ids = [block.get("id") for block in blocks if isinstance(block, dict)]
+            return list(dict.fromkeys(item for item in ids if isinstance(item, str) and item))
+    return []
+
+
+def weekly_answer(body: dict) -> str:
+    sentences = {block_id: WEEKLY_SENTENCE for block_id in weekly_block_ids(body)}
+    return json.dumps({"title": WEEKLY_TITLE, "sentences": sentences, "mutations": []}, ensure_ascii=False)
+
+
+def send_weekly_completion(handler: http.server.BaseHTTPRequestHandler, body: dict, model: str) -> None:
+    payload = json.dumps({"id": "chatcmpl-packaged-weekly", "model": model,
+                          "choices": [{"message": {"role": "assistant", "content": weekly_answer(body)}}],
+                          "usage": {"prompt_tokens": 13, "completion_tokens": 9}}).encode("utf-8")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("x-request-id", "packaged-request-weekly")
+    handler.send_header("Content-Length", str(len(payload)))
+    handler.end_headers()
+    handler.wfile.write(payload)
+
+
+def weekly_fake_now(now: datetime) -> datetime:
+    """First Sunday 10:00 strictly after `now`, in `now`'s own UTC offset."""
+    morning = now.replace(hour=10, minute=0, second=0, microsecond=0)
+    sunday = morning + timedelta(days=(6 - now.weekday()) % 7)
+    return sunday if sunday > now else sunday + timedelta(days=7)
+
+
+def weekday_fake_now(now: datetime) -> datetime:
+    """The Wednesday before that Sunday: no weekend, so no weekly pass runs
+    during the daily scenarios whatever day the CI clock says."""
+    return weekly_fake_now(now) - timedelta(days=4)
+
+
 class FakeAgentProvider:
     FINAL_REQUEST_ID = "packaged-request-final"
 
@@ -304,6 +407,9 @@ class FakeAgentProvider:
                 length = int(self.headers.get("Content-Length", "0"))
                 body = json.loads(self.rfile.read(length) or b"{}")
                 owner.requests.append(body)
+                if is_weekly_request(body):
+                    send_weekly_completion(self, body, "packaged-fake-model-actual")
+                    return
                 messages = body.get("messages") or []
                 tool_results = [message for message in messages if message.get("role") == "tool"]
                 if tool_results:
@@ -388,6 +494,9 @@ class FakeCoachProvider:
                     return
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
                 owner.requests.append(body)
+                if is_weekly_request(body):
+                    send_weekly_completion(self, body, owner.MODEL)
+                    return
                 content = json.dumps({"answer": 17 if owner.invalid_answer else "Check the canonical passage qualifier."})
                 owner.responses.append(content)
                 payload = json.dumps({"id": "packaged-coach-body", "model": owner.MODEL,
@@ -668,15 +777,9 @@ def seed_closed_daily_attempt(app_data: Path, day: str):
                      ("packaged-daily-yesterday", stamp, stamp, stamp, stamp, stamp))
 
 
-def is_weekly_request(body: dict) -> bool:
-    messages = body.get("messages") or []
-    return bool(messages) and "weekly reviewer" in str(messages[0].get("content", ""))
-
-
 def model_calls(provider) -> int:
     """Provider requests that the Daily pass could have made. The weekly pass is
-    a separate, weekend-only model call (weekly_window_due), so it is excluded;
-    the harness runs on whatever day the clock says, Saturday and Sunday included."""
+    a separate, weekend-only model call (weekly_window_due), so it is excluded."""
     return sum(1 for body in provider.requests if not is_weekly_request(body))
 
 
@@ -745,6 +848,66 @@ def wait_daily_receipts(app_data: Path, day: str, today: str, timeout_seconds: i
             )],
         }
     raise RuntimeError(f"automatic Daily incomplete after {timeout_seconds}s: {json.dumps(diagnostic, ensure_ascii=False)}")
+
+
+SCORED_READING_ANSWERS = (
+    "SELECT COUNT(*) FROM attempt_answers a JOIN attempts t ON t.id = a.attempt_id "
+    "WHERE t.activity = 'reading' AND t.status = 'completed' AND a.is_correct IS NOT NULL")
+
+
+def ensure_weekly_evidence(driver: Driver, app_data: Path, asset_ids: list[str]) -> int:
+    """Reuse the flow's reading submissions; submit more (blank answers still
+    score as wrong) until the weekly window holds enough scored outcomes."""
+    for index, asset_id in enumerate(asset_ids):
+        with closing(database_connection(app_data)) as conn:
+            if conn.execute(SCORED_READING_ANSWERS).fetchone()[0] >= WEEKLY_MIN_OBSERVATIONS:
+                break
+        invoke_data(driver, "reading_submit_attempt", {"cmd": {
+            "attemptId": f"packaged-weekly-attempt-{index}", "assetId": asset_id, "answers": {},
+            "markedQuestions": [], "questionTimeline": [], "idempotencyKey": f"packaged-weekly-submit-{index}"}})
+    with closing(database_connection(app_data)) as conn:
+        scored = conn.execute(SCORED_READING_ANSWERS).fetchone()[0]
+    require(scored >= WEEKLY_MIN_OBSERVATIONS, f"weekly window holds only {scored} scored outcomes")
+    return scored
+
+
+def final_weekly_run(rows: list[dict]) -> dict | None:
+    for row in rows:
+        if row["status"] != "completed" or not row["digest_json"]:
+            continue
+        digest = json.loads(row["digest_json"])
+        if digest.get("schemaVersion") == 2 and digest.get("state") == "final":
+            return {"runId": row["id"], "inputHash": row["input_hash"]}
+    return None
+
+
+def wait_weekly_run(app_data: Path, timeout_seconds: int = 180) -> dict:
+    deadline = time.monotonic() + timeout_seconds
+    rows: list[dict] = []
+    while time.monotonic() < deadline:
+        with closing(database_connection(app_data)) as conn:
+            rows = [dict(row) for row in conn.execute(
+                "SELECT r.id, r.status, r.input_hash, d.digest_json FROM dream_runs r "
+                "LEFT JOIN weekly_digests d ON d.run_id = r.id "
+                "WHERE r.input_hash LIKE 'weekly:%' ORDER BY r.id")]
+        final = final_weekly_run(rows)
+        if final:
+            return final
+        time.sleep(0.5)
+    raise RuntimeError(f"weekly run incomplete after {timeout_seconds}s: {json.dumps(rows, ensure_ascii=False)[:2000]}")
+
+
+def check_notebook_week(driver: Driver) -> dict:
+    driver.script("location.hash = '#/'; return true")
+    wait_for_value(driver, "return location.hash === '#/' && !document.querySelector('[data-notebook]')")
+    driver.script("location.hash = '#/notebook'; return true")
+    return wait_for_value(driver, f"""
+        const week = Array.from(document.querySelectorAll('[data-notebook-week]')).find((entry) =>
+          entry.textContent.includes({json.dumps(WEEKLY_TITLE)})
+          && entry.textContent.includes({json.dumps(WEEKLY_SENTENCE)}));
+        return week ? {{window: week.getAttribute('data-notebook-week'),
+                        textLength: week.textContent.trim().length}} : null;
+    """, 30, label="weekly report on the notebook page")
 
 
 def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Path, dict]:
@@ -912,18 +1075,20 @@ def main() -> int:
         return blocked("packaged WebView dependencies are unavailable; no fallback is permitted", missing)
 
     configured_url = os.environ.get("TAURI_WEBDRIVER_URL")
-    driver_port = free_tcp_port()
+    configured_port = None
     if configured_url:
         parsed_url = urllib.parse.urlparse(configured_url)
         if parsed_url.hostname not in {"127.0.0.1", "localhost"} or parsed_url.port is None:
             return blocked("TAURI_WEBDRIVER_URL must use a local host and explicit port", [configured_url])
-        driver_port = parsed_url.port
-    native_port = free_tcp_port()
-    while native_port == driver_port:
-        native_port = free_tcp_port()
+        configured_port = parsed_url.port
+    driver_port, native_port = pick_ports(configured_port)
     driver_url = configured_url or f"http://127.0.0.1:{driver_port}"
     driver = Driver(driver_url)
-    checks = {"coachReceipts": "not_run", "automaticDaily": "not_run", "dailyRestartDedupe": "not_run"}
+    checks = {"coachReceipts": "not_run", "automaticDaily": "not_run", "dailyRestartDedupe": "not_run",
+              "weeklyReport": "not_run"}
+    local_now = datetime.now().astimezone()
+    weekly_now = weekly_fake_now(local_now).isoformat(timespec="seconds")
+    weekday_now = weekday_fake_now(local_now).isoformat(timespec="seconds")
     metadata = binary_metadata(app, tauri, native, build_performed)
     metadata["webview2RuntimeVersion"] = native_selection.runtime_version if native_selection else installed_webview2_version()
     if native_selection:
@@ -960,46 +1125,17 @@ def main() -> int:
         metadata["stagedRuntimePath"] = str(runtime_app)
         DRIVER_LOG.parent.mkdir(parents=True, exist_ok=True)
         driver_log = DRIVER_LOG.open("w", encoding="utf-8", errors="replace")
-        proc = subprocess.Popen(
-            [
-                tauri,
-                "--port",
-                str(driver_port),
-                "--native-port",
-                str(native_port),
-                "--native-driver",
-                native,
-            ],
-            cwd=ROOT,
-            stdout=driver_log,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env={
-                **os.environ,
-                "APPDATA": isolated_app_data.name,
-                "WEBVIEW2_USER_DATA_FOLDER": str(Path(isolated_app_data.name) / "webview"),
-            },
-        )
-        status = None
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                driver_log.flush()
-                raise RuntimeError(
-                    f"tauri-driver exited with code {proc.returncode}: {log_tail(DRIVER_LOG)}"
-                )
-            try:
-                status = driver.call("GET", "/status", timeout_seconds=1)
-                if proc.poll() is not None:
-                    raise RuntimeError(
-                        f"tauri-driver exited with code {proc.returncode}: {log_tail(DRIVER_LOG)}"
-                    )
-                break
-            except Exception:
-                time.sleep(0.25)
-        if status is None:
-            driver_log.flush()
-            raise RuntimeError(f"tauri-driver was not ready after 30s: {log_tail(DRIVER_LOG)}")
+        launch_env = {
+            **os.environ,
+            "APPDATA": isolated_app_data.name,
+            "WEBVIEW2_USER_DATA_FOLDER": str(Path(isolated_app_data.name) / "webview"),
+        }
+        # The app reads its weekly clock from this env (inherited through
+        # tauri-driver). Until the weekly scenario it is pinned to a weekday, so
+        # a CI run on a real weekend cannot complete a weekly pass early.
+        metadata["fakeNow"] = {"daily": weekday_now, "weekly": weekly_now}
+        proc = start_tauri_driver(driver, tauri, native, (driver_port, native_port),
+                                  {**launch_env, FAKE_NOW_ENV: weekday_now}, driver_log)
         driver.create(str(runtime_app))
         checks["launch"] = "passed"
         wait_for_vue(driver)
@@ -1384,6 +1520,30 @@ def main() -> int:
                     f"last agent request: {json.dumps(fake_agent_provider.requests[-1], ensure_ascii=False)[:600]}")
             time.sleep(0.25)
         checks["dailyRestartDedupe"] = "passed"
+        listed_ids = (item.get("id") or item.get("assetId") or item.get("asset_id") for item in assets)
+        asset_ids = list(dict.fromkeys([str(asset_id), *(str(item) for item in listed_ids if item)]))
+        app_data = Path(isolated_app_data.name)
+        scored = ensure_weekly_evidence(driver, app_data, asset_ids)
+        # Relaunch on the first Sunday 10:00 after this practice: the only way to
+        # vary the app's env is a new tauri-driver.
+        close_native_app(driver, runtime_app)
+        stop_process(proc)
+        driver_port, native_port = pick_ports(configured_port)
+        driver.base = configured_url.rstrip("/") if configured_url else f"http://127.0.0.1:{driver_port}"
+        proc = start_tauri_driver(driver, tauri, native, (driver_port, native_port),
+                                  {**launch_env, FAKE_NOW_ENV: weekly_now}, driver_log)
+        driver.create(str(runtime_app))
+        wait_for_vue(driver)
+        weekly_run = wait_weekly_run(app_data)
+        week = check_notebook_week(driver)
+        driver.screenshot(NOTEBOOK_WEEKLY_SCREENSHOT)
+        weekly_requests = sum(is_weekly_request(body) for provider in (fake_agent_provider, fake_coach_provider)
+                              for body in provider.requests)
+        require(weekly_requests == 1, f"expected exactly one weekly provider request, got {weekly_requests}")
+        metadata["weeklyReport"] = {**weekly_run, "fakeNow": weekly_now, "scoredOutcomes": scored,
+                                    "providerRequests": weekly_requests, "notebookWeek": week,
+                                    "screenshot": str(NOTEBOOK_WEEKLY_SCREENSHOT.resolve())}
+        checks["weeklyReport"] = "passed"
         status = "passed" if all(v == "passed" for v in checks.values()) else "failed"
         report = {"schemaVersion": 2, "generatedAt": datetime.now(timezone.utc).isoformat(),
                   "status": status, "exitCode": 0 if status == "passed" else 1,

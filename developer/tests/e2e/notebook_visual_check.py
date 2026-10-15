@@ -1,15 +1,18 @@
-"""札记 (Notebook) route: consolidation output as dated prose, nothing more.
+"""札记 (Notebook) route: daily prose entries and the v2 weekly reports.
 
 Checks the learner-facing contract: dated entries read in reverse order,
 only finished journal days are read (never today's open day), evidence opens
 inline as footnotes, memories expose exactly 不准确 / 忘记, and none of the
-retired workbench machinery (stat tiles, prompt box, run buttons) leaks in.
+retired workbench machinery (prompt box, run buttons) leaks in. Weekly
+reports (notebook_weekly_mock.py): the live week first, then finished weeks;
+each state says what it is; blocks render with accessible charts and links.
 """
 import json
 import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from notebook_weekly_mock import WEEKLY_MOCK
 from visual_test_support import capture_state, wait_for_route_layout
 
 
@@ -98,12 +101,8 @@ MOCK = r"""
       case 'journal_get_daily': return { ok: true, data: journals[args.query.journalDate] || journalShell(args.query.journalDate, {}) };
       case 'memory_catalog_list': return { ok: true, data: { userId: 'local',
         entries: window.__notebookEmpty ? [] : window.__catalog.filter(row => row.status === 'active'), truncated: false } };
-      case 'study_plan_get_latest': return { ok: true, data: { plan: { id: 'plan-1', userId: 'local', goal: '复习判断题边界', availableMinutes: 45, targetDate: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }, items: [
-        { id: 'spi-1', planId: 'plan-1', skillProbe: { skillKey: 'reading.tfng', probeKind: 'contrastive_pair' },
-          whyText: '用两组“错误 / 未提及”对照题，练习定位原文证据。', estimatedMinutes: 15, done: false, createdAt: '2026-10-01T00:00:00Z' },
-        { id: 'spi-2', planId: 'plan-1', skillProbe: 'reading.matching_headings',
-          whyText: '已完成的项不再出现。', estimatedMinutes: 10, done: true, createdAt: '2026-10-01T00:00:00Z' }
-      ] } };
+      case 'weekly_report_current': return { ok: true, data: window.__weeklyReports(window.__weeklyScenario || 'live_final').current };
+      case 'weekly_report_list': return { ok: true, data: window.__weeklyReports(window.__weeklyScenario || 'live_final').list };
       case 'learning_observations_get_by_ids': return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations',
         projectorVersion: 1, ledgerInputHash: 'ledger-hash-notebook', observationOutputHash: 'observation-hash-notebook',
         generatedAt: '2026-10-02T23:00:00Z', freshness: 'fresh', observations: [{
@@ -160,6 +159,8 @@ def read_page(page):
             entries: [...root.querySelectorAll('[data-notebook-entry]')].map(node => node.dataset.notebookEntry),
             sections: [...root.querySelectorAll('.notebook-entry h3')].map(node => node.textContent.trim()),
             text: root.innerText,
+            dailyText: [...root.querySelectorAll('[data-notebook-entry]')].map(node => node.innerText).join('\\n'),
+            weeks: [...root.querySelectorAll('[data-notebook-week]')].map(node => node.dataset.notebookWeek),
             memories: [...root.querySelectorAll('[data-memory-id]')].map(node => ({
               id: node.dataset.memoryId,
               actions: [...node.querySelectorAll('button')].map(button => button.textContent.trim())
@@ -185,8 +186,10 @@ def assert_contract(name, data):
     for section in ("§观察", "§变化", "§下一步练习"):
         if section not in data["sections"]:
             raise AssertionError(f"{name}: missing section {section}: {data['sections']}")
-    if "已完成的项不再出现" in data["text"] or "%" in data["text"]:
-        raise AssertionError(f"{name}: notebook shows finished plan items or fake precision")
+    if "%" in data["dailyText"]:
+        raise AssertionError(f"{name}: daily entries show fake precision")
+    if data["weeks"] != ["2026-W42", "2026-W41", "2026-W40"]:
+        raise AssertionError(f"{name}: weekly reports are not live-first, newest-first: {data['weeks']}")
     if data["machinery"]:
         raise AssertionError(f"{name}: workbench machinery leaked into the notebook")
     if [memory["actions"] for memory in data["memories"]] != [["不准确", "忘记"], ["不准确", "忘记"]]:
@@ -253,6 +256,7 @@ def check_week(browser):
     """Eight finished days: wording is composed per day, never templated or left half-filled."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
     page.add_init_script("window.__notebookWeek = true")
+    page.add_init_script(WEEKLY_MOCK)
     page.add_init_script(MOCK)
     page.goto(f"{BASE_URL}/#/notebook", wait_until="networkidle")
     wait_for_route_layout(page, "[data-notebook-entry]")
@@ -281,6 +285,116 @@ def check_week(browser):
     return [{"day": entry["day"], "text": entry["text"]} for entry in entries]
 
 
+STATE_LINES = {
+    "live": "本周进行中，周末会整理成完整周记",
+    "final_no_ai": "没有配置 AI，这一周只有数据部分",
+    "narrative_failed": "AI 总结这次没写成，会自动重试；下面的数据已经是这一周的最终结果",
+}
+ALL_BLOCKS = ["volume", "accuracy", "question_types", "repeated_misses", "redo_progress",
+              "writing_bands", "coach_signals", "next_week_plan"]
+WEEKLY_EXPECTED = {
+    "live_final": [("2026-W42", "live", ["volume", "accuracy"]), ("2026-W41", "final", ALL_BLOCKS),
+                   ("2026-W40", "final", ["volume", "accuracy"])],
+    "final_no_ai": [("2026-W41", "final_no_ai", ALL_BLOCKS)],
+    "narrative_failed": [("2026-W41", "narrative_failed", ALL_BLOCKS)],
+    "empty": [],
+}
+WEEKLY_CASES = (("live_final", 1440), ("live_final", 360), ("final_no_ai", 390), ("narrative_failed", 768), ("empty", 1440))
+
+
+def read_weeks(page):
+    return page.evaluate(
+        """() => ({
+          viewport: innerWidth,
+          scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+          index: [...document.querySelectorAll('[data-notebook-index] .list-row-meta')].map(node => node.textContent.trim()),
+          empty: Boolean(document.querySelector('.notebook-empty')),
+          weeks: [...document.querySelectorAll('[data-notebook-week]')].map(node => ({
+            window: node.dataset.notebookWeek,
+            state: node.dataset.weekState,
+            title: node.querySelector('h2').textContent.trim(),
+            range: node.querySelector('time').textContent.trim(),
+            stateLine: node.querySelector('[data-week-state-line]')?.textContent.trim() || '',
+            settingsHref: node.querySelector('[data-week-state-line] a')?.getAttribute('href') || '',
+            blocks: [...node.querySelectorAll('[data-week-block]')].map(block => block.dataset.weekBlock),
+            headings: [...node.querySelectorAll('h3')].map(h => h.textContent.trim()),
+            leads: [...node.querySelectorAll('[data-week-block] .notebook-lead')].map(p => p.textContent.trim()),
+            charts: [...node.querySelectorAll('svg[role=img]')].map(svg => ({
+              label: svg.getAttribute('aria-label') || '',
+              width: Math.round(svg.getBoundingClientRect().width),
+              right: Math.round(svg.getBoundingClientRect().right),
+            })),
+            links: [...node.querySelectorAll('[data-week-block] a')].map(a => a.getAttribute('href')),
+            plan: [...node.querySelectorAll('[data-week-block=next_week_plan] li')].map(li => li.innerText.replace(/\\s+/g, '')),
+            text: node.innerText,
+          })),
+        })"""
+    )
+
+
+def check_weekly(browser, scenario, width):
+    """One weekly scenario: entries, state lines, blocks, charts and links as the host sent them."""
+    name = f"weekly-{scenario}-{width}"
+    page = browser.new_page(viewport={"width": width, "height": 900}, timezone_id="Asia/Shanghai")
+    page.add_init_script(f"window.__weeklyScenario = {json.dumps(scenario)}")
+    if scenario == "empty":
+        page.add_init_script("window.__notebookEmpty = true")
+    page.add_init_script(WEEKLY_MOCK)
+    page.add_init_script(MOCK)
+    page.goto(f"{BASE_URL}/#/notebook", wait_until="networkidle")
+    wait_for_route_layout(page, ".notebook-empty" if scenario == "empty" else "[data-notebook-week]")
+    data = read_weeks(page)
+    if data["scrollWidth"] > data["viewport"] + 1:
+        raise AssertionError(f"{name}: weekly report overflows horizontally")
+    expected = WEEKLY_EXPECTED[scenario]
+    got = [(week["window"], week["state"], week["blocks"]) for week in data["weeks"]]
+    if got != expected:
+        raise AssertionError(f"{name}: unexpected weeks {got}")
+    if scenario == "empty" and not data["empty"]:
+        raise AssertionError(f"{name}: no daily entries and no reports must show the empty page")
+    for week in data["weeks"]:
+        check_week_entry(name, scenario, week)
+    if width >= 1024 and scenario != "empty" and data["index"][:len(data["weeks"])] != [week["title"] for week in data["weeks"]]:
+        raise AssertionError(f"{name}: the index does not list the weekly reports first: {data['index']}")
+    capture_state(page, f"notebook-{name}")
+    page.close()
+    return [{key: week[key] for key in ("window", "state", "stateLine", "blocks", "plan")} for week in data["weeks"]]
+
+
+def check_week_entry(name, scenario, week):
+    where = f"{name} {week['window']}"
+    if week["stateLine"] != STATE_LINES.get(week["state"], "") and not week["stateLine"].startswith(STATE_LINES.get(week["state"], "-")):
+        raise AssertionError(f"{where}: state line {week['stateLine']!r}")
+    if week["state"] == "final_no_ai" and week["settingsHref"] != "#/settings":
+        raise AssertionError(f"{where}: the no-AI line must link to Settings, got {week['settingsHref']!r}")
+    if week["window"] == "2026-W41" and week["range"] != "2026年10月5日 – 10月11日":
+        raise AssertionError(f"{where}: date range {week['range']!r}")
+    for token in ("{", "}", "undefined", "NaN", "null", "[object"):
+        if token in week["text"]:
+            raise AssertionError(f"{where}: leaks {token!r}")
+    for chart in week["charts"]:
+        if not any(char.isdigit() for char in chart["label"]):
+            raise AssertionError(f"{where}: a chart's aria-label carries no numbers: {chart['label']!r}")
+        if chart["width"] < 200:
+            raise AssertionError(f"{where}: a chart is too narrow to read: {chart}")
+    if week["window"] != "2026-W41":
+        return
+    narrated = week["state"] == "final"
+    if narrated != bool(week["leads"]):
+        raise AssertionError(f"{where}: narrative sentences {week['leads']} do not match state {week['state']}")
+    if len(week["charts"]) != 5:
+        raise AssertionError(f"{where}: expected 5 charts (volume, accuracy, types, redo, bands), got {len(week['charts'])}")
+    if "#/reading/p2-mid-07/review/attempt-41-2" not in week["links"] or "#/result/writing-41-2" not in week["links"]:
+        raise AssertionError(f"{where}: example links lost their routes: {week['links']}")
+    if week["plan"] != ["判断题对比练习易混题约15分钟", "段落大意配对换一篇新文章练同类题约15分钟",
+                        "写作·连贯与衔接改写一段作文约15分钟"]:
+        raise AssertionError(f"{where}: plan list {week['plan']}")
+    if "§下一步练习" not in week["headings"]:
+        raise AssertionError(f"{where}: no 下一步练习 section: {week['headings']}")
+    if narrated and "§这一周记忆的变化" not in week["headings"]:
+        raise AssertionError(f"{where}: memory changes not shown: {week['headings']}")
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = []
@@ -289,6 +403,7 @@ def main():
         try:
             for name, width, height in CASES:
                 page = browser.new_page(viewport={"width": width, "height": height})
+                page.add_init_script(WEEKLY_MOCK)
                 page.add_init_script(MOCK)
                 page.goto(f"{BASE_URL}/#/notebook", wait_until="networkidle")
                 wait_for_route_layout(page, "[data-notebook-entry]")
@@ -308,6 +423,8 @@ def main():
                 report.append({"name": name, "entries": data["entries"], "sections": data["sections"]})
                 page.close()
             report.append({"name": "week", "entries": check_week(browser)})
+            for scenario, width in WEEKLY_CASES:
+                report.append({"name": f"weekly-{scenario}-{width}", "weeks": check_weekly(browser, scenario, width)})
         finally:
             browser.close()
     print(json.dumps(report, ensure_ascii=False, indent=2))

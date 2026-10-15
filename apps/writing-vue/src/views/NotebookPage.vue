@@ -37,56 +37,72 @@
           <article
             v-for="(week, weekIndex) in weeks"
             :id="`notebook-week-${weekIndex}`"
-            :key="`${week.window}:${week.startDay}`"
+            :key="week.key"
             class="notebook-entry section has-rule"
             :data-notebook-week="week.window"
+            :data-week-state="week.state"
           >
             <header class="section-head">
               <h2 class="heading-serif">{{ week.title }}</h2>
               <time class="section-meta" :datetime="week.startDay">{{ week.dateLabel }}</time>
             </header>
+            <p v-if="week.stateLine" class="section-meta notebook-week__state" data-week-state-line>
+              {{ week.stateLine.text }}<template v-if="week.stateLine.settings">。<router-link class="text-link" :to="{ name: 'Settings' }">去设置</router-link></template>
+            </p>
 
-            <div class="notebook-stats" aria-label="本周概览">
-              <div class="stat">
-                <span class="stat-label">观察</span>
-                <span class="stat-value">{{ week.observations.length }}</span>
+            <section
+              v-for="block in week.blocks"
+              :key="block.id"
+              class="notebook-section notebook-block"
+              :data-week-block="block.kind"
+              :data-notebook-next="block.kind === 'next_week_plan' ? '' : undefined"
+            >
+              <h3><span class="notebook-mark" aria-hidden="true">§</span>{{ block.heading }}</h3>
+              <p v-if="block.lead" class="notebook-prose notebook-lead">{{ block.lead }}</p>
+
+              <div v-if="block.stats.length" class="notebook-stats notebook-block__stats">
+                <div v-for="item in block.stats" :key="item.label" class="stat">
+                  <span class="stat-label">{{ item.label }}</span>
+                  <span class="stat-value">{{ item.value }}</span>
+                  <span v-if="item.delta" class="stat-delta">{{ item.delta }}</span>
+                </div>
               </div>
-              <div class="stat">
-                <span class="stat-label">变化</span>
-                <span class="stat-value">{{ week.changes.length }}</span>
-              </div>
-              <div class="stat">
-                <span class="stat-label">下一步</span>
-                <span class="stat-value">{{ week.nextPractice.length }}</span>
-              </div>
-            </div>
 
-            <section v-if="week.observations.length" class="notebook-section">
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>这段时间的观察</h3>
-              <ul class="notebook-notes">
-                <li v-for="line in week.observations" :key="line"><span>{{ line }}。</span></li>
-              </ul>
-            </section>
+              <component :is="CHARTS[block.chart.kind]" v-if="block.chart" :chart="block.chart" />
 
-            <section v-if="week.changes.length" class="notebook-section">
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>变化</h3>
-              <ul class="notebook-notes">
-                <li v-for="line in week.changes" :key="line"><span>{{ line }}。</span></li>
+              <ul v-if="block.rows.length" class="notebook-notes notebook-block__rows">
+                <li v-for="row in block.rows" :key="row.key"><span>{{ row.text }}</span></li>
               </ul>
-            </section>
 
-            <section v-if="week.nextPractice.length || (weekIndex === 0 && practice.length)" class="notebook-section" data-notebook-next>
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>下一步练习</h3>
-              <ul v-if="week.nextPractice.length" class="notebook-notes">
-                <li v-for="line in week.nextPractice" :key="line"><span>{{ line }}。</span></li>
-              </ul>
-              <ol v-if="weekIndex === 0 && practice.length" class="notebook-practice">
-                <li v-for="item in practice" :key="item.id">
-                  <strong>{{ item.label }}</strong>
-                  <span v-if="item.why">{{ item.why }}</span>
-                  <span v-if="item.minutes" class="notebook-practice__time">约 {{ item.minutes }} 分钟</span>
+              <p v-if="block.tags.length" class="notebook-block__tags">
+                <span v-for="tag in block.tags" :key="tag.key" class="tag">{{ tag.text }}</span>
+              </p>
+
+              <ol v-if="block.plan" class="notebook-practice">
+                <li v-for="item in block.plan.items" :key="item.key">
+                  <router-link v-if="item.link" class="text-link" :to="item.link"><strong>{{ item.label }}</strong></router-link>
+                  <strong v-else>{{ item.label }}</strong>
+                  <span>{{ item.probeLabel }}</span>
+                  <span class="notebook-practice__time">约 {{ item.minutes }} 分钟</span>
                 </li>
               </ol>
+              <p v-if="block.plan && block.plan.items.length > 1" class="section-meta">一共约 {{ block.plan.totalMinutes }} 分钟</p>
+
+              <ul v-if="block.examples.length" class="notebook-block__examples" aria-label="对应的练习">
+                <li v-for="example in block.examples" :key="example.key">
+                  <router-link class="text-link" :to="example.link">{{ example.label }}</router-link>
+                  <span v-if="example.detail" class="section-meta">{{ example.detail }}</span>
+                </li>
+              </ul>
+            </section>
+
+            <section v-if="week.memoryChanges.length" class="notebook-section" data-week-memory-changes>
+              <h3><span class="notebook-mark" aria-hidden="true">§</span>这一周记忆的变化</h3>
+              <ul class="notebook-notes">
+                <li v-for="change in week.memoryChanges" :key="change.key">
+                  <span><span class="tag">{{ change.action }}</span> {{ change.statement }}。</span>
+                </li>
+              </ul>
             </section>
           </article>
 
@@ -155,31 +171,7 @@
               </dl>
             </section>
 
-            <section v-if="entryIndex === 0 && !weeks.length && practice.length" class="notebook-section" data-notebook-next>
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>下一步练习</h3>
-              <p v-if="practiceLine" class="notebook-prose notebook-lead">{{ practiceLine }}</p>
-              <ol class="notebook-practice">
-                <li v-for="item in practice" :key="item.id">
-                  <strong>{{ item.label }}</strong>
-                  <span v-if="item.why">{{ item.why }}</span>
-                  <span v-if="item.minutes" class="notebook-practice__time">约 {{ item.minutes }} 分钟</span>
-                </li>
-              </ol>
-            </section>
           </article>
-
-          <section v-if="!entries.length && !weeks.length && practice.length" class="section has-rule notebook-entry" data-notebook-next>
-            <header class="section-head">
-              <h2 class="heading-serif">下一步练习</h2>
-            </header>
-            <ol class="notebook-practice">
-              <li v-for="item in practice" :key="item.id">
-                <strong>{{ item.label }}</strong>
-                <span v-if="item.why">{{ item.why }}</span>
-                <span v-if="item.minutes" class="notebook-practice__time">约 {{ item.minutes }} 分钟</span>
-              </li>
-            </ol>
-          </section>
 
           <section class="section has-rule notebook-memory" aria-labelledby="notebook-memory-title" data-notebook-memory>
             <header class="section-head">
@@ -228,29 +220,33 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import agentRepository from '@/api/agent-repository.js'
+import WeeklyBandLine from '@/components/notebook/WeeklyBandLine.vue'
+import WeeklyDayBars from '@/components/notebook/WeeklyDayBars.vue'
+import WeeklyStackBar from '@/components/notebook/WeeklyStackBar.vue'
+import WeeklyTypeBars from '@/components/notebook/WeeklyTypeBars.vue'
 import { getMemoryEvidence } from '@/api/learning-repository.js'
 import {
   forgetMemory,
   getBackgroundJobStatus,
   getDailyJournal,
+  getCurrentWeeklyReport,
   getMemoryCatalog,
-  getWeeklyDigests,
+  getWeeklyReports,
   recordMemoryFeedback,
   triggerDailyDream
 } from '@/api/memory-repository.js'
 import {
   buildNotebookEntry,
   ENTRY_LIMIT,
-  buildWeeklyEntry,
   isPracticed,
   journalWindow,
-  nextPractice,
-  practiceLead,
   previousPracticedDay,
   rememberedSentences
 } from '@/modules/notebook/compose.js'
 import LearnerPreferences from '@/modules/notebook/LearnerPreferences.vue'
+import { weeklyEntries } from '@/modules/notebook/weekly.js'
+
+const CHARTS = { dayBars: WeeklyDayBars, hBars: WeeklyTypeBars, bandLine: WeeklyBandLine, stackBar: WeeklyStackBar }
 
 const loading = ref(true)
 const loadError = ref('')
@@ -258,9 +254,6 @@ const entries = ref([])
 const weeks = ref([])
 const memories = ref([])
 const memoryError = ref('')
-const practice = ref([])
-// Worded for the newest entry's day, where the plan is shown.
-const practiceLine = computed(() => practiceLead(practice.value, entries.value[0]?.day))
 const notice = ref('')
 const actionError = ref('')
 const busy = ref(new Set())
@@ -317,28 +310,19 @@ async function readEntries(memoriesById) {
     .filter(Boolean)
 }
 
-// Weekly entries are an addition: a host without them (or a failed read)
-// simply shows the daily pages.
+// Weekly reports are an addition: a host without them (or a failed read)
+// simply shows the daily pages. The live week and the finished weeks are read
+// apart, so one failing does not hide the other.
 async function readWeeks() {
-  try {
-    const digests = await getWeeklyDigests()
-    return (Array.isArray(digests) ? digests : [])
-      .map(buildWeeklyEntry)
-      .filter(Boolean)
-  } catch {
-    return []
-  }
+  const [current, persisted] = await Promise.allSettled([getCurrentWeeklyReport(), getWeeklyReports()])
+  return weeklyEntries(settledValue(current), settledValue(persisted))
 }
 
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const [memoriesById, plan] = await Promise.all([
-      readMemories(),
-      agentRepository.getLatestStudyPlan('local').catch(() => null)
-    ])
-    practice.value = nextPractice(plan)
+    const memoriesById = await readMemories()
     entries.value = await readEntries(memoriesById)
     weeks.value = await readWeeks()
   } catch {
@@ -479,6 +463,55 @@ onMounted(load)
 
 .notebook-stats {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: var(--anth-space-3);
+}
+
+.notebook-week__state {
+  margin: 0 0 var(--anth-space-3);
+}
+
+/* One weekly block: lead sentence, numbers, a small chart, then the links. */
+.notebook-block + .notebook-block {
+  margin-top: var(--anth-space-5);
+}
+
+.notebook-block .notebook-lead {
+  margin-bottom: var(--anth-space-2);
+}
+
+.notebook-block__stats {
+  margin: var(--anth-space-2) 0;
+}
+
+.notebook-block__stats .stat-value {
+  font-size: var(--anth-text-lg);
+}
+
+.notebook-block__rows {
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+}
+
+.notebook-block__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: var(--anth-space-2) 0 0;
+}
+
+.notebook-block__examples {
+  display: grid;
+  gap: 2px;
+  margin: var(--anth-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+}
+
+.notebook-block__examples .section-meta {
+  margin-left: 8px;
 }
 
 .notebook-section h3 {

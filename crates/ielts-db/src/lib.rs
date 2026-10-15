@@ -38,6 +38,7 @@ pub mod sqlite;
 pub mod teaching_strategy;
 pub mod vocab;
 pub mod weekly_pack;
+pub mod weekly_report;
 pub mod writing;
 
 pub use agent::*;
@@ -79,4 +80,8 @@ pub use sqlite::*;
 pub use teaching_strategy::*;
 pub use vocab::*;
 pub use weekly_pack::*;
+pub use weekly_report::{
+    apply_narrative, build_blocks, build_weekly_report, default_title, list_weekly_reports, put_weekly_report,
+    week_facts, weekly_memory_changes, weekly_mutation_request_id, SkillContext, WeekFacts,
+};
 pub use writing::*;

@@ -248,6 +248,7 @@ def main() -> int:
         run_command("Agent console durable state contract", ["node", "developer/tests/js/agentConsoleState.test.mjs"]),
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
         run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
+        run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
@@ -359,8 +360,12 @@ def main() -> int:
             ["cargo", "test", "-p", "ielts-application", "--lib", "coach::", "--locked", "--offline"],
         ),
         run_command(
-            "Rust weekly dream receipts, digests and input pack",
-            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--locked", "--offline"],
+            "Rust weekly dream receipts, weekly report blocks and input pack",
+            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--test", "weekly_report_store", "--test", "weekly_report_facts", "--locked", "--offline"],
+        ),
+        run_command(
+            "Rust weekly report block skills and narrative whitelist",
+            ["cargo", "test", "-p", "ielts-db", "-p", "ielts-domain", "--lib", "weekly_report", "--locked", "--offline"],
         ),
         run_command(
             "Rust weekly dream host path (pack, gate, retry predicate)",

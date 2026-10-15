@@ -2,16 +2,16 @@
 
 The daily journal is deterministic and built by the Rust host; the daily path
 makes no proposals (all memory consolidation is the weekly pass). This package
-owns journal enrichment and the weekly pass (digest prose and memory mutations):
+owns journal enrichment and the weekly pass (report narrative and memory mutations):
 
 - :mod:`types` — M7-03/M8 pydantic contracts
-  (JournalFacts, JournalEnrichment, WeeklyDigest, WeeklyDreamResult).
+  (JournalFacts, JournalEnrichment, WeeklyNarrative, WeeklyDreamResult).
 - :mod:`journal_enrichment` — M7-04 LLM journal enrichment (title/summary/
   open hypotheses only; numeric facts immutable; private memory redaction;
   deterministic no-LLM path).
 - :mod:`weekly` — the weekly-dream orchestrator: ONE model call over the
-  host-built pack of the learner's practice records produces both the digest
-  prose and the memory mutations; every mutation must cite ids of that pack;
+  host-built pack of the learner's practice records produces both the report
+  narrative (a title and one sentence per report block) and the memory mutations; every mutation must cite ids of that pack;
   fail-closed submission to the Rust ``dream.run_weekly`` authority.
 
 The package never touches the canonical SQLite DB or provider secrets. All
@@ -53,7 +53,7 @@ from .types import (
     JournalMemoryEvent,
     MemoryChangeSummary,
     SkillDelta,
-    WeeklyDigest,
+    WeeklyNarrative,
     WeeklyDreamResult,
     WritingEvalSummary,
 )
@@ -106,7 +106,7 @@ __all__ = [
     "JournalMemoryEvent",
     "MemoryChangeSummary",
     "SkillDelta",
-    "WeeklyDigest",
+    "WeeklyNarrative",
     "WeeklyDreamResult",
     "WritingEvalSummary",
 ]

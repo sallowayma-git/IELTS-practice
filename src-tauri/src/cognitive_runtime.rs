@@ -179,6 +179,18 @@ pub(crate) fn weekend_key<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> S
     format!("{}-W{:02}", week.year(), week.week())
 }
 
+/// ISO week of the first weekend at or after `now`: the weekend whose run will
+/// close what is practised now. Saturday and Sunday are their own weekend.
+#[cfg(feature = "daily-dream-v1")]
+pub(crate) fn upcoming_weekend_key<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> String {
+    use chrono::{Datelike, Duration, Weekday};
+    let ahead = match now.weekday() {
+        Weekday::Sat | Weekday::Sun => 0,
+        weekday => 5 - i64::from(weekday.num_days_from_monday()),
+    };
+    weekend_key(&(now.clone() + Duration::days(ahead)))
+}
+
 /// Start of `now`'s calendar day in `now`'s zone, as a UTC instant: the retry
 /// bound is one weekly attempt per local day.
 #[cfg(feature = "daily-dream-v1")]
@@ -197,9 +209,28 @@ pub(crate) fn weekly_pack_value(
     db: &AppDb,
     window: &ielts_db::WeeklyWindow,
 ) -> Result<Value, RuntimeHostError> {
-    db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end))
-        .map(|pack| pack.to_value())
-        .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
+    let offset = *crate::app::clock::now().offset();
+    db.with_conn(|conn| {
+        let mut pack = ielts_db::weekly_pack(conn, "local", window.start, window.end)?.to_value();
+        // The blocks the model writes its sentences for: data only, the page
+        // renders the rest.
+        let report = ielts_db::build_weekly_report(
+            conn,
+            "local",
+            window,
+            offset,
+            ielts_domain::WeeklyReportState::Live,
+            chrono::Utc::now(),
+        )?;
+        let blocks: Vec<Value> = report
+            .blocks
+            .iter()
+            .map(|block| json!({"id": block.id, "kind": block.kind, "data": block.data}))
+            .collect();
+        pack["blocks"] = Value::Array(blocks);
+        Ok(pack)
+    })
+    .map_err(|error: ielts_db::DbError| RuntimeHostError::InvalidResponse(error.to_string()))
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);

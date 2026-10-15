@@ -9,9 +9,9 @@ use ielts_db::{
     build_daily_facts, create_backup_package, delete_attempt, delete_history_attempts,
     finish_dream_run, format17_attempt_summaries, get_history_retention_policy, import_backup,
     insert_dream_run, insert_journal, migrate, open_connection,
-    prune_operational_records, prune_terminal_attempts_in_transaction, put_weekly_digest,
+    prune_operational_records, prune_terminal_attempts_in_transaction,
     read_backup_file, snapshot_before, start_dream_run, upsert_attempt, upsert_setting,
-    with_delete_gate, write_backup_file, DbError, DbOpenOptions, WeeklyDigestProse,
+    with_delete_gate, write_backup_file, DbError, DbOpenOptions,
     OPERATIONAL_RETENTION_DAYS, SNAPSHOT_KEEP,
 };
 use ielts_domain::domain::{Activity, AttemptMode, AttemptStatus, ScoreScale};
@@ -294,10 +294,7 @@ fn operational_prune_removes_old_trace_rows_and_keeps_raw_data() {
 fn legacy_digest_settings_rows_move_into_the_table() {
     let (_dir, conn) = open_db();
     let run_id = dream_run(&conn);
-    let prose = WeeklyDigestProse {
-        observations: vec!["Missed tfng twice".into()],
-        ..Default::default()
-    };
+    let prose = serde_json::json!({"observations": ["Missed tfng twice"]});
     // The legacy shape: a settings row keyed by the run id.
     conn.execute(
         "INSERT INTO settings (namespace, key, value_json, updated_at)
@@ -317,8 +314,6 @@ fn legacy_digest_settings_rows_move_into_the_table() {
         count(&conn, &format!("SELECT COUNT(*) FROM weekly_digests WHERE run_id = '{run_id}'")),
         1
     );
-    put_weekly_digest(&conn, &run_id, &prose, "2026-10-10T09:03:00Z").unwrap();
-    assert_eq!(count(&conn, "SELECT COUNT(*) FROM weekly_digests"), 1);
 }
 
 // ---- backup format 18 ----------------------------------------------------

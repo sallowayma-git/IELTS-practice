@@ -14,7 +14,7 @@ from ielts_agent.dream.types import (
     CAPABILITY_LEARNING_WEEKLY_PACK,
     REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES,
     WEEKLY_MUTATION_ACTIONS,
-    WeeklyDigest,
+    WeeklyNarrative,
     WeeklyDreamResult,
 )
 from ielts_agent.dream.weekly import (
@@ -23,6 +23,7 @@ from ielts_agent.dream.weekly import (
     MIN_OBSERVATIONS,
     MODEL_MAX_ATTEMPTS,
     MODEL_RETRY_BACKOFF_SECONDS,
+    WEEKLY_MODEL_MAX_TOKENS,
     WeeklyDreamInput,
     WeeklyDreamOrchestrator as _WeeklyDreamOrchestrator,
     fallback_result,
@@ -65,6 +66,11 @@ def _pack(observations: int = 14) -> dict:
              "canonicalKey": "strategy.reading.stem_first", "statement": "先读题干。", "version": 2},
         ],
         "preferences": [{"key": "explanation_language", "scope": "global", "value": '"zh"'}],
+        "blocks": [
+            {"id": "accuracy", "kind": "accuracy", "data": {"correct": 30, "answered": 40, "rate": 0.75}},
+            {"id": "repeated_misses", "kind": "repeated_misses",
+             "data": {"acrossPassages": [{"qtype": "tfng", "label": "判断题", "passages": 2, "wrong": 2}]}},
+        ],
     }
 
 
@@ -79,19 +85,24 @@ def _add(**overrides) -> dict:
     return mutation
 
 
-def _digest(**overrides) -> dict:
-    digest = {
-        "observations": ["P1 第 14 题和 P2 第 3 题都在判断题上选错"],
-        "changes": ["重做 P1 后修正了一道错题，第 16 题仍然错"],
-        "nextPractice": ["换一篇文章再练判断题"],
+_TITLE = "判断题在两篇文章里都出错"
+
+
+def _sentences(**overrides) -> dict:
+    sentences = {
+        "accuracy": "整体正确率不错，失分集中在判断题。",
+        "repeated_misses": "判断题在 2 篇文章里都错了，说明是方法问题而不是偶然。",
     }
-    digest.update(overrides)
-    return digest
+    sentences.update(overrides)
+    return sentences
 
 
-def _answer(digest: dict | None = None, mutations: list | None = None) -> str:
-    return json.dumps({"digest": _digest() if digest is None else digest,
+def _answer(sentences: dict | None = None, mutations: list | None = None, title: str = _TITLE) -> str:
+    return json.dumps({"title": title, "sentences": _sentences() if sentences is None else sentences,
                        "mutations": [_add()] if mutations is None else mutations})
+
+
+_EMPTY_NARRATIVE = {"title": "", "sentences": {}}
 
 
 def _dream_result_wire(*, run_id: str = "weekly-run-1", validated: int = 1, rejected: int = 0, accepted: int = 1) -> dict:
@@ -144,12 +155,14 @@ class WeeklyDreamTypesTests(unittest.TestCase):
     def test_mutation_actions_are_exactly_new_reinforce_supersede_archive(self) -> None:
         self.assertEqual(WEEKLY_MUTATION_ACTIONS, frozenset({"ADD", "REINFORCE", "SUPERSEDE", "ARCHIVE"}))
 
-    def test_digest_is_closed_bounded_and_plain(self) -> None:
-        digest = WeeklyDigest.model_validate({"observations": ["a"], "nextPractice": ["b"]})
-        self.assertEqual(digest.to_wire(), {"observations": ["a"], "changes": [], "nextPractice": ["b"]})
-        for bad in ({"observations": [""]}, {"changes": ["x" * 401]}, {"observations": ["a"] * 7}, {"bogus": []}):
-            with self.assertRaises(ValidationError):
-                WeeklyDigest.model_validate(bad)
+    def test_narrative_is_closed_bounded_and_plain(self) -> None:
+        narrative = WeeklyNarrative.model_validate({"title": " 本周 ", "sentences": {"volume": " a ", "accuracy": "b"}})
+        self.assertEqual(narrative.to_wire(), {"title": "本周", "sentences": {"accuracy": "b", "volume": "a"}})
+        self.assertEqual(WeeklyNarrative().to_wire(), _EMPTY_NARRATIVE)
+        for bad in ({"title": "x" * 41}, {"sentences": {"volume": ""}}, {"sentences": {"volume": "x" * 121}},
+                    {"sentences": {"": "a"}}, {"sentences": {"volume": 3}}, {"bogus": []}):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                WeeklyNarrative.model_validate(bad)
 
     def test_result_requires_run_id_when_not_fallback(self) -> None:
         with self.assertRaises(ValidationError):
@@ -169,7 +182,7 @@ class WeeklyDreamTypesTests(unittest.TestCase):
 
 
 class WeeklyDreamOrchestratorTests(unittest.TestCase):
-    def test_one_model_call_over_the_pack_writes_digest_and_mutations(self) -> None:
+    def test_one_model_call_over_the_pack_writes_narrative_and_mutations(self) -> None:
         bridge = FakeHostBridge()
         result = _run(bridge)
         self.assertIsNone(result.fallback_reason)
@@ -179,19 +192,27 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertEqual(bridge.calls[0][1], {"window": "2026-W41"})
         submitted = bridge.submitted()
         self.assertEqual(submitted["window"], "2026-W41")
-        self.assertEqual(submitted["digest"], _digest())
-        self.assertEqual(submitted["mutations"], [_add()])
+        self.assertEqual(submitted, {
+            "window": "2026-W41",
+            "narrative": {"title": _TITLE, "sentences": _sentences()},
+            "mutations": [_add()],
+            "modelAvailable": True,
+            "droppedMutations": 0,
+        })
 
     def test_the_model_sees_the_pack_verbatim_and_a_bounded_request(self) -> None:
         bridge = FakeHostBridge()
         _run(bridge)
         request = bridge.calls[1][1]["request"]
-        self.assertEqual(request["maxTokens"], 1_500)
+        self.assertEqual(request["maxTokens"], 4_000)
+        self.assertEqual(WEEKLY_MODEL_MAX_TOKENS, 4_000)
         self.assertEqual(request["temperature"], 0.0)
         system, user = (message["content"] for message in request["messages"])
         payload = json.loads(user)
         self.assertEqual(payload["pack"], _pack())
-        for needed in ("lines[].ids", "Simplified Chinese", "untrusted data", "ARCHIVE", "repeated misses"):
+        for needed in ("lines[].ids", "Simplified Chinese", "untrusted data", "ARCHIVE", "repeated misses",
+                       "blocks[].id", "at most 40 characters", "at most 120 characters",
+                       "only use numbers that appear in that block's data", "refuses"):
             self.assertIn(needed, system)
         self.assertNotIn("passage text", user)
 
@@ -207,6 +228,7 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         bridge = FakeHostBridge(content=_answer(mutations=mutations))
         _run(bridge)
         self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["REINFORCE"])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 5)
 
     def test_a_mutation_may_only_target_memories_of_the_pack(self) -> None:
         mutations = [
@@ -241,31 +263,53 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         bridge = FakeHostBridge(content=_answer(mutations=mutations))
         _run(bridge)
         self.assertEqual(bridge.submitted()["mutations"], [_add()])
+        self.assertEqual(bridge.submitted()["droppedMutations"], len(mutations) - 1)
 
     def test_mutations_are_bounded(self) -> None:
         many = [_add(canonicalKey=f"strategy.reading.k{i}") for i in range(MAX_MUTATIONS + 5)]
         bridge = FakeHostBridge(content=_answer(mutations=many))
         _run(bridge)
         self.assertEqual(len(bridge.submitted()["mutations"]), MAX_MUTATIONS)
+        self.assertEqual(bridge.submitted()["droppedMutations"], 5)
 
-    def test_the_digest_is_cleaned_and_bounded_before_submission(self) -> None:
-        digest = {"observations": [" spaced   out ", "", 5, None] + ["x"] * 10, "changes": "not a list",
-                  "nextPractice": ["长" * 500]}
-        bridge = FakeHostBridge(content=_answer(digest=digest, mutations=[]))
+    def test_the_narrative_is_cleaned_and_bounded_before_submission(self) -> None:
+        sentences = {
+            "accuracy": " spaced \n  out ",
+            "repeated_misses": "长" * 121,
+            "volume": "not a block of this pack",
+            "next_week_plan": "也不在这个 pack 里",
+        }
+        bridge = FakeHostBridge(content=_answer(sentences=sentences, mutations=[], title="  本周\t重点  "))
         _run(bridge)
-        sent = bridge.submitted()["digest"]
-        self.assertEqual(sent["observations"][0], "spaced out")
-        self.assertEqual(len(sent["observations"]), 6)
-        self.assertEqual(sent["changes"], [])
-        self.assertEqual(len(sent["nextPractice"][0]), 240)
+        self.assertEqual(bridge.submitted()["narrative"], {"title": "本周 重点", "sentences": {"accuracy": "spaced out"}})
+        self.assertEqual(bridge.submitted()["droppedMutations"], 0)
+
+    def test_bad_sentence_values_and_an_over_long_title_are_dropped(self) -> None:
+        sentences = {"accuracy": 5, "repeated_misses": "   "}
+        bridge = FakeHostBridge(content=_answer(sentences=sentences, mutations=[], title="长" * 41))
+        result = _run(bridge)
+        self.assertIsNone(result.fallback_reason)
+        self.assertEqual(bridge.submitted()["narrative"], _EMPTY_NARRATIVE)
+        # Exactly at the bounds both survive.
+        bridge = FakeHostBridge(content=_answer(sentences={"accuracy": "长" * 120}, mutations=[], title="长" * 40))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["narrative"], {"title": "长" * 40, "sentences": {"accuracy": "长" * 120}})
+
+    def test_a_pack_without_blocks_keeps_no_sentence(self) -> None:
+        pack = _pack()
+        del pack["blocks"]
+        bridge = FakeHostBridge(pack=pack)
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["narrative"], {"title": _TITLE, "sentences": {}})
+        self.assertEqual(bridge.submitted()["mutations"], [_add()])
 
     def test_too_little_evidence_skips_the_model_and_still_records_the_run(self) -> None:
         bridge = FakeHostBridge(pack=_pack(MIN_OBSERVATIONS - 1))
         result = _run(bridge)
         self.assertIsNone(result.fallback_reason)
         self.assertEqual(bridge.methods(), [CAPABILITY_LEARNING_WEEKLY_PACK, CAPABILITY_DREAM_RUN_WEEKLY])
-        self.assertEqual(bridge.submitted()["mutations"], [])
-        self.assertEqual(bridge.submitted()["digest"], {"observations": [], "changes": [], "nextPractice": []})
+        self.assertEqual(bridge.submitted(), {"window": "2026-W41", "narrative": _EMPTY_NARRATIVE, "mutations": [],
+                                              "modelAvailable": True, "droppedMutations": 0})
         # Exactly at the threshold the model is called.
         bridge = FakeHostBridge(pack=_pack(MIN_OBSERVATIONS))
         _run(bridge)
@@ -278,17 +322,19 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
             WeeklyDreamInput(trace_id="t", window="2026-W41", available_host_capabilities=caps))
         self.assertIsNone(result.fallback_reason)
         self.assertNotIn("model.invoke", bridge.methods())
-        self.assertEqual(bridge.submitted()["mutations"], [])
+        self.assertEqual(bridge.submitted(), {"window": "2026-W41", "narrative": _EMPTY_NARRATIVE, "mutations": [],
+                                              "modelAvailable": False, "droppedMutations": 0})
 
     def test_an_empty_answer_is_a_success(self) -> None:
-        for empty in ('{"digest":{"observations":[],"changes":[],"nextPractice":[]},"mutations":[]}',
-                      '{"mutations":[]}', '{"digest":{}}'):
+        for empty in ('{"title":"","sentences":{},"mutations":[]}',
+                      '{"mutations":[]}', '{"sentences":{}}', '{"title":""}'):
             with self.subTest(empty=empty):
                 bridge = FakeHostBridge(content=empty)
                 result = _run(bridge)
                 self.assertIsNone(result.fallback_reason)
                 self.assertEqual(bridge.methods().count("model.invoke"), 1)
                 self.assertEqual(bridge.submitted()["mutations"], [])
+                self.assertEqual(bridge.submitted()["narrative"], _EMPTY_NARRATIVE)
 
     def test_fail_closed_pack_failure(self) -> None:
         bridge = FakeHostBridge(fail_methods=frozenset({CAPABILITY_LEARNING_WEEKLY_PACK}))
@@ -424,7 +470,8 @@ class WeeklyRetryTests(unittest.TestCase):
         self.assertTrue(self._submitted(bridge))
 
     def test_malformed_output_is_retried_in_every_shape(self) -> None:
-        for bad in ("not json at all", "", "{}", '{"digest": null}', '{"digest": []}', '{"mutations": {}}',
+        for bad in ("not json at all", "", "{}", '{"sentences": null}', '{"sentences": []}', '{"title": 5}',
+                    '{"title": null}', '{"mutations": {}}', '{"digest": {}}',
                     "[1]", "[]", '{"patterns": []}', {"content": None}, {"nothing": "here"}, {"content": "   "}):
             with self.subTest(bad=bad):
                 result, bridge, sleeps = self._run([bad, bad, _answer()])
@@ -447,7 +494,7 @@ class WeeklyRetryTests(unittest.TestCase):
         self.assertEqual((bridge.model_calls, sleeps), (3, [2.0, 5.0]))
 
     def test_a_genuine_empty_result_is_a_success_and_never_retried(self) -> None:
-        result, bridge, sleeps = self._run(['{"digest":{},"mutations":[]}'])
+        result, bridge, sleeps = self._run(['{"title":"","sentences":{},"mutations":[]}'])
         self.assertIsNone(result.fallback_reason)
         self.assertEqual((bridge.model_calls, sleeps), (1, []))
         self.assertEqual(bridge.submitted()["mutations"], [])
@@ -474,7 +521,7 @@ class WeeklyRetryTests(unittest.TestCase):
         requests = [params["request"] for method, params in bridge.calls if method == "model.invoke"]
         self.assertEqual(len(requests), 3)
         self.assertTrue(all(request == requests[0] for request in requests))
-        self.assertEqual(requests[0]["maxTokens"], 1_500)
+        self.assertEqual(requests[0]["maxTokens"], 4_000)
 
 
 if __name__ == "__main__":
