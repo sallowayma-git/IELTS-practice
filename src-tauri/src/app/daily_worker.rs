@@ -11,10 +11,10 @@
 //!   next weekend's window folds its records in.
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use ielts_application::JournalService;
 use ielts_db::{background_jobs, BackgroundJob, DbError, DbResult, WeeklyWindow};
-use ielts_domain::DailyJournalQuery;
+use ielts_domain::{DailyJournalQuery, WeeklyReportState};
 use tauri::Manager;
 
 use super::{
@@ -150,11 +150,41 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 /// Record a failed weekly attempt (anchored on the journal of the window's end
 /// day) so the weekend is retried on a later day instead of being treated as an
 /// empty success.
-fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
+pub(crate) fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
-    db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))
-        .map(|_| ())
+    // The failed run commits on its own: it is what bounds retries to one a day,
+    // and it does not close the window, so a missing report costs nothing lasting.
+    let run = db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))?;
+    // The blocks are final either way; only the narrative is owed a retry.
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed)?;
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run.id, &report, &now))
+}
+
+/// Close a due window without a model (none configured): its blocks become the
+/// week's final report, and the next window starts after it. The report is built
+/// first and stored in the same transaction as the run that closes the window,
+/// so a report that cannot be built or stored leaves the window due.
+pub(crate) fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
+    let journal_id = ensure_journal(db, &window.anchor_day())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi)?;
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let run = ielts_db::record_completed_weekly_run(&tx, "local", &journal_id, window, &now)?;
+        ielts_db::put_weekly_report(&tx, &run.id, &report, &now)?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+fn weekly_report_without_narrative(
+    db: &AppDb,
+    window: &WeeklyWindow,
+    state: WeeklyReportState,
+) -> DbResult<ielts_domain::WeeklyReport> {
+    crate::commands::journal::finished_report(db, window, state, None)
+        .map_err(|error| DbError::Validation(error.to_string()))
 }
 
 /// The single weekly consolidation call, for the window that is due now.
@@ -171,12 +201,20 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
 
     let db = app.state::<AppDb>();
     let vault = app.state::<AppVault>();
-    let Some(window) = weekly_window_due(&db, &Local::now())? else { return Ok(false) };
-    // Without a provider the sidecar would record an empty window and burn it.
-    let Ok(provider) = crate::ai::load_provider_config(&db, &vault) else { return Ok(false) };
+    let Some(window) = weekly_window_due(&db, &crate::app::clock::now())? else { return Ok(false) };
     if !weekly_has_evidence(&db, &window)? {
         return Ok(false);
     }
+    // Without a provider there is no narrative to write: the blocks alone close the week.
+    // A vault or database read failure is not "no provider": the window stays due.
+    let provider = match crate::ai::load_provider_config(&db, &vault) {
+        Ok(provider) => provider,
+        Err(error) if crate::ai::is_provider_missing(&error) => {
+            record_weekly_without_ai(&db, &window)?;
+            return Ok(false);
+        }
+        Err(error) => return Err(error),
+    };
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
     db.with_conn(|conn| {
         ielts_db::begin_agent_run(conn, &BeginAgentRunCommand {
@@ -644,5 +682,36 @@ mod tests {
         assert!(!weekly_has_evidence(&db, &window).unwrap());
         seed_scored_outcome(&db, ielts_db::WEEKLY_MIN_OBSERVATIONS);
         assert!(weekly_has_evidence(&db, &window).unwrap());
+    }
+
+    /// Review on #243: the no-model path closed the window before storing its
+    /// report, so a failed write dropped the report and the window for good.
+    #[test]
+    fn a_no_model_week_whose_report_cannot_be_stored_stays_due() {
+        let (_dir, db) = test_db("no-ai-fail.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        assert!(record_weekly_without_ai(&db, &window).is_err());
+        assert!(!db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", KEY)).unwrap());
+        assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), None);
+        assert!(due(&db, &at(8, SATURDAY)).is_some(), "the weekend is still owed its report");
+    }
+
+    #[test]
+    fn a_week_without_a_model_closes_with_its_blocks_and_a_failure_keeps_them() {
+        let (_dir, db) = test_db("no-ai.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        record_weekly_without_ai(&db, &window).unwrap();
+        assert!(db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", KEY)).unwrap());
+        assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), Some(window.end));
+        assert!(due(&db, &at(8, SATURDAY)).is_none(), "the weekend is closed");
+
+        let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
+        let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
+        record_weekly_failure(&db, &next, &error).unwrap();
+        assert_eq!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", "2026-W42")).unwrap(), 1);
     }
 }

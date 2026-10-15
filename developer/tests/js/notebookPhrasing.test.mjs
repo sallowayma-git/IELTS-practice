@@ -9,8 +9,7 @@ import {
   factSheet,
   isPracticed,
   journalWindow,
-  previousPracticedDay,
-  practiceLead
+  previousPracticedDay
 } from '../../../apps/writing-vue/src/modules/notebook/compose.js'
 import {
   BANK,
@@ -78,8 +77,6 @@ const SMALL_SCENARIOS = [
   ['note', 'contradicted', { kind: 'contradicted' }],
   ['note', 'superseded', { kind: 'superseded' }],
   ['note', 'other', { kind: 'something_new' }],
-  ['practice', 'single', { count: 1, label: '判断题 · 对照练习' }],
-  ['practice', 'several', { count: 3, label: '判断题 · 对照练习' }],
   ...Object.entries({ new: 'new_candidate', reinforced: 'reinforced', promoted: 'promoted', refined: 'refined', improved: 'improved', regressed: 'regressed', contradicted: 'contradicted', superseded: 'superseded', other: 'something_new' })
     .map(([key, kind]) => ['noteAgain', key, { kind }])
 ]
@@ -157,8 +154,6 @@ test('condition keys pick the edge cases: quiet, first page, long gap, single, z
   assert.equal(key('attempts', { attemptsCount: 2, timeSpentMs: 90_000 }), 'several_timed')
   assert.equal(key('writing', { writingEvalSummary: { completed: 1, averageBand: 0 } }), 'single', 'a zero band is no band')
   assert.equal(key('degraded', { writingEvalSummary: { completed: 0, degraded: 1 } }), null)
-  // Open plan items.
-  assert.equal(keyFor('practice', { count: 0 }), null)
 })
 
 test('the same date reads the same: stable across calls, order and what else was rendered', () => {
@@ -175,7 +170,6 @@ test('the same date reads the same: stable across calls, order and what else was
   const reversed = sweep('2026-10-02', 14).reverse().map(render).reverse()
   assert.deepEqual(reversed, once)
   assert.deepEqual(sweep('2026-10-02', 14).map(render), once)
-  assert.equal(practiceLead([{ label: 'a' }, { label: 'b' }], DAY), practiceLead([{ label: 'a' }, { label: 'b' }], DAY))
 })
 
 test('different days vary: a fortnight uses every variant of a key, and whole entries differ', () => {
@@ -429,17 +423,6 @@ test('the day word appears at most once per entry, and only in the opening line'
   assert.equal(checked, 60)
 })
 
-test('the plan lead is worded per day and says nothing when there is no plan', () => {
-  assert.equal(practiceLead([], DAY), '')
-  assert.equal(practiceLead(null, DAY), '')
-  const one = practiceLead([{ label: '判断题 · 对照练习' }], DAY)
-  assert.ok(one.includes('判断题 · 对照练习'), one)
-  const three = practiceLead([{ label: 'a' }, { label: 'b' }, { label: 'c' }], DAY)
-  assert.ok(three.includes('3'), three)
-  const week = new Set(sweep('2026-10-01', 14).map((day) => practiceLead([{ label: 'a' }, { label: 'b' }], day)))
-  assert.equal(week.size, BANK.practice.several.length)
-})
-
 test('there is no model in this path: no network, no host calls, no API imports', () => {
   const calls = []
   const trap = (name) => (...args) => { calls.push([name, args]); throw new Error(`${name} must not be called`) }
@@ -457,7 +440,6 @@ test('there is no model in this path: no network, no host calls, no API imports'
   try {
     for (const day of sweep('2026-10-01', 14)) {
       buildNotebookEntry({ journalDate: day, facts: { attemptsCount: 3, writingEvalSummary: BAND, coachFeedbackCount: 1 } }, new Map(), { previousDay: null })
-      practiceLead([{ label: 'a' }], day)
     }
   } finally {
     for (const [name, descriptor] of saved) {

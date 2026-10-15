@@ -14,14 +14,6 @@ import { LONG_GAP_DAYS, daysBetween, keyFor, phrase } from './phrasing.js'
 const DAY_KEY = /^(?:daily_journal|daily_dream):local:(\d{4}-\d{2}-\d{2})$/
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
-const PROBE_PHRASES = {
-  novel_item: '新题',
-  same_item_retention: '回看原题',
-  contrastive_pair: '对照练习',
-  coach_micro_drill: '教练小练习',
-  writing_rewrite: '改写练习'
-}
-
 function pick(record, camel, snake) {
   if (!record || typeof record !== 'object') return undefined
   return record[camel] ?? record[snake]
@@ -254,70 +246,4 @@ export function buildNotebookEntry(journal, memoriesById = new Map(), context = 
     changeLead: phrase('changeLead', sheet, day),
     changes: change
   }
-}
-
-/** "2026年10月5日 – 10月11日": the window's date range (year repeated only if it changes). */
-function formatWindowRange(startDay, endDay) {
-  if (startDay === endDay) return formatJournalDate(startDay)
-  const start = formatJournalDate(startDay)
-  const end = formatJournalDate(endDay)
-  const sameYear = start.slice(0, start.indexOf('年')) === end.slice(0, end.indexOf('年'))
-  return `${start} – ${sameYear ? end.slice(end.indexOf('年') + 1) : end}`
-}
-
-function sentences(value) {
-  return (Array.isArray(value) ? value : [])
-    .map((line) => String(line ?? '').trim().replace(/[。．.!！?？\s]+$/u, ''))
-    .filter(Boolean)
-}
-
-/**
- * One weekly notebook entry from a finished weekly pass: the three sections of
- * prose the pass wrote (这段时间的观察 / 变化 / 下一步练习). The window is whatever
- * the run covered (a missed weekend folds into the next one, so it can span
- * weeks), and the entry is labelled by that range. No counts, no ids, no
- * confidence; a pass that wrote nothing has no entry.
- */
-export function buildWeeklyEntry(digest) {
-  const window = String(digest?.window || '')
-  const startDay = localDay(pick(digest, 'windowStart', 'window_start'))
-  const endDay = localDay(pick(digest, 'windowEnd', 'window_end'))
-  if (!window || !startDay || !endDay) return null
-  const entry = {
-    window,
-    startDay,
-    dateLabel: formatWindowRange(startDay, endDay),
-    title: '这段时间的整理',
-    observations: sentences(digest.observations),
-    changes: sentences(digest.changes),
-    nextPractice: sentences(pick(digest, 'nextPractice', 'next_practice'))
-  }
-  return entry.observations.length || entry.changes.length || entry.nextPractice.length ? entry : null
-}
-
-/**
- * The closing line above the open plan items (`items` from nextPractice), or ''
- * when there is nothing to suggest. Worded for `day` like any other fact.
- */
-export function practiceLead(items, day) {
-  const list = Array.isArray(items) ? items : []
-  return phrase('practice', { count: list.length, label: list[0]?.label }, day)
-}
-
-/** Study-plan items still open, as practice suggestions. */
-export function nextPractice(snapshot) {
-  const items = Array.isArray(snapshot?.items) ? snapshot.items : []
-  return items
-    .filter((item) => item && !item.done)
-    .map((item) => {
-      const probe = item.skillProbe ?? item.skill_probe
-      const skillKey = typeof probe === 'string' ? probe : probe?.skillKey
-      const kind = typeof probe === 'object' ? PROBE_PHRASES[probe?.probeKind] : ''
-      return {
-        id: String(item.id),
-        label: [shortSkill(skillKey), kind].filter(Boolean).join(' · '),
-        why: String(item.whyText || item.why_text || ''),
-        minutes: asNumber(item.estimatedMinutes ?? item.estimated_minutes)
-      }
-    })
 }

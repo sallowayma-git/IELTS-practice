@@ -168,10 +168,16 @@ export async function getBackgroundJobStatus() {
   return unwrapCommandResponse(response, 'background_job_status')
 }
 
-/** Finished weekly consolidations (read-only), newest first. */
-export async function getWeeklyDigests(limit = 8) {
-  const response = await invokeCommand('weekly_digest_list', { limit })
-  return unwrapCommandResponse(response, 'weekly_digest_list')
+/** Finished weekly reports (read-only), newest first. */
+export async function getWeeklyReports(limit = 8) {
+  const response = await invokeCommand('weekly_report_list', { limit })
+  return unwrapCommandResponse(response, 'weekly_report_list')
+}
+
+/** This week's report so far (state "live"), or null when nothing was practised since the last finished week. */
+export async function getCurrentWeeklyReport() {
+  const response = await invokeCommand('weekly_report_current', {})
+  return unwrapCommandResponse(response, 'weekly_report_current')
 }
 
 // --- M8 consolidation ---
@@ -196,7 +202,8 @@ export const memoryRepository = {
   triggerDailyDream,
   getDailyJournal,
   getBackgroundJobStatus,
-  getWeeklyDigests,
+  getWeeklyReports,
+  getCurrentWeeklyReport,
   archiveStaleMemories
 }
 

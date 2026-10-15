@@ -1,0 +1,93 @@
+/* Shared marks for the notebook's weekly charts: ink on paper, hairline rules. */
+/* Global on purpose: every class is weekly-chart__ prefixed, and each chart component imports it. */
+.weekly-chart {
+  max-width: 420px;
+  margin: var(--anth-space-2) 0 0;
+}
+
+.weekly-chart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.weekly-chart__rule {
+  stroke: var(--anth-rule);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.weekly-chart__base {
+  stroke: var(--anth-ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.weekly-chart__bar.is-ink { fill: var(--anth-ink); }
+.weekly-chart__bar.is-accent { fill: var(--anth-accent); }
+.weekly-chart__bar.is-success { fill: var(--anth-success); }
+.weekly-chart__bar.is-warning { fill: var(--anth-warning); }
+.weekly-chart__bar.is-danger { fill: var(--anth-danger); }
+.weekly-chart__bar.is-track { fill: var(--anth-rule); }
+
+.weekly-chart__tick,
+.weekly-chart__label,
+.weekly-chart__value {
+  fill: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: 12px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.weekly-chart__tick {
+  text-anchor: middle;
+}
+
+.weekly-chart__tick.is-gap {
+  fill: var(--anth-ink-faint);
+}
+
+.weekly-chart__label {
+  fill: var(--anth-ink);
+}
+
+.weekly-chart__line {
+  fill: none;
+  stroke: var(--anth-ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.weekly-chart__dot {
+  fill: var(--anth-canvas);
+  stroke: var(--anth-ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.weekly-chart__legend {
+  display: flex;
+  gap: var(--anth-space-3);
+  margin-top: 4px;
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-sm);
+}
+
+.weekly-chart__legend span::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  background: var(--anth-ink);
+}
+
+.weekly-chart__legend .is-accent::before { background: var(--anth-accent); }
+.weekly-chart__legend .is-success::before { background: var(--anth-success); }
+.weekly-chart__legend .is-warning::before { background: var(--anth-warning); }
+.weekly-chart__legend .is-danger::before { background: var(--anth-danger); }
+.weekly-chart__legend .is-track::before { background: var(--anth-rule); }

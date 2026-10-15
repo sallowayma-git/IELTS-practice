@@ -144,7 +144,7 @@ impl WeeklyPack {
     }
 }
 
-fn instant(value: DateTime<Utc>) -> String {
+pub(crate) fn instant(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
@@ -176,21 +176,27 @@ fn untrusted(text: &str, chars: usize) -> String {
     }
 }
 
-fn field<'a>(payload: &'a Value, key: &str) -> &'a str {
+pub(crate) fn field<'a>(payload: &'a Value, key: &str) -> &'a str {
     payload.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
-struct Obs {
-    id: String,
-    kind: String,
-    polarity: Option<String>,
-    value_num: Option<f64>,
-    value_text: Option<String>,
-    payload: Value,
-    at: String,
+pub(crate) struct Obs {
+    pub(crate) id: String,
+    pub(crate) kind: String,
+    pub(crate) polarity: Option<String>,
+    pub(crate) value_num: Option<f64>,
+    pub(crate) value_text: Option<String>,
+    pub(crate) payload: Value,
+    pub(crate) at: String,
 }
 
-fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
+/// The window's observations, with each essay's writing scores reduced to its
+/// canonical evaluation (see `canonical_writing`).
+pub(crate) fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
+    Ok(canonical_writing(conn, raw_window_observations(conn, user_id, from, to)?))
+}
+
+fn raw_window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<Vec<Obs>> {
     let mut statement = conn.prepare(&format!(
         "SELECT id, observation_type, polarity, value_num, value_text, payload_json, observed_at
            FROM learner_observations
@@ -217,6 +223,56 @@ fn window_observations(conn: &Connection, user_id: &str, from: &str, to: &str) -
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+fn is_writing_score(observation: &Obs) -> bool {
+    matches!(observation.kind.as_str(), "writing.evaluation.overall_band" | "writing.evaluation.criterion_score")
+}
+
+/// The evaluation a writing ledger event reports on.
+pub(crate) fn evaluation_of(conn: &Connection, event: &str) -> String {
+    conn.query_row(
+        "SELECT COALESCE(json_extract(payload_json, '$.evaluationId'), '') FROM learning_events WHERE id = ?1",
+        [event],
+        |row| row.get(0),
+    )
+    .unwrap_or_default()
+}
+
+/// The attempt's canonical evaluation: the newest by creation, exactly the one
+/// `load_evaluation_for_attempt` (and so history) shows.
+fn canonical_evaluation(conn: &Connection, attempt: &str) -> String {
+    conn.query_row(
+        "SELECT id FROM writing_evaluations WHERE attempt_id = ?1
+          ORDER BY COALESCE(started_at, updated_at) DESC, rowid DESC, id DESC LIMIT 1",
+        [attempt],
+        |row| row.get(0),
+    )
+    .unwrap_or_default()
+}
+
+/// A re-evaluated essay emits an overall band and four criterion scores per
+/// evaluation, all under one attempt. Keep only the scores of its canonical
+/// evaluation, judged over the attempt's whole lineage rather than this
+/// window: an older provider call that finishes after its retry (even in a
+/// later window) never counts. Everything downstream (the pack's lines,
+/// header, count and citable ids; the report's writing facts) then sees each
+/// essay at most once, with the scores history shows.
+pub(crate) fn canonical_writing(conn: &Connection, window: Vec<Obs>) -> Vec<Obs> {
+    let mut canonical: BTreeMap<String, String> = BTreeMap::new();
+    window
+        .into_iter()
+        .filter(|o| {
+            if !is_writing_score(o) {
+                return true;
+            }
+            let attempt = field(&o.payload, "attemptId");
+            let evaluation = canonical.entry(attempt.to_owned()).or_insert_with(|| canonical_evaluation(conn, attempt));
+            // A ledger event with no evaluation row (imported history) has no
+            // lineage to judge against and stands as recorded.
+            evaluation.is_empty() || *evaluation == evaluation_of(conn, field(&o.payload, "eventId"))
+        })
+        .collect()
+}
+
 fn is_scored(observation: &Obs) -> bool {
     match observation.kind.as_str() {
         "reading.question.outcome" => observation.polarity.is_some(),
@@ -234,22 +290,8 @@ pub fn weekly_observation_count(
     end: DateTime<Utc>,
 ) -> DbResult<usize> {
     ensure_observations_fresh(conn)?;
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM learner_observations
-          WHERE user_id = ?1 AND projector_key = ?2 AND projector_version = ?3
-            AND ((observation_type = 'reading.question.outcome' AND polarity IS NOT NULL)
-                 OR observation_type = 'writing.evaluation.overall_band')
-            AND julianday(observed_at) > julianday(?4) AND julianday(observed_at) <= julianday(?5)",
-        params![
-            user_id,
-            LEARNING_OBSERVATION_PROJECTOR_KEY,
-            LEARNING_OBSERVATION_PROJECTOR_VERSION,
-            instant(start),
-            instant(end)
-        ],
-        |row| row.get(0),
-    )?;
-    Ok(count as usize)
+    let window = window_observations(conn, user_id, &instant(start), &instant(end))?;
+    Ok(window.iter().filter(|o| is_scored(o)).count())
 }
 
 /// A reading passage as the learner met it: title and the answer key, never its text.
@@ -259,13 +301,13 @@ struct AssetInfo {
     display: BTreeMap<String, String>,
 }
 
-struct AssetBook<'c> {
+pub(crate) struct AssetBook<'c> {
     conn: &'c Connection,
     cache: BTreeMap<String, AssetInfo>,
 }
 
 impl<'c> AssetBook<'c> {
-    fn new(conn: &'c Connection) -> Self {
+    pub(crate) fn new(conn: &'c Connection) -> Self {
         Self { conn, cache: BTreeMap::new() }
     }
 
@@ -274,11 +316,11 @@ impl<'c> AssetBook<'c> {
         self.cache.entry(asset.to_owned()).or_insert_with(|| load_asset_info(conn, asset))
     }
 
-    fn title(&mut self, asset: &str) -> String {
+    pub(crate) fn title(&mut self, asset: &str) -> String {
         self.info(asset).title.clone()
     }
 
-    fn label(&mut self, asset: &str, qid: &str) -> String {
+    pub(crate) fn label(&mut self, asset: &str, qid: &str) -> String {
         let normalized = normalize_question_id(qid);
         match self.info(asset).display.get(&normalized) {
             Some(number) => format!("q{number}"),
@@ -418,12 +460,12 @@ fn writing_lines(window: &[Obs]) -> Vec<WeeklyLine> {
     let mut criteria: BTreeMap<&str, Vec<(&str, f64)>> = BTreeMap::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.criterion_score") {
         if let (Some(name), Some(value)) = (o.value_text.as_deref(), o.value_num) {
-            criteria.entry(field(&o.payload, "attemptId")).or_default().push((name, value));
+            criteria.entry(field(&o.payload, "eventId")).or_default().push((name, value));
         }
     }
     let mut lines = Vec::new();
     for o in window.iter().filter(|o| o.kind == "writing.evaluation.overall_band") {
-        let mut scores = criteria.get(field(&o.payload, "attemptId")).cloned().unwrap_or_default();
+        let mut scores = criteria.get(field(&o.payload, "eventId")).cloned().unwrap_or_default();
         scores.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(right.0)));
         let lowest: Vec<String> = scores.iter().take(2).map(|(name, value)| format!("{name} {value}")).collect();
         let task = o.payload.get("taskType").and_then(Value::as_str).unwrap_or("writing");
@@ -679,7 +721,7 @@ fn cap_lines(lines: Vec<WeeklyLine>, budget: u32) -> (Vec<WeeklyLine>, usize) {
     (kept, omitted)
 }
 
-fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackMemory>> {
+pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackMemory>> {
     let mut statement = conn.prepare(
         "SELECT id, namespace, scope, canonical_key, content, version, COALESCE(last_observed_at, updated_at)
            FROM memory_items

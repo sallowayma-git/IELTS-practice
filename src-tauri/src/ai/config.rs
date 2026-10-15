@@ -192,6 +192,12 @@ fn provider_config_for_config(
     })
 }
 
+/// True only when no usable provider is configured on this device. A failure to
+/// read SQLite or the OS vault is a different error and must not be mistaken for it.
+pub(crate) fn is_provider_missing(error: &DbError) -> bool {
+    matches!(error, DbError::Validation(message) if message == API_KEY_REQUIRED_ON_THIS_DEVICE)
+}
+
 pub(crate) fn load_provider_config(db: &AppDb, vault: &AppVault) -> DbResult<AiProviderConfig> {
     let available_refs = available_secret_ref_ids(db, vault)?;
     db.with_conn(|conn| {
@@ -271,6 +277,13 @@ pub(crate) fn load_runtime_from_provider_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_missing_key_counts_as_no_provider() {
+        assert!(is_provider_missing(&DbError::Validation(API_KEY_REQUIRED_ON_THIS_DEVICE.into())));
+        assert!(!is_provider_missing(&DbError::Validation("AI config not found".into())));
+        assert!(!is_provider_missing(&DbError::Message("credential manager unavailable".into())));
+    }
 
     #[test]
     fn named_providers_map_to_openai_compatible_endpoints() {

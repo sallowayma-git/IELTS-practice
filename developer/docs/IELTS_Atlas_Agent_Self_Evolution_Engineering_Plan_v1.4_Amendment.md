@@ -54,7 +54,7 @@ v1.3 只把 M0–M2 标为完成。代码实际已包含 M3–M12 各阶段的�
 | M5 Retrieval + Context | 未标 | 0016；context compiler 已接 coach 证据；embedding 与 LLM rerank 默认关（`retrieval/planner.py:48-49`），`AiRuntime` 的 embed 默认返回 `embedding_not_supported`（`ports.rs:109-115`） | 词法/确定性路径 |
 | M6 Coach | 未标 | 0017、0024；Rust `CoachService`（`crates/ielts-application/src/coach.rs`）；反馈 / 再问 / 对错链接为确定性观测 | 阅读复盘页内的 coach |
 | M7 Daily Journal（即唯一的“daily dream”） | 未标 | 0018；进程内 worker `src-tauri/src/app/daily_worker.rs`（无 OS 调度器），一次日任务 = `run_daily_journal`：生成/复用当天确定性日记并把任务绑定到该日记版本。**不调模型、不起 sidecar run、不产生 memory proposal，也不写 `dream_runs` / `agent_runs`**（2.1 规则 2） | 札记页的“日记”条目；“整理今天”（IPC 名仍为 `dream_run_daily`）走同一条任务路径 |
-| M8 Weekly Dream | 未标 | 0019；首次尝试仅周末、失败后逐日重试直到完成的整合（2.3）：窗口规划 `plan_weekly_window`、到期谓词 `weekly_window_due`（`daily_worker.rs`），worker 入口 `run_weekly_if_due`；输入是窗口内**真实练习记录**（`ielts-db/src/weekly_pack.rs`），一次调用同时产出札记散文与记忆变更；`dream_runs.input_hash="weekly:<ISO 周>:<start>..<end>"`（`ielts-db/src/dream.rs`，`WeeklyWindow`） | 札记页的“周记”条目（按窗口实际范围标注）；**未对真实 provider 跑通**（第 5 节） |
+| M8 Weekly Dream | 未标 | 0019；首次尝试仅周末、失败后逐日重试直到完成的整合（2.3）：窗口规划 `plan_weekly_window`、到期谓词 `weekly_window_due`（`daily_worker.rs`），worker 入口 `run_weekly_if_due`；输入是窗口内**真实练习记录**（`ielts-db/src/weekly_pack.rs`），一次调用同时产出周记的标题、每个区块一句话与记忆变更（周记本身是确定性区块，3.3）；`dream_runs.input_hash="weekly:<ISO 周>:<start>..<end>"`（`ielts-db/src/dream.rs`，`WeeklyWindow`） | 札记页的“周记”条目（按窗口实际范围标注）；**未对真实 provider 跑通**（第 5 节） |
 | M9 Memory Center | 未标 | `MemoryCenterPage.vue` 已不存在；`/memory-center` 重定向到 `/notebook`（`main.js:43-47`）；新页 `views/NotebookPage.vue` + `modules/notebook/compose.js`（**撰写时仍是未跟踪文件**） | 被札记取代（3.3） |
 | M10 Teaching Strategy | 未标 | 0020、0023；`teaching_strategy_*` Tauri 命令**仅在 `developer-tools` feature 下编译并注册**（`lib.rs` handler、`commands/mod.rs`）；服务层与 sidecar 反向 RPC 保留 | **无前端调用，无 worker 调用，发布构建无此命令**；coach 固定使用 `evidence_first_v1`（`coach.rs:158`） |
 | M11 Prompt / Skill Eval | 未标 | 0021、0025；`prompt_*` / `skill_*` Tauri 命令**仅在 `developer-tools` feature 下编译并注册**；Python `ielts_agent/eval/` 不被 `runtime.py` 引用 | **无前端调用，发布构建无此命令**；不进入产品路径（2.5） |
@@ -125,13 +125,15 @@ due = 自动学习开启
 
 **大小上限与取舍。** 整包按 `estimate_tokens` 不超过 `WEEKLY_PACK_TOKEN_CAP = 6000`。超限时确定性地取舍（`cap_lines`）：先**保留“在 ≥2 篇不同文章里都错过”的题型的全部行**，再从最新往前保留最近的行（遇到第一条放不下的即停），其余丢弃并写入一行 `omitted N older items`；保护行本身就超限时才丢其中最旧的。`header` 在丢弃之前由全部行计算，所以计数始终如实。行按“日期、种类、文本”排序，与行 id / 数据库行序无关。
 
-**一次调用，两种产出**（`dream/weekly.py`）：`{"digest":{"observations","changes","nextPractice"},"mutations":[…]}`。digest 是简体中文散文（本周观察点名具体文章 / 题号，变化对照更早的 attempt 与重做，下一步练习针对重复错题），落在札记；mutations 只有 **ADD / REINFORCE / SUPERSEDE / ARCHIVE** 四种，线格式就是所有认知提案共用的 `MemoryMutationProposal`。
+**周记 v2：区块由宿主确定性计算，模型只写一句话**（`ielts-db/src/weekly_report/`，契约在 `ielts-domain/src/weekly_report.rs`）。周记是一组 `ReportBlock {id, kind, data, examples, memoryIds, narrative}`：`data` 是该区块页面上出现的全部数字（camelCase；比例是保留两位小数的分数），`examples` 至多 3 条、每条带可直接打开的练习链接（`PracticeLink`：复盘某次 attempt、重做、写作结果、题库）。区块由 8 个确定性技能按**数据形状**选出（不是模型选）：`volume`（量与每日分布）、`accuracy`（正确率与每日走势）、`question_types`（错题题型）、`repeated_misses`（跨文章 / 同题重复错）、`redo_progress`（重做修正 / 仍错 / 新错）、`writing_bands`（写作分数与最弱分项）、`coach_signals`（coach 反馈与追问）、`next_week_plan`（下周计划：旧 Python 学习计划器的确定性移植，取证据数 ≥2 的复习需求，至多 3 项、合计 ≤45 分钟）。每个区块没有可显示内容时不出现；没有练习的一周没有区块。周包同时带上本周区块的 `{id, kind, data}`（`learning.weekly_pack` 的 `blocks`）。
 
-**写入闸门（宿主，唯一咽喉）。** `dream.run_weekly` 收到 `{window, digest, mutations}` 后（`commands/journal.rs::run_weekly_consolidation`）：
+**一次调用，两种产出**（`dream/weekly.py`，`WEEKLY_MODEL_MAX_TOKENS = 4000`，中文输出按字计 token 留足余量）：`{"title", "sentences": {blockId: 一句话}, "mutations":[…]}`。宿主用 `narrative::apply_narrative` 逐句收下：标题 ≤40 字、每句 ≤120 字，命中注入 / 密钥 / 内部 id 的丢弃，**句中出现的每个数字都必须出现在该区块的 `data` 里**（标题对全部区块的数字取并集；中文数字后跟量词也算），否则丢弃该句、区块照常显示。mutations 只有 **ADD / REINFORCE / SUPERSEDE / ARCHIVE** 四种，线格式就是所有认知提案共用的 `MemoryMutationProposal`；被采纳的变更以 `memoryChanges` 记在周记上。
+
+**写入闸门（宿主，唯一咽喉）。** `dream.run_weekly` 收到 `{window, narrative, mutations, modelAvailable, droppedMutations}` 后（`commands/journal.rs::run_weekly_consolidation`）：
 
 1. **引用必须在包内**（`WeeklyEvidence::admits`）：每个 `evidenceObservationIds` 都必须是宿主此刻重算的周包里出现过的 id，`targetMemoryId` 必须是包里的记忆，动作限四种，至多 8 条；否则直接拒绝（计入 `rejected`，不进校验器）。Python 侧先做同样的预过滤。
 2. 其余走**既有的 M3 校验器**（`MemoryProposalValidator`，来源 `Consolidated`）与提升路径（`MemoryService::apply_cognitive_mutations`）：证据存在 / 同用户 / 作用域匹配 / 无注入与密钥标记 / 规范键与重复 / 目标仍 active；REINFORCE 还要求有晚于旧证据的新证据。通过者以 `dream` 身份提升，`created_by='weekly_dream'`，`source_class='consolidated'`；SUPERSEDE 与 ARCHIVE 只改状态，**从不删除**。校验通过但提升失败（目标已变、作用域已满）的候选被置为 `rejected`（`reject_pending_candidate`），不留 `pending`——pending 候选会作为“未验证”上下文泄漏给 coach。
-3. digest 经 `WeeklyDigestProse::sanitized`（条数 / 字数上限，丢弃命中注入 / 密钥 / 禁止推断域的行）后存入 `settings`（命名空间 `weekly_digest`，键为 run id）。**不加列**：`dream_runs` 属于冻结的备份形状，加列会让旧备份无法还原；settings 在备份内，随备份还原。
+3. 宿主重算窗口的区块、套上模型的句子后，把整份 `WeeklyReport`（`schemaVersion = 2`）以 JSON 存入 `weekly_digests`（0029，键为 run id），连同 header 数字一起持久化，札记不再现算。**不加列**：`dream_runs` 属于冻结的备份形状。v1 散文行仍可读入备份，但札记不再显示。
 
 整个 M8 旧路径（`PatternProposal` / `validate_patterns` / `apply_consolidation`）仍在库里供开发期测试，**周任务不再使用**；`memory.candidate_pool` 能力已移除，weekly 运行的宿主方法白名单现在是 `learning.weekly_pack`、`model.invoke`、`dream.run_weekly`。
 
@@ -145,9 +147,11 @@ due = 自动学习开启
 
 一次 weekly 因此最多 3 个 provider 请求。不可修复的失败（401 / 400 等非 retryable、超出 deadline）立即失败，不重试。**空结果（没有可成立的内容）是成功**，不重试、不算失败。weekly 一次运行的宿主预算为 420 s（`WEEKLY_REQUEST_TIMEOUT`），sidecar 自限 400 s。
 
-**失败语义。** provider / 超时 / 模型输出不合法 / sidecar 失败，一律记为 **failed 的 dream run**（锚定在窗口终点当日的日记上），不是“无事可整合”；`weekly_run_completed` 仍为 false。Python 侧同样 fail closed。
+**失败语义。** provider / 超时 / 模型输出不合法 / sidecar 失败，一律记为 **failed 的 dream run**（锚定在窗口终点当日的日记上），不是“无事可整合”；`weekly_run_completed` 仍为 false。Python 侧同样 fail closed。失败的尝试也会存下当周的区块（`state = narrative_failed`），札记照常显示数字，只是没有模型写的句子；之后某天成功时由 completed 的那份取代。**没有配置模型**时不调用 sidecar：该周末直接记为 completed（输出哈希 `no-model`），周记状态为 `final_no_ai`，只有区块与默认标题（“这一周读了 N 篇，写了 M 篇”）。
 
-**札记。** `weekly_digest_list` 返回每个 completed、且有散文的 run 的 `window`（周末键）、实际覆盖的 `windowStart` / `windowEnd` 与三段散文（`observations` / `changes` / `nextPractice`）；札记页按这一范围标注（例如“9月19日 – 10月10日”），三段原样排版，`nextPractice` 之后（仅最新一周）再接学习计划里尚未完成的练习。写了空话的 run 没有条目。
+**札记。** `weekly_report_list` 返回已存的周记（同一窗口 completed 优先于 failed，最新窗口在前，没有区块的不返回）；`weekly_report_current` 返回**本周到目前为止**的实时版本（`state = live`，从上一个完成窗口的终点到现在，确定性计算、不调模型；没有练习时为 `null`）。札记页按 `windowStart` / `windowEnd` 标注范围（例如“9月19日 – 10月10日”），逐个区块排版：小图、数字、一句话（有则显示）、例子链接。状态 `live` 标“本周进行中”，`final_no_ai` 与 `narrative_failed` 明示“没有 AI 总结”，周末之前的周中只看到实时版本。
+
+**测试时钟。** 宿主的 `app::clock::now()` 在设置了 `IELTS_ATLAS_FAKE_NOW`（RFC3339）时返回该时刻，打包 E2E 用它把一次启动放在周三、再一次放在下周日 10:00，配合假模型的 weekly 分支跑完整的周记路径（`developer/tests/e2e/test_packaged_weekly.py`、`packaged_tauri_flow.py` 的 `weeklyReport` 检查）。
 
 ### 2.4 AI 阅读复盘：opt-in 且幂等
 
@@ -280,7 +284,7 @@ due = 自动学习开启
 ### 3.3 札记（Notebook）取代面向用户的 agent 控制台
 
 - 路由 `/notebook`，导航名“札记”（`main.js:39-42`，`NavBar.vue:38`）；`/memory-center` 重定向到它（`main.js:43-47`）。
-- 内容：按日的日记条目与按周的周记条目（散文，不是仪表盘；周记的三段 观察 / 变化 / 下一步练习 就是周任务一次调用写下的散文，2.3）；“下一步练习”；“关于你，我们记住了”——每条记忆**只有两个操作：不准确、忘记**（`NotebookPage.vue:161-170`）。“不准确”记 `inaccurate` 反馈，不删学习事实；“忘记”需确认，且删除该句及其依据，不影响练习记录。
+- 内容：按日的日记条目与按周的周记条目（**区块，不是散文**：每个区块是一张小图或一组数字、模型写的一句话与可点开的练习例子；周中显示实时版本，周末后显示定稿，2.3）；“下一步练习”；“关于你，我们记住了”——每条记忆**只有两个操作：不准确、忘记**（`NotebookPage.vue:161-170`）。“不准确”记 `inaccurate` 反馈，不删学习事实；“忘记”需确认，且删除该句及其依据，不影响练习记录。
 - **不出现**：审批队列、待处理计数、候选数量、置信度、Dream Report 的 approve/reject/edit。
 - 页面头部的“整理今天”是用户主动触发当天的确定性整理，不调模型。
 - 视觉回归：`developer/tests/e2e/notebook_visual_check.py`（撰写时为未跟踪文件）。
@@ -316,7 +320,7 @@ due = 自动学习开启
 | **11.2 Level 1** Session Close Reflection | 会话结束时的 LLM 总结 / 候选提取 | **移除**：不存在这次调用 | 代码中没有 session-close 的调用点（对 `crates/`、`src-tauri/`、`agent-runtime-python/src`、`apps/writing-vue/src` 检索无匹配） |
 | **16** 产品级 Prompt/Skill 自进化；**M10–M12 的 shadow / canary**；**M11** | 应用内 shadow / canary / 提升 | **仅开发者侧，不随产品发布**。DB 表与命令作为合同保留，不作为产品功能运行 | 2.5 |
 | **M7 的 daily dream proposal**（REINFORCE / REFINE / IMPROVE / REGRESS / CONTRADICT / NOOP 候选）；**M7-06～M7-08** 的 daily 编排与容量约束 | 每日生成 memory 候选 | **移除**：daily 只做确定性摘要（日记）；所有记忆整合只在 weekly。`dream_candidates` 表保留但无人读写 | 2.1 规则 2；`daily_dream.py` / `capacity.py` / `record_job_dream_proposals` 已删除 |
-| **M8** “上一个已完成 ISO 周 / 每周每天最多重试一次 / 前置在 daily dream 之后”；ADR-M8 的 `memory.candidate_pool` 与跨 scope pattern 提案 | weekly 的调度、输入与产出 | **取代**：首次仅本地周末、失败后逐日重试直到完成；窗口 = 自上次完成起（≤28 天）；幂等键 = 最近一个周末所在 ISO 周；输入是窗口内真实练习记录（周包），一次调用产出散文 + 记忆变更（ADD / REINFORCE / SUPERSEDE / ARCHIVE）；`memory.candidate_pool` 能力移除、改为 `learning.weekly_pack` | 2.3 |
+| **M8** “上一个已完成 ISO 周 / 每周每天最多重试一次 / 前置在 daily dream 之后”；ADR-M8 的 `memory.candidate_pool` 与跨 scope pattern 提案 | weekly 的调度、输入与产出 | **取代**：首次仅本地周末、失败后逐日重试直到完成；窗口 = 自上次完成起（≤28 天）；幂等键 = 最近一个周末所在 ISO 周；输入是窗口内真实练习记录（周包），一次调用产出标题与每区块一句话 + 记忆变更（周记区块由宿主确定性计算）（ADD / REINFORCE / SUPERSEDE / ARCHIVE）；`memory.candidate_pool` 能力移除、改为 `learning.weekly_pack` | 2.3 |
 | **M10 / M11** 的 Tauri 命令随发布构建注册 | 命令在发布 handler 中 | **取代**：仅 `developer-tools` 下编译与注册 | 1.2；`lib.rs` handler |
 | **11.12** Dream 成本控制 | 每日 token / cost hard limit、按 event group 调用等 | **由本文第 2 节取代**：以结构性规则控制成本，不做运行时硬限额与成本计量 | 第 2 节 |
 

@@ -14,6 +14,7 @@ use ielts_application::{
 };
 use ielts_db::background_jobs::{self, BackgroundJob};
 use ielts_db::WeeklyWindow;
+use ielts_domain::{WeeklyReport, WeeklyReportState};
 use ielts_domain::{
     CommandResponse, DailyDreamQuery, DailyJournal, DailyJournalQuery, ErrorEnvelope,
     MemoryFeedbackKind, MemoryMutationProposalBatch, MemorySourceClass, WeeklyDreamQuery,
@@ -193,21 +194,60 @@ fn default_local_user() -> String {
     "local".into()
 }
 
-/// Read-only: recent weekly consolidations, each with the window it covered and
-/// the prose its pass wrote (what was seen, what changed, what to practise). Runs that wrote nothing are
-/// omitted. The Notebook renders these as prose; nothing here can mutate memory.
+/// Read-only: the persisted weekly reports, newest week first, one per week
+/// (a completed run's report wins over a failed run's). Nothing here can mutate
+/// memory.
 #[tauri::command]
-pub fn weekly_digest_list(
+pub fn weekly_report_list(
     db: State<'_, AppDb>,
     limit: Option<u32>,
-) -> CommandResponse<Vec<ielts_db::WeeklyDigest>> {
-    match db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", limit.unwrap_or(8))) {
-        Ok(digests) => CommandResponse::success(digests),
-        Err(error) => CommandResponse::failure(ErrorEnvelope::new(
-            "journal.weekly_digest_failed",
-            error.to_string(),
-            false,
-        )),
+) -> CommandResponse<Vec<ielts_domain::WeeklyReport>> {
+    respond_weekly(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", limit.unwrap_or(8))))
+}
+
+/// Read-only: the live report of the week so far (since the last finished
+/// weekly run), computed now and never stored. `None` when nothing was
+/// practised in it.
+#[tauri::command]
+pub fn weekly_report_current(db: State<'_, AppDb>) -> CommandResponse<Option<ielts_domain::WeeklyReport>> {
+    respond_weekly(live_weekly_report(&db, crate::app::clock::now()))
+}
+
+pub(crate) fn live_weekly_report(
+    db: &AppDb,
+    now: chrono::DateTime<chrono::FixedOffset>,
+) -> ielts_db::DbResult<Option<ielts_domain::WeeklyReport>> {
+    let last_end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local"))?;
+    let Some(planned) = crate::cognitive_runtime::plan_weekly_window(&now, last_end) else { return Ok(None) };
+    // Named after the weekend that will close it, never the retry key of the
+    // weekend before: that week may already have its own finished report.
+    let key = live_window_key(db, &now)?;
+    let window = ielts_db::WeeklyWindow::new(key, planned.start, planned.end);
+    let report = db.with_conn(|conn| {
+        ielts_db::build_weekly_report(
+            conn,
+            "local",
+            &window,
+            *now.offset(),
+            ielts_domain::WeeklyReportState::Live,
+            now.with_timezone(&chrono::Utc),
+        )
+    })?;
+    Ok((!report.is_empty()).then_some(report))
+}
+
+fn live_window_key(db: &AppDb, now: &chrono::DateTime<chrono::FixedOffset>) -> ielts_db::DbResult<String> {
+    let this_weekend = crate::cognitive_runtime::upcoming_weekend_key(now);
+    if db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", &this_weekend))? {
+        return Ok(crate::cognitive_runtime::upcoming_weekend_key(&(*now + chrono::Duration::days(7))));
+    }
+    Ok(this_weekend)
+}
+
+fn respond_weekly<T: Serialize>(result: ielts_db::DbResult<T>) -> CommandResponse<T> {
+    match result {
+        Ok(value) => CommandResponse::success(value),
+        Err(error) => CommandResponse::failure(ErrorEnvelope::new("journal.weekly_report_failed", error.to_string(), false)),
     }
 }
 
@@ -271,24 +311,34 @@ fn now_iso() -> String {
 }
 
 /// What the sidecar's one model call produced, after the host parsed it: the
-/// digest prose, and the memory mutations in the same wire shape every cognitive
-/// proposal uses. Mutations that do not even parse are counted, never dropped
+/// narrative (a title and one sentence per block), and the memory mutations in
+/// the same wire shape every cognitive proposal uses. Mutations that do not even
+/// parse, and those the sidecar already refused, are counted, never dropped
 /// silently.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct WeeklySubmission {
-    pub digest: ielts_db::WeeklyDigestProse,
+    pub narrative: ielts_domain::WeeklyNarrative,
+    pub model_available: bool,
     pub mutations: Vec<ielts_domain::MemoryMutationProposal>,
     pub unparsed: usize,
 }
 
+impl Default for WeeklySubmission {
+    fn default() -> Self {
+        Self { narrative: Default::default(), model_available: true, mutations: Vec::new(), unparsed: 0 }
+    }
+}
+
 impl WeeklySubmission {
     pub(crate) fn from_params(params: &serde_json::Map<String, serde_json::Value>) -> Self {
-        let digest = params
-            .get("digest")
+        let narrative = params
+            .get("narrative")
             .cloned()
             .and_then(|value| serde_json::from_value(value).ok())
             .unwrap_or_default();
-        let mut submission = Self { digest, ..Self::default() };
+        let model_available = params.get("modelAvailable").and_then(serde_json::Value::as_bool).unwrap_or(true);
+        let dropped = params.get("droppedMutations").and_then(serde_json::Value::as_u64).unwrap_or(0) as usize;
+        let mut submission = Self { narrative, model_available, unparsed: dropped, ..Self::default() };
         for item in params.get("mutations").and_then(serde_json::Value::as_array).into_iter().flatten() {
             match serde_json::from_value(item.clone()) {
                 Ok(mutation) => submission.mutations.push(mutation),
@@ -308,8 +358,8 @@ pub(crate) struct WeeklyOutcome {
     pub accepted: usize,
 }
 
-/// M8: record one weekly pass over `window`: its digest prose and its memory
-/// mutations. Every mutation must cite observations of the pack the model was
+/// M8: record one weekly pass over `window`: its report (the deterministic
+/// blocks plus the model's whitelisted narrative) and its memory mutations. Every mutation must cite observations of the pack the model was
 /// shown and target memories of that pack (`WeeklyEvidence`), then goes through
 /// the one cognitive-proposal gate (`MemoryService`): validation, then promotion
 /// as the `dream` actor. Nothing is ever deleted; supersede and archive keep the
@@ -363,15 +413,15 @@ fn apply_weekly_submission(
     run_id: &str,
     now: &str,
 ) -> Result<WeeklyOutcome, ApplicationError> {
-    let dream_service = DreamService::new(store);
     let pack = db
         .with_conn(|conn| ielts_db::weekly_pack(conn, &query.user_id, window.start, window.end))
         .map_err(|error| ApplicationError::new("weekly.pack_failed", error.to_string(), true))?;
     let evidence = WeeklyEvidence { observation_ids: pack.evidence_ids(), memory_ids: pack.memory_ids() };
 
-    let digest = submission.digest.sanitized();
-    db.with_conn(|conn| ielts_db::put_weekly_digest(conn, run_id, &digest, now))
-        .map_err(|error| ApplicationError::new("weekly.digest_failed", error.to_string(), true))?;
+    // Build the report before any memory changes: if the blocks or the narrative
+    // cannot be built, the run fails with memory untouched.
+    let state = if submission.model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
+    let mut report = finished_report(db, window, state, Some(submission.narrative))?;
 
     let (admitted, refused) = evidence.admitted(submission.mutations);
     let mut rejected = refused + submission.unparsed;
@@ -379,7 +429,7 @@ fn apply_weekly_submission(
     if !admitted.is_empty() {
         outcome = MemoryService::new(store).apply_cognitive_mutations(
             &SubmitMemoryCandidatesCommand {
-                request_id: format!("weekly-mutations-{run_id}"),
+                request_id: ielts_db::weekly_mutation_request_id(run_id),
                 user_id: query.user_id.clone(),
                 run_id: None,
                 batch: MemoryMutationProposalBatch {
@@ -392,8 +442,28 @@ fn apply_weekly_submission(
         )?;
     }
     rejected += outcome.rejected;
-    let output_hash = weekly_output_hash(&digest, &outcome.applied);
-    dream_service.finish_dream_run(run_id, &output_hash, now)?;
+    // The report (with what memory changed) and the run's completion commit
+    // together. Should that fail after memory changed, a retry's validator
+    // refuses to apply the changes twice (an ADD is a duplicate key, a
+    // SUPERSEDE or ARCHIVE target is no longer active, a REINFORCE has no newer
+    // evidence), and the report lists every change made since the last
+    // completed run, read from the promotion records, so it still carries them.
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id)?;
+        ielts_db::put_weekly_report(&tx, run_id, &report, now)?;
+        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report), now)?;
+        tx.commit()?;
+        Ok(())
+    })
+    .map_err(|error: ielts_db::DbError| {
+        let applied: Vec<&str> = outcome.applied.iter().filter_map(|receipt| receipt.memory_id.as_deref()).collect();
+        ApplicationError::new(
+            "weekly.report_failed",
+            format!("{error}; memory changes already applied: {applied:?}"),
+            true,
+        )
+    })?;
     Ok(WeeklyOutcome {
         run_id: run_id.to_owned(),
         validated: outcome.validated,
@@ -402,15 +472,42 @@ fn apply_weekly_submission(
     })
 }
 
-/// Deterministic hash over the digest and the memories the pass touched.
-fn weekly_output_hash(digest: &ielts_db::WeeklyDigestProse, applied: &[ielts_domain::MemoryMutationReceipt]) -> String {
+/// The report a weekly run leaves behind: the window's blocks as they stand
+/// now, the narrative that passed the number whitelist, and what weekly runs
+/// changed in memory since the last completed one. A failed or no-model report
+/// carries those changes too: a failed attempt may already have made them.
+pub(crate) fn finished_report(
+    db: &AppDb,
+    window: &WeeklyWindow,
+    state: WeeklyReportState,
+    narrative: Option<ielts_domain::WeeklyNarrative>,
+) -> Result<WeeklyReport, ApplicationError> {
+    let now = crate::app::clock::now();
+    db.with_conn(|conn| {
+        let mut report =
+            ielts_db::build_weekly_report(conn, "local", window, *now.offset(), state, chrono::Utc::now())?;
+        if let Some(narrative) = narrative {
+            let refused = ielts_db::apply_narrative(&mut report, narrative);
+            if refused > 0 {
+                tracing::info!(refused, "weekly narrative items refused by the number whitelist");
+            }
+        }
+        report.memory_changes = ielts_db::weekly_memory_changes(conn, "local")?;
+        Ok(report)
+    })
+    .map_err(|error: ielts_db::DbError| ApplicationError::new("weekly.report_failed", error.to_string(), true))
+}
+
+/// Deterministic hash over the report and the memories the pass touched.
+fn weekly_output_hash(report: &WeeklyReport) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
-    hasher.update(serde_json::to_string(digest).unwrap_or_default().as_bytes());
-    for receipt in applied {
+    hasher.update(serde_json::to_string(&report.blocks).unwrap_or_default().as_bytes());
+    hasher.update(report.title.as_bytes());
+    for change in &report.memory_changes {
         hasher.update(b"|");
-        hasher.update(receipt.memory_id.as_deref().unwrap_or("").as_bytes());
-        hasher.update(receipt.action.as_bytes());
+        hasher.update(change.memory_id.as_bytes());
+        hasher.update(change.action.as_bytes());
     }
     format!("{:x}", hasher.finalize())
 }
@@ -502,6 +599,23 @@ mod tests {
         window("2026-W41", "2026-10-03T04:00:00Z", "2026-10-10T09:30:00Z")
     }
 
+    /// Codex review on #243: midweek the retry key still names last weekend, so a
+    /// live report keyed by it collided with that weekend's finished report.
+    #[test]
+    fn the_live_report_is_named_after_the_weekend_that_will_close_it() {
+        let (_dir, db) = temp_db();
+        let local = |value: &str| chrono::DateTime::parse_from_rfc3339(value).unwrap();
+        let key = |value: &str| live_window_key(&db, &local(value)).unwrap();
+        assert_eq!(key("2026-10-07T12:00:00+08:00"), "2026-W41", "Wednesday belongs to the coming weekend");
+        assert_eq!(key("2026-10-11T12:00:00+08:00"), "2026-W41", "Sunday before its run");
+
+        let journal_id = seed_journal(&db, "local");
+        db.with_conn(|conn| ielts_db::record_completed_weekly_run(conn, "local", &journal_id, &saturday(), "2026-10-10T09:30:00Z"))
+            .unwrap();
+        assert_eq!(key("2026-10-11T12:00:00+08:00"), "2026-W42", "after the weekend closed");
+        assert_eq!(key("2026-10-12T09:00:00+08:00"), "2026-W42", "Monday after a finished weekend");
+    }
+
     fn dream_run_status(db: &AppDb, run_id: &str) -> Option<String> {
         db.with_conn(|conn| {
             Ok(conn
@@ -519,11 +633,10 @@ mod tests {
         WeeklySubmission::from_params(value.as_object().unwrap())
     }
 
-    fn digest_json() -> serde_json::Value {
+    fn narrative_json() -> serde_json::Value {
         serde_json::json!({
-            "observations": ["P1 的第 14 题（判断题）连续两次选错"],
-            "changes": ["重做 P1 后修正了一道错题"],
-            "nextPractice": ["换一篇文章再练判断题"]
+            "title": "判断题在两篇文章里都出了错",
+            "sentences": {"question_types": "判断题是这周最需要回头看的题型。", "volume": "这周练了 99 篇。"}
         })
     }
 
@@ -556,7 +669,7 @@ mod tests {
         let (_dir, db) = temp_db();
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: "journal-does-not-exist".into() };
         let submission = params(serde_json::json!({
-            "digest": digest_json(),
+            "narrative": narrative_json(),
             "mutations": [add_json("strategy.reading.never", &["obs-x"])],
         }));
 
@@ -567,11 +680,11 @@ mod tests {
         assert_eq!(written, 0, "no memory may land when the run cannot be claimed");
     }
 
-    /// The weekly run row is the per-weekend idempotency receipt, and its digest
-    /// prose is what the notebook reads back. A run with nothing to say leaves a
-    /// receipt but no entry.
+    /// The weekly run row is the per-weekend idempotency receipt. A week with no
+    /// practice leaves a receipt but no report to show; a week without a model
+    /// is final without narrative.
     #[test]
-    fn weekly_consolidation_leaves_a_receipt_and_a_digest_for_its_weekend() {
+    fn weekly_consolidation_leaves_a_receipt_and_no_report_for_an_empty_week() {
         let (_dir, db) = temp_db();
         let journal_id = seed_journal(&db, "local");
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id };
@@ -581,19 +694,8 @@ mod tests {
         run_weekly_consolidation(&db, &query, WeeklySubmission::default(), &window).unwrap();
         assert!(due("2026-W41") && !due("2026-W42"));
         assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), Some(window.end));
-        let digests = || db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
-        assert!(digests().is_empty(), "nothing to say, nothing to show");
-
-        let later = window_after(&window);
-        run_weekly_consolidation(&db, &query, params(serde_json::json!({"digest": digest_json()})), &later).unwrap();
-        let listed = digests();
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].observations, vec!["P1 的第 14 题（判断题）连续两次选错"]);
-        assert_eq!(listed[0].next_practice, vec!["换一篇文章再练判断题"]);
-    }
-
-    fn window_after(window: &WeeklyWindow) -> WeeklyWindow {
-        WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7))
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert!(reports.is_empty(), "nothing practised, nothing to show");
     }
 
     /// Another run over the same span (the pack, and so the citable ids, is the same).
@@ -647,12 +749,120 @@ mod tests {
         }).unwrap()
     }
 
+    /// Review on #243: a report that cannot be stored after memory changed must
+    /// leave the run failed and retryable, name the memories it changed, and the
+    /// retry must not apply them twice.
+    #[test]
+    fn a_report_write_failure_fails_the_run_and_the_retry_does_not_repeat_its_mutations() {
+        let (dir, db) = temp_db();
+        import_passage(&db, dir.path(), "P1");
+        submit(&db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        let window = saturday();
+        let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        let miss = pack.lines.iter().find(|line| line.kind == "miss").unwrap().ids[0].clone();
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
+        let submission = || params(serde_json::json!({
+            "narrative": narrative_json(),
+            "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
+        }));
+
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        let error = run_weekly_consolidation(&db, &query, submission(), &window).unwrap_err();
+        let written = memories(&db);
+        assert_eq!(written.len(), 1);
+        assert!(error.to_string().contains(&written[0].0), "the failure names the memory it changed: {error}");
+        assert!(!db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", "2026-W41")).unwrap());
+        assert!(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap().is_empty());
+
+        db.with_conn(|conn| Ok(conn.execute_batch("DROP TRIGGER fail_report;")?)).unwrap();
+        let retry = run_weekly_consolidation(&db, &query, submission(), &window).unwrap();
+        assert_eq!(retry.accepted, 0, "the same ADD is a duplicate the second time");
+        assert_eq!(memories(&db).len(), 1);
+        assert!(db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", "2026-W41")).unwrap());
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        // The change the failed attempt made is still this week's change.
+        let changes: Vec<(&str, &str)> =
+            reports[0].memory_changes.iter().map(|change| (change.action.as_str(), change.memory_id.as_str())).collect();
+        assert_eq!(changes, vec![("ADD", written[0].0.as_str())]);
+    }
+
+    /// Changes of one run, by action and memory id.
+    fn changes(report: &WeeklyReport) -> Vec<(String, String)> {
+        report.memory_changes.iter().map(|change| (change.action.clone(), change.memory_id.clone())).collect()
+    }
+
+    /// Fail W41's run after its ADD was promoted (the report write aborts).
+    fn a_week_whose_report_write_failed(db: &AppDb, dir: &std::path::Path) -> (WeeklyWindow, Vec<(String, String)>) {
+        import_passage(db, dir, "P1");
+        submit(db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        let window = saturday();
+        let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
+        let miss = pack.lines.iter().find(|line| line.kind == "miss").unwrap().ids[0].clone();
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(db, "local") };
+        db.with_conn(|conn| Ok(conn.execute_batch(
+            "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
+             BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
+        )?)).unwrap();
+        let submission = params(serde_json::json!({
+            "narrative": narrative_json(),
+            "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
+        }));
+        run_weekly_consolidation(db, &query, submission, &window).unwrap_err();
+        db.with_conn(|conn| Ok(conn.execute_batch("DROP TRIGGER fail_report;")?)).unwrap();
+        let written = memories(db);
+        assert_eq!(written.len(), 1);
+        (window, vec![("ADD".to_owned(), written[0].0.clone())])
+    }
+
+    /// Review on #243: the change a failed attempt made is shown on the failed
+    /// report, and the W42 run that folds W41 in reports it as its own.
+    #[test]
+    fn a_change_made_before_a_report_failure_reaches_the_failed_and_the_folded_reports() {
+        let (dir, db) = temp_db();
+        let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
+        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}))
+            .unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, WeeklyReportState::NarrativeFailed);
+        assert_eq!(changes(&reports[0]), added);
+
+        let w42 = window("2026-W42", "2026-10-03T04:00:00Z", "2026-10-17T09:30:00Z");
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
+        let folded = run_weekly_consolidation(&db, &query, params(serde_json::json!({"narrative": narrative_json()})), &w42)
+            .unwrap();
+        assert_eq!(folded.accepted, 0);
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.iter().map(|report| report.window.as_str()).collect::<Vec<_>>(), vec!["2026-W42"]);
+        assert_eq!(changes(&reports[0]), added, "the folded week's change is on the report that closes it");
+
+        // Reported once: nothing is owed to the next week's report.
+        assert!(db.with_conn(|conn| ielts_db::weekly_memory_changes(conn, "local")).unwrap().is_empty());
+    }
+
+    /// Review on #243: with the model gone, the no-model report that closes the
+    /// week still lists the change the failed attempt made.
+    #[test]
+    fn a_change_made_before_a_report_failure_reaches_the_no_model_report() {
+        let (dir, db) = temp_db();
+        let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
+        crate::app::daily_worker::record_weekly_without_ai(&db, &w41).unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, WeeklyReportState::FinalNoAi);
+        assert_eq!(changes(&reports[0]), added);
+    }
+
     /// The whole weekly path with a fake model, on real submissions: the pack the
     /// sidecar would read, a model answer written from that pack, and the host
     /// gate. Every mutation cites pack ids or it is refused; accepted ones become
     /// memory with their evidence; nothing is ever deleted.
     #[test]
-    fn a_fake_model_over_a_real_pack_writes_a_digest_and_gated_memory_mutations() {
+    fn a_fake_model_over_a_real_pack_writes_a_report_and_gated_memory_mutations() {
         let (dir, db) = temp_db();
         for id in ["P1", "P2"] {
             import_passage(&db, dir.path(), id);
@@ -671,7 +881,7 @@ mod tests {
         let mut wrong_scope = add_json("strategy.writing.x", &[&first_miss]);
         wrong_scope["scope"] = serde_json::json!({"type": "activity", "key": "writing"});
         let first = run_weekly_consolidation(&db, &query, params(serde_json::json!({
-            "digest": digest_json(),
+            "narrative": narrative_json(),
             "mutations": [
                 add_json("strategy.reading.tfng_boundary", &[&first_miss]),
                 add_json("strategy.reading.invented", &["obs-forged"]),
@@ -712,10 +922,17 @@ mod tests {
         assert_eq!(status(&memory), "superseded");
         assert_eq!(rows.iter().filter(|(_, status, _)| status == "active").count(), 1);
 
-        // The notebook reads the digest of the first run.
-        let digests = db.with_conn(|conn| ielts_db::list_weekly_digests(conn, "local", 8)).unwrap();
-        assert_eq!(digests.len(), 1);
-        assert_eq!(digests[0].changes, vec!["重做 P1 后修正了一道错题"]);
+        // The notebook reads one report per week; the first run's narrative
+        // passed the whitelist except the sentence with a number nobody computed.
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        let first_report = reports.iter().find(|report| report.window == "2026-W41").unwrap();
+        assert_eq!(first_report.state, WeeklyReportState::Final);
+        assert_eq!(first_report.title, "判断题在两篇文章里都出了错");
+        let narrative = |id: &str| first_report.blocks.iter().find(|block| block.id == id).and_then(|block| block.narrative.clone());
+        assert_eq!(narrative("question_types").as_deref(), Some("判断题是这周最需要回头看的题型。"));
+        assert_eq!(narrative("volume"), None, "99 is not in the volume block");
+        assert_eq!(first_report.memory_changes.len(), 1);
+        assert_eq!(first_report.memory_changes[0].memory_id, memory);
     }
 
     /// "整理今天" is the deterministic journal and nothing else: no run, no
