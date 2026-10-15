@@ -22,6 +22,7 @@ DIST = ROOT / "dist/writing"
 REPORTS = ROOT / "developer/tests/e2e/reports"
 REPORT = REPORTS / "visual-regression-report.json"
 EVIDENCE = REPORTS / "visual-ci-evidence"
+FAILED_LOG_TAIL_LINES = 600
 BASE_URL_ENV_NAMES = (
     "NOTEBOOK_VISUAL_BASE_URL",
     "NAV_VISUAL_BASE_URL",
@@ -245,6 +246,13 @@ def main() -> int:
                     }
                     results.append(result)
                     print(json.dumps(result, ensure_ascii=False))
+                    if return_code != 0:
+                        # Echo the failure into the job log so it can be read without
+                        # downloading the evidence artifact.
+                        lines = f"{stdout}\n{stderr}".strip().splitlines()[-FAILED_LOG_TAIL_LINES:]
+                        print(f"::group::{script_name} output (last {len(lines)} lines)")
+                        print("\n".join(lines))
+                        print("::endgroup::")
         except Exception as error:  # Startup failures still produce a report.
             startup_error = str(error)
         finally:
