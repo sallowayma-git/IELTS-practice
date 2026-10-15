@@ -350,6 +350,36 @@ fn recover_daily_jobs(
     })
 }
 
+// Stream source timestamps without deduplicating them; only local activity
+// days need a distinct set while the database mutex is held.
+const ACTIVITY_WINDOWS_SQL: &str = "SELECT DISTINCT user_id, ielts_local_day(activity_at) AS activity_day FROM (
+           SELECT ?1 AS user_id, COALESCE(submitted_at, started_at) AS activity_at
+           FROM attempts
+           UNION ALL
+           SELECT ?1, COALESCE(completed_at, updated_at)
+           FROM writing_evaluations
+           UNION ALL
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), occurred_at
+           FROM learning_events
+           UNION ALL
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+           FROM learner_observations
+           UNION ALL
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
+           FROM learner_skill_observations
+           UNION ALL
+           SELECT ?1, created_at
+           FROM memory_mutations
+           UNION ALL
+           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), created_at
+           FROM coach_feedback
+           UNION ALL
+           SELECT ?1, created_at
+           FROM coach_reask_links
+         )
+         WHERE activity_day IS NOT NULL AND activity_day < ?2
+         ORDER BY user_id, activity_day";
+
 /// Find canonical activity dates that do not yet have the corresponding daily
 /// derived work. Dates are read from the same source tables used by
 /// `build_daily_facts`; the derived journal/job tables are intentionally not
@@ -369,35 +399,7 @@ fn canonical_activity_windows_in<Tz: chrono::TimeZone + Send + 'static>(
         return Ok(Vec::new());
     };
     crate::local_day::register_local_day_fn(conn, tz.clone())?;
-    let mut statement = conn.prepare(
-        "SELECT DISTINCT user_id, ielts_local_day(activity_at) AS activity_day FROM (
-           SELECT ?1 AS user_id, COALESCE(submitted_at, started_at) AS activity_at
-           FROM attempts
-           UNION
-           SELECT ?1, COALESCE(completed_at, updated_at)
-           FROM writing_evaluations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), occurred_at
-           FROM learning_events
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
-           FROM learner_observations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), observed_at
-           FROM learner_skill_observations
-           UNION
-           SELECT ?1, created_at
-           FROM memory_mutations
-           UNION
-           SELECT COALESCE(NULLIF(TRIM(user_id), ''), ?1), created_at
-           FROM coach_feedback
-           UNION
-           SELECT ?1, created_at
-           FROM coach_reask_links
-         )
-         WHERE activity_day IS NOT NULL AND activity_day < ?2
-         ORDER BY user_id, activity_day",
-    )?;
+    let mut statement = conn.prepare(ACTIVITY_WINDOWS_SQL)?;
     let rows = statement.query_map(params![DEFAULT_USER_ID, today], |row| {
         Ok(ActivityWindow {
             user_id: row.get(0)?,
@@ -732,6 +734,39 @@ mod local_day_tests {
         assert!(days("2026-10-13T15:00:00Z", &beijing).is_empty());
         assert_eq!(days("2026-10-13T16:00:00Z", &beijing), ["2026-10-13"]);
         assert_eq!(days("2026-10-13T00:00:00Z", &utc), ["2026-10-12"]);
+    }
+
+    #[test]
+    fn activity_scan_only_deduplicates_days_in_the_query_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn =
+            crate::open_connection(&crate::DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
+        crate::migrate(&mut conn).unwrap();
+        let utc = chrono::FixedOffset::east_opt(0).unwrap();
+        crate::local_day::register_local_day_fn(&conn, utc).unwrap();
+        let mut statement = conn.prepare(&format!("EXPLAIN QUERY PLAN {ACTIVITY_WINDOWS_SQL}")).unwrap();
+        let plan = statement.query_map(params![DEFAULT_USER_ID, "2026-10-13"], |row| {
+            row.get::<_, String>(3)
+        }).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        assert!(plan.iter().any(|step| step.contains("DISTINCT")), "{plan:?}");
+        assert!(!plan.iter().any(|step| step.contains("UNION USING TEMP B-TREE")), "{plan:?}");
+
+        // Thousands of distinct timestamps in one day still produce one window.
+        conn.execute_batch(
+            "WITH RECURSIVE history(n) AS (
+               SELECT 0 UNION ALL SELECT n + 1 FROM history WHERE n < 4095
+             )
+             INSERT INTO attempts
+               (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+             SELECT 'history-' || n, 'reading', 'single', 'completed',
+               strftime('%Y-%m-%dT%H:%M:%SZ', '2026-10-12', '+' || n || ' seconds'),
+               0, 2, '2026-10-12T00:00:00Z', '2026-10-12T00:00:00Z'
+             FROM history;"
+        ).unwrap();
+        let windows = canonical_activity_windows_in(&conn, "2026-10-13T00:00:00Z", &utc).unwrap();
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].user_id, DEFAULT_USER_ID);
+        assert_eq!(windows[0].day, "2026-10-12");
     }
 
     #[test]

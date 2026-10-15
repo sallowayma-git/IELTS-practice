@@ -8,7 +8,7 @@
  * Daily entries are rule-generated from the journal's structured facts and
  * worded by the seeded phrase bank in phrasing.js. No model is involved.
  */
-import { formatJournalDate, formatMemoryStatement, formatSkillKey, localDay } from '../agent-console/format.js'
+import { formatJournalDate, formatMemoryStatement, formatSkillKey } from '../agent-console/format.js'
 import { LONG_GAP_DAYS, daysBetween, keyFor, phrase } from './phrasing.js'
 
 const DAY_KEY = /^(?:daily_journal|daily_dream):local:(\d{4}-\d{2}-\d{2})$/
