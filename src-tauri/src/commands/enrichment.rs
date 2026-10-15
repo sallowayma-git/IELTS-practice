@@ -10,11 +10,44 @@ use crate::app::application_store::ApplicationStore;
 use crate::app::state::{AppDb, AppVault};
 use ielts_db::{
     delete_annotation, delete_vocab, ensure_coach_thread, import_dictionary, list_annotations,
-    list_coach_messages, list_vocab, lookup_term, revalidate_annotations, review_vocab,
-    upsert_annotation, upsert_vocab, AnnotationRecord, CoachMessage, CoachRunResult, CoachThread,
-    DictionaryEntry, EnsureCoachThreadCommand, ImportDictionaryCommand, ReviewVocabCommand,
-    RunCoachCommand, UpsertAnnotationCommand, UpsertVocabCommand, VocabularyItem,
+    list_coach_messages, list_vocab, lookup_term_with_bundled, revalidate_annotations,
+    review_vocab, upsert_annotation, upsert_vocab, AnnotationRecord, BundledDictionary,
+    CoachMessage, CoachRunResult, CoachThread, DictionaryEntry, EnsureCoachThreadCommand,
+    ImportDictionaryCommand, ReviewVocabCommand, RunCoachCommand, UpsertAnnotationCommand,
+    UpsertVocabCommand, VocabularyItem, PLACEHOLDER_DEFINITION,
 };
+
+/// Bundled ECDICT subset shipped as a Tauri resource. Parsed at most once, on first use
+/// (or by the background warm-up spawned in setup); a missing/corrupt file degrades to
+/// SQLite-only lookup instead of failing the command.
+pub struct BundledDictionaryState {
+    path: std::path::PathBuf,
+    cell: std::sync::OnceLock<Option<BundledDictionary>>,
+}
+
+impl BundledDictionaryState {
+    pub fn new(path: std::path::PathBuf) -> Self {
+        Self {
+            path,
+            cell: std::sync::OnceLock::new(),
+        }
+    }
+
+    pub fn get(&self) -> Option<&BundledDictionary> {
+        self.cell
+            .get_or_init(|| match BundledDictionary::load(&self.path) {
+                Ok(dict) => {
+                    tracing::info!(entries = dict.len(), "loaded bundled ECDICT dictionary");
+                    Some(dict)
+                }
+                Err(error) => {
+                    tracing::warn!(%error, path = %self.path.display(), "bundled ECDICT unavailable");
+                    None
+                }
+            })
+            .as_ref()
+    }
+}
 
 fn map_err(err: ielts_db::DbError) -> ErrorEnvelope {
     ErrorEnvelope {
@@ -83,8 +116,13 @@ pub fn annotation_revalidate(
 }
 
 #[tauri::command]
-pub fn dictionary_lookup(db: State<'_, AppDb>, term: String) -> CommandResponse<DictionaryEntry> {
-    match db.with_conn(|conn| lookup_term(conn, &term)) {
+pub fn dictionary_lookup(
+    db: State<'_, AppDb>,
+    bundled: State<'_, BundledDictionaryState>,
+    term: String,
+) -> CommandResponse<DictionaryEntry> {
+    let bundled = bundled.get();
+    match db.with_conn(|conn| lookup_term_with_bundled(conn, &term, bundled)) {
         Ok(v) => CommandResponse::success(v),
         Err(e) => CommandResponse::failure(map_err(e)),
     }
@@ -104,8 +142,20 @@ pub fn dictionary_import(
 #[tauri::command]
 pub fn vocab_upsert(
     db: State<'_, AppDb>,
-    cmd: UpsertVocabCommand,
+    bundled: State<'_, BundledDictionaryState>,
+    mut cmd: UpsertVocabCommand,
 ) -> CommandResponse<VocabularyItem> {
+    // A save after a missed lookup arrives without a real definition; fill it from the
+    // bundled dictionary instead of persisting the UI placeholder.
+    let missing = cmd.definition.as_deref().map_or(true, |d| {
+        d.trim().is_empty() || d.trim() == PLACEHOLDER_DEFINITION
+    });
+    if missing {
+        if let Some(hit) = bundled.get().and_then(|b| b.get(&cmd.term)) {
+            cmd.definition = Some(hit.definition);
+            cmd.phonetic = cmd.phonetic.or(hit.phonetic);
+        }
+    }
     match db.with_conn(|conn| upsert_vocab(conn, &cmd)) {
         Ok(v) => CommandResponse::success(v),
         Err(e) => CommandResponse::failure(map_err(e)),

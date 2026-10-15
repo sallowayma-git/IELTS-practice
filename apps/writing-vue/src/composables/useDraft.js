@@ -42,13 +42,18 @@ export function useDraft(draftId, getSnapshot = null, options = {}) {
         return !!payload && (
             payload.content.trim().length > 0 ||
             payload.topic_text.trim().length > 0 ||
-            payload.topic_id !== null ||
             payload.category.trim().length > 0
         )
     }
 
+    function isDraftOverride(value) {
+        // Template handlers like @click="scheduleSave" pass a DOM Event; only a
+        // plain draft object may replace the live editor snapshot.
+        return !!value && Object.getPrototypeOf(value) === Object.prototype
+    }
+
     function snapshot(override = null) {
-        if (override) return normalizeDraft(override)
+        if (isDraftOverride(override)) return normalizeDraft(override)
         if (typeof getSnapshot === 'function') return normalizeDraft(getSnapshot())
         return normalizeDraft(lastSnapshot || {})
     }
@@ -112,9 +117,16 @@ export function useDraft(draftId, getSnapshot = null, options = {}) {
         saveGeneration += 1
         if (saveTimeout) clearTimeout(saveTimeout)
         saveTimeout = null
+        // The backend pins a draft attempt to its mode/topic, so the blank
+        // draft must keep that scope or the write is rejected.
+        const scope = snapshot()
         lastSnapshot = null
         lastPersistedSignature = ''
-        await saveDraft(normalizeDraft())
+        await saveDraft(normalizeDraft({
+            task_type: scope.task_type,
+            topic_mode: scope.topic_mode,
+            topic_id: scope.topic_id
+        }))
     }
 
     async function hasDraft() {

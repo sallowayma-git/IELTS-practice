@@ -4,7 +4,8 @@ import {
   buildSuiteReviewNavigationTarget,
   canSnapshotReadingAnswers,
   findNextActiveSuitePassage,
-  mapTauriSubmissionToUi
+  mapTauriSubmissionToUi,
+  readingDraftOwnerMatches
 } from '../../../apps/writing-vue/src/modules/practice-reading/readingModeFlowCore.js'
 
 const ui = mapTauriSubmissionToUi({
@@ -43,6 +44,20 @@ assert.deepEqual(ui.answerComparison.q1, {
   weight: 1,
   matchMode: 'exact'
 })
+assert.equal(ui.analysisSignals, null)
+assert.equal(ui.singleAttemptAnalysis, null)
+
+const analysisSignals = { unansweredCount: 1, changedAnswerCount: null, markedQuestionCount: 0, interactionDensity: null }
+const singleAttemptAnalysis = { diagnosis: [], nextActions: [], radar: { byQuestionKind: [] } }
+const withAnalysis = mapTauriSubmissionToUi({
+  attempt: { id: 'att-2' },
+  score: { accuracy: 0, correct: 0, total: 1, percentage: 0 },
+  comparisons: [],
+  analysisSignals,
+  singleAttemptAnalysis
+}, { assetId: 'asset-1' })
+assert.deepEqual(withAnalysis.analysisSignals, analysisSignals)
+assert.deepEqual(withAnalysis.singleAttemptAnalysis, singleAttemptAnalysis)
 
 const sequence = [
   { status: 'submitted', assetId: 'a1', sessionId: 's1' },
@@ -94,5 +109,17 @@ assert.equal(canSnapshotReadingAnswers({ ...snapshotBase, readOnly: true }), fal
 assert.equal(canSnapshotReadingAnswers({ ...snapshotBase, isEndlessMode: true }), false)
 assert.equal(canSnapshotReadingAnswers({ ...snapshotBase, leaving: true }), false)
 assert.equal(canSnapshotReadingAnswers({ ...snapshotBase, isTauriRuntime: false }), false)
+
+// Endless drafts persist the endless session id as their owner (suite_id).
+// Reloading an endless passage must resume that draft instead of discarding it
+// and letting the next autosave overwrite the saved answer map.
+const endlessDraft = { id: 'att-e', suiteId: 'endless-1' }
+assert.equal(readingDraftOwnerMatches(endlessDraft, { endlessSessionId: 'endless-1' }), true)
+assert.equal(readingDraftOwnerMatches(endlessDraft, { endlessSessionId: 'endless-2' }), false)
+assert.equal(readingDraftOwnerMatches(endlessDraft, {}), false)
+assert.equal(readingDraftOwnerMatches({ id: 'att-s', suite_id: 'suite-1' }, { suiteId: 'suite-1' }), true)
+assert.equal(readingDraftOwnerMatches({ id: 'att-s', suiteId: 'suite-1' }, {}), false)
+assert.equal(readingDraftOwnerMatches({ id: 'att-1', suiteId: null }, {}), true)
+assert.equal(readingDraftOwnerMatches({ id: 'att-1' }, { endlessSessionId: 'endless-1' }), false)
 
 console.log('reading mode flow core: ok')

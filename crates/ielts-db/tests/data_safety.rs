@@ -323,7 +323,7 @@ fn format_18_backup_writes_attempts_once_and_writes_atomically() {
     let (dir, source) = open_db();
     upsert_attempt(&source, &terminal_attempt("bk1", 1)).unwrap();
     let package = create_backup_package(&source, "test").unwrap();
-    assert_eq!(package.manifest.schema_version, 18);
+    assert_eq!(package.manifest.schema_version, 19);
     assert!(package.attempts.is_empty());
     assert_eq!(package.manifest.attempt_count, 1);
 
@@ -353,7 +353,9 @@ fn format_17_backup_with_a_summary_array_still_restores_and_carries_digests() {
     // present, and a checksum over that exact shape.
     let mut legacy = create_backup_package(&source, "v17").unwrap();
     legacy.manifest.schema_version = 17;
-    legacy.database.retain(|table| table.name != "weekly_digests");
+    legacy.database.retain(|table| {
+        table.name != "weekly_digests" && !table.name.starts_with("agent_context_")
+    });
     legacy.manifest.table_count = legacy.database.len() as u32;
     legacy.manifest.row_count = legacy
         .database
@@ -405,7 +407,12 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
     assert!(!backups.exists() || std::fs::read_dir(&backups).unwrap().next().is_none());
 
     // Pretend the last migration has not run yet.
-    conn.execute("DELETE FROM schema_migrations WHERE version = 30", []).unwrap();
+    // 0031 adds a column, so undo it before forgetting it ran.
+    conn.execute_batch(
+        "ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
+         DELETE FROM schema_migrations WHERE version = 31;",
+    )
+    .unwrap();
     assert!(ielts_db::has_pending_migrations(&conn).unwrap());
     ielts_db::migrate_with_snapshot(&mut conn, &backups).unwrap();
     let snapshots: Vec<_> = std::fs::read_dir(&backups)
@@ -414,7 +421,7 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
         .collect();
     assert_eq!(snapshots.len(), 1, "{snapshots:?}");
     assert!(snapshots[0].starts_with("pre-migrate-"));
-    assert_eq!(ielts_db::current_version(&conn).unwrap(), 30);
+    assert_eq!(ielts_db::current_version(&conn).unwrap(), 31);
 }
 
 #[test]

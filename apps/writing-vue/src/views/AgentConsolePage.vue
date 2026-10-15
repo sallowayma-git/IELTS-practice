@@ -15,7 +15,6 @@ import {
   getBackgroundJobStatus,
   getDailyJournal,
   getMemoryCatalog,
-  putExplicitPreference,
   recordMemoryFeedback,
   triggerDailyDream
 } from '@/api/memory-repository.js'
@@ -635,24 +634,6 @@ async function forgetEntry(entry) {
     actionError.value = error?.message || '遗忘失败'
   } finally {
     setBusy(id, false)
-  }
-}
-
-async function pinExplicitPreference(entry) {
-  const key = readMemoryField(entry, 'preferenceKey', '') || readMemoryField(entry, 'preference_key', '') || String(entry && entry.key || '')
-  if (!key) { actionError.value = '该条目没有偏好键，无法固定。'; return }
-  const value = readMemoryField(entry, 'value', null)
-  setBusy(key, true)
-  actionError.value = ''
-  try {
-    invalidateMemoryCatalog()
-    await putExplicitPreference({ preferenceKey: key, scope: memoryScope(entry) || 'global', value: value ?? true })
-    if (!await refreshAfterMemoryMutation()) return
-    actionMessage.value = `已固定这条偏好。`
-  } catch (error) {
-    actionError.value = error?.message || '固定偏好失败'
-  } finally {
-    setBusy(key, false)
   }
 }
 

@@ -202,6 +202,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0030_raw_data_delete_gate.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 31,
+                name: "coach_thread_learner_profile",
+                sql: include_str!("../../migrations/0031_coach_thread_learner_profile.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }

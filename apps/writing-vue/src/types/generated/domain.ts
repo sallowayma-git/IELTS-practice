@@ -283,6 +283,60 @@ export interface HistoryDetailResponse {
   summary: HistoryListItemVm
   attempt: AttemptRecord
   evaluation?: WritingEvaluationV4 | null
+  analysisSignals?: ReadingAnalysisSignals | null
+  singleAttemptAnalysis?: SingleAttemptAnalysis | null
+}
+
+/** Deterministic (zero-LLM) reading review analysis; null metric = not recorded. */
+export interface ReadingAnalysisSignals {
+  questionCount: number
+  answeredCount: number
+  unansweredCount: number
+  correctCount: number
+  incorrectCount: number
+  markedQuestionCount: number
+  changedAnswerCount: number | null
+  interactionDensity: number | null
+  timelineAvailable: boolean
+}
+
+export interface ReadingKindPerformance {
+  kind: string
+  label: string
+  total: number
+  correct: number
+  incorrect: number
+  unanswered: number
+  accuracy: number
+  avgElapsedMs: number | null
+}
+
+export interface ReadingDiagnosisItem {
+  type: string
+  severity: 'high' | 'medium' | 'low'
+  message: string
+  questionIds: string[]
+  questionKind: string | null
+}
+
+export interface ReadingNextAction {
+  type: string
+  target: string
+  instruction: string
+  questionIds: string[]
+  questionKind: string | null
+}
+
+export interface SingleAttemptAnalysis {
+  summary: {
+    accuracy: number
+    durationSec: number
+    unansweredRate: number
+    changedAnswerRate: number | null
+  }
+  radar: { byQuestionKind: ReadingKindPerformance[] }
+  diagnosis: ReadingDiagnosisItem[]
+  nextActions: ReadingNextAction[]
 }
 
 export type HistoryExportFormat = 'csv' | 'markdown' | 'json'

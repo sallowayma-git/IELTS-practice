@@ -6,7 +6,9 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ielts_domain::domain::{Activity, AttemptMode, AttemptStatus, ScoreScale};
-use ielts_domain::dto::{AttemptAnswer, AttemptRecord};
+use ielts_domain::dto::{
+    AttemptAnswer, AttemptRecord, ReadingAnalysisSignals, SingleAttemptAnalysis,
+};
 
 use crate::attempts::upsert_attempt;
 use crate::history::prune_terminal_attempts_in_transaction;
@@ -14,6 +16,7 @@ use crate::learning_events::project_reading_attempt_events_if_enabled;
 use crate::modes::timer::{
     load_reading_timer_state, save_reading_timer_state, TimerOwnerScope, TimerState,
 };
+use crate::reading::analysis::analyze_reading_attempt;
 use crate::reading::assets::{
     load_answer_key, load_controls, load_kinds, load_practice_asset_payload,
 };
@@ -90,6 +93,21 @@ pub struct ReadingSubmitResult {
     pub score: ScoreSummary,
     pub comparisons: Vec<AnswerComparison>,
     pub idempotent_replay: bool,
+    /// Deterministic review analysis derived from `attempt` (never from an LLM).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_signals: Option<ReadingAnalysisSignals>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub single_attempt_analysis: Option<SingleAttemptAnalysis>,
+}
+
+impl ReadingSubmitResult {
+    /// Recompute the deterministic analysis from the scored attempt.
+    pub fn with_analysis(mut self) -> Self {
+        let (signals, analysis) = analyze_reading_attempt(&self.attempt).unzip();
+        self.analysis_signals = signals;
+        self.single_attempt_analysis = analysis;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,7 +338,10 @@ pub(crate) fn submit_reading_attempt_in_scope(
         score: summary.clone(),
         comparisons: comparisons.clone(),
         idempotent_replay: false,
-    };
+        analysis_signals: None,
+        single_attempt_analysis: None,
+    }
+    .with_analysis();
     let response_json =
         serde_json::to_string(&result).map_err(|e| DbError::Message(e.to_string()))?;
     conn.execute(
@@ -631,7 +652,7 @@ fn lookup_submit_response(
             ));
         }
         result.idempotent_replay = true;
-        Ok(Some(result))
+        Ok(Some(result.with_analysis()))
     } else {
         Ok(None)
     }

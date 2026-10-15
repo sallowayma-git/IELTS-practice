@@ -181,6 +181,10 @@ pub fn run() {
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_put_explicit_preference,
             #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_list_explicit_preferences,
+            #[cfg(feature = "memory-core-v1")]
+            commands::memory::memory_delete_explicit_preference,
+            #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_context_preview,
             #[cfg(feature = "memory-core-v1")]
             commands::memory::memory_catalog_list,
@@ -305,6 +309,8 @@ pub fn run() {
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]
+            commands::coach_feedback::coach_list_feedback,
+            #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_reask_link,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_strategy_assignment,
@@ -338,6 +344,18 @@ pub fn run() {
             commands::prompt_skill::skill_list_versions,
         ])
         .setup(|app| {
+            // Register now, parse off the main thread: startup never waits on the 5 MB file.
+            let ecdict = app
+                .path()
+                .resource_dir()?
+                .join("wordlists")
+                .join("ecdict_reading.bundle.js");
+            app.manage(commands::enrichment::BundledDictionaryState::new(ecdict));
+            let warm = app.handle().clone();
+            std::thread::spawn(move || {
+                warm.state::<commands::enrichment::BundledDictionaryState>()
+                    .get();
+            });
             let paths = app.state::<app::state::AppPaths>();
             let db = app.state::<app::state::AppDb>();
             let writing_catalog = app

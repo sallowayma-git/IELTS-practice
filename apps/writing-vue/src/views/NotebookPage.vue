@@ -177,7 +177,9 @@
             <header class="section-head">
               <h2 id="notebook-memory-title" class="heading-serif">关于你，我们记住了</h2>
             </header>
-            <p class="page-header-desc">这是系统目前对你的理解。哪一句不对，就告诉我们；不想被记住，就让它忘记。</p>
+            <LearnerPreferences />
+            <h3 class="notebook-memory__subtitle">系统观察到的</h3>
+            <p class="page-header-desc">这是系统从你的练习里学到的。哪一句不对，就告诉我们；不想被记住，就让它忘记。</p>
             <p v-if="memoryError" class="inline-message inline-message-error" role="alert">{{ memoryError }}</p>
             <p v-else-if="!memories.length" class="section-meta">还没有记住什么。多练几次，这里会出现系统对你的了解。</p>
             <ol v-else class="list notebook-memory__list">
@@ -241,6 +243,7 @@ import {
   previousPracticedDay,
   rememberedSentences
 } from '@/modules/notebook/compose.js'
+import LearnerPreferences from '@/modules/notebook/LearnerPreferences.vue'
 import { weeklyEntries } from '@/modules/notebook/weekly.js'
 
 const CHARTS = { dayBars: WeeklyDayBars, hBars: WeeklyTypeBars, bandLine: WeeklyBandLine, stackBar: WeeklyStackBar }
@@ -613,6 +616,13 @@ onMounted(load)
   color: var(--anth-ink-muted);
   font-family: var(--anth-font-sans);
   font-size: var(--anth-text-sm);
+}
+
+.notebook-memory__subtitle {
+  margin: 0;
+  color: var(--anth-ink-strong);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-md);
 }
 
 .notebook-memory__list {

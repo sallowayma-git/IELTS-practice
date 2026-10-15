@@ -295,6 +295,49 @@ fn autosaving_an_active_writing_attempt_preserves_its_open_status() {
 }
 
 #[test]
+fn unsubmitted_draft_follows_a_topic_or_mode_switch() {
+    let (_dir, conn) = open_db();
+    let attempt_id = "compose-compose-essay";
+    conn.execute(
+        "INSERT INTO practice_assets
+         (id,activity,source_kind,title,category,difficulty,frequency,content_ref,
+          schema_version,fingerprint,pdf_only,created_at,updated_at)
+         VALUES ('topic-a','writing','builtin','Topic A','task2',NULL,'low','topic-a',2,'fp',0,
+                 '2026-08-14T00:00:00Z','2026-08-14T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    let mut bank = draft_cmd(attempt_id, "Bank essay.", "draft-scope-bank");
+    bank.asset_id = Some("topic-a".into());
+    save_writing_draft(&conn, &bank).unwrap();
+
+    let mut free = draft_cmd(attempt_id, "Freeform essay keeps saving.", "draft-scope-free");
+    free.mode = AttemptMode::Freeform;
+    save_writing_draft(&conn, &free).unwrap();
+
+    let draft = get_writing_draft(&conn, attempt_id).unwrap().unwrap();
+    assert_eq!(draft.mode, Some(AttemptMode::Freeform));
+    assert_eq!(draft.asset_id, None);
+    assert_eq!(draft.content_text, "Freeform essay keeps saving.");
+}
+
+#[test]
+fn active_draft_scope_stays_frozen() {
+    let (_dir, conn) = open_db();
+    let attempt_id = "writing-active-scope";
+    save_writing_draft(&conn, &draft_cmd(attempt_id, "Open.", "draft-frozen-1")).unwrap();
+    conn.execute(
+        "UPDATE attempts SET status = 'active' WHERE id = ?1",
+        rusqlite::params![attempt_id],
+    )
+    .unwrap();
+    let mut free = draft_cmd(attempt_id, "Other scope.", "draft-frozen-2");
+    free.mode = AttemptMode::Freeform;
+    let error = save_writing_draft(&conn, &free).unwrap_err();
+    assert!(error.to_string().contains("belongs to another mode"));
+}
+
+#[test]
 fn completed_writing_attempt_rejects_a_stale_draft_save() {
     let (_dir, conn) = open_db();
     let original = "A completed evaluation keeps its submitted source immutable. ".repeat(25);

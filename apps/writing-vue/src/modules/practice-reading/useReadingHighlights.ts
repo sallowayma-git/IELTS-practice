@@ -698,10 +698,15 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
   async function saveDictionaryBubbleWord() {
     const word = normalizeComparableText(dictionaryBubble.term)
     if (!word) return
+    // Only a found entry carries a real definition (meaning may hold the loading text).
+    // On a miss send none: the backend fills it from the bundled dictionary or leaves it empty.
+    const definition = dictionaryBubble.found
+      ? (dictionaryBubble.definition || dictionaryBubble.meaning || '')
+      : ''
     const item = await saveTermToVocab({
       term: word,
-      meaning: dictionaryBubble.meaning || dictionaryBubble.definition || '待补充释义',
-      definition: dictionaryBubble.definition || dictionaryBubble.meaning || '待补充释义',
+      meaning: definition,
+      definition,
       example: dictionaryBubble.example || '',
       phonetic: dictionaryBubble.phonetic || undefined,
       partOfSpeech: dictionaryBubble.partOfSpeech || undefined

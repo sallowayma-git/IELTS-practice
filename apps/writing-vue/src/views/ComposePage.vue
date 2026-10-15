@@ -171,7 +171,7 @@
           </p>
 
           <div class="editor-actions">
-            <button class="btn btn-ghost" @click="scheduleSave">
+            <button class="btn btn-ghost" @click="scheduleSave()">
               保存草稿
             </button>
             <button
@@ -671,10 +671,16 @@ async function submitEssay() {
       word_count: payload.word_count
     })
 
-    if (!resumeAttemptId) {
-      await discardDraft()
-    }
+    // The essay is now durably submitted and evaluation has started. Clearing
+    // the scratch draft is housekeeping: its failure must never strand the
+    // user on the compose page, where a retry would start a second, billed
+    // evaluation of the same essay.
     stopAutoSave()
+    if (!resumeAttemptId) {
+      await discardDraft().catch((discardError) => {
+        console.error('[Draft] clearing submitted draft failed:', discardError)
+      })
+    }
 
     router.push({
       name: 'Evaluating',

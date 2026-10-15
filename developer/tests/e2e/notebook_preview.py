@@ -88,14 +88,15 @@ MOCK = r"""
       sourceClass: 'observed', namespace: 'skill', status: 'active', version: 2, scope: 'activity:reading',
       confidenceBand: 'medium', supportCount: 4, contradictionCount: 0, firstSeen: '2026-09-14T09:00:00Z',
       pendingVerification: false, evidenceObservationIds: ['obs-tfng-0'], lastSeen: '2026-10-02T09:00:00Z' },
-    { id: 'mem-pref', canonicalKey: 'pref.examples', statement: '你更喜欢先看例句，再看规则讲解。',
-      sourceClass: 'user_explicit', namespace: 'preference', status: 'active', version: 1, scope: 'activity:reading',
-      confidenceBand: 'high', supportCount: 3, contradictionCount: 0, firstSeen: '2026-09-14T09:00:00Z',
-      pendingVerification: false, evidenceObservationIds: [], lastSeen: '2026-09-28T09:00:00Z' },
     { id: 'mem-time', canonicalKey: 'pace.reading', statement: '阅读时，后半部分的节奏往往比前半部分慢一半。',
       sourceClass: 'observed', namespace: 'skill', status: 'active', version: 1, scope: 'activity:reading',
       confidenceBand: 'medium', supportCount: 2, contradictionCount: 0, firstSeen: '2026-10-01T09:00:00Z',
       pendingVerification: false, evidenceObservationIds: [], lastSeen: '2026-10-05T09:00:00Z' },
+  ];
+  // What the learner typed in the Notebook (memory_list_explicit_preferences).
+  const preferences = scenario === 'empty' ? [] : [
+    { userId: 'local', preferenceKey: 'user_note.0a1b2c3d4e5f6071', scope: 'global', value: '先给我看例句，再讲规则',
+      status: 'active', source: 'user', updatedAt: '2026-09-28T09:00:00Z' },
   ];
 
   const SKILLS = [
@@ -140,6 +141,7 @@ MOCK = r"""
       case 'memory_catalog_list': return { ok: true, data: { userId: 'local', entries: catalog, truncated: false } };
       case 'weekly_report_current': return { ok: true, data: window.__weeklyReports(weeklyScenario).current };
       case 'weekly_report_list': return { ok: true, data: window.__weeklyReports(weeklyScenario).list };
+      case 'memory_list_explicit_preferences': return { ok: true, data: preferences };
       case 'learning_observations_get_by_ids': return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations',
         projectorVersion: 1, ledgerInputHash: 'ledger', observationOutputHash: 'obs', generatedAt: '2026-10-02T23:00:00Z',
         freshness: 'fresh', observations: observations(args.ids || []), missingIds: [] } };

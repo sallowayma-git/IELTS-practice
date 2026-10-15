@@ -103,6 +103,11 @@ def check_tauri_contract() -> dict[str, Any]:
     writing_catalog = ROOT / "assets/generated/writing-topics/bc-task2-2024-12_2025-01.catalog.json"
     if not writing_catalog.is_file():
         failures.append("bundled writing catalog source file is missing")
+    ecdict_source = "../assets/wordlists/ecdict_reading.bundle.js"
+    if resources.get(ecdict_source) != "wordlists/ecdict_reading.bundle.js":
+        failures.append("bundled ECDICT dictionary must ship as wordlists/ecdict_reading.bundle.js (dictionary_lookup reads it)")
+    if not (ROOT / "assets/wordlists/ecdict_reading.bundle.js").is_file():
+        failures.append("bundled ECDICT dictionary source file is missing")
     for icon in bundle.get("icon") or []:
         if not (ROOT / "src-tauri" / icon).is_file():
             failures.append(f"bundle icon does not exist: {icon}")
@@ -246,6 +251,7 @@ def main() -> int:
         run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
+        run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
         run_command("Vue production build", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(

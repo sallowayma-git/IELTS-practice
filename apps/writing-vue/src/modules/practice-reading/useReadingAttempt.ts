@@ -174,7 +174,9 @@ export function mapSubmitResultToSubmission(
     submittedAt: attempt.submittedAt || attempt.completedAt || null,
     title: attempt.titleSnapshot || extras.titleSnapshot || null,
     source: 'tauri',
-    idempotentReplay: Boolean(result.idempotentReplay)
+    idempotentReplay: Boolean(result.idempotentReplay),
+    analysisSignals: result.analysisSignals ?? null,
+    singleAttemptAnalysis: result.singleAttemptAnalysis ?? null
   }
 }
 

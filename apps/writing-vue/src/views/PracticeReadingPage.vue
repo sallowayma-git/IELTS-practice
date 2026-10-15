@@ -375,6 +375,8 @@
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
+      :coach-feedback="coachFeedback"
+      :coach-reaskable-id="coachReaskableId"
       :coach-query="coachQuery"
       :can-ask-coach="canAskCoach"
       @toggle-panel="toggleReadingCoachPanel"
@@ -383,6 +385,8 @@
       @quick-action="runCoachQuickAction"
       @selection-action="runCoachSelectionAction"
       @follow-up="askCoachFollowUp"
+      @feedback="submitCoachFeedback($event.messageId, $event.kind)"
+      @reask="reaskCoachMessage"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
@@ -444,7 +448,7 @@ import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
 import { useReadingHighlights } from '@/modules/practice-reading/useReadingHighlights'
 import { normalizeComparableText } from '@/modules/practice-reading/readingHighlightCore.js'
 import { useReadingModeFlow } from '@/modules/practice-reading/useReadingModeFlow'
-import { canSnapshotReadingAnswers } from '@/modules/practice-reading/readingModeFlowCore.js'
+import { canSnapshotReadingAnswers, readingDraftOwnerMatches } from '@/modules/practice-reading/readingModeFlowCore.js'
 import { useReadingTimer } from '@/modules/practice-reading/useReadingTimer'
 import { useReadingAttempt } from '@/modules/practice-reading/useReadingAttempt'
 import {
@@ -734,6 +738,8 @@ const {
   coachStatusText,
   coachTranscript,
   coachFollowUps,
+  coachFeedback,
+  coachReaskableId,
   resetReadingCoachState,
   setReadingCoachOpen,
   hydrateReadingCoachFromSubmission,
@@ -742,6 +748,8 @@ const {
   clearSelectedContext,
   askCoach,
   askCoachFollowUp,
+  reaskCoachMessage,
+  submitCoachFeedback,
   runCoachQuickAction,
   runCoachSelectionAction,
   runAutomaticReviewCoach
@@ -1251,19 +1259,18 @@ async function loadSubmittedSession(sessionId) {
 
 async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null) {
   try {
-    const expectedSuiteId = String(suiteId || '').trim()
+    const scope = { suiteId, endlessSessionId }
     const { attempt, timer } = await getOpenReadingDraft(
       assetId,
-      expectedSuiteId || null,
+      String(suiteId || '').trim() || null,
       String(endlessSessionId || '').trim() || null
     )
     if (!attempt?.id) return
-    const draftSuiteId = String(attempt.suiteId || attempt.suite_id || '').trim()
-    if (draftSuiteId !== expectedSuiteId) {
+    if (!readingDraftOwnerMatches(attempt, scope)) {
       console.warn('忽略不属于当前阅读范围的草稿', {
         attemptId: attempt.id,
-        expectedSuiteId,
-        draftSuiteId
+        scope,
+        draftOwnerId: attempt.suiteId || attempt.suite_id || null
       })
       return
     }

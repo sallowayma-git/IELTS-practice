@@ -120,6 +120,11 @@ pub struct HistoryDetailResponse {
     pub attempt: AttemptRecord,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<WritingEvaluationV4>,
+    /// Deterministic reading review analysis, derived from the attempt on read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_signals: Option<crate::dto::ReadingAnalysisSignals>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub single_attempt_analysis: Option<crate::dto::SingleAttemptAnalysis>,
 }
 
 /// Server-owned range for the Writing-only four-criterion statistics card.
