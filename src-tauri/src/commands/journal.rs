@@ -824,7 +824,7 @@ mod tests {
     fn a_change_made_before_a_report_failure_reaches_the_failed_and_the_folded_reports() {
         let (dir, db) = temp_db();
         let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
-        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}))
+        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}), &chrono::Utc::now().to_rfc3339())
             .unwrap();
         let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
         assert_eq!(reports.len(), 1);

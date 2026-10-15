@@ -149,16 +149,28 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 
 /// Record a failed weekly attempt (anchored on the journal of the window's end
 /// day) so the weekend is retried on a later day instead of being treated as an
-/// empty success.
-pub(crate) fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
+/// empty success. `attempt_started` is when this attempt began: a run the
+/// consolidation already marked failed since then is the same attempt and is
+/// reused, so one attempt never counts twice against the retry cap.
+pub(crate) fn record_weekly_failure(
+    db: &AppDb,
+    window: &WeeklyWindow,
+    error: &serde_json::Value,
+    attempt_started: &str,
+) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
     // The failed run commits on its own: it is what bounds retries to one a day,
     // and it does not close the window, so a missing report costs nothing lasting.
-    let run = db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))?;
+    let run_id = db.with_conn(|conn| {
+        match ielts_db::weekly_failed_run_since(conn, "local", &window.key, attempt_started)? {
+            Some(id) => Ok(id),
+            None => Ok(ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now)?.id),
+        }
+    })?;
     // The blocks are final either way; only the narrative is owed a retry.
     let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed)?;
-    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run.id, &report, &now))
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run_id, &report, &now))
 }
 
 /// Close a due window without a model (none configured): its blocks become the
@@ -216,6 +228,7 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         Err(error) => return Err(error),
     };
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
+    let attempt_started = chrono::Utc::now().to_rfc3339();
     db.with_conn(|conn| {
         ielts_db::begin_agent_run(conn, &BeginAgentRunCommand {
             id: audit_run_id.clone(),
@@ -251,7 +264,7 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         Some((code, message)) => {
             let error = serde_json::json!({"code": code, "message": message});
             // Same-day retries are bounded by this failed run row.
-            record_weekly_failure(&db, &window, &error)?;
+            record_weekly_failure(&db, &window, &error, &attempt_started)?;
             audit.finish(StoredAgentRunStatus::Failed, None, Some(error))?;
         }
     }
@@ -701,6 +714,30 @@ mod tests {
     }
 
     #[test]
+    fn a_consolidation_failure_and_the_worker_count_as_one_attempt() {
+        let (_dir, db) = test_db("one-attempt.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        let count = || db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", KEY)).unwrap();
+        // Yesterday's attempt failed on its own: it stays a separate attempt.
+        fail_at(&db, KEY, "2000-01-01T00:00:00Z");
+        let started = chrono::Utc::now().to_rfc3339();
+        // The host consolidation marks its own run failed, then the error reaches the worker.
+        let journal = journal(&db);
+        let error = serde_json::json!({"code": "weekly.report_failed"});
+        db.with_conn(|conn| {
+            let run = ielts_db::insert_dream_run(conn, "local", &journal, Some(&window.marker()))?;
+            ielts_db::start_dream_run(conn, &run.id, &started)?;
+            ielts_db::fail_dream_run(conn, &run.id, &error, &chrono::Utc::now().to_rfc3339())?;
+            Ok(())
+        }).unwrap();
+        record_weekly_failure(&db, &window, &error, &started).unwrap();
+        assert_eq!(count(), 2, "one earlier attempt plus this one, not three");
+        // An attempt that failed before anything was recorded still leaves a row.
+        record_weekly_failure(&db, &window, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
+        assert_eq!(count(), 3);
+    }
+
+    #[test]
     fn a_week_without_a_model_closes_with_its_blocks_and_a_failure_keeps_them() {
         let (_dir, db) = test_db("no-ai.db");
         let window = due(&db, &at(8, SATURDAY)).unwrap();
@@ -711,7 +748,7 @@ mod tests {
 
         let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
         let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
-        record_weekly_failure(&db, &next, &error).unwrap();
+        record_weekly_failure(&db, &next, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
         assert_eq!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", "2026-W42")).unwrap(), 1);
     }
 }

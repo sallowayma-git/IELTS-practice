@@ -270,6 +270,25 @@ pub fn weekly_failed_attempt_count(conn: &Connection, user_id: &str, key: &str) 
     Ok(count as usize)
 }
 
+/// The newest weekly run for the weekend key that failed at or after `since`
+/// (RFC3339): the host's consolidation already marks its own run failed, so a
+/// worker attempt that started at `since` reuses that row instead of counting
+/// the same attempt twice.
+pub fn weekly_failed_run_since(conn: &Connection, user_id: &str, key: &str, since: &str) -> DbResult<Option<String>> {
+    conn.query_row(
+        &format!(
+            "SELECT id FROM dream_runs
+              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH}
+                AND julianday(COALESCE(finished_at, updated_at)) >= julianday(?3)
+              ORDER BY julianday(COALESCE(finished_at, updated_at)) DESC, id DESC LIMIT 1"
+        ),
+        params![normalize_user_id(user_id), key, since],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 /// End of the newest completed weekly window: where the next window starts.
 pub fn last_weekly_window_end(conn: &Connection, user_id: &str) -> DbResult<Option<DateTime<Utc>>> {
     let marker: Option<String> = conn
