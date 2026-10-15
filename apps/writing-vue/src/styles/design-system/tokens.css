@@ -167,8 +167,8 @@
  * Paper v2. Sits on the same element as the legacy block above.
  * ════════════════════════════════════════════════════════════════════ */
 .atlas-paper {
-  /* 1.1 Typography: families. Names match the @fontsource packages. */
-  --anth-font-serif: "Source Serif 4 Variable", "Noto Serif SC", "Songti SC", Georgia, serif;
+  /* 1.1 Typography: families. Names match fonts.css (CJK serif is renamed there). */
+  --anth-font-serif: "Source Serif 4 Variable", "Atlas Noto Serif SC", "Songti SC", Georgia, serif;
   --anth-font-sans: "Inter Variable", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
   --anth-font-mono: "JetBrains Mono", Consolas, ui-monospace, monospace;
   --anth-font-features: "cv11", "ss01";

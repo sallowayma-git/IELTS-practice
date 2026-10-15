@@ -30,7 +30,7 @@ Fonts are **bundled** (offline desktop app, no CDN):
 | Mono | JetBrains Mono → Consolas | system | |
 
 ```
---anth-font-serif: "Source Serif 4 Variable", "Noto Serif SC", "Songti SC", Georgia, serif;
+--anth-font-serif: "Source Serif 4 Variable", "Atlas Noto Serif SC", "Songti SC", Georgia, serif;
 --anth-font-sans:  "Inter Variable", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
 --anth-font-mono:  "JetBrains Mono", Consolas, ui-monospace, monospace;
 ```
