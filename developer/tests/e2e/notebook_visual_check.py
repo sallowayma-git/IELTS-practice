@@ -40,8 +40,8 @@ MOCK = r"""
     '2026-10-02': journalShell('2026-10-02', {
       attemptsCount: 3, timeSpentMs: 3120000,
       writingEvalSummary: { completed: 1, degraded: 0, averageBand: 6.5 },
-      skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, evidenceCount: 3 },
-                    { skillKey: 'reading.matching_headings', delta: -0.3, evidenceCount: 2 }],
+      skillDeltas: [{ skillKey: 'reading.tfng', delta: 0.4, evidenceCount: 3, trend: 'improving' },
+                    { skillKey: 'reading.matching_headings', delta: -0.3, evidenceCount: 2, trend: 'recurring' }],
       coachFeedbackCount: 2,
       memoryEvents: [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',
                        changeKind: 'reinforced', evidenceObservationIds: ['obs-tfng'] }] }),
@@ -56,7 +56,8 @@ MOCK = r"""
       journals[date] = journalShell(date, {
         attemptsCount: attempts, timeSpentMs: minutes * 60000,
         writingEvalSummary: { completed: written, degraded, averageBand: band },
-        skillDeltas: deltas.map(([skillKey, delta]) => ({ skillKey, delta, evidenceCount: 2 })),
+        skillDeltas: deltas.map(([skillKey, delta]) => ({ skillKey, delta, evidenceCount: 2,
+                                                          trend: delta > 0 ? 'improving' : delta < 0 ? 'recurring' : 'steady' })),
         coachFeedbackCount: coach, coachReaskCount: reask, memoryEvents: events });
     };
     const tfng = (changeKind) => [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',

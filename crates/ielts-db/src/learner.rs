@@ -8,11 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Duration, Utc};
 use ielts_domain::{
-    apply_skill_observation, familiarity_weights, preferred_probe, priority_band, review_priority,
-    trend_direction, uncertainty_band, LearnerModelConfig, LearnerRebuildReport, LearnerStateQuery,
-    LearnerStateSnapshot, LearnerVerifyReport, SkillObservation, SkillReviewNeed,
-    SkillReviewNeedsQuery, SkillReviewNeedsSnapshot, SkillReviewProbe, SkillState, SkillStateView,
-    TrendDirection, UncertaintyBand, LEARNER_MODEL_SCHEMA_VERSION, LEARNER_SCHEDULER_VERSION,
+    apply_skill_observation, familiarity_weights, has_priority_evidence, preferred_probe,
+    priority_band, review_priority, trend_direction, uncertainty_band, LearnerModelConfig,
+    LearnerRebuildReport, LearnerStateQuery, LearnerStateSnapshot, LearnerVerifyReport,
+    SkillObservation, SkillReviewNeed, SkillReviewNeedsQuery, SkillReviewNeedsSnapshot,
+    SkillReviewProbe, SkillState, SkillStateView, TrendDirection, UncertaintyBand,
+    INSUFFICIENT_EVIDENCE_REASON, LEARNER_MODEL_SCHEMA_VERSION, LEARNER_SCHEDULER_VERSION,
     LEARNER_STATE_MODEL_VERSION, LEARNER_TAXONOMY_VERSION, MAX_LEARNER_LIMIT,
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -190,6 +191,14 @@ fn fresh_learner_transaction(conn: &Connection) -> DbResult<Transaction<'_>> {
         }
     }
     Ok(tx)
+}
+
+/// Bring the M2 observation and M4 skill projections up to date, the same
+/// verify-then-repair every learner read performs. Readers of the derived
+/// tables that are not learner snapshots (the daily journal) call this first.
+pub fn learner_projections_refresh(conn: &Connection) -> DbResult<()> {
+    fresh_learner_transaction(conn)?.commit()?;
+    Ok(())
 }
 
 pub fn learner_skill_snapshot(
@@ -674,31 +683,8 @@ fn deterministic_skill_key(conn: &Connection, source: &SourceObservation) -> Opt
             return Some(hint.to_string());
         }
     }
-    let normalized = source
-        .question_kind
-        .as_deref()?
-        .trim()
-        .to_ascii_lowercase()
-        .replace('-', "_")
-        .replace(' ', "_");
-    let skill_key = match normalized.as_str() {
-        "matching" | "matching_headings" | "matching_information" | "matching_features" => {
-            "reading.matching_headings"
-        }
-        "tfng" | "true_false_not_given" => "reading.tfng",
-        "yng" | "yes_no_not_given" => "reading.yng",
-        "mcq" | "multi_choice" | "multiple_choice" => "reading.multi_choice",
-        "single_choice" => "reading.single_choice",
-        "sentence_completion" => "reading.sentence_completion",
-        "summary_completion" => "reading.summary_completion",
-        "notes_completion" => "reading.notes_completion",
-        "table_completion" => "reading.table_completion",
-        "flow_chart_completion" => "reading.flow_chart_completion",
-        "diagram_completion" => "reading.diagram_completion",
-        "short_answer" => "reading.short_answer",
-        "classification" => "reading.classification",
-        _ => return None,
-    };
+    let skill_key = canonical_reading_skill_key(source.question_kind.as_deref()?);
+    // Only catalogued skills are learned; an unknown kind maps to nothing.
     conn.query_row(
         "SELECT skill_key FROM skill_catalog WHERE skill_key = ?1 AND active = 1",
         params![skill_key],
@@ -1272,6 +1258,9 @@ fn schedule_time_factors(state: &SkillState, as_of: DateTime<Utc>) -> (f64, f64)
 
 fn reason_codes(state: &SkillState, overdue_factor: f64) -> Vec<String> {
     let mut reasons = Vec::new();
+    if !has_priority_evidence(state) {
+        reasons.push(INSUFFICIENT_EVIDENCE_REASON.into());
+    }
     if state.mastery_mean < 0.5 {
         reasons.push("low_mastery_estimate".into());
     }
@@ -1317,13 +1306,38 @@ fn update_stability(previous: f64, elapsed_days: f64, outcome: f64, weight: f64)
     }
 }
 
+/// The one name of a reading question type: the skill key every layer (learner
+/// model, weekly pack, planner, UI labels) uses. Accepts payload kinds
+/// (`true_false_not_given`), short aliases (`tfng`) and canonical keys
+/// (`reading.tfng`) alike; an unrecognised kind keeps its own normalised name
+/// under `reading.`, which the skill catalog then accepts or ignores.
+pub fn canonical_reading_skill_key(question_kind: &str) -> String {
+    let normalized = question_kind
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_");
+    let kind = normalized.strip_prefix("reading.").unwrap_or(&normalized);
+    let canonical = match kind {
+        "tfng" | "true_false_not_given" => "tfng",
+        "yng" | "yes_no_not_given" => "yng",
+        "mcq" | "multi_choice" | "multiple_choice" => "multi_choice",
+        "headings" | "matching_headings" => "matching_headings",
+        "sentence_endings" | "matching_sentence_endings" => "matching_sentence_endings",
+        "" => "unknown",
+        other => other,
+    };
+    format!("reading.{canonical}")
+}
+
+/// Error cause of a wrong answer, named under its question type's skill key.
 pub(crate) fn error_type(question_kind: Option<&str>) -> String {
-    match question_kind.unwrap_or("unknown") {
-        "tfng" | "true_false_not_given" => "tfng.boundary".into(),
-        "yng" | "yes_no_not_given" => "yng.boundary".into(),
-        "matching" | "matching_headings" => "matching.evidence_selection".into(),
-        kind => format!("reading.{kind}.incorrect"),
-    }
+    let skill_key = canonical_reading_skill_key(question_kind.unwrap_or("unknown"));
+    let cause = match skill_key.as_str() {
+        "reading.tfng" | "reading.yng" => "boundary",
+        key if key.starts_with("reading.matching") => "evidence_selection",
+        _ => "incorrect",
+    };
+    format!("{skill_key}.{cause}")
 }
 
 fn add_days(time: DateTime<Utc>, days: f64) -> DateTime<Utc> {

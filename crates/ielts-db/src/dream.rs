@@ -193,9 +193,10 @@ impl WeeklyWindow {
         format!("{WEEKLY_MARKER_PREFIX}{}", self.token())
     }
 
-    /// UTC day of the window end: the day whose journal the run row is anchored on.
+    /// Local calendar day of the window end: the day whose journal the run row
+    /// is anchored on (the same day notion as the daily journal).
     pub fn anchor_day(&self) -> String {
-        self.end.format("%Y-%m-%d").to_string()
+        crate::local_day::local_day_of(&self.end)
     }
 }
 
@@ -254,18 +255,38 @@ pub fn weekly_attempted_since(conn: &Connection, user_id: &str, key: &str, since
     Ok(exists != 0)
 }
 
-/// Whether a weekly attempt for the weekend key failed (and so is still owed a
-/// retry unless a completed run exists for the key).
-pub fn weekly_failed_attempt_exists(conn: &Connection, user_id: &str, key: &str) -> DbResult<bool> {
-    let exists: i64 = conn.query_row(
+/// How many weekly attempts for the weekend key failed. A failed weekend is owed
+/// a retry unless a completed run exists for the key, up to the worker's cap;
+/// the failed rows stay in the ledger either way.
+pub fn weekly_failed_attempt_count(conn: &Connection, user_id: &str, key: &str) -> DbResult<usize> {
+    let count: i64 = conn.query_row(
         &format!(
-            "SELECT EXISTS(SELECT 1 FROM dream_runs
-              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH})"
+            "SELECT COUNT(*) FROM dream_runs
+              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH}"
         ),
         params![normalize_user_id(user_id), key],
         |row| row.get(0),
     )?;
-    Ok(exists != 0)
+    Ok(count as usize)
+}
+
+/// The newest weekly run for the weekend key that failed at or after `since`
+/// (RFC3339): the host's consolidation already marks its own run failed, so a
+/// worker attempt that started at `since` reuses that row instead of counting
+/// the same attempt twice.
+pub fn weekly_failed_run_since(conn: &Connection, user_id: &str, key: &str, since: &str) -> DbResult<Option<String>> {
+    conn.query_row(
+        &format!(
+            "SELECT id FROM dream_runs
+              WHERE user_id = ?1 AND status = 'failed' AND {WEEKLY_KEY_MATCH}
+                AND julianday(COALESCE(finished_at, updated_at)) >= julianday(?3)
+              ORDER BY julianday(COALESCE(finished_at, updated_at)) DESC, id DESC LIMIT 1"
+        ),
+        params![normalize_user_id(user_id), key, since],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
 }
 
 /// End of the newest completed weekly window: where the next window starts.
@@ -423,7 +444,10 @@ mod tests {
         assert_eq!(window.token(), "2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
         assert_eq!(WeeklyWindow::parse(&window.token()), Some(window.clone()));
         assert_eq!(window.marker(), "weekly:2026-W41:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z");
-        assert_eq!(window.anchor_day(), "2026-10-10");
+        assert_eq!(window.anchor_day(), crate::local_day::local_day_of(&window.end));
+        let beijing = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+        let late = WeeklyWindow::new("2026-W41", at("2026-10-03T04:00:00Z"), at("2026-10-10T17:00:00Z"));
+        assert_eq!(crate::local_day::day_of_in(&late.end, &beijing), "2026-10-11");
         for bad in [
             "", "2026-W41", "2026-W41:garbage", "2026-W99:2026-10-03T04:00:00Z..2026-10-10T09:30:00Z",
             "2026-W41:2026-10-10T09:30:00Z..2026-10-03T04:00:00Z",

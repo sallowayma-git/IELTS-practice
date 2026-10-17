@@ -13,7 +13,6 @@ use ielts_domain::dto::{
     SingleAttemptAnalysis,
 };
 
-use crate::reading::scoring::split_answer_tokens;
 
 const UNANSWERED_RATE_HIGH: f64 = 0.08;
 const CHANGED_RATE_HIGH: f64 = 0.25;
@@ -32,9 +31,10 @@ pub enum QuestionOutcome {
     Ungraded,
 }
 
-/// Blank (no non-empty token) is unanswered regardless of `is_correct`.
+/// Blank is unanswered regardless of `is_correct`. Same rule as the learning
+/// events (`AttemptAnswer::is_answered`), so review and mastery never disagree.
 pub fn question_outcome(answer: &AttemptAnswer) -> QuestionOutcome {
-    if split_answer_tokens(&answer.answer).is_empty() {
+    if !answer.is_answered() {
         return QuestionOutcome::Unanswered;
     }
     match answer.is_correct {

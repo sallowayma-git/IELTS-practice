@@ -12,13 +12,14 @@ use std::collections::BTreeMap;
 
 use ielts_domain::{
     DailyJournal, DailyJournalStatus, JournalFacts, JournalMemoryEvent, MemoryChangeSummary,
-    SkillDelta, WritingEvalSummary,
+    SkillDelta, SkillTrend, WritingEvalSummary,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::local_day::day_bounds;
 use crate::sqlite::{DbError, DbResult};
 
 const DEFAULT_USER_ID: &str = "local";
@@ -223,6 +224,55 @@ pub fn insert_journal_source(
     Ok(())
 }
 
+/// Build the day's facts from up-to-date derived rows. Practice submits only
+/// append to the ledger; the observation/skill projections are repaired on
+/// read, so the journal refreshes them first (the same API learner reads use)
+/// instead of summarising whatever the last rebuild left behind.
+pub fn build_fresh_daily_facts(
+    conn: &Connection,
+    user_id: &str,
+    day: &str,
+) -> DbResult<JournalFacts> {
+    crate::learner::learner_projections_refresh(conn)?;
+    build_daily_facts(conn, user_id, day)
+}
+
+/// The day's current journal, decided and published in one step: refresh the
+/// projections, build the facts, reuse the latest version when its
+/// `source_hash` matches, otherwise insert a new version. The caller must hold
+/// the connection exclusively for the whole call (the app's `AppDb` mutex), so
+/// no practice write can land between the build and the publication and two
+/// readers cannot publish the same facts twice.
+pub fn ensure_journal(conn: &Connection, user_id: &str, day: &str) -> DbResult<DailyJournal> {
+    let facts = build_fresh_daily_facts(conn, user_id, day)?;
+    match load_latest_journal(conn, user_id, day)? {
+        Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
+        _ => insert_journal(conn, user_id, &facts, None),
+    }
+}
+
+/// Every stored version of a day's journal, newest first (superseded history
+/// included).
+pub fn list_journal_versions(
+    conn: &Connection,
+    user_id: &str,
+    day: &str,
+) -> DbResult<Vec<DailyJournal>> {
+    let user_id = normalize_user_id(user_id);
+    require_text(day, "journalDate")?;
+    let mut statement = conn.prepare(
+        "SELECT id, user_id, journal_date, version, status, facts_json, source_hash,
+                rendered_markdown, superseded_by, created_at, updated_at
+         FROM daily_journals
+         WHERE user_id = ?1 AND journal_date = ?2
+         ORDER BY version DESC",
+    )?;
+    let rows = statement
+        .query_map(params![user_id, day], map_journal)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn map_journal(row: &rusqlite::Row<'_>) -> rusqlite::Result<DailyJournal> {
     let facts_json: String = row.get(5)?;
     let facts: JournalFacts =
@@ -268,8 +318,8 @@ fn count_attempts(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM attempts
-             WHERE COALESCE(submitted_at, started_at) >= ?1
-               AND COALESCE(submitted_at, started_at) < ?2",
+             WHERE julianday(COALESCE(submitted_at, started_at)) >= julianday(?1)
+               AND julianday(COALESCE(submitted_at, started_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -291,8 +341,8 @@ fn writing_eval_summary(
         .query_row(
             "SELECT COUNT(*) FROM writing_evaluations
              WHERE status = 'completed'
-               AND COALESCE(completed_at, updated_at) >= ?1
-               AND COALESCE(completed_at, updated_at) < ?2",
+               AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+               AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -302,32 +352,25 @@ fn writing_eval_summary(
         .query_row(
             "SELECT COUNT(*) FROM writing_evaluations
              WHERE degradation_json IS NOT NULL AND degradation_json != '[]'
-               AND COALESCE(completed_at, updated_at) >= ?1
-               AND COALESCE(completed_at, updated_at) < ?2",
+               AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+               AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
         .optional()?
         .unwrap_or(0);
-    let avg_band: Option<f64> = {
-        let avg: f64 = conn
-            .query_row(
-                "SELECT COALESCE(AVG(json_extract(result_json, '$.overallBand')), 0)
-                 FROM writing_evaluations
-                 WHERE status = 'completed' AND result_json IS NOT NULL
-                   AND COALESCE(completed_at, updated_at) >= ?1
-                   AND COALESCE(completed_at, updated_at) < ?2",
-                params![day_start, day_end],
-                |row| row.get(0),
-            )
-            .optional()?
-            .unwrap_or(0.0);
-        if completed > 0 {
-            Some(avg)
-        } else {
-            None
-        }
-    };
+    // The persisted result is a `WritingEvaluationV4`: the band lives at
+    // `score.overall`. AVG ignores rows without a score, and yields NULL (None)
+    // when no completed evaluation carries one; never report 0 as an average.
+    let avg_band: Option<f64> = conn.query_row(
+        "SELECT AVG(json_extract(result_json, '$.score.overall'))
+         FROM writing_evaluations
+         WHERE status = 'completed' AND result_json IS NOT NULL
+           AND julianday(COALESCE(completed_at, updated_at)) >= julianday(?1)
+           AND julianday(COALESCE(completed_at, updated_at)) < julianday(?2)",
+        params![day_start, day_end],
+        |row| row.get(0),
+    )?;
     Ok(WritingEvalSummary {
         completed: completed as u64,
         degraded: degraded as u64,
@@ -335,35 +378,81 @@ fn writing_eval_summary(
     })
 }
 
+/// An observation with an outcome below this counts as a failed attempt.
+const SKILL_FAIL_OUTCOME: f64 = 0.5;
+/// Minimum rise of today's mean over the prior baseline to call it improving.
+const SKILL_IMPROVING_MIN_DELTA: f64 = 0.15;
+
+/// Per-skill change for the day against the learner's own history.
+///
+/// `delta = mean(outcome today) - mean(outcome before day_start)`, or 0 when
+/// the skill has no prior observation. Trend rule (first match wins):
+/// - `improving`: a prior baseline exists and `delta >= 0.15`;
+/// - `recurring`: today has a failed observation (outcome < 0.5) and the
+///   mistake repeats, i.e. the skill also failed before today, or failed at
+///   least twice today;
+/// - `steady`: everything else (including first contact with a skill).
 fn skill_deltas(
     conn: &Connection,
     user_id: &str,
     day_start: &str,
     day_end: &str,
 ) -> DbResult<Vec<SkillDelta>> {
-    // Aggregate skill observations for the day; the delta is the mean outcome
-    // change compared to the prior state. For determinism, we compute the mean
-    // outcome for the day per skill (bounded count).
     let mut stmt = conn.prepare(
-        "SELECT skill_key, COUNT(*), AVG(outcome)
+        "SELECT skill_key,
+                SUM(julianday(observed_at) >= julianday(?2)),
+                AVG(CASE WHEN julianday(observed_at) >= julianday(?2) THEN outcome END),
+                SUM(julianday(observed_at) >= julianday(?2) AND outcome < ?5),
+                AVG(CASE WHEN julianday(observed_at) < julianday(?2) THEN outcome END),
+                SUM(julianday(observed_at) < julianday(?2) AND outcome < ?5)
          FROM learner_skill_observations
-         WHERE user_id = ?1 AND observed_at >= ?2 AND observed_at < ?3
+         WHERE user_id = ?1 AND julianday(observed_at) < julianday(?3)
          GROUP BY skill_key
+         HAVING SUM(julianday(observed_at) >= julianday(?2)) > 0
          ORDER BY skill_key
          LIMIT ?4",
     )?;
-    let rows = stmt.query_map(params![user_id, day_start, day_end, MAX_SKILL_DELTAS as i64], |row| {
-        Ok(SkillDelta {
-            skill_key: row.get(0)?,
-            evidence_count: row.get::<_, i64>(1)? as u64,
-            delta: row.get(2)?,
-        })
-    })?;
+    let rows = stmt.query_map(
+        params![
+            user_id,
+            day_start,
+            day_end,
+            MAX_SKILL_DELTAS as i64,
+            SKILL_FAIL_OUTCOME
+        ],
+        |row| {
+            let today_mean: f64 = row.get(2)?;
+            let prior_mean: Option<f64> = row.get(4)?;
+            let delta = prior_mean.map_or(0.0, |prior| today_mean - prior);
+            let trend = skill_trend(
+                prior_mean.is_some(),
+                delta,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(5)?,
+            );
+            Ok(SkillDelta {
+                skill_key: row.get(0)?,
+                evidence_count: row.get::<_, i64>(1)? as u64,
+                delta,
+                trend,
+            })
+        },
+    )?;
     let mut deltas = Vec::new();
     for row in rows {
         deltas.push(row?);
     }
     Ok(deltas)
+}
+
+fn skill_trend(has_baseline: bool, delta: f64, failed_today: i64, failed_before: i64) -> SkillTrend {
+    if has_baseline && delta >= SKILL_IMPROVING_MIN_DELTA {
+        return SkillTrend::Improving;
+    }
+    if failed_today >= 1 && (failed_before >= 1 || failed_today >= 2) {
+        return SkillTrend::Recurring;
+    }
+    SkillTrend::Steady
 }
 
 /// Today-scoped observation IDs for Dream evidence (M7-06). Most-recent-first,
@@ -415,7 +504,7 @@ fn memory_events(
     let event_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.sensitivity = 'normal' AND mi.user_id = ?3",
         params![day_start, day_end, user_id],
         |row| row.get(0),
@@ -427,7 +516,7 @@ fn memory_events(
         "SELECT m.id, m.memory_id, mi.namespace, mi.canonical_key, m.operation
          FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.sensitivity = 'normal'
            AND mi.user_id = ?4
          ORDER BY m.created_at ASC, m.id ASC
@@ -517,7 +606,7 @@ fn memory_mutations(
         "SELECT m.operation, COUNT(*)
          FROM memory_mutations m
          JOIN memory_items mi ON mi.id = m.memory_id
-         WHERE m.created_at >= ?1 AND m.created_at < ?2
+         WHERE julianday(m.created_at) >= julianday(?1) AND julianday(m.created_at) < julianday(?2)
            AND mi.user_id = ?3
          GROUP BY m.operation",
     )?;
@@ -567,7 +656,7 @@ fn coach_feedback_count(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM coach_feedback
-             WHERE created_at >= ?1 AND created_at < ?2",
+             WHERE julianday(created_at) >= julianday(?1) AND julianday(created_at) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -586,7 +675,7 @@ fn coach_reask_count(
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM coach_reask_links
-             WHERE created_at >= ?1 AND created_at < ?2",
+             WHERE julianday(created_at) >= julianday(?1) AND julianday(created_at) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -605,8 +694,8 @@ fn time_spent(
     let total: Option<i64> = conn
         .query_row(
             "SELECT COALESCE(SUM(duration_ms), 0) FROM attempts
-             WHERE COALESCE(submitted_at, started_at) >= ?1
-               AND COALESCE(submitted_at, started_at) < ?2",
+             WHERE julianday(COALESCE(submitted_at, started_at)) >= julianday(?1)
+               AND julianday(COALESCE(submitted_at, started_at)) < julianday(?2)",
             params![day_start, day_end],
             |row| row.get(0),
         )
@@ -641,13 +730,16 @@ fn daily_source_hash(
         )
         .as_bytes(),
     );
-    let mut skill_map: BTreeMap<&str, (u64, f64)> = BTreeMap::new();
+    let mut skill_map: BTreeMap<&str, (u64, f64, SkillTrend)> = BTreeMap::new();
     for delta in skill_deltas {
-        skill_map.insert(&delta.skill_key, (delta.evidence_count, delta.delta));
+        skill_map.insert(
+            &delta.skill_key,
+            (delta.evidence_count, delta.delta, delta.trend),
+        );
     }
     hasher.update(b":skills=");
-    for (key, (count, delta)) in &skill_map {
-        hasher.update(format!("{key}={count}:{delta};").as_bytes());
+    for (key, (count, delta, trend)) in &skill_map {
+        hasher.update(format!("{key}={count}:{delta}:{};", trend.as_str()).as_bytes());
     }
     hasher.update(
         format!(
@@ -684,24 +776,6 @@ fn daily_source_hash(
         );
     }
     hex::encode(hasher.finalize())
-}
-
-pub(crate) fn day_bounds(day: &str) -> DbResult<(String, String)> {
-    let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").map_err(|error| {
-        DbError::Validation(format!("journalDate is not a valid date: {error}"))
-    })?;
-    let start = date
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| DbError::Validation("day start midnight overflowed".into()))?;
-    let end = date
-        .succ_opt()
-        .ok_or_else(|| DbError::Validation("journalDate has no successor".into()))?
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| DbError::Validation("day end midnight overflowed".into()))?;
-    // Bind to UTC so the RFC3339 output is well-formed.
-    let start_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(start, chrono::Utc);
-    let end_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(end, chrono::Utc);
-    Ok((start_utc.to_rfc3339(), end_utc.to_rfc3339()))
 }
 
 fn normalize_user_id(user_id: &str) -> String {

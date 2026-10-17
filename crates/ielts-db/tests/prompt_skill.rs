@@ -765,7 +765,7 @@ fn migration_does_not_guess_legacy_release_predecessors() {
             conn.execute("UPDATE prompt_versions SET status = 'rollback' WHERE id = ?1", [&prior.id]).unwrap();
         }
         conn.execute("UPDATE prompt_versions SET status = 'active' WHERE id = ?1", [&live.id]).unwrap();
-        assert_eq!(migrate(&mut conn).unwrap(), vec![25, 26, 27, 28, 29, 30, 31]);
+        assert_eq!(migrate(&mut conn).unwrap(), vec![25, 26, 27, 28, 29, 30, 31, 32]);
         assert!(migrate(&mut conn).unwrap().is_empty());
         let error = rollback_version(&conn, &rollback_command(CandidateTargetKind::Prompt, &live.id))
             .unwrap_err();

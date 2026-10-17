@@ -26,9 +26,9 @@ use tauri::State;
 use crate::app::application_store::ApplicationStore;
 use crate::app::state::AppDb;
 
-/// Read or build today's journal. If a published journal exists for the day it
-/// is returned; otherwise the deterministic facts are built and a new version
-/// is inserted (M7-03). No LLM is involved on this path.
+/// Read today's journal: build fresh deterministic facts, return the latest
+/// version when its source hash still matches, otherwise insert a new version
+/// (M7-03). The same path the daily worker takes. No LLM is involved.
 #[tauri::command]
 pub fn journal_get_daily(
     db: State<'_, AppDb>,
@@ -36,14 +36,7 @@ pub fn journal_get_daily(
 ) -> CommandResponse<DailyJournal> {
     let store = ApplicationStore::new(db.inner());
     let service = JournalService::new(&store);
-    let result = service.load_latest_journal(&query).and_then(|maybe| match maybe {
-        Some(journal) => Ok(journal),
-        None => {
-            let facts = service.build_facts(&query)?;
-            service.insert_journal(&facts, None)
-        }
-    });
-    respond(result)
+    respond(service.ensure_journal(&query))
 }
 
 /// Manually rerun the daily journal for a day: build fresh deterministic facts
@@ -126,11 +119,8 @@ pub fn journal_list_versions(
     db: State<'_, AppDb>,
     query: DailyJournalQuery,
 ) -> CommandResponse<Vec<DailyJournal>> {
-    // The current JournalStore port only exposes the latest journal; version
-    // history listing is a future diagnostic. Return an empty list rather than
-    // fabricating a single-row result so the UI degrades cleanly.
-    let _ = (db, query);
-    respond(Ok(Vec::new()))
+    let store = ApplicationStore::new(db.inner());
+    respond(JournalService::new(&store).list_journal_versions(&query))
 }
 
 /// "整理今天": refresh the deterministic daily summary of a day on demand. The
@@ -834,7 +824,7 @@ mod tests {
     fn a_change_made_before_a_report_failure_reaches_the_failed_and_the_folded_reports() {
         let (dir, db) = temp_db();
         let (w41, added) = a_week_whose_report_write_failed(&db, dir.path());
-        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}))
+        crate::app::daily_worker::record_weekly_failure(&db, &w41, &serde_json::json!({"code": "weekly.report_failed"}), &chrono::Utc::now().to_rfc3339())
             .unwrap();
         let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
         assert_eq!(reports.len(), 1);

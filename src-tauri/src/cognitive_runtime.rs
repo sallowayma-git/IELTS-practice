@@ -1535,16 +1535,9 @@ impl RuntimeManager {
                         user_id: user_id.clone(),
                         journal_date: window.anchor_day(),
                     };
-                    let journal = match journal_service
-                        .load_latest_journal(&journal_query)
-                        .map_err(|error| error.to_string())?
-                    {
-                        Some(journal) => journal,
-                        None => journal_service
-                            .build_facts(&journal_query)
-                            .and_then(|facts| journal_service.insert_journal(&facts, None))
-                            .map_err(|error| error.to_string())?,
-                    };
+                    let journal = journal_service
+                        .ensure_journal(&journal_query)
+                        .map_err(|error| error.to_string())?;
                     let query = WeeklyDreamQuery {
                         user_id,
                         journal_id: journal.id,

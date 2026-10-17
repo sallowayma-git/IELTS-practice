@@ -4,11 +4,22 @@
 use ielts_db::{
     build_daily_facts, insert_journal, load_latest_journal, migrate, open_connection, DbOpenOptions,
 };
-use ielts_domain::{DailyJournalStatus, MemoryChangeSummary, WritingEvalSummary};
+use ielts_domain::{
+    DailyJournalStatus, MemoryChangeSummary, SkillTrend, WritingEvalSummary, WritingEvaluationV4,
+};
 use rusqlite::params;
 use tempfile::tempdir;
 
+/// Journal days are local calendar days (`ielts_db::local_day`). These fixtures
+/// are written in UTC days, so the harness pins the process zone to UTC; zone
+/// behaviour itself is covered by the fixed-offset unit tests.
+fn pin_utc_local_zone() {
+    static PIN: std::sync::Once = std::sync::Once::new();
+    PIN.call_once(|| std::env::set_var("TZ", "UTC"));
+}
+
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
+    pin_utc_local_zone();
     let dir = tempdir().unwrap();
     let mut conn = open_connection(&DbOpenOptions::create(dir.path().join("v2.db"))).unwrap();
     migrate(&mut conn).unwrap();
@@ -48,7 +59,21 @@ fn seed_writing_eval(
         params![
             eval_id,
             attempt_id,
-            serde_json::json!({"overallBand": overall_band}).to_string(),
+            // Real persisted shape: a WritingEvaluationV4 with `score.overall`.
+            serde_json::json!({
+                "schemaVersion": 4,
+                "id": eval_id,
+                "status": "completed",
+                "stage": "finalizing",
+                "score": {
+                    "overall": overall_band,
+                    "taskResponse": overall_band,
+                    "coherence": overall_band,
+                    "lexical": overall_band,
+                    "grammar": overall_band
+                }
+            })
+            .to_string(),
             completed_at
         ],
     )
@@ -107,6 +132,23 @@ fn deterministic_facts_aggregate_attempts_and_time() {
 }
 
 #[test]
+fn imported_offsets_are_bounded_as_instants_not_text() {
+    let (_dir, conn) = open_db();
+    // Inside 2026-08-16 UTC, though the text sorts after the day's end / before its start.
+    seed_attempt(&conn, "plus-14", "2026-08-17T08:30:00+14:00", 60_000); // 2026-08-16T18:30Z
+    seed_attempt(&conn, "minus-12", "2026-08-15T13:00:00-12:00", 120_000); // 2026-08-16T01:00Z
+    // Outside, though the text falls inside the day.
+    seed_attempt(&conn, "plus-14-early", "2026-08-16T05:00:00+14:00", 240_000); // 2026-08-15T15:00Z
+    seed_attempt(&conn, "minus-12-late", "2026-08-16T20:00:00-12:00", 480_000); // 2026-08-17T08:00Z
+    seed_coach_feedback(&conn, "msg-offset", "2026-08-17T09:00:00+14:00"); // 2026-08-16T19:00Z
+
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.attempts_count, 2);
+    assert_eq!(facts.time_spent_ms, 180_000);
+    assert_eq!(facts.coach_feedback_count, 1);
+}
+
+#[test]
 fn deterministic_facts_aggregate_writing_evals() {
     let (_dir, conn) = open_db();
     // Need attempts for the FK.
@@ -119,6 +161,104 @@ fn deterministic_facts_aggregate_writing_evals() {
     assert_eq!(facts.writing_eval_summary.completed, 2);
     assert_eq!(facts.writing_eval_summary.degraded, 0);
     assert!((facts.writing_eval_summary.average_band.unwrap() - 6.75).abs() < 0.01);
+}
+
+#[test]
+fn writing_eval_fixture_matches_persisted_dto() {
+    let (_dir, conn) = open_db();
+    seed_attempt(&conn, "att-w1", "2026-08-16T10:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-1", "att-w1", 7.0, "2026-08-16T10:30:00Z");
+    let json: String = conn
+        .query_row("SELECT result_json FROM writing_evaluations", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let parsed: WritingEvaluationV4 = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.score.unwrap().overall, 7.0);
+}
+
+#[test]
+fn writing_eval_average_is_none_when_no_completed_eval_has_a_score() {
+    let (_dir, conn) = open_db();
+    seed_attempt(&conn, "att-w1", "2026-08-16T10:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-1", "att-w1", 7.0, "2026-08-16T10:30:00Z");
+    // A completed evaluation without a score must not be averaged in as 0,
+    // and alone must not produce a fake 0 average.
+    conn.execute(
+        r#"UPDATE writing_evaluations SET result_json = '{"schemaVersion":4}'"#,
+        [],
+    )
+    .unwrap();
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.writing_eval_summary.completed, 1);
+    assert_eq!(facts.writing_eval_summary.average_band, None);
+
+    seed_attempt(&conn, "att-w2", "2026-08-16T11:00:00Z", 0);
+    seed_writing_eval(&conn, "eval-2", "att-w2", 6.0, "2026-08-16T11:30:00Z");
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    assert_eq!(facts.writing_eval_summary.completed, 2);
+    assert_eq!(facts.writing_eval_summary.average_band, Some(6.0));
+}
+
+fn seed_skill_obs(conn: &rusqlite::Connection, id: &str, skill: &str, outcome: f64, at: &str) {
+    // Facts only read this projection; skip the event/catalog FKs.
+    conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
+    conn.execute(
+        "INSERT INTO learner_skill_observations (
+           id, user_id, event_id, skill_key, outcome, mapping_weight, evidence_weight,
+           novelty_weight, familiarity_weight, time_weight, error_type, context_json,
+           observed_at, asset_id, question_id
+         ) VALUES (?1, 'local', ?1, ?2, ?3, 1, 1, 1, 1, 1, NULL, '{}', ?4, 'asset', 'q')",
+        params![id, skill, outcome, at],
+    )
+    .unwrap();
+}
+
+#[test]
+fn skill_deltas_compare_today_with_prior_baseline_and_classify() {
+    let (_dir, conn) = open_db();
+    // improving: wrong before, right today.
+    seed_skill_obs(&conn, "o1", "reading.improve", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o2", "reading.improve", 1.0, "2026-08-16T10:00:00Z");
+    // recurring: failed before and fails again today.
+    seed_skill_obs(&conn, "o3", "reading.recur", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o4", "reading.recur", 0.0, "2026-08-16T10:00:00Z");
+    // recurring without history: failed twice today.
+    seed_skill_obs(&conn, "o5", "reading.twice", 0.0, "2026-08-16T10:00:00Z");
+    seed_skill_obs(&conn, "o6", "reading.twice", 0.0, "2026-08-16T11:00:00Z");
+    // steady: first contact, one correct answer, no baseline.
+    seed_skill_obs(&conn, "o7", "reading.new", 1.0, "2026-08-16T10:00:00Z");
+    // steady: a single slip on a skill that never failed before.
+    seed_skill_obs(&conn, "o8", "reading.slip", 1.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o9", "reading.slip", 0.0, "2026-08-16T10:00:00Z");
+    // Not practised today: no entry; tomorrow's observation is ignored.
+    seed_skill_obs(&conn, "o10", "reading.old", 0.0, "2026-08-10T10:00:00Z");
+    seed_skill_obs(&conn, "o11", "reading.improve", 0.0, "2026-08-17T10:00:00Z");
+
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let got: Vec<(&str, f64, u64, SkillTrend)> = facts
+        .skill_deltas
+        .iter()
+        .map(|d| (d.skill_key.as_str(), d.delta, d.evidence_count, d.trend))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("reading.improve", 1.0, 1, SkillTrend::Improving),
+            ("reading.new", 0.0, 1, SkillTrend::Steady),
+            ("reading.recur", 0.0, 1, SkillTrend::Recurring),
+            ("reading.slip", -1.0, 1, SkillTrend::Steady),
+            ("reading.twice", 0.0, 2, SkillTrend::Recurring),
+        ]
+    );
+
+    // The trend survives persistence; legacy rows without it read as steady.
+    insert_journal(&conn, "local", &facts, None).unwrap();
+    let reloaded = load_latest_journal(&conn, "local", DAY).unwrap().unwrap();
+    assert_eq!(reloaded.facts.skill_deltas, facts.skill_deltas);
+    let legacy: ielts_domain::SkillDelta =
+        serde_json::from_str(r#"{"skillKey":"s","delta":0.8,"evidenceCount":2}"#).unwrap();
+    assert_eq!(legacy.trend, SkillTrend::Steady);
 }
 
 #[test]
@@ -588,4 +728,106 @@ fn late_contradiction_cannot_hide_behind_128_event_limit_or_borrow_support() {
     let contradiction = bounded.memory_events.last().unwrap();
     assert_eq!(contradiction.change_kind, "contradicted");
     assert_eq!(contradiction.evidence_observation_ids, ["obs-counter"]);
+}
+
+#[test]
+fn list_journal_versions_returns_every_version_newest_first() {
+    let (_dir, conn) = open_db();
+    assert!(ielts_db::list_journal_versions(&conn, "local", DAY).unwrap().is_empty());
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let first = insert_journal(&conn, "local", &facts, None).unwrap();
+    seed_attempt(&conn, "att-1", "2026-08-16T10:00:00Z", 600_000);
+    let facts = build_daily_facts(&conn, "local", DAY).unwrap();
+    let second = insert_journal(&conn, "local", &facts, None).unwrap();
+    // Another day and another user are not part of this day's history.
+    let other_day = build_daily_facts(&conn, "local", "2026-08-17").unwrap();
+    insert_journal(&conn, "local", &other_day, None).unwrap();
+    insert_journal(&conn, "u2", &build_daily_facts(&conn, "u2", DAY).unwrap(), None).unwrap();
+
+    let versions = ielts_db::list_journal_versions(&conn, "local", DAY).unwrap();
+    let rows = versions
+        .iter()
+        .map(|j| (j.id.as_str(), j.version, j.status))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows,
+        vec![
+            (second.id.as_str(), 2, DailyJournalStatus::Published),
+            (first.id.as_str(), 1, DailyJournalStatus::Superseded),
+        ]
+    );
+    assert_eq!(versions[1].superseded_by.as_deref(), Some(second.id.as_str()));
+}
+
+fn submit_reading(dir: &std::path::Path, conn: &rusqlite::Connection) {
+    let path = dir.join("journal-asset.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({
+            "examId": "journal-asset", "meta": {"title": "Journal", "category": "P1"},
+            "questionCount": 2, "questionOrder": ["q1", "q2"],
+            "answerKey": {"q1": "TRUE", "q2": "B"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]},
+                               {"kind": "mcq", "questionIds": ["q2"]}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let asset = ielts_db::import_asset_payload_file(conn, &path).unwrap();
+    ielts_db::submit_reading_attempt(
+        conn,
+        &ielts_db::ReadingSubmitCommand {
+            attempt_id: "journal-attempt-1".into(),
+            asset_id: "journal-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint),
+            answers: serde_json::json!({"q1": "FALSE", "q2": "B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(900),
+            title_snapshot: Some("Journal".into()),
+            idempotency_key: "journal-submit-1".into(),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn fresh_daily_facts_project_a_new_submit_before_summarising() {
+    let (dir, conn) = open_db();
+    submit_reading(dir.path(), &conn);
+    // A submit only appends to the ledger: the derived rows are stale.
+    assert!(!ielts_db::learning_observations_verify(&conn).unwrap().consistent);
+
+    // The submit happened "now"; cover both the UTC and the local calendar day
+    // so the test does not depend on how day bounds are interpreted.
+    let days = [chrono::Utc::now().date_naive(), chrono::Local::now().date_naive()]
+        .map(|day| day.format("%Y-%m-%d").to_string());
+    let stale = days
+        .iter()
+        .map(|day| build_daily_facts(&conn, "local", day).unwrap())
+        .collect::<Vec<_>>();
+    assert!(stale
+        .iter()
+        .all(|f| f.today_observation_ids.is_empty() && f.skill_deltas.is_empty()));
+
+    let fresh = days
+        .iter()
+        .map(|day| ielts_db::build_fresh_daily_facts(&conn, "local", day).unwrap())
+        .collect::<Vec<_>>();
+    assert!(ielts_db::learning_observations_verify(&conn).unwrap().consistent);
+    assert!(ielts_db::learner_model_verify(&conn).unwrap().consistent);
+    assert!(fresh
+        .iter()
+        .any(|f| !f.today_observation_ids.is_empty() && !f.skill_deltas.is_empty()));
+    for (stale, fresh) in stale.iter().zip(&fresh) {
+        if !fresh.today_observation_ids.is_empty() {
+            assert_ne!(stale.source_hash, fresh.source_hash);
+        }
+    }
+    // Once fresh, another build is a pure read with the same hash.
+    let changes = conn.total_changes();
+    let again = ielts_db::build_fresh_daily_facts(&conn, "local", &days[0]).unwrap();
+    assert_eq!(again.source_hash, fresh[0].source_hash);
+    assert_eq!(conn.total_changes(), changes);
 }

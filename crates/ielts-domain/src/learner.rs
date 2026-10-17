@@ -372,7 +372,36 @@ pub fn trend_direction(outcomes: &[f64]) -> TrendDirection {
     }
 }
 
+/// Minimum-evidence rule for weakness priority.
+///
+/// A skill may only be ranked as a review priority once it has at least
+/// `MIN_PRIORITY_EVIDENCE_COUNT` scored observations spread over at least
+/// `MIN_PRIORITY_DISTINCT_ASSETS` distinct articles. Below that the Beta
+/// posterior is dominated by the prior: one wrong answer on one new article
+/// reads as ~33% mastery, and the overdue/recency terms then escalate that
+/// single slip to "urgent" after a few weeks without practice. Requiring two
+/// articles also keeps one hard passage from masquerading as a skill gap.
+/// The numbers are deliberately small so real weaknesses surface after one
+/// or two practice sessions.
+pub const MIN_PRIORITY_EVIDENCE_COUNT: u64 = 3;
+pub const MIN_PRIORITY_DISTINCT_ASSETS: u64 = 2;
+/// Reason code reported for skills below the evidence threshold. Their
+/// priority is 0, so they land in the lowest band ("watch") — the persisted
+/// band vocabulary (CHECK constraint on skill_review_schedule) is unchanged.
+pub const INSUFFICIENT_EVIDENCE_REASON: &str = "insufficient_evidence";
+
+pub fn has_priority_evidence(state: &SkillState) -> bool {
+    state.evidence_count >= MIN_PRIORITY_EVIDENCE_COUNT
+        && state.distinct_asset_count >= MIN_PRIORITY_DISTINCT_ASSETS
+}
+
+/// Review priority in [0, 1]. Skills below the minimum-evidence rule get 0:
+/// they are not prioritized, and staleness (overdue/recency) cannot escalate
+/// them.
 pub fn review_priority(state: &SkillState, overdue_factor: f64, recency_gap_factor: f64) -> f64 {
+    if !has_priority_evidence(state) {
+        return 0.0;
+    }
     let weakness = 1.0 - state.mastery_mean.clamp(0.0, 1.0);
     let uncertainty = state.uncertainty.clamp(0.0, 1.0);
     (weakness * 0.40
@@ -497,6 +526,50 @@ mod tests {
         assert_eq!(state.evidence_count, before_evidence);
         assert!((state.mastery_mean - 0.5).abs() < before_mastery_distance);
         assert!(state.uncertainty > 0.5);
+    }
+
+    fn state_with(observations: &[(f64, &str)]) -> SkillState {
+        let config = LearnerModelConfig::default();
+        let mut skill = state();
+        let mut assets = std::collections::BTreeSet::new();
+        for (outcome, asset) in observations {
+            apply_skill_observation(&mut skill, &observation(*outcome, 1.0, 1.0), 0.0, config);
+            assets.insert(*asset);
+        }
+        skill.distinct_asset_count = assets.len() as u64;
+        skill
+    }
+
+    #[test]
+    fn single_wrong_answer_gets_no_priority() {
+        let skill = state_with(&[(0.0, "asset-1")]);
+        assert!(!has_priority_evidence(&skill));
+        let priority = review_priority(&skill, 0.0, 0.0);
+        assert_eq!(priority, 0.0);
+        assert_eq!(priority_band(priority), "watch");
+    }
+
+    #[test]
+    fn staleness_cannot_escalate_skill_below_evidence_threshold() {
+        // Fully overdue and 30+ days stale, but only one observation.
+        let skill = state_with(&[(0.0, "asset-1")]);
+        let priority = review_priority(&skill, 1.0, 1.0);
+        assert_eq!(priority, 0.0);
+        assert_eq!(priority_band(priority), "watch");
+        // Many observations on a single article are still not enough.
+        let one_article = state_with(&[(0.0, "a"), (0.0, "a"), (0.0, "a"), (0.0, "a")]);
+        assert_eq!(review_priority(&one_article, 1.0, 1.0), 0.0);
+    }
+
+    #[test]
+    fn sufficient_evidence_keeps_weighted_priority() {
+        let skill = state_with(&[(0.0, "a"), (0.0, "b"), (0.0, "b")]);
+        assert!(has_priority_evidence(&skill));
+        let weakness = 1.0 - skill.mastery_mean;
+        let expected = (weakness * 0.40 + skill.uncertainty * 0.25 + 0.25 + 0.10).clamp(0.0, 1.0);
+        let priority = review_priority(&skill, 1.0, 1.0);
+        assert!((priority - expected).abs() < 1e-12);
+        assert_eq!(priority_band(priority), "urgent");
     }
 
     #[test]

@@ -59,6 +59,7 @@ interface ReadingSubmitResult {
   score?: ReadingScoreSnapshot
   comparisons?: AnswerComparisonEntry[]
   idempotentReplay?: boolean
+  analysisSignals?: JsonMap | null
   [key: string]: unknown
 }
 

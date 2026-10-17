@@ -196,6 +196,7 @@ impl MemoryStore for ClosedLoopFakeStore {
             observation_output_hash: "obs-hash".into(),
             observations: Vec::new(),
             active_memory: Vec::new(),
+            refuted_memory: Vec::new(),
         })
     }
 

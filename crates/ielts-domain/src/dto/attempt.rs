@@ -85,6 +85,27 @@ pub struct AttemptAnswer {
     pub answered_at: Option<String>,
 }
 
+impl AttemptAnswer {
+    /// The one definition of "unanswered": the learner left nothing in the
+    /// slot (null, whitespace-only text, or an empty/blank list). Scoring
+    /// still marks such a question incorrect; learning evidence must not, as a
+    /// blank says nothing about the skill the question tests.
+    pub fn is_answered(&self) -> bool {
+        answer_value_is_given(&self.answer)
+    }
+}
+
+fn answer_value_is_given(value: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match value {
+        Value::Null => false,
+        Value::String(text) => !text.trim().is_empty(),
+        Value::Array(items) => items.iter().any(answer_value_is_given),
+        Value::Object(fields) => fields.values().any(answer_value_is_given),
+        Value::Bool(_) | Value::Number(_) => true,
+    }
+}
+
 fn default_weight() -> f64 {
     1.0
 }
@@ -108,4 +129,35 @@ pub struct AttemptAnnotationDto {
     pub anchor: serde_json::Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note_text: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn answer(value: serde_json::Value) -> AttemptAnswer {
+        AttemptAnswer {
+            question_id: "q1".into(),
+            answer: value,
+            is_correct: Some(false),
+            weight: 1.0,
+            question_kind: None,
+            change_count: 0,
+            visit_count: 0,
+            elapsed_ms: 0,
+            marked: false,
+            answered_at: None,
+        }
+    }
+
+    #[test]
+    fn blank_whitespace_and_empty_lists_are_unanswered() {
+        for blank in [json!(null), json!(""), json!("  \t"), json!([]), json!(["", " "]), json!({})] {
+            assert!(!answer(blank.clone()).is_answered(), "{blank} must be unanswered");
+        }
+        for given in [json!("NOT GIVEN"), json!(["A"]), json!(["", "B"]), json!(0), json!(false)] {
+            assert!(answer(given.clone()).is_answered(), "{given} must be answered");
+        }
+    }
 }

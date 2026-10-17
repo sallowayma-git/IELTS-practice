@@ -20,7 +20,9 @@ const READING_KEYS = [
   'reading.matching_headings.global_main_idea',
   'reading.matching_headings.paragraph_scope_control',
   'reading.multi_choice.distractor_elimination',
-  'reading.multi_choice.evidence_completeness'
+  'reading.multi_choice.evidence_completeness',
+  'reading.matching', 'reading.matching_information', 'reading.matching_features',
+  'reading.matching_sentence_endings'
 ]
 
 const WRITING_KEYS = {
@@ -52,6 +54,11 @@ for (const [key, expected] of Object.entries(WRITING_KEYS)) {
 
 assert.equal(formatSkillKey('reading.tfng.false_vs_not_given'), '阅读 · 判断题 · 错误与未提及')
 
+// Matching sub-types are distinct skills: none of them is labelled as headings.
+assert.equal(formatSkillKey('reading.matching_information'), '阅读 · 段落信息配对')
+assert.equal(formatSkillKey('reading.matching_features'), '阅读 · 特征配对')
+assert.equal(formatSkillKey('reading.matching_sentence_endings'), '阅读 · 句尾配对')
+assert.equal(formatSkillKey('reading.matching'), '阅读 · 配对题')
 // Known parent, unknown sub-skill: parent label survives, suffix is humanised.
 assert.equal(formatSkillKey('reading.tfng.new_probe_kind'), '阅读 · 判断题 · new probe kind')
 // Unknown writing criterion and totally unknown keys: humanised, never raw.

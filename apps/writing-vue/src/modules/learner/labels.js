@@ -6,7 +6,11 @@ const READING_KIND_LABELS = {
   classification: '分类题',
   diagram_completion: '图示填空',
   flow_chart_completion: '流程图填空',
+  matching: '配对题',
+  matching_features: '特征配对',
   matching_headings: '段落大意配对',
+  matching_information: '段落信息配对',
+  matching_sentence_endings: '句尾配对',
   multi_choice: '多选题',
   notes_completion: '笔记填空',
   sentence_completion: '句子填空',
@@ -40,6 +44,7 @@ const WRITING_CRITERION_LABELS = {
 }
 
 const REASON_LABELS = {
+  insufficient_evidence: '证据不足，暂不排优先级',
   low_mastery_estimate: '掌握度偏低',
   high_uncertainty: '证据不确定',
   recent_errors: '近期连续出错',

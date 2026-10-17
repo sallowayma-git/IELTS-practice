@@ -414,6 +414,32 @@ fn archive_stale_applies_the_per_namespace_policy_window() {
     assert!(report.skipped_kinds.contains(&"preference".to_string()));
 }
 
+/// "不准确" is a promise the weekly pass must keep: the validation snapshot
+/// carries every memory the learner refuted, so a proposal restating it is
+/// rejected (`user_marked_inaccurate`). Other feedback is not a refutation, and
+/// forget leaves nothing to match.
+#[test]
+fn the_validation_snapshot_remembers_what_the_learner_marked_inaccurate() {
+    let (_dir, conn) = open_db();
+    for id in ["mem-a", "mem-b", "mem-c"] {
+        insert_memory(&conn, id, "consolidated", "activity:reading", "asset-1", "active");
+    }
+    record_memory_feedback(&conn, "mem-a", MemoryFeedbackKind::Inaccurate, USER, &json!({}), NOW).unwrap();
+    record_memory_feedback(&conn, "mem-b", MemoryFeedbackKind::Accurate, USER, &json!({}), NOW).unwrap();
+    record_memory_feedback(&conn, "mem-c", MemoryFeedbackKind::Inaccurate, USER, &json!({}), NOW).unwrap();
+    let version: i64 = conn.query_row("SELECT version FROM memory_items WHERE id='mem-c'", [], |r| r.get(0)).unwrap();
+    ielts_db::forget_memory(&conn, &ielts_domain::MemoryForgetCommand {
+        memory_id: "mem-c".into(), expected_version: version as u64, actor_type: "user".into(),
+        actor_id: Some(USER.into()), reason: "user forget".into(),
+    }).unwrap();
+
+    let snapshot = ielts_db::load_memory_validation_snapshot(&conn, USER, &[]).unwrap();
+    let refuted: Vec<_> = snapshot.refuted_memory.iter().map(|m| m.canonical_key.as_str()).collect();
+    assert_eq!(refuted, vec!["key-mem-a"]);
+    assert!(!snapshot.refuted_memory[0].statement.is_empty());
+    assert!(ielts_db::load_memory_validation_snapshot(&conn, "other", &[]).unwrap().refuted_memory.is_empty());
+}
+
 // ---------------------------------------------------------------------------
 // Round-3 audit (A1): the weekly channel wrote the raw LLM statement straight
 // into `memory_items` with `status='active'`. Every guard below was declared in

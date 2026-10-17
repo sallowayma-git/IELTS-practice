@@ -9,9 +9,12 @@
 //! `obs-*` ids a memory mutation may cite; the host accepts a mutation only if
 //! every id it cites is an id in this pack.
 //!
-//! Size is bounded by `WEEKLY_PACK_TOKEN_CAP`. When the lines do not fit, every
-//! line of a question type missed in two or more different passages is kept,
-//! then the most recent lines, and the rest is replaced by one "omitted" note.
+//! Size is bounded by `WEEKLY_PACK_TOKEN_CAP`. Preferences and memories share
+//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the most
+//! recently observed memories), so practice lines always keep the rest. When the
+//! lines do not fit, every line of a question type missed in two or more
+//! different passages is kept, then the most recent lines, and the rest is
+//! replaced by one "omitted" note.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,12 +30,16 @@ use crate::cognitive_read::ensure_observations_fresh;
 use crate::learning_observations::{
     LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION,
 };
+use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 
 pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 2;
 /// Upper bound of the whole serialized pack, in `estimate_tokens` units.
 pub const WEEKLY_PACK_TOKEN_CAP: u32 = 6_000;
+/// The most the carried-along preferences and memories may spend of the cap:
+/// whatever their size, practice lines keep the remaining share.
+pub const WEEKLY_CONTEXT_TOKEN_BUDGET: u32 = WEEKLY_PACK_TOKEN_CAP * 2 / 5;
 /// Fewer scored observations than this in a window is not worth a model call.
 pub const WEEKLY_MIN_OBSERVATIONS: usize = 8;
 
@@ -380,21 +387,26 @@ fn reading_lines(conn: &Connection, window: &[Obs], assets: &mut AssetBook<'_>) 
         let asset = field(&o.payload, "assetId");
         let correct = o.payload.get("correctCount").and_then(Value::as_f64);
         let total = o.payload.get("questionCount").and_then(Value::as_u64);
-        let score = match (correct, total) {
+        let mut score = match (correct, total) {
             (Some(correct), Some(total)) => format!("correct {correct}/{total}"),
             _ => format!("score {:.2}", o.value_num.unwrap_or_default()),
         };
+        // Blanks are not misses (no miss line); the attempt line still says how many.
+        if let Some(blank) = o.payload.get("unansweredCount").and_then(Value::as_u64).filter(|n| *n > 0) {
+            score += &format!(", {blank} unanswered");
+        }
         let ordinal = o.payload.get("attemptOrdinal").and_then(Value::as_u64).unwrap_or(1);
         let text = format!("{asset} \"{}\" {score}, attempt #{ordinal}", assets.title(asset));
         lines.push(line(vec![o.id.clone()], &o.at, "reading", text, Facet::Attempt));
     }
     for o in window.iter().filter(|o| o.kind == "reading.question.outcome" && o.polarity.as_deref() == Some("negative")) {
         let (asset, attempt, qid) = (field(&o.payload, "assetId"), field(&o.payload, "attemptId"), field(&o.payload, "questionId"));
-        let qtype = o.payload.get("questionKind").and_then(Value::as_str).unwrap_or("unknown");
+        // One naming for question-type and error-cause stats: the skill key.
+        let qtype = canonical_reading_skill_key(o.payload.get("questionKind").and_then(Value::as_str).unwrap_or("unknown"));
         let given = show_answer(&learner_answer(conn, attempt, qid));
         let key = assets.key(asset, qid).map_or_else(|| "(key unavailable)".to_owned(), |key| show_answer(&key));
         let text = format!("{asset} {} [{qtype}] answered {given} -> key {key}", assets.label(asset, qid));
-        let facet = Facet::Miss { qtype: qtype.into(), asset: asset.into(), attempt: attempt.into(), qid: normalize_question_id(qid) };
+        let facet = Facet::Miss { qtype, asset: asset.into(), attempt: attempt.into(), qid: normalize_question_id(qid) };
         lines.push(line(vec![o.id.clone()], &o.at, "miss", text, facet));
     }
     lines
@@ -490,6 +502,20 @@ struct CoachDay {
     reasks: u32,
 }
 
+impl CoachDay {
+    /// The day's line is dated by its latest event, whichever query saw it.
+    fn seen(&mut self, asset: String, at: String) {
+        if self.at.is_empty() || moment(&at) >= moment(&self.at) {
+            (self.asset, self.at) = (asset, at);
+        }
+    }
+}
+
+/// A stored timestamp as an instant, so differently formatted offsets still order by real time.
+fn moment(at: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(at).ok().map(|value| value.with_timezone(&Utc))
+}
+
 fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &mut AssetBook<'_>) -> DbResult<Vec<WeeklyLine>> {
     let mut days: BTreeMap<(String, String), CoachDay> = BTreeMap::new();
     let mut feedback = conn.prepare(
@@ -507,7 +533,7 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
     for row in rows {
         let (attempt, asset, kind, at) = row?;
         let entry = days.entry((attempt, day(&at))).or_default();
-        (entry.asset, entry.at) = (asset, at);
+        entry.seen(asset, at);
         *entry.kinds.entry(kind).or_default() += 1;
     }
     let mut reasks = conn.prepare(
@@ -525,9 +551,14 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
     for row in rows {
         let (attempt, asset, at) = row?;
         let entry = days.entry((attempt, day(&at))).or_default();
-        (entry.asset, entry.at) = (asset, at);
+        entry.seen(asset, at);
         entry.reasks += 1;
     }
+    // Keep the most recent days, by real time, with the attempt id only as a tiebreak.
+    let mut days: Vec<((String, String), CoachDay)> = days.into_iter().collect();
+    days.sort_by(|(left_key, left), (right_key, right)| {
+        moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
+    });
     let mut lines = Vec::new();
     for ((attempt, _), entry) in days.into_iter().take(MAX_COACH_LINES) {
         let kinds: Vec<String> = entry
@@ -755,14 +786,64 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
         end: to,
         lines: Vec::new(),
         omitted: 0,
-        memories: active_memories(conn, user_id)?,
-        preferences: explicit_preferences(conn, user_id)?,
+        memories: Vec::new(),
+        preferences: Vec::new(),
     };
+    (pack.preferences, pack.memories) =
+        fit_context(explicit_preferences(conn, user_id)?, active_memories(conn, user_id)?, WEEKLY_CONTEXT_TOKEN_BUDGET);
     // The omitted note is part of what must fit, so reserve for it up front.
     pack.omitted = lines.len();
     let budget = WEEKLY_PACK_TOKEN_CAP.saturating_sub(pack.estimated_tokens());
     (pack.lines, pack.omitted) = cap_lines(lines, budget);
+    enforce_cap(&mut pack);
     Ok(pack)
+}
+
+fn item_tokens<T: Serialize>(item: &T) -> u32 {
+    // +1: the separating comma and rounding, as for lines.
+    estimate_tokens(&serde_json::to_string(item).unwrap_or_default()) + 1
+}
+
+/// The longest prefix of `items` whose cost fits `budget`; returns it and what is left.
+fn take_fitting<T: Serialize>(items: Vec<T>, budget: u32) -> (Vec<T>, u32) {
+    let mut left = budget;
+    let kept = items
+        .into_iter()
+        .map_while(|item| {
+            let cost = item_tokens(&item);
+            (cost <= left).then(|| {
+                left -= cost;
+                item
+            })
+        })
+        .collect();
+    (kept, left)
+}
+
+/// Bound the carried-along context: explicit preferences first (the learner said
+/// them), then memories in recency order, until `budget` is spent.
+fn fit_context(
+    preferences: Vec<PackPreference>,
+    memories: Vec<PackMemory>,
+    budget: u32,
+) -> (Vec<PackPreference>, Vec<PackMemory>) {
+    let (preferences, left) = take_fitting(preferences, budget);
+    let (memories, _) = take_fitting(memories, left);
+    (preferences, memories)
+}
+
+/// Last line of defence for the cap: the per-item estimates above already sum to
+/// at least the whole, so this only trims if that ever stops being true. Oldest
+/// lines go first, then the least recent memories, then preferences.
+fn enforce_cap(pack: &mut WeeklyPack) {
+    while pack.estimated_tokens() > WEEKLY_PACK_TOKEN_CAP {
+        if !pack.lines.is_empty() {
+            pack.lines.remove(0);
+            pack.omitted += 1;
+        } else if pack.memories.pop().is_none() && pack.preferences.pop().is_none() {
+            break;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -775,7 +856,7 @@ mod tests {
             day,
             "miss",
             format!("{asset} {qid} [{qtype}] {}", "x".repeat(filler)),
-            Facet::Miss { qtype: qtype.into(), asset: asset.into(), attempt: format!("a-{asset}-{day}"), qid: qid.into() },
+            Facet::Miss { qtype: canonical_reading_skill_key(qtype), asset: asset.into(), attempt: format!("a-{asset}-{day}"), qid: qid.into() },
         )
     }
 
@@ -819,7 +900,7 @@ mod tests {
     #[test]
     fn the_header_separates_passages_from_repeats_of_one_passage() {
         let mut again = miss("2026-10-04", "tfng", "P1", "q1", 1);
-        again.facet = Facet::Miss { qtype: "tfng".into(), asset: "P1".into(), attempt: "later".into(), qid: "q1".into() };
+        again.facet = Facet::Miss { qtype: "reading.tfng".into(), asset: "P1".into(), attempt: "later".into(), qid: "q1".into() };
         let lines = vec![
             miss("2026-10-01", "tfng", "P1", "q1", 1),
             miss("2026-10-02", "tfng", "P2", "q5", 1),
@@ -828,10 +909,23 @@ mod tests {
         ];
         let header = header(&lines);
         assert_eq!(header["reading"]["wrongQuestions"], 4);
-        assert_eq!(header["reading"]["byQuestionType"]["tfng"], json!({"wrong": 3, "passages": 2}));
-        assert_eq!(header["reading"]["missedAcrossPassages"], json!(["tfng (2 passages)"]));
+        assert_eq!(header["reading"]["byQuestionType"]["reading.tfng"], json!({"wrong": 3, "passages": 2}));
+        assert_eq!(header["reading"]["missedAcrossPassages"], json!(["reading.tfng (2 passages)"]));
         assert_eq!(header["reading"]["missedAgainInSamePassage"], json!(["P1 q1 (2 attempts)"]));
-        assert_eq!(header["reading"]["byErrorType"]["tfng.boundary"], 3);
+        assert_eq!(header["reading"]["byErrorType"]["reading.tfng.boundary"], 3);
+    }
+
+    #[test]
+    fn question_type_and_error_cause_stats_share_one_naming() {
+        // Payload kind, short alias and skill key are one question type.
+        let lines = vec![
+            miss("2026-10-01", "true_false_not_given", "P1", "q1", 1),
+            miss("2026-10-02", "tfng", "P2", "q2", 1),
+            miss("2026-10-03", "reading.tfng", "P3", "q3", 1),
+        ];
+        let header = header(&lines);
+        assert_eq!(header["reading"]["byQuestionType"], json!({"reading.tfng": {"wrong": 3, "passages": 3}}));
+        assert_eq!(header["reading"]["byErrorType"], json!({"reading.tfng.boundary": 3}));
     }
 
     #[test]

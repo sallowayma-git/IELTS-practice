@@ -10,7 +10,7 @@ use ielts_domain::{
     MemoryContextEntry, MemoryContextPreview, MemoryContextQuery, MemoryContextSource,
     MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
-    MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, MAX_ACTIVE_MEMORY_PER_SCOPE,
+    MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, RefutedMemorySummary, MAX_ACTIVE_MEMORY_PER_SCOPE,
     MAX_EXPLICIT_PREFERENCES, MAX_MEMORY_CANDIDATE_OBSERVATIONS, MAX_MEMORY_CONTEXT_ITEMS,
     MAX_MEMORY_PROPOSALS, MAX_MEMORY_STATEMENT_BYTES, MAX_USER_NOTE_PREFERENCES,
     USER_NOTE_PREFERENCE_PREFIX,
@@ -219,7 +219,32 @@ pub fn load_memory_validation_snapshot(
         observation_output_hash: batch.observation_output_hash,
         observations,
         active_memory: load_active_memory(conn, user_id)?,
+        refuted_memory: load_refuted_memory(conn, user_id)?,
     })
+}
+
+/// Every memory the learner marked `inaccurate` and has not since forgotten
+/// (forget redacts the key and statement, so nothing is left to match).
+fn load_refuted_memory(conn: &Connection, user_id: &str) -> DbResult<Vec<RefutedMemorySummary>> {
+    let mut statement = conn.prepare(
+        "SELECT DISTINCT m.namespace,m.canonical_key,m.scope,m.content
+         FROM memory_feedback f JOIN memory_items m ON m.id=f.memory_id
+         WHERE f.user_id=?1 AND m.user_id=?1 AND f.feedback_kind='inaccurate' AND m.status != 'deleted'
+         ORDER BY m.namespace,m.canonical_key,m.scope,m.content",
+    )?;
+    let rows = statement.query_map([user_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+    })?;
+    let mut refuted = Vec::new();
+    for row in rows {
+        let (namespace, canonical_key, scope, statement) = row?;
+        // A legacy row outside the closed namespace/scope vocabulary can never
+        // equal a valid proposal's identity; it must not fail the whole snapshot.
+        if let (Some(namespace), Some(scope)) = (MemoryNamespace::parse(&namespace), MemoryScope::parse_storage_key(&scope)) {
+            refuted.push(RefutedMemorySummary { namespace, canonical_key, scope, statement });
+        }
+    }
+    Ok(refuted)
 }
 
 pub fn persist_memory_candidate_batch(

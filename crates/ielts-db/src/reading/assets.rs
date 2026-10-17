@@ -678,11 +678,7 @@ pub fn load_kinds(payload: &Value) -> serde_json::Map<String, Value> {
     let mut map = HashMap::new();
     if let Some(groups) = payload.get("questionGroups").and_then(|v| v.as_array()) {
         for g in groups {
-            let kind = g
-                .get("kind")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string();
+            let kind = group_kind(g);
             if let Some(ids) = g.get("questionIds").and_then(|v| v.as_array()) {
                 for id in ids {
                     if let Some(s) = id.as_str() {
@@ -697,6 +693,90 @@ pub fn load_kinds(payload: &Value) -> serde_json::Map<String, Value> {
         .collect()
 }
 
+/// The question kind a group is scored and learned under. Payloads type every
+/// matching task as the generic `matching`; its instructions say which one it
+/// is, so the sub-type is resolved here, once, where questions are indexed.
+/// A matching group whose instructions are not recognised stays `matching`.
+fn group_kind(group: &Value) -> String {
+    let kind = group
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    if kind != "matching" {
+        return kind.to_string();
+    }
+    let html = group.get("bodyHtml").and_then(|v| v.as_str()).unwrap_or("");
+    matching_subtype(&instruction_text(html)).to_string()
+}
+
+fn matching_subtype(text: &str) -> &'static str {
+    const RULES: [(&[&str], &str); 6] = [
+        (&["list of headings", "correct heading"], "matching_headings"),
+        (&["paragraph contains", "section contains"], "matching_information"),
+        (&["correct ending", "sentence ending"], "matching_sentence_endings"),
+        // A word bank for a summary is summary completion, not matching.
+        (&["complete the summary"], "summary_completion"),
+        (&["classify the following"], "classification"),
+        // People, places, dates, researchers, categories: "matching features".
+        (&["match each"], "matching_features"),
+    ];
+    RULES
+        .iter()
+        .find(|(needles, _)| needles.iter().any(|needle| text.contains(needle)))
+        .map_or("matching", |(_, kind)| kind)
+}
+
+/// Lower-cased text of an HTML fragment with tags removed and spaces collapsed.
+fn instruction_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for ch in html.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' if in_tag => {
+                in_tag = false;
+                text.push(' ');
+            }
+            _ if !in_tag => text.push(ch),
+            _ => {}
+        }
+    }
+    text.replace("&nbsp;", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 fn normalize_qid(s: &str) -> String {
     crate::reading::scoring::normalize_question_id(s)
+}
+
+#[cfg(test)]
+mod kind_tests {
+    use super::*;
+
+    fn kind_of(kind: &str, html: &str) -> String {
+        let payload = json!({"questionGroups": [{"kind": kind, "questionIds": ["q1"], "bodyHtml": html}]});
+        load_kinds(&payload)["q1"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn generic_matching_groups_resolve_to_their_sub_type() {
+        let cases = [
+            ("<p>Choose the correct heading for each paragraph from the <b>list of headings</b> below.</p>", "matching_headings"),
+            ("<p>Which paragraph contains the following information?</p>", "matching_information"),
+            ("<p>Look at the following statements and the list of researchers below. Match each statement with the correct researcher, A&nbsp;-&nbsp;E.</p>", "matching_features"),
+            ("<p>Complete each sentence with the correct ending, A-G, below.</p>", "matching_sentence_endings"),
+            ("<p>Complete the summary using the list of words, A-K, below.</p>", "summary_completion"),
+            ("<p>Classify the following statements as referring to</p>", "classification"),
+            ("<h4>Questions 1-4</h4>", "matching"),
+            ("", "matching"),
+        ];
+        for (html, expected) in cases {
+            assert_eq!(kind_of("matching", html), expected, "{html}");
+        }
+        // Only the generic kind is reinterpreted; explicit kinds pass through.
+        assert_eq!(kind_of("true_false_not_given", "<p>list of headings</p>"), "true_false_not_given");
+    }
 }

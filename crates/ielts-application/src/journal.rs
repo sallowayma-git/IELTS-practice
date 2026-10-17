@@ -12,7 +12,8 @@ use crate::ApplicationError;
 
 /// Persistence port for the M7 Daily Journal projection.
 pub trait JournalStore {
-    /// Build the deterministic `JournalFacts` for a given day (§23.14).
+    /// Build the deterministic `JournalFacts` for a given day (§23.14) from
+    /// up-to-date derived projections.
     fn build_facts(&self, query: &DailyJournalQuery) -> Result<JournalFacts, ApplicationError>;
 
     /// Insert a new journal row and supersede the previous published journal
@@ -28,6 +29,18 @@ pub trait JournalStore {
         &self,
         query: &DailyJournalQuery,
     ) -> Result<Option<DailyJournal>, ApplicationError>;
+
+    /// Every stored version of a day's journal, newest first.
+    fn list_journal_versions(
+        &self,
+        query: &DailyJournalQuery,
+    ) -> Result<Vec<DailyJournal>, ApplicationError>;
+
+    /// The day's current journal: build fresh facts, reuse the latest version
+    /// when its `source_hash` matches, otherwise insert a new version. One
+    /// atomic store operation, so no write can land between the build and the
+    /// publication.
+    fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError>;
 }
 
 pub struct JournalService<'a> {
@@ -61,6 +74,22 @@ impl<'a> JournalService<'a> {
         query: &DailyJournalQuery,
     ) -> Result<Option<DailyJournal>, ApplicationError> {
         self.store.load_latest_journal(query)
+    }
+
+    /// The day's current journal: build fresh facts, reuse the latest version
+    /// when its `source_hash` matches, otherwise insert a new version. The one
+    /// path every reader (command, worker, weekly anchor) goes through, so a
+    /// stored journal can never outlive the practice it summarises.
+    pub fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError> {
+        self.store.ensure_journal(query)
+    }
+
+    /// Every stored version of a day's journal, newest first.
+    pub fn list_journal_versions(
+        &self,
+        query: &DailyJournalQuery,
+    ) -> Result<Vec<DailyJournal>, ApplicationError> {
+        self.store.list_journal_versions(query)
     }
 }
 
@@ -128,6 +157,63 @@ mod tests {
         ) -> Result<Option<DailyJournal>, ApplicationError> {
             Ok(self.journals.lock().unwrap().last().cloned())
         }
+
+        fn list_journal_versions(
+            &self,
+            _query: &DailyJournalQuery,
+        ) -> Result<Vec<DailyJournal>, ApplicationError> {
+            Ok(self.journals.lock().unwrap().iter().rev().cloned().collect())
+        }
+
+        fn ensure_journal(&self, query: &DailyJournalQuery) -> Result<DailyJournal, ApplicationError> {
+            let facts = self.build_facts(query)?;
+            match self.load_latest_journal(query)? {
+                Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
+                _ => self.insert_journal(&facts, None),
+            }
+        }
+    }
+
+    fn facts_with_hash(hash: &str) -> JournalFacts {
+        JournalFacts {
+            journal_date: "2026-08-16".into(),
+            attempts_count: 0,
+            writing_eval_summary: Default::default(),
+            skill_deltas: Vec::new(),
+            memory_changes: Default::default(),
+            coach_feedback_count: 0,
+            coach_reask_count: 0,
+            time_spent_ms: 0,
+            source_hash: hash.into(),
+            today_observation_ids: Vec::new(),
+            memory_events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn ensure_journal_reuses_a_fresh_version_and_replaces_a_stale_one() {
+        let store = FakeStore::default();
+        let service = JournalService::new(&store);
+        let query = DailyJournalQuery {
+            user_id: "local".into(),
+            journal_date: "2026-08-16".into(),
+        };
+        *store.facts.lock().unwrap() = Some(facts_with_hash("before-practice"));
+        let first = service.ensure_journal(&query).unwrap();
+        assert_eq!(service.ensure_journal(&query).unwrap().id, first.id);
+
+        // New practice changes the facts: the stored journal is stale and a
+        // read must not return it.
+        *store.facts.lock().unwrap() = Some(facts_with_hash("after-practice"));
+        let second = service.ensure_journal(&query).unwrap();
+        assert_ne!(second.id, first.id);
+        assert_eq!(second.version, 2);
+        assert_eq!(second.source_hash, "after-practice");
+        let versions = service.list_journal_versions(&query).unwrap();
+        assert_eq!(
+            versions.iter().map(|j| j.version).collect::<Vec<_>>(),
+            vec![2, 1]
+        );
     }
 
     #[test]

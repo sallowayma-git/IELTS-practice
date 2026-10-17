@@ -23,6 +23,7 @@ pub mod journal;
 pub mod learning_events;
 pub mod learning_observations;
 pub mod learning_tools;
+pub mod local_day;
 pub mod memory;
 pub mod learner;
 pub mod migrate;

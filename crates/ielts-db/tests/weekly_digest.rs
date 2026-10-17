@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use ielts_db::{
     build_daily_facts, finish_dream_run, insert_dream_run, insert_journal, last_weekly_window_end,
     migrate, open_connection, start_dream_run,
-    weekly_failed_attempt_exists, weekly_run_completed, DbOpenOptions, WeeklyWindow,
+    weekly_failed_attempt_count, weekly_run_completed, DbOpenOptions, WeeklyWindow,
 };
 use rusqlite::Connection;
 use tempfile::tempdir;
@@ -99,8 +99,8 @@ fn failed_weekly_attempt_is_not_a_receipt_and_bounds_retries_to_one_per_day() {
 
     // Not a receipt: the weekend is still due, and it is known to have failed.
     assert!(!weekly_run_completed(&conn, "local", "2026-W41").unwrap());
-    assert!(weekly_failed_attempt_exists(&conn, "local", "2026-W41").unwrap());
-    assert!(!weekly_failed_attempt_exists(&conn, "local", "2026-W42").unwrap());
+    assert_eq!(weekly_failed_attempt_count(&conn, "local", "2026-W41").unwrap(), 1);
+    assert_eq!(weekly_failed_attempt_count(&conn, "local", "2026-W42").unwrap(), 0);
     // One attempt per day: blocked that day, free the next day and for other weekends.
     assert!(ielts_db::weekly_attempted_since(&conn, "local", "2026-W41", &day_start("2026-10-10")).unwrap());
     assert!(!ielts_db::weekly_attempted_since(&conn, "local", "2026-W41", &day_start("2026-10-11")).unwrap());

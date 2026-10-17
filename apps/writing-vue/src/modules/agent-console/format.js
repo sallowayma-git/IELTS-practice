@@ -61,6 +61,19 @@ function pick(record, camel, snake, fallback) {
   return fallback
 }
 
+/**
+ * The viewer's local calendar day ("YYYY-MM-DD") of an instant (a Date or an
+ * RFC3339 string), or ''. This is the journal's notion of a day: the host
+ * bounds a journal date by local midnights, so "today" must never be derived
+ * from a UTC ISO string.
+ */
+export function localDay(instant) {
+  const time = instant instanceof Date ? instant : new Date(String(instant || ''))
+  if (Number.isNaN(time.getTime())) return ''
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`
+}
+
 export function formatJournalDate(value) {
   const raw = String(value || '').trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)

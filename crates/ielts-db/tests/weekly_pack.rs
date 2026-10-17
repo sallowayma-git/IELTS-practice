@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use ielts_db::*;
+use ielts_domain::estimate_tokens;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
@@ -101,8 +102,8 @@ fn wrong_questions_carry_the_learners_answer_the_key_and_a_citable_id() {
     assert_eq!(
         texts(&pack, "miss"),
         vec![
-            "P1 q14 [tfng] answered FALSE -> key TRUE".to_string(),
-            "P1 q16 [matching] answered A -> key B".to_string(),
+            "P1 q14 [reading.tfng] answered FALSE -> key TRUE".to_string(),
+            "P1 q16 [reading.matching] answered A -> key B".to_string(),
         ]
     );
     let attempt = &texts(&pack, "reading")[0];
@@ -136,11 +137,11 @@ fn the_header_counts_types_and_separates_passages_from_repeats() {
     submit(&conn, "a3", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-06T09:00:00Z");
     let reading = &pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z").header["reading"];
 
-    assert_eq!(reading["byQuestionType"]["tfng"], json!({"wrong": 4, "passages": 2}));
-    assert_eq!(reading["byQuestionType"]["matching"], json!({"wrong": 1, "passages": 1}));
-    assert_eq!(reading["missedAcrossPassages"], json!(["tfng (2 passages)"]));
+    assert_eq!(reading["byQuestionType"]["reading.tfng"], json!({"wrong": 4, "passages": 2}));
+    assert_eq!(reading["byQuestionType"]["reading.matching"], json!({"wrong": 1, "passages": 1}));
+    assert_eq!(reading["missedAcrossPassages"], json!(["reading.tfng (2 passages)"]));
     assert_eq!(reading["missedAgainInSamePassage"], json!(["P1 q1 (2 attempts)"]));
-    assert_eq!(reading["byErrorType"]["tfng.boundary"], 4);
+    assert_eq!(reading["byErrorType"]["reading.tfng.boundary"], 4);
 }
 
 #[test]
@@ -254,13 +255,116 @@ fn a_busy_window_fits_the_cap_keeps_repeated_types_and_says_what_it_omitted() {
     assert!(pack.estimated_tokens() <= WEEKLY_PACK_TOKEN_CAP, "{}", pack.estimated_tokens());
     assert!(pack.omitted > 0);
     assert_eq!(pack.to_value()["omitted"], json!(format!("omitted {} older items", pack.omitted)));
-    let kept_matching = texts(&pack, "miss").into_iter().filter(|text| text.contains("[matching]")).count();
+    let kept_matching = texts(&pack, "miss").into_iter().filter(|text| text.contains("[reading.matching]")).count();
     assert_eq!(kept_matching, 3, "every line of a repeatedly missed question type survives");
     // The header still counts everything, omitted lines included.
     assert_eq!(pack.header["reading"]["wrongQuestions"], 123);
     // Determinism: the same database and window give the same bytes.
     let again = weekly_pack(&conn, "local", at("2026-10-03T00:00:00Z"), at("2026-10-10T00:00:00Z")).unwrap();
     assert_eq!(pack.to_value(), again.to_value());
+}
+
+#[test]
+fn a_huge_memory_block_is_bounded_and_practice_lines_keep_their_share() {
+    let (_dir, conn) = fixture();
+    // Thirty memories and twenty preferences of long CJK text: unbounded, they alone overflow the cap.
+    let long = "先读题干再定位关键词并核对同义替换".repeat(20);
+    for index in 0..30 {
+        let id = format!("mem-{index:02}");
+        conn.execute(
+            "INSERT INTO memory_items (id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,content,status,
+                source_class,created_by,content_hash,last_observed_at,created_at,updated_at)
+             VALUES (?1,'local','strategy','activity:reading','procedural',?1,'label',?2,'active','inferred','weekly_dream',?1,
+                ?3,'2026-10-01T00:00:00Z','2026-10-01T00:00:00Z')",
+            params![id, long, format!("2026-09-{:02}T00:00:00Z", 1 + index % 28)],
+        )
+        .unwrap();
+    }
+    for index in 0..20 {
+        conn.execute(
+            "INSERT INTO explicit_user_preferences (user_id,preference_key,scope,value_json,status,source,created_at,updated_at)
+             VALUES ('local',?1,'global',?2,'active','user','2026-10-01T00:00:00Z','2026-10-01T00:00:00Z')",
+            params![format!("pref_{index:02}"), json!(long).to_string()],
+        )
+        .unwrap();
+    }
+    for index in 0..60 {
+        let day = format!("2026-10-{:02}T09:{:02}:00Z", 4 + index % 5, index % 60);
+        submit(&conn, &format!("n{index}"), "P1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), &day);
+    }
+    let pack = pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+
+    assert!(pack.estimated_tokens() <= WEEKLY_PACK_TOKEN_CAP, "{}", pack.estimated_tokens());
+    let context = estimate_tokens(&json!(pack.memories).to_string()) + estimate_tokens(&json!(pack.preferences).to_string());
+    assert!(context <= WEEKLY_CONTEXT_TOKEN_BUDGET, "{context}");
+    assert!(pack.memories.len() + pack.preferences.len() < 50, "the context was trimmed");
+    // Practice lines keep the rest of the budget: plenty of them survive.
+    let lines = estimate_tokens(&json!(pack.lines).to_string());
+    assert!(lines >= WEEKLY_PACK_TOKEN_CAP / 3, "{lines}");
+    assert!(!texts(&pack, "miss").is_empty());
+}
+
+#[test]
+fn coach_lines_keep_the_most_recent_days_not_the_smallest_attempt_ids() {
+    let (_dir, conn) = fixture();
+    // a00 is the oldest coach day and a20 the newest: one more than the coach line limit.
+    for index in 0..21 {
+        let attempt = format!("a{index:02}");
+        submit(&conn, &attempt, "P1", json!({"q1": "TRUE", "q2": "FALSE", "q3": "B"}), "2026-09-20T09:00:00Z");
+        let at = format!("2026-10-{:02}T{:02}:00:00Z", 4 + index / 6, 8 + index % 6);
+        coach_feedback(&conn, &attempt, "P1", &at, &["too_long"], 0);
+    }
+    let pack = pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+    let score_id = |attempt: &str| -> String {
+        conn.query_row(
+            "SELECT id FROM learner_observations WHERE observation_type = 'reading.attempt.score'
+               AND json_extract(payload_json, '$.attemptId') = ?1",
+            [attempt],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    let coach: Vec<_> = pack.lines.iter().filter(|line| line.kind == "coach").collect();
+    assert_eq!(coach.len(), 20);
+    assert!(coach.iter().all(|line| !line.ids.contains(&score_id("a00"))), "the oldest day is the one dropped");
+    assert!(coach.iter().any(|line| line.ids.contains(&score_id("a20"))), "the newest day survives");
+}
+
+#[test]
+fn rebuild_then_verify_is_consistent_for_forty_same_passage_submits() {
+    let (_dir, conn) = fixture();
+    for index in 0..40 {
+        let day = format!("2026-10-{:02}T09:{:02}:00Z", 4 + index % 5, index % 60);
+        submit(&conn, &format!("n{index}"), "P1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), &day);
+    }
+    learning_observations_rebuild(&conn).unwrap();
+    let verify = learning_observations_verify(&conn).unwrap();
+    assert!(verify.consistent, "{:?}", verify.mismatches);
+    pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+}
+
+#[test]
+fn projection_runs_with_equal_timestamps_resolve_to_the_last_inserted_run() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "t1", "P1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), "2026-10-04T09:00:00Z");
+    let tie = "2999-01-01T00:00:00+00:00";
+    // A stale run whose id sorts after every random `lpr-<uuid>` id, written first.
+    conn.execute(
+        "INSERT INTO learning_projection_runs
+         (id, projector_key, projector_version, status, input_count, output_count,
+          input_hash, output_hash, started_at, finished_at)
+         VALUES ('lpr-zzzz', ?1, ?2, 'completed', 0, 0, 'stale', 'stale', ?3, ?3)",
+        params![LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION, tie],
+    )
+    .unwrap();
+    let fresh = learning_observations_rebuild(&conn).unwrap();
+    conn.execute(
+        "UPDATE learning_projection_runs SET finished_at = ?1 WHERE id = ?2",
+        params![tie, fresh.run_id],
+    )
+    .unwrap();
+    // Same timestamp: the fresh run was written last, so it must be the latest.
+    pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
 }
 
 #[test]
@@ -298,9 +402,9 @@ fn untrusted_learner_text_is_neutralised_before_it_reaches_the_model() {
     assert_eq!(
         texts(&pack, "miss"),
         vec![
-            "P1 q14 [tfng] answered [redacted] -> key TRUE".to_string(),
-            "P1 q15 [tfng] answered [redacted] -> key FALSE".to_string(),
-            "P1 q16 [matching] answered A -> key B".to_string(),
+            "P1 q14 [reading.tfng] answered [redacted] -> key TRUE".to_string(),
+            "P1 q15 [reading.tfng] answered [redacted] -> key FALSE".to_string(),
+            "P1 q16 [reading.matching] answered A -> key B".to_string(),
         ]
     );
     assert_eq!(pack.memory_ids().into_iter().collect::<Vec<_>>(), vec!["mem-clean".to_string()]);

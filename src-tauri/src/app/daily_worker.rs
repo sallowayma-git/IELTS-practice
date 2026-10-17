@@ -6,7 +6,9 @@
 //! * the weekly pass: the single weekly consolidation, the only model call the
 //!   worker makes and the only place memory is written. It is first attempted on
 //!   a Saturday or Sunday, and an attempt that failed is retried on the following
-//!   days (once per local day) until it completes.
+//!   days (once per local day) until it completes or has failed
+//!   `WEEKLY_MAX_FAILED_ATTEMPTS` times; then that weekend is given up and the
+//!   next weekend's window folds its records in.
 use std::time::{Duration, Instant};
 
 use chrono::DateTime;
@@ -24,6 +26,9 @@ use crate::cognitive_runtime::{is_weekend, local_day_start_utc, plan_weekly_wind
 /// How often an idle worker looks at the weekly pass. Cheap checks first, so on
 /// an ordinary weekday this is a clock comparison and one indexed lookup.
 const WEEKLY_CHECK_INTERVAL: Duration = Duration::from_secs(600);
+/// Failed attempts one weekend gets before it is given up until the next weekend.
+/// The failed runs stay in `dream_runs`, so the failure remains visible.
+const WEEKLY_MAX_FAILED_ATTEMPTS: usize = 3;
 const OPERATIONAL_PRUNE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 pub(crate) fn valid_local_window(user: &str, day: &str) -> bool {
@@ -62,15 +67,8 @@ pub(crate) fn ensure_journal(db: &AppDb, day: &str) -> DbResult<String> {
         user_id: "local".into(),
         journal_date: day.into(),
     };
-    let facts = service
-        .build_facts(&query)
-        .map_err(|error| DbError::Message(error.to_string()))?;
     service
-        .load_latest_journal(&query)
-        .and_then(|journal| match journal {
-            Some(journal) if journal.source_hash == facts.source_hash => Ok(journal),
-            _ => service.insert_journal(&facts, None),
-        })
+        .ensure_journal(&query)
         .map(|journal| journal.id)
         .map_err(|error| DbError::Message(error.to_string()))
 }
@@ -114,7 +112,8 @@ pub(crate) fn run_daily_journal(db: &AppDb, job: &BackgroundJob, worker: &str) -
 /// this window belongs to (the latest Saturday or Sunday at or before now) has no
 /// completed run, none was attempted today, and either today is a weekend day (the
 /// first attempt) or that weekend's earlier attempt failed (the retry, on any
-/// following day). Automatic learning must be on.
+/// following day), and it has not yet failed `WEEKLY_MAX_FAILED_ATTEMPTS` times.
+/// Automatic learning must be on.
 fn weekly_window_due<Tz: chrono::TimeZone>(
     db: &AppDb,
     now: &DateTime<Tz>,
@@ -125,15 +124,19 @@ fn weekly_window_due<Tz: chrono::TimeZone>(
     let last_end = db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local"))?;
     let Some(window) = plan_weekly_window(now, last_end) else { return Ok(None) };
     let since = local_day_start_utc(now).to_rfc3339();
-    let (completed, attempted_today, failed) = db.with_conn(|conn| {
+    let (completed, attempted_today, failures) = db.with_conn(|conn| {
         Ok((
             ielts_db::weekly_run_completed(conn, "local", &window.key)?,
             ielts_db::weekly_attempted_since(conn, "local", &window.key, &since)?,
-            ielts_db::weekly_failed_attempt_exists(conn, "local", &window.key)?,
+            ielts_db::weekly_failed_attempt_count(conn, "local", &window.key)?,
         ))
     })?;
-    let due = !completed && !attempted_today && (is_weekend(now) || failed);
-    Ok(due.then_some(window))
+    Ok(weekly_attempt_due(completed, attempted_today, failures, is_weekend(now)).then_some(window))
+}
+
+/// The pure decision behind `weekly_window_due`.
+fn weekly_attempt_due(completed: bool, attempted_today: bool, failures: usize, weekend: bool) -> bool {
+    !completed && !attempted_today && failures < WEEKLY_MAX_FAILED_ATTEMPTS && (weekend || failures > 0)
 }
 
 /// Whether the window holds enough scored observations to be worth a model call.
@@ -146,16 +149,28 @@ fn weekly_has_evidence(db: &AppDb, window: &WeeklyWindow) -> DbResult<bool> {
 
 /// Record a failed weekly attempt (anchored on the journal of the window's end
 /// day) so the weekend is retried on a later day instead of being treated as an
-/// empty success.
-pub(crate) fn record_weekly_failure(db: &AppDb, window: &WeeklyWindow, error: &serde_json::Value) -> DbResult<()> {
+/// empty success. `attempt_started` is when this attempt began: a run the
+/// consolidation already marked failed since then is the same attempt and is
+/// reused, so one attempt never counts twice against the retry cap.
+pub(crate) fn record_weekly_failure(
+    db: &AppDb,
+    window: &WeeklyWindow,
+    error: &serde_json::Value,
+    attempt_started: &str,
+) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
     // The failed run commits on its own: it is what bounds retries to one a day,
     // and it does not close the window, so a missing report costs nothing lasting.
-    let run = db.with_conn(|conn| ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now))?;
+    let run_id = db.with_conn(|conn| {
+        match ielts_db::weekly_failed_run_since(conn, "local", &window.key, attempt_started)? {
+            Some(id) => Ok(id),
+            None => Ok(ielts_db::record_failed_weekly_run(conn, "local", &journal_id, &window.key, error, &now)?.id),
+        }
+    })?;
     // The blocks are final either way; only the narrative is owed a retry.
     let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed)?;
-    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run.id, &report, &now))
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run_id, &report, &now))
 }
 
 /// Close a due window without a model (none configured): its blocks become the
@@ -213,6 +228,7 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         Err(error) => return Err(error),
     };
     let audit_run_id = format!("weekly-dream-{}", uuid::Uuid::new_v4());
+    let attempt_started = chrono::Utc::now().to_rfc3339();
     db.with_conn(|conn| {
         ielts_db::begin_agent_run(conn, &BeginAgentRunCommand {
             id: audit_run_id.clone(),
@@ -248,7 +264,7 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         Some((code, message)) => {
             let error = serde_json::json!({"code": code, "message": message});
             // Same-day retries are bounded by this failed run row.
-            record_weekly_failure(&db, &window, &error)?;
+            record_weekly_failure(&db, &window, &error, &attempt_started)?;
             audit.finish(StoredAgentRunStatus::Failed, None, Some(error))?;
         }
     }
@@ -395,6 +411,100 @@ mod tests {
     }
 
     #[test]
+    fn a_stored_journal_is_replaced_once_new_practice_lands() {
+        let (dir, db) = test_db("stale.db");
+        // The submit happens "now"; check the UTC and local day alike.
+        let days = [Utc::now().date_naive(), chrono::Local::now().date_naive()]
+            .map(|day| day.format("%Y-%m-%d").to_string());
+        let before = days.clone().map(|day| ensure_journal(&db, &day).unwrap());
+
+        let path = dir.path().join("asset.json");
+        std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+            "examId": "stale-asset", "meta": {"title": "Stale", "category": "P1"},
+            "questionCount": 1, "questionOrder": ["q1"], "answerKey": {"q1": "TRUE"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]}]
+        })).unwrap()).unwrap();
+        db.with_conn(|conn| {
+            let asset = ielts_db::import_asset_payload_file(conn, &path)?;
+            ielts_db::submit_reading_attempt(conn, &ielts_db::ReadingSubmitCommand {
+                attempt_id: "stale-attempt".into(),
+                asset_id: "stale-asset".into(),
+                asset_revision: Some(asset.schema_version),
+                asset_fingerprint: Some(asset.fingerprint),
+                answers: serde_json::json!({"q1": "FALSE"}),
+                marked_questions: vec![],
+                question_timeline: vec![],
+                duration_ms: Some(900),
+                title_snapshot: Some("Stale".into()),
+                idempotency_key: "stale-submit".into(),
+            })?;
+            Ok(())
+        }).unwrap();
+
+        let fresh = days.clone().map(|day| {
+            let id = ensure_journal(&db, &day).unwrap();
+            db.with_conn(|conn| ielts_db::load_latest_journal(conn, "local", &day)).unwrap()
+                .filter(|journal| journal.id == id).unwrap()
+        });
+        // The day holding the submit gets a new version whose skill section was
+        // projected from the new practice, not the stale derived rows.
+        assert!(fresh.iter().zip(&before).any(|(journal, old)| journal.id != *old
+            && journal.version == 2
+            && !journal.facts.today_observation_ids.is_empty()
+            && !journal.facts.skill_deltas.is_empty()));
+        for (journal, day) in fresh.iter().zip(&days) {
+            assert_eq!(ensure_journal(&db, day).unwrap(), journal.id);
+        }
+    }
+
+    #[test]
+    fn concurrent_readers_and_writes_never_publish_a_stale_or_duplicate_version() {
+        let (_dir, db) = test_db("race.db");
+        let db = std::sync::Arc::new(db);
+        let day = "2026-10-01";
+        let writer = {
+            let db = db.clone();
+            std::thread::spawn(move || {
+                for index in 0..40 {
+                    db.with_conn(|conn| {
+                        conn.execute(
+                            "INSERT INTO attempts
+                               (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+                             VALUES (?1, 'reading', 'single', 'completed', '2026-10-01T12:00:00Z', 1000, 2,
+                                     '2026-10-01T12:00:00Z', '2026-10-01T12:00:00Z')",
+                            [format!("race-{index}")],
+                        )?;
+                        Ok(())
+                    }).unwrap();
+                }
+            })
+        };
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..20 {
+                        ensure_journal(&db, day).unwrap();
+                    }
+                })
+            })
+            .collect();
+        writer.join().unwrap();
+        readers.into_iter().for_each(|reader| reader.join().unwrap());
+
+        let latest = ensure_journal(&db, day).unwrap();
+        db.with_conn(|conn| {
+            let versions = ielts_db::list_journal_versions(conn, "local", day)?;
+            assert_eq!(versions[0].id, latest);
+            assert_eq!(versions[0].facts.attempts_count, 40, "the newest version saw every write");
+            for pair in versions.windows(2) {
+                assert_ne!(pair[0].source_hash, pair[1].source_hash, "a version republished unchanged facts");
+            }
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
     fn a_worker_retry_completes_the_same_journal_version() {
         let (_dir, db) = test_db("retry.db");
         let job = claimed_daily_job(&db, "2026-10-01", "worker-one");
@@ -517,13 +627,19 @@ mod tests {
         );
         complete_at(&db, &earlier, "2026-10-03T03:06:00Z");
 
-        // The weekend and every weekday after it fail, one attempt per day.
-        for day in 10..=16 {
+        // The weekend and the Monday after it fail, one attempt per day; then the
+        // weekend is given up for the rest of the week.
+        for day in 10..=12 {
             let now = at(8, &format!("2026-10-{day:02}T03:00:00Z"));
             assert_eq!(due(&db, &now).unwrap().key, KEY, "day {day}");
             fail_at(&db, KEY, &format!("2026-10-{day:02}T03:05:00Z"));
             assert!(due(&db, &now).is_none(), "one attempt per day, day {day}");
         }
+        for day in 13..=16 {
+            assert!(due(&db, &at(8, &format!("2026-10-{day:02}T03:00:00Z"))).is_none(), "given up, day {day}");
+        }
+        let failures = db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", KEY)).unwrap();
+        assert_eq!(failures, WEEKLY_MAX_FAILED_ATTEMPTS, "the failures stay in the run ledger");
         // The next Saturday is a new weekend whose window reaches back to the last success.
         let next = due(&db, &at(8, "2026-10-17T03:00:00Z")).unwrap();
         assert_eq!(next.key, "2026-W42");
@@ -532,6 +648,20 @@ mod tests {
         // Completing it ends the retries of the old, failed weekend for good.
         complete_at(&db, &next, "2026-10-17T03:06:00Z");
         assert!(due(&db, &at(8, "2026-10-19T03:00:00Z")).is_none());
+    }
+
+    #[test]
+    fn retries_stop_after_the_failure_cap() {
+        let first = |weekend| weekly_attempt_due(false, false, 0, weekend);
+        assert!(first(true) && !first(false), "the first attempt is weekend-only");
+        for failures in 1..WEEKLY_MAX_FAILED_ATTEMPTS {
+            assert!(weekly_attempt_due(false, false, failures, false), "retry {failures}");
+        }
+        for weekend in [true, false] {
+            assert!(!weekly_attempt_due(false, false, WEEKLY_MAX_FAILED_ATTEMPTS, weekend), "capped");
+            assert!(!weekly_attempt_due(false, true, 1, weekend), "once per local day");
+            assert!(!weekly_attempt_due(true, false, 0, weekend), "completed");
+        }
     }
 
     fn seed_scored_outcome(db: &AppDb, index: usize) {
@@ -584,6 +714,30 @@ mod tests {
     }
 
     #[test]
+    fn a_consolidation_failure_and_the_worker_count_as_one_attempt() {
+        let (_dir, db) = test_db("one-attempt.db");
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+        let count = || db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", KEY)).unwrap();
+        // Yesterday's attempt failed on its own: it stays a separate attempt.
+        fail_at(&db, KEY, "2000-01-01T00:00:00Z");
+        let started = chrono::Utc::now().to_rfc3339();
+        // The host consolidation marks its own run failed, then the error reaches the worker.
+        let journal = journal(&db);
+        let error = serde_json::json!({"code": "weekly.report_failed"});
+        db.with_conn(|conn| {
+            let run = ielts_db::insert_dream_run(conn, "local", &journal, Some(&window.marker()))?;
+            ielts_db::start_dream_run(conn, &run.id, &started)?;
+            ielts_db::fail_dream_run(conn, &run.id, &error, &chrono::Utc::now().to_rfc3339())?;
+            Ok(())
+        }).unwrap();
+        record_weekly_failure(&db, &window, &error, &started).unwrap();
+        assert_eq!(count(), 2, "one earlier attempt plus this one, not three");
+        // An attempt that failed before anything was recorded still leaves a row.
+        record_weekly_failure(&db, &window, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
+        assert_eq!(count(), 3);
+    }
+
+    #[test]
     fn a_week_without_a_model_closes_with_its_blocks_and_a_failure_keeps_them() {
         let (_dir, db) = test_db("no-ai.db");
         let window = due(&db, &at(8, SATURDAY)).unwrap();
@@ -594,7 +748,7 @@ mod tests {
 
         let error = serde_json::json!({"code": "journal.weekly_failed", "message": "provider timeout"});
         let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
-        record_weekly_failure(&db, &next, &error).unwrap();
-        assert!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_exists(conn, "local", "2026-W42")).unwrap());
+        record_weekly_failure(&db, &next, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
+        assert_eq!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", "2026-W42")).unwrap(), 1);
     }
 }

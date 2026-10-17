@@ -91,7 +91,7 @@ MAX_PROPOSAL_ITEMS = 8
 _SKILL_PREFIX_TO_QUESTION_KIND: tuple[tuple[str, QuestionKind], ...] = (
     ("reading.tfng", QuestionKind.READING_TFNG),
     ("reading.matching_headings", QuestionKind.READING_MATCHING_HEADINGS),
-    ("reading.multiple_choice", QuestionKind.READING_MULTIPLE_CHOICE),
+    ("reading.multi_choice", QuestionKind.READING_MULTIPLE_CHOICE),
     ("reading.summary", QuestionKind.READING_SUMMARY),
     ("writing.task1", QuestionKind.WRITING_TASK1),
     ("writing.task2", QuestionKind.WRITING_TASK2),

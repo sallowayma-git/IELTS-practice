@@ -48,6 +48,20 @@ impl JournalStore for FakeJournalStore {
     ) -> Result<Option<ielts_domain::DailyJournal>, ApplicationError> {
         unreachable!("not used in these tests")
     }
+
+    fn list_journal_versions(
+        &self,
+        _query: &ielts_domain::DailyJournalQuery,
+    ) -> Result<Vec<ielts_domain::DailyJournal>, ApplicationError> {
+        unreachable!("not used in these tests")
+    }
+
+    fn ensure_journal(
+        &self,
+        _query: &ielts_domain::DailyJournalQuery,
+    ) -> Result<ielts_domain::DailyJournal, ApplicationError> {
+        unreachable!("not used in these tests")
+    }
 }
 
 // ---- DreamStore fake ----

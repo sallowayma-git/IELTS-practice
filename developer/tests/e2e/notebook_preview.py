@@ -68,7 +68,8 @@ MOCK = r"""
     PRACTICE_DAYS.forEach((date, n) => {
       const topics = TOPICS[n % TOPICS.length];
       const writing = n % 3 === 0;
-      const deltas = topics.map((key, k) => ({ skillKey: key, delta: ((n + k) % 3 === 0 ? -0.3 : 0.3), evidenceCount: 2 }));
+      const deltas = topics.map((key, k) => ({ skillKey: key, delta: ((n + k) % 3 === 0 ? -0.3 : 0.3), evidenceCount: 2,
+        trend: (n + k) % 3 === 0 ? 'recurring' : 'improving' }));
       const events = (n % 2 === 0) ? [{ memoryId: 'mem-tfng', namespace: 'skill', canonicalKey: 'reading.tfng',
         changeKind: n > 14 ? 'improved' : 'reinforced', evidenceObservationIds: ['obs-tfng-' + (n % 3)] }] : [];
       journals[date] = journalShell(date, {
