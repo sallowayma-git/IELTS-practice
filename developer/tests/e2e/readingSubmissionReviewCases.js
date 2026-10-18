@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 
+const REVIEW_SYNC_TIMEOUT_MS = 60000;
+const REVIEW_POLLING_INTERVAL_MS = 100;
+
 async function assertAnswerEditingLocked(child) {
     const answer = child.locator('#question-groups input[name="q1"][value="B"]');
     assert.equal(await answer.isDisabled(), true, 'unconfirmed answers cannot be edited');
@@ -24,10 +27,11 @@ function incidentForEvent(child, selector, eventId) {
 
 async function dismissUnconfirmedIncident(child, eventId, { required = true } = {}) {
     const dialog = incidentForEvent(child, '.incident-dialog', eventId);
-    if (required) await dialog.waitFor({ state: 'visible' });
+    if (required) await dialog.waitFor({ state: 'visible', timeout: REVIEW_SYNC_TIMEOUT_MS });
     else if (!await dialog.isVisible()) return false;
-    await dialog.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true }).click();
-    await dialog.waitFor({ state: 'detached' });
+    await dialog.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true })
+        .click({ timeout: REVIEW_SYNC_TIMEOUT_MS });
+    await dialog.waitFor({ state: 'detached', timeout: REVIEW_SYNC_TIMEOUT_MS });
     return true;
 }
 
@@ -44,7 +48,10 @@ async function waitForSubmissionDiagnostic(child, { submissionId, code, operatio
                 && !excluded.has(entry.eventId)
         ));
         return event ? { eventId: event.eventId, submissionId, code, operation } : false;
-    }, { submissionId, code, operation, excludedEventIds });
+    }, { submissionId, code, operation, excludedEventIds }, {
+        polling: REVIEW_POLLING_INTERVAL_MS,
+        timeout: REVIEW_SYNC_TIMEOUT_MS
+    });
     const event = await handle.jsonValue();
     await handle.dispose();
     assert.ok(event?.eventId, message);
@@ -59,77 +66,70 @@ async function submissionTimeoutEventIds(child) {
     )).map(event => event.eventId));
 }
 
-async function waitForSubmittedOrNewTimeout(child, excludedEventIds, message) {
-    const handle = await child.waitForFunction((excludedEventIds) => {
+async function waitForExactSubmissionState(child, submissionId, status, message) {
+    const handle = await child.waitForFunction(({ submissionId, status }) => {
         const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
-        if (state.submissionStatus === 'submitted') {
-            return state.submissionId ? { status: 'submitted', submissionId: state.submissionId } : false;
-        }
-        if (state.submissionStatus !== 'draft' || !state.submissionEditingLocked || !state.submissionId) {
-            return false;
-        }
-        const alias = AppDiagnostics.correlate({ submission: state.submissionId }).submission;
-        const excluded = new Set(excludedEventIds);
-        const event = [...AppDiagnostics.snapshot().events].reverse().find(entry => (
-            entry.code === 'PRACTICE_CHANNEL_TIMEOUT'
-                && entry.action === 'submit'
-                && entry.persistence?.operation === 'unconfirmed'
-                && entry.correlation?.submission === alias
-                && !excluded.has(entry.eventId)
-        ));
-        return event ? { status: 'timeout', submissionId: state.submissionId, eventId: event.eventId } : false;
-    }, excludedEventIds);
+        return state.submissionId === submissionId && state.submissionStatus === status
+            ? { submissionId: state.submissionId, status: state.submissionStatus }
+            : false;
+    }, { submissionId, status }, {
+        polling: REVIEW_POLLING_INTERVAL_MS,
+        timeout: REVIEW_SYNC_TIMEOUT_MS
+    });
     const resolution = await handle.jsonValue();
     await handle.dispose();
-    assert.ok(resolution?.submissionId, message);
-    assert.ok(resolution.status === 'submitted' || (resolution.status === 'timeout' && resolution.eventId), message);
+    assert.deepEqual(resolution, { submissionId, status }, message);
     return resolution;
 }
 
-async function resolveSubmissionAfterHostCompletion(child, { submissionId, excludedEventIds }, message) {
-    const outcome = await child.evaluate(({ submissionId, excludedEventIds }) => {
-        const api = __IELTS_UNIFIED_READING_PAGE_TEST__;
-        const before = api.getTestState();
-        const alias = submissionId ? AppDiagnostics.correlate({ submission: submissionId }).submission : '';
-        const excluded = new Set(excludedEventIds);
-        const expired = before.submissionStatus === 'submitting' && before.submissionId === submissionId
-            ? api.expirePendingSubmission(submissionId)
-            : false;
-        const after = api.getTestState();
-        const timeoutEvent = [...AppDiagnostics.snapshot().events].reverse().find(entry => (
-            entry.code === 'PRACTICE_CHANNEL_TIMEOUT'
-                && entry.action === 'submit'
-                && entry.persistence?.operation === 'unconfirmed'
-                && entry.correlation?.submission === alias
-                && !excluded.has(entry.eventId)
+function submissionOutcomeIdentity(type, submission) {
+    return {
+        type,
+        examId: String(submission?.examId || ''),
+        sessionId: String(submission?.sessionId || ''),
+        submissionId: String(submission?.submissionId || '')
+    };
+}
+
+async function consumeQueuedSubmissionOutcome(host, identity, { deliver = true } = {}, message) {
+    assert.ok(identity.examId && identity.sessionId && identity.submissionId, `${message}: complete identity is required`);
+    const queued = await host.waitForFunction(identity => {
+        const matches = reviewOutcomeQueue.filter(entry => (
+            entry.type === identity.type
+                && entry.examId === identity.examId
+                && entry.sessionId === identity.sessionId
+                && entry.submissionId === identity.submissionId
         ));
+        return matches.length ? { matchCount: matches.length, queueLength: reviewOutcomeQueue.length } : false;
+    }, identity, {
+        polling: REVIEW_POLLING_INTERVAL_MS,
+        timeout: REVIEW_SYNC_TIMEOUT_MS
+    });
+    const queuedState = await queued.jsonValue();
+    await queued.dispose();
+    assert.deepEqual(queuedState, { matchCount: 1, queueLength: 1 }, `${message}: exactly one outcome must be queued`);
+    const consumed = await host.evaluate(({ identity, deliver }) => {
+        const index = reviewOutcomeQueue.findIndex(entry => (
+            entry.type === identity.type
+                && entry.examId === identity.examId
+                && entry.sessionId === identity.sessionId
+                && entry.submissionId === identity.submissionId
+        ));
+        if (index < 0) return { found: false, delivered: null, remaining: reviewOutcomeQueue.length };
+        const [entry] = reviewOutcomeQueue.splice(index, 1);
         return {
-            beforeStatus: before.submissionStatus,
-            beforeLocked: before.submissionEditingLocked,
-            beforeSubmissionId: before.submissionId,
-            expired,
-            afterStatus: after.submissionStatus,
-            afterLocked: after.submissionEditingLocked,
-            afterSubmissionId: after.submissionId,
-            eventId: timeoutEvent?.eventId || null
+            found: true,
+            delivered: deliver
+                ? reviewOriginalPost.call(window.app, entry.examId, entry.target, entry.type, entry.payload)
+                : null,
+            remaining: reviewOutcomeQueue.length
         };
-    }, { submissionId, excludedEventIds });
-    assert.ok(submissionId, `${message}: host submission ID must be present`);
-    assert.equal(outcome.beforeSubmissionId, submissionId, `${message}: child must own the completed host submission`);
-    assert.equal(outcome.afterSubmissionId, submissionId, `${message}: submission ID must remain stable`);
-    if (outcome.beforeStatus === 'submitted') {
-        assert.equal(outcome.afterStatus, 'submitted', message);
-        return { status: 'submitted', submissionId };
-    }
-    assert.ok(
-        (outcome.beforeStatus === 'submitting' && outcome.expired === true)
-            || (outcome.beforeStatus === 'draft' && outcome.beforeLocked === true),
-        message
-    );
-    assert.equal(outcome.afterStatus, 'draft', `${message}: a delayed ACK must retain a retryable draft`);
-    assert.equal(outcome.afterLocked, true, `${message}: an unconfirmed commit must keep answers locked`);
-    assert.ok(outcome.eventId, `${message}: a new exact timeout event must identify the delayed ACK`);
-    return { status: 'timeout', submissionId, eventId: outcome.eventId };
+    }, { identity, deliver });
+    assert.equal(consumed.found, true, `${message}: queued outcome must remain available`);
+    assert.equal(consumed.remaining, 0, `${message}: no unrelated outcome may remain queued`);
+    if (deliver) assert.equal(consumed.delivered, true, `${message}: the exact outcome must be delivered`);
+    else assert.equal(consumed.delivered, null, `${message}: the exact outcome must be intentionally withheld`);
+    return consumed;
 }
 
 export async function expireOrObservePendingSubmissionTimeout(child, message) {
@@ -185,23 +185,34 @@ export async function runRejectedResubmission(host, child, outcome) {
     await host.evaluate(outcome => {
         window.reviewSubmissions = [];
         window.reviewCompleted = 0;
-        window.reviewFirstOutcomeDelivered = null;
-        window.reviewSecondAttemptStarted = false;
-        window.reviewReleaseSecondAttempt = null;
+        window.reviewFirstOutcomeQueued = null;
+        window.reviewOutcomeQueue = [];
+        window.reviewOriginalPost = window.app._postExamMessage;
+        window.app._postExamMessage = function (examId, target, type, data) {
+            if (type === 'PRACTICE_SUBMIT_ACK' || type === 'PRACTICE_SUBMIT_FAILED') {
+                const payload = structuredClone(data);
+                reviewOutcomeQueue.push({
+                    type,
+                    examId: String(examId || ''),
+                    sessionId: String(payload?.sessionId || ''),
+                    submissionId: String(payload?.submissionId || ''),
+                    target,
+                    payload
+                });
+                return true;
+            }
+            return reviewOriginalPost.call(this, examId, target, type, data);
+        };
         const original = window.app.handlePracticeComplete;
         window.app.handlePracticeComplete = async function (examId, data, source, options) {
             reviewSubmissions.push(structuredClone(data));
             try {
                 if (reviewSubmissions.length === 1) {
-                    if (outcome !== 'timeout') reviewFirstOutcomeDelivered = this._announcePracticeSubmitOutcome(
+                    if (outcome !== 'timeout') reviewFirstOutcomeQueued = this._announcePracticeSubmitOutcome(
                         examId, data, source, false,
                         { errorCode: 'QUOTA_EXCEEDED', operation: outcome === 'not-committed' ? outcome : 'unconfirmed' }
                     );
                     return false; // No persistence on the first attempt.
-                }
-                if (outcome === 'timeout' && reviewSubmissions.length === 2) {
-                    reviewSecondAttemptStarted = true;
-                    await new Promise(resolve => { reviewReleaseSecondAttempt = resolve; });
                 }
                 return await original.call(this, examId, data, source, options);
             } finally {
@@ -211,20 +222,36 @@ export async function runRejectedResubmission(host, child, outcome) {
     }, outcome);
     await child.locator('#question-groups input[name="q1"][value="A"]').check();
     await child.locator('#submit-btn').click();
-    await host.waitForFunction(() => reviewCompleted >= 1);
+    await host.waitForFunction(() => reviewCompleted >= 1, null, {
+        polling: REVIEW_POLLING_INTERVAL_MS,
+        timeout: REVIEW_SYNC_TIMEOUT_MS
+    });
     const firstAttempt = await host.evaluate(() => ({
         submission: reviewSubmissions[0],
-        outcomeDelivered: reviewFirstOutcomeDelivered
+        outcomeQueued: reviewFirstOutcomeQueued
     }));
     assert.ok(firstAttempt.submission?.submissionId, 'the rejected submission must have a stable ID');
     let initialIncident;
     if (outcome === 'timeout') {
+        assert.equal(await host.evaluate(() => reviewOutcomeQueue.length), 0, 'the timeout fixture must not queue a synthetic NACK');
         initialIncident = await expireOrObservePendingSubmissionTimeout(
             child,
             'the timeout fixture must expire or observe expiry of the pending submission it created'
         );
     } else {
-        assert.equal(firstAttempt.outcomeDelivered, true, 'the rejection fixture must deliver its NACK');
+        assert.equal(firstAttempt.outcomeQueued, true, 'the rejection fixture must queue its NACK');
+        await waitForExactSubmissionState(
+            child,
+            firstAttempt.submission.submissionId,
+            'submitting',
+            'the child must be awaiting the exact first rejection before its NACK is released'
+        );
+        await consumeQueuedSubmissionOutcome(
+            host,
+            submissionOutcomeIdentity('PRACTICE_SUBMIT_FAILED', firstAttempt.submission),
+            { deliver: true },
+            'the first rejection'
+        );
         initialIncident = await waitForSubmissionDiagnostic(child, {
             submissionId: firstAttempt.submission.submissionId,
             code: 'PRACTICE_SAVE_FAILED',
@@ -236,7 +263,8 @@ export async function runRejectedResubmission(host, child, outcome) {
     assert.equal(initialState.submissionStatus, 'draft');
     assert.equal(initialState.submissionEditingLocked, !editable);
     if (editable) {
-        await incidentForEvent(child, '.incident-notice', initialIncident.eventId).waitFor({ state: 'visible' });
+        await incidentForEvent(child, '.incident-notice', initialIncident.eventId)
+            .waitFor({ state: 'visible', timeout: REVIEW_SYNC_TIMEOUT_MS });
     } else {
         await dismissUnconfirmedIncident(child, initialIncident.eventId);
     }
@@ -244,43 +272,81 @@ export async function runRejectedResubmission(host, child, outcome) {
     else await assertAnswerEditingLocked(child);
     const priorTimeouts = await submissionTimeoutEventIds(child);
     await child.locator('#submit-btn').click();
-    let forcedSecondIncident = null;
-    if (outcome === 'timeout') {
-        await host.waitForFunction(() => reviewSecondAttemptStarted && typeof reviewReleaseSecondAttempt === 'function');
-        forcedSecondIncident = await expireOrObservePendingSubmissionTimeout(
-            child,
-            'the delayed second attempt must record a new timeout before its host write is released'
-        );
-        await host.evaluate(() => reviewReleaseSecondAttempt());
-    }
-    await host.waitForFunction(() => reviewCompleted >= 2, null, { timeout: 60000 });
+    await host.waitForFunction(() => reviewCompleted >= 2, null, {
+        polling: REVIEW_POLLING_INTERVAL_MS,
+        timeout: REVIEW_SYNC_TIMEOUT_MS
+    });
     const secondAttempt = await host.evaluate(async () => ({
         submission: reviewSubmissions[1],
         records: await AppData.practice.list()
     }));
     assert.ok(secondAttempt.submission?.submissionId, 'the second host attempt must have a stable submission ID');
     assert.equal(secondAttempt.records.length, 1, 'the completed second host attempt must have exactly one canonical record');
-    const secondResolution = await resolveSubmissionAfterHostCompletion(child, {
-        submissionId: secondAttempt.submission.submissionId,
-        excludedEventIds: priorTimeouts
-    }, 'the completed second attempt must receive its ACK or record a new matching timeout');
-    if (forcedSecondIncident) assert.equal(secondResolution.eventId, forcedSecondIncident.eventId);
+    await waitForExactSubmissionState(
+        child,
+        secondAttempt.submission.submissionId,
+        'submitting',
+        'the child must await the completed second host attempt before its ACK is resolved'
+    );
+    const secondAck = submissionOutcomeIdentity('PRACTICE_SUBMIT_ACK', secondAttempt.submission);
+    let secondResolution;
     let reconciled = false;
-    if (secondResolution.status === 'timeout') {
+    if (outcome === 'timeout') {
+        await consumeQueuedSubmissionOutcome(
+            host,
+            secondAck,
+            { deliver: false },
+            'the intentionally lost second acknowledgement'
+        );
+        const forcedSecondIncident = await expireOrObservePendingSubmissionTimeout(
+            child,
+            'the completed second attempt must record an explicit timeout after its ACK is withheld'
+        );
+        assert.equal(forcedSecondIncident.submissionId, secondAttempt.submission.submissionId);
+        assert.equal(priorTimeouts.includes(forcedSecondIncident.eventId), false, 'the second timeout must be a new event');
+        secondResolution = { status: 'timeout', submissionId: forcedSecondIncident.submissionId,
+            eventId: forcedSecondIncident.eventId };
         // A repeat timeout for the same immutable submission may be grouped with
         // the already-dismissed incident, so no second dialog is required.
-        await dismissUnconfirmedIncident(child, secondResolution.eventId, { required: outcome !== 'timeout' });
+        await dismissUnconfirmedIncident(child, secondResolution.eventId, { required: false });
         const reconciliationTimeouts = await submissionTimeoutEventIds(child);
         await child.locator('#submit-btn').click();
-        await host.waitForFunction(() => reviewCompleted >= 3, null, { timeout: 60000 });
-        const reconciliation = await waitForSubmittedOrNewTimeout(
+        await host.waitForFunction(() => reviewCompleted >= 3, null, {
+            polling: REVIEW_POLLING_INTERVAL_MS,
+            timeout: REVIEW_SYNC_TIMEOUT_MS
+        });
+        const reconciliationAttempt = await host.evaluate(() => reviewSubmissions[2]);
+        assert.equal(reconciliationAttempt?.submissionId, secondResolution.submissionId,
+            'receipt reconciliation must preserve the exact submission ID');
+        await waitForExactSubmissionState(
             child,
-            reconciliationTimeouts,
-            'receipt reconciliation must return the exact ACK for the committed submission'
+            secondResolution.submissionId,
+            'submitting',
+            'receipt reconciliation must await the exact replayed acknowledgement'
         );
-        assert.equal(reconciliation.status, 'submitted', 'receipt reconciliation must not time out');
-        assert.equal(reconciliation.submissionId, secondResolution.submissionId);
+        await consumeQueuedSubmissionOutcome(
+            host,
+            submissionOutcomeIdentity('PRACTICE_SUBMIT_ACK', reconciliationAttempt),
+            { deliver: true },
+            'the receipt-replay acknowledgement'
+        );
+        await waitForExactSubmissionState(
+            child,
+            secondResolution.submissionId,
+            'submitted',
+            'receipt reconciliation must accept the exact replayed acknowledgement'
+        );
+        const newTimeouts = await submissionTimeoutEventIds(child);
+        assert.deepEqual(newTimeouts, reconciliationTimeouts, 'receipt reconciliation must not add another timeout');
         reconciled = true;
+    } else {
+        await consumeQueuedSubmissionOutcome(host, secondAck, { deliver: true }, 'the completed second acknowledgement');
+        secondResolution = await waitForExactSubmissionState(
+            child,
+            secondAttempt.submission.submissionId,
+            'submitted',
+            'the completed second attempt must accept its exact acknowledgement'
+        );
     }
     const { messages, records } = await host.evaluate(async () => ({ messages: reviewSubmissions, records: await AppData.practice.list() }));
     assert.equal(messages.length, reconciled ? 3 : 2);
@@ -295,6 +361,14 @@ export async function runRejectedResubmission(host, child, outcome) {
     assert.equal(records[0].answers.q1, editable ? 'B' : 'A');
     assert.equal(await child.locator(`#question-groups input[name="q1"][value="${editable ? 'B' : 'A'}"]`).isChecked(), true);
     assert.equal(await child.locator('#question-groups input[name="q1"][value="B"]').isDisabled(), true);
+    const queuedOutcomes = await host.evaluate(() => {
+        const pending = reviewOutcomeQueue.map(({ type, examId, sessionId, submissionId }) => (
+            { type, examId, sessionId, submissionId }
+        ));
+        window.app._postExamMessage = reviewOriginalPost;
+        return pending;
+    });
+    assert.deepEqual(queuedOutcomes, [], 'all synthetic outcome deliveries must be consumed explicitly');
 }
 
 export async function runCommittedAcknowledgementLoss(host, child, suite) {
