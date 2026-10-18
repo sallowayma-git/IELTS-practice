@@ -6,6 +6,7 @@
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const READING_DRAFT_SYNC_MS = 1500;
     const SUBMIT_ACK_TIMEOUT_MS = 10000;
+    let submissionAckTimeoutMs = SUBMIT_ACK_TIMEOUT_MS;
     const NOTE_EDITOR_SAVE_DEBOUNCE_MS = 450;
     const NOTE_ROW_LONG_PRESS_MS = 100;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
@@ -6486,7 +6487,7 @@
             return false;
         }
         clearSubmissionAckTimer();
-        state.submissionAckTimer = setTimeout(() => expirePendingSubmission(submission.id), SUBMIT_ACK_TIMEOUT_MS);
+        state.submissionAckTimer = setTimeout(() => expirePendingSubmission(submission.id), submissionAckTimeoutMs);
         return true;
     }
 
@@ -6667,6 +6668,14 @@
                 acceptSubmissionAcknowledgement,
                 expirePendingSubmission,
                 retryPendingSubmission() { return retryPendingSubmission(pendingSubmission); },
+                setSubmissionAcknowledgementTimeoutMs(value) {
+                    const timeoutMs = Number(value);
+                    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < SUBMIT_ACK_TIMEOUT_MS || timeoutMs > 120000) {
+                        return false;
+                    }
+                    submissionAckTimeoutMs = timeoutMs;
+                    return true;
+                },
                 persistSimulationDraftMirror,
                 loadScript,
                 startInitLoop,

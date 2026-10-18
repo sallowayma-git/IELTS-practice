@@ -60,6 +60,9 @@ async function openPractice(host, context, base, { examId = 'p1-high-01', suite 
         }, { examId, suite })]);
     await child.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState().sessionReadySent, null, { timeout: 20000 });
     await child.waitForFunction(() => AppDiagnostics.status().transport?.connection === 'connected');
+    assert.equal(await child.evaluate(() => (
+        __IELTS_UNIFIED_READING_PAGE_TEST__.setSubmissionAcknowledgementTimeoutMs(120000)
+    )), true, 'the E2E fixture must isolate explicit timeout tests from the production wall clock');
     if (suite) await child.waitForFunction(() => {
         const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
         return state.suiteInline && !state.suiteActivating && state.suiteSequence.length === 3;

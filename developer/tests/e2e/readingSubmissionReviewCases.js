@@ -86,6 +86,52 @@ async function waitForSubmittedOrNewTimeout(child, excludedEventIds, message) {
     return resolution;
 }
 
+async function resolveSubmissionAfterHostCompletion(child, { submissionId, excludedEventIds }, message) {
+    const outcome = await child.evaluate(({ submissionId, excludedEventIds }) => {
+        const api = __IELTS_UNIFIED_READING_PAGE_TEST__;
+        const before = api.getTestState();
+        const alias = submissionId ? AppDiagnostics.correlate({ submission: submissionId }).submission : '';
+        const excluded = new Set(excludedEventIds);
+        const expired = before.submissionStatus === 'submitting' && before.submissionId === submissionId
+            ? api.expirePendingSubmission(submissionId)
+            : false;
+        const after = api.getTestState();
+        const timeoutEvent = [...AppDiagnostics.snapshot().events].reverse().find(entry => (
+            entry.code === 'PRACTICE_CHANNEL_TIMEOUT'
+                && entry.action === 'submit'
+                && entry.persistence?.operation === 'unconfirmed'
+                && entry.correlation?.submission === alias
+                && !excluded.has(entry.eventId)
+        ));
+        return {
+            beforeStatus: before.submissionStatus,
+            beforeLocked: before.submissionEditingLocked,
+            beforeSubmissionId: before.submissionId,
+            expired,
+            afterStatus: after.submissionStatus,
+            afterLocked: after.submissionEditingLocked,
+            afterSubmissionId: after.submissionId,
+            eventId: timeoutEvent?.eventId || null
+        };
+    }, { submissionId, excludedEventIds });
+    assert.ok(submissionId, `${message}: host submission ID must be present`);
+    assert.equal(outcome.beforeSubmissionId, submissionId, `${message}: child must own the completed host submission`);
+    assert.equal(outcome.afterSubmissionId, submissionId, `${message}: submission ID must remain stable`);
+    if (outcome.beforeStatus === 'submitted') {
+        assert.equal(outcome.afterStatus, 'submitted', message);
+        return { status: 'submitted', submissionId };
+    }
+    assert.ok(
+        (outcome.beforeStatus === 'submitting' && outcome.expired === true)
+            || (outcome.beforeStatus === 'draft' && outcome.beforeLocked === true),
+        message
+    );
+    assert.equal(outcome.afterStatus, 'draft', `${message}: a delayed ACK must retain a retryable draft`);
+    assert.equal(outcome.afterLocked, true, `${message}: an unconfirmed commit must keep answers locked`);
+    assert.ok(outcome.eventId, `${message}: a new exact timeout event must identify the delayed ACK`);
+    return { status: 'timeout', submissionId, eventId: outcome.eventId };
+}
+
 export async function expireOrObservePendingSubmissionTimeout(child, message) {
     const outcome = await child.evaluate(() => {
         const api = __IELTS_UNIFIED_READING_PAGE_TEST__;
@@ -207,32 +253,31 @@ export async function runRejectedResubmission(host, child, outcome) {
         );
         await host.evaluate(() => reviewReleaseSecondAttempt());
     }
-    const [, secondResolution] = await Promise.all([
-        host.waitForFunction(() => reviewCompleted >= 2),
-        waitForSubmittedOrNewTimeout(
-            child,
-            priorTimeouts,
-            'the second attempt must either receive its ACK or record a new matching timeout'
-        )
-    ]);
+    await host.waitForFunction(() => reviewCompleted >= 2, null, { timeout: 60000 });
+    const secondAttempt = await host.evaluate(async () => ({
+        submission: reviewSubmissions[1],
+        records: await AppData.practice.list()
+    }));
+    assert.ok(secondAttempt.submission?.submissionId, 'the second host attempt must have a stable submission ID');
+    assert.equal(secondAttempt.records.length, 1, 'the completed second host attempt must have exactly one canonical record');
+    const secondResolution = await resolveSubmissionAfterHostCompletion(child, {
+        submissionId: secondAttempt.submission.submissionId,
+        excludedEventIds: priorTimeouts
+    }, 'the completed second attempt must receive its ACK or record a new matching timeout');
     if (forcedSecondIncident) assert.equal(secondResolution.eventId, forcedSecondIncident.eventId);
     let reconciled = false;
     if (secondResolution.status === 'timeout') {
-        const committed = await host.evaluate(async () => AppData.practice.list());
-        assert.equal(committed.length, 1, 'a timed-out second attempt must commit before reconciliation');
         // A repeat timeout for the same immutable submission may be grouped with
         // the already-dismissed incident, so no second dialog is required.
-        await dismissUnconfirmedIncident(child, secondResolution.eventId, { required: false });
+        await dismissUnconfirmedIncident(child, secondResolution.eventId, { required: outcome !== 'timeout' });
         const reconciliationTimeouts = await submissionTimeoutEventIds(child);
         await child.locator('#submit-btn').click();
-        const [, reconciliation] = await Promise.all([
-            host.waitForFunction(() => reviewCompleted >= 3),
-            waitForSubmittedOrNewTimeout(
-                child,
-                reconciliationTimeouts,
-                'receipt reconciliation must return the exact ACK for the committed submission'
-            )
-        ]);
+        await host.waitForFunction(() => reviewCompleted >= 3, null, { timeout: 60000 });
+        const reconciliation = await waitForSubmittedOrNewTimeout(
+            child,
+            reconciliationTimeouts,
+            'receipt reconciliation must return the exact ACK for the committed submission'
+        );
         assert.equal(reconciliation.status, 'submitted', 'receipt reconciliation must not time out');
         assert.equal(reconciliation.submissionId, secondResolution.submissionId);
         reconciled = true;
