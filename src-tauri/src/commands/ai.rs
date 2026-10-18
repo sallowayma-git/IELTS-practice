@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::ai::{list_ai_configs_with_vault, load_runtime_for_config, normalize_provider};
 use crate::app::state::{AppDb, AppVault};
-use ielts_db::{ai_secret_name, DbError};
+use ielts_db::{ai_secret_name, legacy_ai_secret_name, DbError};
 
 fn supported_provider(provider: &str) -> bool {
     matches!(
@@ -162,10 +162,12 @@ pub fn ai_delete_config(
     id: String,
 ) -> CommandResponse<bool> {
     let secret_name = ai_secret_name(&id);
+    let legacy_secret_name = legacy_ai_secret_name(&id);
     let vault = vault.inner();
     let result = db.with_conn(|conn| {
         let deleted = ielts_db::delete_ai_config(conn, &id)?;
         ielts_db::delete_secret_ref(conn, &secret_name)?;
+        ielts_db::delete_secret_ref(conn, &legacy_secret_name)?;
         Ok(deleted)
     });
     let result = match result {
@@ -174,19 +176,21 @@ pub fn ai_delete_config(
             .map(|deleted| {
                 // A swallowed failure here leaves the user's API key in the OS
                 // credential store after the UI has said the config is gone,
-                // and nothing will ever retry it: the SQLite row naming this
-                // secret was just deleted above, so no later call knows the
-                // name. That is a secret-lifetime defect, not untidiness, so
+                // and nothing will ever retry it: the SQLite rows naming these
+                // secrets were just deleted above, so no later call knows the
+                // names. That is a secret-lifetime defect, not untidiness, so
                 // it gets logged rather than discarded. It is deliberately not
                 // fatal — the canonical rows are already committed, and failing
                 // the command here would tell the user the delete did not
                 // happen when it did.
-                if let Err(error) = vault.0.delete_secret(&secret_name) {
-                    tracing::warn!(
-                        secret_name = %secret_name,
-                        error = %error,
-                        "failed to remove credential from the OS store after deleting its AI config; it may remain on this device"
-                    );
+                for name in [&secret_name, &legacy_secret_name] {
+                    if let Err(error) = vault.0.delete_secret(name) {
+                        tracing::warn!(
+                            secret_name = %name,
+                            error = %error,
+                            "failed to remove credential from the OS store after                              deleting its AI config; it may remain on this device"
+                        );
+                    }
                 }
                 deleted
             }),

@@ -8,6 +8,11 @@
 -- parents so the implicit DELETE of each DROP never cascades into a live table.
 -- The pre-migration snapshot (backups/pre-migrate-*.db) keeps their rows.
 DROP TABLE IF EXISTS prompt_skill_release_heads;
+-- A release names its predecessor in the same table ON DELETE RESTRICT, so the
+-- implicit DELETE of DROP TABLE fails on any release chain: unlink it first.
+-- The stand-in table only keeps this file re-runnable once the table is gone.
+CREATE TABLE IF NOT EXISTS prompt_skill_releases (predecessor_release_id TEXT);
+UPDATE prompt_skill_releases SET predecessor_release_id = NULL;
 DROP TABLE IF EXISTS prompt_skill_releases;
 DROP TABLE IF EXISTS shadow_runs;
 DROP TABLE IF EXISTS eval_results;

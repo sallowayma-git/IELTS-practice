@@ -155,15 +155,19 @@ where
     Ok(configs)
 }
 
-/// Resolve the persisted secret reference for an AI configuration.
+/// Resolve the persisted secret reference for an AI configuration. Canonical
+/// names win over the pre-migration name when both records exist.
 pub fn ai_secret_ref_for_config(conn: &Connection, id: &str) -> DbResult<Option<SecretRef>> {
     let refs = list_secret_refs(conn)?;
     Ok(ai_secret_ref_from_refs(&refs, id).cloned())
 }
 
 fn ai_secret_ref_from_refs<'a>(refs: &'a [SecretRef], id: &str) -> Option<&'a SecretRef> {
-    let name = ai_secret_name(id);
-    refs.iter().find(|item| item.name == name)
+    let canonical = ai_secret_name(id);
+    let legacy = legacy_ai_secret_name(id);
+    refs.iter()
+        .find(|item| item.name == canonical)
+        .or_else(|| refs.iter().find(|item| item.name == legacy))
 }
 
 pub fn upsert_ai_config(conn: &Connection, config: &AiConfigDto) -> DbResult<()> {
@@ -288,6 +292,11 @@ pub fn set_default_ai_config(conn: &Connection, config: Option<&AiConfigDto>) ->
 
 pub fn ai_secret_name(id: &str) -> String {
     format!("ai.config.{id}.api_key")
+}
+
+/// Compatibility for configs created before secret names became explicit.
+pub fn legacy_ai_secret_name(id: &str) -> String {
+    format!("ai.config.{id}")
 }
 
 fn write_ai_runtime_value(conn: &Connection, key: &str, value: &Value) -> DbResult<()> {

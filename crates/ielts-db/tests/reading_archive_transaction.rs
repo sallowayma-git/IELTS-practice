@@ -199,17 +199,6 @@ fn unknown_schema_is_rejected_without_legacy_shape_loss() {
         .iter()
         .any(|entry| entry.code == "archive_schema_unsupported"));
     assert_eq!(attempt_count(&conn), 0);
-
-    for legacy in [json!("practice-history-archive.v1"), json!(1), Value::Null] {
-        archive["schemaVersion"] = legacy;
-        let report = import_reading_archive_value(&conn, &archive).unwrap();
-        assert!(!report.committed);
-        assert!(report
-            .report
-            .iter()
-            .any(|entry| entry.code == "archive_schema_unsupported"));
-    }
-    assert_eq!(attempt_count(&conn), 0);
 }
 
 #[test]
@@ -333,4 +322,36 @@ fn annotation_asset_references_are_materialized_for_full_backup_integrity() {
         1
     );
     assert!(create_backup_package(&conn, "archive-test").is_ok());
+}
+
+#[test]
+fn archives_exported_by_older_versions_still_import() {
+    let (_dir, conn) = open_db();
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/legacy-data/reading-archive/reading-archive-v1-sample.json"
+    );
+    let mut archive: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for (index, legacy) in [Some(json!(1)), Some(json!("practice-history-archive.v1")), None]
+        .into_iter()
+        .enumerate()
+    {
+        let root = archive.as_object_mut().unwrap();
+        match legacy {
+            Some(version) => root.insert("schemaVersion".into(), version),
+            None => root.remove("schemaVersion"),
+        };
+        archive["records"][0]["id"] = json!(format!("ra-legacy-{index}"));
+        let report = import_reading_archive_value(&conn, &archive).unwrap();
+        assert!(report.committed, "{:?}", report.report);
+    }
+    assert_eq!(attempt_count(&conn), 3);
+    let title: String = conn
+        .query_row(
+            "SELECT title_snapshot FROM attempts WHERE id = 'ra-legacy-0'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(title, "A Brief History of Tea");
 }

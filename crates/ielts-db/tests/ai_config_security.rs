@@ -49,7 +49,7 @@ fn active_runtime_config_is_complete_and_contains_only_a_secret_name() {
         has_secret: true,
     };
     upsert_ai_config(&conn, &config).unwrap();
-    put_secret_ref(&conn, "ai.config.legacy-openai.api_key", "keyring:legacy-openai").unwrap();
+    put_secret_ref(&conn, "ai.config.legacy-openai", "keyring:legacy-openai").unwrap();
     set_default_ai_config(&conn, Some(&config)).unwrap();
 
     for key in [
@@ -72,7 +72,7 @@ fn active_runtime_config_is_complete_and_contains_only_a_secret_name() {
         )
         .unwrap();
     assert!(!dump.contains("sk-"));
-    assert!(dump.contains("ai.config.legacy-openai.api_key"));
+    assert!(dump.contains("ai.config.legacy-openai"));
 }
 
 #[test]

@@ -1236,6 +1236,9 @@ fn input_hash(events: &[LedgerEvent]) -> String {
                 "schemaVersion": event.schema_version,
                 "sensitivity": event.sensitivity,
                 "quarantined": event.consolidation_state == "quarantined",
+                // A payload edited without its content hash changes nothing
+                // above; this keeps the stored-hash fast path honest.
+                "valid": validate_ledger_event(event).is_ok(),
             })
         })
         .map(|value| canonical_json(&value))
