@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:6aedf4499e6169b1b565f8f635b247b7305da54d65da98aa5155304efb70b3e5",
+  "buildId": "sha256:b403bfa973c86844c7d28aced969a45b39b9bb4fd197ee22c2e01d0e02b8893b",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -538,7 +538,7 @@
     },
     {
       "path": "developer/package.json",
-      "sha256": "8f0d8c2b46b2e2353f71247044f9aabe7f279ce16c698c7f18e134bf46b3e2f7"
+      "sha256": "2e307fe66f50185670cae7b92dfd1ba149f2bc13f761fe3b96ec381d620c2683"
     },
     {
       "path": "index.html",
