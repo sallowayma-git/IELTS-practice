@@ -266,9 +266,46 @@
         }
 
         normalizeIndexForCustomConfig(index) {
-            return Array.isArray(index)
-                ? index.map((exam) => this.absolutizeDefaultExamPath(exam))
-                : [];
+            if (!Array.isArray(index)) {
+                return [];
+            }
+
+            const generatedReadingPdfAvailability = new Map();
+            this.getDefaultReadingIndex().forEach((exam) => {
+                if (
+                    exam
+                    && exam.sourceKind === 'generated-reading'
+                    && typeof exam.id === 'string'
+                    && exam.id
+                ) {
+                    generatedReadingPdfAvailability.set(exam.id, exam.hasPdf === true);
+                }
+            });
+
+            return index.map((exam) => {
+                const normalized = this.absolutizeDefaultExamPath(exam);
+                if (!normalized || typeof normalized !== 'object') {
+                    return normalized;
+                }
+
+                if (
+                    normalized.sourceKind === 'file-picker'
+                    && !Object.prototype.hasOwnProperty.call(normalized, 'hasPdf')
+                ) {
+                    normalized.hasPdf = typeof normalized.pdfFilename === 'string'
+                        && normalized.pdfFilename.trim().length > 0;
+                }
+
+                if (
+                    normalized.sourceKind === 'generated-reading'
+                    && typeof normalized.id === 'string'
+                    && generatedReadingPdfAvailability.has(normalized.id)
+                ) {
+                    normalized.hasPdf = generatedReadingPdfAvailability.get(normalized.id);
+                }
+
+                return normalized;
+            });
         }
 
         finishLibraryLoading(startTime, index) {
@@ -719,8 +756,8 @@
         async applyLibraryConfiguration(key, dataset, options = {}) {
             const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
             const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
-            const exams = Array.isArray(rawExams)
-                ? rawExams.map((exam) => ({ ...exam, libraryConfigurationId: configurationId })) : [];
+            const exams = this.normalizeIndexForCustomConfig(rawExams)
+                .map((exam) => ({ ...exam, libraryConfigurationId: configurationId }));
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');

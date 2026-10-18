@@ -3228,12 +3228,14 @@
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
-        var examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
-        var examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
-        var isListeningExam = examType === 'listening' || examId.indexOf('listening-') === 0;
-        var pdfAvailable = isListeningExam || !!(global.ResourceCore
-            && typeof global.ResourceCore.isPdfAvailable === 'function'
-            && global.ResourceCore.isPdfAvailable(exam));
+        var isListeningExam = !!(global.ResourceCore
+            && typeof global.ResourceCore.isListeningExam === 'function'
+            && global.ResourceCore.isListeningExam(exam));
+        var pdfAvailable = isListeningExam
+            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
+            : !!(global.ResourceCore
+                && typeof global.ResourceCore.isPdfAvailable === 'function'
+                && global.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             var startBtn = this._createElement('button', {
@@ -3268,7 +3270,7 @@
             }
         }
 
-        var isReadingExam = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        var isReadingExam = exam && !isListeningExam && exam.hasHtml !== false;
         if (isReadingExam && exam.id) {
             var vocabBtn = this._createElement('button', {
                 className: 'btn btn-outline exam-item-action-btn exam-item-vocab-btn',

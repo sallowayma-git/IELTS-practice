@@ -22,22 +22,47 @@ class PDFHandler {
      * @returns {Window|null} - Reference to opened window or null if failed
      */
     openPDF(pdfPath, examTitle = 'PDF Exam', options = {}) {
+        const launchOptions = options && typeof options === 'object' ? options : {};
+        const reservedWindow = launchOptions.reservedWindow || null;
+        const resourceResolution = launchOptions.resourceResolution || null;
+        const reservationAttempted = launchOptions.reservationAttempted === true;
+        const ownsReservedWindow = Boolean(reservedWindow && launchOptions.ownsReservedWindow === true);
+        const preventCurrentWindowFallback = launchOptions.preventCurrentWindowFallback === true;
+        const windowOptionOverrides = { ...launchOptions };
+        delete windowOptionOverrides.reservedWindow;
+        delete windowOptionOverrides.resourceResolution;
+        delete windowOptionOverrides.reservationAttempted;
+        delete windowOptionOverrides.ownsReservedWindow;
+        delete windowOptionOverrides.preventCurrentWindowFallback;
+
         try {
             console.log('[PDFHandler] Opening PDF:', pdfPath);
             
             // Validate PDF path
-            if (!this.isValidPDFPath(pdfPath)) {
+            if (!this.isValidPDFPath(pdfPath, { resourceResolution })) {
                 throw new Error('Invalid PDF path provided');
             }
 
             // Prepare window options
-            const windowOptions = this.prepareWindowOptions(options);
+            const windowOptions = this.prepareWindowOptions(windowOptionOverrides);
             
             // Generate unique window name
             const windowName = this.generateWindowName(examTitle);
             
-            // Open PDF in new window
-            const pdfWindow = window.open(pdfPath, windowName, windowOptions);
+            // A caller may reserve a blank window synchronously inside the click
+            // event, before ResourceCore performs an asynchronous HTTP probe.
+            // Navigate that exact window so transient user activation is not lost.
+            let pdfWindow = reservedWindow && !reservedWindow.closed
+                ? reservedWindow
+                : null;
+            if (pdfWindow) {
+                pdfWindow.location.href = pdfPath;
+                if (typeof pdfWindow.focus === 'function') {
+                    pdfWindow.focus();
+                }
+            } else if (!reservationAttempted && !preventCurrentWindowFallback) {
+                pdfWindow = window.open(pdfPath, windowName, windowOptions);
+            }
             
             if (!pdfWindow) {
                 throw new Error('Failed to open PDF window. Please check popup blocker settings.');
@@ -53,6 +78,10 @@ class PDFHandler {
             return pdfWindow;
             
         } catch (error) {
+            if (ownsReservedWindow && reservedWindow && !reservedWindow.closed
+                && typeof reservedWindow.close === 'function') {
+                try { reservedWindow.close(); } catch (_) { }
+            }
             console.error('[PDFHandler] Failed to open PDF:', error);
             this.handlePDFError(error, pdfPath, examTitle);
             return null;
@@ -132,20 +161,29 @@ class PDFHandler {
      * @param {string} path - File path to check
      * @returns {boolean} - True if valid PDF path
      */
-    isValidPDFPath(path) {
+    isValidPDFPath(path, options = {}) {
         if (!path || typeof path !== 'string') {
             return false;
         }
 
+        const normalizedPath = path.trim();
+        const resourceCore = typeof window !== 'undefined' ? window.ResourceCore : null;
+        const isBlobPath = /^blob:/i.test(normalizedPath);
+        const isApprovedRuntimeBlob = isBlobPath
+            && resourceCore
+            && typeof resourceCore.isApprovedPdfResolution === 'function'
+            && resourceCore.isApprovedPdfResolution(options.resourceResolution, path);
+
         // Check file extension
-        const hasValidExtension = this.supportedFormats.some(ext => 
-            path.toLowerCase().endsWith(ext)
-        );
+        const hasValidExtension = isBlobPath
+            ? isApprovedRuntimeBlob
+            : this.supportedFormats.some(ext => normalizedPath.toLowerCase().endsWith(ext));
 
         // Basic path validation
-        const isValidPath = !path.includes('..') && // Prevent directory traversal
-                           !path.startsWith('javascript:') && // Prevent XSS
-                           !path.startsWith('data:'); // Prevent data URLs
+        const lowerPath = normalizedPath.toLowerCase();
+        const isValidPath = !normalizedPath.includes('..') && // Prevent directory traversal
+                           !lowerPath.startsWith('javascript:') && // Prevent XSS
+                           !lowerPath.startsWith('data:'); // Prevent data URLs
 
         return hasValidExtension && isValidPath;
     }

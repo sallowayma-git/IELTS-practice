@@ -109,7 +109,18 @@
                     ? await library.listConfigurations() : [];
                 await Promise.all(snapshot.reading.sources.filter((row) => row.kind === 'imported').map(async (source) => {
                     const config = configurations.find((row) => String(row.id || row.key || row.configId) === source.libraryId);
-                    const index = typeof library.getIndex === 'function' ? await library.getIndex(source.libraryId) : null;
+                    const storedIndex = typeof library.getIndex === 'function'
+                        ? await library.getIndex(source.libraryId)
+                        : null;
+                    const libraryManager = global.LibraryManager
+                        && typeof global.LibraryManager.getInstance === 'function'
+                        ? global.LibraryManager.getInstance()
+                        : null;
+                    const index = Array.isArray(storedIndex)
+                        && libraryManager
+                        && typeof libraryManager.normalizeIndexForCustomConfig === 'function'
+                        ? libraryManager.normalizeIndexForCustomConfig(storedIndex)
+                        : storedIndex;
                     metadata.set(source.id, {
                         name: config && (config.name || config.title) || source.libraryId,
                         index: Array.isArray(index) ? index : null
@@ -808,9 +819,30 @@
                 const openPdfTrigger = e.target.closest('[data-action="open-exam-pdf"]');
                 if (openPdfTrigger) {
                     const examId = openPdfTrigger.dataset.examId;
-                    if (!await this.canOpenOriginalSource(article)) return;
+                    let reservedWindow = null;
+                    try {
+                        reservedWindow = global.open(
+                            'about:blank',
+                            '_blank',
+                            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                        );
+                    } catch (_) { }
+                    const closeReservation = () => {
+                        if (!reservedWindow || reservedWindow.closed || typeof reservedWindow.close !== 'function') return;
+                        try { reservedWindow.close(); } catch (_) { }
+                    };
+                    if (!await this.canOpenOriginalSource(article)) {
+                        closeReservation();
+                        return;
+                    }
                     if (typeof global.viewPDF === 'function') {
-                        global.viewPDF(examId);
+                        global.viewPDF(examId, {
+                            reservationAttempted: true,
+                            reservedWindow,
+                            ownsReservedWindow: Boolean(reservedWindow)
+                        });
+                    } else {
+                        closeReservation();
                     }
                     return;
                 }

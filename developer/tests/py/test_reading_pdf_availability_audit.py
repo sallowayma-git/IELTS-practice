@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -124,6 +125,60 @@ class ReadingPdfAvailabilityAuditTest(unittest.TestCase):
             [item["examId"] for item in payload["presentMarkedUnavailable"]],
             ["present-but-disabled"],
         )
+
+    def test_reports_unicode_normalization_mismatches_in_both_directions(self) -> None:
+        nfd_filename = "Piraha\u0303.pdf"
+        nfc_filename = "Pirah\u00e3.pdf"
+        self.assertNotEqual(nfd_filename, nfc_filename)
+        self.assertEqual(
+            unicodedata.normalize("NFC", nfd_filename),
+            unicodedata.normalize("NFC", nfc_filename),
+        )
+
+        for locator_filename, resource_filename in (
+            (nfd_filename, nfc_filename),
+            (nfc_filename, nfd_filename),
+        ):
+            with self.subTest(locator=locator_filename, resource=resource_filename):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    workspace = Path(temp_dir)
+                    pdf_root = workspace / "ReadingPractice" / "PDF"
+                    pdf_root.mkdir(parents=True)
+                    (pdf_root / resource_filename).write_bytes(b"%PDF fixture")
+                    manifest = workspace / "manifest.js"
+                    pdf_filename = f"ReadingPractice/PDF/{locator_filename}"
+                    self.write_manifest(
+                        manifest,
+                        {
+                            "normalization-mismatch": {
+                                "examId": "normalization-mismatch",
+                                "hasPdf": True,
+                                "pdfFilename": pdf_filename,
+                            },
+                        },
+                    )
+
+                    exit_code, payload, _ = self.run_main(
+                        ["--pdf-root", str(pdf_root), "--manifest", str(manifest)]
+                    )
+
+                self.assertEqual(exit_code, 1)
+                self.assertEqual(payload["status"], "fail")
+                self.assertEqual(payload["mismatchCount"], 1)
+                self.assertEqual(payload["missingMarkedAvailable"], [])
+                self.assertEqual(payload["caseMismatches"], [])
+                self.assertEqual(
+                    payload["normalizationMismatches"],
+                    [
+                        {
+                            "examId": "normalization-mismatch",
+                            "pdfFilename": pdf_filename,
+                            "expected": locator_filename,
+                            "actual": [resource_filename],
+                        }
+                    ],
+                )
+                self.assertEqual(payload["unreferencedResources"], [])
 
     def test_supplied_pdf_root_must_be_a_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

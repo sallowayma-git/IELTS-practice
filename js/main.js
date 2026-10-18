@@ -3837,12 +3837,14 @@ function createFallbackExamCard(exam, options = {}) {
         });
         actions.appendChild(selectBtn);
     } else {
-        const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
-        const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
-        const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
-        const pdfAvailable = isListeningExam || !!(window.ResourceCore
-            && typeof window.ResourceCore.isPdfAvailable === 'function'
-            && window.ResourceCore.isPdfAvailable(exam));
+        const isListeningExam = !!(window.ResourceCore
+            && typeof window.ResourceCore.isListeningExam === 'function'
+            && window.ResourceCore.isListeningExam(exam));
+        const pdfAvailable = isListeningExam
+            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
+            : !!(window.ResourceCore
+                && typeof window.ResourceCore.isPdfAvailable === 'function'
+                && window.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             const startBtn = document.createElement('button');
@@ -3871,7 +3873,7 @@ function createFallbackExamCard(exam, options = {}) {
             actions.appendChild(pdfUnavailable);
         }
 
-        const isReading = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        const isReading = exam && !isListeningExam && exam.hasHtml !== false;
         if (isReading && exam && exam.id) {
             const vocabBtn = document.createElement('button');
             vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
@@ -4115,20 +4117,80 @@ function openExam(examId, options = {}) {
     return showMessage('统一练习入口未就绪：app.openExam 不可用，已阻止打开原始题源 HTML。', 'error');
 }
 
-async function viewPDF(examId) {
-    const list = await resolveActiveExamIndex();
-    const exam = list.find(e => e.id === examId);
-    const examType = exam && typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
-    const normalizedExamId = exam && typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
-    const isListeningExam = examType === 'listening' || normalizedExamId.startsWith('listening-');
-
-    if (isListeningExam) {
-        if (!exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
-        const listeningPdfPath = window.buildResourcePath(exam, 'pdf');
-        return openPDFSafely(listeningPdfPath, exam.title);
+async function viewPDF(examId, launchOptions = {}) {
+    const safeLaunchOptions = launchOptions && typeof launchOptions === 'object'
+        ? launchOptions
+        : {};
+    let reservedWindow = safeLaunchOptions.reservedWindow || null;
+    let ownsReservedWindow = Boolean(reservedWindow && safeLaunchOptions.ownsReservedWindow === true);
+    let reservationAttempted = safeLaunchOptions.reservationAttempted === true;
+    if (!reservedWindow && !reservationAttempted) {
+        reservationAttempted = true;
+        try {
+            reservedWindow = window.open(
+                'about:blank',
+                '_blank',
+                'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+            );
+            ownsReservedWindow = Boolean(reservedWindow);
+        } catch (_) { }
     }
 
+    const closeReservedWindow = () => {
+        if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed
+            || typeof reservedWindow.close !== 'function') {
+            return;
+        }
+        try { reservedWindow.close(); } catch (_) { }
+    };
+
+    let list;
+    try {
+        list = await resolveActiveExamIndex();
+    } catch (error) {
+        closeReservedWindow();
+        throw error;
+    }
+    const exam = Array.isArray(list) ? list.find(e => e.id === examId) : null;
     const resourceCore = getResourceCore();
+    const isListeningExam = Boolean(
+        resourceCore
+        && typeof resourceCore.isListeningExam === 'function'
+        && resourceCore.isListeningExam(exam)
+    );
+
+    if (isListeningExam) {
+        if (typeof exam.pdfFilename !== 'string' || !exam.pdfFilename.trim()) {
+            closeReservedWindow();
+            return showMessage('未找到PDF文件', 'error');
+        }
+        let listeningPdfPath = '';
+        try {
+            listeningPdfPath = window.buildResourcePath(exam, 'pdf');
+        } catch (error) {
+            closeReservedWindow();
+            console.warn('[PDF] 听力资源路径构建失败:', error);
+            return showMessage('未找到PDF文件', 'error');
+        }
+        let resourceResolution = null;
+        if (/^blob:/i.test(String(listeningPdfPath || '').trim())
+            && resourceCore
+            && typeof resourceCore.resolveResource === 'function') {
+            try {
+                resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+            } catch (error) {
+                console.warn('[PDF] 听力 Blob 资源解析失败:', error);
+            }
+        }
+        return openPDFSafely(listeningPdfPath, exam.title, {
+            reservationAttempted,
+            reservedWindow,
+            ownsReservedWindow,
+            preventCurrentWindowFallback: true,
+            resourceResolution
+        });
+    }
+
     const isAvailable = Boolean(
         exam
         && resourceCore
@@ -4136,6 +4198,7 @@ async function viewPDF(examId) {
         && resourceCore.isPdfAvailable(exam)
     );
     if (!isAvailable) {
+        closeReservedWindow();
         return showMessage('此PDF不存在', 'error');
     }
 
@@ -4143,28 +4206,56 @@ async function viewPDF(examId) {
         ? String(window.location.protocol).toLowerCase()
         : '';
     let fullPath = '';
+    let resourceResolution = null;
 
     if (protocol === 'http:' || protocol === 'https:') {
         if (typeof resourceCore.resolveResource !== 'function') {
+            closeReservedWindow();
             return showMessage('此PDF不存在', 'error');
         }
         try {
-            const resolved = await resourceCore.resolveResource(exam, 'pdf');
-            fullPath = resolved && typeof resolved.url === 'string'
-                ? resolved.url.trim()
+            resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+            fullPath = resourceResolution && typeof resourceResolution.url === 'string'
+                ? resourceResolution.url.trim()
                 : '';
         } catch (error) {
             console.warn('[PDF] 资源解析失败:', error);
         }
     } else if (typeof window.buildResourcePath === 'function') {
-        fullPath = window.buildResourcePath(exam, 'pdf');
+        try {
+            fullPath = window.buildResourcePath(exam, 'pdf');
+        } catch (error) {
+            closeReservedWindow();
+            console.warn('[PDF] 资源路径构建失败:', error);
+            return showMessage('此PDF不存在', 'error');
+        }
+        if (/^blob:/i.test(String(fullPath || '').trim())
+            && resourceCore
+            && typeof resourceCore.resolveResource === 'function') {
+            try {
+                resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+                fullPath = resourceResolution && typeof resourceResolution.url === 'string'
+                    ? resourceResolution.url.trim()
+                    : '';
+            } catch (error) {
+                console.warn('[PDF] Blob 资源解析失败:', error);
+                fullPath = '';
+            }
+        }
     }
 
     if (!fullPath) {
+        closeReservedWindow();
         return showMessage('此PDF不存在', 'error');
     }
 
-    return openPDFSafely(fullPath, exam.title);
+    return openPDFSafely(fullPath, exam.title, {
+        reservationAttempted,
+        reservedWindow,
+        ownsReservedWindow,
+        preventCurrentWindowFallback: true,
+        resourceResolution
+    });
 }
 
 // Bridge for record details to existing enhancer/modal if present
@@ -4190,16 +4281,62 @@ function showRecordDetails(recordId) {
 }
 
 // Provide a local implementation to avoid dependency on legacy js/script.js
-function openPDFSafely(pdfPath, examTitle = 'PDF') {
-    try {
-        if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
-            return pdfHandler.openPDF(pdfPath, examTitle, { width: 1000, height: 800 });
+function openPDFSafely(pdfPath, examTitle = 'PDF', options = {}) {
+    const reservedWindow = options && options.reservedWindow;
+    const ownsReservedWindow = Boolean(reservedWindow && options.ownsReservedWindow === true);
+    const reservationAttempted = options.reservationAttempted === true;
+    const closeReservedWindow = () => {
+        if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed
+            || typeof reservedWindow.close !== 'function') {
+            return;
         }
-        let pdfWindow = null;
-        try {
-            pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-        } catch (_) { }
+        try { reservedWindow.close(); } catch (_) { }
+    };
+    try {
+        if (/^blob:/i.test(String(pdfPath || '').trim())) {
+            const resourceCore = getResourceCore();
+            const approved = Boolean(
+                resourceCore
+                && typeof resourceCore.isApprovedPdfResolution === 'function'
+                && resourceCore.isApprovedPdfResolution(options.resourceResolution, pdfPath)
+            );
+            if (!approved) {
+                closeReservedWindow();
+                showMessage('打开PDF失败', 'error');
+                return null;
+            }
+        }
+        if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
+            return pdfHandler.openPDF(pdfPath, examTitle, {
+                width: 1000,
+                height: 800,
+                reservationAttempted,
+                reservedWindow,
+                ownsReservedWindow,
+                preventCurrentWindowFallback: options.preventCurrentWindowFallback === true,
+                resourceResolution: options.resourceResolution || null
+            });
+        }
+        let pdfWindow = reservedWindow && !reservedWindow.closed ? reservedWindow : null;
+        if (pdfWindow) {
+            try {
+                pdfWindow.location.href = pdfPath;
+                if (typeof pdfWindow.focus === 'function') pdfWindow.focus();
+            } catch (_) {
+                pdfWindow = null;
+            }
+        }
+        if (!pdfWindow && !reservationAttempted && !options.preventCurrentWindowFallback) {
+            try {
+                pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+            } catch (_) { }
+        }
         if (!pdfWindow) {
+            if (reservationAttempted || options.preventCurrentWindowFallback) {
+                closeReservedWindow();
+                showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
+                return null;
+            }
             try {
                 // 降级：当前窗口打开
                 window.location.href = pdfPath;
@@ -4212,6 +4349,7 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         showMessage('正在打开PDF...', 'info');
         return pdfWindow;
     } catch (error) {
+        closeReservedWindow();
         console.error('[PDF] 打开失败:', error);
         showMessage('打开PDF失败', 'error');
         return null;
@@ -4246,10 +4384,14 @@ function updateSystemInfo(examIndex = []) {
     if (pdfExamsEl) {
         const resourceCore = getResourceCore();
         pdfExamsEl.textContent = examIndexSnapshot.filter((exam) => {
-            const examType = exam && typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
-            const examId = exam && typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
-            const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
-            if (isListeningExam) return Boolean(exam.pdfFilename);
+            const isListeningExam = Boolean(
+                resourceCore
+                && typeof resourceCore.isListeningExam === 'function'
+                && resourceCore.isListeningExam(exam)
+            );
+            if (isListeningExam) {
+                return Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim());
+            }
             return Boolean(resourceCore
                 && typeof resourceCore.isPdfAvailable === 'function'
                 && resourceCore.isPdfAvailable(exam));

@@ -1727,12 +1727,14 @@
             return item;
         }
 
-        const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
-        const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
-        const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
-        const pdfAvailable = isListeningExam || !!(global.ResourceCore
-            && typeof global.ResourceCore.isPdfAvailable === 'function'
-            && global.ResourceCore.isPdfAvailable(exam));
+        const isListeningExam = !!(global.ResourceCore
+            && typeof global.ResourceCore.isListeningExam === 'function'
+            && global.ResourceCore.isListeningExam(exam));
+        const pdfAvailable = isListeningExam
+            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
+            : !!(global.ResourceCore
+                && typeof global.ResourceCore.isPdfAvailable === 'function'
+                && global.ResourceCore.isPdfAvailable(exam));
 
         // A PDF-only entry must not retain a hidden launch path when its PDF is
         // unavailable. HTML-backed exercises remain usable independently.

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const bookshelfCode = fs.readFileSync(new URL('../../../js/components/bookshelfView.js', import.meta.url), 'utf8');
 const modelCode = fs.readFileSync(new URL('../../../js/data/v2/readingVocabularyModel.js', import.meta.url), 'utf8');
+const libraryManagerCode = fs.readFileSync(new URL('../../../js/services/libraryManager.js', import.meta.url), 'utf8');
 const sourceA = { kind: 'builtin', id: 'default' };
 const sourceB = { kind: 'imported', id: 'library-b' };
 const at = '2026-09-08T00:00:00.000Z';
@@ -516,4 +517,132 @@ test('lightweight bookshelf keeps only the current ten-word preview and rejects 
     assert.equal(f.store.getBookshelfExams().length, 0);
     assert.equal(f.store._previewPages.size, 0);
     assert.equal(fullReads, 0);
+});
+
+test('Bookshelf source metadata normalizes imported snapshots without mutating stored rows', async () => {
+    const f = fixture();
+    const storedIndex = [
+        {
+            id: 'generated-with-pdf',
+            type: 'reading',
+            sourceKind: 'generated-reading',
+            pdfFilename: 'generated-with-pdf.pdf',
+            hasPdf: false
+        },
+        {
+            id: 'generated-without-pdf',
+            type: 'reading',
+            sourceKind: 'generated-reading',
+            pdfFilename: 'removed.pdf',
+            hasPdf: true
+        },
+        {
+            id: 'legacy-file-picker',
+            type: 'reading',
+            sourceKind: 'file-picker',
+            pdfFilename: 'legacy.pdf'
+        },
+        {
+            id: 'legacy-file-picker-empty',
+            type: 'reading',
+            sourceKind: 'file-picker',
+            pdfFilename: '   '
+        }
+    ];
+    const storedBefore = clone(storedIndex);
+    f.sandbox.__READING_EXAM_INDEX__ = [
+        { id: 'generated-with-pdf', sourceKind: 'generated-reading', hasPdf: true },
+        { id: 'generated-without-pdf', sourceKind: 'generated-reading', hasPdf: false }
+    ];
+    f.sandbox.AppData.library.listConfigurations = async () => [{ id: 'library-b', name: 'Imported snapshot' }];
+    f.sandbox.AppData.library.getIndex = async () => storedIndex;
+    vm.runInContext(libraryManagerCode, f.sandbox, { filename: 'js/services/libraryManager.js' });
+
+    const metadata = await f.store._readSourceMetadata({
+        reading: { sources: [{ id: 'imported:library-b', kind: 'imported', libraryId: 'library-b' }] }
+    });
+    const sourceMetadata = metadata.get('imported:library-b');
+    const normalized = clone(sourceMetadata.index);
+
+    assert.equal(sourceMetadata.name, 'Imported snapshot');
+    assert.equal(normalized.find((row) => row.id === 'generated-with-pdf').hasPdf, true,
+        'current generated manifest availability replaces a stale false snapshot flag');
+    assert.equal(normalized.find((row) => row.id === 'generated-without-pdf').hasPdf, false,
+        'current generated manifest availability replaces a stale true snapshot flag');
+    assert.equal(normalized.find((row) => row.id === 'legacy-file-picker').hasPdf, true,
+        'legacy file-picker rows recover PDF availability from a nonblank filename');
+    assert.equal(normalized.find((row) => row.id === 'legacy-file-picker-empty').hasPdf, false,
+        'legacy file-picker rows with blank filenames remain unavailable');
+    assert.deepEqual(storedIndex, storedBefore, 'normalizing display metadata must not mutate persisted rows');
+    assert.equal(Object.hasOwn(storedIndex[2], 'hasPdf'), false);
+    assert.equal(Object.hasOwn(storedIndex[3], 'hasPdf'), false);
+});
+
+test('Bookshelf PDF clicks reserve a window before source checks and transfer or close ownership', async () => {
+    const f = fixture();
+    await f.store.init();
+    const article = f.store.getBookshelfExams().find((row) => row.source.kind === 'builtin');
+    const view = f.sandbox.BookshelfView;
+    const root = { querySelector() { return null; }, querySelectorAll() { return []; }, onclick: null };
+    view.bindCardEvents(root);
+
+    const reservations = [];
+    const opened = [];
+    const makeReservation = () => ({
+        closed: false,
+        closeCalls: 0,
+        close() {
+            this.closeCalls += 1;
+            this.closed = true;
+        }
+    });
+    f.sandbox.open = (url, target, features) => {
+        const reservation = makeReservation();
+        reservations.push({ url, target, features, reservation });
+        opened.push('reserve');
+        return reservation;
+    };
+    const trigger = { dataset: { examId: article.examId } };
+    const card = { dataset: { articleId: article.articleId } };
+    const event = {
+        target: {
+            closest(selector) {
+                if (selector === '[data-article-id]') return card;
+                if (selector === '[data-action="open-exam-pdf"]') return trigger;
+                return null;
+            }
+        }
+    };
+
+    const deniedGate = deferred();
+    view.canOpenOriginalSource = async () => {
+        opened.push('source-check');
+        return deniedGate.promise;
+    };
+    const deniedClick = root.onclick(event);
+    assert.deepEqual(opened, ['reserve', 'source-check'],
+        'the popup reservation is created synchronously before the asynchronous source check settles');
+    assert.equal(reservations[0].url, 'about:blank');
+    assert.equal(reservations[0].reservation.closed, false);
+    deniedGate.resolve(false);
+    await deniedClick;
+    assert.equal(reservations[0].reservation.closeCalls, 1,
+        'a denied source check closes the reservation owned by the bookshelf click');
+
+    const allowedGate = deferred();
+    view.canOpenOriginalSource = async () => allowedGate.promise;
+    let launch = null;
+    f.sandbox.viewPDF = (examId, options) => { launch = { examId, options }; };
+    const allowedClick = root.onclick(event);
+    assert.equal(reservations.length, 2);
+    assert.equal(launch, null, 'the reserved popup waits for source validation before PDF launch');
+    allowedGate.resolve(true);
+    await allowedClick;
+
+    assert.equal(launch.examId, article.examId);
+    assert.equal(launch.options.reservationAttempted, true);
+    assert.equal(launch.options.reservedWindow, reservations[1].reservation);
+    assert.equal(launch.options.ownsReservedWindow, true);
+    assert.equal(reservations[1].reservation.closeCalls, 0,
+        'ownership transfers to viewPDF after the source check succeeds');
 });

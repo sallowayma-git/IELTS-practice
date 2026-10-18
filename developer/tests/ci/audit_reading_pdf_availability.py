@@ -54,12 +54,12 @@ def relative_pdf_locator(value: Any) -> tuple[str | None, str | None]:
         return None, "unsafe_pdf_locator"
     if not relative_parts[-1].casefold().endswith(".pdf"):
         return None, "non_pdf_locator"
-    return unicodedata.normalize("NFC", "/".join(relative_parts)), None
+    return "/".join(relative_parts), None
 
 
 def discover_pdfs(pdf_root: Path) -> list[str]:
     return sorted(
-        unicodedata.normalize("NFC", path.relative_to(pdf_root).as_posix())
+        path.relative_to(pdf_root).as_posix()
         for path in pdf_root.rglob("*")
         if path.is_file() and path.suffix.casefold() == ".pdf"
     )
@@ -70,14 +70,18 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
     resources = discover_pdfs(pdf_root)
     resource_set = set(resources)
     resources_by_casefold: dict[str, list[str]] = {}
+    resources_by_normalized: dict[str, list[str]] = {}
     for resource in resources:
         resources_by_casefold.setdefault(resource.casefold(), []).append(resource)
+        normalized_resource = unicodedata.normalize("NFC", resource)
+        resources_by_normalized.setdefault(normalized_resource, []).append(resource)
 
     missing_marked_available: list[dict[str, str]] = []
     present_marked_unavailable: list[dict[str, Any]] = []
     invalid_availability_entries: list[dict[str, Any]] = []
     invalid_locator_entries: list[dict[str, str]] = []
     case_mismatches: list[dict[str, Any]] = []
+    normalization_mismatches: list[dict[str, Any]] = []
     referenced_resources: set[str] = set()
     available_count = 0
     unavailable_count = 0
@@ -110,12 +114,25 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
 
         assert locator is not None
         exact_present = locator in resource_set
-        casefold_matches = resources_by_casefold.get(locator.casefold(), [])
-        present = exact_present or bool(casefold_matches)
+        casefold_matches = [] if exact_present else resources_by_casefold.get(locator.casefold(), [])
+        normalized_matches = []
+        if not exact_present:
+            normalized_locator = unicodedata.normalize("NFC", locator)
+            normalized_matches = [
+                resource
+                for resource in resources_by_normalized.get(normalized_locator, [])
+                if resource not in casefold_matches
+            ]
+        matched_resources = (
+            [locator]
+            if exact_present
+            else list(dict.fromkeys([*casefold_matches, *normalized_matches]))
+        )
+        present = bool(matched_resources)
         if exact_present:
             referenced_resources.add(locator)
         else:
-            referenced_resources.update(casefold_matches)
+            referenced_resources.update(matched_resources)
             if casefold_matches:
                 case_mismatches.append(
                     {
@@ -123,6 +140,15 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
                         "pdfFilename": str(pdf_filename),
                         "expected": locator,
                         "actual": casefold_matches,
+                    }
+                )
+            if normalized_matches:
+                normalization_mismatches.append(
+                    {
+                        "examId": exam_id,
+                        "pdfFilename": str(pdf_filename),
+                        "expected": locator,
+                        "actual": normalized_matches,
                     }
                 )
 
@@ -135,7 +161,7 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
                 {
                     "examId": exam_id,
                     "pdfFilename": str(pdf_filename),
-                    "actual": [locator] if exact_present else casefold_matches,
+                    "actual": matched_resources,
                 }
             )
 
@@ -147,6 +173,7 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
             invalid_availability_entries,
             invalid_locator_entries,
             case_mismatches,
+            normalization_mismatches,
         )
     )
     return {
@@ -166,6 +193,7 @@ def audit(pdf_root: Path, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, A
         "invalidAvailabilityEntries": invalid_availability_entries,
         "invalidLocatorEntries": invalid_locator_entries,
         "caseMismatches": case_mismatches,
+        "normalizationMismatches": normalization_mismatches,
         "unreferencedResources": sorted(resource_set - referenced_resources),
     }
 

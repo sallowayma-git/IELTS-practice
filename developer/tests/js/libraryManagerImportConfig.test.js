@@ -190,6 +190,181 @@ function baseSeed() {
     };
 }
 
+function availabilityRegressionSeed() {
+    const key = 'pre_upgrade_mixed';
+    const currentMissingPdf = {
+        id: 'p2-medium-243',
+        examId: 'p2-medium-243',
+        type: 'reading',
+        title: 'Current Missing PDF',
+        category: 'P2',
+        path: 'Generated/missing/',
+        filename: 'reading-practice-unified.html',
+        sourceKind: 'generated-reading',
+        hasHtml: true,
+        hasPdf: false,
+        pdfFilename: 'ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf'
+    };
+    const currentAvailablePdf = {
+        id: 'p1-high-01',
+        examId: 'p1-high-01',
+        type: 'reading',
+        title: 'Current Available PDF',
+        category: 'P1',
+        path: 'Generated/available/',
+        filename: 'available.html',
+        sourceKind: 'generated-reading',
+        hasHtml: true,
+        hasPdf: true,
+        pdfFilename: 'ReadingPractice/PDF/available.pdf'
+    };
+    const currentCollisionPdf = {
+        id: 'p3-high-03',
+        examId: 'p3-high-03',
+        type: 'reading',
+        title: 'Current Manifest Collision',
+        category: 'P3',
+        path: 'Generated/collision/',
+        filename: 'collision.html',
+        sourceKind: 'generated-reading',
+        hasHtml: true,
+        hasPdf: false,
+        pdfFilename: 'ReadingPractice/PDF/manifest-collision.pdf'
+    };
+    const persistedIndex = [
+        Object.assign({}, currentMissingPdf, { hasPdf: true, snapshotMarker: 'keep-missing-row' }),
+        Object.assign({}, currentAvailablePdf, { hasPdf: false, snapshotMarker: 'keep-available-row' }),
+        {
+            id: 'legacy-file-picker-pdf',
+            type: 'reading',
+            title: 'Legacy selected PDF',
+            category: 'P1',
+            path: 'Imported/legacy-pdf/',
+            sourceKind: 'file-picker',
+            importKey: 'reading:legacy-pdf',
+            pdfFilename: '  selected-reading.pdf  '
+        },
+        {
+            id: 'legacy-file-picker-no-pdf',
+            type: 'reading',
+            title: 'Legacy selection without PDF',
+            category: 'P2',
+            path: 'Imported/legacy-no-pdf/',
+            sourceKind: 'file-picker',
+            importKey: 'reading:legacy-no-pdf',
+            pdfFilename: '   '
+        },
+        {
+            id: 'p3-high-03',
+            type: 'reading',
+            title: 'File picker sharing a manifest ID',
+            category: 'P3',
+            path: 'Imported/manifest-id-collision/',
+            sourceKind: 'file-picker',
+            importKey: 'reading:manifest-id-collision',
+            pdfFilename: 'selected-manifest-id-collision.pdf'
+        },
+        {
+            id: 'explicit-file-picker-unavailable',
+            type: 'reading',
+            title: 'Explicitly unavailable selected PDF',
+            category: 'P2',
+            path: 'Imported/explicit-unavailable/',
+            sourceKind: 'file-picker',
+            importKey: 'reading:explicit-unavailable',
+            hasPdf: false,
+            pdfFilename: 'selected-but-disabled.pdf'
+        },
+        {
+            id: 'explicit-file-picker-available',
+            type: 'reading',
+            title: 'Explicitly available selected PDF',
+            category: 'P3',
+            path: 'Imported/explicit-available/',
+            sourceKind: 'file-picker',
+            importKey: 'reading:explicit-available',
+            hasPdf: true,
+            pdfFilename: ''
+        },
+        {
+            id: 'non-file-picker-with-locator',
+            type: 'reading',
+            title: 'Non file picker without availability flag',
+            category: 'P3',
+            path: 'Imported/non-file-picker/',
+            sourceKind: 'pdf-only',
+            pdfFilename: 'must-not-be-inferred.pdf'
+        },
+        {
+            id: 'unknown-generated-reading',
+            type: 'reading',
+            title: 'Unknown generated row',
+            category: 'P1',
+            path: 'Generated/unknown/',
+            sourceKind: 'generated-reading',
+            hasPdf: true,
+            pdfFilename: 'unknown.pdf'
+        },
+        {
+            id: 'legacy-listening-file-picker',
+            type: 'listening',
+            title: 'Legacy listening selection',
+            category: 'P4',
+            path: 'Imported/listening/',
+            sourceKind: 'file-picker',
+            importKey: 'listening:legacy-pdf',
+            pdfFilename: 'selected-listening.pdf'
+        }
+    ];
+
+    return {
+        key,
+        persistedIndex,
+        seed: {
+            library: {
+                activeConfigurationId: key,
+                importedIndexes: { [key]: persistedIndex },
+                configurations: [{ id: key, key, name: '升级前混合题库', examCount: persistedIndex.length }]
+            },
+            readingExamIndex: [currentMissingPdf, currentAvailablePdf, currentCollisionPdf],
+            defaultListeningAvailable: false
+        }
+    };
+}
+
+function assertAvailabilityReconciled(index, configurationId) {
+    const rows = Array.isArray(index) ? index : [];
+    const byId = (id) => {
+        const row = rows.find((item) => item && item.id === id);
+        assert(row, `missing normalized row: ${id}`);
+        return row;
+    };
+
+    assert.strictEqual(rows.length, 10, 'normalization must preserve every mixed-snapshot row');
+    assert.strictEqual(byId('p2-medium-243').hasPdf, false, 'current manifest false must override a stale generated-reading true');
+    assert.strictEqual(byId('p2-medium-243').pdfFilename, 'ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf', 'manifest reconciliation must retain the expected locator');
+    assert.strictEqual(byId('p2-medium-243').snapshotMarker, 'keep-missing-row', 'manifest reconciliation must not replace the persisted row');
+    assert.strictEqual(byId('p1-high-01').hasPdf, true, 'current manifest true must override a stale generated-reading false');
+    assert.strictEqual(byId('p1-high-01').snapshotMarker, 'keep-available-row', 'bidirectional reconciliation must preserve snapshot metadata');
+
+    assert.strictEqual(byId('legacy-file-picker-pdf').hasPdf, true, 'legacy file-picker rows with a trimmed locator must be backfilled as available');
+    assert.strictEqual(byId('legacy-file-picker-pdf').pdfFilename, '  selected-reading.pdf  ', 'availability inference must not rewrite the stored locator');
+    assert.strictEqual(byId('legacy-file-picker-no-pdf').hasPdf, false, 'legacy file-picker rows with only whitespace must be backfilled as unavailable');
+    assert.strictEqual(byId('p3-high-03').hasPdf, true, 'a file-picker row sharing a manifest ID must use its own locator instead of manifest authority');
+    assert.strictEqual(byId('explicit-file-picker-unavailable').hasPdf, false, 'an explicit false flag must not be overridden by a locator');
+    assert.strictEqual(byId('explicit-file-picker-available').hasPdf, true, 'an explicit true flag must not be overridden by an empty locator');
+    assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(byId('non-file-picker-with-locator'), 'hasPdf'),
+        false,
+        'non-file-picker rows must not receive inferred availability'
+    );
+    assert.strictEqual(byId('unknown-generated-reading').hasPdf, true, 'generated rows without an exact current manifest ID must remain untouched');
+    assert.strictEqual(byId('legacy-listening-file-picker').hasPdf, true, 'legacy file-picker inference must survive in a mixed reading/listening snapshot');
+    rows.forEach((row) => {
+        assert.strictEqual(row.libraryConfigurationId, configurationId, 'published rows must retain their active-library provenance');
+    });
+}
+
 const results = [];
 function recordResult(name, detail) {
     results.push({ name, passed: true, detail, timestamp: new Date().toISOString() });
@@ -303,6 +478,76 @@ async function testIncrementalCreatesSnapshotAndDedupes() {
     assert.deepStrictEqual(await window.AppData.practice.list(), seed.records, '增量导入不能修改练习记录');
 
     recordResult('增量导入创建新配置并按 importKey 去重更新', { key: created.key, merge: created.merge });
+}
+
+async function testLoadActiveLibraryReconcilesPreUpgradeAvailability() {
+    const fixture = availabilityRegressionSeed();
+    const storedBefore = clone(fixture.persistedIndex);
+    const { window } = createHarness(fixture.seed);
+    const manager = window.LibraryManager.getInstance();
+
+    const loaded = await manager.loadActiveLibrary(true);
+
+    assertAvailabilityReconciled(loaded, fixture.key);
+    assert.deepStrictEqual(
+        await window.AppData.library.getIndex(fixture.key),
+        storedBefore,
+        'loading must project compatibility fields without mutating the persisted pre-upgrade snapshot'
+    );
+    assert.deepStrictEqual(fixture.persistedIndex, storedBefore, 'loading must not mutate the caller-owned fixture');
+    recordResult('启动加载归一化升级前 file-picker 与 generated-reading 可用性', { loadedCount: loaded.length });
+}
+
+async function testApplyLibraryConfigurationReconcilesFetchedAndSuppliedAvailability() {
+    const fetchedFixture = availabilityRegressionSeed();
+    const fetchedStoredBefore = clone(fetchedFixture.persistedIndex);
+    const fetchedHarness = createHarness(fetchedFixture.seed);
+    let fetchedPublished = null;
+    fetchedHarness.window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') {
+            fetchedPublished = event.detail.index;
+        }
+        return true;
+    };
+
+    const fetchedApplied = await fetchedHarness.window.LibraryManager.getInstance()
+        .applyLibraryConfiguration(fetchedFixture.key);
+
+    assert.strictEqual(fetchedApplied, true, 'applying a fetched pre-upgrade mixed snapshot should succeed');
+    assertAvailabilityReconciled(fetchedPublished, fetchedFixture.key);
+    assert.deepStrictEqual(
+        await fetchedHarness.window.AppData.library.getIndex(fetchedFixture.key),
+        fetchedStoredBefore,
+        'fetched apply normalization must not mutate persisted source rows'
+    );
+
+    const suppliedFixture = availabilityRegressionSeed();
+    const suppliedHarness = createHarness(suppliedFixture.seed);
+    const suppliedDataset = clone(suppliedFixture.persistedIndex);
+    const suppliedBefore = clone(suppliedDataset);
+    let suppliedPublished = null;
+    suppliedHarness.window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') {
+            suppliedPublished = event.detail.index;
+        }
+        return true;
+    };
+
+    const suppliedApplied = await suppliedHarness.window.LibraryManager.getInstance()
+        .applyLibraryConfiguration(suppliedFixture.key, suppliedDataset);
+
+    assert.strictEqual(suppliedApplied, true, 'applying an explicitly supplied pre-upgrade mixed snapshot should succeed');
+    assertAvailabilityReconciled(suppliedPublished, suppliedFixture.key);
+    assert.deepStrictEqual(suppliedDataset, suppliedBefore, 'supplied apply normalization must not mutate its caller-owned dataset');
+    assert.deepStrictEqual(
+        await suppliedHarness.window.AppData.library.getIndex(suppliedFixture.key),
+        suppliedFixture.persistedIndex,
+        'supplying a dataset for apply must not rewrite the stored snapshot'
+    );
+    recordResult('配置切换归一化 fetched 与 supplied 升级前题库快照', {
+        fetchedCount: fetchedPublished.length,
+        suppliedCount: suppliedPublished.length
+    });
 }
 
 async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
@@ -682,6 +927,8 @@ async function main() {
         await testFullListeningCreatesSnapshotAndKeepsReading();
         await testFullReadingCreatesSnapshotAndKeepsListening();
         await testIncrementalCreatesSnapshotAndDedupes();
+        await testLoadActiveLibraryReconcilesPreUpgradeAvailability();
+        await testApplyLibraryConfigurationReconcilesFetchedAndSuppliedAvailability();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();

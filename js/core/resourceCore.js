@@ -288,13 +288,43 @@
         return kind === 'pdf' ? value + '.pdf' : value + '.html';
     }
 
+    function isListeningExam(exam) {
+        if (!exam || typeof exam !== 'object') {
+            return false;
+        }
+
+        const examType = typeof exam.type === 'string'
+            ? exam.type.trim().toLowerCase()
+            : '';
+        const examId = typeof exam.id === 'string'
+            ? exam.id.trim().toLowerCase()
+            : '';
+        const examPath = typeof exam.path === 'string'
+            ? exam.path.trim().replace(/\\/g, '/').toLowerCase()
+            : '';
+
+        return examType === 'listening'
+            || examId.startsWith('listening-')
+            || examPath.includes('listeningpractice/')
+            || /^p[1-4]\//.test(examPath);
+    }
+
     function isPdfAvailable(exam) {
-        return Boolean(
-            exam
-            && exam.hasPdf === true
-            && typeof exam.pdfFilename === 'string'
-            && exam.pdfFilename.trim()
-        );
+        if (!exam || typeof exam !== 'object'
+            || typeof exam.pdfFilename !== 'string'
+            || !exam.pdfFilename.trim()) {
+            return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(exam, 'hasPdf')) {
+            return exam.hasPdf === true;
+        }
+
+        // LibraryDiscovery versions predating the explicit availability
+        // contract persisted a locator only when the user selected a real PDF,
+        // but did not persist hasPdf. Keep that narrowly identified schema
+        // readable while LibraryManager materializes the new flag at its index
+        // normalization boundary. No other filename-only record is promoted.
+        return exam.sourceKind === 'file-picker';
     }
 
     function stripQueryAndHash(url) {
@@ -584,6 +614,7 @@
     }
 
     const resourceProbeCache = new Map();
+    const approvedRuntimePdfResolutions = new WeakSet();
 
     function probeResource(url) {
         if (!url) {
@@ -616,19 +647,42 @@
     }
 
     async function resolveResource(exam, kind = 'html') {
-        const attempts = getResourceAttempts(exam, kind);
+        const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const attempts = getResourceAttempts(exam, resourceKind);
         for (let i = 0; i < attempts.length; i += 1) {
             const entry = attempts[i];
             try {
                 const ok = await probeResource(entry.path);
                 if (ok) {
-                    return { url: entry.path, attempts };
+                    const resolution = Object.freeze({
+                        url: entry.path,
+                        attempts,
+                        source: entry.label,
+                        kind: resourceKind
+                    });
+                    if (resourceKind === 'pdf'
+                        && entry.label === 'runtime'
+                        && /^blob:/i.test(String(entry.path || '').trim())) {
+                        approvedRuntimePdfResolutions.add(resolution);
+                    }
+                    return resolution;
                 }
             } catch (error) {
                 console.warn('[ResourceCore] 资源探测失败:', entry, error);
             }
         }
-        return { url: '', attempts };
+        return Object.freeze({ url: '', attempts, source: '', kind: resourceKind });
+    }
+
+    function isApprovedPdfResolution(resolution, url) {
+        return Boolean(
+            resolution
+            && approvedRuntimePdfResolutions.has(resolution)
+            && resolution.kind === 'pdf'
+            && resolution.source === 'runtime'
+            && resolution.url === url
+            && /^blob:/i.test(String(url || '').trim())
+        );
     }
 
     global.ResourceCore = {
@@ -654,6 +708,8 @@
         buildResourcePath,
         getResourceAttempts,
         resolveResource,
+        isApprovedPdfResolution,
+        isListeningExam,
         isPdfAvailable,
         sanitizeFilename,
         encodePathSegments,

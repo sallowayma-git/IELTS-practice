@@ -7,6 +7,7 @@ const examActionsSource = fs.readFileSync(new URL('../../../js/app/examActions.j
 const legacyViewSource = fs.readFileSync(new URL('../../../js/views/legacyViewBundle.js', import.meta.url), 'utf8');
 const mainSource = fs.readFileSync(new URL('../../../js/main.js', import.meta.url), 'utf8');
 const bookshelfSource = fs.readFileSync(new URL('../../../js/components/bookshelfView.js', import.meta.url), 'utf8');
+const resourceCoreSource = fs.readFileSync(new URL('../../../js/core/resourceCore.js', import.meta.url), 'utf8');
 const mainCss = fs.readFileSync(new URL('../../../css/main.css', import.meta.url), 'utf8');
 const bookshelfCss = fs.readFileSync(new URL('../../../css/vocab-reader.css', import.meta.url), 'utf8');
 
@@ -98,18 +99,11 @@ function createDocument() {
     };
 }
 
-function strictPdfAvailability(exam) {
-    return Boolean(exam && exam.hasPdf === true
-        && typeof exam.pdfFilename === 'string'
-        && exam.pdfFilename.trim());
-}
-
 function createSandbox() {
     const document = createDocument();
     const window = {
         document,
         console: { log() {}, warn() {}, error() {} },
-        ResourceCore: { isPdfAvailable: strictPdfAvailability },
         addEventListener() {},
         dispatchEvent() {},
         location: { protocol: 'file:', href: 'file:///test/index.html' }
@@ -130,10 +124,13 @@ function createSandbox() {
         Set,
         Promise,
         URL,
-        URLSearchParams
+        URLSearchParams,
+        fetch: async () => ({ ok: true, status: 200 })
     };
     sandbox.globalThis = window;
-    return vm.createContext(sandbox);
+    const context = vm.createContext(sandbox);
+    vm.runInContext(resourceCoreSource, context, { filename: 'js/core/resourceCore.js' });
+    return context;
 }
 
 function descendants(root) {
@@ -183,6 +180,10 @@ const legacyListening = {
     id: 'listening-legacy', title: 'Legacy listening', category: 'P1', type: 'listening',
     hasHtml: true, pdfFilename: 'ListeningPractice/PDF/legacy.pdf'
 };
+const pathOnlyLegacyListening = {
+    id: 'legacy-audio-set', title: 'Path-only legacy listening', category: 'P1',
+    path: 'P1/legacy-set/', hasHtml: false, pdfFilename: 'ListeningPractice/PDF/path-only.pdf'
+};
 
 test('primary ExamActions cards expose only verified PDFs and keep unavailable HTML practice', () => {
     const context = createSandbox();
@@ -206,6 +207,13 @@ test('primary ExamActions cards expose only verified PDFs and keep unavailable H
     const listeningCard = context.window.ExamListView.createExamCard(legacyListening);
     assert.equal(elementsWithAction(listeningCard, 'pdf').length, 1,
         'the reading-only contract must not hide legacy listening PDF actions');
+
+    const pathOnlyListeningCard = context.window.ExamListView.createExamCard(pathOnlyLegacyListening);
+    assert.equal(elementsWithAction(pathOnlyListeningCard, 'pdf').length, 1,
+        'P1 path-only listening entries should retain their legacy PDF action');
+    assert.equal(elementsWithAction(pathOnlyListeningCard, 'start').length, 1,
+        'a path-only listening PDF should remain launchable without HTML');
+    assert.equal(unavailableStates(pathOnlyListeningCard).length, 0);
 });
 
 test('LegacyExamListView fallback uses the same non-interactive unavailable state', () => {
@@ -227,6 +235,11 @@ test('LegacyExamListView fallback uses the same non-interactive unavailable stat
 
     const listeningCard = view._createExamElement(legacyListening, 0, {});
     assert.equal(elementsWithAction(listeningCard, 'pdf').length, 1);
+
+    const pathOnlyListeningCard = view._createExamElement(pathOnlyLegacyListening, 0, {});
+    assert.equal(elementsWithAction(pathOnlyListeningCard, 'pdf').length, 1);
+    assert.equal(elementsWithAction(pathOnlyListeningCard, 'start').length, 1);
+    assert.equal(unavailableStates(pathOnlyListeningCard).length, 0);
 });
 
 function extractMainFallbackRenderer() {
@@ -259,6 +272,11 @@ test('final main.js fallback never attaches a PDF handler to unavailable state',
 
     const listeningCard = context.createFallbackExamCard(legacyListening);
     assert.ok(descendants(listeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === 'PDF'));
+
+    const pathOnlyListeningCard = context.createFallbackExamCard(pathOnlyLegacyListening);
+    assert.ok(descendants(pathOnlyListeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === 'PDF'));
+    assert.ok(descendants(pathOnlyListeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === '开始练习'));
+    assert.equal(unavailableStates(pathOnlyListeningCard).length, 0);
 });
 
 test('bookshelf cards replace a missing PDF action with exact plain-text markup', () => {
@@ -305,11 +323,12 @@ test('system PDF count follows the shared availability predicate, not a retained
         available,
         unavailable,
         { ...unavailable, id: 'filename-only', hasPdf: undefined },
-        legacyListening
+        legacyListening,
+        pathOnlyLegacyListening
     ]);
 
-    assert.equal(elements.get('total-exams').textContent, 4);
-    assert.equal(elements.get('pdf-exams').textContent, 2);
+    assert.equal(elements.get('total-exams').textContent, 5);
+    assert.equal(elements.get('pdf-exams').textContent, 3);
 });
 
 test('unavailable-state CSS is present for question-bank and bookshelf surfaces', () => {

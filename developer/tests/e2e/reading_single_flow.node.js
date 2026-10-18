@@ -248,16 +248,36 @@ async function openUnifiedExam(page, examId, consoleLog) {
 
 async function openManualPdfExam(page, examId) {
   await page.evaluate(() => {
-    window.__readingPdfCapture = { urls: [] };
+    window.__readingPdfCapture = { urls: [], windows: [] };
     window.__readingPdfNativeOpen = window.open;
     window.open = function (url) {
       const normalized = String(url || '');
-      window.__readingPdfCapture.urls.push(normalized);
-      return {
-        closed: false,
-        focus() { },
-        location: { href: normalized },
+      let currentHref = normalized;
+      const location = {
+        get href() {
+          return currentHref;
+        },
+        set href(nextUrl) {
+          currentHref = String(nextUrl || '');
+        },
+        replace(nextUrl) {
+          currentHref = String(nextUrl || '');
+        },
       };
+      const openedWindow = {
+        closed: false,
+        focusCount: 0,
+        focus() {
+          this.focusCount += 1;
+        },
+        close() {
+          this.closed = true;
+        },
+        location,
+      };
+      window.__readingPdfCapture.urls.push(normalized);
+      window.__readingPdfCapture.windows.push(openedWindow);
+      return openedWindow;
     };
   });
 
@@ -280,7 +300,7 @@ async function openManualPdfExam(page, examId) {
     }, examId);
     await page.waitForTimeout(300);
     const popupUrl = await page.evaluate(
-      () => window.__readingPdfCapture?.urls?.slice(-1)[0] || ''
+      () => window.__readingPdfCapture?.windows?.slice(-1)[0]?.location?.href || ''
     );
     const hasSession = await page.evaluate(
       (targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId,

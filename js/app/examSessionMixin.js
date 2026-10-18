@@ -69,47 +69,20 @@
 
     const mixin = {
         _isReadingLibraryExam(exam) {
-            if (!exam || typeof exam !== 'object') {
-                return false;
-            }
-
-            const examType = typeof exam.type === 'string'
-                ? exam.type.trim().toLowerCase()
-                : '';
-            if (examType === 'listening') {
-                return false;
-            }
-
-            const examId = typeof exam.id === 'string'
-                ? exam.id.trim().toLowerCase()
-                : '';
-            if (examId.startsWith('listening-')) {
-                return false;
-            }
-
-            return true;
+            return Boolean(
+                exam
+                && typeof exam === 'object'
+                && !this._isListeningLibraryExam(exam)
+            );
         },
 
         _isListeningLibraryExam(exam) {
-            if (!exam || typeof exam !== 'object') {
-                return false;
-            }
-            const examType = typeof exam.type === 'string'
-                ? exam.type.trim().toLowerCase()
-                : '';
-            if (examType === 'listening') {
-                return true;
-            }
-            const examId = typeof exam.id === 'string'
-                ? exam.id.trim().toLowerCase()
-                : '';
-            if (examId.startsWith('listening-')) {
-                return true;
-            }
-            const path = typeof exam.path === 'string'
-                ? exam.path.replace(/\\/g, '/').toLowerCase()
-                : '';
-            return path.includes('listeningpractice/') || /^p[1-4]\//.test(path);
+            const resourceCore = global.ResourceCore || null;
+            return Boolean(
+                resourceCore
+                && typeof resourceCore.isListeningExam === 'function'
+                && resourceCore.isListeningExam(exam)
+            );
         },
 
         _normalizeCompletionQuestionKey(rawKey, fallbackIndex = 0) {
@@ -511,8 +484,51 @@
           * 打开指定题目进行练习
           */
         async openExam(examId, options = {}) {
+            options = options && typeof options === 'object' ? { ...options } : {};
+            let openGeneration = null;
+            let provisionalWindow = options.reuseWindow && !options.reuseWindow.closed
+                ? options.reuseWindow
+                : null;
+            let ownsProvisionalWindow = Boolean(
+                provisionalWindow && options.ownsReservedWindow === true
+            );
+            let reservationAttempted = options.reservationAttempted === true
+                || Boolean(provisionalWindow);
+            const suppliedExam = options.examDefinition && typeof options.examDefinition === 'object'
+                ? options.examDefinition
+                : null;
+            const mayNeedPdfWindow = !suppliedExam || suppliedExam.hasHtml === false;
+            if (mayNeedPdfWindow && !provisionalWindow && !reservationAttempted) {
+                reservationAttempted = true;
+                try {
+                    provisionalWindow = window.open(
+                        'about:blank',
+                        '_blank',
+                        options.target === 'tab'
+                            ? undefined
+                            : 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                    );
+                } catch (_) { }
+                ownsProvisionalWindow = Boolean(provisionalWindow);
+            }
+            if (reservationAttempted) options.reservationAttempted = true;
+            if (provisionalWindow) options.reuseWindow = provisionalWindow;
+            if (ownsProvisionalWindow) options.ownsReservedWindow = true;
+
+            const closeOwnedProvisionalWindow = () => {
+                if (!ownsProvisionalWindow || !provisionalWindow || provisionalWindow.closed
+                    || typeof provisionalWindow.close !== 'function') {
+                    return;
+                }
+                if (openGeneration && this._examOpenWindowGenerations
+                    && this._examOpenWindowGenerations.get(provisionalWindow) !== openGeneration) {
+                    return;
+                }
+                try { provisionalWindow.close(); } catch (_) { }
+            };
+
             observeStep('practice', 'open-practice', 'started', { suite: options.suiteSessionId });
-            const openGeneration = this._beginExamOpenGeneration(examId, options);
+            openGeneration = this._beginExamOpenGeneration(examId, options);
             const reviewMode = Boolean(options && options.reviewMode);
             let examWindow = null;
             let launchRegistration = null;
@@ -521,10 +537,20 @@
                 : null;
             if (!exam) {
                 if (options && options.requireRecordProvenance) {
+                    closeOwnedProvisionalWindow();
                     throw new Error('历史记录的题库来源不可用');
                 }
-                const examIndex = await getActiveExamIndexSnapshot();
-                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                let examIndex;
+                try {
+                    examIndex = await getActiveExamIndexSnapshot();
+                } catch (error) {
+                    closeOwnedProvisionalWindow();
+                    throw error;
+                }
+                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) {
+                    closeOwnedProvisionalWindow();
+                    return null;
+                }
                 const list = Array.isArray(examIndex) ? examIndex : [];
                 exam = list.find(e => e.id === examId);
             }
@@ -534,11 +560,15 @@
             const memorizeMode = practiceMode === 'memorize';
 
             if (!exam) {
+                closeOwnedProvisionalWindow();
                 window.showMessage('题目不存在', 'error');
                 return;
             }
 
-            if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+            if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) {
+                closeOwnedProvisionalWindow();
+                return null;
+            }
 
             try {
                 const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
@@ -575,9 +605,15 @@
                 if (guardOptions.endlessMode) {
                     examUrl = this._appendEndlessContextToExamUrl(examUrl);
                 }
-                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                if (!this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) {
+                    closeOwnedProvisionalWindow();
+                    return null;
+                }
                 examWindow = this.openExamWindow(examUrl, exam, guardOptions);
-                if (!examWindow || !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
+                if (!examWindow || !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) {
+                    closeOwnedProvisionalWindow();
+                    return null;
+                }
                 launchRegistration = this._installExamNavigationRegistration(examId, examWindow, exam, {
                     ...guardOptions,
                     expectedUrl: this._ensureAbsoluteUrl(examUrl)
@@ -699,6 +735,7 @@
                 console.error('Failed to open exam:', error);
                 window.showMessage('打开题目失败，请重试', 'error');
                 if (launchRegistration) await this._abortExamOpen(examId, launchRegistration);
+                else closeOwnedProvisionalWindow();
                 return null;
             }
         },
@@ -706,6 +743,29 @@
         async _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
             const openGeneration = options.openGeneration || null;
+            let reservedWindow = options.reuseWindow && !options.reuseWindow.closed
+                ? options.reuseWindow
+                : null;
+            let ownsReservedWindow = Boolean(
+                reservedWindow && options.ownsReservedWindow === true
+            );
+            let reservationAttempted = options.reservationAttempted === true
+                || Boolean(reservedWindow);
+            let mustUseReservedWindow = reservationAttempted;
+
+            const ownsCurrentReservation = () => Boolean(
+                ownsReservedWindow
+                && reservedWindow
+                && (!openGeneration || !this._examOpenWindowGenerations
+                    || this._examOpenWindowGenerations.get(reservedWindow) === openGeneration)
+            );
+            const closeOwnedReservation = () => {
+                if (!ownsCurrentReservation() || reservedWindow.closed
+                    || typeof reservedWindow.close !== 'function') {
+                    return;
+                }
+                try { reservedWindow.close(); } catch (_) { }
+            };
 
             if (this._isReadingLibraryExam(exam)) {
                 const resourceCore = global.ResourceCore || null;
@@ -715,6 +775,7 @@
                     && resourceCore.isPdfAvailable(exam)
                 );
                 if (!isAvailable) {
+                    closeOwnedReservation();
                     window.showMessage('此PDF不存在', 'error');
                     return null;
                 }
@@ -723,7 +784,26 @@
                     ? String(global.location.protocol).toLowerCase()
                     : '';
                 if (protocol === 'http:' || protocol === 'https:') {
+                    mustUseReservedWindow = true;
+                    if (!reservedWindow && !reservationAttempted) {
+                        reservationAttempted = true;
+                        try {
+                            reservedWindow = window.open(
+                                'about:blank',
+                                '_blank',
+                                options.target === 'tab'
+                                    ? undefined
+                                    : 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                            );
+                        } catch (_) { }
+                        ownsReservedWindow = Boolean(reservedWindow);
+                        if (reservedWindow && openGeneration) {
+                            if (!this._examOpenWindowGenerations) this._examOpenWindowGenerations = new WeakMap();
+                            this._examOpenWindowGenerations.set(reservedWindow, openGeneration);
+                        }
+                    }
                     if (typeof resourceCore.resolveResource !== 'function') {
+                        closeOwnedReservation();
                         window.showMessage('此PDF不存在', 'error');
                         return null;
                     }
@@ -739,27 +819,35 @@
                 }
 
                 if (!resolvedPdfUrl) {
+                    closeOwnedReservation();
                     window.showMessage('此PDF不存在', 'error');
                     return null;
                 }
-                resolvedPdfUrl = this._ensureAbsoluteUrl(resolvedPdfUrl);
-            }
-
-            if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
-                    if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow)) {
-                        return null;
-                    }
-                    options.reuseWindow.location.href = resolvedPdfUrl;
-                    options.navigationEpoch = this._recordExamWindowNavigation(options.reuseWindow);
-                    options.reuseWindow.focus();
-                    pdfWin = options.reuseWindow;
-                } catch (reuseError) {
-                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                    resolvedPdfUrl = this._ensureAbsoluteUrl(resolvedPdfUrl);
+                } catch (error) {
+                    closeOwnedReservation();
+                    throw error;
                 }
             }
 
-            if (!pdfWin) {
+            if (reservedWindow && !reservedWindow.closed) {
+                try {
+                    if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || reservedWindow)) {
+                        closeOwnedReservation();
+                        return null;
+                    }
+                    reservedWindow.location.href = resolvedPdfUrl;
+                    options.navigationEpoch = this._recordExamWindowNavigation(reservedWindow);
+                    if (typeof reservedWindow.focus === 'function') reservedWindow.focus();
+                    pdfWin = reservedWindow;
+                } catch (reuseError) {
+                    console.warn('[App] 无法复用已打开的标签:', reuseError);
+                    closeOwnedReservation();
+                }
+            }
+
+            if (!pdfWin && !mustUseReservedWindow) {
                 if (openGeneration && !this._isExamOpenGenerationCurrent(openGeneration, options.reuseWindow || null)) return null;
                 if (options.target === 'tab') {
                     try {
@@ -774,6 +862,11 @@
             }
 
             if (!pdfWin) {
+                if (mustUseReservedWindow) {
+                    closeOwnedReservation();
+                    window.showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
+                    return null;
+                }
                 try {
                     window.location.href = resolvedPdfUrl;
                     options.navigationEpoch = this._recordExamWindowNavigation(window);
