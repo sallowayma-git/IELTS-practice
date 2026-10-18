@@ -8,6 +8,13 @@ use tauri::WebviewWindowBuilder;
 
 use crate::commands;
 
+/// The origin Tauri serves the bundled frontend from; anything else is remote.
+const LOCAL_ORIGIN: &str = if cfg!(windows) {
+    "http://tauri.localhost"
+} else {
+    "tauri://localhost"
+};
+
 fn invoke(cmd: &str) -> Result<serde_json::Value, String> {
     let app = mock_builder()
         .invoke_handler(tauri::generate_handler![
@@ -25,7 +32,7 @@ fn invoke(cmd: &str) -> Result<serde_json::Value, String> {
             cmd: cmd.into(),
             callback: CallbackFn(0),
             error: CallbackFn(1),
-            url: "tauri://localhost".parse().unwrap(),
+            url: LOCAL_ORIGIN.parse().unwrap(),
             body: InvokeBody::default(),
             headers: Default::default(),
             invoke_key: INVOKE_KEY.to_string(),
