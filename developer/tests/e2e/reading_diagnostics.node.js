@@ -244,7 +244,9 @@ try {
                 console.log(`PASS ${mode} ${scenario}`);
             } catch (error) {
                 console.error(String(error));
-                results.push({ mode, scenario, passed: false, error: String(error) });
+                // The qualification gate keeps only the allowlisted source line
+                // from this transient stack and discards the exception payload.
+                results.push({ mode, scenario, passed: false, error: error.stack || String(error) });
                 if (!child.isClosed()) {
                     await child.screenshot({ path: path.join(reports, `reading-diagnostics-${mode}-${scenario}-failure.png`) }).catch(() => {});
                     console.error(await child.evaluate(() => ({ state: window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState(),
