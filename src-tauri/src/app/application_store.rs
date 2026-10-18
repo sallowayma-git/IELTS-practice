@@ -2,9 +2,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use ielts_application::{
     AgentStore, AgentThreadStore, ApplicationError, CoachFeedbackStore, CognitiveReadStore,
-    ConsolidationStore, ContextSnapshotStore, CoachStore, CorpusExportStore, DreamStore,
+    ConsolidationStore, CoachStore, DreamStore,
     EventSink, JournalStore, LearnerModelAdminStore, LearnerModelStore, LearningObservationStore,
-    MemoryStore, PromptSkillStore, TeachingStrategyStore, WritingEvaluationStore,
+    MemoryStore, WritingEvaluationStore,
 };
 use ielts_db::{
     AppendCoachMessageCommand, BeginAgentRunCommand, BeginAgentToolCallCommand, CoachMessage,
@@ -404,50 +404,6 @@ impl CognitiveReadStore for ApplicationStore<'_> {
     }
 }
 
-#[cfg(feature = "context-compiler-v1")]
-impl CorpusExportStore for ApplicationStore<'_> {
-    fn corpus_manifest(&self) -> Result<ielts_domain::CorpusManifest, ApplicationError> {
-        self.db
-            .with_conn(ielts_db::corpus_manifest)
-            .map_err(corpus_error)
-    }
-
-    fn export_chunks(
-        &self,
-        query: &ielts_domain::CorpusExportQuery,
-    ) -> Result<ielts_domain::CorpusExportPage, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::export_corpus_chunks(conn, query))
-            .map_err(corpus_error)
-    }
-
-    fn fetch_chunks(
-        &self,
-        query: &ielts_domain::CorpusFetchQuery,
-    ) -> Result<ielts_domain::CorpusFetchResult, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::fetch_corpus_chunks(conn, query))
-            .map_err(corpus_error)
-    }
-}
-
-#[cfg(feature = "context-compiler-v1")]
-impl ContextSnapshotStore for ApplicationStore<'_> {
-    fn insert_context_snapshot(
-        &self,
-        manifest: &ielts_domain::ContextManifest,
-        rendered_context: &str,
-        query_plan_json: &serde_json::Value,
-        scope: &str,
-    ) -> Result<(), ApplicationError> {
-        self.db
-            .with_conn(|conn| {
-                ielts_db::insert_context_snapshot(conn, manifest, rendered_context, query_plan_json, scope)
-            })
-            .map_err(corpus_error)
-    }
-}
-
 impl MemoryStore for ApplicationStore<'_> {
     fn prepare_candidate_input(
         &self,
@@ -736,102 +692,6 @@ impl ConsolidationStore for ApplicationStore<'_> {
     }
 }
 
-#[cfg(feature = "daily-dream-v1")]
-impl TeachingStrategyStore for ApplicationStore<'_> {
-    fn load_catalog(
-        &self,
-    ) -> Result<Vec<ielts_domain::TeachingStrategyCatalogEntry>, ApplicationError> {
-        self.db
-            .with_conn(ielts_db::load_catalog)
-            .map_err(teaching_strategy_error)
-    }
-
-    fn load_catalog_entry(
-        &self,
-        strategy_id: ielts_domain::TeachingStrategyId,
-    ) -> Result<Option<ielts_domain::TeachingStrategyCatalogEntry>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::load_catalog_entry(conn, strategy_id))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn record_strategy_assignment(
-        &self,
-        command: &ielts_domain::RecordStrategyAssignmentCommand,
-    ) -> Result<ielts_domain::StrategyAssignmentRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::record_strategy_assignment(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn record_strategy_feedback(
-        &self,
-        command: &ielts_domain::RecordStrategyFeedbackCommand,
-    ) -> Result<ielts_domain::StrategyFeedbackRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::record_strategy_feedback(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn record_strategy_outcome(
-        &self,
-        command: &ielts_domain::RecordStrategyOutcomeCommand,
-    ) -> Result<ielts_domain::OutcomeAttribution, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::record_strategy_outcome(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn load_user_strategy_state(
-        &self,
-        user_id: &str,
-        strategy_id: ielts_domain::TeachingStrategyId,
-        scope: &str,
-    ) -> Result<Option<ielts_domain::UserStrategyState>, ApplicationError> {
-        self.db
-            .with_conn(|conn| {
-                ielts_db::load_user_strategy_state(conn, user_id, strategy_id, scope)
-            })
-            .map_err(teaching_strategy_error)
-    }
-
-    fn select_strategy(
-        &self,
-        command: &ielts_domain::SelectStrategyCommand,
-    ) -> Result<ielts_domain::StrategySelection, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::select_strategy(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn record_strategy_candidate_batch(
-        &self,
-        command: &ielts_domain::RecordStrategyCandidateBatchCommand,
-    ) -> Result<ielts_domain::StrategyCandidateBatchRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::record_strategy_candidate_batch(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn record_strategy_candidate_evaluation(
-        &self,
-        command: &ielts_domain::RecordStrategyCandidateEvaluationCommand,
-    ) -> Result<ielts_domain::StrategyCandidateEvaluationRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::record_strategy_candidate_evaluation(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-
-    fn promote_strategy_candidate(
-        &self,
-        command: &ielts_domain::PromoteStrategyCandidateCommand,
-    ) -> Result<ielts_domain::StrategyCandidateDecision, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::promote_strategy_candidate(conn, command))
-            .map_err(teaching_strategy_error)
-    }
-}
-
 pub(crate) struct ChannelEventSink {
     channel: Channel<EvaluationEvent>,
     closed: AtomicBool,
@@ -890,11 +750,6 @@ fn cognitive_read_error(error: ielts_db::DbError) -> ApplicationError {
     ApplicationError::new("learning.cognitive_read_failed", error.to_string(), false)
 }
 
-#[cfg(feature = "context-compiler-v1")]
-fn corpus_error(error: ielts_db::DbError) -> ApplicationError {
-    ApplicationError::new("retrieval.corpus_export_failed", error.to_string(), false)
-}
-
 fn memory_error(error: ielts_db::DbError) -> ApplicationError {
     ApplicationError::new("memory.persistence_failed", error.to_string(), false)
 }
@@ -911,163 +766,4 @@ fn journal_error(error: ielts_db::DbError) -> ApplicationError {
 #[cfg(feature = "daily-dream-v1")]
 fn dream_error(error: ielts_db::DbError) -> ApplicationError {
     ApplicationError::new("dream.run_failed", error.to_string(), false)
-}
-
-#[cfg(feature = "daily-dream-v1")]
-fn teaching_strategy_error(error: ielts_db::DbError) -> ApplicationError {
-    ApplicationError::new("teaching.strategy_failed", error.to_string(), false)
-}
-
-#[cfg(feature = "daily-dream-v1")]
-fn prompt_skill_error(error: ielts_db::DbError) -> ApplicationError {
-    ApplicationError::new("prompt_skill.failed", error.to_string(), false)
-}
-
-#[cfg(feature = "daily-dream-v1")]
-impl PromptSkillStore for ApplicationStore<'_> {
-    fn ensure_prompt_template(
-        &self,
-        module: ielts_domain::PromptModule,
-        description: Option<&str>,
-    ) -> Result<ielts_domain::PromptTemplate, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::ensure_prompt_template(conn, module, description))
-            .map_err(prompt_skill_error)
-    }
-
-    fn create_prompt_version(
-        &self,
-        template_id: &str,
-        content_text: &str,
-        prompt_metadata: &serde_json::Value,
-        created_by: &str,
-    ) -> Result<ielts_domain::PromptVersion, ApplicationError> {
-        self.db
-            .with_conn(|conn| {
-                ielts_db::create_prompt_version(conn, template_id, content_text, prompt_metadata, created_by)
-            })
-            .map_err(prompt_skill_error)
-    }
-
-    fn list_prompt_versions(
-        &self,
-        module: ielts_domain::PromptModule,
-    ) -> Result<Vec<ielts_domain::PromptVersion>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::list_prompt_versions(conn, module))
-            .map_err(prompt_skill_error)
-    }
-
-    fn get_active_prompt_version(
-        &self,
-        module: ielts_domain::PromptModule,
-    ) -> Result<Option<ielts_domain::PromptVersion>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::get_active_prompt_version(conn, module))
-            .map_err(prompt_skill_error)
-    }
-
-    fn ensure_skill_definition(
-        &self,
-        skill_name: ielts_domain::SkillName,
-        description: Option<&str>,
-    ) -> Result<ielts_domain::SkillDefinition, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::ensure_skill_definition(conn, skill_name, description))
-            .map_err(prompt_skill_error)
-    }
-
-    fn create_skill_version(
-        &self,
-        skill_definition_id: &str,
-        definition: &serde_json::Value,
-        created_by: &str,
-    ) -> Result<ielts_domain::SkillVersion, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::create_skill_version(conn, skill_definition_id, definition, created_by))
-            .map_err(prompt_skill_error)
-    }
-
-    fn list_skill_versions(
-        &self,
-        skill_name: ielts_domain::SkillName,
-    ) -> Result<Vec<ielts_domain::SkillVersion>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::list_skill_versions(conn, skill_name))
-            .map_err(prompt_skill_error)
-    }
-
-    fn insert_eval_case(
-        &self,
-        case_kind: ielts_domain::EvalCaseKind,
-        input: &serde_json::Value,
-        expected: &serde_json::Value,
-        holdout: bool,
-    ) -> Result<ielts_domain::EvalCase, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::insert_eval_case(conn, case_kind, input, expected, holdout))
-            .map_err(prompt_skill_error)
-    }
-
-    fn list_eval_cases(&self, include_holdout: bool) -> Result<Vec<ielts_domain::EvalCase>, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::list_eval_cases(conn, include_holdout))
-            .map_err(prompt_skill_error)
-    }
-
-    fn propose_candidate(
-        &self,
-        command: &ielts_domain::ProposeCandidateCommand,
-    ) -> Result<ielts_domain::CandidatePromotion, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::propose_candidate(conn, command))
-            .map_err(prompt_skill_error)
-    }
-
-    fn run_eval(&self, command: &ielts_domain::RunEvalCommand) -> Result<ielts_domain::EvalRunOutcome, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::run_eval(conn, command))
-            .map_err(prompt_skill_error)
-    }
-
-    fn approve_candidate(
-        &self,
-        command: &ielts_domain::ApproveCandidateCommand,
-    ) -> Result<ielts_domain::CandidatePromotion, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::approve_candidate(conn, command))
-            .map_err(prompt_skill_error)
-    }
-
-    fn promote_candidate(
-        &self,
-        command: &ielts_domain::PromoteCandidateCommand,
-    ) -> Result<ielts_domain::CandidateDecision, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::promote_candidate(conn, command))
-            .map_err(prompt_skill_error)
-    }
-
-    fn rollback_version(
-        &self,
-        command: &ielts_domain::RollbackCommand,
-    ) -> Result<ielts_domain::RollbackOutcome, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::rollback_version(conn, command))
-            .map_err(prompt_skill_error)
-    }
-
-    fn record_shadow_run(
-        &self,
-        candidate_id: &str,
-        input_hash: &str,
-        output_diff: &serde_json::Value,
-        no_user_visible_side_effect: bool,
-    ) -> Result<(), ApplicationError> {
-        self.db
-            .with_conn(|conn| {
-                ielts_db::record_shadow_run(conn, candidate_id, input_hash, output_diff, no_user_visible_side_effect)
-            })
-            .map_err(prompt_skill_error)
-    }
 }

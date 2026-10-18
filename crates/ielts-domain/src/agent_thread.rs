@@ -274,6 +274,22 @@ pub fn is_forbidden_action_kind(name: &str) -> bool {
     FORBIDDEN_ACTION_KINDS.contains(&name)
 }
 
+/// M11-06: the deny-list of online self-modifying agent tools. The reverse-
+/// RPC `tool.invoke` dispatcher rejects these names before any side effect.
+/// The online Agent never edits its own Soul, system prompt, or installs an
+/// unreviewed skill.
+pub const DENIED_SELF_MODIFYING_TOOLS: &[&str] = &[
+    "update_system_prompt",
+    "edit_soul",
+    "install_unreviewed_skill",
+];
+
+/// M11-06: returns `true` when a tool name is on the self-modifying deny-
+/// list. Used by the reverse-RPC `tool.invoke` dispatcher to fail closed.
+pub fn is_denied_self_modifying_tool(name: &str) -> bool {
+    DENIED_SELF_MODIFYING_TOOLS.contains(&name)
+}
+
 /// M12-06: the approval status for an approval-gated action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -704,6 +720,10 @@ mod tests {
         assert!(is_forbidden_action_kind("silent_delete_history"));
         assert!(!is_forbidden_action_kind("create_study_plan_draft"));
         assert!(!is_forbidden_action_kind("bulk_archive"));
+        assert!(is_denied_self_modifying_tool("update_system_prompt"));
+        assert!(is_denied_self_modifying_tool("edit_soul"));
+        assert!(is_denied_self_modifying_tool("install_unreviewed_skill"));
+        assert!(!is_denied_self_modifying_tool("memory.candidate_input"));
     }
 
     #[test]

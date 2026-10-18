@@ -1171,9 +1171,8 @@ def main() -> int:
         # The real packaged command table must reject product release writes.
         # Missing args, an ACL error, or a business error is NOT evidence that a
         # command is absent. Even a forged passing verdict must hit not-found.
-        # M10 teaching-strategy and M11 prompt/skill commands are compiled only
-        # with the `developer-tools` feature, so the packaged build must not
-        # expose any of them, readers included.
+        # The M10 teaching-strategy and M11 prompt/skill commands were deleted,
+        # so the packaged build must not expose any of them, readers included.
         for command in (
             "eval_run_case", "prompt_approve_candidate",
             "prompt_promote_candidate", "prompt_rollback",

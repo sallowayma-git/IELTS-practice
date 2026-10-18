@@ -88,16 +88,6 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     ("model.invoke", "1"),
     ("tool.invoke", "1"),
     #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.corpus_manifest", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.export_chunks", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.fetch_chunks", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("context.materialize", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("model.embed.batch", "1"),
-    #[cfg(feature = "context-compiler-v1")]
     ("learning.learner_skill_state", "1"),
     #[cfg(feature = "context-compiler-v1")]
     ("memory.search_active", "1"),
@@ -107,47 +97,8 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     ("dream.run_weekly", "1"),
     #[cfg(feature = "daily-dream-v1")]
     ("learning.weekly_pack", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.select", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_assignment", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_feedback", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_outcome", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.user_state", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.list_versions", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.get_active", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.propose_candidate", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("skill.list_versions", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.create", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.append_message", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.list", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.save_checkpoint", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.request_cancel", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("approval.list", "1"),
-    // `approval.record` only inserts a PENDING row: it is the sidecar's
-    // legitimate way to REQUEST a human decision. `approval.decide` is
-    // deliberately absent (Round-3 audit A2) — deciding is the human's.
-    #[cfg(feature = "agent-threads-v1")]
-    ("approval.record", "1"),
     #[cfg(feature = "agent-threads-v1")]
     ("study_plan.create", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("study_plan.list_items", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("study_plan.mark_done", "1"),
 ];
 /// Saturday or Sunday, in `now`'s own zone.
 #[cfg(feature = "daily-dream-v1")]
@@ -1483,15 +1434,6 @@ impl RuntimeManager {
                 self.invoke_model(app, params, request_budget, active.kind.model_transport_retries()).await
             }
             #[cfg(feature = "context-compiler-v1")]
-            Some("model.embed.batch") => self.invoke_embed(app, params, request_budget).await,
-            #[cfg(feature = "context-compiler-v1")]
-            Some(method @ ("retrieval.corpus_manifest"
-                | "retrieval.export_chunks"
-                | "retrieval.fetch_chunks"
-                | "context.materialize")) => {
-                self.invoke_retrieval_context(app, method, params).await
-            }
-            #[cfg(feature = "context-compiler-v1")]
             Some(method @ ("learning.learner_skill_state"
                 | "memory.search_active"
                 | "learning.evidence_by_ids")) => {
@@ -1501,112 +1443,13 @@ impl RuntimeManager {
             Some(method @ ("dream.run_weekly" | "learning.weekly_pack")) => {
                 self.invoke_journal_dream(app, method, params, &active).await
             }
-            #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("strategy.select"
-                | "strategy.record_assignment"
-                | "strategy.record_feedback"
-                | "strategy.record_outcome"
-                | "strategy.user_state")) => {
-                self.invoke_teaching_strategy(app, method, params).await
-            }
-            // Round-3 audit (A2): `prompt.promote_candidate`, `prompt.rollback`,
-            // `eval.run_case` and `approval.decide` are deliberately absent.
-            // They activate a version, reverse one, author the eval verdict that
-            // gates approval, or decide an approval outright — the sidecar is a
-            // derived runtime and must not hold that authority. They now fall
-            // through to the `unsupported host method` arm below. Product
-            // prompt release operations are also absent from Webview commands;
-            // controlled-action approval retains its separate human UI gate.
-            #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("prompt.list_versions"
-                | "prompt.get_active"
-                | "prompt.propose_candidate"
-                | "skill.list_versions")) => {
-                self.invoke_prompt_skill(app, method, params).await
-            }
             #[cfg(feature = "agent-threads-v1")]
-            Some(method @ ("thread.create"
-                | "thread.append_message"
-                | "thread.list"
-                | "thread.save_checkpoint"
-                | "thread.request_cancel"
-                | "approval.list"
-                | "approval.record"
-                | "study_plan.create"
-                | "study_plan.list_items"
-                | "study_plan.mark_done")) => {
-                self.invoke_agent_thread(app, method, params).await
-            }
+            Some("study_plan.create") => self.invoke_study_plan_create(app, params).await,
             Some(method) => Err(RuntimeHostError::InvalidResponse(format!(
                 "unsupported host method: {method}"
             ))),
             None => Err(RuntimeHostError::InvalidResponse("host method is missing".into())),
         }
-    }
-
-    /// M5-01/M5-08: serve the corpus export + context materialization reverse-RPC.
-    ///
-    /// Python asks for bounded corpus views or asks Rust to materialize a
-    /// ContextPlan. Rust is the authority: it never exposes a DB handle, and
-    /// materialization re-fetches canonical text + re-authorizes before
-    /// returning a ContextPack. Python only ever receives derived DTOs.
-    #[cfg(feature = "context-compiler-v1")]
-    async fn invoke_retrieval_context(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::{ContextMaterializerService, CorpusExportService};
-        use ielts_domain::{ContextPlan, CorpusExportQuery, CorpusFetchQuery};
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let result: Result<Value, String> = match method {
-            "retrieval.corpus_manifest" => serialize_result(
-                CorpusExportService::new(&store).corpus_manifest(),
-            ),
-            "retrieval.export_chunks" => {
-                match serde_json::from_value::<CorpusExportQuery>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(
-                        CorpusExportService::new(&store).export_chunks(&query),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "retrieval.fetch_chunks" => {
-                match serde_json::from_value::<CorpusFetchQuery>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(
-                        CorpusExportService::new(&store).fetch_chunks(&query),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "context.materialize" => {
-                match serde_json::from_value::<ContextPlan>(
-                    params.get("plan").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(plan) => {
-                        let scope = params
-                            .get("scope")
-                            .and_then(Value::as_str)
-                            .unwrap_or("internal")
-                            .to_string();
-                        serialize_result(
-                            ContextMaterializerService::new(&store, &store)
-                                .materialize_for_caller(&plan, &scope),
-                        )
-                    }
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported retrieval/context method: {other}")),
-        };
-        result.map_err(RuntimeHostError::InvalidResponse)
     }
 
     /// M6-02: serve the three bounded read-only learning/memory tools.
@@ -1770,327 +1613,36 @@ impl RuntimeManager {
         Ok(value)
     }
 
-    /// M10: serve the teaching-strategy evolution reverse-RPC. Rust is the
-    /// evolution authority: selection (M10-06), assignment recording (M10-02),
-    /// the two reward channels (M10-03: satisfaction vs learning on separate
-    /// tables), the delayed outcome window (M10-04), per-user state (M10-05),
-    /// and the candidate promotion gate (M10-08). Python only receives derived
-    /// DTOs + stable strategy ids.
-    #[cfg(feature = "daily-dream-v1")]
-    async fn invoke_teaching_strategy(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::TeachingStrategyService;
-        use ielts_domain::{
-            RecordStrategyAssignmentCommand, RecordStrategyFeedbackCommand,
-            RecordStrategyOutcomeCommand, SelectStrategyCommand, TeachingStrategyId,
-        };
-
-        const STRATEGY_RESPONSE_BYTES: usize = 256 * 1024;
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = TeachingStrategyService::new(&store);
-        let result: Result<Value, String> = match method {
-            "strategy.select" => {
-                match serde_json::from_value::<SelectStrategyCommand>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(service.select_strategy(&query)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_assignment" => {
-                match serde_json::from_value::<RecordStrategyAssignmentCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_assignment(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_feedback" => {
-                match serde_json::from_value::<RecordStrategyFeedbackCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_feedback(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_outcome" => {
-                match serde_json::from_value::<RecordStrategyOutcomeCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_outcome(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.user_state" => {
-                let user_id = params
-                    .get("userId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("local")
-                    .to_string();
-                let strategy_id_str = params
-                    .get("strategyId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("");
-                let scope = params
-                    .get("scope")
-                    .and_then(Value::as_str)
-                    .unwrap_or("general")
-                    .to_string();
-                match TeachingStrategyId::parse(strategy_id_str) {
-                    Some(strategy_id) => {
-                        serialize_result(service.user_state(&user_id, strategy_id, &scope))
-                    }
-                    None => Err(format!("unknown strategy id: {strategy_id_str}")),
-                }
-            }
-            other => Err(format!("unsupported strategy method: {other}")),
-        };
-        let value = result.map_err(RuntimeHostError::InvalidResponse)?;
-        let size = serde_json::to_vec(&value)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?
-            .len();
-        if size > STRATEGY_RESPONSE_BYTES {
-            return Err(RuntimeHostError::InvalidResponse(format!(
-                "strategy response exceeds {STRATEGY_RESPONSE_BYTES} bytes"
-            )));
-        }
-        Ok(value)
-    }
-
-    /// M11: prompt/skill registry + eval-driven evolution reverse-RPC. Rust is
-    /// the release gate (M11-05 lifecycle: propose→eval→holdout→shadow→approval
-    ///→canary→promote→rollback). Online self-modifying prompt is forbidden
-    /// (M11-06); candidate cannot skip eval.
-    #[cfg(feature = "daily-dream-v1")]
-    async fn invoke_prompt_skill(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::PromptSkillService;
-        // PromoteCandidateCommand / RollbackCommand / RunEvalCommand are
-        // deliberately absent: those methods are not served on this path.
-        use ielts_domain::{ProposeCandidateCommand, PromptModule, SkillName};
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = PromptSkillService::new(&store);
-        let result: Result<Value, String> = match method {
-            "prompt.list_versions" => {
-                let module = serde_json::from_value::<PromptModule>(
-                    params.get("module").cloned().unwrap_or(Value::Null),
-                );
-                match module {
-                    Ok(module) => serialize_result(
-                        service.list_prompt_versions(module).map(|versions| {
-                            serde_json::to_value(versions).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "prompt.get_active" => {
-                let module = serde_json::from_value::<PromptModule>(
-                    params.get("module").cloned().unwrap_or(Value::Null),
-                );
-                match module {
-                    Ok(module) => serialize_result(
-                        service.get_active_prompt_version(module).map(|maybe| {
-                            serde_json::to_value(maybe).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "prompt.propose_candidate" => {
-                let command = serde_json::from_value::<ProposeCandidateCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                );
-                match command {
-                    Ok(command) => serialize_result(
-                        service.propose_candidate(&command).map(|promotion| {
-                            serde_json::to_value(promotion).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            // Round-3 audit (A2): `prompt.promote_candidate`, `prompt.rollback`
-            // and `eval.run_case` are intentionally NOT served here. Promotion
-            // and rollback activate or reverse a live version; `eval.run_case`
-            // persists caller-supplied `passed` gradings and advances a candidate
-            // to `eval_passed`, which is the sole precondition for approval — so
-            // serving it to the sidecar would let the runtime author the very
-            // evidence the human gate reviews. All three are offline-only,
-            // not Webview commands; a caller-supplied grade is not a release eval.
-            "skill.list_versions" => {
-                let skill = serde_json::from_value::<SkillName>(
-                    params.get("skill").cloned().unwrap_or(Value::Null),
-                );
-                match skill {
-                    Ok(skill) => serialize_result(
-                        service.list_skill_versions(skill).map(|versions| {
-                            serde_json::to_value(versions).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported prompt/skill method: {other}")),
-        };
-        result.map_err(RuntimeHostError::InvalidResponse)
-    }
-
-    /// M12-01/02/04/06: serve the General Agent Thread reverse-RPC. Rust is
-    /// the controlled-action authority: threads, checkpoints, study plans,
-    /// and approvals are persisted here; Python owns planner orchestration
-    /// and calls back through these methods. Forbidden action kinds are
-    /// rejected by the `tool.invoke` dispatcher before reaching this method.
+    /// M12-04: serve `study_plan.create`, the only agent-thread reverse-RPC a
+    /// run kind is allowed to reach. Rust is the controlled-action authority:
+    /// the study plan is persisted here; Python owns planner orchestration.
+    /// Forbidden action kinds are rejected by the `tool.invoke` dispatcher.
     #[cfg(feature = "agent-threads-v1")]
-    async fn invoke_agent_thread(
+    async fn invoke_study_plan_create(
         &self,
         app: &AppHandle,
-        method: &str,
         params: &serde_json::Map<String, Value>,
     ) -> Result<Value, RuntimeHostError> {
         use ielts_application::AgentThreadService;
-        // DecideApprovalCommand is deliberately absent: `approval.decide` is not
-        // served on this path.
-        use ielts_domain::{
-            CreateStudyPlanCommand, CreateThreadCommand,
-            MarkPlanItemDoneCommand, RecordApprovalCommand, RequestCancelCommand,
-            SaveCheckpointCommand,
-        };
-
-        const THREAD_RESPONSE_BYTES: usize = 512 * 1024;
+        use ielts_domain::CreateStudyPlanCommand;
 
         let db = app.state::<AppDb>();
         let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = AgentThreadService::new(&store);
-        let result: Result<Value, String> = match method {
-            "thread.create" => {
-                match serde_json::from_value::<CreateThreadCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.create_thread(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.append_message" => {
-                match serde_json::from_value::<ielts_domain::AppendMessageCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.append_message(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.list" => {
-                let user_id = params
-                    .get("userId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("local")
-                    .to_string();
-                let limit = params
-                    .get("limit")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(50) as u32;
-                serialize_result(service.list_threads(&user_id, limit))
-            }
-            "thread.save_checkpoint" => {
-                match serde_json::from_value::<SaveCheckpointCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.save_checkpoint(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.request_cancel" => {
-                match serde_json::from_value::<RequestCancelCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.request_cancel(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "approval.list" => {
-                let limit = params
-                    .get("limit")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(50) as u32;
-                serialize_result(service.list_pending_approvals(limit))
-            }
-            // Round-3 audit (A2): `approval.decide` is intentionally NOT served
-            // here. `decide_approval` validates `approvedBy` only as non-empty
-            // text, so serving it to the sidecar let the runtime approve its own
-            // pending actions and record a fabricated approver. Deciding is a
-            // human action and stays on the Tauri command path.
-            "approval.record" => {
-                // M12-06: record an approval-gated action as pending. Allow-
-                // listed kinds are rejected by the service; forbidden kinds
-                // never reach here (rejected by tool.invoke).
-                match serde_json::from_value::<RecordApprovalCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_action_approval(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "study_plan.create" => {
-                // Preserve the full probe JSON in the existing TEXT column.
-                // Return the envelope required by the Python orchestrator.
-                let parsed = params
-                    .get("proposal")
-                    .ok_or_else(|| "study_plan.create requires proposal".to_string())
-                    .and_then(CreateStudyPlanCommand::from_planner_proposal);
-                match parsed {
-                    Ok(command) => {
-                        match service.create_study_plan(&command) {
-                            Ok(plan) => Ok(json!({
-                                "planId": plan.id,
-                                "accepted": command.items.len(),
-                                "rejected": 0,
-                            })),
-                            Err(error) => Err(error.message),
-                        }
-                    }
-                    Err(error) => Err(error),
-                }
-            }
-            "study_plan.list_items" => {
-                let plan_id = params
-                    .get("planId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                serialize_result(service.list_study_plan_items(&plan_id))
-            }
-            "study_plan.mark_done" => {
-                match serde_json::from_value::<MarkPlanItemDoneCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.mark_plan_item_done(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported agent thread method: {other}")),
-        };
-        let value = result.map_err(RuntimeHostError::InvalidResponse)?;
-        let size = serde_json::to_vec(&value)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?
-            .len();
-        if size > THREAD_RESPONSE_BYTES {
-            return Err(RuntimeHostError::InvalidResponse(format!(
-                "agent thread response exceeds {THREAD_RESPONSE_BYTES} bytes"
-            )));
-        }
-        Ok(value)
+        // Preserve the full probe JSON in the existing TEXT column.
+        // Return the envelope required by the Python orchestrator.
+        let command = params
+            .get("proposal")
+            .ok_or_else(|| "study_plan.create requires proposal".to_string())
+            .and_then(CreateStudyPlanCommand::from_planner_proposal)
+            .map_err(RuntimeHostError::InvalidResponse)?;
+        let plan = AgentThreadService::new(&store)
+            .create_study_plan(&command)
+            .map_err(|error| RuntimeHostError::InvalidResponse(error.message))?;
+        Ok(json!({
+            "planId": plan.id,
+            "accepted": command.items.len(),
+            "rejected": 0,
+        }))
     }
 
     async fn invoke_candidate_input_tool(
@@ -2213,42 +1765,6 @@ impl RuntimeManager {
             .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
     }
 
-    /// M5-04: serve the `model.embed.batch` reverse-RPC.
-    ///
-    /// Python asks for an embedding batch; Rust resolves the provider through
-    /// the same `load_runtime` + `AppVault` path as `model.invoke`, then delegates
-    /// to `LanguageModel::embed`. Slice 4 only stands up the contract — the
-    /// `AiRuntime` impl keeps the default `embedding_not_supported` error until
-    /// the M5-11 eval gate proves embeddings add value and a real provider
-    /// endpoint is wired. The capability is advertised so Python can probe
-    /// readiness and persist the signature contract; a not_supported error is
-    /// surfaced to the caller rather than silently degrading to lexical.
-    #[cfg(feature = "context-compiler-v1")]
-    async fn invoke_embed(
-        &self,
-        app: &AppHandle,
-        params: &serde_json::Map<String, Value>,
-        timeout: Duration,
-    ) -> Result<Value, RuntimeHostError> {
-        let request = params
-            .get("request")
-            .cloned()
-            .ok_or_else(|| RuntimeHostError::InvalidResponse("embedding request is missing".into()))?;
-        let request: ielts_domain::EmbeddingRequest = serde_json::from_value(request)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
-        validate_embed_request(&request)?;
-        let db = app.state::<AppDb>();
-        let vault = app.state::<AppVault>();
-        let runtime = load_runtime(&db, &vault)
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
-        let response = tokio::time::timeout(timeout, runtime.embed(request))
-            .await
-            .map_err(|_| RuntimeHostError::Timeout)?
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
-        serde_json::to_value(response)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
-    }
-
     async fn write_to_child(
         &self,
         generation: u64,
@@ -2346,11 +1862,7 @@ fn fail_pending(process: &mut RuntimeProcess, message: &str) {
 /// `passed` gradings and advances a candidate to `eval_passed`, which is the
 /// sole precondition for approval; `approval.decide` is the human decision
 /// itself, and its `approvedBy` is only checked for non-emptiness. The sidecar
-/// is a derived runtime — it may PROPOSE (`prompt.propose_candidate`) and it may
-/// REQUEST a decision (`approval.record`), but it may not grant one.
-///
-/// Host ownership does not imply Webview access: product prompt eval/release
-/// operations have no Tauri command. Controlled-action approval is separate.
+/// is a derived runtime and may not grant any of them.
 pub(crate) const HOST_ONLY_METHODS: &[&str] = &[
     "prompt.promote_candidate",
     "prompt.rollback",
@@ -2403,31 +1915,6 @@ fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHost
         return Err(RuntimeHostError::InvalidResponse(format!(
             "model request maxTokens must be between 1 and {SIDECAR_MAX_OUTPUT_TOKENS}"
         )));
-    }
-    Ok(())
-}
-
-/// M5-04: bound the embedding batch so Python can never probe the gateway with
-/// an oversized or empty batch. Empty batches are rejected (no-cost probes);
-/// the per-text byte cap matches the frame ceiling so a batch cannot exceed the
-/// framed protocol budget.
-fn validate_embed_request(request: &ielts_domain::EmbeddingRequest) -> Result<(), RuntimeHostError> {
-    if request.texts.is_empty() {
-        return Err(RuntimeHostError::InvalidResponse(
-            "embedding request must contain at least one text".into(),
-        ));
-    }
-    if request.texts.len() > ielts_domain::MAX_CORPUS_FETCH_IDS {
-        return Err(RuntimeHostError::FrameTooLarge(request.texts.len()));
-    }
-    let bytes = request
-        .texts
-        .iter()
-        .try_fold(0usize, |total, text| {
-            Ok(total.saturating_add(text.len()))
-        })?;
-    if bytes > MAX_FRAME_BYTES {
-        return Err(RuntimeHostError::FrameTooLarge(bytes));
     }
     Ok(())
 }
@@ -2982,50 +2469,12 @@ mod tests {
         }
     }
 
-    /// Task book §17.8: the production UI may read the product registry and
-    /// propose drafts, but may not author verdicts or release global versions.
-    #[test]
-    fn product_prompt_release_is_not_a_webview_command() {
-        let lib_source = include_str!("lib.rs");
-        let handler = lib_source
-            .split_once("tauri::generate_handler![")
-            .expect("generate_handler! block must exist")
-            .1
-            .split_once("])")
-            .expect("generate_handler! block must terminate")
-            .0;
-        for command in [
-            "eval_run_case",
-            "prompt_approve_candidate",
-            "prompt_promote_candidate",
-            "prompt_rollback",
-        ] {
-            assert!(
-                !handler.contains(&format!("commands::prompt_skill::{command}")),
-                "{command} must not be registered for the Webview"
-            );
-        }
-        for command in [
-            "prompt_list_versions",
-            "prompt_get_active",
-            "prompt_propose_candidate",
-            "skill_list_versions",
-        ] {
-            assert!(
-                handler.contains(&format!("commands::prompt_skill::{command}")),
-                "{command} must remain registered"
-            );
-        }
-    }
-
-    /// The legitimate propose/request surface must stay reachable, so the fix
-    /// above cannot be "solved" by over-trimming.
+    /// The legitimate run surface must stay reachable, so the fix above
+    /// cannot be "solved" by over-trimming.
     #[test]
     fn propose_and_request_methods_stay_available() {
         for method in [
-            "prompt.propose_candidate",
-            "approval.record",
-            "approval.list",
+            "study_plan.create",
             "model.invoke",
             "tool.invoke",
         ] {

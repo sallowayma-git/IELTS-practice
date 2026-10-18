@@ -89,11 +89,14 @@ def skill_catalog() -> set[str]:
 
 def writing_criteria() -> set[str]:
     """The criterion names the backend stores as skill keys `writing.<criterion>`."""
-    text = read(ROOT / "crates/ielts-db/src/teaching_strategy.rs")
-    match = re.search(r"matches!\(\s*\*field,\s*((?:\"[A-Za-z]+\"\s*\|?\s*)+)\)", text)
+    text = read(ROOT / "crates/ielts-db/src/learning_observations.rs")
+    match = re.search(r"\nfn writing_score_value\(.*?\n\}\n", text, re.S)
     if not match:
-        raise SystemExit("could not parse writing criterion list from teaching_strategy.rs")
-    return set(re.findall(r'"([A-Za-z]+)"', match.group(1)))
+        raise SystemExit("could not parse fn writing_score_value from learning_observations.rs")
+    criteria = set(re.findall(r'"([A-Za-z]+)"\s*=>', match.group(0)))
+    if not criteria:
+        raise SystemExit("fn writing_score_value matches no criterion names")
+    return criteria
 
 
 def probe_kinds() -> set[str]:

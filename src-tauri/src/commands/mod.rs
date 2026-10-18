@@ -5,10 +5,6 @@ pub mod ai;
 pub mod backup;
 #[cfg(feature = "learning-observation-v1")]
 pub mod coach_feedback;
-#[cfg(feature = "context-compiler-v1")]
-pub mod context;
-#[cfg(feature = "context-compiler-v1")]
-pub mod corpus;
 pub mod diagnostics;
 pub mod enrichment;
 pub mod history;
@@ -20,10 +16,6 @@ pub mod learner;
 pub mod memory;
 pub mod modes;
 pub mod paths;
-#[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-pub mod prompt_skill;
 pub mod reading;
 pub mod settings;
-#[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-pub mod teaching_strategy;
 pub mod writing;

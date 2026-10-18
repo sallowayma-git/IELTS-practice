@@ -203,14 +203,6 @@ pub fn run() {
             commands::learner::learner_model_rebuild,
             #[cfg(all(feature = "developer-tools", feature = "learner-model-v1"))]
             commands::learner::learner_model_verify,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_manifest,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_export_chunks,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_fetch_chunks,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::context::context_materialize,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::journal_get_daily,
             #[cfg(feature = "daily-dream-v1")]
@@ -311,32 +303,6 @@ pub fn run() {
             commands::coach_feedback::coach_record_strategy_assignment,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_link_outcome,
-            // M10 teaching-strategy and M11 prompt/skill commands are engineering
-            // surfaces with no product caller: compiled only with `developer-tools`.
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_select,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_assignment,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_feedback,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_outcome,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_user_state,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_candidate_batch,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_candidate_evaluation,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_promote_candidate,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_list_versions,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_get_active,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_propose_candidate,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::skill_list_versions,
         ])
         .setup(|app| {
             // Register now, parse off the main thread: startup never waits on the 5 MB file.
