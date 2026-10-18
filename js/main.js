@@ -3840,11 +3840,9 @@ function createFallbackExamCard(exam, options = {}) {
         const isListeningExam = !!(window.ResourceCore
             && typeof window.ResourceCore.isListeningExam === 'function'
             && window.ResourceCore.isListeningExam(exam));
-        const pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(window.ResourceCore
-                && typeof window.ResourceCore.isPdfAvailable === 'function'
-                && window.ResourceCore.isPdfAvailable(exam));
+        const pdfAvailable = isListeningExam || !!(window.ResourceCore
+            && typeof window.ResourceCore.isPdfAvailable === 'function'
+            && window.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             const startBtn = document.createElement('button');

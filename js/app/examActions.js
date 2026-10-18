@@ -1730,14 +1730,12 @@
         const isListeningExam = !!(global.ResourceCore
             && typeof global.ResourceCore.isListeningExam === 'function'
             && global.ResourceCore.isListeningExam(exam));
-        const pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(global.ResourceCore
-                && typeof global.ResourceCore.isPdfAvailable === 'function'
-                && global.ResourceCore.isPdfAvailable(exam));
+        const pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        // A PDF-only entry must not retain a hidden launch path when its PDF is
-        // unavailable. HTML-backed exercises remain usable independently.
+        // A reading PDF-only entry must not retain a hidden launch path when its
+        // PDF is unavailable. Listening entries keep their legacy actions.
         if (exam.hasHtml !== false || pdfAvailable) {
             const startBtn = document.createElement('button');
             startBtn.className = 'btn exam-item-action-btn';

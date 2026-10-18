@@ -116,11 +116,14 @@
                         && typeof global.LibraryManager.getInstance === 'function'
                         ? global.LibraryManager.getInstance()
                         : null;
-                    const index = Array.isArray(storedIndex)
-                        && libraryManager
-                        && typeof libraryManager.normalizeIndexForCustomConfig === 'function'
-                        ? libraryManager.normalizeIndexForCustomConfig(storedIndex)
-                        : storedIndex;
+                    let index = storedIndex;
+                    if (Array.isArray(storedIndex) && libraryManager) {
+                        if (typeof libraryManager.normalizeIndexForCustomConfigReady === 'function') {
+                            index = await libraryManager.normalizeIndexForCustomConfigReady(storedIndex);
+                        } else if (typeof libraryManager.normalizeIndexForCustomConfig === 'function') {
+                            index = libraryManager.normalizeIndexForCustomConfig(storedIndex);
+                        }
+                    }
                     metadata.set(source.id, {
                         name: config && (config.name || config.title) || source.libraryId,
                         index: Array.isArray(index) ? index : null

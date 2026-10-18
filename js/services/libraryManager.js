@@ -308,6 +308,17 @@
             });
         }
 
+        async normalizeIndexForCustomConfigReady(index) {
+            const rows = Array.isArray(index) ? index : [];
+            const needsCanonicalReadingManifest = rows.some((exam) => {
+                return exam && exam.sourceKind === 'generated-reading';
+            });
+            if (needsCanonicalReadingManifest && typeof global.ensureExamDataScripts === 'function') {
+                await global.ensureExamDataScripts();
+            }
+            return this.normalizeIndexForCustomConfig(rows);
+        }
+
         finishLibraryLoading(startTime, index) {
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
@@ -340,7 +351,7 @@
                 ? configurationId.trim()
                 : null;
             if (id === null) return this.resolveDefaultIndex();
-            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id))
+            return (await this.normalizeIndexForCustomConfigReady(await global.AppData.library.getIndex(id)))
                 .map((exam) => ({ ...exam, libraryConfigurationId: id }));
         }
 
@@ -425,7 +436,7 @@
             }
 
             if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData)
+                const updatedIndex = (await this.normalizeIndexForCustomConfigReady(cachedData))
                     .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
                 if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
@@ -591,13 +602,19 @@
                 const listening = this.resolveDefaultTypeIndex('listening');
                 currentIndex = reading.concat(listening);
             }
-            return this.normalizeIndexForCustomConfig(currentIndex);
+            return this.normalizeIndexForCustomConfigReady(currentIndex);
         }
 
         async buildImportBaseIndex(activeKey, type, mode) {
             const base = await this.resolveBaseLibraryIndex(activeKey);
             const otherType = type === 'reading' ? 'listening' : 'reading';
             let next = base.slice();
+
+            const needsDefaultReading = !next.some((exam) => exam && exam.type === 'reading')
+                && (otherType === 'reading' || (mode === 'incremental' && type === 'reading'));
+            if (needsDefaultReading && typeof global.ensureExamDataScripts === 'function') {
+                await global.ensureExamDataScripts();
+            }
 
             if (!next.some((exam) => exam && exam.type === otherType)) {
                 next = next.concat(this.resolveDefaultTypeIndex(otherType));
@@ -756,7 +773,7 @@
         async applyLibraryConfiguration(key, dataset, options = {}) {
             const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
             const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
-            const exams = this.normalizeIndexForCustomConfig(rawExams)
+            const exams = (await this.normalizeIndexForCustomConfigReady(rawExams))
                 .map((exam) => ({ ...exam, libraryConfigurationId: configurationId }));
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {

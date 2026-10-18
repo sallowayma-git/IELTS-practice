@@ -32,6 +32,8 @@ function createHarness(seed = {}) {
         .map((config) => Object.assign({}, clone(config), { id: config.id || config.key }));
     const practiceRecords = clone(seed.records || []);
     const defaultReadingIndex = clone(seed.readingExamIndex || []);
+    const deferReadingExamIndex = seed.deferReadingExamIndex === true;
+    let examDataScriptLoads = 0;
     let resourceBasePrefix = '';
 
     const AppData = {
@@ -79,10 +81,6 @@ function createHarness(seed = {}) {
     const windowStub = {
         console: { log() {}, warn() {}, error() {}, info() {} },
         AppData,
-        __READING_EXAM_INDEX__: clone(defaultReadingIndex),
-        getReadingExamIndex() {
-            return clone(defaultReadingIndex);
-        },
         listeningExamIndex: clone(seed.listeningExamIndex || []),
         __LISTENING_EXAM_MANIFEST__: clone(seed.listeningManifest),
         __defaultListeningLibraryAvailable: typeof seed.defaultListeningAvailable === 'boolean'
@@ -104,9 +102,24 @@ function createHarness(seed = {}) {
         showMessage() {},
         dispatchEvent() {}
     };
+    const installReadingExamIndex = () => {
+        windowStub.__READING_EXAM_INDEX__ = clone(defaultReadingIndex);
+        windowStub.getReadingExamIndex = function getReadingExamIndex() {
+            return clone(defaultReadingIndex);
+        };
+    };
+    if (!deferReadingExamIndex) {
+        installReadingExamIndex();
+    }
     if (seed.ensureExamDataScriptsRejects) {
         windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
             throw new Error('simulated optional listening load failure');
+        };
+    } else if (deferReadingExamIndex) {
+        windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
+            examDataScriptLoads += 1;
+            await Promise.resolve();
+            installReadingExamIndex();
         };
     }
 
@@ -143,7 +156,13 @@ function createHarness(seed = {}) {
     }
     loadScript('js/services/libraryDiscovery.js', context);
     loadScript('js/services/libraryManager.js', context);
-    return { window: windowStub, indexes, getActiveId: () => activeId, getConfigurations: () => clone(configurations) };
+    return {
+        window: windowStub,
+        indexes,
+        getActiveId: () => activeId,
+        getConfigurations: () => clone(configurations),
+        getExamDataScriptLoads: () => examDataScriptLoads
+    };
 }
 
 function baseSeed() {
@@ -408,6 +427,43 @@ async function testFullListeningCreatesSnapshotAndKeepsReading() {
     recordResult('听力全量导入创建新配置并继承阅读', { key: created.key, counts: created.counts });
 }
 
+async function testColdListeningOnlyBaseLoadsManifestBeforeAddingDefaultReading() {
+    const seed = baseSeed();
+    seed.deferReadingExamIndex = true;
+    seed.library.importedIndexes.custom_active = [seed.listeningOld];
+    seed.library.configurations[0].examCount = 1;
+    const harness = createHarness(seed);
+    const manager = harness.window.LibraryManager.getInstance();
+    const listeningNew = {
+        id: 'listening-cold-import',
+        examId: 'listening-cold-import',
+        type: 'listening',
+        title: 'Cold Listening Import',
+        category: 'P1',
+        path: 'Drop/cold/',
+        filename: 'cold.html',
+        importKey: 'listening:drop/cold.html'
+    };
+
+    const created = await manager.createImportedLibraryConfiguration({
+        type: 'listening',
+        mode: 'full',
+        additions: [listeningNew],
+        activate: false
+    });
+    const next = await harness.window.AppData.library.getIndex(created.key);
+
+    assert.equal(harness.getExamDataScriptLoads(), 1,
+        'a listening-only custom base must load exam-data before adding default reading rows');
+    assert(next.some((exam) => exam.id === seed.readingA.id),
+        'cold import must retain the canonical default reading index');
+    assert(next.some((exam) => exam.id === listeningNew.id));
+    recordResult('冷启动仅听力基库先加载 Reading manifest 再补齐默认阅读', {
+        key: created.key,
+        count: next.length
+    });
+}
+
 async function testFullReadingCreatesSnapshotAndKeepsListening() {
     const seed = baseSeed();
     const { window } = createHarness(seed);
@@ -546,6 +602,48 @@ async function testApplyLibraryConfigurationReconcilesFetchedAndSuppliedAvailabi
     );
     recordResult('配置切换归一化 fetched 与 supplied 升级前题库快照', {
         fetchedCount: fetchedPublished.length,
+        suppliedCount: suppliedPublished.length
+    });
+}
+
+async function testColdStartLoadsManifestBeforeCachedAndSuppliedAvailabilityReconciliation() {
+    const cachedFixture = availabilityRegressionSeed();
+    cachedFixture.seed.deferReadingExamIndex = true;
+    const cachedHarness = createHarness(cachedFixture.seed);
+    assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(cachedHarness.window, '__READING_EXAM_INDEX__'),
+        false,
+        'strict-on-demand cold start must begin without a pre-seeded reading manifest'
+    );
+
+    const cachedLoaded = await cachedHarness.window.LibraryManager.getInstance().loadActiveLibrary(true);
+
+    assert.strictEqual(cachedHarness.getExamDataScriptLoads(), 1,
+        'cached custom-library normalization must load exam-data before its early return');
+    assertAvailabilityReconciled(cachedLoaded, cachedFixture.key);
+
+    const suppliedFixture = availabilityRegressionSeed();
+    suppliedFixture.seed.deferReadingExamIndex = true;
+    const suppliedHarness = createHarness(suppliedFixture.seed);
+    const suppliedDataset = clone(suppliedFixture.persistedIndex);
+    const suppliedBefore = clone(suppliedDataset);
+    let suppliedPublished = null;
+    suppliedHarness.window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') suppliedPublished = event.detail.index;
+        return true;
+    };
+
+    const suppliedApplied = await suppliedHarness.window.LibraryManager.getInstance()
+        .applyLibraryConfiguration(suppliedFixture.key, suppliedDataset);
+
+    assert.strictEqual(suppliedApplied, true);
+    assert.strictEqual(suppliedHarness.getExamDataScriptLoads(), 1,
+        'supplied custom-library normalization must load exam-data before publishing rows');
+    assertAvailabilityReconciled(suppliedPublished, suppliedFixture.key);
+    assert.deepStrictEqual(suppliedDataset, suppliedBefore,
+        'cold-start reconciliation must not mutate the caller-owned supplied dataset');
+    recordResult('严格按需冷启动先加载 Reading manifest 再归一化缓存与 supplied 快照', {
+        cachedCount: cachedLoaded.length,
         suppliedCount: suppliedPublished.length
     });
 }
@@ -925,10 +1023,12 @@ async function testLibraryPublishesIndexBeforeProgressSync() {
 async function main() {
     try {
         await testFullListeningCreatesSnapshotAndKeepsReading();
+        await testColdListeningOnlyBaseLoadsManifestBeforeAddingDefaultReading();
         await testFullReadingCreatesSnapshotAndKeepsListening();
         await testIncrementalCreatesSnapshotAndDedupes();
         await testLoadActiveLibraryReconcilesPreUpgradeAvailability();
         await testApplyLibraryConfigurationReconcilesFetchedAndSuppliedAvailability();
+        await testColdStartLoadsManifestBeforeCachedAndSuppliedAvailabilityReconciliation();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();

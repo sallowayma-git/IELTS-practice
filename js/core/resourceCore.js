@@ -303,6 +303,13 @@
             ? exam.path.trim().replace(/\\/g, '/').toLowerCase()
             : '';
 
+        // An explicit canonical type is authoritative. Legacy identifiers and
+        // directory layouts are consulted only when the type is absent or is
+        // not one of the canonical reading/listening values.
+        if (examType === 'reading') {
+            return false;
+        }
+
         return examType === 'listening'
             || examId.startsWith('listening-')
             || examPath.includes('listeningpractice/')
@@ -315,16 +322,7 @@
             || !exam.pdfFilename.trim()) {
             return false;
         }
-        if (Object.prototype.hasOwnProperty.call(exam, 'hasPdf')) {
-            return exam.hasPdf === true;
-        }
-
-        // LibraryDiscovery versions predating the explicit availability
-        // contract persisted a locator only when the user selected a real PDF,
-        // but did not persist hasPdf. Keep that narrowly identified schema
-        // readable while LibraryManager materializes the new flag at its index
-        // normalization boundary. No other filename-only record is promoted.
-        return exam.sourceKind === 'file-picker';
+        return exam.hasPdf === true;
     }
 
     function stripQueryAndHash(url) {

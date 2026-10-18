@@ -37,14 +37,32 @@ export async function runRejectedResubmission(host, child, outcome) {
     await child.locator('#question-groups input[name="q1"][value="A"]').check();
     await child.locator('#submit-btn').click();
     await host.waitForFunction(() => reviewSubmissions.length === 1);
-    if (outcome === 'timeout') await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission());
+    if (outcome === 'timeout') {
+        await child.waitForFunction(() => {
+            return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
+        });
+        assert.equal(
+            await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
+            true,
+            'the timeout fixture must expire the pending submission it created'
+        );
+    }
     const editable = outcome === 'not-committed';
     if (editable) {
-        await child.waitForFunction(() => !__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionEditingLocked);
-        await child.locator('.incident-notice').first().waitFor();
+        await child.waitForFunction(() => {
+            const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
+            return state.submissionStatus === 'draft' && !state.submissionEditingLocked
+                && document.querySelector('.incident-notice')?.textContent.includes('已确认未保存');
+        });
     } else {
-        await child.locator('.incident-dialog').waitFor();
+        await child.waitForFunction(() => {
+            const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
+            return state.submissionStatus === 'draft' && state.submissionEditingLocked
+                && document.querySelector('.incident-dialog')?.textContent.includes('尚未确认保存');
+        });
+        const dialog = child.locator('.incident-dialog');
         await child.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true }).click();
+        await dialog.waitFor({ state: 'detached' });
     }
     if (editable) await child.locator('#question-groups input[name="q1"][value="B"]').check();
     else await assertAnswerEditingLocked(child);
@@ -88,9 +106,20 @@ export async function runCommittedAcknowledgementLoss(host, child, suite) {
     const saved = await host.evaluate(async () => AppData.practice.list());
     assert.equal(saved.length, 1, 'the first write really committed before the timeout');
     if (suite) assert.equal(await host.evaluate(() => window.app.currentSuiteSession.status), 'completed');
-    await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission());
-    await child.locator('.incident-dialog').waitFor();
+    await child.waitForFunction(() => {
+        return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
+    });
+    assert.equal(
+        await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
+        true,
+        'the lost-ACK fixture must expire the pending submission it created'
+    );
+    await child.waitForFunction(() => {
+        return document.querySelector('.incident-dialog')?.textContent.includes('尚未确认保存');
+    });
+    const dialog = child.locator('.incident-dialog');
     await child.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
     if (suite) await selectPassage(child, 1, 'p1-low-67');
     await assertAnswerEditingLocked(child);
     if (suite) await selectPassage(child, 3, 'p3-high-32');

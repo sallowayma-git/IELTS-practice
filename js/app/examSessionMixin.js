@@ -500,16 +500,56 @@
             const mayNeedPdfWindow = !suppliedExam || suppliedExam.hasHtml === false;
             if (mayNeedPdfWindow && !provisionalWindow && !reservationAttempted) {
                 reservationAttempted = true;
+                const requestedWindowName = typeof options.windowName === 'string'
+                    ? options.windowName.trim()
+                    : '';
+                const safeWindowNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
+                const derivedWindowName = `${suppliedExam && suppliedExam.hasHtml === false ? 'pdf' : 'exam'}_${String(examId || '').trim()}`;
+                const stableWindowName = safeWindowNamePattern.test(requestedWindowName)
+                    ? requestedWindowName
+                    : (options.target !== 'tab' && safeWindowNamePattern.test(derivedWindowName)
+                        ? derivedWindowName
+                        : '');
                 try {
                     provisionalWindow = window.open(
-                        'about:blank',
-                        '_blank',
+                        stableWindowName ? '' : 'about:blank',
+                        stableWindowName || '_blank',
                         options.target === 'tab'
                             ? undefined
                             : 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
                     );
                 } catch (_) { }
-                ownsProvisionalWindow = Boolean(provisionalWindow);
+                if (provisionalWindow) {
+                    if (!this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows = new WeakSet();
+                    }
+                    const ownsTrackedBlankWindow = this._examOpenOwnedBlankWindows.has(provisionalWindow);
+                    if (!stableWindowName) {
+                        ownsProvisionalWindow = true;
+                    } else {
+                        const wasTrackedWindow = Boolean(
+                            this._examOpenWindowGenerations
+                            && this._examOpenWindowGenerations.has(provisionalWindow)
+                        );
+                        let isBlankWindow = false;
+                        try {
+                            const currentHref = String(
+                                provisionalWindow.location && provisionalWindow.location.href || ''
+                            ).trim().toLowerCase();
+                            isBlankWindow = !currentHref || currentHref === 'about:blank';
+                        } catch (_) {
+                            // An inaccessible named context is no longer a blank window we can own safely.
+                        }
+                        if (ownsTrackedBlankWindow && !isBlankWindow) {
+                            this._examOpenOwnedBlankWindows.delete(provisionalWindow);
+                        }
+                        ownsProvisionalWindow = isBlankWindow
+                            && (ownsTrackedBlankWindow || !wasTrackedWindow);
+                    }
+                    if (ownsProvisionalWindow) {
+                        this._examOpenOwnedBlankWindows.add(provisionalWindow);
+                    }
+                }
             }
             if (reservationAttempted) options.reservationAttempted = true;
             if (provisionalWindow) options.reuseWindow = provisionalWindow;
@@ -525,6 +565,9 @@
                     return;
                 }
                 try { provisionalWindow.close(); } catch (_) { }
+                if (this._examOpenOwnedBlankWindows) {
+                    this._examOpenOwnedBlankWindows.delete(provisionalWindow);
+                }
             };
 
             observeStep('practice', 'open-practice', 'started', { suite: options.suiteSessionId });
@@ -765,6 +808,9 @@
                     return;
                 }
                 try { reservedWindow.close(); } catch (_) { }
+                if (this._examOpenOwnedBlankWindows) {
+                    this._examOpenOwnedBlankWindows.delete(reservedWindow);
+                }
             };
 
             if (this._isReadingLibraryExam(exam)) {
@@ -838,6 +884,9 @@
                         return null;
                     }
                     reservedWindow.location.href = resolvedPdfUrl;
+                    if (this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows.delete(reservedWindow);
+                    }
                     options.navigationEpoch = this._recordExamWindowNavigation(reservedWindow);
                     if (typeof reservedWindow.focus === 'function') reservedWindow.focus();
                     pdfWin = reservedWindow;
@@ -925,6 +974,9 @@
                         return null;
                     }
                     reuseWindow.location.href = finalUrl;
+                    if (this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows.delete(reuseWindow);
+                    }
                     options.navigationEpoch = this._recordExamWindowNavigation(reuseWindow);
                     reuseWindow.focus();
                     return reuseWindow;

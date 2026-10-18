@@ -180,12 +180,16 @@ const legacyListening = {
     id: 'listening-legacy', title: 'Legacy listening', category: 'P1', type: 'listening',
     hasHtml: true, pdfFilename: 'ListeningPractice/PDF/legacy.pdf'
 };
+const htmlOnlyListening = {
+    id: 'listening-html-only', title: 'HTML-only listening', category: 'P2', type: 'listening',
+    hasHtml: true, htmlFilename: 'ListeningPractice/P2/html-only.html'
+};
 const pathOnlyLegacyListening = {
     id: 'legacy-audio-set', title: 'Path-only legacy listening', category: 'P1',
     path: 'P1/legacy-set/', hasHtml: false, pdfFilename: 'ListeningPractice/PDF/path-only.pdf'
 };
 
-test('primary ExamActions cards expose only verified PDFs and keep unavailable HTML practice', () => {
+test('primary ExamActions cards apply verified PDF availability only to reading entries', () => {
     const context = createSandbox();
     vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
 
@@ -207,6 +211,13 @@ test('primary ExamActions cards expose only verified PDFs and keep unavailable H
     const listeningCard = context.window.ExamListView.createExamCard(legacyListening);
     assert.equal(elementsWithAction(listeningCard, 'pdf').length, 1,
         'the reading-only contract must not hide legacy listening PDF actions');
+
+    const htmlOnlyListeningCard = context.window.ExamListView.createExamCard(htmlOnlyListening);
+    assert.equal(elementsWithAction(htmlOnlyListeningCard, 'pdf').length, 1,
+        'HTML-only listening entries should retain their existing PDF action');
+    assert.equal(elementsWithAction(htmlOnlyListeningCard, 'start').length, 1);
+    assert.equal(unavailableStates(htmlOnlyListeningCard).length, 0,
+        'the unavailable state is reading-only');
 
     const pathOnlyListeningCard = context.window.ExamListView.createExamCard(pathOnlyLegacyListening);
     assert.equal(elementsWithAction(pathOnlyListeningCard, 'pdf').length, 1,
@@ -235,6 +246,11 @@ test('LegacyExamListView fallback uses the same non-interactive unavailable stat
 
     const listeningCard = view._createExamElement(legacyListening, 0, {});
     assert.equal(elementsWithAction(listeningCard, 'pdf').length, 1);
+
+    const htmlOnlyListeningCard = view._createExamElement(htmlOnlyListening, 0, {});
+    assert.equal(elementsWithAction(htmlOnlyListeningCard, 'pdf').length, 1);
+    assert.equal(elementsWithAction(htmlOnlyListeningCard, 'start').length, 1);
+    assert.equal(unavailableStates(htmlOnlyListeningCard).length, 0);
 
     const pathOnlyListeningCard = view._createExamElement(pathOnlyLegacyListening, 0, {});
     assert.equal(elementsWithAction(pathOnlyListeningCard, 'pdf').length, 1);
@@ -272,6 +288,11 @@ test('final main.js fallback never attaches a PDF handler to unavailable state',
 
     const listeningCard = context.createFallbackExamCard(legacyListening);
     assert.ok(descendants(listeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === 'PDF'));
+
+    const htmlOnlyListeningCard = context.createFallbackExamCard(htmlOnlyListening);
+    assert.ok(descendants(htmlOnlyListeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === 'PDF'));
+    assert.ok(descendants(htmlOnlyListeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === '开始练习'));
+    assert.equal(unavailableStates(htmlOnlyListeningCard).length, 0);
 
     const pathOnlyListeningCard = context.createFallbackExamCard(pathOnlyLegacyListening);
     assert.ok(descendants(pathOnlyListeningCard).some((node) => node.tagName === 'BUTTON' && node.textContent === 'PDF'));
@@ -324,10 +345,11 @@ test('system PDF count follows the shared availability predicate, not a retained
         unavailable,
         { ...unavailable, id: 'filename-only', hasPdf: undefined },
         legacyListening,
+        htmlOnlyListening,
         pathOnlyLegacyListening
     ]);
 
-    assert.equal(elements.get('total-exams').textContent, 5);
+    assert.equal(elements.get('total-exams').textContent, 6);
     assert.equal(elements.get('pdf-exams').textContent, 3);
 });
 

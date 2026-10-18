@@ -52,15 +52,16 @@ function isListeningExam(exam) {
     const examPath = typeof exam.path === 'string'
         ? exam.path.trim().replace(/\\/g, '/').toLowerCase()
         : '';
+    if (type === 'reading') return false;
     return type === 'listening'
         || id.startsWith('listening-')
         || examPath.includes('listeningpractice/')
         || /^p[1-4]\//.test(examPath);
 }
 
-function createPopup(label = 'reserved') {
+function createPopup(label = 'reserved', initialHref = 'about:blank') {
     const state = { label, closeCalls: 0, focusCalls: 0, navigationWrites: [] };
-    let href = 'about:blank';
+    let href = initialHref;
     const location = {};
     Object.defineProperty(location, 'href', {
         enumerable: true,
@@ -187,6 +188,7 @@ function createSessionHarness({
     resolutionUrl = '',
     resourcePromise = null,
     activeIndexPromise = null,
+    activeIndexResolver = null,
     popupFactory = () => createPopup()
 }) {
     const state = {
@@ -246,6 +248,9 @@ function createSessionHarness({
         },
         async resolveActiveLibraryIndex() {
             state.activeIndexCalls += 1;
+            if (typeof activeIndexResolver === 'function') {
+                return activeIndexResolver(state.activeIndexCalls);
+            }
             return activeIndexPromise || [];
         },
         showMessage(message, type) {
@@ -515,6 +520,26 @@ async function testPathOnlyLegacyListeningBypassesReadingGuard() {
     }]);
 }
 
+async function testExplicitReadingTypeOverridesLegacyListeningPath() {
+    const exam = pdfExam({
+        id: 'explicit-reading-in-legacy-folder',
+        type: 'reading',
+        path: 'ListeningPractice/P1/Imported/',
+        hasPdf: false
+    });
+    const harness = createDirectEntryHarness({ protocol: 'https:', exam });
+
+    await harness.context.viewPDF(exam.id);
+
+    assert.strictEqual(harness.state.resolveCalls, 0,
+        'explicit reading must fail availability before resource resolution');
+    assert.strictEqual(harness.state.buildCalls, 0,
+        'legacy listening-looking paths must not override explicit reading type');
+    assert.deepStrictEqual(harness.state.safeOpenCalls, []);
+    assert.deepStrictEqual(harness.state.messages, [{ message: '此PDF不存在', type: 'error' }]);
+    assert.strictEqual(harness.state.openedPopups[0].state.closeCalls, 1);
+}
+
 async function testSessionReservesBeforeResourceResolutionAndReusesExactWindow() {
     const resource = createDeferred();
     const exam = pdfExam();
@@ -620,7 +645,9 @@ async function testRapidOpenExamGenerationCannotCloseNewerReservation() {
     const firstOpen = harness.app.openExam(exam.id);
     assert.strictEqual(harness.state.activeIndexCalls, 1);
     assert.strictEqual(harness.state.windowOpenCalls.length, 1);
-    assert.strictEqual(harness.state.windowOpenCalls[0].url, 'about:blank');
+    assert.strictEqual(harness.state.windowOpenCalls[0].url, '');
+    assert.strictEqual(harness.state.windowOpenCalls[0].target, `exam_${exam.id}`,
+        'an ID-only launch should reserve the same named browsing context used by the final exam window');
 
     const secondOpen = harness.app.openExam(exam.id, { examDefinition: exam });
     const secondResult = await secondOpen;
@@ -628,7 +655,9 @@ async function testRapidOpenExamGenerationCannotCloseNewerReservation() {
     assert.ok(secondResult, 'the newer generation should complete successfully');
     assert.strictEqual(harness.state.windowOpenCalls.length, 2,
         'each full openExam call should synchronously attempt its own reservation');
-    assert.ok(harness.state.windowOpenCalls.every(call => call.url === 'about:blank'));
+    assert.ok(harness.state.windowOpenCalls.every(call => call.url === ''));
+    assert.strictEqual(harness.state.windowOpenCalls[1].target, `pdf_${exam.id}`,
+        'a known PDF-only launch should reserve its established named PDF context');
     const firstReservation = harness.state.openedPopups[0].popup;
     const secondReservation = harness.state.openedPopups[1].popup;
     assert.strictEqual(secondResult, secondReservation);
@@ -650,6 +679,190 @@ async function testRapidOpenExamGenerationCannotCloseNewerReservation() {
     assert.deepStrictEqual(harness.state.navigationWrites, [],
         'neither generation may fall back to navigating the host application');
     assert.strictEqual(harness.getCurrentHref(), harness.initialHref);
+}
+
+async function testStableCallerWindowNameIsReusedAcrossIndexBackedLaunches() {
+    for (const windowName of ['ielts-reading-memorize', 'ielts-endless-mode-tab']) {
+        const firstActiveIndex = createDeferred();
+        const exam = pdfExam({ id: `stable-window-${windowName}` });
+        const reservationsByTarget = new Map();
+        const harness = createSessionHarness({
+            protocol: 'https:',
+            resolutionUrl: '/deployed/exercise.pdf',
+            activeIndexResolver(callNumber) {
+                return callNumber === 1 ? firstActiveIndex.promise : [exam];
+            },
+            popupFactory(_callNumber, openCall) {
+                if (reservationsByTarget.has(openCall.target)) {
+                    return reservationsByTarget.get(openCall.target);
+                }
+                const created = createPopup(`stable-reservation:${openCall.target}`);
+                reservationsByTarget.set(openCall.target, created);
+                return created;
+            }
+        });
+        const launchOptions = {
+            target: 'tab',
+            windowName,
+            ...(windowName === 'ielts-reading-memorize'
+                ? { practiceMode: 'memorize' }
+                : { endlessMode: true })
+        };
+
+        const firstOpen = harness.app.openExam(exam.id, launchOptions);
+        assert.strictEqual(harness.state.windowOpenCalls.length, 1);
+        assert.strictEqual(harness.state.windowOpenCalls[0].target, windowName,
+            `${windowName}: provisional reservation must preserve the stable caller name`);
+
+        const secondOpen = harness.app.openExam(exam.id, launchOptions);
+        const secondResult = await secondOpen;
+
+        assert.ok(secondResult, `${windowName}: the newer launch should succeed`);
+        assert.strictEqual(harness.state.activeIndexCalls, 2,
+            `${windowName}: both launches should resolve the active index without examDefinition`);
+        assert.strictEqual(harness.state.windowOpenCalls.length, 2);
+        assert.ok(harness.state.windowOpenCalls.every(call => call.url === ''),
+            `${windowName}: named reservations must retrieve the context without blanking it`);
+        assert.ok(harness.state.windowOpenCalls.every(call => call.target === windowName),
+            `${windowName}: both reservations must use the same stable target name`);
+        assert.strictEqual(reservationsByTarget.size, 1,
+            `${windowName}: the browser should observe one reusable named browsing context`);
+        const firstReservation = harness.state.openedPopups[0].popup;
+        const secondReservation = harness.state.openedPopups[1].popup;
+        assert.strictEqual(firstReservation, secondReservation,
+            `${windowName}: the second launch must reuse the named reservation handle`);
+        assert.strictEqual(secondResult, secondReservation);
+
+        firstActiveIndex.resolve([exam]);
+        const firstResult = await firstOpen;
+
+        assert.strictEqual(firstResult, null,
+            `${windowName}: the first continuation should be stale after the second launch`);
+        assert.strictEqual(secondReservation.closed, false,
+            `${windowName}: stale cleanup must not close the reused current-generation window`);
+        assert.strictEqual(harness.state.openedPopups[1].state.closeCalls, 0,
+            `${windowName}: no generation may close the successfully reused window`);
+        assert.deepStrictEqual(harness.state.navigationWrites, [],
+            `${windowName}: neither launch may navigate the host application`);
+        assert.strictEqual(harness.getCurrentHref(), harness.initialHref);
+    }
+}
+
+async function testFailedNamedRelaunchPreservesExistingSuccessfulContext() {
+    const windowName = 'ielts-reading-memorize';
+    const exam = pdfExam({ id: 'stable-window-failure-preservation' });
+    const namedContext = createPopup(`stable-reservation:${windowName}`);
+    let activeIndexCall = 0;
+    const harness = createSessionHarness({
+        protocol: 'https:',
+        resolutionUrl: '/deployed/exercise.pdf',
+        activeIndexResolver() {
+            activeIndexCall += 1;
+            return activeIndexCall === 1 ? [exam] : [];
+        },
+        popupFactory(_callNumber, openCall) {
+            assert.strictEqual(openCall.target, windowName);
+            return namedContext;
+        }
+    });
+    const launchOptions = {
+        target: 'tab',
+        windowName,
+        practiceMode: 'memorize'
+    };
+
+    const firstResult = await harness.app.openExam(exam.id, launchOptions);
+    assert.strictEqual(firstResult, namedContext.popup);
+    assert.strictEqual(namedContext.popup.location.href, 'https://example.test/deployed/exercise.pdf');
+    assert.strictEqual(namedContext.state.closeCalls, 0);
+
+    const secondResult = await harness.app.openExam(exam.id, launchOptions);
+    assert.strictEqual(secondResult, undefined,
+        'a missing exam on the second launch should fail before navigation');
+    assert.strictEqual(harness.state.windowOpenCalls.length, 2);
+    assert.strictEqual(harness.state.windowOpenCalls[1].url, '',
+        'retrieving an existing named context must not navigate it to about:blank');
+    assert.strictEqual(namedContext.popup.location.href, 'https://example.test/deployed/exercise.pdf',
+        'the failed relaunch must preserve the successful context contents');
+    assert.strictEqual(namedContext.popup.closed, false,
+        'the failed relaunch must not close a pre-existing named context');
+    assert.strictEqual(namedContext.state.closeCalls, 0);
+}
+
+async function testConcurrentFailedNamedRelaunchClosesTransferredBlankReservation() {
+    const windowName = 'ielts-endless-mode-tab';
+    const exam = pdfExam({ id: 'stable-window-concurrent-failure' });
+    const firstActiveIndex = createDeferred();
+    const namedContext = createPopup(`stable-reservation:${windowName}`);
+    let activeIndexCall = 0;
+    const harness = createSessionHarness({
+        protocol: 'https:',
+        activeIndexResolver() {
+            activeIndexCall += 1;
+            return activeIndexCall === 1 ? firstActiveIndex.promise : [];
+        },
+        popupFactory(_callNumber, openCall) {
+            assert.strictEqual(openCall.target, windowName);
+            return namedContext;
+        }
+    });
+    const launchOptions = {
+        target: 'tab',
+        windowName,
+        endlessMode: true
+    };
+
+    const firstOpen = harness.app.openExam(exam.id, launchOptions);
+    assert.strictEqual(namedContext.popup.location.href, 'about:blank');
+    const secondResult = await harness.app.openExam(exam.id, launchOptions);
+
+    assert.strictEqual(secondResult, undefined);
+    assert.strictEqual(namedContext.state.closeCalls, 1,
+        'the newer generation must inherit and close the app-owned blank reservation');
+    assert.strictEqual(namedContext.popup.closed, true);
+
+    firstActiveIndex.resolve([exam]);
+    assert.strictEqual(await firstOpen, null,
+        'the stale first continuation must stop after the newer failed generation');
+    assert.strictEqual(namedContext.state.closeCalls, 1,
+        'the stale generation must not close the transferred reservation again');
+}
+
+async function testFailedNamedRelaunchPreservesExternallyNavigatedPendingContext() {
+    const windowName = 'ielts-reading-memorize';
+    const exam = pdfExam({ id: 'stable-window-external-navigation' });
+    const firstActiveIndex = createDeferred();
+    const namedContext = createPopup(`stable-reservation:${windowName}`);
+    let activeIndexCall = 0;
+    const harness = createSessionHarness({
+        protocol: 'https:',
+        activeIndexResolver() {
+            activeIndexCall += 1;
+            return activeIndexCall === 1 ? firstActiveIndex.promise : [];
+        },
+        popupFactory() { return namedContext; }
+    });
+    const launchOptions = {
+        target: 'tab',
+        windowName,
+        practiceMode: 'memorize'
+    };
+
+    const firstOpen = harness.app.openExam(exam.id, launchOptions);
+    namedContext.popup.location.href = 'https://example.test/user-content';
+    const secondResult = await harness.app.openExam(exam.id, launchOptions);
+
+    assert.strictEqual(secondResult, undefined);
+    assert.strictEqual(namedContext.popup.location.href, 'https://example.test/user-content',
+        'a relaunch lookup must not blank externally navigated content');
+    assert.strictEqual(namedContext.state.closeCalls, 0,
+        'a no-longer-blank context must lose app-owned reservation status');
+    assert.strictEqual(namedContext.popup.closed, false);
+
+    firstActiveIndex.resolve([exam]);
+    assert.strictEqual(await firstOpen, null);
+    assert.strictEqual(namedContext.state.closeCalls, 0,
+        'the stale first generation must not reclaim or close the navigated context');
 }
 
 async function testPdfOnlyFallbackFileProtocolPreservesPathLaunch() {
@@ -755,10 +968,15 @@ async function main() {
         testDirectEntryPreservesCallerOwnedReservationOnFailure,
         testDirectEntryFileProtocolPreservesPathLaunch,
         testPathOnlyLegacyListeningBypassesReadingGuard,
+        testExplicitReadingTypeOverridesLegacyListeningPath,
         testSessionReservesBeforeResourceResolutionAndReusesExactWindow,
         testSessionNeverLateOpensOrNavigatesHostWhenReservationUnavailable,
         testSessionReservationOwnershipOnResolutionFailure,
         testRapidOpenExamGenerationCannotCloseNewerReservation,
+        testStableCallerWindowNameIsReusedAcrossIndexBackedLaunches,
+        testFailedNamedRelaunchPreservesExistingSuccessfulContext,
+        testConcurrentFailedNamedRelaunchClosesTransferredBlankReservation,
+        testFailedNamedRelaunchPreservesExternallyNavigatedPendingContext,
         testPdfOnlyFallbackFileProtocolPreservesPathLaunch,
         testRealResourceCoreAndPdfHandlerBlobProvenance
     ];

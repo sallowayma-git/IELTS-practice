@@ -4014,11 +4014,9 @@ class VirtualScroller {
         var isListeningExam = !!(global.ResourceCore
             && typeof global.ResourceCore.isListeningExam === 'function'
             && global.ResourceCore.isListeningExam(exam));
-        var pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(global.ResourceCore
-                && typeof global.ResourceCore.isPdfAvailable === 'function'
-                && global.ResourceCore.isPdfAvailable(exam));
+        var pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             var startBtn = this._createElement('button', {
@@ -7163,14 +7161,12 @@ class VirtualScroller {
         const isListeningExam = !!(global.ResourceCore
             && typeof global.ResourceCore.isListeningExam === 'function'
             && global.ResourceCore.isListeningExam(exam));
-        const pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(global.ResourceCore
-                && typeof global.ResourceCore.isPdfAvailable === 'function'
-                && global.ResourceCore.isPdfAvailable(exam));
+        const pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        // A PDF-only entry must not retain a hidden launch path when its PDF is
-        // unavailable. HTML-backed exercises remain usable independently.
+        // A reading PDF-only entry must not retain a hidden launch path when its
+        // PDF is unavailable. Listening entries keep their legacy actions.
         if (exam.hasHtml !== false || pdfAvailable) {
             const startBtn = document.createElement('button');
             startBtn.className = 'btn exam-item-action-btn';
@@ -9374,16 +9370,56 @@ class VirtualScroller {
             const mayNeedPdfWindow = !suppliedExam || suppliedExam.hasHtml === false;
             if (mayNeedPdfWindow && !provisionalWindow && !reservationAttempted) {
                 reservationAttempted = true;
+                const requestedWindowName = typeof options.windowName === 'string'
+                    ? options.windowName.trim()
+                    : '';
+                const safeWindowNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
+                const derivedWindowName = `${suppliedExam && suppliedExam.hasHtml === false ? 'pdf' : 'exam'}_${String(examId || '').trim()}`;
+                const stableWindowName = safeWindowNamePattern.test(requestedWindowName)
+                    ? requestedWindowName
+                    : (options.target !== 'tab' && safeWindowNamePattern.test(derivedWindowName)
+                        ? derivedWindowName
+                        : '');
                 try {
                     provisionalWindow = window.open(
-                        'about:blank',
-                        '_blank',
+                        stableWindowName ? '' : 'about:blank',
+                        stableWindowName || '_blank',
                         options.target === 'tab'
                             ? undefined
                             : 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
                     );
                 } catch (_) { }
-                ownsProvisionalWindow = Boolean(provisionalWindow);
+                if (provisionalWindow) {
+                    if (!this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows = new WeakSet();
+                    }
+                    const ownsTrackedBlankWindow = this._examOpenOwnedBlankWindows.has(provisionalWindow);
+                    if (!stableWindowName) {
+                        ownsProvisionalWindow = true;
+                    } else {
+                        const wasTrackedWindow = Boolean(
+                            this._examOpenWindowGenerations
+                            && this._examOpenWindowGenerations.has(provisionalWindow)
+                        );
+                        let isBlankWindow = false;
+                        try {
+                            const currentHref = String(
+                                provisionalWindow.location && provisionalWindow.location.href || ''
+                            ).trim().toLowerCase();
+                            isBlankWindow = !currentHref || currentHref === 'about:blank';
+                        } catch (_) {
+                            // An inaccessible named context is no longer a blank window we can own safely.
+                        }
+                        if (ownsTrackedBlankWindow && !isBlankWindow) {
+                            this._examOpenOwnedBlankWindows.delete(provisionalWindow);
+                        }
+                        ownsProvisionalWindow = isBlankWindow
+                            && (ownsTrackedBlankWindow || !wasTrackedWindow);
+                    }
+                    if (ownsProvisionalWindow) {
+                        this._examOpenOwnedBlankWindows.add(provisionalWindow);
+                    }
+                }
             }
             if (reservationAttempted) options.reservationAttempted = true;
             if (provisionalWindow) options.reuseWindow = provisionalWindow;
@@ -9399,6 +9435,9 @@ class VirtualScroller {
                     return;
                 }
                 try { provisionalWindow.close(); } catch (_) { }
+                if (this._examOpenOwnedBlankWindows) {
+                    this._examOpenOwnedBlankWindows.delete(provisionalWindow);
+                }
             };
 
             observeStep('practice', 'open-practice', 'started', { suite: options.suiteSessionId });
@@ -9639,6 +9678,9 @@ class VirtualScroller {
                     return;
                 }
                 try { reservedWindow.close(); } catch (_) { }
+                if (this._examOpenOwnedBlankWindows) {
+                    this._examOpenOwnedBlankWindows.delete(reservedWindow);
+                }
             };
 
             if (this._isReadingLibraryExam(exam)) {
@@ -9712,6 +9754,9 @@ class VirtualScroller {
                         return null;
                     }
                     reservedWindow.location.href = resolvedPdfUrl;
+                    if (this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows.delete(reservedWindow);
+                    }
                     options.navigationEpoch = this._recordExamWindowNavigation(reservedWindow);
                     if (typeof reservedWindow.focus === 'function') reservedWindow.focus();
                     pdfWin = reservedWindow;
@@ -9799,6 +9844,9 @@ class VirtualScroller {
                         return null;
                     }
                     reuseWindow.location.href = finalUrl;
+                    if (this._examOpenOwnedBlankWindows) {
+                        this._examOpenOwnedBlankWindows.delete(reuseWindow);
+                    }
                     options.navigationEpoch = this._recordExamWindowNavigation(reuseWindow);
                     reuseWindow.focus();
                     return reuseWindow;
@@ -24650,11 +24698,9 @@ function createFallbackExamCard(exam, options = {}) {
         const isListeningExam = !!(window.ResourceCore
             && typeof window.ResourceCore.isListeningExam === 'function'
             && window.ResourceCore.isListeningExam(exam));
-        const pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(window.ResourceCore
-                && typeof window.ResourceCore.isPdfAvailable === 'function'
-                && window.ResourceCore.isPdfAvailable(exam));
+        const pdfAvailable = isListeningExam || !!(window.ResourceCore
+            && typeof window.ResourceCore.isPdfAvailable === 'function'
+            && window.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             const startBtn = document.createElement('button');

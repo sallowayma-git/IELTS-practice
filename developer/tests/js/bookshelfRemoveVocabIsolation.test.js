@@ -550,10 +550,15 @@ test('Bookshelf source metadata normalizes imported snapshots without mutating s
         }
     ];
     const storedBefore = clone(storedIndex);
-    f.sandbox.__READING_EXAM_INDEX__ = [
-        { id: 'generated-with-pdf', sourceKind: 'generated-reading', hasPdf: true },
-        { id: 'generated-without-pdf', sourceKind: 'generated-reading', hasPdf: false }
-    ];
+    let manifestLoads = 0;
+    f.sandbox.ensureExamDataScripts = async () => {
+        manifestLoads += 1;
+        await Promise.resolve();
+        f.sandbox.__READING_EXAM_INDEX__ = [
+            { id: 'generated-with-pdf', sourceKind: 'generated-reading', hasPdf: true },
+            { id: 'generated-without-pdf', sourceKind: 'generated-reading', hasPdf: false }
+        ];
+    };
     f.sandbox.AppData.library.listConfigurations = async () => [{ id: 'library-b', name: 'Imported snapshot' }];
     f.sandbox.AppData.library.getIndex = async () => storedIndex;
     vm.runInContext(libraryManagerCode, f.sandbox, { filename: 'js/services/libraryManager.js' });
@@ -564,6 +569,8 @@ test('Bookshelf source metadata normalizes imported snapshots without mutating s
     const sourceMetadata = metadata.get('imported:library-b');
     const normalized = clone(sourceMetadata.index);
 
+    assert.equal(manifestLoads, 1,
+        'Bookshelf metadata must await the canonical manifest before normalizing a cached generated index');
     assert.equal(sourceMetadata.name, 'Imported snapshot');
     assert.equal(normalized.find((row) => row.id === 'generated-with-pdf').hasPdf, true,
         'current generated manifest availability replaces a stale false snapshot flag');

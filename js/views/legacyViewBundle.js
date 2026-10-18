@@ -3231,11 +3231,9 @@
         var isListeningExam = !!(global.ResourceCore
             && typeof global.ResourceCore.isListeningExam === 'function'
             && global.ResourceCore.isListeningExam(exam));
-        var pdfAvailable = isListeningExam
-            ? Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim())
-            : !!(global.ResourceCore
-                && typeof global.ResourceCore.isPdfAvailable === 'function'
-                && global.ResourceCore.isPdfAvailable(exam));
+        var pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
         if (exam.hasHtml !== false || pdfAvailable) {
             var startBtn = this._createElement('button', {

@@ -123,9 +123,17 @@ try {
                         });
                         await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.handleSubmit());
                         await host.waitForFunction(async () => (await AppData.practice.list()).length === 1);
-                        await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission());
-                        await child.locator('.incident-dialog').waitFor();
-                        assert.match(await child.locator('.incident-dialog').innerText(), /尚未确认保存/);
+                        await child.waitForFunction(() => {
+                            return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
+                        });
+                        assert.equal(
+                            await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
+                            true,
+                            'the lost-ACK fixture must expire the pending submission it created'
+                        );
+                        await child.waitForFunction(() => {
+                            return document.querySelector('.incident-dialog')?.textContent.includes('尚未确认保存');
+                        });
                         const before = await child.evaluate(() => ({ state: __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState(),
                             event: AppDiagnostics.snapshot().events.find(event => event.code === 'PRACTICE_CHANNEL_TIMEOUT' && event.action === 'submit') }));
                         assert.equal(before.event.persistence.operation, 'unconfirmed'); assert.equal(before.event.retry.available, true);

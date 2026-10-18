@@ -197,7 +197,15 @@ function testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore) {
         { label: 'P1 path signal', exam: { path: 'P1/legacy-set/' } },
         { label: 'P2 path signal', exam: { path: 'p2/legacy-set/' } },
         { label: 'P3 path signal', exam: { path: ' P3/legacy-set/ ' } },
-        { label: 'P4 path signal', exam: { path: 'P4\\legacy-set\\' } }
+        { label: 'P4 path signal', exam: { path: 'P4\\legacy-set\\' } },
+        {
+            label: 'unknown type with legacy id signal',
+            exam: { type: 'legacy-import', id: 'listening-unknown-type' }
+        },
+        {
+            label: 'unknown type with legacy path signal',
+            exam: { type: 'external', path: 'P2/unknown-type/' }
+        }
     ];
     listeningCases.forEach(({ label, exam }) => {
         assert.strictEqual(ResourceCore.isListeningExam(exam), true, `${label} should classify as listening`);
@@ -207,6 +215,14 @@ function testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore) {
         { label: 'null exam', exam: null },
         { label: 'empty exam', exam: {} },
         { label: 'reading type', exam: { type: 'reading' } },
+        {
+            label: 'explicit reading type overrides every legacy listening heuristic',
+            exam: {
+                type: ' READING ',
+                id: 'listening-conflicting-record',
+                path: 'ListeningPractice/P1/conflicting-record/'
+            }
+        },
         { label: 'non-prefixed id', exam: { id: 'legacy-listening-set' } },
         { label: 'similar directory name', exam: { path: 'Listening-Practice/set-1/' } },
         { label: 'P5 path', exam: { path: 'P5/legacy-set/' } },
@@ -222,7 +238,7 @@ function testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore) {
     });
 }
 
-function testPdfAvailabilityHonorsExplicitFlagsAndLegacyFilePicker(ResourceCore) {
+function testPdfAvailabilityRequiresExplicitTrueFlagAndLocator(ResourceCore) {
     const unavailableCases = [
         { label: 'null exam', exam: null },
         { label: 'empty exam', exam: {} },
@@ -239,6 +255,10 @@ function testPdfAvailabilityHonorsExplicitFlagsAndLegacyFilePicker(ResourceCore)
         {
             label: 'filename-only generated-reading entry',
             exam: { sourceKind: 'generated-reading', pdfFilename: 'file.pdf' }
+        },
+        {
+            label: 'legacy file-picker locator without normalized availability flag',
+            exam: { sourceKind: 'file-picker', pdfFilename: 'Imported/PDF/legacy.pdf' }
         },
         {
             label: 'legacy file-picker with blank locator',
@@ -268,18 +288,9 @@ function testPdfAvailabilityHonorsExplicitFlagsAndLegacyFilePicker(ResourceCore)
         true,
         'PDF-only entries should remain available when they have an explicit flag and locator'
     );
-    assert.strictEqual(
-        ResourceCore.isPdfAvailable({
-            sourceKind: 'file-picker',
-            pdfFilename: 'Imported/PDF/legacy.pdf'
-        }),
-        true,
-        'legacy file-picker entries should retain PDFs selected before hasPdf was persisted'
-    );
-
-    recordResult('ResourceCore PDF 可用性保留旧版文件选择器兼容性', true, {
+    recordResult('ResourceCore PDF 可用性要求显式真值与 locator', true, {
         unavailableCases: unavailableCases.length,
-        availableCases: 3
+        availableCases: 2
     });
 }
 
@@ -415,7 +426,7 @@ async function main() {
         testDefaultRootStillWorks(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
         testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore);
-        testPdfAvailabilityHonorsExplicitFlagsAndLegacyFilePicker(ResourceCore);
+        testPdfAvailabilityRequiresExplicitTrueFlagAndLocator(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
         await testBlobRuntimeResourceBypassesHttpProbe(context, ResourceCore);
         await testPathMapDerivedFromLibraryIndex(context, ResourceCore);
