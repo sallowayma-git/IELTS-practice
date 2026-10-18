@@ -816,13 +816,14 @@ def daily_receipts(app_data: Path, day: str, today: str):
         # session (its runs carry a "weekly:" marker); the daily job may not.
         require(conn.execute("SELECT COUNT(*) FROM dream_runs WHERE input_hash IS NULL OR input_hash NOT LIKE 'weekly:%'").fetchone()[0] == 0,
                 "automatic Daily wrote dream_runs")
-        require(conn.execute("SELECT COUNT(*) FROM dream_candidates").fetchone()[0] == 0, "automatic Daily wrote dream_candidates")
+        require(conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dream_candidates'").fetchone()[0] == 0,
+                "dream_candidates survived migration 0033")
         require(conn.execute("SELECT COUNT(*) FROM agent_runs WHERE model='daily-dream-v1'").fetchone()[0] == 0,
                 "automatic Daily wrote a model audit row")
         return {"jobIds": [job["id"]], "journalId": journal["id"], "journalSourceHash": journal["source_hash"],
                 "checkpoints": {job["job_kind"]: binding},
                 "counts": {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                           for table in ("background_jobs", "dream_candidates")}
+                           for table in ("background_jobs",)}
                 | {"daily_journals": conn.execute("SELECT COUNT(*) FROM daily_journals WHERE id=?",
                                                   (journal["id"],)).fetchone()[0]}
                 | {"dream_runs": conn.execute(

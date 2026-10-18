@@ -214,6 +214,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0032_reading_matching_skills.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 33,
+                name: "drop_dead_evolution_tables",
+                sql: include_str!("../../migrations/0033_drop_dead_evolution_tables.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }

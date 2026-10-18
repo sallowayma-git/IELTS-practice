@@ -3,8 +3,7 @@
 //! The daily journal is a deterministic summary and has no dream run. A dream
 //! run is the ledger row of the weekly consolidation (`dream_runs`), which is
 //! fail-closed: a failed run never blocks the practice loop. The legacy
-//! `dream_candidates` table is kept for old databases but nothing writes or
-//! reads it any more.
+//! `dream_candidates` table was dropped by migration 0033.
 
 use serde::{Deserialize, Serialize};
 

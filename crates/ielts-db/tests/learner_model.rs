@@ -42,11 +42,11 @@ fn v11_database_upgrade_applies_m4_after_m3_without_skipping_versions() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
     );
     assert!(
-        current_version(&conn).unwrap() == 32,
-        "latest migration 0032 was not applied"
+        current_version(&conn).unwrap() == 33,
+        "latest migration 0033 was not applied"
     );
     verify_idempotent(&mut conn).unwrap();
     for table in [

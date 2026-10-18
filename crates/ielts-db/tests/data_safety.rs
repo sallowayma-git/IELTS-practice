@@ -323,7 +323,7 @@ fn format_18_backup_writes_attempts_once_and_writes_atomically() {
     let (dir, source) = open_db();
     upsert_attempt(&source, &terminal_attempt("bk1", 1)).unwrap();
     let package = create_backup_package(&source, "test").unwrap();
-    assert_eq!(package.manifest.schema_version, 19);
+    assert_eq!(package.manifest.schema_version, 20);
     assert!(package.attempts.is_empty());
     assert_eq!(package.manifest.attempt_count, 1);
 

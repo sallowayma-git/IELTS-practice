@@ -258,7 +258,7 @@ class PackagedReceiptTests(unittest.TestCase):
         self.seed_daily_receipts()
         result = flow.daily_receipts(self.root, "2026-10-01", "2026-10-02")
         self.assertEqual(result["jobIds"], ["daily_journal"])
-        self.assertEqual(result["counts"], {"background_jobs": 1, "daily_journals": 1, "dream_runs": 0, "dream_candidates": 0})
+        self.assertEqual(result["counts"], {"background_jobs": 1, "daily_journals": 1, "dream_runs": 0})
         self.assertEqual(result["journalSourceHash"], "source")
         self.assertNotIn("dreamRunId", result["checkpoints"]["daily_journal"])
         self.assertEqual(flow.daily_receipts(self.root, "2026-10-01", "2026-10-02"), result)

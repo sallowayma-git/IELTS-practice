@@ -402,7 +402,7 @@ mod tests {
         db.with_conn(|conn| {
             assert_eq!(background_jobs::load_job(conn, &job.id)?.unwrap().status, "completed");
             // No dream run, no candidate, no model audit row: just the journal.
-            for table in ["dream_runs", "dream_candidates", "agent_runs"] {
+            for table in ["dream_runs", "agent_runs"] {
                 let rows: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))?;
                 assert_eq!(rows, 0, "{table}");
             }

@@ -131,3 +131,41 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
         }
     }
 }
+
+#[test]
+fn format_19_package_with_tables_migration_0033_dropped_still_restores() {
+    use ielts_domain::dto::{BackupSqlValue, BackupTable};
+
+    let dir = tempdir().unwrap();
+    let source = open_db(dir.path().join("source.db"));
+    let mut package = create_backup_package(&source, "dropped-tables").unwrap();
+    assert_eq!(package.manifest.schema_version, 20);
+    assert!(package.database.iter().all(|table| table.name != "dream_candidates"));
+
+    // A format 19 package still carries the evolution tables; their rows are
+    // accepted and ignored, since the target no longer has those tables.
+    package.manifest.schema_version = 19;
+    for name in ["dream_candidates", "teaching_strategy_catalog", "prompt_skill_releases"] {
+        package.database.push(BackupTable {
+            name: name.into(),
+            columns: vec!["id".into()],
+            rows: vec![vec![BackupSqlValue::Text(format!("{name}-row"))]],
+        });
+    }
+    recount(&mut package);
+    rechecksum(&mut package);
+    validate_backup(&package).unwrap();
+
+    let target = open_db(dir.path().join("target.db"));
+    let report = import_backup(&target, &package, false).unwrap();
+    assert!(report.ok, "{:?}", report.errors);
+    assert_fk_enabled(&target);
+    let dropped: i64 = target
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'dream_candidates'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(dropped, 0);
+}
