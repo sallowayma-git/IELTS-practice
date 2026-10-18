@@ -2925,6 +2925,27 @@ body.no-scroll {
     cursor: not-allowed;
 }
 
+.pdf-unavailable-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px dashed rgba(100, 116, 139, 0.42);
+    border-radius: var(--border-radius-lg);
+    background: rgba(241, 245, 249, 0.74);
+    color: #64748b;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.2;
+    text-align: center;
+    cursor: default;
+}
+
+.exam-item-pdf-unavailable {
+    width: 100%;
+}
+
 .exam-item--suite-selecting {
     border: 1.5px dashed rgba(102, 126, 234, 0.55);
     background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(236, 242, 255, 0.86));

@@ -288,6 +288,15 @@
         return kind === 'pdf' ? value + '.pdf' : value + '.html';
     }
 
+    function isPdfAvailable(exam) {
+        return Boolean(
+            exam
+            && exam.hasPdf === true
+            && typeof exam.pdfFilename === 'string'
+            && exam.pdfFilename.trim()
+        );
+    }
+
     function stripQueryAndHash(url) {
         if (!url) {
             return '';
@@ -560,7 +569,7 @@
         try {
             const resolved = new URL(url, global.location && global.location.href ? global.location.href : undefined);
             const protocol = (resolved.protocol || '').toLowerCase();
-            if (protocol === 'file:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
+            if (protocol === 'file:' || protocol === 'blob:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
                 return true;
             }
             if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
@@ -645,6 +654,7 @@
         buildResourcePath,
         getResourceAttempts,
         resolveResource,
+        isPdfAvailable,
         sanitizeFilename,
         encodePathSegments,
         detectScriptBasePrefix,

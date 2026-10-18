@@ -180,6 +180,81 @@ async function testReadingImportRejectsListeningHtml() {
     recordResult('阅读导入排除听力题源', true, { rejected: result.rejected.length });
 }
 
+async function testReadingHtmlWithDiscoveredPdfIsExplicitlyAvailable() {
+    const { discovery } = createHarness();
+    const result = await discovery.discover([
+        makeFile('Imported/P1/42. Passage.html', '<!doctype html><title>Reading Passage 42</title><h1>Passage 42</h1>'),
+        makeFile('Imported/P1/42. Passage.pdf', '', { type: 'application/pdf' })
+    ], { type: 'reading', registerRuntime: true });
+
+    assert.strictEqual(result.entries.length, 1, '同目录 HTML + PDF 应识别为一个阅读条目');
+    const entry = result.entries[0];
+    assert.strictEqual(entry.hasHtml, true, '应明确标记 HTML 可用');
+    assert.strictEqual(entry.hasPdf, true, '发现实际 PDF record 时应明确标记 PDF 可用');
+    assert.strictEqual(entry.pdfFilename, '42. Passage.pdf');
+    assert.strictEqual(result.runtime.pdf, 1, '实际 PDF 应注册为运行时资源');
+    assert(
+        discovery.resolveRuntimeResource(entry, 'pdf').startsWith('blob:library-discovery-test/'),
+        '已发现 PDF 应能解析到运行时 Blob URL'
+    );
+
+    recordResult('阅读 HTML + PDF 导入显式标记 PDF 可用', true, {
+        sourcePath: entry.sourcePath,
+        pdfFilename: entry.pdfFilename
+    });
+}
+
+async function testReadingHtmlWithoutDiscoveredPdfIsExplicitlyUnavailable() {
+    const { discovery } = createHarness();
+    const result = await discovery.discover([
+        makeFile(
+            'Imported/P2/html-only.html',
+            '<!doctype html><title>HTML Only Reading</title><script>const pdfFilename = "expected-but-missing.pdf";</script>'
+        )
+    ], { type: 'reading', registerRuntime: true });
+
+    assert.strictEqual(result.entries.length, 1, '只有 HTML 的阅读题仍应被导入');
+    const entry = result.entries[0];
+    assert.strictEqual(entry.hasHtml, true, '应明确标记 HTML 可用');
+    assert.strictEqual(entry.hasPdf, false, '未发现实际 PDF record 时应明确标记 PDF 不可用');
+    assert.strictEqual(entry.pdfFilename, undefined, 'HTML 中的 PDF 文件名字符串不得被当作已发现资源');
+    assert.strictEqual(result.runtime.pdf, 0, '未发现 PDF 时不应注册 PDF 运行时资源');
+    assert.strictEqual(discovery.resolveRuntimeResource(entry, 'pdf'), '');
+
+    recordResult('阅读 HTML-only 导入显式标记 PDF 不可用', true, {
+        sourcePath: entry.sourcePath,
+        hasPdf: entry.hasPdf
+    });
+}
+
+async function testPdfOnlyReadingImportRemainsSupported() {
+    const { discovery } = createHarness();
+    const result = await discovery.discover([
+        makeFile('Imported/P3/77. PDF Only.pdf', '', { type: 'application/pdf' })
+    ], { type: 'reading', registerRuntime: true });
+
+    assert.strictEqual(result.entries.length, 1, 'PDF-only 阅读条目应继续被保留');
+    const entry = result.entries[0];
+    assert.strictEqual(entry.hasHtml, false, 'PDF-only 条目应明确标记无 HTML');
+    assert.strictEqual(entry.hasPdf, true, 'PDF-only 条目应从实际 PDF record 得到可用标记');
+    assert.strictEqual(entry.filename, undefined);
+    assert.strictEqual(entry.pdfFilename, '77. PDF Only.pdf');
+    assert.strictEqual(entry.sourcePath, 'Imported/P3/77. PDF Only.pdf');
+    assert.strictEqual(entry.importKey, 'reading:imported/p3/77. pdf only.pdf');
+    assert.strictEqual(entry.detectedBy.length, 1);
+    assert(entry.detectedBy.includes('pdf'), 'PDF-only 条目应保留 PDF 发现信号');
+    assert.strictEqual(result.runtime.pdf, 1, 'PDF-only 条目应注册 PDF 运行时资源');
+    assert(
+        discovery.resolveRuntimeResource(entry, 'pdf').startsWith('blob:library-discovery-test/'),
+        'PDF-only 条目应能解析到 PDF Blob URL'
+    );
+
+    recordResult('PDF-only 阅读导入保留并显式标记 PDF 可用', true, {
+        sourcePath: entry.sourcePath,
+        pdfFilename: entry.pdfFilename
+    });
+}
+
 async function testIncrementalMergeDedupesByImportKey() {
     const { discovery } = createHarness();
     const original = {
@@ -234,6 +309,9 @@ async function main() {
         await testRejectsUnrelatedHtml();
         await testRejectsAudioPageWithoutAnswerPath();
         await testReadingImportRejectsListeningHtml();
+        await testReadingHtmlWithDiscoveredPdfIsExplicitlyAvailable();
+        await testReadingHtmlWithoutDiscoveredPdfIsExplicitlyUnavailable();
+        await testPdfOnlyReadingImportRemainsSupported();
         await testIncrementalMergeDedupesByImportKey();
 
         console.log(JSON.stringify({

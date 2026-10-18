@@ -1727,33 +1727,51 @@
             return item;
         }
 
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn exam-item-action-btn';
-        startBtn.type = 'button';
-        startBtn.dataset.action = 'start';
-        if (exam.id) {
-            startBtn.dataset.examId = exam.id;
-        }
-        startBtn.textContent = '开始练习';
-        if (isSelecting) {
-            startBtn.disabled = true;
-            startBtn.setAttribute('aria-disabled', 'true');
-        }
-        actions.appendChild(startBtn);
+        const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+        const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+        const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
+        const pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
-        pdfBtn.type = 'button';
-        pdfBtn.dataset.action = 'pdf';
-        if (exam.id) {
-            pdfBtn.dataset.examId = exam.id;
+        // A PDF-only entry must not retain a hidden launch path when its PDF is
+        // unavailable. HTML-backed exercises remain usable independently.
+        if (exam.hasHtml !== false || pdfAvailable) {
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn exam-item-action-btn';
+            startBtn.type = 'button';
+            startBtn.dataset.action = 'start';
+            if (exam.id) {
+                startBtn.dataset.examId = exam.id;
+            }
+            startBtn.textContent = '开始练习';
+            if (isSelecting) {
+                startBtn.disabled = true;
+                startBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(startBtn);
         }
-        pdfBtn.textContent = 'PDF';
-        if (isSelecting) {
-            pdfBtn.disabled = true;
-            pdfBtn.setAttribute('aria-disabled', 'true');
+
+        if (pdfAvailable) {
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+            pdfBtn.type = 'button';
+            pdfBtn.dataset.action = 'pdf';
+            if (exam.id) {
+                pdfBtn.dataset.examId = exam.id;
+            }
+            pdfBtn.textContent = 'PDF';
+            if (isSelecting) {
+                pdfBtn.disabled = true;
+                pdfBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(pdfBtn);
+        } else {
+            const pdfUnavailable = document.createElement('span');
+            pdfUnavailable.className = 'pdf-unavailable-state exam-item-pdf-unavailable';
+            pdfUnavailable.textContent = '此PDF不存在';
+            actions.appendChild(pdfUnavailable);
         }
-        actions.appendChild(pdfBtn);
 
         if (isReadingMemorizeExam(exam)) {
             const vocabBtn = document.createElement('button');

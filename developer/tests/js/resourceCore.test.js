@@ -56,6 +56,7 @@ function createResourceCoreHarness() {
         JSON,
         Map,
         Set,
+        URL,
         Promise,
         encodeURIComponent,
         decodeURIComponent
@@ -188,6 +189,47 @@ function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
     });
 }
 
+function testPdfAvailabilityRequiresExplicitFlagAndLocator(ResourceCore) {
+    const unavailableCases = [
+        { label: 'null exam', exam: null },
+        { label: 'empty exam', exam: {} },
+        { label: 'missing locator', exam: { hasPdf: true } },
+        { label: 'empty locator', exam: { hasPdf: true, pdfFilename: '' } },
+        { label: 'whitespace locator', exam: { hasPdf: true, pdfFilename: '   ' } },
+        { label: 'explicitly unavailable with retained locator', exam: { hasPdf: false, pdfFilename: 'expected.pdf' } },
+        { label: 'truthy non-boolean availability', exam: { hasPdf: 'true', pdfFilename: 'file.pdf' } },
+        { label: 'numeric availability', exam: { hasPdf: 1, pdfFilename: 'file.pdf' } }
+    ];
+
+    unavailableCases.forEach(({ label, exam }) => {
+        assert.strictEqual(
+            ResourceCore.isPdfAvailable(exam),
+            false,
+            `${label} must not expose a PDF`
+        );
+    });
+
+    assert.strictEqual(
+        ResourceCore.isPdfAvailable({ hasPdf: true, pdfFilename: 'file.pdf' }),
+        true,
+        'explicit availability with a filename should expose the PDF'
+    );
+    assert.strictEqual(
+        ResourceCore.isPdfAvailable({
+            hasHtml: false,
+            hasPdf: true,
+            pdfFilename: 'ReadingPractice/PDF/file.pdf'
+        }),
+        true,
+        'PDF-only entries should remain available when they have an explicit flag and locator'
+    );
+
+    recordResult('ResourceCore PDF 可用性要求显式标记与 locator', true, {
+        unavailableCases: unavailableCases.length,
+        availableCases: 2
+    });
+}
+
 function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     ResourceCore.setBasePrefix('./');
     ResourceCore.setActivePathMap(ResourceCore.DEFAULT_PATH_MAP);
@@ -224,6 +266,44 @@ function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     });
 }
 
+async function testBlobRuntimeResourceBypassesHttpProbe(context, ResourceCore) {
+    const runtimePdfUrl = 'blob:https://example.test/imported-reading-pdf';
+    let fetchCalls = 0;
+    context.window.location.href = 'https://example.test/index.html';
+    context.window.location.protocol = 'https:';
+    context.fetch = async () => {
+        fetchCalls += 1;
+        throw new Error('blob URLs must not be network-probed');
+    };
+    context.window.LibraryDiscovery = {
+        resolveRuntimeResource(exam, kind) {
+            if (exam && exam.importKey === 'reading:imported/passage.pdf' && kind === 'pdf') {
+                return runtimePdfUrl;
+            }
+            return '';
+        }
+    };
+
+    const exam = {
+        id: 'imported-reading-pdf',
+        importKey: 'reading:imported/passage.pdf',
+        type: 'reading',
+        hasHtml: false,
+        hasPdf: true,
+        pdfFilename: 'passage.pdf'
+    };
+    const resolved = await ResourceCore.resolveResource(exam, 'pdf');
+
+    assert.strictEqual(resolved.url, runtimePdfUrl, '托管页面应直接接受当前会话已注册的 Blob PDF URL');
+    assert.strictEqual(resolved.attempts[0]?.label, 'runtime', 'Blob PDF 应继续优先使用运行时资源');
+    assert.strictEqual(fetchCalls, 0, 'Blob PDF 不应发起无效的 HTTP HEAD 探测');
+
+    recordResult('ResourceCore 托管环境跳过 Blob URL 探测', true, {
+        url: resolved.url,
+        fetchCalls
+    });
+}
+
 async function testPathMapDerivedFromLibraryIndex(context, ResourceCore) {
     const index = [
         { id: 'custom-reading', type: 'reading', path: 'ReadingCustom/set-a/', filename: 'index.html' },
@@ -250,7 +330,9 @@ async function main() {
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
+        testPdfAvailabilityRequiresExplicitFlagAndLocator(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
+        await testBlobRuntimeResourceBypassesHttpProbe(context, ResourceCore);
         await testPathMapDerivedFromLibraryIndex(context, ResourceCore);
 
         console.log(JSON.stringify({

@@ -4011,30 +4011,44 @@ class VirtualScroller {
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
+        var examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+        var examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+        var isListeningExam = examType === 'listening' || examId.indexOf('listening-') === 0;
+        var pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        var startBtn = this._createElement('button', {
-            className: actionConfig.startClass,
-            dataset: { action: actionConfig.startAction, examId: exam.id },
-            type: 'button'
-        }, actionConfig.startLabel);
-        if (isSelecting) {
-            startBtn.disabled = true;
-            startBtn.setAttribute('aria-disabled', 'true');
+        if (exam.hasHtml !== false || pdfAvailable) {
+            var startBtn = this._createElement('button', {
+                className: actionConfig.startClass,
+                dataset: { action: actionConfig.startAction, examId: exam.id },
+                type: 'button'
+            }, actionConfig.startLabel);
+            if (isSelecting) {
+                startBtn.disabled = true;
+                startBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(startBtn);
         }
-        actions.appendChild(startBtn);
 
         if (actionConfig.includePdfButton) {
-            var pdfBtn = this._createElement('button', {
-                className: 'btn btn-secondary exam-item-action-btn',
-                dataset: { action: 'pdf', examId: exam.id },
-                type: 'button',
-                title: '查看PDF版本'
-            }, '查看PDF');
-            if (isSelecting) {
-                pdfBtn.disabled = true;
-                pdfBtn.setAttribute('aria-disabled', 'true');
+            if (pdfAvailable) {
+                var pdfBtn = this._createElement('button', {
+                    className: 'btn btn-secondary exam-item-action-btn',
+                    dataset: { action: 'pdf', examId: exam.id },
+                    type: 'button',
+                    title: '查看PDF版本'
+                }, '查看PDF');
+                if (isSelecting) {
+                    pdfBtn.disabled = true;
+                    pdfBtn.setAttribute('aria-disabled', 'true');
+                }
+                actions.appendChild(pdfBtn);
+            } else {
+                actions.appendChild(this._createElement('span', {
+                    className: 'pdf-unavailable-state exam-item-pdf-unavailable'
+                }, '此PDF不存在'));
             }
-            actions.appendChild(pdfBtn);
         }
 
         var isReadingExam = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
@@ -7144,33 +7158,51 @@ class VirtualScroller {
             return item;
         }
 
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn exam-item-action-btn';
-        startBtn.type = 'button';
-        startBtn.dataset.action = 'start';
-        if (exam.id) {
-            startBtn.dataset.examId = exam.id;
-        }
-        startBtn.textContent = '开始练习';
-        if (isSelecting) {
-            startBtn.disabled = true;
-            startBtn.setAttribute('aria-disabled', 'true');
-        }
-        actions.appendChild(startBtn);
+        const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+        const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+        const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
+        const pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
-        pdfBtn.type = 'button';
-        pdfBtn.dataset.action = 'pdf';
-        if (exam.id) {
-            pdfBtn.dataset.examId = exam.id;
+        // A PDF-only entry must not retain a hidden launch path when its PDF is
+        // unavailable. HTML-backed exercises remain usable independently.
+        if (exam.hasHtml !== false || pdfAvailable) {
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn exam-item-action-btn';
+            startBtn.type = 'button';
+            startBtn.dataset.action = 'start';
+            if (exam.id) {
+                startBtn.dataset.examId = exam.id;
+            }
+            startBtn.textContent = '开始练习';
+            if (isSelecting) {
+                startBtn.disabled = true;
+                startBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(startBtn);
         }
-        pdfBtn.textContent = 'PDF';
-        if (isSelecting) {
-            pdfBtn.disabled = true;
-            pdfBtn.setAttribute('aria-disabled', 'true');
+
+        if (pdfAvailable) {
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+            pdfBtn.type = 'button';
+            pdfBtn.dataset.action = 'pdf';
+            if (exam.id) {
+                pdfBtn.dataset.examId = exam.id;
+            }
+            pdfBtn.textContent = 'PDF';
+            if (isSelecting) {
+                pdfBtn.disabled = true;
+                pdfBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(pdfBtn);
+        } else {
+            const pdfUnavailable = document.createElement('span');
+            pdfUnavailable.className = 'pdf-unavailable-state exam-item-pdf-unavailable';
+            pdfUnavailable.textContent = '此PDF不存在';
+            actions.appendChild(pdfUnavailable);
         }
-        actions.appendChild(pdfBtn);
 
         if (isReadingMemorizeExam(exam)) {
             const vocabBtn = document.createElement('button');
@@ -9147,7 +9179,11 @@ class VirtualScroller {
         },
 
         _buildReadingPdfUrl(exam) {
-            if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
+            const resourceCore = global.ResourceCore || null;
+            if (!this._isReadingLibraryExam(exam)
+                || !resourceCore
+                || typeof resourceCore.isPdfAvailable !== 'function'
+                || !resourceCore.isPdfAvailable(exam)) {
                 return '';
             }
 
@@ -9380,7 +9416,7 @@ class VirtualScroller {
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
-                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, { ...options, openGeneration });
+                    return await this._openPdfWindow(exam, readingLaunch.pdfUrl, { ...options, openGeneration });
                 }
 
                 // 若无HTML，直接打开PDF
@@ -9389,7 +9425,7 @@ class VirtualScroller {
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
-                    return this._openPdfWindow(exam, resolvedPdfUrl, { ...options, openGeneration });
+                    return await this._openPdfWindow(exam, resolvedPdfUrl, { ...options, openGeneration });
                 }
 
                 const guardOptions = { ...options, examId, openGeneration };
@@ -9537,9 +9573,47 @@ class VirtualScroller {
             }
         },
 
-        _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
+        async _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
             const openGeneration = options.openGeneration || null;
+
+            if (this._isReadingLibraryExam(exam)) {
+                const resourceCore = global.ResourceCore || null;
+                const isAvailable = Boolean(
+                    resourceCore
+                    && typeof resourceCore.isPdfAvailable === 'function'
+                    && resourceCore.isPdfAvailable(exam)
+                );
+                if (!isAvailable) {
+                    window.showMessage('此PDF不存在', 'error');
+                    return null;
+                }
+
+                const protocol = global.location && global.location.protocol
+                    ? String(global.location.protocol).toLowerCase()
+                    : '';
+                if (protocol === 'http:' || protocol === 'https:') {
+                    if (typeof resourceCore.resolveResource !== 'function') {
+                        window.showMessage('此PDF不存在', 'error');
+                        return null;
+                    }
+                    try {
+                        const resolved = await resourceCore.resolveResource(exam, 'pdf');
+                        resolvedPdfUrl = resolved && typeof resolved.url === 'string'
+                            ? resolved.url.trim()
+                            : '';
+                    } catch (error) {
+                        console.warn('[App] PDF资源解析失败:', error);
+                        resolvedPdfUrl = '';
+                    }
+                }
+
+                if (!resolvedPdfUrl) {
+                    window.showMessage('此PDF不存在', 'error');
+                    return null;
+                }
+                resolvedPdfUrl = this._ensureAbsoluteUrl(resolvedPdfUrl);
+            }
 
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
@@ -24438,23 +24512,39 @@ function createFallbackExamCard(exam, options = {}) {
         });
         actions.appendChild(selectBtn);
     } else {
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn exam-item-action-btn';
-        startBtn.type = 'button';
-        startBtn.textContent = '开始练习';
-        startBtn.addEventListener('click', function () {
-            openExam(exam.id);
-        });
-        actions.appendChild(startBtn);
+        const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+        const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+        const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
+        const pdfAvailable = isListeningExam || !!(window.ResourceCore
+            && typeof window.ResourceCore.isPdfAvailable === 'function'
+            && window.ResourceCore.isPdfAvailable(exam));
 
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
-        pdfBtn.type = 'button';
-        pdfBtn.textContent = 'PDF';
-        pdfBtn.addEventListener('click', function () {
-            viewPDF(exam.id);
-        });
-        actions.appendChild(pdfBtn);
+        if (exam.hasHtml !== false || pdfAvailable) {
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn exam-item-action-btn';
+            startBtn.type = 'button';
+            startBtn.textContent = '开始练习';
+            startBtn.addEventListener('click', function () {
+                openExam(exam.id);
+            });
+            actions.appendChild(startBtn);
+        }
+
+        if (pdfAvailable) {
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+            pdfBtn.type = 'button';
+            pdfBtn.textContent = 'PDF';
+            pdfBtn.addEventListener('click', function () {
+                viewPDF(exam.id);
+            });
+            actions.appendChild(pdfBtn);
+        } else {
+            const pdfUnavailable = document.createElement('span');
+            pdfUnavailable.className = 'pdf-unavailable-state exam-item-pdf-unavailable';
+            pdfUnavailable.textContent = '此PDF不存在';
+            actions.appendChild(pdfUnavailable);
+        }
 
         const isReading = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
         if (isReading && exam && exam.id) {
@@ -24703,10 +24793,53 @@ function openExam(examId, options = {}) {
 async function viewPDF(examId) {
     const list = await resolveActiveExamIndex();
     const exam = list.find(e => e.id === examId);
-    if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
+    const examType = exam && typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+    const normalizedExamId = exam && typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+    const isListeningExam = examType === 'listening' || normalizedExamId.startsWith('listening-');
 
-    const fullPath = window.buildResourcePath(exam, 'pdf');
-    openPDFSafely(fullPath, exam.title);
+    if (isListeningExam) {
+        if (!exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
+        const listeningPdfPath = window.buildResourcePath(exam, 'pdf');
+        return openPDFSafely(listeningPdfPath, exam.title);
+    }
+
+    const resourceCore = getResourceCore();
+    const isAvailable = Boolean(
+        exam
+        && resourceCore
+        && typeof resourceCore.isPdfAvailable === 'function'
+        && resourceCore.isPdfAvailable(exam)
+    );
+    if (!isAvailable) {
+        return showMessage('此PDF不存在', 'error');
+    }
+
+    const protocol = window.location && window.location.protocol
+        ? String(window.location.protocol).toLowerCase()
+        : '';
+    let fullPath = '';
+
+    if (protocol === 'http:' || protocol === 'https:') {
+        if (typeof resourceCore.resolveResource !== 'function') {
+            return showMessage('此PDF不存在', 'error');
+        }
+        try {
+            const resolved = await resourceCore.resolveResource(exam, 'pdf');
+            fullPath = resolved && typeof resolved.url === 'string'
+                ? resolved.url.trim()
+                : '';
+        } catch (error) {
+            console.warn('[PDF] 资源解析失败:', error);
+        }
+    } else if (typeof window.buildResourcePath === 'function') {
+        fullPath = window.buildResourcePath(exam, 'pdf');
+    }
+
+    if (!fullPath) {
+        return showMessage('此PDF不存在', 'error');
+    }
+
+    return openPDFSafely(fullPath, exam.title);
 }
 
 // Bridge for record details to existing enhancer/modal if present
@@ -24785,7 +24918,18 @@ function updateSystemInfo(examIndex = []) {
     const lastUpdateEl = document.getElementById('last-update');
 
     if (htmlExamsEl) htmlExamsEl.textContent = readingExams.length + listeningExams.length; // Simplified
-    if (pdfExamsEl) pdfExamsEl.textContent = examIndexSnapshot.filter(e => e.pdfFilename).length;
+    if (pdfExamsEl) {
+        const resourceCore = getResourceCore();
+        pdfExamsEl.textContent = examIndexSnapshot.filter((exam) => {
+            const examType = exam && typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+            const examId = exam && typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+            const isListeningExam = examType === 'listening' || examId.startsWith('listening-');
+            if (isListeningExam) return Boolean(exam.pdfFilename);
+            return Boolean(resourceCore
+                && typeof resourceCore.isPdfAvailable === 'function'
+                && resourceCore.isPdfAvailable(exam));
+        }).length;
+    }
     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
 }
 

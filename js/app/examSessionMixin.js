@@ -309,7 +309,11 @@
         },
 
         _buildReadingPdfUrl(exam) {
-            if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
+            const resourceCore = global.ResourceCore || null;
+            if (!this._isReadingLibraryExam(exam)
+                || !resourceCore
+                || typeof resourceCore.isPdfAvailable !== 'function'
+                || !resourceCore.isPdfAvailable(exam)) {
                 return '';
             }
 
@@ -542,7 +546,7 @@
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
-                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, { ...options, openGeneration });
+                    return await this._openPdfWindow(exam, readingLaunch.pdfUrl, { ...options, openGeneration });
                 }
 
                 // 若无HTML，直接打开PDF
@@ -551,7 +555,7 @@
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
-                    return this._openPdfWindow(exam, resolvedPdfUrl, { ...options, openGeneration });
+                    return await this._openPdfWindow(exam, resolvedPdfUrl, { ...options, openGeneration });
                 }
 
                 const guardOptions = { ...options, examId, openGeneration };
@@ -699,9 +703,47 @@
             }
         },
 
-        _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
+        async _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
             const openGeneration = options.openGeneration || null;
+
+            if (this._isReadingLibraryExam(exam)) {
+                const resourceCore = global.ResourceCore || null;
+                const isAvailable = Boolean(
+                    resourceCore
+                    && typeof resourceCore.isPdfAvailable === 'function'
+                    && resourceCore.isPdfAvailable(exam)
+                );
+                if (!isAvailable) {
+                    window.showMessage('此PDF不存在', 'error');
+                    return null;
+                }
+
+                const protocol = global.location && global.location.protocol
+                    ? String(global.location.protocol).toLowerCase()
+                    : '';
+                if (protocol === 'http:' || protocol === 'https:') {
+                    if (typeof resourceCore.resolveResource !== 'function') {
+                        window.showMessage('此PDF不存在', 'error');
+                        return null;
+                    }
+                    try {
+                        const resolved = await resourceCore.resolveResource(exam, 'pdf');
+                        resolvedPdfUrl = resolved && typeof resolved.url === 'string'
+                            ? resolved.url.trim()
+                            : '';
+                    } catch (error) {
+                        console.warn('[App] PDF资源解析失败:', error);
+                        resolvedPdfUrl = '';
+                    }
+                }
+
+                if (!resolvedPdfUrl) {
+                    window.showMessage('此PDF不存在', 'error');
+                    return null;
+                }
+                resolvedPdfUrl = this._ensureAbsoluteUrl(resolvedPdfUrl);
+            }
 
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {

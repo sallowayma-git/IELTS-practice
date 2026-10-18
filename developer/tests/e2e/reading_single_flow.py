@@ -17,7 +17,7 @@ INDEX_PATH = REPO_ROOT / "index.html"
 INDEX_URL = f"{INDEX_PATH.as_uri()}?test_env=1"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_FILE = REPORT_DIR / "reading-single-flow-report.json"
-TARGET_UNIFIED_EXAM_ID = "p3-medium-169"
+TARGET_UNIFIED_EXAM_ID = "p2-medium-243"
 TARGET_MANUAL_PDF_EXAM_ID = "p2-high-26"
 
 try:
@@ -174,6 +174,52 @@ async def _ensure_reading_list_ready(page: Page) -> int:
     )
 
 
+async def _assert_unavailable_pdf_card_state(page: Page, exam_id: str) -> dict:
+    await page.wait_for_selector(
+        f"#exam-list-container .exam-item[data-exam-id='{exam_id}']",
+        timeout=30000,
+    )
+    state = await page.evaluate(
+        """
+        (targetExamId) => {
+            const card = document.querySelector(
+                `#exam-list-container .exam-item[data-exam-id='${targetExamId}']`
+            );
+            if (!card) return null;
+            const unavailable = Array.from(card.querySelectorAll('*')).find(
+                node => node.textContent?.trim() === '此PDF不存在'
+            );
+            return {
+                text: unavailable?.textContent?.trim() || '',
+                tagName: unavailable?.tagName || '',
+                role: unavailable?.getAttribute('role') || '',
+                tabIndex: unavailable?.getAttribute('tabindex') || '',
+                visible: unavailable
+                    ? Boolean(unavailable.offsetWidth || unavailable.offsetHeight || unavailable.getClientRects().length)
+                    : false,
+                pdfActions: card.querySelectorAll('[data-action="pdf"]').length,
+                pdfButtons: Array.from(card.querySelectorAll('button')).filter(
+                    button => /PDF/i.test(button.textContent || '')
+                ).length,
+            };
+        }
+        """,
+        exam_id,
+    )
+    if not state or state.get("text") != "此PDF不存在":
+        raise AssertionError(f"题目 {exam_id} 未显示精确的 PDF 不可用状态")
+    if (
+        not state.get("visible")
+        or state.get("tagName") == "BUTTON"
+        or state.get("role") == "button"
+        or state.get("tabIndex")
+        or state.get("pdfActions")
+        or state.get("pdfButtons")
+    ):
+        raise AssertionError(f"题目 {exam_id} 的 PDF 不可用状态仍可交互: {state}")
+    return state
+
+
 async def _open_exam_popup(page: Page, exam_id: str, console_log: List[ConsoleEntry]) -> Page:
     selector = f"#exam-list-container .exam-item[data-exam-id='{exam_id}'] button[data-action='start']"
     start_btn = page.locator(selector).first
@@ -226,6 +272,14 @@ async def _open_unified_exam(page: Page, exam_id: str, console_log: List[Console
         "() => window.location.href.includes('assets/generated/reading-exams/reading-practice-unified.html') && !!document.getElementById('question-groups')",
         timeout=20000,
     )
+    await practice_page.wait_for_function(
+        "() => document.getElementById('exam-title')?.textContent?.trim() === 'The internal body clock'",
+        timeout=20000,
+    )
+    await practice_page.locator('input[type="radio"][name="q1"][value="F"]').wait_for(
+        state="visible",
+        timeout=20000,
+    )
     session_id = await page.evaluate(
         "(targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || ''",
         exam_id,
@@ -273,6 +327,7 @@ async def _open_manual_pdf_exam(page: Page, exam_id: str) -> tuple[str, bool]:
                         type: 'reading',
                         title: 'Manual PDF regression fixture',
                         hasHtml: false,
+                        hasPdf: true,
                         pdfFilename: 'ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf'
                     }
                 });
@@ -338,6 +393,9 @@ async def run() -> None:
             reading_count = await _ensure_reading_list_ready(page)
             log_step(f"reading 题目列表已就绪，数量: {reading_count}", "SUCCESS")
 
+            await _assert_unavailable_pdf_card_state(page, TARGET_UNIFIED_EXAM_ID)
+            log_step(f"PDF 不可用卡片状态已锁定: {TARGET_UNIFIED_EXAM_ID}", "SUCCESS")
+
             open_exam_type = await page.evaluate("() => typeof (window.app && window.app.openExam)")
             if open_exam_type != "function":
                 raise AssertionError(f"window.app.openExam 不可用: {open_exam_type}")
@@ -355,12 +413,18 @@ async def run() -> None:
             submission_begin_ms = int(datetime.now().timestamp() * 1000)
             await practice_page.wait_for_selector("#timer", state="visible", timeout=15000)
             await practice_page.wait_for_selector("#submit-btn", state="visible", timeout=15000)
+            await practice_page.locator('input[name="q1"][value="F"]').check()
             await practice_page.wait_for_timeout(1100)
             await practice_page.locator("#timer").click()
             paused_at_ms = int(datetime.now().timestamp() * 1000)
             await practice_page.wait_for_timeout(2200)
             await practice_page.locator("#submit-btn").click()
             submit_clicked_ms = int(datetime.now().timestamp() * 1000)
+            results_score = practice_page.locator("#results .results-score-text")
+            await results_score.wait_for(state="visible", timeout=15000)
+            results_score_text = (await results_score.text_content() or "").strip()
+            if "得分 1 / 13" not in results_score_text:
+                raise AssertionError(f"受影响题目的真实评分结果非预期: {results_score_text}")
             await page.wait_for_timeout(1800)
             if not practice_page.is_closed():
                 await practice_page.close()
@@ -368,30 +432,47 @@ async def run() -> None:
             await _click_nav(page, "practice")
             semantic_handle = await page.wait_for_function(
                 """
-                async (targetExamId) => {
+                async (target) => {
                     try {
-                        const records = await window.AppData.practice.list({ projection: 'light' });
+                        const records = await window.AppData.practice.list({ projection: 'full' });
                         const matched = Array.isArray(records)
-                            ? records.filter(r => String(r?.examId || '') === targetExamId)
+                            ? records.filter(r => String(r?.examId || '') === target.examId
+                                && String(r?.sessionId || '') === target.sessionId)
                             : [];
                         const record = matched.length ? matched[matched.length - 1] : null;
+                        const q1 = record?.answerComparison?.q1 || null;
                         return record ? {
                             duration: Number(record.duration) || 0,
                             startTimeMs: record.startTime ? new Date(record.startTime).getTime() : null,
                             endTimeMs: record.endTime ? new Date(record.endTime).getTime() : null,
+                            q1Answer: record.answers?.q1 || '',
+                            q1UserAnswer: q1?.userAnswer || '',
+                            q1CorrectAnswer: q1?.correctAnswer || '',
+                            q1IsCorrect: q1?.isCorrect === true,
+                            correctAnswers: Number(record.correctAnswers),
+                            totalQuestions: Number(record.totalQuestions),
                         } : null;
                     } catch (_) {
                         return null;
                     }
                 }
                 """,
-                arg=exam_id,
+                arg={"examId": exam_id, "sessionId": session_id},
                 timeout=30000,
             )
             semantic = await semantic_handle.json_value()
-            log_step("练习记录已落地", "SUCCESS")
+            log_step("练习记录和答案判定已落地", "SUCCESS")
             if not semantic:
                 raise AssertionError("未找到目标练习记录用于时间语义断言")
+            if (
+                semantic.get("q1Answer") != "F"
+                or semantic.get("q1UserAnswer") != "F"
+                or semantic.get("q1CorrectAnswer") != "F"
+                or semantic.get("q1IsCorrect") is not True
+                or semantic.get("correctAnswers") != 1
+                or semantic.get("totalQuestions") != 13
+            ):
+                raise AssertionError(f"受影响题目的答案判定未正确持久化: {semantic}")
             duration_sec = float(semantic.get("duration") or 0)
             end_time_ms = int(semantic.get("endTimeMs") or 0)
             wall_clock_sec = max(0.0, (submit_clicked_ms - submission_begin_ms) / 1000.0)

@@ -7,6 +7,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
@@ -18,9 +19,9 @@ const INDEX_PATH = path.join(REPO_ROOT, 'index.html');
 const INDEX_URL = `${pathToFileURL(INDEX_PATH).href}?test_env=1`;
 const REPORT_DIR = path.join(REPO_ROOT, 'developer', 'tests', 'e2e', 'reports');
 const REPORT_FILE = path.join(REPORT_DIR, 'reading-single-flow-report.json');
-const TMP_DIR = '/tmp/ielts-playwright-tmp';
+const TMP_DIR = path.join(os.tmpdir(), 'ielts-playwright-tmp');
 const BROWSERS_DIR = path.join(REPO_ROOT, 'developer', 'tests', 'e2e', '.pw-browsers');
-const TARGET_UNIFIED_EXAM_ID = 'p3-medium-169';
+const TARGET_UNIFIED_EXAM_ID = 'p2-medium-243';
 const TARGET_MANUAL_PDF_EXAM_ID = 'p2-high-26';
 
 function nowIso() {
@@ -131,6 +132,43 @@ async function ensureReadingListReady(page) {
   );
 }
 
+async function assertUnavailablePdfCardState(page, examId) {
+  await page.waitForSelector(
+    `#exam-list-container .exam-item[data-exam-id='${examId}']`,
+    { timeout: 30_000 }
+  );
+  const state = await page.evaluate((targetExamId) => {
+    const card = document.querySelector(
+      `#exam-list-container .exam-item[data-exam-id='${targetExamId}']`
+    );
+    if (!card) return null;
+    const unavailable = Array.from(card.querySelectorAll('*')).find(
+      (node) => node.textContent?.trim() === '此PDF不存在'
+    );
+    return {
+      text: unavailable?.textContent?.trim() || '',
+      tagName: unavailable?.tagName || '',
+      role: unavailable?.getAttribute('role') || '',
+      tabIndex: unavailable?.getAttribute('tabindex') || '',
+      visible: unavailable
+        ? Boolean(unavailable.offsetWidth || unavailable.offsetHeight || unavailable.getClientRects().length)
+        : false,
+      pdfActions: card.querySelectorAll('[data-action="pdf"]').length,
+      pdfButtons: Array.from(card.querySelectorAll('button')).filter(
+        (button) => /PDF/i.test(button.textContent || '')
+      ).length,
+    };
+  }, examId);
+
+  if (!state || state.text !== '此PDF不存在') {
+    throw new Error(`题目 ${examId} 未显示精确的 PDF 不可用状态`);
+  }
+  if (!state.visible || state.tagName === 'BUTTON' || state.role === 'button' || state.tabIndex || state.pdfActions || state.pdfButtons) {
+    throw new Error(`题目 ${examId} 的 PDF 不可用状态仍可交互: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
+
 async function openExamPopup(page, examId, consoleLog) {
   const selector = `#exam-list-container .exam-item[data-exam-id='${examId}'] button[data-action='start']`;
   const startBtn = page.locator(selector).first();
@@ -178,8 +216,18 @@ async function openUnifiedExam(page, examId, consoleLog) {
 
   await practicePage.waitForFunction(
     () => window.location.href.includes('assets/generated/reading-exams/reading-practice-unified.html') && !!document.getElementById('question-groups'),
+    undefined,
     { timeout: 20_000 }
   );
+  await practicePage.waitForFunction(
+    () => document.getElementById('exam-title')?.textContent?.trim() === 'The internal body clock',
+    undefined,
+    { timeout: 20_000 }
+  );
+  await practicePage.locator('input[type="radio"][name="q1"][value="F"]').waitFor({
+    state: 'visible',
+    timeout: 20_000,
+  });
 
   const sessionId = await page.evaluate(
     (targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || '',
@@ -225,6 +273,7 @@ async function openManualPdfExam(page, examId) {
           type: 'reading',
           title: 'Manual PDF regression fixture',
           hasHtml: false,
+          hasPdf: true,
           pdfFilename: 'ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf',
         },
       });
@@ -256,7 +305,11 @@ async function run() {
   process.env.TMPDIR = TMP_DIR;
   process.env.TMP = TMP_DIR;
   process.env.TEMP = TMP_DIR;
-  process.env.PLAYWRIGHT_BROWSERS_PATH = BROWSERS_DIR;
+  const localBrowserEntries = fs.readdirSync(BROWSERS_DIR, { withFileTypes: true });
+  if (!process.env.PLAYWRIGHT_BROWSERS_PATH
+    && localBrowserEntries.some((entry) => entry.isDirectory() && /^(?:chromium|firefox)-/.test(entry.name))) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = BROWSERS_DIR;
+  }
 
   const startedAt = Date.now();
   const consoleLog = [];
@@ -266,8 +319,20 @@ async function run() {
   let manualPdfUrl = null;
   let failure = null;
 
-  const { firefox } = await import('playwright');
-  const browser = await firefox.launch({ headless: true });
+  const { chromium, firefox } = await import('playwright');
+  let browser;
+  try {
+    browser = await firefox.launch({ headless: true });
+  } catch (firefoxError) {
+    try {
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--allow-file-access-from-files'],
+      });
+    } catch (chromiumError) {
+      throw new AggregateError([firefoxError, chromiumError], 'No installed Playwright browser could be launched');
+    }
+  }
 
   try {
     const context = await browser.newContext();
@@ -291,6 +356,9 @@ async function run() {
     const readingCount = await ensureReadingListReady(page);
     logStep(`reading 题目列表已就绪，数量: ${readingCount}`, 'SUCCESS');
 
+    await assertUnavailablePdfCardState(page, TARGET_UNIFIED_EXAM_ID);
+    logStep(`PDF 不可用卡片状态已锁定: ${TARGET_UNIFIED_EXAM_ID}`, 'SUCCESS');
+
     const openExamType = await page.evaluate(() => typeof (window.app && window.app.openExam));
     if (openExamType !== 'function') {
       throw new Error(`window.app.openExam 不可用: ${openExamType}`);
@@ -308,35 +376,17 @@ async function run() {
       throw new Error(`统一阅读页 URL 非预期: ${opened.popupUrl}`);
     }
 
-    const completionPayload = {
-      examId,
-      sessionId,
-      duration: 95,
-      startTime: nowIso(),
-      endTime: nowIso(),
-      scoreInfo: {
-        correct: 1,
-        total: 2,
-        accuracy: 0.5,
-        percentage: 50,
-        source: 'practice_page',
-      },
-      answers: { q1: 'A', q2: 'B' },
-      correctAnswers: { q1: 'A', q2: 'C' },
-      answerComparison: {
-        q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'A', isCorrect: true },
-        q2: { questionId: 'q2', userAnswer: 'B', correctAnswer: 'C', isCorrect: false },
-      },
-      metadata: { source: 'reading_single_e2e' },
-    };
+    await opened.practicePage.waitForSelector('#timer', { state: 'visible', timeout: 15_000 });
+    await opened.practicePage.waitForSelector('#submit-btn', { state: 'visible', timeout: 15_000 });
+    await opened.practicePage.locator('input[name="q1"][value="F"]').check();
+    await opened.practicePage.locator('#submit-btn').click();
 
-    await opened.practicePage.evaluate((payload) => {
-      const target = window.opener || window.parent;
-      if (!target || typeof target.postMessage !== 'function') {
-        throw new Error('missing_message_target');
-      }
-      target.postMessage({ type: 'PRACTICE_COMPLETE', data: payload, source: 'practice_page' }, '*');
-    }, completionPayload);
+    const resultsScore = opened.practicePage.locator('#results .results-score-text');
+    await resultsScore.waitFor({ state: 'visible', timeout: 15_000 });
+    const resultsScoreText = String(await resultsScore.textContent() || '').trim();
+    if (!resultsScoreText.includes('得分 1 / 13')) {
+      throw new Error(`受影响题目的真实评分结果非预期: ${resultsScoreText}`);
+    }
 
     await page.waitForTimeout(1800);
     if (!opened.practicePage.isClosed()) {
@@ -344,20 +394,42 @@ async function run() {
     }
 
     await clickNav(page, 'practice');
-    await page.waitForFunction(
-      async (targetExamId) => {
+    const semanticHandle = await page.waitForFunction(
+      async (target) => {
         try {
-          const records = await window.AppData.practice.list({ projection: 'light' });
-          return Array.isArray(records) &&
-            records.some((r) => String(r?.examId || '') === targetExamId);
+          const records = await window.AppData.practice.list({ projection: 'full' });
+          const matched = Array.isArray(records)
+            ? records.filter((record) => String(record?.examId || '') === target.examId
+              && String(record?.sessionId || '') === target.sessionId)
+            : [];
+          const record = matched.length ? matched[matched.length - 1] : null;
+          const q1 = record?.answerComparison?.q1 || null;
+          return record ? {
+            q1Answer: record.answers?.q1 || '',
+            q1UserAnswer: q1?.userAnswer || '',
+            q1CorrectAnswer: q1?.correctAnswer || '',
+            q1IsCorrect: q1?.isCorrect === true,
+            correctAnswers: Number(record.correctAnswers),
+            totalQuestions: Number(record.totalQuestions),
+          } : null;
         } catch (_) {
-          return false;
+          return null;
         }
       },
-      examId,
+      { examId, sessionId },
       { timeout: 30_000 }
     );
-    logStep('练习记录已落地', 'SUCCESS');
+    const semantic = await semanticHandle.jsonValue();
+    if (!semantic
+      || semantic.q1Answer !== 'F'
+      || semantic.q1UserAnswer !== 'F'
+      || semantic.q1CorrectAnswer !== 'F'
+      || semantic.q1IsCorrect !== true
+      || semantic.correctAnswers !== 1
+      || semantic.totalQuestions !== 13) {
+      throw new Error(`受影响题目的答案判定未正确持久化: ${JSON.stringify(semantic)}`);
+    }
+    logStep('练习记录和答案判定已落地', 'SUCCESS');
 
     const tailLogs = consoleLog.slice(checkpoint);
     const fallbackHits = tailLogs.filter((entry) => entry.text.includes('[Fallback]'));
