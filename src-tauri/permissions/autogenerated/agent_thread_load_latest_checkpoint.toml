@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-thread-load-latest-checkpoint"
+description = "Enables the agent_thread_load_latest_checkpoint command without any pre-configured scope."
+commands.allow = ["agent_thread_load_latest_checkpoint"]
+
+[[permission]]
+identifier = "deny-agent-thread-load-latest-checkpoint"
+description = "Denies the agent_thread_load_latest_checkpoint command without any pre-configured scope."
+commands.deny = ["agent_thread_load_latest_checkpoint"]

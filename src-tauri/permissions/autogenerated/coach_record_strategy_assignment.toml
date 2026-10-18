@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-record-strategy-assignment"
+description = "Enables the coach_record_strategy_assignment command without any pre-configured scope."
+commands.allow = ["coach_record_strategy_assignment"]
+
+[[permission]]
+identifier = "deny-coach-record-strategy-assignment"
+description = "Denies the coach_record_strategy_assignment command without any pre-configured scope."
+commands.deny = ["coach_record_strategy_assignment"]

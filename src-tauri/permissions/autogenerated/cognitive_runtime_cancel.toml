@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cognitive-runtime-cancel"
+description = "Enables the cognitive_runtime_cancel command without any pre-configured scope."
+commands.allow = ["cognitive_runtime_cancel"]
+
+[[permission]]
+identifier = "deny-cognitive-runtime-cancel"
+description = "Denies the cognitive_runtime_cancel command without any pre-configured scope."
+commands.deny = ["cognitive_runtime_cancel"]

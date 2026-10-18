@@ -2,9 +2,8 @@
 //!
 //! 1. Deleting ONE history attempt runs the M2 projection rebuild, which used to
 //!    `DELETE FROM learner_observations WHERE projector_key = ...` and then
-//!    re-insert. `coach_outcome_links_v0.future_observation_id` cascades and
-//!    `teaching_strategy_outcomes.observation_id` is SET NULL on that delete, so
-//!    every coach link in the database was wiped even though the rebuilt
+//!    re-insert. `coach_outcome_links_v0.future_observation_id` cascades on that
+//!    delete, so every coach link in the database was wiped even though the rebuilt
 //!    observations come back with the same deterministic ids. Only links to the
 //!    deleted attempt's observations may disappear.
 //! 2. A backup containing coach strategy assignments with a
@@ -113,22 +112,6 @@ fn insert_coach_assignment(conn: &Connection, id: &str, message_id: &str, snapsh
     .unwrap();
 }
 
-fn insert_teaching_assignment(
-    conn: &Connection,
-    id: &str,
-    message_id: &str,
-    snapshot: Option<&str>,
-) {
-    conn.execute(
-        "INSERT INTO teaching_strategy_assignments
-           (id, user_id, strategy_id, why_selected_json, memory_ids_json, skill_keys_json,
-            context_snapshot_id, response_message_id, created_at)
-         VALUES (?1,'local','evidence_first_v1','{}','[]','[]',?2,?3,'2026-08-16T00:00:00Z')",
-        params![id, snapshot, message_id],
-    )
-    .unwrap();
-}
-
 fn link(conn: &Connection, assignment: &str, observation: &str) {
     conn.execute(
         "INSERT INTO coach_outcome_links_v0
@@ -145,15 +128,6 @@ fn linked_observations(conn: &Connection) -> Vec<String> {
         .unwrap();
     let rows = stmt.query_map([], |row| row.get(0)).unwrap();
     rows.map(Result::unwrap).collect()
-}
-
-fn strategy_outcome_observation(conn: &Connection, id: &str) -> Option<String> {
-    conn.query_row(
-        "SELECT observation_id FROM teaching_strategy_outcomes WHERE id = ?1",
-        params![id],
-        |row| row.get(0),
-    )
-    .unwrap()
 }
 
 #[test]
@@ -173,19 +147,6 @@ fn deleting_one_attempt_keeps_coach_links_owned_by_other_attempts() {
     link(&conn, "asg-1", &keep_obs);
     link(&conn, "asg-1", &drop_obs);
 
-    insert_teaching_assignment(&conn, "tsa-1", &message, None);
-    for (id, obs) in [("tso-keep", &keep_obs), ("tso-drop", &drop_obs)] {
-        conn.execute(
-            "INSERT INTO teaching_strategy_outcomes
-               (id, outcome_kind, assignment_id, observation_id, novel_asset_id,
-                score_delta, created_at)
-             VALUES (?1,'next_novel_skill_attempt','tsa-1',?2,NULL,NULL,
-                     '2026-08-16T00:00:00Z')",
-            params![id, obs],
-        )
-        .unwrap();
-    }
-
     assert!(delete_attempt(&conn, "att-drop").unwrap());
 
     // The surviving attempt's observation keeps its deterministic id ...
@@ -196,20 +157,11 @@ fn deleting_one_attempt_keeps_coach_links_owned_by_other_attempts() {
         vec![keep_obs.clone()],
         "deleting one attempt must only remove coach links to that attempt"
     );
-    assert_eq!(
-        strategy_outcome_observation(&conn, "tso-keep"),
-        Some(keep_obs.clone())
-    );
-    assert_eq!(strategy_outcome_observation(&conn, "tso-drop"), None);
 
     // A plain rebuild (the learning_observations_rebuild command) is also
     // non-destructive for links whose observation still exists.
     ielts_db::learning_observations_rebuild(&conn).unwrap();
-    assert_eq!(linked_observations(&conn), vec![keep_obs.clone()]);
-    assert_eq!(
-        strategy_outcome_observation(&conn, "tso-keep"),
-        Some(keep_obs)
-    );
+    assert_eq!(linked_observations(&conn), vec![keep_obs]);
 }
 
 fn insert_context_snapshot(conn: &Connection, id: &str) {
@@ -248,7 +200,6 @@ fn backup_with_context_snapshot_references_restores_on_a_fresh_device() {
     insert_context_snapshot(&source, "ctx-1");
     let message = coach_message(&source);
     insert_coach_assignment(&source, "asg-1", &message, Some("ctx-1"));
-    insert_teaching_assignment(&source, "tsa-1", &message, Some("ctx-1"));
 
     let package = ielts_db::create_backup_package(&source, "test").unwrap();
 
@@ -263,10 +214,6 @@ fn backup_with_context_snapshot_references_restores_on_a_fresh_device() {
     // The coach records and their context provenance both survive.
     assert_eq!(
         snapshot_ref(&target, "coach_strategy_assignments_v0", "asg-1").as_deref(),
-        Some("ctx-1")
-    );
-    assert_eq!(
-        snapshot_ref(&target, "teaching_strategy_assignments", "tsa-1").as_deref(),
         Some("ctx-1")
     );
     let items: i64 = target
@@ -289,7 +236,6 @@ fn older_backup_without_context_snapshots_still_restores() {
     insert_context_snapshot(&source, "ctx-1");
     let message = coach_message(&source);
     insert_coach_assignment(&source, "asg-1", &message, Some("ctx-1"));
-    insert_teaching_assignment(&source, "tsa-1", &message, Some("ctx-1"));
 
     let mut package = ielts_db::create_backup_package(&source, "test").unwrap();
     package
@@ -321,10 +267,6 @@ fn older_backup_without_context_snapshots_still_restores() {
     assert_eq!(snapshots, 0);
     assert_eq!(
         snapshot_ref(&target, "coach_strategy_assignments_v0", "asg-1"),
-        None
-    );
-    assert_eq!(
-        snapshot_ref(&target, "teaching_strategy_assignments", "tsa-1"),
         None
     );
 }

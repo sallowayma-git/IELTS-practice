@@ -35,8 +35,11 @@ latest-linux.yml
 *.dmg
 *.pkg
 *.exe
+# Frozen sidecars, staging/fingerprint files and locally built manifests stay
+# out of git; only the Windows manifest used by packaged e2e is tracked.
 src-tauri/binaries/ielts-agent-runtime-*
-!src-tauri/binaries/*.sha256
+src-tauri/binaries/.ielts-agent-runtime-*
+!src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.sha256
 *.msi
 *.AppImage
 *.deb

@@ -1,6 +1,6 @@
 //! M3 host-owned Python sidecar lifecycle and framed protocol boundary.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -30,6 +30,9 @@ pub(crate) const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const SIDECAR_MAX_OUTPUT_TOKENS: u32 = 8_000;
 const SIDECAR_NAME: &str = "ielts-agent-runtime";
 const SIDECAR_BUILD_ID: &str = env!("IELTS_AGENT_RUNTIME_BUILD_ID");
+/// `build.rs` emits this instead of a SHA-256 when a development build was
+/// compiled without a frozen sidecar; such a build never starts the runtime.
+const SIDECAR_UNAVAILABLE_BUILD_ID: &str = "sidecar-unavailable";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const COGNITIVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 /// The weekly run makes up to `MODEL_MAX_ATTEMPTS` (3) model calls with backoff;
@@ -39,6 +42,17 @@ const COGNITIVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const WEEKLY_REQUEST_TIMEOUT: Duration = Duration::from_secs(420);
 const START_TIMEOUT: Duration = Duration::from_secs(30);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+/// Delay before the first automatic restart after a sidecar failure; doubled
+/// for every further consecutive failure, up to `RESTART_BACKOFF_MAX`.
+const RESTART_BACKOFF_BASE: Duration = Duration::from_secs(1);
+const RESTART_BACKOFF_MAX: Duration = Duration::from_secs(60);
+/// Consecutive failures (no successful handshake in between) after which the
+/// host stops restarting the sidecar on its own.
+const RESTART_MAX_CONSECUTIVE_FAILURES: u32 = 5;
+/// Sidecar stderr is logged locally, line by line, within these bounds.
+const STDERR_LINE_CAP: usize = 2 * 1024;
+const STDERR_LOG_BUDGET: usize = 64 * 1024;
+const STDERR_TAIL_LINES: usize = 20;
 /// Methods the HOST calls ON the sidecar. Every entry must be a method the host
 /// actually sends, and every method the host sends must be listed here —
 /// otherwise the handshake succeeds against a sidecar that cannot serve the
@@ -58,7 +72,6 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUIRED_RUNTIME_CAPABILITIES: &[(&str, &str)] = &[
     ("runtime.health", "1"),
     ("runtime.shutdown", "1"),
-    ("memory.candidates.extract", "1"),
     ("memory.candidates.generate", "1"),
     ("dream.weekly", "1"),
     ("planner.study_plan", "1"),
@@ -75,16 +88,6 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     ("model.invoke", "1"),
     ("tool.invoke", "1"),
     #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.corpus_manifest", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.export_chunks", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("retrieval.fetch_chunks", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("context.materialize", "1"),
-    #[cfg(feature = "context-compiler-v1")]
-    ("model.embed.batch", "1"),
-    #[cfg(feature = "context-compiler-v1")]
     ("learning.learner_skill_state", "1"),
     #[cfg(feature = "context-compiler-v1")]
     ("memory.search_active", "1"),
@@ -94,47 +97,8 @@ const PROVIDED_HOST_CAPABILITIES: &[(&str, &str)] = &[
     ("dream.run_weekly", "1"),
     #[cfg(feature = "daily-dream-v1")]
     ("learning.weekly_pack", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.select", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_assignment", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_feedback", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.record_outcome", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("strategy.user_state", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.list_versions", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.get_active", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("prompt.propose_candidate", "1"),
-    #[cfg(feature = "daily-dream-v1")]
-    ("skill.list_versions", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.create", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.append_message", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.list", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.save_checkpoint", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("thread.request_cancel", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("approval.list", "1"),
-    // `approval.record` only inserts a PENDING row: it is the sidecar's
-    // legitimate way to REQUEST a human decision. `approval.decide` is
-    // deliberately absent (Round-3 audit A2) — deciding is the human's.
-    #[cfg(feature = "agent-threads-v1")]
-    ("approval.record", "1"),
     #[cfg(feature = "agent-threads-v1")]
     ("study_plan.create", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("study_plan.list_items", "1"),
-    #[cfg(feature = "agent-threads-v1")]
-    ("study_plan.mark_done", "1"),
 ];
 /// Saturday or Sunday, in `now`'s own zone.
 #[cfg(feature = "daily-dream-v1")]
@@ -282,6 +246,11 @@ pub(crate) enum RuntimeHostError {
     ProtocolVersionMismatch { expected: u32, actual: u32 },
     #[error("runtime build identity mismatch")]
     BuildIdentityMismatch,
+    #[error(
+        "AI features are unavailable: this app was built without its agent runtime. \
+         Run developer/tests/ci/build_agent_runtime_sidecar.py and rebuild the app."
+    )]
+    SidecarNotBundled,
     #[error("runtime is missing capability {0}")]
     MissingCapability(String),
     #[error("runtime capability version mismatch for {capability}: expected {expected}, got {actual}")]
@@ -300,6 +269,10 @@ pub(crate) enum RuntimeHostError {
     Process(String),
     #[error("runtime request timed out")]
     Timeout,
+    #[error("The study assistant stopped unexpectedly and is restarting; try again after {retry_after_secs}s.")]
+    RestartBackoff { retry_after_secs: u64 },
+    #[error("The study assistant stopped unexpectedly {failures} times in a row and will not restart automatically. Restart the app to try again.")]
+    RestartGaveUp { failures: u32 },
     /// The model provider failed; `retryable` is the gateway's own verdict
     /// (5xx / 429 / timeout / connect), which the sidecar's retry loop honours.
     #[error("{message}")]
@@ -392,6 +365,164 @@ impl RuntimeLifecycle {
     }
 }
 
+/// Crash-loop guard for automatic sidecar restarts. Every failed run (crash,
+/// process error, failed startup) of a distinct generation counts once; a
+/// successful handshake or an explicit shutdown/restart clears the history.
+#[derive(Debug, Default)]
+struct RestartBackoff {
+    consecutive_failures: u32,
+    last_failure_at: Option<Instant>,
+    last_failed_generation: Option<u64>,
+}
+
+impl RestartBackoff {
+    fn record_failure(&mut self, generation: u64, now: Instant) {
+        if self.last_failed_generation == Some(generation) {
+            return;
+        }
+        self.last_failed_generation = Some(generation);
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+        self.last_failure_at = Some(now);
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn check(&self, now: Instant) -> Result<(), RuntimeHostError> {
+        restart_decision(self.consecutive_failures, self.last_failure_at, now)
+    }
+}
+
+/// Backoff before the restart that follows `failures` consecutive failures:
+/// 1 s, 2 s, 4 s, ... capped at `RESTART_BACKOFF_MAX`.
+fn restart_delay(failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(16);
+    RESTART_BACKOFF_BASE
+        .saturating_mul(1u32 << doublings)
+        .min(RESTART_BACKOFF_MAX)
+}
+
+/// Pure restart gate (the clock is the caller's `now`). Never sleeps: a start
+/// inside the backoff window is rejected with the time left, and after
+/// `RESTART_MAX_CONSECUTIVE_FAILURES` it is rejected until an explicit restart.
+fn restart_decision(
+    failures: u32,
+    last_failure_at: Option<Instant>,
+    now: Instant,
+) -> Result<(), RuntimeHostError> {
+    if failures == 0 {
+        return Ok(());
+    }
+    if failures >= RESTART_MAX_CONSECUTIVE_FAILURES {
+        return Err(RuntimeHostError::RestartGaveUp { failures });
+    }
+    let Some(last) = last_failure_at else {
+        return Ok(());
+    };
+    let elapsed = now.saturating_duration_since(last);
+    let delay = restart_delay(failures);
+    if elapsed >= delay {
+        return Ok(());
+    }
+    let remaining = delay - elapsed;
+    // Round up so the message never says "after 0s" while still blocked.
+    let retry_after_secs = remaining.as_secs() + u64::from(remaining.subsec_nanos() > 0);
+    Err(RuntimeHostError::RestartBackoff { retry_after_secs })
+}
+
+/// What one chunk of sidecar stderr turns into for the local log.
+#[derive(Debug, PartialEq, Eq)]
+enum StderrOutput {
+    Line(String),
+    /// Emitted once, when the per-process log budget is spent.
+    BudgetExhausted,
+}
+
+/// Line-splits raw sidecar stderr with bounds: each line is capped at
+/// `STDERR_LINE_CAP` bytes, at most `STDERR_LOG_BUDGET` bytes are logged per
+/// process, and the last `STDERR_TAIL_LINES` lines are kept (even past the
+/// budget) for the termination log event. Logs stay local.
+#[derive(Debug, Default)]
+struct StderrCapture {
+    partial: Vec<u8>,
+    partial_truncated: bool,
+    logged_bytes: usize,
+    budget_exhausted: bool,
+    tail: VecDeque<String>,
+}
+
+impl StderrCapture {
+    fn push(&mut self, bytes: &[u8]) -> Vec<StderrOutput> {
+        let mut out = Vec::new();
+        for chunk in bytes.split_inclusive(|byte| *byte == b'\n') {
+            let (body, complete) = match chunk.split_last() {
+                Some((b'\n', body)) => (body, true),
+                _ => (chunk, false),
+            };
+            let room = STDERR_LINE_CAP.saturating_sub(self.partial.len());
+            if body.len() > room {
+                self.partial.extend_from_slice(&body[..room]);
+                self.partial_truncated = true;
+            } else {
+                self.partial.extend_from_slice(body);
+            }
+            if complete {
+                self.complete_line(&mut out);
+            }
+        }
+        out
+    }
+
+    /// Flush an unterminated last line (the process has exited).
+    fn finish(&mut self) -> Vec<StderrOutput> {
+        let mut out = Vec::new();
+        if !self.partial.is_empty() || self.partial_truncated {
+            self.complete_line(&mut out);
+        }
+        out
+    }
+
+    fn complete_line(&mut self, out: &mut Vec<StderrOutput>) {
+        let raw = std::mem::take(&mut self.partial);
+        let raw = raw.strip_suffix(b"\r").unwrap_or(&raw);
+        let mut line = String::from_utf8_lossy(raw).into_owned();
+        if std::mem::take(&mut self.partial_truncated) {
+            line.push_str(" [line truncated]");
+        }
+        if self.tail.len() == STDERR_TAIL_LINES {
+            self.tail.pop_front();
+        }
+        self.tail.push_back(line.clone());
+        if self.logged_bytes + line.len() <= STDERR_LOG_BUDGET {
+            self.logged_bytes += line.len();
+            out.push(StderrOutput::Line(line));
+        } else if !self.budget_exhausted {
+            self.budget_exhausted = true;
+            out.push(StderrOutput::BudgetExhausted);
+        }
+    }
+
+    fn tail(&self) -> String {
+        self.tail.iter().map(String::as_str).collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn log_stderr(outputs: Vec<StderrOutput>) {
+    for output in outputs {
+        match output {
+            StderrOutput::Line(line) => {
+                tracing::warn!(target: "ielts_agent_runtime::stderr", "{line}");
+            }
+            StderrOutput::BudgetExhausted => tracing::warn!(
+                target: "ielts_agent_runtime::stderr",
+                budget_bytes = STDERR_LOG_BUDGET,
+                "Python cognitive runtime stderr exceeded its log budget; further lines are not logged",
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeMetrics {
@@ -420,6 +551,7 @@ struct RuntimeProcess {
     generation: u64,
     termination: Option<Arc<Notify>>,
     metrics: RuntimeMetrics,
+    restart: RestartBackoff,
 }
 
 #[derive(Clone)]
@@ -614,6 +746,7 @@ impl RuntimeManager {
         if self.inner.lock().await.lifecycle.state() == RuntimeState::Ready {
             return Ok(());
         }
+        self.inner.lock().await.restart.check(Instant::now())?;
         verify_sidecar_hash()?;
         let generation = {
             let mut process = self.inner.lock().await;
@@ -650,8 +783,9 @@ impl RuntimeManager {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             let mut stdout = Vec::new();
+            let mut stderr = StderrCapture::default();
             while let Some(event) = events.recv().await {
-                manager.handle_event(&app, generation, event, &mut stdout).await;
+                manager.handle_event(&app, generation, event, &mut stdout, &mut stderr).await;
             }
         });
 
@@ -719,7 +853,9 @@ impl RuntimeManager {
             if process.generation != generation {
                 return Err(RuntimeHostError::Process("sidecar generation changed during startup".into()));
             }
-            process.lifecycle.mark_ready()
+            process.lifecycle.mark_ready()?;
+            process.restart.reset();
+            Ok(())
         }
         .await;
         if let Err(error) = startup {
@@ -970,7 +1106,10 @@ impl RuntimeManager {
         }
     }
 
+    /// Explicit stop (developer restart command, app exit). Clears the
+    /// crash-loop guard so the next start is not held back by old failures.
     pub(crate) async fn shutdown(&self) -> Result<(), RuntimeHostError> {
+        self.inner.lock().await.restart.reset();
         let request_guard = match self.request_operation.clone().try_lock_owned() {
             Ok(guard) => guard,
             Err(_) => return self.force_stop_inner().await,
@@ -1056,6 +1195,7 @@ impl RuntimeManager {
         generation: u64,
         event: CommandEvent,
         stdout: &mut Vec<u8>,
+        stderr: &mut StderrCapture,
     ) {
         match event {
             CommandEvent::Stdout(bytes) => {
@@ -1075,17 +1215,17 @@ impl RuntimeManager {
                     }
                 }
             }
-            CommandEvent::Stderr(bytes) => {
-                let digest = hex::encode(Sha256::digest(&bytes));
-                tracing::warn!(stderr_bytes = bytes.len(), stderr_sha256 = %digest, "Python cognitive runtime stderr");
-            }
+            CommandEvent::Stderr(bytes) => log_stderr(stderr.push(&bytes)),
             CommandEvent::Error(error) => {
                 tracing::error!(%error, "Python cognitive runtime process error");
                 self.mark_crashed(generation).await;
             }
             CommandEvent::Terminated(payload) => {
+                log_stderr(stderr.finish());
+                let stderr_tail = stderr.tail();
                 let mut process = self.inner.lock().await;
                 if process.generation != generation {
+                    tracing::info!(code = ?payload.code, signal = ?payload.signal, %stderr_tail, "stopped Python cognitive runtime exited");
                     return;
                 }
                 process.child = None;
@@ -1094,13 +1234,23 @@ impl RuntimeManager {
                 let termination = process.termination.take();
                 if process.lifecycle.state() == RuntimeState::Stopping {
                     process.lifecycle.shutdown();
-                } else if !matches!(
-                    process.lifecycle.state(),
-                    RuntimeState::Crashed | RuntimeState::Unavailable
-                ) {
-                    process.lifecycle.mark_crashed();
-                    process.metrics.crashes += 1;
-                    tracing::error!(code = ?payload.code, signal = ?payload.signal, "Python cognitive runtime crashed");
+                    tracing::info!(code = ?payload.code, signal = ?payload.signal, %stderr_tail, "Python cognitive runtime exited");
+                } else {
+                    if !matches!(
+                        process.lifecycle.state(),
+                        RuntimeState::Crashed | RuntimeState::Unavailable
+                    ) {
+                        process.lifecycle.mark_crashed();
+                        process.metrics.crashes += 1;
+                    }
+                    process.restart.record_failure(generation, Instant::now());
+                    tracing::error!(
+                        code = ?payload.code,
+                        signal = ?payload.signal,
+                        consecutive_failures = process.restart.consecutive_failures,
+                        %stderr_tail,
+                        "Python cognitive runtime crashed",
+                    );
                 }
                 drop(process);
                 if let Some(termination) = termination {
@@ -1284,15 +1434,6 @@ impl RuntimeManager {
                 self.invoke_model(app, params, request_budget, active.kind.model_transport_retries()).await
             }
             #[cfg(feature = "context-compiler-v1")]
-            Some("model.embed.batch") => self.invoke_embed(app, params, request_budget).await,
-            #[cfg(feature = "context-compiler-v1")]
-            Some(method @ ("retrieval.corpus_manifest"
-                | "retrieval.export_chunks"
-                | "retrieval.fetch_chunks"
-                | "context.materialize")) => {
-                self.invoke_retrieval_context(app, method, params).await
-            }
-            #[cfg(feature = "context-compiler-v1")]
             Some(method @ ("learning.learner_skill_state"
                 | "memory.search_active"
                 | "learning.evidence_by_ids")) => {
@@ -1302,112 +1443,13 @@ impl RuntimeManager {
             Some(method @ ("dream.run_weekly" | "learning.weekly_pack")) => {
                 self.invoke_journal_dream(app, method, params, &active).await
             }
-            #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("strategy.select"
-                | "strategy.record_assignment"
-                | "strategy.record_feedback"
-                | "strategy.record_outcome"
-                | "strategy.user_state")) => {
-                self.invoke_teaching_strategy(app, method, params).await
-            }
-            // Round-3 audit (A2): `prompt.promote_candidate`, `prompt.rollback`,
-            // `eval.run_case` and `approval.decide` are deliberately absent.
-            // They activate a version, reverse one, author the eval verdict that
-            // gates approval, or decide an approval outright — the sidecar is a
-            // derived runtime and must not hold that authority. They now fall
-            // through to the `unsupported host method` arm below. Product
-            // prompt release operations are also absent from Webview commands;
-            // controlled-action approval retains its separate human UI gate.
-            #[cfg(feature = "daily-dream-v1")]
-            Some(method @ ("prompt.list_versions"
-                | "prompt.get_active"
-                | "prompt.propose_candidate"
-                | "skill.list_versions")) => {
-                self.invoke_prompt_skill(app, method, params).await
-            }
             #[cfg(feature = "agent-threads-v1")]
-            Some(method @ ("thread.create"
-                | "thread.append_message"
-                | "thread.list"
-                | "thread.save_checkpoint"
-                | "thread.request_cancel"
-                | "approval.list"
-                | "approval.record"
-                | "study_plan.create"
-                | "study_plan.list_items"
-                | "study_plan.mark_done")) => {
-                self.invoke_agent_thread(app, method, params).await
-            }
+            Some("study_plan.create") => self.invoke_study_plan_create(app, params).await,
             Some(method) => Err(RuntimeHostError::InvalidResponse(format!(
                 "unsupported host method: {method}"
             ))),
             None => Err(RuntimeHostError::InvalidResponse("host method is missing".into())),
         }
-    }
-
-    /// M5-01/M5-08: serve the corpus export + context materialization reverse-RPC.
-    ///
-    /// Python asks for bounded corpus views or asks Rust to materialize a
-    /// ContextPlan. Rust is the authority: it never exposes a DB handle, and
-    /// materialization re-fetches canonical text + re-authorizes before
-    /// returning a ContextPack. Python only ever receives derived DTOs.
-    #[cfg(feature = "context-compiler-v1")]
-    async fn invoke_retrieval_context(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::{ContextMaterializerService, CorpusExportService};
-        use ielts_domain::{ContextPlan, CorpusExportQuery, CorpusFetchQuery};
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let result: Result<Value, String> = match method {
-            "retrieval.corpus_manifest" => serialize_result(
-                CorpusExportService::new(&store).corpus_manifest(),
-            ),
-            "retrieval.export_chunks" => {
-                match serde_json::from_value::<CorpusExportQuery>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(
-                        CorpusExportService::new(&store).export_chunks(&query),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "retrieval.fetch_chunks" => {
-                match serde_json::from_value::<CorpusFetchQuery>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(
-                        CorpusExportService::new(&store).fetch_chunks(&query),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "context.materialize" => {
-                match serde_json::from_value::<ContextPlan>(
-                    params.get("plan").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(plan) => {
-                        let scope = params
-                            .get("scope")
-                            .and_then(Value::as_str)
-                            .unwrap_or("internal")
-                            .to_string();
-                        serialize_result(
-                            ContextMaterializerService::new(&store, &store)
-                                .materialize_for_caller(&plan, &scope),
-                        )
-                    }
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported retrieval/context method: {other}")),
-        };
-        result.map_err(RuntimeHostError::InvalidResponse)
     }
 
     /// M6-02: serve the three bounded read-only learning/memory tools.
@@ -1571,327 +1613,36 @@ impl RuntimeManager {
         Ok(value)
     }
 
-    /// M10: serve the teaching-strategy evolution reverse-RPC. Rust is the
-    /// evolution authority: selection (M10-06), assignment recording (M10-02),
-    /// the two reward channels (M10-03: satisfaction vs learning on separate
-    /// tables), the delayed outcome window (M10-04), per-user state (M10-05),
-    /// and the candidate promotion gate (M10-08). Python only receives derived
-    /// DTOs + stable strategy ids.
-    #[cfg(feature = "daily-dream-v1")]
-    async fn invoke_teaching_strategy(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::TeachingStrategyService;
-        use ielts_domain::{
-            RecordStrategyAssignmentCommand, RecordStrategyFeedbackCommand,
-            RecordStrategyOutcomeCommand, SelectStrategyCommand, TeachingStrategyId,
-        };
-
-        const STRATEGY_RESPONSE_BYTES: usize = 256 * 1024;
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = TeachingStrategyService::new(&store);
-        let result: Result<Value, String> = match method {
-            "strategy.select" => {
-                match serde_json::from_value::<SelectStrategyCommand>(
-                    params.get("query").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(query) => serialize_result(service.select_strategy(&query)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_assignment" => {
-                match serde_json::from_value::<RecordStrategyAssignmentCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_assignment(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_feedback" => {
-                match serde_json::from_value::<RecordStrategyFeedbackCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_feedback(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.record_outcome" => {
-                match serde_json::from_value::<RecordStrategyOutcomeCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_outcome(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "strategy.user_state" => {
-                let user_id = params
-                    .get("userId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("local")
-                    .to_string();
-                let strategy_id_str = params
-                    .get("strategyId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("");
-                let scope = params
-                    .get("scope")
-                    .and_then(Value::as_str)
-                    .unwrap_or("general")
-                    .to_string();
-                match TeachingStrategyId::parse(strategy_id_str) {
-                    Some(strategy_id) => {
-                        serialize_result(service.user_state(&user_id, strategy_id, &scope))
-                    }
-                    None => Err(format!("unknown strategy id: {strategy_id_str}")),
-                }
-            }
-            other => Err(format!("unsupported strategy method: {other}")),
-        };
-        let value = result.map_err(RuntimeHostError::InvalidResponse)?;
-        let size = serde_json::to_vec(&value)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?
-            .len();
-        if size > STRATEGY_RESPONSE_BYTES {
-            return Err(RuntimeHostError::InvalidResponse(format!(
-                "strategy response exceeds {STRATEGY_RESPONSE_BYTES} bytes"
-            )));
-        }
-        Ok(value)
-    }
-
-    /// M11: prompt/skill registry + eval-driven evolution reverse-RPC. Rust is
-    /// the release gate (M11-05 lifecycle: propose→eval→holdout→shadow→approval
-    ///→canary→promote→rollback). Online self-modifying prompt is forbidden
-    /// (M11-06); candidate cannot skip eval.
-    #[cfg(feature = "daily-dream-v1")]
-    async fn invoke_prompt_skill(
-        &self,
-        app: &AppHandle,
-        method: &str,
-        params: &serde_json::Map<String, Value>,
-    ) -> Result<Value, RuntimeHostError> {
-        use ielts_application::PromptSkillService;
-        // PromoteCandidateCommand / RollbackCommand / RunEvalCommand are
-        // deliberately absent: those methods are not served on this path.
-        use ielts_domain::{ProposeCandidateCommand, PromptModule, SkillName};
-
-        let db = app.state::<AppDb>();
-        let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = PromptSkillService::new(&store);
-        let result: Result<Value, String> = match method {
-            "prompt.list_versions" => {
-                let module = serde_json::from_value::<PromptModule>(
-                    params.get("module").cloned().unwrap_or(Value::Null),
-                );
-                match module {
-                    Ok(module) => serialize_result(
-                        service.list_prompt_versions(module).map(|versions| {
-                            serde_json::to_value(versions).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "prompt.get_active" => {
-                let module = serde_json::from_value::<PromptModule>(
-                    params.get("module").cloned().unwrap_or(Value::Null),
-                );
-                match module {
-                    Ok(module) => serialize_result(
-                        service.get_active_prompt_version(module).map(|maybe| {
-                            serde_json::to_value(maybe).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "prompt.propose_candidate" => {
-                let command = serde_json::from_value::<ProposeCandidateCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                );
-                match command {
-                    Ok(command) => serialize_result(
-                        service.propose_candidate(&command).map(|promotion| {
-                            serde_json::to_value(promotion).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            // Round-3 audit (A2): `prompt.promote_candidate`, `prompt.rollback`
-            // and `eval.run_case` are intentionally NOT served here. Promotion
-            // and rollback activate or reverse a live version; `eval.run_case`
-            // persists caller-supplied `passed` gradings and advances a candidate
-            // to `eval_passed`, which is the sole precondition for approval — so
-            // serving it to the sidecar would let the runtime author the very
-            // evidence the human gate reviews. All three are offline-only,
-            // not Webview commands; a caller-supplied grade is not a release eval.
-            "skill.list_versions" => {
-                let skill = serde_json::from_value::<SkillName>(
-                    params.get("skill").cloned().unwrap_or(Value::Null),
-                );
-                match skill {
-                    Ok(skill) => serialize_result(
-                        service.list_skill_versions(skill).map(|versions| {
-                            serde_json::to_value(versions).unwrap_or(Value::Null)
-                        }),
-                    ),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported prompt/skill method: {other}")),
-        };
-        result.map_err(RuntimeHostError::InvalidResponse)
-    }
-
-    /// M12-01/02/04/06: serve the General Agent Thread reverse-RPC. Rust is
-    /// the controlled-action authority: threads, checkpoints, study plans,
-    /// and approvals are persisted here; Python owns planner orchestration
-    /// and calls back through these methods. Forbidden action kinds are
-    /// rejected by the `tool.invoke` dispatcher before reaching this method.
+    /// M12-04: serve `study_plan.create`, the only agent-thread reverse-RPC a
+    /// run kind is allowed to reach. Rust is the controlled-action authority:
+    /// the study plan is persisted here; Python owns planner orchestration.
+    /// Forbidden action kinds are rejected by the `tool.invoke` dispatcher.
     #[cfg(feature = "agent-threads-v1")]
-    async fn invoke_agent_thread(
+    async fn invoke_study_plan_create(
         &self,
         app: &AppHandle,
-        method: &str,
         params: &serde_json::Map<String, Value>,
     ) -> Result<Value, RuntimeHostError> {
         use ielts_application::AgentThreadService;
-        // DecideApprovalCommand is deliberately absent: `approval.decide` is not
-        // served on this path.
-        use ielts_domain::{
-            CreateStudyPlanCommand, CreateThreadCommand,
-            MarkPlanItemDoneCommand, RecordApprovalCommand, RequestCancelCommand,
-            SaveCheckpointCommand,
-        };
-
-        const THREAD_RESPONSE_BYTES: usize = 512 * 1024;
+        use ielts_domain::CreateStudyPlanCommand;
 
         let db = app.state::<AppDb>();
         let store = crate::app::application_store::ApplicationStore::new(db.inner());
-        let service = AgentThreadService::new(&store);
-        let result: Result<Value, String> = match method {
-            "thread.create" => {
-                match serde_json::from_value::<CreateThreadCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.create_thread(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.append_message" => {
-                match serde_json::from_value::<ielts_domain::AppendMessageCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.append_message(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.list" => {
-                let user_id = params
-                    .get("userId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("local")
-                    .to_string();
-                let limit = params
-                    .get("limit")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(50) as u32;
-                serialize_result(service.list_threads(&user_id, limit))
-            }
-            "thread.save_checkpoint" => {
-                match serde_json::from_value::<SaveCheckpointCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.save_checkpoint(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "thread.request_cancel" => {
-                match serde_json::from_value::<RequestCancelCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.request_cancel(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "approval.list" => {
-                let limit = params
-                    .get("limit")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(50) as u32;
-                serialize_result(service.list_pending_approvals(limit))
-            }
-            // Round-3 audit (A2): `approval.decide` is intentionally NOT served
-            // here. `decide_approval` validates `approvedBy` only as non-empty
-            // text, so serving it to the sidecar let the runtime approve its own
-            // pending actions and record a fabricated approver. Deciding is a
-            // human action and stays on the Tauri command path.
-            "approval.record" => {
-                // M12-06: record an approval-gated action as pending. Allow-
-                // listed kinds are rejected by the service; forbidden kinds
-                // never reach here (rejected by tool.invoke).
-                match serde_json::from_value::<RecordApprovalCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.record_action_approval(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            "study_plan.create" => {
-                // Preserve the full probe JSON in the existing TEXT column.
-                // Return the envelope required by the Python orchestrator.
-                let parsed = params
-                    .get("proposal")
-                    .ok_or_else(|| "study_plan.create requires proposal".to_string())
-                    .and_then(CreateStudyPlanCommand::from_planner_proposal);
-                match parsed {
-                    Ok(command) => {
-                        match service.create_study_plan(&command) {
-                            Ok(plan) => Ok(json!({
-                                "planId": plan.id,
-                                "accepted": command.items.len(),
-                                "rejected": 0,
-                            })),
-                            Err(error) => Err(error.message),
-                        }
-                    }
-                    Err(error) => Err(error),
-                }
-            }
-            "study_plan.list_items" => {
-                let plan_id = params
-                    .get("planId")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                serialize_result(service.list_study_plan_items(&plan_id))
-            }
-            "study_plan.mark_done" => {
-                match serde_json::from_value::<MarkPlanItemDoneCommand>(
-                    params.get("command").cloned().unwrap_or(Value::Null),
-                ) {
-                    Ok(command) => serialize_result(service.mark_plan_item_done(&command)),
-                    Err(error) => Err(error.to_string()),
-                }
-            }
-            other => Err(format!("unsupported agent thread method: {other}")),
-        };
-        let value = result.map_err(RuntimeHostError::InvalidResponse)?;
-        let size = serde_json::to_vec(&value)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?
-            .len();
-        if size > THREAD_RESPONSE_BYTES {
-            return Err(RuntimeHostError::InvalidResponse(format!(
-                "agent thread response exceeds {THREAD_RESPONSE_BYTES} bytes"
-            )));
-        }
-        Ok(value)
+        // Preserve the full probe JSON in the existing TEXT column.
+        // Return the envelope required by the Python orchestrator.
+        let command = params
+            .get("proposal")
+            .ok_or_else(|| "study_plan.create requires proposal".to_string())
+            .and_then(CreateStudyPlanCommand::from_planner_proposal)
+            .map_err(RuntimeHostError::InvalidResponse)?;
+        let plan = AgentThreadService::new(&store)
+            .create_study_plan(&command)
+            .map_err(|error| RuntimeHostError::InvalidResponse(error.message))?;
+        Ok(json!({
+            "planId": plan.id,
+            "accepted": command.items.len(),
+            "rejected": 0,
+        }))
     }
 
     async fn invoke_candidate_input_tool(
@@ -2014,42 +1765,6 @@ impl RuntimeManager {
             .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
     }
 
-    /// M5-04: serve the `model.embed.batch` reverse-RPC.
-    ///
-    /// Python asks for an embedding batch; Rust resolves the provider through
-    /// the same `load_runtime` + `AppVault` path as `model.invoke`, then delegates
-    /// to `LanguageModel::embed`. Slice 4 only stands up the contract — the
-    /// `AiRuntime` impl keeps the default `embedding_not_supported` error until
-    /// the M5-11 eval gate proves embeddings add value and a real provider
-    /// endpoint is wired. The capability is advertised so Python can probe
-    /// readiness and persist the signature contract; a not_supported error is
-    /// surfaced to the caller rather than silently degrading to lexical.
-    #[cfg(feature = "context-compiler-v1")]
-    async fn invoke_embed(
-        &self,
-        app: &AppHandle,
-        params: &serde_json::Map<String, Value>,
-        timeout: Duration,
-    ) -> Result<Value, RuntimeHostError> {
-        let request = params
-            .get("request")
-            .cloned()
-            .ok_or_else(|| RuntimeHostError::InvalidResponse("embedding request is missing".into()))?;
-        let request: ielts_domain::EmbeddingRequest = serde_json::from_value(request)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
-        validate_embed_request(&request)?;
-        let db = app.state::<AppDb>();
-        let vault = app.state::<AppVault>();
-        let runtime = load_runtime(&db, &vault)
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
-        let response = tokio::time::timeout(timeout, runtime.embed(request))
-            .await
-            .map_err(|_| RuntimeHostError::Timeout)?
-            .map_err(|error| RuntimeHostError::Process(error.to_string()))?;
-        serde_json::to_value(response)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
-    }
-
     async fn write_to_child(
         &self,
         generation: u64,
@@ -2070,6 +1785,8 @@ impl RuntimeManager {
 
     async fn mark_unavailable(&self) {
         let mut process = self.inner.lock().await;
+        let generation = process.generation;
+        process.restart.record_failure(generation, Instant::now());
         process.lifecycle.mark_unavailable();
         process.active_run = None;
         process.metrics.unavailable += 1;
@@ -2085,6 +1802,7 @@ impl RuntimeManager {
             process.lifecycle.mark_crashed();
             process.metrics.crashes += 1;
         }
+        process.restart.record_failure(generation, Instant::now());
         process.active_run = None;
         fail_pending(&mut process, "sidecar crashed");
         if let Some(child) = process.child.take() {
@@ -2104,6 +1822,7 @@ impl RuntimeManager {
         process.active_run = None;
         process.lifecycle.mark_unavailable();
         process.metrics.unavailable += 1;
+        process.restart.record_failure(generation, Instant::now());
         fail_pending(&mut process, "sidecar startup failed");
     }
 
@@ -2143,11 +1862,7 @@ fn fail_pending(process: &mut RuntimeProcess, message: &str) {
 /// `passed` gradings and advances a candidate to `eval_passed`, which is the
 /// sole precondition for approval; `approval.decide` is the human decision
 /// itself, and its `approvedBy` is only checked for non-emptiness. The sidecar
-/// is a derived runtime — it may PROPOSE (`prompt.propose_candidate`) and it may
-/// REQUEST a decision (`approval.record`), but it may not grant one.
-///
-/// Host ownership does not imply Webview access: product prompt eval/release
-/// operations have no Tauri command. Controlled-action approval is separate.
+/// is a derived runtime and may not grant any of them.
 pub(crate) const HOST_ONLY_METHODS: &[&str] = &[
     "prompt.promote_candidate",
     "prompt.rollback",
@@ -2204,38 +1919,21 @@ fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHost
     Ok(())
 }
 
-/// M5-04: bound the embedding batch so Python can never probe the gateway with
-/// an oversized or empty batch. Empty batches are rejected (no-cost probes);
-/// the per-text byte cap matches the frame ceiling so a batch cannot exceed the
-/// framed protocol budget.
-fn validate_embed_request(request: &ielts_domain::EmbeddingRequest) -> Result<(), RuntimeHostError> {
-    if request.texts.is_empty() {
-        return Err(RuntimeHostError::InvalidResponse(
-            "embedding request must contain at least one text".into(),
-        ));
-    }
-    if request.texts.len() > ielts_domain::MAX_CORPUS_FETCH_IDS {
-        return Err(RuntimeHostError::FrameTooLarge(request.texts.len()));
-    }
-    let bytes = request
-        .texts
-        .iter()
-        .try_fold(0usize, |total, text| {
-            Ok(total.saturating_add(text.len()))
-        })?;
-    if bytes > MAX_FRAME_BYTES {
-        return Err(RuntimeHostError::FrameTooLarge(bytes));
-    }
-    Ok(())
-}
-
 pub(crate) fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
+    verify_sidecar_bundled(SIDECAR_BUILD_ID)?;
     let path = sidecar_hash_path()?;
     let bytes = std::fs::read(&path)
         .map_err(|error| RuntimeHostError::Process(format!("cannot read {}: {error}", path.display())))?;
     let actual = hex::encode(Sha256::digest(bytes));
     if actual != SIDECAR_BUILD_ID {
         return Err(RuntimeHostError::BuildIdentityMismatch);
+    }
+    Ok(())
+}
+
+fn verify_sidecar_bundled(build_id: &str) -> Result<(), RuntimeHostError> {
+    if build_id == SIDECAR_UNAVAILABLE_BUILD_ID {
+        return Err(RuntimeHostError::SidecarNotBundled);
     }
     Ok(())
 }
@@ -2251,6 +1949,7 @@ fn sidecar_hash_path() -> Result<PathBuf, RuntimeHostError> {
     } else {
         executable_dir
     };
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut path = base_dir.join(SIDECAR_NAME);
     #[cfg(windows)]
     path.as_mut_os_string().push(".exe");
@@ -2770,50 +2469,12 @@ mod tests {
         }
     }
 
-    /// Task book §17.8: the production UI may read the product registry and
-    /// propose drafts, but may not author verdicts or release global versions.
-    #[test]
-    fn product_prompt_release_is_not_a_webview_command() {
-        let lib_source = include_str!("lib.rs");
-        let handler = lib_source
-            .split_once("tauri::generate_handler![")
-            .expect("generate_handler! block must exist")
-            .1
-            .split_once("])")
-            .expect("generate_handler! block must terminate")
-            .0;
-        for command in [
-            "eval_run_case",
-            "prompt_approve_candidate",
-            "prompt_promote_candidate",
-            "prompt_rollback",
-        ] {
-            assert!(
-                !handler.contains(&format!("commands::prompt_skill::{command}")),
-                "{command} must not be registered for the Webview"
-            );
-        }
-        for command in [
-            "prompt_list_versions",
-            "prompt_get_active",
-            "prompt_propose_candidate",
-            "skill_list_versions",
-        ] {
-            assert!(
-                handler.contains(&format!("commands::prompt_skill::{command}")),
-                "{command} must remain registered"
-            );
-        }
-    }
-
-    /// The legitimate propose/request surface must stay reachable, so the fix
-    /// above cannot be "solved" by over-trimming.
+    /// The legitimate run surface must stay reachable, so the fix above
+    /// cannot be "solved" by over-trimming.
     #[test]
     fn propose_and_request_methods_stay_available() {
         for method in [
-            "prompt.propose_candidate",
-            "approval.record",
-            "approval.list",
+            "study_plan.create",
             "model.invoke",
             "tool.invoke",
         ] {
@@ -2920,6 +2581,112 @@ mod tests {
         lifecycle.begin_start().unwrap();
         assert_eq!(lifecycle.state(), RuntimeState::Starting);
         assert!(lifecycle.handshake().is_none());
+    }
+
+    #[test]
+    fn restart_backoff_doubles_and_caps() {
+        assert_eq!(restart_delay(1), Duration::from_secs(1));
+        assert_eq!(restart_delay(2), Duration::from_secs(2));
+        assert_eq!(restart_delay(3), Duration::from_secs(4));
+        assert_eq!(restart_delay(7), Duration::from_secs(60));
+        assert_eq!(restart_delay(u32::MAX), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn restart_decision_rejects_inside_the_window_without_sleeping() {
+        let t0 = Instant::now();
+        assert_eq!(restart_decision(0, None, t0), Ok(()));
+        assert_eq!(
+            restart_decision(1, Some(t0), t0 + Duration::from_millis(200)),
+            Err(RuntimeHostError::RestartBackoff { retry_after_secs: 1 })
+        );
+        assert_eq!(restart_decision(1, Some(t0), t0 + Duration::from_secs(1)), Ok(()));
+        assert_eq!(
+            restart_decision(3, Some(t0), t0 + Duration::from_secs(1)),
+            Err(RuntimeHostError::RestartBackoff { retry_after_secs: 3 })
+        );
+        assert_eq!(restart_decision(3, Some(t0), t0 + Duration::from_secs(4)), Ok(()));
+        let message = restart_decision(2, Some(t0), t0).unwrap_err().to_string();
+        assert!(message.contains("try again after 2s"), "{message}");
+    }
+
+    #[test]
+    fn restart_gives_up_after_consecutive_failures_until_reset() {
+        let t0 = Instant::now();
+        let mut backoff = RestartBackoff::default();
+        for generation in 1..=u64::from(RESTART_MAX_CONSECUTIVE_FAILURES) {
+            backoff.record_failure(generation, t0);
+            // The same generation failing through several paths counts once.
+            backoff.record_failure(generation, t0);
+        }
+        assert_eq!(backoff.consecutive_failures, RESTART_MAX_CONSECUTIVE_FAILURES);
+        let error = backoff.check(t0 + Duration::from_secs(3600)).unwrap_err();
+        assert_eq!(error, RuntimeHostError::RestartGaveUp { failures: 5 });
+        assert!(error.to_string().contains("will not restart automatically"));
+        backoff.reset();
+        assert_eq!(backoff.check(t0), Ok(()));
+    }
+
+    #[test]
+    fn stderr_capture_splits_lines_and_keeps_a_tail() {
+        let mut capture = StderrCapture::default();
+        assert_eq!(capture.push(b"Traceback (most"), vec![]);
+        assert_eq!(
+            capture.push(b" recent call last):\r\n  File x\nValueError"),
+            vec![
+                StderrOutput::Line("Traceback (most recent call last):".into()),
+                StderrOutput::Line("  File x".into()),
+            ]
+        );
+        assert_eq!(capture.finish(), vec![StderrOutput::Line("ValueError".into())]);
+        assert_eq!(capture.tail(), "Traceback (most recent call last):\n  File x\nValueError");
+        for index in 0..STDERR_TAIL_LINES + 5 {
+            capture.push(format!("line {index}\n").as_bytes());
+        }
+        assert_eq!(capture.tail.len(), STDERR_TAIL_LINES);
+        let last = format!("line {}", STDERR_TAIL_LINES + 4);
+        assert_eq!(capture.tail.back(), Some(&last));
+    }
+
+    #[test]
+    fn stderr_capture_caps_lines_and_total_budget() {
+        let mut capture = StderrCapture::default();
+        let long = vec![b'x'; STDERR_LINE_CAP * 3];
+        assert_eq!(capture.push(&long[..STDERR_LINE_CAP]), vec![]);
+        let out = capture.push(&[&long[STDERR_LINE_CAP..], b"\n".as_slice()].concat());
+        let [StderrOutput::Line(line)] = out.as_slice() else { panic!("{out:?}") };
+        assert_eq!(line.len(), STDERR_LINE_CAP + " [line truncated]".len());
+        assert!(line.ends_with(" [line truncated]"));
+
+        let mut capture = StderrCapture::default();
+        let mut line = vec![b'y'; 1023];
+        line.push(b'\n');
+        let mut emitted = Vec::new();
+        for _ in 0..200 {
+            emitted.extend(capture.push(&line));
+        }
+        let logged: usize = emitted
+            .iter()
+            .map(|item| match item {
+                StderrOutput::Line(line) => line.len(),
+                StderrOutput::BudgetExhausted => 0,
+            })
+            .sum();
+        assert!(logged <= STDERR_LOG_BUDGET);
+        assert_eq!(emitted.iter().filter(|item| **item == StderrOutput::BudgetExhausted).count(), 1);
+        assert_eq!(emitted.last(), Some(&StderrOutput::BudgetExhausted));
+        assert_eq!(capture.tail.len(), STDERR_TAIL_LINES);
+    }
+
+    #[test]
+    fn build_without_frozen_sidecar_refuses_to_start_runtime() {
+        let error = verify_sidecar_bundled(SIDECAR_UNAVAILABLE_BUILD_ID).unwrap_err();
+        assert_eq!(error, RuntimeHostError::SidecarNotBundled);
+        assert!(error.to_string().contains("build_agent_runtime_sidecar.py"));
+        assert!(verify_sidecar_bundled(&"a".repeat(64)).is_ok());
+        if SIDECAR_BUILD_ID == SIDECAR_UNAVAILABLE_BUILD_ID {
+            assert_eq!(verify_sidecar_hash().unwrap_err(), RuntimeHostError::SidecarNotBundled);
+        }
     }
 
     #[test]

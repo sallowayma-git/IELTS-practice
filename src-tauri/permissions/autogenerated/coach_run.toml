@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-run"
+description = "Enables the coach_run command without any pre-configured scope."
+commands.allow = ["coach_run"]
+
+[[permission]]
+identifier = "deny-coach-run"
+description = "Denies the coach_run command without any pre-configured scope."
+commands.deny = ["coach_run"]

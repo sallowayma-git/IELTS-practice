@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-timer-elapsed-seconds"
+description = "Enables the timer_elapsed_seconds command without any pre-configured scope."
+commands.allow = ["timer_elapsed_seconds"]
+
+[[permission]]
+identifier = "deny-timer-elapsed-seconds"
+description = "Denies the timer_elapsed_seconds command without any pre-configured scope."
+commands.deny = ["timer_elapsed_seconds"]

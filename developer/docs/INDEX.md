@@ -31,8 +31,8 @@
 | M7 Journal + Daily Dream | [ADR-M7](ADR-M7-Daily-Journal-Daily-Dream.md) | [M7 gate](M7_STAGE_GATE_REPORT.md) | `0018_daily_journal_jobs.sql` | `crates/ielts-db/src/journal.rs`, `crates/ielts-db/src/background_jobs.rs` |
 | M8 Weekly Dream + Consolidation | [ADR-M8](ADR-M8-Weekly-Dream-Consolidation.md) | [M8 gate](M8_STAGE_GATE_REPORT.md) | `0019_memory_consolidation_v1.sql` | `crates/ielts-db/src/consolidation.rs`, `src-tauri/src/commands/journal.rs` |
 | M9 Memory Center | [ADR-M9](ADR-M9-Memory-Center-Evidence-UX.md) | [M9 gate](M9_STAGE_GATE_REPORT.md) | uses M14/M19 data | `apps/writing-vue/src/views/NotebookPage.vue`（v1.4 起取代 Memory Center UI）, `apps/writing-vue/src/api/memory-repository.js` |
-| M10 Teaching Strategy | [ADR-M10](ADR-M10-Teaching-Strategy-Evolution.md) | [M10 gate](M10_STAGE_GATE_REPORT.md) | `0020_teaching_strategy_evolution.sql` | `crates/ielts-db/src/teaching_strategy.rs`, `src-tauri/src/commands/teaching_strategy.rs` |
-| M11 Prompt + Skill Eval | [ADR-M11](ADR-M11-Prompt-Skill-Eval-Evolution.md) | [M11 gate](M11_STAGE_GATE_REPORT.md) | `0021_prompt_skill_evolution.sql` | `crates/ielts-db/src/prompt_skill.rs`, `agent-runtime-python/src/ielts_agent/eval/` |
+| M10 Teaching Strategy | [ADR-M10](ADR-M10-Teaching-Strategy-Evolution.md) | [M10 gate](M10_STAGE_GATE_REPORT.md) | `0020_teaching_strategy_evolution.sql` | Rust 实现已删除（无产品调用方）；迁移文件保留 |
+| M11 Prompt + Skill Eval | [ADR-M11](ADR-M11-Prompt-Skill-Eval-Evolution.md) | [M11 gate](M11_STAGE_GATE_REPORT.md) | `0021_prompt_skill_evolution.sql` | Rust 实现已删除（无产品调用方）；迁移文件保留 |
 | M12 Threads + Planner | [ADR-M12](ADR-M12-Agent-Threads-Planner-Controlled-Actions.md) | [M12 gate](M12_STAGE_GATE_REPORT.md) | `0022_agent_threads_planner.sql` | `crates/ielts-db/src/agent_threads.rs`, `src-tauri/src/commands/agent_thread.rs` |
 
 ## Gate and audit evidence

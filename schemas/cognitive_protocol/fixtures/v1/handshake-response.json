@@ -5,7 +5,6 @@
   "capabilities": {
     "runtime.health": "1",
     "runtime.shutdown": "1",
-    "memory.candidates.extract": "1",
     "memory.candidates.generate": "1"
   },
   "requiredHostCapabilities": {

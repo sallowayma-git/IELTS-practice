@@ -11,7 +11,7 @@ use tempfile::tempdir;
 
 use ielts_db::{
     create_backup_package, export_history, get_history_detail, import_backup, list_history,
-    list_secret_refs, list_settings, migrate, migrate_local_storage_prefs, open_connection,
+    list_secret_refs, list_settings, migrate, open_connection,
     put_secret_ref, upsert_attempt, upsert_setting, write_backup_file, DbOpenOptions, SecretVault,
     NS_UI,
 };
@@ -318,17 +318,6 @@ fn settings_layers_and_reject_secrets() {
 
     let err = upsert_setting(&conn, "ai", "api_key", &json!("sk-secret-should-fail")).unwrap_err();
     assert!(err.to_string().contains("secret") || err.to_string().contains("API key"));
-
-    let mut prefs = serde_json::Map::new();
-    prefs.insert("theme".into(), json!("academic"));
-    prefs.insert("api_key".into(), json!("sk-leak"));
-    prefs.insert("practice_timer_default".into(), json!(3600));
-    let n = migrate_local_storage_prefs(&conn, &prefs).unwrap();
-    assert_eq!(n, 2); // api_key skipped
-    let theme = list_settings(&conn, Some(NS_UI)).unwrap();
-    assert!(theme
-        .iter()
-        .any(|s| s.key == "theme" && s.value == json!("academic")));
 }
 
 #[test]

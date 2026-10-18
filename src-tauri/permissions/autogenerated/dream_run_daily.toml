@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dream-run-daily"
+description = "Enables the dream_run_daily command without any pre-configured scope."
+commands.allow = ["dream_run_daily"]
+
+[[permission]]
+identifier = "deny-dream-run-daily"
+description = "Denies the dream_run_daily command without any pre-configured scope."
+commands.deny = ["dream_run_daily"]

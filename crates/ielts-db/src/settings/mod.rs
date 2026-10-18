@@ -18,16 +18,6 @@ pub const NS_SECRET_REFS: &str = "secret_refs";
 const AI_CONFIG_PREFIX: &str = "config:";
 const AI_DEFAULT_ID: &str = "defaultConfigId";
 
-/// Preferences that historically lived in localStorage and must migrate.
-pub const LEGACY_UI_KEYS: &[&str] = &[
-    "theme",
-    "three_bg_theme",
-    "locale",
-    "reduced_motion",
-    "library_layout",
-    "history_page_size",
-];
-
 pub fn get_setting(
     conn: &Connection,
     namespace: &str,
@@ -318,36 +308,6 @@ fn write_ai_runtime_value(conn: &Connection, key: &str, value: &Value) -> DbResu
         params![NS_AI, key, value_json, now],
     )?;
     Ok(())
-}
-
-/// Import a flat localStorage map into ui/practice namespaces.
-pub fn migrate_local_storage_prefs(
-    conn: &Connection,
-    prefs: &serde_json::Map<String, Value>,
-) -> DbResult<u32> {
-    let mut count = 0u32;
-    for (key, value) in prefs {
-        if key_looks_like_secret(key) {
-            continue;
-        }
-        let namespace = if LEGACY_UI_KEYS.contains(&key.as_str())
-            || key.starts_with("ui.")
-            || key.starts_with("theme")
-        {
-            NS_UI
-        } else if key.starts_with("practice")
-            || key.starts_with("reading")
-            || key.starts_with("writing")
-        {
-            NS_PRACTICE
-        } else {
-            NS_SYSTEM
-        };
-        let clean_key = key.trim_start_matches("ui.").to_string();
-        upsert_setting(conn, namespace, &clean_key, value)?;
-        count += 1;
-    }
-    Ok(count)
 }
 
 /// Persist only a secret *reference* (never the secret value).

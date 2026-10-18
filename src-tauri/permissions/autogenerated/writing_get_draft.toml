@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-get-draft"
+description = "Enables the writing_get_draft command without any pre-configured scope."
+commands.allow = ["writing_get_draft"]
+
+[[permission]]
+identifier = "deny-writing-get-draft"
+description = "Denies the writing_get_draft command without any pre-configured scope."
+commands.deny = ["writing_get_draft"]

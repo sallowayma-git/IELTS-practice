@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-put-explicit-preference"
+description = "Enables the memory_put_explicit_preference command without any pre-configured scope."
+commands.allow = ["memory_put_explicit_preference"]
+
+[[permission]]
+identifier = "deny-memory-put-explicit-preference"
+description = "Denies the memory_put_explicit_preference command without any pre-configured scope."
+commands.deny = ["memory_put_explicit_preference"]

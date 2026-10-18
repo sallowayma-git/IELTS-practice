@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-journal-rerun"
+description = "Enables the journal_rerun command without any pre-configured scope."
+commands.allow = ["journal_rerun"]
+
+[[permission]]
+identifier = "deny-journal-rerun"
+description = "Denies the journal_rerun command without any pre-configured scope."
+commands.deny = ["journal_rerun"]

@@ -31,7 +31,6 @@ base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"
-proptest = "1"
 
 [[bench]]
 name = "m2_1_projection"

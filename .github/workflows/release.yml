@@ -18,6 +18,8 @@ env:
   PY_PLAYWRIGHT_VERSION: 1.61.0
   PYTHONUTF8: '1'
   PYTHONDONTWRITEBYTECODE: '1'
+  # build.rs refuses a missing, mismatched or placeholder sidecar.
+  IELTS_REQUIRE_FROZEN_SIDECAR: '1'
 
 jobs:
   shipping-gate:
@@ -47,9 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-shipping-sidecar-evidence
-          path: |
-            developer/tests/benchmarks/reports/m3_sidecar_release.json
-            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.sha256
+          path: target/agent-runtime-sidecar/smoke-report.json
           if-no-files-found: error
       - name: Tauri + Vue static gate
         run: python developer/tests/ci/run_static_suite.py
@@ -124,9 +124,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-rust-sidecar-evidence
-          path: |
-            developer/tests/benchmarks/reports/m3_sidecar_release.json
-            src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc.sha256
+          path: target/agent-runtime-sidecar/smoke-report.json
           if-no-files-found: error
       - name: Rust workspace tests
         run: cargo test --workspace --locked
@@ -218,9 +216,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-sidecar-${{ matrix.target }}
-          path: |
-            developer/tests/benchmarks/reports/m3_sidecar_release.json
-            src-tauri/binaries/ielts-agent-runtime-${{ matrix.target }}.sha256
+          path: target/agent-runtime-sidecar/smoke-report.json
           if-no-files-found: error
       - name: Generate fail-closed release config
         run: python developer/tests/ci/prepare_tauri_release.py --require-signing-key --platform ${{ matrix.platformKey }} --tag "${{ github.ref_name }}" --output developer/tests/e2e/reports/tauri.release.generated.json

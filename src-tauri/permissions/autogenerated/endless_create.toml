@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-endless-create"
+description = "Enables the endless_create command without any pre-configured scope."
+commands.allow = ["endless_create"]
+
+[[permission]]
+identifier = "deny-endless-create"
+description = "Denies the endless_create command without any pre-configured scope."
+commands.deny = ["endless_create"]

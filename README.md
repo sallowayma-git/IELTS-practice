@@ -73,7 +73,9 @@ python developer/tests/ci/build_agent_runtime_sidecar.py
 
 冻结脚本自动识别表中的原生宿主。也可以显式指定匹配目标，例如在 Apple Silicon 上运行 `python developer/tests/ci/build_agent_runtime_sidecar.py --target aarch64-apple-darwin`；`--target` 不提供交叉编译，Python 架构、Rust target 和宿主必须匹配。
 
-脚本执行干净的 PyInstaller freeze 和完整协议 smoke，通过后才发布 `src-tauri/binaries/ielts-agent-runtime-<target>[.exe]` 及 `ielts-agent-runtime-<target>.sha256`。指标写入 `developer/tests/benchmarks/reports/m3_sidecar_release.json`。`src-tauri/build.rs` 在每次相关编译时验证可执行文件与 SHA-256 manifest；不要手工填入 hash、跳过 smoke 或复用其他目标的文件。修改 runtime 源码或依赖锁后重新冻结。
+脚本执行干净的 PyInstaller freeze 和完整协议 smoke，通过后才发布 `src-tauri/binaries/ielts-agent-runtime-<target>[.exe]` 及 `ielts-agent-runtime-<target>.sha256`。本次 smoke 指标写入 `target/agent-runtime-sidecar/smoke-report.json`（不提交；CI 将该新生成的报告作为证据上传）。`src-tauri/build.rs` 在每次相关编译时验证可执行文件与 SHA-256 manifest；不要手工填入 hash、跳过 smoke 或复用其他目标的文件。修改 runtime 源码或依赖锁后重新冻结。
+
+只做 Rust/Vue 开发时可以跳过冻结：缺少（或不匹配、或只是占位文件的）sidecar 时，`build.rs` 打印 `cargo:warning`，照常编译并运行 `cargo build` / `cargo test`，但该构建的 AI 运行时会拒绝启动并提示先冻结 sidecar。发布与打包必须设置 `IELTS_REQUIRE_FROZEN_SIDECAR=1`（release workflow 已设置），此时缺少、哈希不符或占位的 sidecar 会直接使构建失败，不可能被打包发布。
 
 两个 Python lock 文件安装第三方依赖。当前冻结入口配置了 `agent-runtime-python/src`，smoke 使用独立的六项能力合同，不导入源码包，因此这条构建路径无需额外 `pip install -e` 或设置 `PYTHONPATH`。
 
@@ -101,7 +103,7 @@ cargo check --workspace --locked
 cargo test --workspace --locked
 ```
 
-sidecar 准备必须早于 `tauri dev/build`、`cargo tauri dev/build`、上述 workspace 命令，以及会编译 Tauri 的静态门禁。
+需要真实 AI 运行时或发布级验证时，sidecar 准备必须早于 `tauri dev/build`、`cargo tauri dev/build`、上述 workspace 命令，以及会编译 Tauri 的静态门禁；用 `IELTS_REQUIRE_FROZEN_SIDECAR=1` 运行这些命令可确认确实使用了已冻结的 sidecar。
 
 ### Windows 必需回归
 

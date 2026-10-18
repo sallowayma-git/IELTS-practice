@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-endless-get"
+description = "Enables the endless_get command without any pre-configured scope."
+commands.allow = ["endless_get"]
+
+[[permission]]
+identifier = "deny-endless-get"
+description = "Denies the endless_get command without any pre-configured scope."
+commands.deny = ["endless_get"]

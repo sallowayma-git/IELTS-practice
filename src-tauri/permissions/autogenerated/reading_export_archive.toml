@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-export-archive"
+description = "Enables the reading_export_archive command without any pre-configured scope."
+commands.allow = ["reading_export_archive"]
+
+[[permission]]
+identifier = "deny-reading-export-archive"
+description = "Denies the reading_export_archive command without any pre-configured scope."
+commands.deny = ["reading_export_archive"]

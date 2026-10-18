@@ -1,7 +1,7 @@
 //! Age-based retention for class D (operational) records.
 //!
 //! Run traces, context snapshots (which hold rendered prompts, answers
-//! included), LLM invocation logs, retrieval traces and finished jobs grow on
+//! included), LLM invocation logs and finished jobs grow on
 //! every model call and are never read again once the run is over. They are
 //! pruned by age. Nothing else is: no raw truth, no ledger, no memory, no
 //! journal, no digest. The raw tables are additionally protected by the delete
@@ -25,7 +25,6 @@ pub struct OperationalPruneReport {
     pub agent_runs: usize,
     pub context_snapshots: usize,
     pub llm_invocations: usize,
-    pub retrieval_runs: usize,
     pub finished_jobs: usize,
 }
 
@@ -34,7 +33,6 @@ impl OperationalPruneReport {
         self.agent_runs
             + self.context_snapshots
             + self.llm_invocations
-            + self.retrieval_runs
             + self.finished_jobs
     }
 }
@@ -69,10 +67,6 @@ pub fn prune_operational_records(
     )?;
     report.llm_invocations = tx.execute(
         "DELETE FROM llm_invocations WHERE julianday(created_at) < julianday(?1)",
-        params![cutoff],
-    )?;
-    report.retrieval_runs = tx.execute(
-        "DELETE FROM retrieval_runs WHERE julianday(created_at) < julianday(?1)",
         params![cutoff],
     )?;
     // Only completed jobs: a failed daily job is the receipt that stops startup

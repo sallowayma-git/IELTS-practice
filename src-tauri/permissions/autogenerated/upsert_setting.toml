@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-upsert-setting"
+description = "Enables the upsert_setting command without any pre-configured scope."
+commands.allow = ["upsert_setting"]
+
+[[permission]]
+identifier = "deny-upsert-setting"
+description = "Denies the upsert_setting command without any pre-configured scope."
+commands.deny = ["upsert_setting"]

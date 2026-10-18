@@ -49,15 +49,13 @@ EXPECTED_ACTIONS = frozenset(
 )
 FORBIDDEN_DEPENDENCY_FRAGMENTS = ("sqlite", "keyring")
 # Core cognitive runtime tokens that must never appear anywhere in the Python
-# source. `sqlite3` is intentionally absent here: the M5 retrieval package is
-# explicitly authorized to own a derived disposable index (retrieval_v1.sqlite)
-# per engineering plan §M5-02. It is gated separately via RETRIEVAL_ALLOWED_TOKEN.
+# source. `sqlite3` is gated separately: it is forbidden outside the planner
+# orchestration package.
 FORBIDDEN_SOURCE_TOKENS = ("keyring", "v2.db", "tauri internal")
-# The retrieval package may use sqlite3 for its derived index, but must never
-# touch canonical DB paths, credentials, or keyring regardless of location.
-RETRIEVAL_PACKAGE = Path("ielts_agent") / "retrieval"
+# The planner orchestration package must never touch canonical DB paths,
+# credentials, or keyring.
 PLANNER_PACKAGE = Path("ielts_agent") / "planner"
-RETRIEVAL_FORBIDDEN_TOKENS = ("keyring", "v2.db", "tauri internal", "getpass")
+ORCHESTRATION_FORBIDDEN_TOKENS = ("keyring", "v2.db", "tauri internal", "getpass")
 
 
 def display_path(path: Path) -> str:
@@ -378,12 +376,10 @@ def check_python_source(failures: list[str]) -> None:
         except (OSError, UnicodeDecodeError) as error:
             fail(f"{display_path(path)}: cannot be read as UTF-8: {error}", failures)
             continue
-        is_retrieval = RETRIEVAL_PACKAGE in path.relative_to(PYTHON_SOURCE).parents
-        is_planner = PLANNER_PACKAGE in path.relative_to(PYTHON_SOURCE).parents
-        is_orchestration = is_retrieval or is_planner
-        # sqlite3 is allowed only inside orchestration packages (retrieval derived
-        # index; planner is a Python orchestration package accessing host gateway).
-        tokens = list(RETRIEVAL_FORBIDDEN_TOKENS if is_orchestration else FORBIDDEN_SOURCE_TOKENS)
+        is_orchestration = PLANNER_PACKAGE in path.relative_to(PYTHON_SOURCE).parents
+        # sqlite3 is allowed only inside the planner orchestration package (it
+        # accesses state through the host gateway, never canonical truth).
+        tokens = list(ORCHESTRATION_FORBIDDEN_TOKENS if is_orchestration else FORBIDDEN_SOURCE_TOKENS)
         if not is_orchestration:
             tokens.append("sqlite3")
         for token in tokens:

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-link-outcome"
+description = "Enables the coach_link_outcome command without any pre-configured scope."
+commands.allow = ["coach_link_outcome"]
+
+[[permission]]
+identifier = "deny-coach-link-outcome"
+description = "Denies the coach_link_outcome command without any pre-configured scope."
+commands.deny = ["coach_link_outcome"]

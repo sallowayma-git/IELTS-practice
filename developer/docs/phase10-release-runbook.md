@@ -58,6 +58,16 @@ The builder freezes and smokes the native executable before publishing
 manifest alone is not a prepared sidecar. Tauri's `build.rs` must continue to
 verify the executable's SHA-256 against the manifest. Rebuild after runtime or
 lock-file changes; never patch the manifest to bypass a failed build or smoke.
+The smoke metrics of that run are written to
+`target/agent-runtime-sidecar/smoke-report.json`; CI uploads this fresh report as
+sidecar evidence and fails when it is missing. No report is committed.
+
+Without a valid sidecar, a development `cargo build`/`cargo test` still succeeds:
+`build.rs` prints a `cargo:warning`, leaves `externalBin` out of the build and
+compiles a sentinel build ID, so the runtime refuses to start with an error that
+names the freeze script. Release, packaging and CI jobs that build the sidecar set
+`IELTS_REQUIRE_FROZEN_SIDECAR=1`; then a missing, mismatched or placeholder
+sidecar (not a native executable of at least 1 MiB) fails the build.
 The current independent smoke contract does not import the source package, so
 no editable package installation or `PYTHONPATH` override is required.
 
@@ -72,7 +82,8 @@ Those local gates currently require Windows; native macOS/Linux packaging uses
 the platform jobs below.
 
 Each consuming CI/release job prepares its own sidecar: `tauri-ci.yml` static and
-workspace jobs, `release.yml` shipping and workspace jobs, and each native release
+workspace jobs (plus an unsigned macOS 14 and Ubuntu 22.04 freeze-and-smoke
+matrix that the PR `CI result` requires), `release.yml` shipping and workspace jobs, and each native release
 matrix job. Job `needs` dependencies do not transfer files. A transferred artifact
 would still need the matching platform/architecture, executable, and manifest.
 Production Windows/macOS jobs import their certificates first and pass `--sign`:

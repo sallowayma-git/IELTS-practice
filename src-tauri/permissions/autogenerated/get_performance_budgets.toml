@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-performance-budgets"
+description = "Enables the get_performance_budgets command without any pre-configured scope."
+commands.allow = ["get_performance_budgets"]
+
+[[permission]]
+identifier = "deny-get-performance-budgets"
+description = "Denies the get_performance_budgets command without any pre-configured scope."
+commands.deny = ["get_performance_budgets"]

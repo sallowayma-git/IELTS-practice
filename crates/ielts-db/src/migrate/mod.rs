@@ -214,6 +214,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0032_reading_matching_skills.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 33,
+                name: "drop_dead_evolution_tables",
+                sql: include_str!("../../migrations/0033_drop_dead_evolution_tables.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }
@@ -423,4 +429,45 @@ pub fn open_and_migrate(path: impl AsRef<std::path::Path>) -> DbResult<Connectio
     ))?;
     migrate(&mut conn)?;
     Ok(conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migration_33_drops_a_prompt_release_chain_with_foreign_keys_on() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        current_version(&conn).unwrap();
+        for migration in migrations().iter().filter(|m| m.version <= 32) {
+            apply(&mut conn, migration).unwrap();
+        }
+        seed_release_chain(&conn);
+        migrate(&mut conn).unwrap();
+        let left: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'prompt_skill_releases'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
+        assert_eq!(current_version(&conn).unwrap(), 33);
+    }
+
+    /// Only the self-reference matters here, so the chain is written with
+    /// enforcement off and the candidate it names is left out.
+    fn seed_release_chain(conn: &Connection) {
+        conn.execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             INSERT INTO prompt_skill_releases
+               (id, target_kind, parent_id, version_id, predecessor_version_id,
+                predecessor_release_id, candidate_id, created_at)
+             VALUES ('r1', 'prompt', 'tpl', 'v1', NULL, NULL, 'c1', 'now'),
+                    ('r2', 'prompt', 'tpl', 'v2', 'v1', 'r1', 'c2', 'now');
+             PRAGMA foreign_keys = ON;",
+        )
+        .unwrap();
+    }
 }

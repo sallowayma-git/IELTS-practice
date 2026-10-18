@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-journal-get-daily"
+description = "Enables the journal_get_daily command without any pre-configured scope."
+commands.allow = ["journal_get_daily"]
+
+[[permission]]
+identifier = "deny-journal-get-daily"
+description = "Denies the journal_get_daily command without any pre-configured scope."
+commands.deny = ["journal_get_daily"]

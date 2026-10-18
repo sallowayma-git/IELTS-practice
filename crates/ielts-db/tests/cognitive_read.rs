@@ -180,6 +180,18 @@ fn submitted_reading_evidence_is_missing_after_hash_tampering_and_recovers_on_re
         params![event.id, tampered.to_string()],
     )
     .unwrap();
+    // The stored-hash fast path must notice the edit and rebuild rather than
+    // serve the observation built on the original payload as fresh.
+    let query = ObservationSnapshotQuery {
+        namespaces: vec!["reading".into()],
+        scope: None,
+        since: None,
+        after_id: None,
+        limit: 50,
+    };
+    let snapshot = observation_snapshot(&conn, &query).unwrap();
+    assert_ne!(snapshot.ledger_input_hash, baseline.input_hash);
+    assert_ne!(snapshot.observation_output_hash, baseline.output_hash);
     let isolated = learning_observations_rebuild(&conn).unwrap();
     assert_eq!(isolated.quarantined_event_ids, ids);
     assert!(learning_observations_verify(&conn).unwrap().consistent);

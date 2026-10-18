@@ -74,17 +74,6 @@ pub fn upsert_setting(
 }
 
 #[tauri::command]
-pub fn migrate_local_preferences(
-    db: State<'_, AppDb>,
-    prefs: serde_json::Map<String, serde_json::Value>,
-) -> CommandResponse<u32> {
-    match db.with_conn(|conn| ielts_db::migrate_local_storage_prefs(conn, &prefs)) {
-        Ok(n) => CommandResponse::success(n),
-        Err(e) => CommandResponse::failure(map_db_err(e)),
-    }
-}
-
-#[tauri::command]
 pub fn set_secret(
     db: State<'_, AppDb>,
     vault: State<'_, AppVault>,

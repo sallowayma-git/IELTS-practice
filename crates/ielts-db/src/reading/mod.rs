@@ -4,6 +4,7 @@ pub mod analysis;
 pub mod archive;
 pub mod assets;
 pub mod attempt;
+mod legacy_archive;
 pub mod scoring;
 
 pub use analysis::*;

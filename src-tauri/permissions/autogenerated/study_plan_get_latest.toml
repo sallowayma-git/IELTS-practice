@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-study-plan-get-latest"
+description = "Enables the study_plan_get_latest command without any pre-configured scope."
+commands.allow = ["study_plan_get_latest"]
+
+[[permission]]
+identifier = "deny-study-plan-get-latest"
+description = "Denies the study_plan_get_latest command without any pre-configured scope."
+commands.deny = ["study_plan_get_latest"]

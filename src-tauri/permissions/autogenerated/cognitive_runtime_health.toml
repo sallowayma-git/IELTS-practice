@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cognitive-runtime-health"
+description = "Enables the cognitive_runtime_health command without any pre-configured scope."
+commands.allow = ["cognitive_runtime_health"]
+
+[[permission]]
+identifier = "deny-cognitive-runtime-health"
+description = "Denies the cognitive_runtime_health command without any pre-configured scope."
+commands.deny = ["cognitive_runtime_health"]

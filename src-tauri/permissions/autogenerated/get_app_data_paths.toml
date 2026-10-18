@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-app-data-paths"
+description = "Enables the get_app_data_paths command without any pre-configured scope."
+commands.allow = ["get_app_data_paths"]
+
+[[permission]]
+identifier = "deny-get-app-data-paths"
+description = "Denies the get_app_data_paths command without any pre-configured scope."
+commands.deny = ["get_app_data_paths"]

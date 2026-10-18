@@ -38,7 +38,6 @@ export interface SetHistoryRetentionPolicyResult {
 }
 export function getHistoryRetentionPolicy(): Promise<HistoryRetentionPolicy>
 export function setHistoryRetentionPolicy(maxTerminalAttempts: number | null): Promise<SetHistoryRetentionPolicyResult>
-export function migrateLocalPreferences(prefs: unknown): Promise<{ source: 'tauri'; count: number }>
 export function setSecret(name: string, secret: string): Promise<unknown>
 export function listSecretRefs(): Promise<unknown[]>
 export function listAiConfigs(): Promise<AiProviderConfig[]>

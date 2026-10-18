@@ -37,37 +37,12 @@ const M7_TABLES: &[&str] = &[
     "daily_journal_sources",
     "background_jobs",
     "dream_runs",
-    "dream_candidates",
 ];
 
 const M8_TABLES: &[&str] = &[
     "memory_relations",
     "memory_feedback",
     "memory_capacity_state",
-];
-
-const M10_TABLES: &[&str] = &[
-    "teaching_strategy_catalog",
-    "teaching_strategy_assignments",
-    "teaching_strategy_feedback",
-    "teaching_strategy_outcomes",
-    "user_strategy_state",
-    "strategy_candidate_batches",
-    "strategy_candidate_evaluations",
-];
-
-const M11_TABLES: &[&str] = &[
-    "prompt_templates",
-    "prompt_versions",
-    "skill_definitions",
-    "skill_versions",
-    "eval_cases",
-    "candidate_promotions",
-    "eval_runs",
-    "eval_results",
-    "shadow_runs",
-    "prompt_skill_releases",
-    "prompt_skill_release_heads",
 ];
 
 const M12_TABLES: &[&str] = &[
@@ -95,14 +70,6 @@ fn is_m8_table(name: &str) -> bool {
     M8_TABLES.contains(&name)
 }
 
-fn is_m10_table(name: &str) -> bool {
-    M10_TABLES.contains(&name)
-}
-
-fn is_m11_table(name: &str) -> bool {
-    M11_TABLES.contains(&name)
-}
-
 fn is_m12_table(name: &str) -> bool {
     M12_TABLES.contains(&name)
 }
@@ -115,8 +82,6 @@ fn is_newer_than_legacy(name: &str) -> bool {
         || is_coach_feedback_table(name)
         || is_m7_table(name)
         || is_m8_table(name)
-        || is_m10_table(name)
-        || is_m11_table(name)
         || is_m12_table(name)
 }
 
@@ -366,13 +331,6 @@ fn seed_complete_user_state(conn: &Connection) {
           '2026-01-05T00:01:00Z'
         );
 
-        INSERT INTO dream_candidates (
-          id, run_id, proposal_json, proposal_kind, target_memory_id,
-          evidence_observation_ids_json, disposition, created_at
-        ) VALUES (
-          'dcand-fixture-1', 'drmrun-fixture-1', '{"kind":"REINFORCE"}', 'REINFORCE',
-          'mem-fixture-1', '["obs-fixture-1"]', 'pending', '2026-01-05T00:01:00Z'
-        );
 
         INSERT INTO memory_relations (
           id, source_memory_id, target_memory_id, relation_kind, created_at
@@ -393,58 +351,14 @@ fn seed_complete_user_state(conn: &Connection) {
           ('behavior', '{"policy":"fast","archiveAfterDays":21}', '2026-01-05T00:04:00Z')
         ON CONFLICT(memory_kind) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at;
 
-        INSERT INTO prompt_templates (id, module_name, description, created_at)
-        VALUES ('pt-fixture-1', 'attempt_review', 'Attempt review prompt', '2026-01-08T00:00:00Z');
 
-        INSERT INTO prompt_versions (
-          id, template_id, version, content_hash, content_text,
-          prompt_metadata_json, status, created_by, created_at
-        ) VALUES (
-          'pv-fixture-1', 'pt-fixture-1', 1, 'pv-hash-1', 'Review this attempt.',
-          '{"version":"1"}', 'active', 'system', '2026-01-08T00:00:01Z'
-        );
 
-        INSERT INTO skill_definitions (id, skill_name, description, created_at)
-        VALUES ('sd-fixture-1', 'read_attempt_evidence', 'Read attempt evidence', '2026-01-08T00:00:02Z');
 
-        INSERT INTO skill_versions (
-          id, skill_definition_id, version, definition_json, status, created_by, created_at
-        ) VALUES (
-          'sv-fixture-1', 'sd-fixture-1', 1, '{"steps":["read"]}', 'active', 'system',
-          '2026-01-08T00:00:03Z'
-        );
 
-        INSERT INTO eval_cases (id, case_kind, input_json, expected_json, holdout)
-        VALUES (
-          'ec-fixture-1', 'context_selection', '{"query":"test"}', '{"answer":"ok"}', 0
-        );
 
-        INSERT INTO candidate_promotions (
-          id, target_kind, target_version_id, proposal_json, status,
-          proposed_by, approved_by, created_at, updated_at
-        ) VALUES (
-          'cp-fixture-1', 'prompt', 'pv-fixture-1', '{"reason":"baseline"}', 'promoted',
-          'system', 'release-manager', '2026-01-08T00:00:04Z', '2026-01-08T00:00:05Z'
-        );
 
-        INSERT INTO eval_runs (
-          id, candidate_promotion_id, status, metrics_json, started_at,
-          finished_at, error_json, created_at
-        ) VALUES (
-          'er-fixture-1', 'cp-fixture-1', 'completed', '{"allPassed":true}',
-          '2026-01-08T00:00:04Z', '2026-01-08T00:00:05Z', NULL, '2026-01-08T00:00:04Z'
-        );
 
-        INSERT INTO eval_results (id, eval_run_id, case_id, passed, score, grading_json)
-        VALUES ('erl-fixture-1', 'er-fixture-1', 'ec-fixture-1', 1, 1.0, '{"grade":"ok"}');
 
-        INSERT INTO shadow_runs (
-          id, candidate_promotion_id, input_hash, output_diff_json,
-          no_user_visible_side_effect, created_at
-        ) VALUES (
-          'shr-fixture-1', 'cp-fixture-1', 'input-hash-1', '{"diff":"none"}', 1,
-          '2026-01-08T00:00:06Z'
-        );
 
         INSERT INTO vocabulary_items (
           id, term, normalized_term, definition, phonetic, part_of_speech, example,
@@ -534,7 +448,7 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
         .unwrap();
 
     let package = create_backup_package(&source, "roundtrip-test").unwrap();
-    assert_eq!(package.manifest.schema_version, 19);
+    assert_eq!(package.manifest.schema_version, 20);
     assert!(package.attempts.is_empty(), "format 18 carries attempts once");
     assert_eq!(
         package.manifest.table_count as usize,
@@ -642,26 +556,6 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
             })
             .unwrap(),
         2
-    );
-    assert_eq!(
-        target
-            .query_row(
-                "SELECT COUNT(*) FROM dream_candidates WHERE run_id='drmrun-fixture-1'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap(),
-        1
-    );
-    assert_eq!(
-        target
-            .query_row(
-                "SELECT proposal_kind FROM dream_candidates WHERE id='dcand-fixture-1'",
-                [],
-                |row| row.get::<_, String>(0),
-            )
-            .unwrap(),
-        "REINFORCE"
     );
     assert_eq!(
         target

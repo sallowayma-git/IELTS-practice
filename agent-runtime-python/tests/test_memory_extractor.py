@@ -182,37 +182,6 @@ class MemoryExtractorTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             MemoryCandidateInput.model_validate(raw)
 
-    def test_runtime_method_requires_handshake_and_returns_fallback_marker(self) -> None:
-        server = RuntimeServer(build_id="test")
-        handshake = server.handle(
-            {
-                "protocolVersion": 1,
-                "requestId": "request-handshake",
-                "traceId": "trace-handshake",
-                "deadlineMs": 1000,
-                "method": "runtime.handshake",
-                "params": {
-                    "hostProtocolVersion": 1,
-                    "requestedCapabilities": ["memory.candidates.extract"],
-                    "hostCapabilities": {"model.invoke": "1", "tool.invoke": "1"},
-                },
-            }
-        )
-        self.assertTrue(handshake["ok"])
-        response = server.handle(
-            {
-                "protocolVersion": 1,
-                "requestId": "request-extract",
-                "traceId": "trace-extract",
-                "deadlineMs": 1000,
-                "method": "memory.candidates.extract",
-                "params": {"input": candidate_input(), "modelOutput": "bad"},
-            }
-        )
-        self.assertTrue(response["ok"])
-        self.assertTrue(response["result"]["fallbackUsed"])
-        self.assertEqual(response["result"]["batch"]["schemaVersion"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use crate::attempts::{ensure_asset_stub, upsert_attempt};
 use crate::history::load_attempt;
-use crate::import::convert::reading_submission_to_attempt;
+use super::legacy_archive::reading_submission_to_attempt;
 use crate::sqlite::DbResult;
 
 /// The first archive schema that is a direct serialization of the canonical

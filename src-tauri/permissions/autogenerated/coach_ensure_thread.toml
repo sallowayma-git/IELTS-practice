@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-ensure-thread"
+description = "Enables the coach_ensure_thread command without any pre-configured scope."
+commands.allow = ["coach_ensure_thread"]
+
+[[permission]]
+identifier = "deny-coach-ensure-thread"
+description = "Denies the coach_ensure_thread command without any pre-configured scope."
+commands.deny = ["coach_ensure_thread"]

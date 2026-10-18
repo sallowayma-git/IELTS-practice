@@ -42,11 +42,11 @@ fn v11_database_upgrade_applies_m4_after_m3_without_skipping_versions() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
     );
     assert!(
-        current_version(&conn).unwrap() == 32,
-        "latest migration 0032 was not applied"
+        current_version(&conn).unwrap() == 33,
+        "latest migration 0033 was not applied"
     );
     verify_idempotent(&mut conn).unwrap();
     for table in [
@@ -1250,60 +1250,6 @@ fn sufficient_evidence_keeps_weakness_priority_and_staleness_escalation() {
     assert!(stale[0].priority > fresh[0].priority);
     assert_eq!(stale[0].priority_band, "urgent");
     assert!(stale[0].reason_codes.iter().any(|r| r == "review_due"));
-}
-
-#[test]
-fn rust_snapshot_is_consumed_by_python_and_python_query_is_accepted_by_rust() {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let (dir, conn) = open_db();
-    submit_fixture(dir.path(), &conn, 1);
-    let snapshot = ielts_db::learner_skill_snapshot(&conn, &LearnerStateQuery::default()).unwrap();
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let python = std::env::var("PYTHON")
-        .unwrap_or_else(|_| if cfg!(windows) { "python" } else { "python3" }.into());
-    let mut child = Command::new(python)
-        .arg(root.join("developer/tests/ci/learner_wire_probe.py"))
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Python is required for the real learner wire contract");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&snapshot).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "Python failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let params: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let query: LearnerStateQuery = serde_json::from_value(
-        params
-            .get("query")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null),
-    )
-    .unwrap();
-    assert_eq!(
-        query.skill_keys,
-        snapshot
-            .state
-            .states
-            .iter()
-            .map(|row| row.skill_key.clone())
-            .collect::<Vec<_>>()
-    );
-    assert!(serde_json::from_value::<LearnerStateQuery>(
-        json!({"activity":"reading", "skills":[]})
-    )
-    .is_err());
-    assert!(serde_json::from_value::<LearnerStateQuery>(serde_json::Value::Null).is_err());
 }
 
 fn skill_rows(conn: &Connection, sql: &str) -> Vec<(String, String, Option<String>)> {

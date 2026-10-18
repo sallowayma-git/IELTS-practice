@@ -82,7 +82,6 @@ class RuntimeTests(unittest.TestCase):
             handshake["result"]["capabilities"],
             {
                 "dream.weekly": "1",
-                "memory.candidates.extract": "1",
                 "memory.candidates.generate": "1",
                 "planner.study_plan": "1",
                 "runtime.health": "1",
@@ -132,38 +131,29 @@ class RuntimeTests(unittest.TestCase):
     def test_runtime_source_has_no_canonical_truth_access(self) -> None:
         source_root = Path(__file__).parents[1] / "src"
         # The cognitive runtime core (memory/protocol/runtime/host_bridge) must
-        # never touch SQLite, keyring, or canonical DB paths. The M5 retrieval
-        # package and the M12 planner package are explicitly authorized to own
-        # *derived* state / orchestration (never canonical truth) — they are
-        # excluded from this core-runtime scan but audited separately below.
+        # never touch SQLite, keyring, or canonical DB paths. The M12 planner
+        # package is a Python orchestration package (never canonical truth) — it
+        # is excluded from this core-runtime scan but audited separately below.
         # Docstrings that say "never touches sqlite3" would otherwise trip a
         # naive substring scan, so orchestration packages are excluded.
         forbidden_in_core = ("sqlite3", "keyring", "v2.db", "Tauri internal")
-        retrieval_dir = source_root / "ielts_agent" / "retrieval"
         planner_dir = source_root / "ielts_agent" / "planner"
         core_sources: list[str] = []
-        retrieval_sources: list[str] = []
+        planner_sources: list[str] = []
         for path in source_root.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
-            if retrieval_dir in path.parents or planner_dir in path.parents:
-                retrieval_sources.append(text)
+            if planner_dir in path.parents:
+                planner_sources.append(text)
             else:
                 core_sources.append(text)
         core_source = "\n".join(core_sources)
         for forbidden in forbidden_in_core:
             self.assertNotIn(forbidden, core_source)
-        # The retrieval package may use sqlite3 only for its derived index; it
-        # must never reference credentials, the canonical IELTS DB, or keyring.
-        # We strip comments/docstrings so documentation prose does not trip
-        # the guard — the intent is to catch real credential *access*.
-        retrieval_source = "\n".join(retrieval_sources)
-        for forbidden in ("keyring", "v2.db", "import credentials", "os.environ[", "getpass"):
-            self.assertNotIn(forbidden, retrieval_source)
-        # sqlite3 is allowed in the retrieval package but must only appear in
-        # the derived-index store, never in the core runtime modules.
-        for forbidden in ("keyring", "v2.db", "Tauri internal"):
-            self.assertNotIn(forbidden, retrieval_source)
-
+        # The planner package must never reference credentials, the canonical
+        # IELTS DB, or keyring.
+        planner_source = "\n".join(planner_sources)
+        for forbidden in ("keyring", "v2.db", "Tauri internal", "import credentials", "os.environ[", "getpass"):
+            self.assertNotIn(forbidden, planner_source)
 
 
 class DreamDispatchBridge:

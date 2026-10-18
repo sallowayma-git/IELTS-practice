@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-timer-should-auto-submit"
+description = "Enables the timer_should_auto_submit command without any pre-configured scope."
+commands.allow = ["timer_should_auto_submit"]
+
+[[permission]]
+identifier = "deny-timer-should-auto-submit"
+description = "Denies the timer_should_auto_submit command without any pre-configured scope."
+commands.deny = ["timer_should_auto_submit"]

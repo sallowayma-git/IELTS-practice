@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-run-attempt-review"
+description = "Enables the agent_run_attempt_review command without any pre-configured scope."
+commands.allow = ["agent_run_attempt_review"]
+
+[[permission]]
+identifier = "deny-agent-run-attempt-review"
+description = "Denies the agent_run_attempt_review command without any pre-configured scope."
+commands.deny = ["agent_run_attempt_review"]

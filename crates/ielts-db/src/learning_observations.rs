@@ -381,20 +381,41 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
     let input_hash = input_hash(&events);
     let build = build_projection(&events);
 
-    // Coach result rows point at these observations from outside the
-    // projection. The delete below would cascade/null them for EVERY
-    // observation, even though the rebuild recreates the same deterministic
-    // ids, so one history delete used to wipe every coach link. Save them now
-    // and reattach the ones whose observation still exists after the rebuild.
+    // Apply only the difference, keyed by the deterministic observation id:
+    // unchanged rows are left alone, so the coach links and strategy outcomes
+    // that point at them are never touched. A row whose evidence changed is
+    // deleted and reinserted (evidence deletes cascade to the observation), so
+    // the dependents of those few rows are saved and reattached as before.
+    let stored = load_stored_records(conn)?;
+    let built = build
+        .records
+        .iter()
+        .map(|record| (record.id.as_str(), record))
+        .collect::<BTreeMap<_, _>>();
+    let mut remove = Vec::new();
+    let mut write = Vec::new();
+    let mut unchanged = BTreeSet::new();
+    for record in &stored {
+        match built.get(record.id.as_str()) {
+            None => remove.push(record.id.clone()),
+            Some(next) if next.evidence != record.evidence => remove.push(record.id.clone()),
+            Some(next) if record_row(next) == record_row(record) => {
+                unchanged.insert(record.id.as_str());
+            }
+            Some(_) => {}
+        }
+    }
+    for record in &build.records {
+        if !unchanged.contains(record.id.as_str()) {
+            write.push(record.clone());
+        }
+    }
     let dependents = save_observation_dependents(conn)?;
-
-    // This projector owns only its versioned rows. Delete the parent first so
-    // SQLite cascades its evidence, then clear legacy orphan evidence without
-    // touching rows owned by another projector.
-    conn.execute(
-        "DELETE FROM learner_observations WHERE projector_key = ?1",
-        params![LEARNING_OBSERVATION_PROJECTOR_KEY],
-    )?;
+    let mut delete_statement =
+        conn.prepare("DELETE FROM learner_observations WHERE id = ?1 AND projector_key = ?2")?;
+    for id in &remove {
+        delete_statement.execute(params![id, LEARNING_OBSERVATION_PROJECTOR_KEY])?;
+    }
     conn.execute(
         "DELETE FROM learner_observation_evidence
          WHERE NOT EXISTS (
@@ -403,7 +424,7 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
          )",
         [],
     )?;
-    insert_records(conn, &build.records)?;
+    insert_records(conn, &write)?;
     restore_observation_dependents(conn, &dependents)?;
 
     let output_hash = output_hash(&build.records);
@@ -446,13 +467,10 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
 }
 
 /// Rows outside the projection that reference this projector's observations:
-/// `coach_outcome_links_v0` (ON DELETE CASCADE) and
-/// `teaching_strategy_outcomes.observation_id` (ON DELETE SET NULL).
+/// `coach_outcome_links_v0` (ON DELETE CASCADE).
 struct ObservationDependents {
     /// (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
     outcome_links: Vec<(String, String, String, String)>,
-    /// (teaching_strategy_outcomes.id, observation_id)
-    strategy_outcomes: Vec<(String, String)>,
 }
 
 fn save_observation_dependents(conn: &Connection) -> DbResult<ObservationDependents> {
@@ -467,21 +485,7 @@ fn save_observation_dependents(conn: &Connection) -> DbResult<ObservationDepende
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut statement = conn.prepare(
-        "SELECT t.id, t.observation_id
-         FROM teaching_strategy_outcomes t
-         JOIN learner_observations o ON o.id = t.observation_id
-         WHERE o.projector_key = ?1",
-    )?;
-    let strategy_outcomes = statement
-        .query_map(params![LEARNING_OBSERVATION_PROJECTOR_KEY], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(ObservationDependents {
-        outcome_links,
-        strategy_outcomes,
-    })
+    Ok(ObservationDependents { outcome_links })
 }
 
 /// Reattach saved dependents whose observation survived the rebuild. A row
@@ -500,15 +504,18 @@ fn restore_observation_dependents(
     for (assignment_id, observation_id, kind, created_at) in &dependents.outcome_links {
         link_statement.execute(params![assignment_id, observation_id, kind, created_at])?;
     }
-    let mut outcome_statement = conn.prepare(
-        "UPDATE teaching_strategy_outcomes SET observation_id = ?2
-         WHERE id = ?1 AND observation_id IS NULL
-           AND EXISTS (SELECT 1 FROM learner_observations WHERE id = ?2)",
-    )?;
-    for (outcome_id, observation_id) in &dependents.strategy_outcomes {
-        outcome_statement.execute(params![outcome_id, observation_id])?;
-    }
     Ok(())
+}
+
+/// Hashes for the cheap freshness check: the ledger's input hash and the
+/// output hash of the rows currently stored, without building the projection.
+/// The projection is a pure function of the ledger, so when both equal the
+/// latest completed run's hashes the stored rows are exactly what a rebuild
+/// would write.
+pub(crate) fn stored_projection_hashes(conn: &Connection) -> DbResult<(String, String)> {
+    let events = load_ledger_events(conn)?;
+    let stored = load_stored_records(conn)?;
+    Ok((input_hash(&events), output_hash(&stored)))
 }
 
 /// Verify the current derived rows against a fresh deterministic projection.
@@ -1229,6 +1236,9 @@ fn input_hash(events: &[LedgerEvent]) -> String {
                 "schemaVersion": event.schema_version,
                 "sensitivity": event.sensitivity,
                 "quarantined": event.consolidation_state == "quarantined",
+                // A payload edited without its content hash changes nothing
+                // above; this keeps the stored-hash fast path honest.
+                "valid": validate_ledger_event(event).is_ok(),
             })
         })
         .map(|value| canonical_json(&value))
@@ -1237,30 +1247,30 @@ fn input_hash(events: &[LedgerEvent]) -> String {
     sha256_hex(&rows.join("\n"))
 }
 
+/// One record as the canonical row the output hash covers, so the hash and
+/// the incremental rebuild agree on what "changed" means.
+fn record_row(record: &ObservationRecord) -> String {
+    canonical_json(&json!({
+        "id": record.id,
+        "userId": record.user_id,
+        "observationType": record.observation_type,
+        "namespace": record.namespace,
+        "scopeKind": record.scope_kind,
+        "scopeKey": record.scope_key,
+        "polarity": record.polarity,
+        "valueNum": record.value_num,
+        "valueText": record.value_text,
+        "payload": record.payload,
+        "confidence": record.confidence,
+        "evidenceStrength": record.evidence_strength,
+        "observedAt": record.observed_at,
+        "sourceFingerprint": record.source_fingerprint,
+        "evidence": record.evidence,
+    }))
+}
+
 fn output_hash(records: &[ObservationRecord]) -> String {
-    let mut rows = records
-        .iter()
-        .map(|record| {
-            json!({
-                "id": record.id,
-                "userId": record.user_id,
-                "observationType": record.observation_type,
-                "namespace": record.namespace,
-                "scopeKind": record.scope_kind,
-                "scopeKey": record.scope_key,
-                "polarity": record.polarity,
-                "valueNum": record.value_num,
-                "valueText": record.value_text,
-                "payload": record.payload,
-                "confidence": record.confidence,
-                "evidenceStrength": record.evidence_strength,
-                "observedAt": record.observed_at,
-                "sourceFingerprint": record.source_fingerprint,
-                "evidence": record.evidence,
-            })
-        })
-        .map(|value| canonical_json(&value))
-        .collect::<Vec<_>>();
+    let mut rows = records.iter().map(record_row).collect::<Vec<_>>();
     rows.sort();
     sha256_hex(&rows.join("\n"))
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-list-assets"
+description = "Enables the reading_list_assets command without any pre-configured scope."
+commands.allow = ["reading_list_assets"]
+
+[[permission]]
+identifier = "deny-reading-list-assets"
+description = "Denies the reading_list_assets command without any pre-configured scope."
+commands.deny = ["reading_list_assets"]

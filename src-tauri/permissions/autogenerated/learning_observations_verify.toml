@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learning-observations-verify"
+description = "Enables the learning_observations_verify command without any pre-configured scope."
+commands.allow = ["learning_observations_verify"]
+
+[[permission]]
+identifier = "deny-learning-observations-verify"
+description = "Denies the learning_observations_verify command without any pre-configured scope."
+commands.deny = ["learning_observations_verify"]

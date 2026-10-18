@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-pick-practice-asset"
+description = "Enables the reading_pick_practice_asset command without any pre-configured scope."
+commands.allow = ["reading_pick_practice_asset"]
+
+[[permission]]
+identifier = "deny-reading-pick-practice-asset"
+description = "Denies the reading_pick_practice_asset command without any pre-configured scope."
+commands.deny = ["reading_pick_practice_asset"]

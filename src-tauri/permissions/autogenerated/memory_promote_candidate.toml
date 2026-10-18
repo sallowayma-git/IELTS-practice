@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-promote-candidate"
+description = "Enables the memory_promote_candidate command without any pre-configured scope."
+commands.allow = ["memory_promote_candidate"]
+
+[[permission]]
+identifier = "deny-memory-promote-candidate"
+description = "Denies the memory_promote_candidate command without any pre-configured scope."
+commands.deny = ["memory_promote_candidate"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-archive"
+description = "Enables the memory_archive command without any pre-configured scope."
+commands.allow = ["memory_archive"]
+
+[[permission]]
+identifier = "deny-memory-archive"
+description = "Denies the memory_archive command without any pre-configured scope."
+commands.deny = ["memory_archive"]

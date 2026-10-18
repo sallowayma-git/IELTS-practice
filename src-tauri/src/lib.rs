@@ -1,6 +1,6 @@
 //! Tauri 2 shell for IELTS Practice.
 //!
-//! Phase 2: boot Vue UI without Fastify; diagnostics / paths / routes.
+//! Phase 2: boot Vue UI; diagnostics / paths.
 //! Phase 4: unified history, settings, backup, secret-ref commands.
 
 pub(crate) mod agent;
@@ -8,6 +8,8 @@ pub(crate) mod ai;
 pub(crate) mod cognitive_runtime;
 pub mod app;
 pub mod commands;
+#[cfg(test)]
+mod ipc_acl_tests;
 
 use tauri::Manager;
 
@@ -142,9 +144,6 @@ pub fn run() {
             commands::diagnostics::get_performance_budgets,
             commands::diagnostics::get_query_plan_baselines,
             commands::paths::get_app_data_paths,
-            commands::paths::discover_legacy_data_dirs,
-            commands::routes::normalize_shell_route,
-            commands::routes::resolve_legacy_route,
             commands::history::list_history,
             commands::history::get_history_detail,
             commands::history::history_writing_statistics,
@@ -153,7 +152,6 @@ pub fn run() {
             commands::history::delete_history_attempts,
             commands::history::history_issue_clear_token,
             commands::history::clear_history,
-            commands::history::import_reading_archive_value,
             commands::history::history_get_retention_policy,
             commands::history::history_set_retention_policy,
             commands::learning::learning_get_attempt_detail,
@@ -207,14 +205,6 @@ pub fn run() {
             commands::learner::learner_model_rebuild,
             #[cfg(all(feature = "developer-tools", feature = "learner-model-v1"))]
             commands::learner::learner_model_verify,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_manifest,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_export_chunks,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::corpus::corpus_fetch_chunks,
-            #[cfg(feature = "context-compiler-v1")]
-            commands::context::context_materialize,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::journal_get_daily,
             #[cfg(feature = "daily-dream-v1")]
@@ -240,7 +230,6 @@ pub fn run() {
             commands::journal::consolidation_archive_stale,
             commands::settings::list_settings,
             commands::settings::upsert_setting,
-            commands::settings::migrate_local_preferences,
             commands::settings::set_secret,
             commands::settings::list_secret_refs,
             commands::settings::delete_secret,
@@ -316,32 +305,6 @@ pub fn run() {
             commands::coach_feedback::coach_record_strategy_assignment,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_link_outcome,
-            // M10 teaching-strategy and M11 prompt/skill commands are engineering
-            // surfaces with no product caller: compiled only with `developer-tools`.
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_select,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_assignment,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_feedback,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_outcome,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_user_state,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_candidate_batch,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_record_candidate_evaluation,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::teaching_strategy::teaching_strategy_promote_candidate,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_list_versions,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_get_active,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::prompt_propose_candidate,
-            #[cfg(all(feature = "daily-dream-v1", feature = "developer-tools"))]
-            commands::prompt_skill::skill_list_versions,
         ])
         .setup(|app| {
             // Register now, parse off the main thread: startup never waits on the 5 MB file.
@@ -407,8 +370,7 @@ pub fn run() {
             tracing::info!(
                 app_data = %paths.app_data.display(),
                 db = %paths.v2_db_path().display(),
-                legacy_candidates = paths.legacy_candidates.len(),
-                "IELTS Practice Tauri shell ready (no Fastify localhost API)"
+                "IELTS Practice Tauri shell ready"
             );
             Ok(())
         });

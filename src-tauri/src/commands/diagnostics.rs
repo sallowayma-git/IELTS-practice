@@ -26,7 +26,6 @@ pub struct StartupDiagnostics {
     pub started_at: String,
     pub app_data: String,
     pub logs_dir: String,
-    pub legacy_data_dirs: Vec<String>,
     pub notes: Vec<String>,
 }
 
@@ -318,16 +317,7 @@ pub fn get_startup_diagnostics(paths: State<'_, AppPaths>) -> StartupDiagnostics
         started_at: chrono::Utc::now().to_rfc3339(),
         app_data: paths.app_data.display().to_string(),
         logs_dir: paths.logs.display().to_string(),
-        legacy_data_dirs: paths
-            .legacy_candidates
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect(),
         notes: vec![
-            "Phase 10 cutover: Tauri/Rust is the only shipping runtime.".into(),
-            "No localhost Fastify business API is started.".into(),
-            "SQLite v2 is primary store; legacy importers remain for one-shot migration.".into(),
-            "Shadow dual-read is test-only; production path is single-source.".into(),
             "Updater is fail-closed; release builds inject a signed endpoint and public key."
                 .into(),
         ],

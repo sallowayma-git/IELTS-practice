@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-start-evaluation"
+description = "Enables the writing_start_evaluation command without any pre-configured scope."
+commands.allow = ["writing_start_evaluation"]
+
+[[permission]]
+identifier = "deny-writing-start-evaluation"
+description = "Denies the writing_start_evaluation command without any pre-configured scope."
+commands.deny = ["writing_start_evaluation"]

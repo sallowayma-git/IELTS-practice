@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-import-archive"
+description = "Enables the reading_import_archive command without any pre-configured scope."
+commands.allow = ["reading_import_archive"]
+
+[[permission]]
+identifier = "deny-reading-import-archive"
+description = "Denies the reading_import_archive command without any pre-configured scope."
+commands.deny = ["reading_import_archive"]

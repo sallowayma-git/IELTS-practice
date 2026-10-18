@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-study-plan-list-items"
+description = "Enables the study_plan_list_items command without any pre-configured scope."
+commands.allow = ["study_plan_list_items"]
+
+[[permission]]
+identifier = "deny-study-plan-list-items"
+description = "Denies the study_plan_list_items command without any pre-configured scope."
+commands.deny = ["study_plan_list_items"]

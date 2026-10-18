@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-prompt-get"
+description = "Enables the writing_prompt_get command without any pre-configured scope."
+commands.allow = ["writing_prompt_get"]
+
+[[permission]]
+identifier = "deny-writing-prompt-get"
+description = "Denies the writing_prompt_get command without any pre-configured scope."
+commands.deny = ["writing_prompt_get"]

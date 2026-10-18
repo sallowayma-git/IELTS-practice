@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-thread-request-cancel"
+description = "Enables the agent_thread_request_cancel command without any pre-configured scope."
+commands.allow = ["agent_thread_request_cancel"]
+
+[[permission]]
+identifier = "deny-agent-thread-request-cancel"
+description = "Denies the agent_thread_request_cancel command without any pre-configured scope."
+commands.deny = ["agent_thread_request_cancel"]

@@ -572,7 +572,6 @@ mod tests {
             exports: root.join("exports"),
             diagnostics: root.join("diagnostics"),
             db_dir: root.join("db"),
-            legacy_candidates: Vec::new(),
         };
         let db = AppDb::open(&paths).unwrap();
         (dir, db)

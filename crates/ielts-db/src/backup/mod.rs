@@ -1,7 +1,7 @@
 //! Versioned, lossless backup / restore for the canonical SQLite store.
 //! Ordinary backups contain opaque keychain references, never secret bytes.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use rusqlite::types::{Value as SqlValue, ValueRef};
@@ -23,13 +23,38 @@ use crate::sqlite::{DbError, DbResult};
 /// carried a duplicate `attempts` summary array; it still restores.
 /// Format 19 also carries the agent context snapshots that coach and teaching
 /// strategy assignments reference.
-pub const BACKUP_SCHEMA_VERSION: u32 = 19;
+pub const BACKUP_SCHEMA_VERSION: u32 = 20;
 /// First format whose database payload carries `weekly_digests`.
 const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
 /// First format whose database payload carries the context snapshot tables.
 const CONTEXT_SNAPSHOTS_SCHEMA_VERSION: u32 = 19;
 const CONTEXT_SNAPSHOT_TABLES: &[&str] = &["agent_context_snapshots", "agent_context_items"];
 const LEGACY_BACKUP_SCHEMA_VERSION: u32 = 1;
+/// Tables migration 0033 dropped. Packages before format 20 carry them; a
+/// restore accepts and ignores them, and no package requires them.
+const DROPPED_TABLES: &[&str] = &[
+    "prompt_skill_release_heads",
+    "prompt_skill_releases",
+    "shadow_runs",
+    "eval_results",
+    "eval_runs",
+    "eval_cases",
+    "candidate_promotions",
+    "prompt_versions",
+    "prompt_templates",
+    "skill_versions",
+    "skill_definitions",
+    "strategy_candidate_evaluations",
+    "strategy_candidate_batches",
+    "teaching_strategy_outcomes",
+    "teaching_strategy_feedback",
+    "teaching_strategy_assignments",
+    "user_strategy_state",
+    "teaching_strategy_catalog",
+    "retrieval_runs",
+    "retrieval_index_registry",
+    "dream_candidates",
+];
 
 // Parent tables precede their children. Restore inserts in this order and
 // clears in reverse order, so foreign keys remain enabled for the whole
@@ -62,8 +87,7 @@ const CANONICAL_TABLES: &[&str] = &[
     "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
-    // coach_strategy_assignments_v0 / teaching_strategy_assignments
-    // .context_snapshot_id point here; without them a restore on a fresh
+    // coach_strategy_assignments_v0.context_snapshot_id points here; without them a restore on a fresh
     // device failed the final foreign-key check.
     "agent_context_snapshots",
     "agent_context_items",
@@ -79,28 +103,9 @@ const CANONICAL_TABLES: &[&str] = &[
     "background_jobs",
     "dream_runs",
     "weekly_digests",
-    "dream_candidates",
     "memory_relations",
     "memory_feedback",
     "memory_capacity_state",
-    "teaching_strategy_catalog",
-    "teaching_strategy_assignments",
-    "teaching_strategy_feedback",
-    "teaching_strategy_outcomes",
-    "user_strategy_state",
-    "strategy_candidate_batches",
-    "strategy_candidate_evaluations",
-    "prompt_templates",
-    "prompt_versions",
-    "skill_definitions",
-    "skill_versions",
-    "eval_cases",
-    "candidate_promotions",
-    "prompt_skill_releases",
-    "prompt_skill_release_heads",
-    "eval_runs",
-    "eval_results",
-    "shadow_runs",
     "agent_threads",
     "agent_messages",
     "agent_checkpoints",
@@ -752,8 +757,8 @@ const V14_CANONICAL_TABLES: &[&str] = &[
     "migration_meta",
 ];
 
-/// The tables a package of `schema_version` carries. Restore clears every
-/// canonical table and inserts only these.
+/// The tables a package of `schema_version` must carry and a restore inserts.
+/// Restore clears every canonical table; dropped tables are never required.
 fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
     snapshot_tables_before_digests(schema_version)
         .iter()
@@ -763,6 +768,7 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
             !CONTEXT_SNAPSHOT_TABLES.contains(table)
                 || schema_version >= CONTEXT_SNAPSHOTS_SCHEMA_VERSION
         })
+        .filter(|table| !DROPPED_TABLES.contains(table))
         .collect()
 }
 
@@ -1156,6 +1162,9 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
         )));
     }
     for table in &package.database {
+        if DROPPED_TABLES.contains(&table.name.as_str()) {
+            continue;
+        }
         let target_columns = table_columns(conn, &table.name)?;
         // Some migrations add only a nullable column. Historical snapshots
         // cannot invent it; INSERT with the old columns leaves NULL. Keep every
@@ -1217,10 +1226,6 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             if *table == "history_retention_policy" && !source_tables.contains(table) {
                 continue;
             }
-            if *table == "prompt_skill_releases" {
-                clear_release_history(tx)?;
-                continue;
-            }
             tx.execute(&format!("DELETE FROM {}", quote_identifier(table)), [])?;
         }
         Ok(())
@@ -1249,12 +1254,7 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             quote_identifier(table_name)
         );
         let mut stmt = tx.prepare(&sql)?;
-        let rows = if *table_name == "prompt_skill_releases" {
-            release_rows_in_order(table)?
-        } else {
-            table.rows.iter().collect()
-        };
-        for row in rows {
+        for row in &table.rows {
             let values = row.iter().map(sql_value).collect::<Vec<_>>();
             stmt.execute(params_from_iter(values))?;
         }
@@ -1405,70 +1405,15 @@ fn assert_no_foreign_key_violations(conn: &Connection) -> DbResult<()> {
     Ok(())
 }
 
-// JSON/id/timestamp order is unrelated to publication order. Build the order
-// from recorded edges only, in O(rows + edges), and reject cycles.
-fn release_rows_in_order(table: &BackupTable) -> DbResult<Vec<&Vec<BackupSqlValue>>> {
-    let ids = text_set(table, "id")?;
-    require_optional_refs(table, "predecessor_release_id", &ids)?;
-    let id_index = column_index(table, "id")?;
-    let predecessor_index = column_index(table, "predecessor_release_id")?;
-    let mut children: HashMap<&str, Vec<usize>> = HashMap::new();
-    let mut ready = VecDeque::new();
-    for (index, row) in table.rows.iter().enumerate() {
-        match &row[predecessor_index] {
-            BackupSqlValue::Text(parent) => children.entry(parent).or_default().push(index),
-            BackupSqlValue::Null => ready.push_back(index),
-            _ => unreachable!("reference types validated above"),
-        }
-    }
-    let mut ordered = Vec::with_capacity(table.rows.len());
-    while let Some(index) = ready.pop_front() {
-        let row = &table.rows[index];
-        ordered.push(row);
-        let BackupSqlValue::Text(id) = &row[id_index] else {
-            unreachable!("ids validated above");
-        };
-        if let Some(indices) = children.remove(id.as_str()) {
-            ready.extend(indices);
-        }
-    }
-    if ordered.len() != table.rows.len() {
-        return Err(DbError::Validation(
-            "cycle in prompt_skill_releases predecessor chain".into(),
-        ));
-    }
-    Ok(ordered)
-}
-
-fn clear_release_history(tx: &Transaction<'_>) -> DbResult<()> {
-    let mut stmt = tx.prepare("SELECT id, predecessor_release_id FROM prompt_skill_releases")?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(vec![
-                sql_value_from_ref(row.get_ref(0)?),
-                sql_value_from_ref(row.get_ref(1)?),
-            ])
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    let table = BackupTable {
-        name: "prompt_skill_releases".into(),
-        columns: vec!["id".into(), "predecessor_release_id".into()],
-        rows,
-    };
-    // ON DELETE RESTRICT needs children removed before their predecessors,
-    // even while other restore foreign keys are deferred. Heads are already gone.
-    let mut delete = tx.prepare("DELETE FROM prompt_skill_releases WHERE id = ?1")?;
-    for row in release_rows_in_order(&table)?.into_iter().rev() {
-        delete.execute([sql_value(&row[0])])?;
-    }
-    Ok(())
-}
-
 fn table_map<'a>(
     tables: &'a [BackupTable],
     required_tables: &[&str],
 ) -> DbResult<HashMap<&'a str, &'a BackupTable>> {
-    let allowed = required_tables.iter().copied().collect::<HashSet<_>>();
+    let allowed = required_tables
+        .iter()
+        .chain(DROPPED_TABLES)
+        .copied()
+        .collect::<HashSet<_>>();
     let mut out = HashMap::new();
     for table in tables {
         if !allowed.contains(table.name.as_str()) {
@@ -1652,19 +1597,6 @@ fn validate_json_cells(tables: &HashMap<&str, &BackupTable>) -> DbResult<()> {
 }
 
 fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult<()> {
-    if let Some(releases) = tables.get("prompt_skill_releases") {
-        release_rows_in_order(releases)?;
-        require_refs(
-            releases,
-            "candidate_id",
-            &text_set(tables["candidate_promotions"], "id")?,
-        )?;
-        require_refs(
-            tables["prompt_skill_release_heads"],
-            "release_id",
-            &text_set(releases, "id")?,
-        )?;
-    }
     let assets = text_set(tables["practice_assets"], "id")?;
     let suites = text_set(tables["reading_suites"], "id")?;
     let attempts = text_set(tables["attempts"], "id")?;
@@ -1812,14 +1744,6 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
         }
         if let Some(runs) = tables.get("dream_runs") {
             require_refs(runs, "journal_id", &journal_ids)?;
-            let run_ids = text_set(runs, "id")?;
-            if let Some(candidates) = tables.get("dream_candidates") {
-                require_refs(candidates, "run_id", &run_ids)?;
-                if let Some(items) = tables.get("memory_items") {
-                    let memory_ids = text_set(items, "id")?;
-                    require_optional_refs(candidates, "target_memory_id", &memory_ids)?;
-                }
-            }
         }
     }
     Ok(())

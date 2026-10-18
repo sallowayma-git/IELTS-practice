@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learner-model-get-review-needs"
+description = "Enables the learner_model_get_review_needs command without any pre-configured scope."
+commands.allow = ["learner_model_get_review_needs"]
+
+[[permission]]
+identifier = "deny-learner-model-get-review-needs"
+description = "Denies the learner_model_get_review_needs command without any pre-configured scope."
+commands.deny = ["learner_model_get_review_needs"]

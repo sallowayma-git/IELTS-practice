@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learning-events-verify"
+description = "Enables the learning_events_verify command without any pre-configured scope."
+commands.allow = ["learning_events_verify"]
+
+[[permission]]
+identifier = "deny-learning-events-verify"
+description = "Denies the learning_events_verify command without any pre-configured scope."
+commands.deny = ["learning_events_verify"]

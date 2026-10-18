@@ -2,8 +2,7 @@
 //!
 //! `dream_runs` is the ledger of the weekly consolidation, the only dream there
 //! is: the daily journal is a deterministic summary and has no run. The legacy
-//! `dream_candidates` table stays in the schema (no destructive migration) but
-//! nothing writes or reads it any more.
+//! `dream_candidates` table was dropped by migration 0033.
 
 use chrono::{DateTime, Duration, NaiveDate, SecondsFormat, Utc};
 use ielts_domain::{DreamRun, DreamRunStatus};
