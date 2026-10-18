@@ -1252,6 +1252,15 @@ fn sufficient_evidence_keeps_weakness_priority_and_staleness_escalation() {
     assert!(stale[0].reason_codes.iter().any(|r| r == "review_due"));
 }
 
+fn skill_rows(conn: &Connection, sql: &str) -> Vec<(String, String, Option<String>)> {
+    let mut statement = conn.prepare(sql).unwrap();
+    statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
 #[test]
 fn matching_groups_feed_their_own_sub_type_skill_and_unknown_matching_is_not_headings() {
     let (dir, conn) = open_db();
