@@ -287,19 +287,6 @@ pub fn history_set_retention_policy(
     }
 }
 
-/// Compatibility command name for callers not yet on `reading_import_archive`.
-/// It returns the same canonical all-or-nothing report as the Reading command.
-#[tauri::command]
-pub fn import_reading_archive_value(
-    db: State<'_, AppDb>,
-    value: serde_json::Value,
-) -> CommandResponse<ielts_db::ReadingArchiveImportResult> {
-    match db.with_conn(|conn| ielts_db::import_reading_archive_value(conn, &value)) {
-        Ok(report) => CommandResponse::success(report),
-        Err(e) => CommandResponse::failure(map_db_err(e)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

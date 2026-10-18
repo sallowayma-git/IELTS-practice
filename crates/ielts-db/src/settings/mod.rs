@@ -18,16 +18,6 @@ pub const NS_SECRET_REFS: &str = "secret_refs";
 const AI_CONFIG_PREFIX: &str = "config:";
 const AI_DEFAULT_ID: &str = "defaultConfigId";
 
-/// Preferences that historically lived in localStorage and must migrate.
-pub const LEGACY_UI_KEYS: &[&str] = &[
-    "theme",
-    "three_bg_theme",
-    "locale",
-    "reduced_motion",
-    "library_layout",
-    "history_page_size",
-];
-
 pub fn get_setting(
     conn: &Connection,
     namespace: &str,
@@ -165,19 +155,15 @@ where
     Ok(configs)
 }
 
-/// Resolve the persisted secret reference for an AI configuration. Canonical
-/// names win over the pre-migration name when both records exist.
+/// Resolve the persisted secret reference for an AI configuration.
 pub fn ai_secret_ref_for_config(conn: &Connection, id: &str) -> DbResult<Option<SecretRef>> {
     let refs = list_secret_refs(conn)?;
     Ok(ai_secret_ref_from_refs(&refs, id).cloned())
 }
 
 fn ai_secret_ref_from_refs<'a>(refs: &'a [SecretRef], id: &str) -> Option<&'a SecretRef> {
-    let canonical = ai_secret_name(id);
-    let legacy = legacy_ai_secret_name(id);
-    refs.iter()
-        .find(|item| item.name == canonical)
-        .or_else(|| refs.iter().find(|item| item.name == legacy))
+    let name = ai_secret_name(id);
+    refs.iter().find(|item| item.name == name)
 }
 
 pub fn upsert_ai_config(conn: &Connection, config: &AiConfigDto) -> DbResult<()> {
@@ -304,11 +290,6 @@ pub fn ai_secret_name(id: &str) -> String {
     format!("ai.config.{id}.api_key")
 }
 
-/// Compatibility for configs created before secret names became explicit.
-pub fn legacy_ai_secret_name(id: &str) -> String {
-    format!("ai.config.{id}")
-}
-
 fn write_ai_runtime_value(conn: &Connection, key: &str, value: &Value) -> DbResult<()> {
     let now = chrono::Utc::now().to_rfc3339();
     let value_json = serde_json::to_string(value).map_err(|e| DbError::Message(e.to_string()))?;
@@ -318,36 +299,6 @@ fn write_ai_runtime_value(conn: &Connection, key: &str, value: &Value) -> DbResu
         params![NS_AI, key, value_json, now],
     )?;
     Ok(())
-}
-
-/// Import a flat localStorage map into ui/practice namespaces.
-pub fn migrate_local_storage_prefs(
-    conn: &Connection,
-    prefs: &serde_json::Map<String, Value>,
-) -> DbResult<u32> {
-    let mut count = 0u32;
-    for (key, value) in prefs {
-        if key_looks_like_secret(key) {
-            continue;
-        }
-        let namespace = if LEGACY_UI_KEYS.contains(&key.as_str())
-            || key.starts_with("ui.")
-            || key.starts_with("theme")
-        {
-            NS_UI
-        } else if key.starts_with("practice")
-            || key.starts_with("reading")
-            || key.starts_with("writing")
-        {
-            NS_PRACTICE
-        } else {
-            NS_SYSTEM
-        };
-        let clean_key = key.trim_start_matches("ui.").to_string();
-        upsert_setting(conn, namespace, &clean_key, value)?;
-        count += 1;
-    }
-    Ok(count)
 }
 
 /// Persist only a secret *reference* (never the secret value).

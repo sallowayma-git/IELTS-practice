@@ -1871,7 +1871,6 @@ dependencies = [
  "hex",
  "ielts-domain",
  "keyring",
- "proptest",
  "rusqlite",
  "serde",
  "serde_json",

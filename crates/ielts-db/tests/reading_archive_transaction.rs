@@ -199,6 +199,17 @@ fn unknown_schema_is_rejected_without_legacy_shape_loss() {
         .iter()
         .any(|entry| entry.code == "archive_schema_unsupported"));
     assert_eq!(attempt_count(&conn), 0);
+
+    for legacy in [json!("practice-history-archive.v1"), json!(1), Value::Null] {
+        archive["schemaVersion"] = legacy;
+        let report = import_reading_archive_value(&conn, &archive).unwrap();
+        assert!(!report.committed);
+        assert!(report
+            .report
+            .iter()
+            .any(|entry| entry.code == "archive_schema_unsupported"));
+    }
+    assert_eq!(attempt_count(&conn), 0);
 }
 
 #[test]

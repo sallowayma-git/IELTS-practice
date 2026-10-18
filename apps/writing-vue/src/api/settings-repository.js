@@ -29,14 +29,6 @@ export async function setHistoryRetentionPolicy(maxTerminalAttempts) {
   return unwrapCommandResponse(response, 'history_set_retention_policy')
 }
 
-export async function migrateLocalPreferences(prefs) {
-  const response = await invokeCommand('migrate_local_preferences', { prefs })
-  return {
-    source: 'tauri',
-    count: unwrapCommandResponse(response, 'migrate_local_preferences') || 0
-  }
-}
-
 export async function setSecret(name, secret) {
   const response = await invokeCommand('set_secret', { cmd: { name, secret } })
   return unwrapCommandResponse(response, 'set_secret')
@@ -102,7 +94,6 @@ export const settingsRepository = {
   upsertSetting,
   getHistoryRetentionPolicy,
   setHistoryRetentionPolicy,
-  migrateLocalPreferences,
   setSecret,
   listSecretRefs,
   listAiConfigs,

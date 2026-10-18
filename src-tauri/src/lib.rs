@@ -1,6 +1,6 @@
 //! Tauri 2 shell for IELTS Practice.
 //!
-//! Phase 2: boot Vue UI without Fastify; diagnostics / paths / routes.
+//! Phase 2: boot Vue UI; diagnostics / paths.
 //! Phase 4: unified history, settings, backup, secret-ref commands.
 
 pub(crate) mod agent;
@@ -142,9 +142,6 @@ pub fn run() {
             commands::diagnostics::get_performance_budgets,
             commands::diagnostics::get_query_plan_baselines,
             commands::paths::get_app_data_paths,
-            commands::paths::discover_legacy_data_dirs,
-            commands::routes::normalize_shell_route,
-            commands::routes::resolve_legacy_route,
             commands::history::list_history,
             commands::history::get_history_detail,
             commands::history::history_writing_statistics,
@@ -153,7 +150,6 @@ pub fn run() {
             commands::history::delete_history_attempts,
             commands::history::history_issue_clear_token,
             commands::history::clear_history,
-            commands::history::import_reading_archive_value,
             commands::history::history_get_retention_policy,
             commands::history::history_set_retention_policy,
             commands::learning::learning_get_attempt_detail,
@@ -240,7 +236,6 @@ pub fn run() {
             commands::journal::consolidation_archive_stale,
             commands::settings::list_settings,
             commands::settings::upsert_setting,
-            commands::settings::migrate_local_preferences,
             commands::settings::set_secret,
             commands::settings::list_secret_refs,
             commands::settings::delete_secret,
@@ -407,8 +402,7 @@ pub fn run() {
             tracing::info!(
                 app_data = %paths.app_data.display(),
                 db = %paths.v2_db_path().display(),
-                legacy_candidates = paths.legacy_candidates.len(),
-                "IELTS Practice Tauri shell ready (no Fastify localhost API)"
+                "IELTS Practice Tauri shell ready"
             );
             Ok(())
         });

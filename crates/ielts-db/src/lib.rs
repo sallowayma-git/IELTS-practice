@@ -1,7 +1,6 @@
 //! SQLite v2 persistence for the IELTS Practice rewrite.
 //!
 //! Product hot path: history, settings, writing, reading, modes, enrichment, attempts.
-//! Cold path only: `import` (optional legacy one-shot migration).
 
 pub mod agent;
 pub mod agent_thread;
@@ -18,7 +17,6 @@ pub mod corpus;
 pub mod dictionary;
 pub mod dream;
 pub mod history;
-pub mod import;
 pub mod journal;
 pub mod learning_events;
 pub mod learning_observations;
@@ -34,7 +32,6 @@ pub mod reading;
 pub mod safety;
 pub mod secrets;
 pub mod settings;
-pub mod shadow;
 pub mod sqlite;
 pub mod teaching_strategy;
 pub mod vocab;
@@ -57,11 +54,6 @@ pub use corpus::*;
 pub use dictionary::*;
 pub use dream::*;
 pub use history::*;
-pub use import::{
-    find_legacy_db_candidates, import_browser_export_file, import_browser_export_value,
-    import_reading_archive_file, list_history_view_models, migrate_legacy_sqlite_to_v2,
-    scan_legacy_sqlite, LegacyDbScan, LegacyMigrationReport,
-};
 pub use journal::*;
 pub use learning_events::*;
 pub use learning_observations::*;
@@ -76,7 +68,6 @@ pub use reading::*;
 pub use safety::*;
 pub use secrets::*;
 pub use settings::*;
-pub use shadow::*;
 pub use sqlite::*;
 pub use teaching_strategy::*;
 pub use vocab::*;

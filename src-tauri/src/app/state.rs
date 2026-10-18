@@ -16,7 +16,6 @@ pub struct AppPaths {
     pub exports: PathBuf,
     pub diagnostics: PathBuf,
     pub db_dir: PathBuf,
-    pub legacy_candidates: Vec<PathBuf>,
 }
 
 impl AppPaths {
@@ -28,7 +27,6 @@ impl AppPaths {
         let exports = app_data.join("exports");
         let diagnostics = app_data.join("diagnostics");
         let db_dir = app_data.join("db");
-        let legacy_candidates = discover_legacy_dirs();
 
         Self {
             app_data,
@@ -38,7 +36,6 @@ impl AppPaths {
             exports,
             diagnostics,
             db_dir,
-            legacy_candidates,
         }
     }
 
@@ -135,7 +132,6 @@ pub(crate) mod test_support {
             exports: root.join("exports"),
             diagnostics: root.join("diagnostics"),
             db_dir: root.join("db"),
-            legacy_candidates: Vec::new(),
         }
     }
 
@@ -170,46 +166,4 @@ fn default_app_data_dir() -> PathBuf {
             .join("IELTS Practice");
     }
     std::env::temp_dir().join("ielts-practice")
-}
-
-/// Locate historical Electron / browser data directories without migrating them.
-pub fn discover_legacy_dirs() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut push_if_exists = |path: PathBuf| {
-        if path.exists() && !out.iter().any(|p| p == &path) {
-            out.push(path);
-        }
-    };
-
-    if let Some(appdata) = std::env::var_os("APPDATA") {
-        let base = PathBuf::from(appdata);
-        push_if_exists(base.join("IELTS Practice"));
-        push_if_exists(base.join("ielts-practice"));
-        push_if_exists(base.join("ielts-writing"));
-        push_if_exists(base.join("ielts-practice-app"));
-    }
-
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        push_if_exists(
-            home.join("Library")
-                .join("Application Support")
-                .join("IELTS Practice"),
-        );
-        push_if_exists(
-            home.join("Library")
-                .join("Application Support")
-                .join("ielts-practice"),
-        );
-        push_if_exists(home.join(".config").join("ielts-practice"));
-        push_if_exists(home.join(".config").join("IELTS Practice"));
-    }
-
-    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        let base = PathBuf::from(local);
-        push_if_exists(base.join("IELTS Practice"));
-        push_if_exists(base.join("ielts-practice"));
-    }
-
-    out
 }

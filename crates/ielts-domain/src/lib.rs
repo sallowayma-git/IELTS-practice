@@ -1,7 +1,6 @@
 //! IELTS Practice domain contracts for the Rust + Tauri rewrite.
 //!
 //! Canonical enums, DTOs, error envelope, view models.
-//! Legacy converters live in `ielts-db::import::convert` (optional one-shot import only).
 
 pub mod cognitive_read;
 pub mod coach_feedback;

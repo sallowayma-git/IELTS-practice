@@ -1,8 +1,8 @@
 //! Canonical Reading history archive snapshot/import.
 //!
 //! This is a product path, not a browser compatibility shim: SQLite owns the
-//! snapshot and import is validate-then-commit. Legacy browser archives are
-//! accepted only at the conversion boundary.
+//! snapshot and import is validate-then-commit. Only the canonical current
+//! archive schema is accepted.
 
 use std::collections::HashSet;
 
@@ -15,7 +15,6 @@ use serde_json::Value;
 
 use crate::attempts::{ensure_asset_stub, upsert_attempt};
 use crate::history::load_attempt;
-use crate::import::convert::reading_submission_to_attempt;
 use crate::sqlite::DbResult;
 
 /// The first archive schema that is a direct serialization of the canonical
@@ -167,26 +166,18 @@ fn validate_archive(
             )],
         ));
     };
-    let Some(records) = root
-        .get("submissions")
-        .or_else(|| root.get("records"))
-        .and_then(Value::as_array)
-    else {
+    let Some(records) = root.get("submissions").and_then(Value::as_array) else {
         return Err(ReadingArchiveImportResult::rejected(
             1,
             vec![report_entry(
                 None,
                 "archive_missing_records",
-                "阅读归档缺少 submissions[] 或 records[]",
+                "阅读归档缺少 submissions[]",
             )],
         ));
     };
 
-    let schema_version = root.get("schemaVersion");
-    let canonical = schema_version
-        .and_then(Value::as_str)
-        .is_some_and(|version| version == READING_ARCHIVE_SCHEMA_VERSION);
-    if !canonical && !is_supported_legacy_schema(schema_version) {
+    if root.get("schemaVersion").and_then(Value::as_str) != Some(READING_ARCHIVE_SCHEMA_VERSION) {
         return Err(ReadingArchiveImportResult::rejected(
             records.len(),
             vec![report_entry(
@@ -197,25 +188,20 @@ fn validate_archive(
         ));
     }
     let mut report = Vec::new();
-
-    if canonical {
-        validate_canonical_header(root, records.len(), &mut report);
-    }
+    validate_canonical_header(root, records.len(), &mut report);
 
     let mut attempts = Vec::with_capacity(records.len());
     let mut seen_ids = HashSet::new();
     let mut seen_annotation_ids = HashSet::new();
     for (index, raw) in records.iter().enumerate() {
-        let converted = if canonical {
-            serde_json::from_value::<AttemptRecord>(raw.clone())
-                .map_err(|error| format!("规范记录格式无效：{error}"))
-        } else {
-            reading_submission_to_attempt(raw).map_err(|error| error.to_string())
-        };
-        let mut attempt = match converted {
+        let mut attempt = match serde_json::from_value::<AttemptRecord>(raw.clone()) {
             Ok(attempt) => attempt,
-            Err(message) => {
-                report.push(report_entry(Some(index), "record_invalid", message));
+            Err(error) => {
+                report.push(report_entry(
+                    Some(index),
+                    "record_invalid",
+                    format!("规范记录格式无效：{error}"),
+                ));
                 continue;
             }
         };
@@ -253,15 +239,6 @@ fn validate_archive(
                 .len()
         };
         Err(ReadingArchiveImportResult::rejected(failed, report))
-    }
-}
-
-fn is_supported_legacy_schema(value: Option<&Value>) -> bool {
-    match value {
-        None => true,
-        Some(Value::Number(number)) => number.as_u64() == Some(1),
-        Some(Value::String(version)) => version == "practice-history-archive.v1",
-        _ => false,
     }
 }
 
@@ -406,8 +383,8 @@ fn validate_attempt(
                 ));
             }
         } else {
-            // Old archives did not always carry this field. It is safe to
-            // normalize only after the record has been bound to its parent.
+            // `attemptId` is optional on annotations; bind it to the parent
+            // record only after the record itself has been validated.
             annotation.attempt_id = Some(attempt.id.clone());
         }
     }
