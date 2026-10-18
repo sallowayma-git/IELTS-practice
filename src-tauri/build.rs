@@ -42,8 +42,22 @@ fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");
     let commands = registered_commands(&manifest_dir.join("src/lib.rs"));
     let manifest = tauri_build::AppManifest::new().commands(commands);
-    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
-        .expect("failed to run tauri-build");
+    let mut attributes = tauri_build::Attributes::new().app_manifest(manifest);
+    if target.contains("windows-msvc") {
+        // tauri-build links its Common Controls v6 manifest into bins only, so
+        // the lib test binary (which builds a mock app) dies with
+        // STATUS_ENTRYPOINT_NOT_FOUND. Embed the same manifest in every target.
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+        embed_windows_manifest(&manifest_dir.join("windows-app-manifest.xml"));
+    }
+    tauri_build::try_build(attributes).expect("failed to run tauri-build");
+}
+
+fn embed_windows_manifest(path: &Path) {
+    println!("cargo:rerun-if-changed={}", path.display());
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", path.display());
 }
 
 /// The command names in `generate_handler![...]`, whatever their cfg: a
