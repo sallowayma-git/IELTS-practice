@@ -25,7 +25,7 @@ MAX_UNPACKED_BYTES = 60 * 1024 * 1024
 MAX_INSTALLER_DELTA_BYTES = 80 * 1024 * 1024
 MAX_IDLE_RSS_BYTES = 150 * 1024 * 1024
 MAX_WINDOWS_COLD_START_MS = 1500.0
-REPORT = ROOT / "developer/tests/benchmarks/reports/m3_sidecar_release.json"
+REPORT = ROOT / "target/agent-runtime-sidecar/smoke-report.json"
 
 
 def host_target() -> str:

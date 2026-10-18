@@ -14,6 +14,8 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   PY_PLAYWRIGHT_VERSION: 1.61.0
+  # build.rs refuses a missing, mismatched or placeholder sidecar.
+  IELTS_REQUIRE_FROZEN_SIDECAR: '1'
 
 jobs:
   static-gate:
@@ -106,10 +108,40 @@ jobs:
           path: developer/tests/e2e/reports/visual-ci-evidence
           if-no-files-found: error
 
+  sidecar-portability:
+    name: Sidecar freeze and smoke (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            pythonArchitecture: arm64
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            pythonArchitecture: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.pythonArchitecture }}
+      - name: Install pinned sidecar build and runtime dependencies
+        run: python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
+      - name: Freeze and smoke unsigned native sidecar
+        run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }}
+      - name: Upload fresh sidecar smoke report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-smoke-${{ matrix.target }}
+          path: target/agent-runtime-sidecar/smoke-report.json
+          if-no-files-found: error
+
   ci-result:
     name: CI result
     if: always()
-    needs: [static-gate, rust-test, visual-regression]
+    needs: [static-gate, rust-test, visual-regression, sidecar-portability]
     runs-on: ubuntu-latest
     steps:
       - name: Require every gate to pass
@@ -117,9 +149,10 @@ jobs:
           STATIC_RESULT: ${{ needs.static-gate.result }}
           RUST_RESULT: ${{ needs.rust-test.result }}
           VISUAL_RESULT: ${{ needs.visual-regression.result }}
+          SIDECAR_RESULT: ${{ needs.sidecar-portability.result }}
         run: |
           set -eu
-          printf 'static=%s rust=%s visual=%s\n' "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT"
-          for result in "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT"; do
+          printf 'static=%s rust=%s visual=%s sidecar=%s\n' "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT" "$SIDECAR_RESULT"
+          for result in "$STATIC_RESULT" "$RUST_RESULT" "$VISUAL_RESULT" "$SIDECAR_RESULT"; do
             test "$result" = success
           done

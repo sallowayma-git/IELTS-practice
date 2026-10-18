@@ -30,6 +30,9 @@ pub(crate) const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const SIDECAR_MAX_OUTPUT_TOKENS: u32 = 8_000;
 const SIDECAR_NAME: &str = "ielts-agent-runtime";
 const SIDECAR_BUILD_ID: &str = env!("IELTS_AGENT_RUNTIME_BUILD_ID");
+/// `build.rs` emits this instead of a SHA-256 when a development build was
+/// compiled without a frozen sidecar; such a build never starts the runtime.
+const SIDECAR_UNAVAILABLE_BUILD_ID: &str = "sidecar-unavailable";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const COGNITIVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 /// The weekly run makes up to `MODEL_MAX_ATTEMPTS` (3) model calls with backoff;
@@ -292,6 +295,11 @@ pub(crate) enum RuntimeHostError {
     ProtocolVersionMismatch { expected: u32, actual: u32 },
     #[error("runtime build identity mismatch")]
     BuildIdentityMismatch,
+    #[error(
+        "AI features are unavailable: this app was built without its agent runtime. \
+         Run developer/tests/ci/build_agent_runtime_sidecar.py and rebuild the app."
+    )]
+    SidecarNotBundled,
     #[error("runtime is missing capability {0}")]
     MissingCapability(String),
     #[error("runtime capability version mismatch for {capability}: expected {expected}, got {actual}")]
@@ -2425,12 +2433,20 @@ fn validate_embed_request(request: &ielts_domain::EmbeddingRequest) -> Result<()
 }
 
 pub(crate) fn verify_sidecar_hash() -> Result<(), RuntimeHostError> {
+    verify_sidecar_bundled(SIDECAR_BUILD_ID)?;
     let path = sidecar_hash_path()?;
     let bytes = std::fs::read(&path)
         .map_err(|error| RuntimeHostError::Process(format!("cannot read {}: {error}", path.display())))?;
     let actual = hex::encode(Sha256::digest(bytes));
     if actual != SIDECAR_BUILD_ID {
         return Err(RuntimeHostError::BuildIdentityMismatch);
+    }
+    Ok(())
+}
+
+fn verify_sidecar_bundled(build_id: &str) -> Result<(), RuntimeHostError> {
+    if build_id == SIDECAR_UNAVAILABLE_BUILD_ID {
+        return Err(RuntimeHostError::SidecarNotBundled);
     }
     Ok(())
 }
@@ -2446,6 +2462,7 @@ fn sidecar_hash_path() -> Result<PathBuf, RuntimeHostError> {
     } else {
         executable_dir
     };
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut path = base_dir.join(SIDECAR_NAME);
     #[cfg(windows)]
     path.as_mut_os_string().push(".exe");
@@ -3210,6 +3227,17 @@ mod tests {
         assert_eq!(emitted.iter().filter(|item| **item == StderrOutput::BudgetExhausted).count(), 1);
         assert_eq!(emitted.last(), Some(&StderrOutput::BudgetExhausted));
         assert_eq!(capture.tail.len(), STDERR_TAIL_LINES);
+    }
+
+    #[test]
+    fn build_without_frozen_sidecar_refuses_to_start_runtime() {
+        let error = verify_sidecar_bundled(SIDECAR_UNAVAILABLE_BUILD_ID).unwrap_err();
+        assert_eq!(error, RuntimeHostError::SidecarNotBundled);
+        assert!(error.to_string().contains("build_agent_runtime_sidecar.py"));
+        assert!(verify_sidecar_bundled(&"a".repeat(64)).is_ok());
+        if SIDECAR_BUILD_ID == SIDECAR_UNAVAILABLE_BUILD_ID {
+            assert_eq!(verify_sidecar_hash().unwrap_err(), RuntimeHostError::SidecarNotBundled);
+        }
     }
 
     #[test]

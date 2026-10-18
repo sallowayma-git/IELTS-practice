@@ -33,7 +33,7 @@ M3 vertical slice 阶段契约验证完成（历史 gate），覆盖 M3-00A 到 
 
 ## 诚实的限制
 
-- benchmark 为 baseline 数据，无任务书规定的硬性 pass/fail 阈值：`developer/tests/benchmarks/reports/m3_sidecar_release.json` 只记录单次实测（coldStart/idleRss/unpackedSize/compressedSize/installerDelta），是观测值而非逐 task 的判定标准。
+- benchmark 为 baseline 数据，无任务书规定的硬性 pass/fail 阈值：每次冻结生成的 `target/agent-runtime-sidecar/smoke-report.json`（CI 证据上传，不再提交仓库）只记录单次实测（coldStart/idleRss/unpackedSize/compressedSize/installerDelta），是观测值而非逐 task 的判定标准。
 - sidecar 冷启动 / RSS / 体积阈值目前只在 `smoke_agent_runtime_sidecar.py` 内以常量断言（`MAX_IDLE_RSS_BYTES=150MB`、`MAX_WINDOWS_COLD_START_MS=1500ms`、`MAX_UNPACKED_BYTES=60MB`），未跨平台、未做多轮统计稳定性验证。
 - `memory_generate_candidates` 的端到端路径依赖真实 AI provider 配置；本会话验证的是合同/协议/持久化边界，未对真实模型输出做端到端断言。
 

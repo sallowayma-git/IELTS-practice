@@ -13,6 +13,8 @@ env:
   CARGO_TERM_COLOR: always
   PYTHONUTF8: '1'
   PYTHONDONTWRITEBYTECODE: '1'
+  # build.rs refuses a missing, mismatched or placeholder sidecar.
+  IELTS_REQUIRE_FROZEN_SIDECAR: '1'
 
 jobs:
   required-regressions:
@@ -38,6 +40,12 @@ jobs:
           python -m pip install --disable-pip-version-check -r agent-runtime-python/requirements-build.lock -r agent-runtime-python/requirements.lock
       - name: Prepare fresh Windows sidecar
         run: python developer/tests/ci/build_agent_runtime_sidecar.py --target x86_64-pc-windows-msvc
+      - name: Upload fresh sidecar smoke report
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-acceptance-required-sidecar-smoke
+          path: target/agent-runtime-sidecar/smoke-report.json
+          if-no-files-found: error
       - name: Required static suite
         run: python developer/tests/ci/run_static_suite.py
       - name: Prepare native practice host
@@ -65,7 +73,6 @@ jobs:
             developer/tests/e2e/reports/tauri-driver.log
             developer/tests/e2e/reports/native-diagnostics/**
             developer/tests/e2e/reports/*-current.png
-            developer/tests/benchmarks/reports/m3_sidecar_release.json
             target/release/ielts-practice-tauri.exe
             src-tauri/binaries/ielts-agent-runtime-x86_64-pc-windows-msvc*
           if-no-files-found: error
@@ -120,6 +127,12 @@ jobs:
         run: python developer/tests/ci/native_acceptance_evidence.py source --target ${{ matrix.target }}
       - name: Fresh native sidecar freeze and full smoke
         run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }}
+      - name: Upload fresh sidecar smoke report
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-acceptance-sidecar-smoke-${{ matrix.target }}
+          path: target/agent-runtime-sidecar/smoke-report.json
+          if-no-files-found: error
       - name: Build frontend for workspace tests
         run: npm --prefix apps/writing-vue run build
       - uses: Swatinem/rust-cache@v2
@@ -144,7 +157,6 @@ jobs:
           name: native-acceptance-${{ matrix.target }}
           path: |
             developer/tests/e2e/reports/native-acceptance/**
-            developer/tests/benchmarks/reports/m3_sidecar_release.json
             src-tauri/binaries/ielts-agent-runtime-${{ matrix.target }}.sha256
             target/**/release/bundle/**
           if-no-files-found: error

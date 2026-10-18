@@ -48,7 +48,7 @@ class WorkflowTriggerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         root = Path(__file__).resolve().parents[3]
-        workflows = root / ".github/workflows"
+        workflows = cls.workflows = root / ".github/workflows"
         cls.branch_ci = (workflows / "tauri-ci.yml").read_text(encoding="utf-8")
         cls.release = (workflows / "release.yml").read_text(encoding="utf-8")
 
@@ -195,6 +195,31 @@ class WorkflowTriggerTests(unittest.TestCase):
         publish = workflow_block(self.release, "publish-release", indent=2)
         self.assertIn("needs: tauri-release", publish)
         self.assertNotIn("if: always()", publish)
+
+    def test_sidecar_workflows_require_frozen_sidecar_and_upload_fresh_smoke_report(self) -> None:
+        acceptance = (self.workflows / "release-acceptance.yml").read_text(encoding="utf-8")
+        fresh = "path: target/agent-runtime-sidecar/smoke-report.json\n          if-no-files-found: error"
+        build = "run: python developer/tests/ci/build_agent_runtime_sidecar.py"
+        for name, document in (("release", self.release), ("acceptance", acceptance), ("ci", self.branch_ci)):
+            with self.subTest(workflow=name):
+                self.assertIn("IELTS_REQUIRE_FROZEN_SIDECAR: '1'", workflow_block(document, "env"))
+                self.assertNotIn("benchmarks/reports/m3_sidecar_release.json", document)
+        for name, document in (("release", self.release), ("acceptance", acceptance)):
+            with self.subTest(workflow=name):
+                self.assertEqual(document.count(fresh), document.count(build))
+
+    def test_pull_requests_freeze_and_smoke_macos_and_linux_sidecars(self) -> None:
+        job = workflow_block(self.branch_ci, "sidecar-portability", indent=2)
+        self.assertIn("runner: macos-14", job)
+        self.assertIn("runner: ubuntu-22.04", job)
+        self.assertIn(
+            "run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }}\n", job
+        )
+        self.assertNotIn("--sign", job)
+        self.assertIn("path: target/agent-runtime-sidecar/smoke-report.json", job)
+        result = workflow_block(self.branch_ci, "ci-result", indent=2)
+        self.assertIn("sidecar-portability]", result)
+        self.assertIn('"$SIDECAR_RESULT"; do', result)
 
 
 class ReleaseConfigTests(unittest.TestCase):
