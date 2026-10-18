@@ -9,9 +9,9 @@ use rusqlite::{params, params_from_iter, types::Value as SqlValue, Connection, O
 use serde_json::Value;
 
 use crate::learning_observations::{
-    learning_observations_rebuild, learning_observations_verify, validated_learning_event_payload,
-    LearningObservationsVerifyReport, RawLedgerEvent, LEARNING_OBSERVATION_PROJECTOR_KEY,
-    LEARNING_OBSERVATION_PROJECTOR_VERSION,
+    learning_observations_rebuild, learning_observations_verify, stored_projection_hashes,
+    validated_learning_event_payload, LearningObservationsVerifyReport, RawLedgerEvent,
+    LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION,
 };
 use crate::sqlite::{DbError, DbResult};
 
@@ -114,6 +114,9 @@ pub fn learning_events_by_ids(
 }
 
 fn ensure_fresh(conn: &Connection) -> DbResult<ProjectionHeader> {
+    if let Some(header) = fresh_without_rebuild(conn)? {
+        return Ok(header);
+    }
     let mut verify = learning_observations_verify(conn)?;
     if !verify.consistent || !projection_run_matches(conn, &verify)? {
         // This is deliberately outside any caller-owned business transaction:
@@ -140,6 +143,9 @@ pub(crate) fn ensure_observations_fresh(conn: &Connection) -> DbResult<()> {
 /// Recheck in the learner read transaction: another connection may have
 /// committed evidence between M2 repair and acquiring this snapshot.
 pub(crate) fn require_observations_fresh(conn: &Connection) -> DbResult<()> {
+    if fresh_without_rebuild(conn)?.is_some() {
+        return Ok(());
+    }
     let verify = learning_observations_verify(conn)?;
     if !verify.consistent || !projection_run_matches(conn, &verify)? {
         return Err(DbError::Validation(
@@ -147,6 +153,30 @@ pub(crate) fn require_observations_fresh(conn: &Connection) -> DbResult<()> {
         ));
     }
     Ok(())
+}
+
+/// The header of the latest completed run when the stored rows still match it
+/// and the ledger has not changed since, so every learner read after the first
+/// skips building the whole projection again.
+fn fresh_without_rebuild(conn: &Connection) -> DbResult<Option<ProjectionHeader>> {
+    let Some((input_hash, Some(output_hash), status, version, Some(finished_at))) =
+        latest_projection_run(conn)?
+    else {
+        return Ok(None);
+    };
+    if status != "completed" || version != LEARNING_OBSERVATION_PROJECTOR_VERSION {
+        return Ok(None);
+    }
+    let (current_input, stored_output) = stored_projection_hashes(conn)?;
+    if current_input != input_hash || stored_output != output_hash {
+        return Ok(None);
+    }
+    require_text(&finished_at, "projection.finishedAt")?;
+    Ok(Some(ProjectionHeader {
+        input_hash,
+        output_hash,
+        generated_at: finished_at,
+    }))
 }
 
 fn latest_projection_run(

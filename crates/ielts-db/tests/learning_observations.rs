@@ -595,6 +595,39 @@ fn hash_valid_but_out_of_range_scores_are_quarantined() {
 }
 
 #[test]
+fn rebuild_writes_only_the_observations_that_changed() {
+    let (_dir, conn) = open_db();
+    insert_reading_question(&conn, "first", "q1", "2026-08-12T00:00:00Z", Some(false));
+    learning_observations_rebuild(&conn).unwrap();
+    let rows = |conn: &Connection| -> Vec<(String, i64)> {
+        let mut statement = conn
+            .prepare("SELECT id, rowid FROM learner_observations ORDER BY id")
+            .unwrap();
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    };
+    let before = rows(&conn);
+    assert!(!before.is_empty());
+
+    // Nothing changed: every row keeps its rowid.
+    learning_observations_rebuild(&conn).unwrap();
+    assert_eq!(rows(&conn), before);
+
+    // A new event adds rows; the old ones are left in place.
+    insert_reading_question(&conn, "second", "q1", "2026-08-12T00:30:00Z", Some(true));
+    learning_observations_rebuild(&conn).unwrap();
+    let after = rows(&conn);
+    for row in &before {
+        assert!(after.contains(row), "{row:?} was rewritten");
+    }
+    assert!(after.len() > before.len());
+    assert!(learning_observations_verify(&conn).unwrap().consistent);
+}
+
+#[test]
 fn verify_detects_derived_row_loss() {
     let (_dir, conn) = open_db();
     insert_reading_question(
