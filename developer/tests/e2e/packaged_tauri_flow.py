@@ -194,7 +194,7 @@ def blocked(reason: str, missing: list[str]) -> int:
                          "sqliteRestart": "blocked",
                          "coachReceipts": "blocked", "automaticDaily": "blocked",
                          "dailyRestartDedupe": "blocked", "weeklyReport": "blocked",
-                         "promptAuthorityBoundary": "blocked"}}
+                         "promptAuthorityBoundary": "blocked", "ipcAllowList": "blocked"}}
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -1170,10 +1170,12 @@ def main() -> int:
         if not assets: raise RuntimeError("Tauri IPC bridge unavailable or reading_list_assets returned empty")
         checks["readingIpc"] = "passed"
         # The real packaged command table must reject product release writes.
-        # Missing args, an ACL error, or a business error is NOT evidence that a
-        # command is absent. Even a forged passing verdict must hit not-found.
-        # The M10 teaching-strategy and M11 prompt/skill commands were deleted,
-        # so the packaged build must not expose any of them, readers included.
+        # Missing args or a business error is NOT evidence that a command is
+        # unreachable; even a forged passing verdict must be refused before any
+        # handler runs. The M10 teaching-strategy and M11 prompt/skill commands
+        # were deleted, so the app ACL (built from generate_handler!) does not
+        # know them and a release build refuses them as "not allowed by ACL".
+        # check_ipc_acl.py separately keeps them out of generate_handler!.
         for command in (
             "eval_run_case", "prompt_approve_candidate",
             "prompt_promote_candidate", "prompt_rollback",
@@ -1195,9 +1197,20 @@ def main() -> int:
                   .catch(error => ({resolved: false, error: String(error)}));
             """, [command])
             if (not isinstance(rejected, dict) or rejected.get("resolved") is not False
-                    or rejected.get("error") != f"Command {command} not found"):
+                    or rejected.get("error") != f"Command {command} not allowed by ACL"):
                 raise RuntimeError(f"product prompt authority still exposed: {command}: {rejected}")
         checks["promptAuthorityBoundary"] = "passed"
+        # Registered but host-only commands are refused by the capability too.
+        for command in ("learning_observations_rebuild", "cognitive_runtime_restart", "delete_secret"):
+            rejected = driver.script("""
+                return window.__TAURI_INTERNALS__.invoke(arguments[0], {})
+                  .then(value => ({resolved: true, value}))
+                  .catch(error => ({resolved: false, error: String(error)}));
+            """, [command])
+            if (not isinstance(rejected, dict) or rejected.get("resolved") is not False
+                    or rejected.get("error") != f"Command {command} not allowed by ACL"):
+                raise RuntimeError(f"host-only command reachable from the webview: {command}: {rejected}")
+        checks["ipcAllowList"] = "passed"
         missing_agent_run = driver.script(
             "return window.__TAURI_INTERNALS__.invoke('agent_get_run', {runId: 'e2e-missing-agent-run'})"
         )

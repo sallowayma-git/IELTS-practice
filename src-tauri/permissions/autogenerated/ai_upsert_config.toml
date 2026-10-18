@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ai-upsert-config"
+description = "Enables the ai_upsert_config command without any pre-configured scope."
+commands.allow = ["ai_upsert_config"]
+
+[[permission]]
+identifier = "deny-ai-upsert-config"
+description = "Denies the ai_upsert_config command without any pre-configured scope."
+commands.deny = ["ai_upsert_config"]

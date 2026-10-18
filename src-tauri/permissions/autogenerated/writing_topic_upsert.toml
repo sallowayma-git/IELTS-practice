@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-topic-upsert"
+description = "Enables the writing_topic_upsert command without any pre-configured scope."
+commands.allow = ["writing_topic_upsert"]
+
+[[permission]]
+identifier = "deny-writing-topic-upsert"
+description = "Denies the writing_topic_upsert command without any pre-configured scope."
+commands.deny = ["writing_topic_upsert"]

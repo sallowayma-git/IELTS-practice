@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-get-run"
+description = "Enables the agent_get_run command without any pre-configured scope."
+commands.allow = ["agent_get_run"]
+
+[[permission]]
+identifier = "deny-agent-get-run"
+description = "Denies the agent_get_run command without any pre-configured scope."
+commands.deny = ["agent_get_run"]

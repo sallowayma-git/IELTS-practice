@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-background-job-status"
+description = "Enables the background_job_status command without any pre-configured scope."
+commands.allow = ["background_job_status"]
+
+[[permission]]
+identifier = "deny-background-job-status"
+description = "Denies the background_job_status command without any pre-configured scope."
+commands.deny = ["background_job_status"]

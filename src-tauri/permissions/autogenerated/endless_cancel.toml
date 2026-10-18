@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-endless-cancel"
+description = "Enables the endless_cancel command without any pre-configured scope."
+commands.allow = ["endless_cancel"]
+
+[[permission]]
+identifier = "deny-endless-cancel"
+description = "Denies the endless_cancel command without any pre-configured scope."
+commands.deny = ["endless_cancel"]

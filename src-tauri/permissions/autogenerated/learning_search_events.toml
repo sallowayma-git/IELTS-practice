@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learning-search-events"
+description = "Enables the learning_search_events command without any pre-configured scope."
+commands.allow = ["learning_search_events"]
+
+[[permission]]
+identifier = "deny-learning-search-events"
+description = "Denies the learning_search_events command without any pre-configured scope."
+commands.deny = ["learning_search_events"]

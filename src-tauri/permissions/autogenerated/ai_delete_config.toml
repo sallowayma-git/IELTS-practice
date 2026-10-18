@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ai-delete-config"
+description = "Enables the ai_delete_config command without any pre-configured scope."
+commands.allow = ["ai_delete_config"]
+
+[[permission]]
+identifier = "deny-ai-delete-config"
+description = "Denies the ai_delete_config command without any pre-configured scope."
+commands.deny = ["ai_delete_config"]

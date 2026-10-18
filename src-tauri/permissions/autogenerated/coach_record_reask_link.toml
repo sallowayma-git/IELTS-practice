@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-record-reask-link"
+description = "Enables the coach_record_reask_link command without any pre-configured scope."
+commands.allow = ["coach_record_reask_link"]
+
+[[permission]]
+identifier = "deny-coach-record-reask-link"
+description = "Denies the coach_record_reask_link command without any pre-configured scope."
+commands.deny = ["coach_record_reask_link"]

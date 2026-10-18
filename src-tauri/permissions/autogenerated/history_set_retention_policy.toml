@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-history-set-retention-policy"
+description = "Enables the history_set_retention_policy command without any pre-configured scope."
+commands.allow = ["history_set_retention_policy"]
+
+[[permission]]
+identifier = "deny-history-set-retention-policy"
+description = "Denies the history_set_retention_policy command without any pre-configured scope."
+commands.deny = ["history_set_retention_policy"]

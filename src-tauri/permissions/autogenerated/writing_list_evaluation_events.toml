@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-list-evaluation-events"
+description = "Enables the writing_list_evaluation_events command without any pre-configured scope."
+commands.allow = ["writing_list_evaluation_events"]
+
+[[permission]]
+identifier = "deny-writing-list-evaluation-events"
+description = "Denies the writing_list_evaluation_events command without any pre-configured scope."
+commands.deny = ["writing_list_evaluation_events"]

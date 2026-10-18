@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-patch-answer"
+description = "Enables the reading_patch_answer command without any pre-configured scope."
+commands.allow = ["reading_patch_answer"]
+
+[[permission]]
+identifier = "deny-reading-patch-answer"
+description = "Denies the reading_patch_answer command without any pre-configured scope."
+commands.deny = ["reading_patch_answer"]

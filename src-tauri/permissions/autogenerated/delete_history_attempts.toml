@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-history-attempts"
+description = "Enables the delete_history_attempts command without any pre-configured scope."
+commands.allow = ["delete_history_attempts"]
+
+[[permission]]
+identifier = "deny-delete-history-attempts"
+description = "Denies the delete_history_attempts command without any pre-configured scope."
+commands.deny = ["delete_history_attempts"]

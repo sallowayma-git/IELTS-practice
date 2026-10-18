@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learner-model-verify"
+description = "Enables the learner_model_verify command without any pre-configured scope."
+commands.allow = ["learner_model_verify"]
+
+[[permission]]
+identifier = "deny-learner-model-verify"
+description = "Denies the learner_model_verify command without any pre-configured scope."
+commands.deny = ["learner_model_verify"]

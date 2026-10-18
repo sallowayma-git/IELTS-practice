@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learner-model-get-state"
+description = "Enables the learner_model_get_state command without any pre-configured scope."
+commands.allow = ["learner_model_get_state"]
+
+[[permission]]
+identifier = "deny-learner-model-get-state"
+description = "Denies the learner_model_get_state command without any pre-configured scope."
+commands.deny = ["learner_model_get_state"]

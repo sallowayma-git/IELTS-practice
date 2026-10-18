@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dictionary-lookup"
+description = "Enables the dictionary_lookup command without any pre-configured scope."
+commands.allow = ["dictionary_lookup"]
+
+[[permission]]
+identifier = "deny-dictionary-lookup"
+description = "Denies the dictionary_lookup command without any pre-configured scope."
+commands.deny = ["dictionary_lookup"]

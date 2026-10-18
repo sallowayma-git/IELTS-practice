@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-topic-get"
+description = "Enables the writing_topic_get command without any pre-configured scope."
+commands.allow = ["writing_topic_get"]
+
+[[permission]]
+identifier = "deny-writing-topic-get"
+description = "Denies the writing_topic_get command without any pre-configured scope."
+commands.deny = ["writing_topic_get"]

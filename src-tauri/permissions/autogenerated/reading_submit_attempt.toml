@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reading-submit-attempt"
+description = "Enables the reading_submit_attempt command without any pre-configured scope."
+commands.allow = ["reading_submit_attempt"]
+
+[[permission]]
+identifier = "deny-reading-submit-attempt"
+description = "Denies the reading_submit_attempt command without any pre-configured scope."
+commands.deny = ["reading_submit_attempt"]

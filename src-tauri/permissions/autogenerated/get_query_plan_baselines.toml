@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-query-plan-baselines"
+description = "Enables the get_query_plan_baselines command without any pre-configured scope."
+commands.allow = ["get_query_plan_baselines"]
+
+[[permission]]
+identifier = "deny-get-query-plan-baselines"
+description = "Denies the get_query_plan_baselines command without any pre-configured scope."
+commands.deny = ["get_query_plan_baselines"]

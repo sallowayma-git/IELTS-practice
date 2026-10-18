@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learner-model-rebuild"
+description = "Enables the learner_model_rebuild command without any pre-configured scope."
+commands.allow = ["learner_model_rebuild"]
+
+[[permission]]
+identifier = "deny-learner-model-rebuild"
+description = "Denies the learner_model_rebuild command without any pre-configured scope."
+commands.deny = ["learner_model_rebuild"]

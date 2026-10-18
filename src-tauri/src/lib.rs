@@ -8,6 +8,8 @@ pub(crate) mod ai;
 pub(crate) mod cognitive_runtime;
 pub mod app;
 pub mod commands;
+#[cfg(test)]
+mod ipc_acl_tests;
 
 use tauri::Manager;
 

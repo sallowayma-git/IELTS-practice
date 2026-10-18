@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-context-preview"
+description = "Enables the memory_context_preview command without any pre-configured scope."
+commands.allow = ["memory_context_preview"]
+
+[[permission]]
+identifier = "deny-memory-context-preview"
+description = "Denies the memory_context_preview command without any pre-configured scope."
+commands.deny = ["memory_context_preview"]

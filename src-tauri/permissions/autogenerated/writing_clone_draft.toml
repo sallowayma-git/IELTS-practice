@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-writing-clone-draft"
+description = "Enables the writing_clone_draft command without any pre-configured scope."
+commands.allow = ["writing_clone_draft"]
+
+[[permission]]
+identifier = "deny-writing-clone-draft"
+description = "Denies the writing_clone_draft command without any pre-configured scope."
+commands.deny = ["writing_clone_draft"]

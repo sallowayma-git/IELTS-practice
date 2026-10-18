@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-annotation-list"
+description = "Enables the annotation_list command without any pre-configured scope."
+commands.allow = ["annotation_list"]
+
+[[permission]]
+identifier = "deny-annotation-list"
+description = "Denies the annotation_list command without any pre-configured scope."
+commands.deny = ["annotation_list"]

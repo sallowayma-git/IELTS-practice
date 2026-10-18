@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-learning-events-rebuild"
+description = "Enables the learning_events_rebuild command without any pre-configured scope."
+commands.allow = ["learning_events_rebuild"]
+
+[[permission]]
+identifier = "deny-learning-events-rebuild"
+description = "Denies the learning_events_rebuild command without any pre-configured scope."
+commands.deny = ["learning_events_rebuild"]

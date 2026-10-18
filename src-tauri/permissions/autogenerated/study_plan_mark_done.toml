@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-study-plan-mark-done"
+description = "Enables the study_plan_mark_done command without any pre-configured scope."
+commands.allow = ["study_plan_mark_done"]
+
+[[permission]]
+identifier = "deny-study-plan-mark-done"
+description = "Denies the study_plan_mark_done command without any pre-configured scope."
+commands.deny = ["study_plan_mark_done"]

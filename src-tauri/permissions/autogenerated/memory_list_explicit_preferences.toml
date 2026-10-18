@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-list-explicit-preferences"
+description = "Enables the memory_list_explicit_preferences command without any pre-configured scope."
+commands.allow = ["memory_list_explicit_preferences"]
+
+[[permission]]
+identifier = "deny-memory-list-explicit-preferences"
+description = "Denies the memory_list_explicit_preferences command without any pre-configured scope."
+commands.deny = ["memory_list_explicit_preferences"]

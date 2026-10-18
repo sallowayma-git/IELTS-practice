@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suite-save-passage-draft"
+description = "Enables the suite_save_passage_draft command without any pre-configured scope."
+commands.allow = ["suite_save_passage_draft"]
+
+[[permission]]
+identifier = "deny-suite-save-passage-draft"
+description = "Denies the suite_save_passage_draft command without any pre-configured scope."
+commands.deny = ["suite_save_passage_draft"]

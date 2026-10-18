@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-catalog-list"
+description = "Enables the memory_catalog_list command without any pre-configured scope."
+commands.allow = ["memory_catalog_list"]
+
+[[permission]]
+identifier = "deny-memory-catalog-list"
+description = "Denies the memory_catalog_list command without any pre-configured scope."
+commands.deny = ["memory_catalog_list"]

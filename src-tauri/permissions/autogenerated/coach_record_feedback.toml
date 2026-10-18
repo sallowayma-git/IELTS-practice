@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-record-feedback"
+description = "Enables the coach_record_feedback command without any pre-configured scope."
+commands.allow = ["coach_record_feedback"]
+
+[[permission]]
+identifier = "deny-coach-record-feedback"
+description = "Denies the coach_record_feedback command without any pre-configured scope."
+commands.deny = ["coach_record_feedback"]

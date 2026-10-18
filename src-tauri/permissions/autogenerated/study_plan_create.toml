@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-study-plan-create"
+description = "Enables the study_plan_create command without any pre-configured scope."
+commands.allow = ["study_plan_create"]
+
+[[permission]]
+identifier = "deny-study-plan-create"
+description = "Denies the study_plan_create command without any pre-configured scope."
+commands.deny = ["study_plan_create"]

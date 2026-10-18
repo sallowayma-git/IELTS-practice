@@ -37,7 +37,33 @@ fn main() {
         }
     };
     println!("cargo:rustc-env=IELTS_AGENT_RUNTIME_BUILD_ID={build_id}");
-    tauri_build::build()
+    // Declaring the app's commands turns on Tauri's app ACL: the webview can
+    // then call only the commands `capabilities/main.json` allows.
+    println!("cargo:rerun-if-changed=src/lib.rs");
+    let commands = registered_commands(&manifest_dir.join("src/lib.rs"));
+    let manifest = tauri_build::AppManifest::new().commands(commands);
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
+        .expect("failed to run tauri-build");
+}
+
+/// The command names in `generate_handler![...]`, whatever their cfg: a
+/// permission for a command compiled out is inert.
+fn registered_commands(lib_rs: &Path) -> &'static [&'static str] {
+    let source = fs::read_to_string(lib_rs).expect("src/lib.rs is readable");
+    let start = source.find("generate_handler![").expect("lib.rs registers commands");
+    let end = start + source[start..].find("])").expect("generate_handler! is closed");
+    let names: Vec<&'static str> = source[start..end]
+        .lines()
+        .skip(1)
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#') && !line.starts_with("//") && line.contains("::"))
+        .map(|line| {
+            let name = line.trim_end_matches(',').rsplit("::").next().unwrap();
+            &*Box::leak(name.to_owned().into_boxed_str())
+        })
+        .collect();
+    assert!(!names.is_empty(), "no commands parsed from generate_handler!");
+    Box::leak(names.into_boxed_slice())
 }
 
 fn frozen_sidecar_build_id(hash_path: &Path, sidecar_path: &Path) -> Result<String, String> {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suite-cancel"
+description = "Enables the suite_cancel command without any pre-configured scope."
+commands.allow = ["suite_cancel"]
+
+[[permission]]
+identifier = "deny-suite-cancel"
+description = "Denies the suite_cancel command without any pre-configured scope."
+commands.deny = ["suite_cancel"]

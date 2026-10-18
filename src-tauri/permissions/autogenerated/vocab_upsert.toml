@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vocab-upsert"
+description = "Enables the vocab_upsert command without any pre-configured scope."
+commands.allow = ["vocab_upsert"]
+
+[[permission]]
+identifier = "deny-vocab-upsert"
+description = "Denies the vocab_upsert command without any pre-configured scope."
+commands.deny = ["vocab_upsert"]

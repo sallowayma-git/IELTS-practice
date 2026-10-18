@@ -407,6 +407,10 @@ def main() -> int:
             [sys.executable, "developer/tests/ci/check_mock_contracts.py"],
         ),
         run_command(
+            "IPC command allow-list (capability vs registered vs frontend)",
+            [sys.executable, "developer/tests/ci/check_ipc_acl.py"],
+        ),
+        run_command(
             "Learner skill label contract",
             ["node", "developer/tests/js/learnerSkillLabels.test.mjs"],
         ),

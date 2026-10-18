@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-record-feedback"
+description = "Enables the memory_record_feedback command without any pre-configured scope."
+commands.allow = ["memory_record_feedback"]
+
+[[permission]]
+identifier = "deny-memory-record-feedback"
+description = "Denies the memory_record_feedback command without any pre-configured scope."
+commands.deny = ["memory_record_feedback"]

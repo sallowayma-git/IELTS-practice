@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-history-detail"
+description = "Enables the get_history_detail command without any pre-configured scope."
+commands.allow = ["get_history_detail"]
+
+[[permission]]
+identifier = "deny-get-history-detail"
+description = "Denies the get_history_detail command without any pre-configured scope."
+commands.deny = ["get_history_detail"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-annotation-upsert"
+description = "Enables the annotation_upsert command without any pre-configured scope."
+commands.allow = ["annotation_upsert"]
+
+[[permission]]
+identifier = "deny-annotation-upsert"
+description = "Denies the annotation_upsert command without any pre-configured scope."
+commands.deny = ["annotation_upsert"]

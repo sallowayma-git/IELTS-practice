@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-history"
+description = "Enables the list_history command without any pre-configured scope."
+commands.allow = ["list_history"]
+
+[[permission]]
+identifier = "deny-list-history"
+description = "Denies the list_history command without any pre-configured scope."
+commands.deny = ["list_history"]

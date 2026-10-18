@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-generate-candidates"
+description = "Enables the memory_generate_candidates command without any pre-configured scope."
+commands.allow = ["memory_generate_candidates"]
+
+[[permission]]
+identifier = "deny-memory-generate-candidates"
+description = "Denies the memory_generate_candidates command without any pre-configured scope."
+commands.deny = ["memory_generate_candidates"]

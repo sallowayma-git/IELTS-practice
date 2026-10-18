@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restart-after-update"
+description = "Enables the restart_after_update command without any pre-configured scope."
+commands.allow = ["restart_after_update"]
+
+[[permission]]
+identifier = "deny-restart-after-update"
+description = "Denies the restart_after_update command without any pre-configured scope."
+commands.deny = ["restart_after_update"]
