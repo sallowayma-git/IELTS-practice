@@ -5,7 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { runRejectedResubmission, runCommittedAcknowledgementLoss, runDelayedSuiteAcknowledgement } from './readingSubmissionReviewCases.js';
+import {
+    expireOrObservePendingSubmissionTimeout,
+    runRejectedResubmission,
+    runCommittedAcknowledgementLoss,
+    runDelayedSuiteAcknowledgement
+} from './readingSubmissionReviewCases.js';
 
 const root = path.resolve(process.env.DIAGNOSTIC_RUNTIME_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const reports = path.resolve(process.env.DIAGNOSTIC_REPORT_DIR || path.join(root, 'developer/tests/e2e/reports'));
@@ -123,13 +128,9 @@ try {
                         });
                         await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.handleSubmit());
                         await host.waitForFunction(async () => (await AppData.practice.list()).length === 1);
-                        await child.waitForFunction(() => {
-                            return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
-                        });
-                        assert.equal(
-                            await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
-                            true,
-                            'the lost-ACK fixture must expire the pending submission it created'
+                        await expireOrObservePendingSubmissionTimeout(
+                            child,
+                            'the lost-ACK fixture must expire or observe expiry of the pending submission it created'
                         );
                         await child.waitForFunction(() => {
                             return document.querySelector('.incident-dialog')?.textContent.includes('尚未确认保存');

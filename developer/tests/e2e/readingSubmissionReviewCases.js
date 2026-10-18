@@ -12,6 +12,46 @@ async function assertAnswerEditingLocked(child) {
     assert.equal(await child.locator('#question-groups input[name="q1"][value="A"]').isChecked(), true);
 }
 
+export async function expireOrObservePendingSubmissionTimeout(child, message) {
+    const outcome = await child.evaluate(() => {
+        const api = __IELTS_UNIFIED_READING_PAGE_TEST__;
+        const before = api.getTestState();
+        const submissionAlias = before.submissionId
+            ? AppDiagnostics.correlate({ submission: before.submissionId }).submission
+            : '';
+        const expired = before.submissionStatus === 'submitting'
+            ? api.expirePendingSubmission()
+            : false;
+        const after = api.getTestState();
+        const timeoutObserved = AppDiagnostics.snapshot().events.some(event => (
+            event.code === 'PRACTICE_CHANNEL_TIMEOUT'
+                && event.action === 'submit'
+                && event.persistence.operation === 'unconfirmed'
+                && event.correlation.submission === submissionAlias
+        ));
+        return {
+            beforeStatus: before.submissionStatus,
+            beforeLocked: before.submissionEditingLocked,
+            beforeSubmissionId: before.submissionId,
+            expired,
+            afterStatus: after.submissionStatus,
+            afterLocked: after.submissionEditingLocked,
+            afterSubmissionId: after.submissionId,
+            timeoutObserved
+        };
+    });
+    assert.ok(outcome.beforeSubmissionId, `${message}: submission ID must be present`);
+    assert.equal(outcome.afterSubmissionId, outcome.beforeSubmissionId, `${message}: submission ID must remain stable`);
+    assert.ok(
+        (outcome.beforeStatus === 'submitting' && outcome.expired === true)
+            || (outcome.beforeStatus === 'draft' && outcome.beforeLocked === true && outcome.timeoutObserved),
+        message
+    );
+    assert.equal(outcome.timeoutObserved, true, `${message}: matching timeout evidence must be recorded`);
+    assert.equal(outcome.afterStatus, 'draft', `${message}: submission must be restored to draft`);
+    assert.equal(outcome.afterLocked, true, `${message}: unconfirmed answers must remain locked`);
+}
+
 async function selectPassage(child, part, examId) {
     await child.locator(`#part-section-${part} .part-nav-name`).click();
     await child.waitForFunction(examId => {
@@ -38,13 +78,9 @@ export async function runRejectedResubmission(host, child, outcome) {
     await child.locator('#submit-btn').click();
     await host.waitForFunction(() => reviewSubmissions.length === 1);
     if (outcome === 'timeout') {
-        await child.waitForFunction(() => {
-            return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
-        });
-        assert.equal(
-            await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
-            true,
-            'the timeout fixture must expire the pending submission it created'
+        await expireOrObservePendingSubmissionTimeout(
+            child,
+            'the timeout fixture must expire or observe expiry of the pending submission it created'
         );
     }
     const editable = outcome === 'not-committed';
@@ -106,13 +142,9 @@ export async function runCommittedAcknowledgementLoss(host, child, suite) {
     const saved = await host.evaluate(async () => AppData.practice.list());
     assert.equal(saved.length, 1, 'the first write really committed before the timeout');
     if (suite) assert.equal(await host.evaluate(() => window.app.currentSuiteSession.status), 'completed');
-    await child.waitForFunction(() => {
-        return __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitting';
-    });
-    assert.equal(
-        await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission()),
-        true,
-        'the lost-ACK fixture must expire the pending submission it created'
+    await expireOrObservePendingSubmissionTimeout(
+        child,
+        'the lost-ACK fixture must expire or observe expiry of the pending submission it created'
     );
     await child.waitForFunction(() => {
         return document.querySelector('.incident-dialog')?.textContent.includes('尚未确认保存');

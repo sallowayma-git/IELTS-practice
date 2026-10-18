@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { loadHooks } from './unifiedReadingPageInlineSuiteRegression.test.js';
 import { read, root, harness } from './helpers/diagnosticHarness.js';
 import { buildGeneratedPreserveFileNames, resetGeneratedDir } from '../tools/reading-json/generate_reading_assets.node.js';
+import { expireOrObservePendingSubmissionTimeout } from '../e2e/readingSubmissionReviewCases.js';
 
 function setup(options = {}) {
     const presentations = [], calls = [];
@@ -29,6 +30,51 @@ function setup(options = {}) {
     } });
     return { ...h, parent, calls, presentations, ack, events: () => h.window.AppDiagnostics.snapshot().events };
 }
+
+function pageForSubmissionTimeout(h) {
+    return {
+        async evaluate(callback) {
+            const previousApi = globalThis.__IELTS_UNIFIED_READING_PAGE_TEST__;
+            const previousDiagnostics = globalThis.AppDiagnostics;
+            globalThis.__IELTS_UNIFIED_READING_PAGE_TEST__ = h.hooks;
+            globalThis.AppDiagnostics = h.window.AppDiagnostics;
+            try {
+                return callback();
+            } finally {
+                if (previousApi === undefined) delete globalThis.__IELTS_UNIFIED_READING_PAGE_TEST__;
+                else globalThis.__IELTS_UNIFIED_READING_PAGE_TEST__ = previousApi;
+                if (previousDiagnostics === undefined) delete globalThis.AppDiagnostics;
+                else globalThis.AppDiagnostics = previousDiagnostics;
+            }
+        }
+    };
+}
+
+test('E2E timeout synchronization accepts only matching timeout evidence', async () => {
+    const manual = setup();
+    manual.hooks.beginSubmission('PRACTICE_COMPLETE', {});
+    await expireOrObservePendingSubmissionTimeout(pageForSubmissionTimeout(manual), 'manual timeout');
+    assert.equal(manual.hooks.getTestState().submissionStatus, 'draft');
+    assert.equal(manual.hooks.getTestState().submissionEditingLocked, true);
+
+    const automatic = setup();
+    automatic.hooks.beginSubmission('PRACTICE_COMPLETE', {});
+    automatic.hooks.expirePendingSubmission();
+    await expireOrObservePendingSubmissionTimeout(pageForSubmissionTimeout(automatic), 'automatic timeout');
+
+    const nack = setup();
+    nack.hooks.beginSubmission('PRACTICE_COMPLETE', {});
+    const submissionId = nack.hooks.getTestState().submissionId;
+    await nack.hooks.handleIncoming({ source: nack.parent, origin: 'http://localhost', data: {
+        source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { examId: 'reading-p1', sessionId: 'PRIVATE_SESSION',
+            submissionId, windowSessionToken: 'PRIVATE_TOKEN', errorCode: 'QUOTA_EXCEEDED' }
+    } });
+    assert.equal(nack.hooks.getTestState().submissionEditingLocked, true);
+    await assert.rejects(
+        expireOrObservePendingSubmissionTimeout(pageForSubmissionTimeout(nack), 'unconfirmed NACK must not pass'),
+        /unconfirmed NACK must not pass/
+    );
+});
 
 test('reading timeout offers business retry with the original immutable snapshot and matching confirmation', async () => {
     const h = setup();
