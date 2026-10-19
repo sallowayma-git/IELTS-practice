@@ -124,6 +124,20 @@
             return true;
         }
 
+        reserveLibraryCommitIntent(generation) {
+            if (!this.canPrepareLibraryIntent(generation)) return false;
+            if (
+                this._exclusiveLibraryMutationGeneration > 0
+                && this._exclusiveLibraryMutationGeneration !== generation
+            ) {
+                // A destructive mutation already owns the serialized commit slot.
+                // Keep the newer intent eligible so it can queue behind that
+                // mutation, but do not supersede the active owner mid-cleanup.
+                return true;
+            }
+            return this.claimLibraryCommitIntent(generation);
+        }
+
         isLibraryIntentCurrent(generation) {
             return generation === this._libraryCommitIntentGeneration;
         }
@@ -188,6 +202,10 @@
 
         async runLibraryCommitForIntent(generation, commit) {
             return this.runSerializedLibraryMutation(async () => {
+                if (
+                    !this.isLibraryIntentCurrent(generation)
+                    && !this.claimLibraryCommitIntent(generation)
+                ) return false;
                 if (!this.isLibraryIntentCurrent(generation)) return false;
                 return commit();
             });
@@ -591,7 +609,7 @@
                         currentPathMap || this.DEFAULT_PATH_MAP
                     )
                     : currentPathMap;
-                if (!this.claimLibraryCommitIntent(intentGeneration)) return [];
+                if (!this.reserveLibraryCommitIntent(intentGeneration)) return [];
 
                 try {
                     const loaded = await this.runLibraryCommitForIntent(intentGeneration, async () => {
@@ -666,7 +684,7 @@
                 };
                 const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
                 if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
-                if (!this.claimLibraryCommitIntent(intentGeneration)) return [];
+                if (!this.reserveLibraryCommitIntent(intentGeneration)) return [];
                 defaultCommitClaimed = true;
 
                 const loaded = await this.runLibraryCommitForIntent(intentGeneration, async () => {
@@ -749,7 +767,7 @@
             const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
             if (
                 options.intentAlreadyClaimed !== true
-                && !this.claimLibraryCommitIntent(intentGeneration)
+                && !this.reserveLibraryCommitIntent(intentGeneration)
             ) return [];
 
             try {
@@ -1284,7 +1302,7 @@
                 : (currentPathMap || null);
             if (
                 options.intentAlreadyClaimed !== true
-                && !this.claimLibraryCommitIntent(intentGeneration)
+                && !this.reserveLibraryCommitIntent(intentGeneration)
             ) return false;
 
             let activationCompleted = false;

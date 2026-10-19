@@ -348,9 +348,8 @@ function createRealBlobHarness() {
     };
 }
 
-function createRandomPracticePdfHarness() {
+function createRandomPracticeHarness(exam, options = {}) {
     const activeIndex = createDeferred();
-    const exam = pdfExam();
     const popup = createPopup('random-practice');
     const timers = [];
     let gestureActive = true;
@@ -359,11 +358,26 @@ function createRandomPracticePdfHarness() {
         windowOpenCalls: [],
         safeOpenCalls: [],
         messages: [],
-        events: []
+        events: [],
+        hostNavigationWrites: [],
+        htmlLaunchOptions: null,
+        htmlLaunchPromise: null
     };
+    let hostHref = 'https://example.test/index.html';
+    const hostLocation = { protocol: 'https:' };
+    Object.defineProperty(hostLocation, 'href', {
+        enumerable: true,
+        configurable: true,
+        get() { return hostHref; },
+        set(value) {
+            state.hostNavigationWrites.push(value);
+            hostHref = value;
+        }
+    });
     const documentStub = {
         readyState: 'loading',
         addEventListener() {},
+        dispatchEvent() {},
         querySelector() { return null; },
         querySelectorAll() { return []; },
         getElementById() { return null; }
@@ -382,15 +396,16 @@ function createRandomPracticePdfHarness() {
     };
     const windowStub = {
         document: documentStub,
-        location: { protocol: 'https:', href: 'https://example.test/index.html' },
+        location: hostLocation,
         ResourceCore: resourceCore,
+        __READING_EXAM_MANIFEST__: {},
         async resolveActiveLibraryIndex() {
             state.activeIndexCalls += 1;
             state.events.push('resolve-random-index');
             return activeIndex.promise;
         },
-        buildResourcePath() {
-            return './random-practice.pdf';
+        buildResourcePath(_candidate, kind) {
+            return kind === 'html' ? './random-practice.html' : './random-practice.pdf';
         },
         open(url, target, features) {
             state.events.push(`window-open:${url}`);
@@ -399,7 +414,9 @@ function createRandomPracticePdfHarness() {
         },
         showMessage(message, type) {
             state.messages.push({ message, type });
-        }
+        },
+        addEventListener() {},
+        removeEventListener() {}
     };
     const sandbox = {
         window: windowStub,
@@ -421,6 +438,12 @@ function createRandomPracticePdfHarness() {
         Error,
         URL,
         URLSearchParams,
+        CustomEvent: class CustomEvent {
+            constructor(type, init) {
+                this.type = type;
+                this.detail = init && init.detail;
+            }
+        },
         setTimeout(callback) {
             timers.push(callback);
             return timers.length;
@@ -445,6 +468,34 @@ function createRandomPracticePdfHarness() {
     const context = vm.createContext(sandbox);
     vm.runInContext(extractViewPdfSource(), context, { filename: 'js/main.js#viewPDF' });
     windowStub.viewPDF = context.viewPDF;
+    if (options.useProductionHtmlApp === true) {
+        vm.runInContext(read('js/app/examSessionMixin.js'), context, { filename: 'js/app/examSessionMixin.js' });
+        const app = Object.assign({}, windowStub.ExamSystemAppMixins.examSession);
+        const registration = {
+            window: popup.popup,
+            windowInfo: { window: popup.popup },
+            navigationEpoch: 1
+        };
+        app.resolveReadingLaunchDescriptor = () => null;
+        app._installExamNavigationRegistration = () => registration;
+        app._isExamSessionRegistrationCurrent = () => true;
+        app._guardExamWindowContent = (examWindow) => examWindow;
+        app._cleanupReusedWindowSessions = async () => {};
+        app._captureLaunchLibraryConfigurationId = async () => {};
+        app.setupExamWindowManagement = () => registration;
+        app.startPracticeSession = async () => ({ owned: true, registration });
+        app.restartExamHandshake = () => {};
+        app.injectDataCollectionScript = () => {};
+        app._recordExamWindowNavigation = () => 1;
+        const openExam = app.openExam.bind(app);
+        app.openExam = function observedOpenExam(examId, launchOptions) {
+            state.htmlLaunchOptions = launchOptions;
+            state.events.push('app-open-exam');
+            state.htmlLaunchPromise = openExam(examId, launchOptions);
+            return state.htmlLaunchPromise;
+        };
+        windowStub.app = app;
+    }
     vm.runInContext(read('js/presentation/app-actions.js'), context, { filename: 'js/presentation/app-actions.js' });
     return {
         activeIndex,
@@ -455,6 +506,22 @@ function createRandomPracticePdfHarness() {
         windowStub,
         endGesture() { gestureActive = false; }
     };
+}
+
+function createRandomPracticePdfHarness() {
+    return createRandomPracticeHarness(pdfExam());
+}
+
+function createRandomPracticeHtmlHarness() {
+    return createRandomPracticeHarness({
+        id: 'custom-reading-html',
+        type: 'reading',
+        title: 'Imported HTML exercise',
+        path: 'Imported/',
+        filename: 'exercise.html',
+        hasHtml: true,
+        hasPdf: false
+    }, { useProductionHtmlApp: true });
 }
 
 function pdfExam(overrides = {}) {
@@ -1025,6 +1092,40 @@ async function testRandomPracticeReservesPdfWindowBeforeDelayedSelection() {
         'ownership must transfer to viewPDF instead of closing the reserved popup early');
 }
 
+async function testRandomPracticeReusesGestureWindowForHtmlSelection() {
+    const harness = createRandomPracticeHtmlHarness();
+
+    const pending = harness.windowStub.AppActions.startRandomPractice('all', 'reading');
+    assert.strictEqual(harness.state.windowOpenCalls.length, 1,
+        'Random Practice must create exactly one context during the initiating gesture');
+    assert.strictEqual(harness.state.windowOpenCalls[0].gestureActive, true);
+
+    harness.endGesture();
+    harness.activeIndex.resolve([harness.exam]);
+    await pending;
+    assert.strictEqual(harness.timers.length, 1);
+    harness.timers.shift()();
+    for (let index = 0; index < 12; index += 1) {
+        await Promise.resolve();
+    }
+
+    assert.ok(harness.state.htmlLaunchPromise, 'the production app.openExam chain must start');
+    const openedWindow = await harness.state.htmlLaunchPromise;
+    assert.strictEqual(openedWindow, harness.popup.popup);
+    assert.strictEqual(harness.state.htmlLaunchOptions.reservedWindow, harness.popup.popup);
+    assert.strictEqual(harness.state.htmlLaunchOptions.reuseWindow, harness.popup.popup,
+        'the HTML consumer must receive the gesture-created context through reuseWindow');
+    assert.strictEqual(harness.state.htmlLaunchOptions.ownsReservedWindow, true);
+    assert.strictEqual(harness.state.windowOpenCalls.length, 1,
+        'the delayed HTML path must not attempt a second popup');
+    assert.deepStrictEqual(harness.popup.state.navigationWrites, [
+        'https://example.test/random-practice.html'
+    ]);
+    assert.strictEqual(harness.popup.state.closeCalls, 0);
+    assert.deepStrictEqual(harness.state.hostNavigationWrites, [],
+        'the host application must not be used as a popup fallback');
+}
+
 async function testRealResourceCoreAndPdfHandlerBlobProvenance() {
     const harness = createRealBlobHarness();
     const handler = new harness.PDFHandler();
@@ -1127,6 +1228,7 @@ async function main() {
         testFailedNamedRelaunchPreservesExternallyNavigatedPendingContext,
         testPdfOnlyFallbackFileProtocolPreservesPathLaunch,
         testRandomPracticeReservesPdfWindowBeforeDelayedSelection,
+        testRandomPracticeReusesGestureWindowForHtmlSelection,
         testRealResourceCoreAndPdfHandlerBlobProvenance
     ];
 

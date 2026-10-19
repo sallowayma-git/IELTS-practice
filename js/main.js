@@ -5594,6 +5594,15 @@ function closeOwnedReservedPdfWindow(options) {
     try { reservedWindow.close(); } catch (_) { }
 }
 
+function transferReservedWindowForHtml(options) {
+    const launchOptions = options && typeof options === 'object' ? options : {};
+    const reservedWindow = launchOptions.reservedWindow;
+    if (reservedWindow && !reservedWindow.closed) {
+        launchOptions.reuseWindow = reservedWindow;
+    }
+    return launchOptions;
+}
+
 function reserveRandomPracticePdfWindow() {
     const launchOptions = {
         reservedWindow: null,
@@ -5629,8 +5638,7 @@ function openExamWithFallback(exam, delay = 600, options = {}) {
     const launch = () => {
         try {
             if (exam.hasHtml) {
-                closeOwnedReservedPdfWindow(launchOptions);
-                openExam(exam.id);
+                openExam(exam.id, transferReservedWindowForHtml(launchOptions));
             } else {
                 viewPDF(exam.id, launchOptions);
             }

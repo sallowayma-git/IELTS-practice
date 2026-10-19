@@ -2054,15 +2054,90 @@ async function testDeleteFirstExcludesSwitchDuringRemove() {
     const deletion = harness.manager.deleteLibraryConfiguration('race_b');
     await withTimeout(removeStarted.promise, 'delete-first remove entry');
     const switching = harness.manager.switchLibraryConfig('race_b');
-    const switchResult = await withTimeout(switching, 'switch blocked by exclusive deletion');
+    let switchSettled = false;
+    switching.then(
+        () => { switchSettled = true; },
+        () => { switchSettled = true; }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(switchSettled, false,
+        'a conflicting switch must queue until destructive cleanup completes');
     removeRelease.resolve();
-    const deletionResult = await withTimeout(deletion, 'delete-first completion');
+    const [deletionResult, switchResult] = await withTimeout(
+        Promise.all([deletion, switching]),
+        'delete-first completion and stored-target revalidation'
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     await assertDeletionRaceWinner(harness, deletionResult, switchResult);
     recordResult('delete-first 与 switch 并发时独占删除成为唯一提交者', {
         deleted: deletionResult.deleted,
         switched: switchResult
+    });
+}
+
+async function testDeleteFirstQueuesLaterDefaultSelection() {
+    const harness = createLatestIntentRaceHarness();
+    await establishDeletionRaceBaseline(harness);
+
+    const removeStarted = createDeferred();
+    const removeRelease = createDeferred();
+    const successorQueued = createDeferred();
+    const remove = harness.window.AppData.library.remove.bind(harness.window.AppData.library);
+    harness.window.AppData.library.remove = async function removeWithGate(id) {
+        if (id === 'race_b') {
+            removeStarted.resolve();
+            await removeRelease.promise;
+        }
+        return remove(id);
+    };
+    const runCommit = harness.manager.runLibraryCommitForIntent.bind(harness.manager);
+    harness.manager.runLibraryCommitForIntent = function runCommitObserved(generation, commit) {
+        const pending = runCommit(generation, commit);
+        successorQueued.resolve();
+        return pending;
+    };
+
+    const deletion = harness.manager.deleteLibraryConfiguration('race_b');
+    await withTimeout(removeStarted.promise, 'delete-B destructive phase');
+    const switching = harness.manager.switchLibraryConfig(null);
+    await withTimeout(successorQueued.promise, 'later default selection queued behind delete-B');
+
+    let switchSettled = false;
+    switching.then(
+        () => { switchSettled = true; },
+        () => { switchSettled = true; }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(switchSettled, false,
+        'the later non-conflicting selection must wait for delete-B instead of being discarded');
+
+    removeRelease.resolve();
+    const [deletionResult, switchResult] = await withTimeout(
+        Promise.all([deletion, switching]),
+        'delete-B followed by default selection'
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(deletionResult.deleted, true);
+    assert.strictEqual(switchResult, true,
+        'the later default selection must commit after destructive cleanup releases the queue');
+    assert.strictEqual(harness.getActiveId(), null, 'the newer default selection must be durable');
+    assert.deepStrictEqual(await harness.window.AppData.library.getIndex('race_b'), []);
+    assert(!harness.getConfigurations().some((config) => config.id === 'race_b' || config.key === 'race_b'));
+    assert.deepStrictEqual(harness.effects.publications, [
+        { key: 'race_a', ids: ['race-a'], provenance: ['race_a'] },
+        { key: null, ids: ['race-a'], provenance: [null] }
+    ], 'A must remain coherent until the queued default publication replaces it');
+    assert.deepStrictEqual(harness.effects.activations, ['race_a', null]);
+    const expectedDefaultRoot = harness.manager.DEFAULT_PATH_MAP.reading.root;
+    assert.strictEqual(harness.window.ResourceCore.getPathMap().reading.root, expectedDefaultRoot);
+    assert.strictEqual(harness.window.__activeLibraryPathMap.reading.root, expectedDefaultRoot);
+    assert.strictEqual(harness.window.pathMap.reading.root, expectedDefaultRoot);
+    recordResult('delete-B 独占阶段会保留并顺序提交后续默认库选择', {
+        deleted: deletionResult.deleted,
+        switched: switchResult,
+        activeKey: harness.getActiveId()
     });
 }
 
@@ -2636,6 +2711,7 @@ async function main() {
         await testFailingActiveLoadDoesNotInterruptDurableActivation();
         await testSupersededQueuedDefaultLoadReturnsEmptyArray();
         await testDeleteFirstExcludesSwitchDuringRemove();
+        await testDeleteFirstQueuesLaterDefaultSelection();
         await testCapturedSwitchCannotCommitAfterDelete();
         await testProductionUploadStopsAfterManagerRejection();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();

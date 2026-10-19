@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:ef19295eb90e86b8cfc7de4c3c68a34168d85a89d361898fcc52994bb9a54abd",
+  "buildId": "sha256:24c21b5e5d8d539f157e1f0a19581d5ce0f48b212b43b4bd70802e958335f912",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -546,11 +546,11 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "819b8f0b0b6c686e48a141fb45a1ca9af1b4cd5ecfa7a7bb25f27cbde5882445"
+      "sha256": "65b6d54b52b4da6d556ee394066a89e705ae7a89f33f8fda4ea229ffd797d200"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "fc8196b7499c2da226efcd5db99327c1962fdcc04b3523471a2a88f5ca861454"
+      "sha256": "5798d12ed1867a0ac640d73e81c1d0a0f4a7b8a5aa57e7bcf74a2fcfd37286ce"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -598,7 +598,7 @@
     },
     {
       "path": "js/bundles/runtime-entry.bundle.js",
-      "sha256": "1ac7156b269deca5d6e50c514e14bf8de3ae39849691ca0dfabb872f15ddd065"
+      "sha256": "ca59b426bdc4f06a2a39114d8fb17baebd4c998c3d1bc258ae665302bb8a747e"
     },
     {
       "path": "js/bundles/session.bundle.js",
@@ -672,7 +672,7 @@
       {
         "source": "js/presentation/app-actions.js",
         "startLine": 1577,
-        "endLine": 2772,
+        "endLine": 2779,
         "sourceStartLine": 1
       }
     ],
@@ -836,7 +836,7 @@
       {
         "source": "js/services/libraryManager.js",
         "startLine": 23959,
-        "endLine": 25529,
+        "endLine": 25547,
         "sourceStartLine": 1
       }
     ],
@@ -1052,7 +1052,7 @@
       {
         "source": "js/main.js",
         "startLine": 20859,
-        "endLine": 26562,
+        "endLine": 26570,
         "sourceStartLine": 1
       }
     ],

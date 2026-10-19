@@ -470,6 +470,15 @@
         try { reservedWindow.close(); } catch (_) { }
     }
 
+    function transferReservedWindowForHtml(options) {
+        var launchOptions = options && typeof options === 'object' ? options : {};
+        var reservedWindow = launchOptions.reservedWindow;
+        if (reservedWindow && !reservedWindow.closed) {
+            launchOptions.reuseWindow = reservedWindow;
+        }
+        return launchOptions;
+    }
+
     function reserveRandomPracticePdfWindow() {
         var launchOptions = {
             reservedWindow: null,
@@ -504,11 +513,9 @@
         var launch = function () {
             try {
                 if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
-                    closeOwnedReservedPdfWindow(launchOptions);
-                    global.app.openExam(exam.id, launchOptions);
+                    global.app.openExam(exam.id, transferReservedWindowForHtml(launchOptions));
                 } else if (exam.hasHtml && typeof global.openExam === 'function') {
-                    closeOwnedReservedPdfWindow(launchOptions);
-                    global.openExam(exam.id, launchOptions);
+                    global.openExam(exam.id, transferReservedWindowForHtml(launchOptions));
                 } else if (typeof global.viewPDF === 'function') {
                     global.viewPDF(exam.id, launchOptions);
                 } else {
