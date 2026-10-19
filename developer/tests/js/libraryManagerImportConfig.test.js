@@ -21,6 +21,14 @@ function clone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+function createDeferred() {
+    let resolve;
+    const promise = new Promise((done) => {
+        resolve = done;
+    });
+    return { promise, resolve };
+}
+
 function createHarness(seed = {}) {
     const librarySeed = seed.library && typeof seed.library === 'object' ? seed.library : {};
     const indexes = new Map(Object.entries(librarySeed.importedIndexes || {}).map(([id, value]) => [String(id), clone(value)]));
@@ -33,6 +41,10 @@ function createHarness(seed = {}) {
     const practiceRecords = clone(seed.records || []);
     const defaultReadingIndex = clone(seed.readingExamIndex || []);
     const deferReadingExamIndex = seed.deferReadingExamIndex === true;
+    const controlReadingExamIndex = seed.controlReadingExamIndex === true;
+    const manifestStarted = createDeferred();
+    const manifestRelease = createDeferred();
+    let manifestRequestStarted = false;
     let examDataScriptLoads = 0;
     let resourceBasePrefix = '';
 
@@ -115,6 +127,16 @@ function createHarness(seed = {}) {
         windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
             throw new Error('simulated optional listening load failure');
         };
+    } else if (deferReadingExamIndex && controlReadingExamIndex) {
+        windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
+            examDataScriptLoads += 1;
+            if (!manifestRequestStarted) {
+                manifestRequestStarted = true;
+                manifestStarted.resolve();
+            }
+            await manifestRelease.promise;
+            installReadingExamIndex();
+        };
     } else if (deferReadingExamIndex) {
         windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
             examDataScriptLoads += 1;
@@ -161,7 +183,9 @@ function createHarness(seed = {}) {
         indexes,
         getActiveId: () => activeId,
         getConfigurations: () => clone(configurations),
-        getExamDataScriptLoads: () => examDataScriptLoads
+        getExamDataScriptLoads: () => examDataScriptLoads,
+        waitForReadingManifestRequest: () => manifestStarted.promise,
+        releaseReadingManifest: () => manifestRelease.resolve()
     };
 }
 
@@ -382,6 +406,144 @@ function assertAvailabilityReconciled(index, configurationId) {
     rows.forEach((row) => {
         assert.strictEqual(row.libraryConfigurationId, configurationId, 'published rows must retain their active-library provenance');
     });
+}
+
+function createLatestIntentRaceHarness() {
+    const canonicalA = {
+        id: 'race-a',
+        examId: 'race-a',
+        type: 'reading',
+        sourceKind: 'generated-reading',
+        title: 'Delayed A',
+        category: 'P1',
+        path: 'Race/A/',
+        filename: 'a.html',
+        hasPdf: false,
+        pdfFilename: 'a.pdf'
+    };
+    const delayedA = Object.assign({}, canonicalA, { hasPdf: true });
+    const immediateB = {
+        id: 'race-b',
+        examId: 'race-b',
+        type: 'reading',
+        sourceKind: 'file-picker',
+        title: 'Immediate B',
+        category: 'P2',
+        path: 'Race/B/',
+        filename: 'b.html',
+        hasPdf: true,
+        pdfFilename: 'b.pdf'
+    };
+    const harness = createHarness({
+        deferReadingExamIndex: true,
+        controlReadingExamIndex: true,
+        readingExamIndex: [canonicalA],
+        library: {
+            activeConfigurationId: 'race_a',
+            importedIndexes: {
+                race_a: [delayedA],
+                race_b: [immediateB]
+            },
+            configurations: [
+                { id: 'race_a', key: 'race_a', name: 'Race A', examCount: 1, timestamp: 11 },
+                { id: 'race_b', key: 'race_b', name: 'Race B', examCount: 1, timestamp: 22 }
+            ]
+        }
+    });
+    const { window } = harness;
+    const effects = {
+        publications: [],
+        overviews: [],
+        systemInfo: [],
+        examLists: [],
+        listeningAvailability: [],
+        progressSyncs: [],
+        filterStates: [],
+        filteredIndexes: [],
+        configRenders: [],
+        activations: [],
+        configurationUpdates: [],
+        pathMapSaves: []
+    };
+    const ids = (index) => clone(index).map((exam) => exam.id);
+
+    window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') {
+            const index = clone(event.detail.index);
+            effects.publications.push({
+                key: event.detail.key ?? null,
+                ids: index.map((exam) => exam.id),
+                provenance: index.map((exam) => exam.libraryConfigurationId)
+            });
+        }
+        return true;
+    };
+    window.updateOverview = (index) => effects.overviews.push(ids(index));
+    window.updateSystemInfo = (index) => effects.systemInfo.push(ids(index));
+    window.loadExamList = (index) => effects.examLists.push(ids(index));
+    window.refreshListeningAvailabilityUI = (index) => effects.listeningAvailability.push(ids(index));
+    window.startPracticeRecordsSyncInBackground = (trigger, options) => {
+        effects.progressSyncs.push(`${trigger}:${options?.forceRender === true}`);
+    };
+    window.setBrowseFilterState = (category, type) => effects.filterStates.push([category, type]);
+    window.setFilteredExamsState = (index) => effects.filteredIndexes.push(ids(index));
+    window.renderLibraryConfigList = (options) => effects.configRenders.push(options?.activeKey ?? null);
+
+    const activate = window.AppData.library.activate.bind(window.AppData.library);
+    window.AppData.library.activate = async function activateObserved(id) {
+        effects.activations.push(id);
+        return activate(id);
+    };
+    const updateConfiguration = window.AppData.library.updateConfiguration.bind(window.AppData.library);
+    window.AppData.library.updateConfiguration = async function updateConfigurationObserved(config) {
+        effects.configurationUpdates.push(config?.id || config?.key || null);
+        return updateConfiguration(config);
+    };
+    const savePathMap = window.ResourceCore.savePathMapForConfiguration.bind(window.ResourceCore);
+    window.ResourceCore.savePathMapForConfiguration = async function savePathMapObserved(key, index, options) {
+        effects.pathMapSaves.push(key);
+        return savePathMap(key, index, options);
+    };
+
+    return Object.assign(harness, {
+        manager: window.LibraryManager.getInstance(),
+        delayedA,
+        immediateB,
+        effects
+    });
+}
+
+function assertLatestIntentRaceOutcome(harness, options = {}) {
+    const { window, effects } = harness;
+    assert.strictEqual(harness.getActiveId(), 'race_b', 'the newer supplied library must remain durably active');
+    assert.deepStrictEqual(effects.publications, [{
+        key: 'race_b',
+        ids: ['race-b'],
+        provenance: ['race_b']
+    }], 'only the newer supplied library may publish an index');
+    assert.deepStrictEqual(effects.overviews, [['race-b']], 'overview publication must remain owned by the newer intent');
+    assert.deepStrictEqual(effects.systemInfo, [['race-b']], 'system-info publication must remain owned by the newer intent');
+    assert.deepStrictEqual(effects.examLists, [['race-b']], 'exam-list publication must remain owned by the newer intent');
+    assert.deepStrictEqual(effects.listeningAvailability, [['race-b']], 'availability UI must remain owned by the newer intent');
+    assert.deepStrictEqual(effects.progressSyncs, ['library-loaded:true'], 'only the newer intent may request progress sync');
+    assert.deepStrictEqual(effects.filterStates, [['all', 'all']], 'only the newer intent may reset browse filters');
+    assert.deepStrictEqual(effects.filteredIndexes, [[]], 'only the newer intent may reset the filtered index');
+    assert.deepStrictEqual(effects.configRenders, ['race_b'], 'the deferred configuration render must retain newer-intent ownership');
+    assert.deepStrictEqual(
+        effects.activations,
+        options.expectedActivations || ['race_b'],
+        'durable activations must complete in latest-intent order'
+    );
+    assert.deepStrictEqual(effects.configurationUpdates, ['race_b'], 'the delayed intent must not update A metadata');
+    assert.deepStrictEqual(effects.pathMapSaves, ['race_b'], 'the delayed intent must not save or activate A path data');
+    assert.strictEqual(
+        harness.getConfigurations().find((config) => config.id === 'race_a').timestamp,
+        11,
+        'the delayed intent must leave A metadata untouched'
+    );
+    assert.strictEqual(window.ResourceCore.getPathMap().reading.root, 'Race/B/');
+    assert.strictEqual(window.__activeLibraryPathMap.reading.root, 'Race/B/');
+    assert.strictEqual(window.pathMap.reading.root, 'Race/B/');
 }
 
 const results = [];
@@ -645,6 +807,140 @@ async function testColdStartLoadsManifestBeforeCachedAndSuppliedAvailabilityReco
     recordResult('严格按需冷启动先加载 Reading manifest 再归一化缓存与 supplied 快照', {
         cachedCount: cachedLoaded.length,
         suppliedCount: suppliedPublished.length
+    });
+}
+
+async function testNewerApplySupersedesManifestDelayedApply() {
+    const harness = createLatestIntentRaceHarness();
+    const delayedApply = harness.manager.applyLibraryConfiguration('race_a', [clone(harness.delayedA)]);
+    await harness.waitForReadingManifestRequest();
+
+    const immediateResult = await harness.manager.applyLibraryConfiguration('race_b', [clone(harness.immediateB)]);
+    assert.strictEqual(immediateResult, true, 'the immediate supplied-B apply must complete');
+    harness.releaseReadingManifest();
+    const delayedResult = await delayedApply;
+    assert.strictEqual(delayedResult, false, 'the manifest-delayed A apply must report that it was superseded');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assertLatestIntentRaceOutcome(harness);
+    recordResult('较新的 supplied apply 淘汰 manifest 延迟的旧 apply', {
+        activeKey: harness.getActiveId(),
+        publications: harness.effects.publications.map((entry) => entry.key)
+    });
+}
+
+async function testNewerApplySupersedesManifestDelayedActiveLoad() {
+    const harness = createLatestIntentRaceHarness();
+    const delayedLoad = harness.manager.loadActiveLibrary(true);
+    await harness.waitForReadingManifestRequest();
+
+    const immediateResult = await harness.manager.applyLibraryConfiguration('race_b', [clone(harness.immediateB)]);
+    assert.strictEqual(immediateResult, true, 'the immediate supplied-B apply must complete');
+    harness.releaseReadingManifest();
+    const delayedResult = await delayedLoad;
+    assert.deepStrictEqual(clone(delayedResult), [], 'the manifest-delayed active load must return no stale A index');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assertLatestIntentRaceOutcome(harness);
+    recordResult('较新的 supplied apply 淘汰 manifest 延迟的活动库加载', {
+        activeKey: harness.getActiveId(),
+        publications: harness.effects.publications.map((entry) => entry.key)
+    });
+}
+
+async function testNewerApplyCommitsAfterDelayedOlderActivation() {
+    const harness = createLatestIntentRaceHarness();
+    harness.releaseReadingManifest();
+    const activationStarted = createDeferred();
+    const activationRelease = createDeferred();
+    const activate = harness.window.AppData.library.activate.bind(harness.window.AppData.library);
+    harness.window.AppData.library.activate = async function activateWithDelayedA(id) {
+        if (id === 'race_a') {
+            activationStarted.resolve();
+            await activationRelease.promise;
+        }
+        return activate(id);
+    };
+
+    const delayedApply = harness.manager.applyLibraryConfiguration('race_a', [clone(harness.delayedA)]);
+    await activationStarted.promise;
+    let newerSettled = false;
+    const newerApply = harness.manager.applyLibraryConfiguration('race_b', [clone(harness.immediateB)])
+        .then((result) => {
+            newerSettled = true;
+            return result;
+        });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(newerSettled, false, 'the newer commit must queue behind an older in-flight activation');
+
+    activationRelease.resolve();
+    const [delayedResult, newerResult] = await Promise.all([delayedApply, newerApply]);
+    assert.strictEqual(delayedResult, false, 'the older apply must stop after its delayed activation returns stale');
+    assert.strictEqual(newerResult, true, 'the newer apply must commit after the older activation releases');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assertLatestIntentRaceOutcome(harness, { expectedActivations: ['race_a', 'race_b'] });
+    recordResult('较新的 apply 在旧 activation 结束后最后提交', {
+        activeKey: harness.getActiveId(),
+        activations: harness.effects.activations
+    });
+}
+
+async function testNewerActiveLoadWaitsForDelayedOlderActivation() {
+    const harness = createLatestIntentRaceHarness();
+    const activationStarted = createDeferred();
+    const activationRelease = createDeferred();
+    const activate = harness.window.AppData.library.activate.bind(harness.window.AppData.library);
+    harness.window.AppData.library.activate = async function activateWithDelayedB(id) {
+        if (id === 'race_b') {
+            activationStarted.resolve();
+            await activationRelease.promise;
+        }
+        return activate(id);
+    };
+
+    const delayedApply = harness.manager.applyLibraryConfiguration('race_b', [clone(harness.immediateB)]);
+    await activationStarted.promise;
+    let loadSettled = false;
+    const newerLoad = harness.manager.loadActiveLibrary(true).then((index) => {
+        loadSettled = true;
+        return index;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(loadSettled, false, 'the newer load must wait for the in-flight durable activation');
+
+    activationRelease.resolve();
+    const [delayedResult, loaded] = await Promise.all([delayedApply, newerLoad]);
+    assert.strictEqual(delayedResult, false, 'the older apply must stop after its activation returns stale');
+    assert.deepStrictEqual(clone(loaded).map((exam) => ({
+        id: exam.id,
+        provenance: exam.libraryConfigurationId
+    })), [{ id: 'race-b', provenance: 'race_b' }], 'the newer load must observe and publish the committed B selection');
+
+    const { window, effects } = harness;
+    assert.strictEqual(harness.getActiveId(), 'race_b');
+    assert.deepStrictEqual(effects.activations, ['race_b']);
+    assert.deepStrictEqual(effects.configurationUpdates, [], 'the stale apply must not continue into metadata mutation');
+    assert.deepStrictEqual(effects.pathMapSaves, ['race_b']);
+    assert.deepStrictEqual(effects.publications, [{
+        key: null,
+        ids: ['race-b'],
+        provenance: ['race_b']
+    }]);
+    assert.deepStrictEqual(effects.overviews, [['race-b']]);
+    assert.deepStrictEqual(effects.systemInfo, []);
+    assert.deepStrictEqual(effects.examLists, []);
+    assert.deepStrictEqual(effects.listeningAvailability, [['race-b']]);
+    assert.deepStrictEqual(effects.progressSyncs, ['library-loaded:true']);
+    assert.deepStrictEqual(effects.filterStates, []);
+    assert.deepStrictEqual(effects.filteredIndexes, []);
+    assert.deepStrictEqual(effects.configRenders, []);
+    assert.strictEqual(window.ResourceCore.getPathMap().reading.root, 'Race/B/');
+    assert.strictEqual(window.__activeLibraryPathMap.reading.root, 'Race/B/');
+    assert.strictEqual(window.pathMap.reading.root, 'Race/B/');
+    recordResult('较新的活动库加载等待旧 activation 并读取最终提交', {
+        activeKey: harness.getActiveId(),
+        publications: effects.publications.map((entry) => entry.ids)
     });
 }
 
@@ -1029,6 +1325,10 @@ async function main() {
         await testLoadActiveLibraryReconcilesPreUpgradeAvailability();
         await testApplyLibraryConfigurationReconcilesFetchedAndSuppliedAvailability();
         await testColdStartLoadsManifestBeforeCachedAndSuppliedAvailabilityReconciliation();
+        await testNewerApplySupersedesManifestDelayedApply();
+        await testNewerApplySupersedesManifestDelayedActiveLoad();
+        await testNewerApplyCommitsAfterDelayedOlderActivation();
+        await testNewerActiveLoadWaitsForDelayedOlderActivation();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();

@@ -93,6 +93,32 @@
     class LibraryManager {
         constructor(options = {}) {
             this.options = options || {};
+            this._libraryIntentGeneration = 0;
+            this._libraryCommitTail = Promise.resolve();
+        }
+
+        beginLibraryIntent() {
+            this._libraryIntentGeneration += 1;
+            return this._libraryIntentGeneration;
+        }
+
+        isLibraryIntentCurrent(generation) {
+            return generation === this._libraryIntentGeneration;
+        }
+
+        async runLibraryCommitForIntent(generation, commit) {
+            const previousCommit = this._libraryCommitTail;
+            let releaseCommit;
+            this._libraryCommitTail = new Promise((resolve) => {
+                releaseCommit = resolve;
+            });
+            await previousCommit;
+            try {
+                if (!this.isLibraryIntentCurrent(generation)) return false;
+                return await commit();
+            } finally {
+                releaseCommit();
+            }
         }
 
         get resourceCore() {
@@ -319,16 +345,23 @@
             return this.normalizeIndexForCustomConfig(rows);
         }
 
-        finishLibraryLoading(startTime, index) {
+        finishLibraryLoading(startTime, index, intentGeneration) {
+            const isCurrent = () => intentGeneration === undefined
+                || this.isLibraryIntentCurrent(intentGeneration);
+            if (!isCurrent()) return 0;
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('题库装载完成', 75);
             }
+            if (!isCurrent()) return loadTime;
             try { global.updateOverview && global.updateOverview(index); } catch (_) { }
+            if (!isCurrent()) return loadTime;
             refreshListeningAvailabilityUI(index);
+            if (!isCurrent()) return loadTime;
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
+            if (!isCurrent()) return loadTime;
             if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
                 global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
             }
@@ -415,12 +448,23 @@
         }
 
         async loadActiveLibrary(forceReload = false) {
+            return this.loadActiveLibraryForIntent(forceReload, this.beginLibraryIntent());
+        }
+
+        async loadActiveLibraryForIntent(forceReload, intentGeneration) {
             const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('加载题库索引', 35);
             }
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+            const commitBarrierPassed = await this.runLibraryCommitForIntent(
+                intentGeneration,
+                () => this.isLibraryIntentCurrent(intentGeneration)
+            );
+            if (!commitBarrierPassed || !this.isLibraryIntentCurrent(intentGeneration)) return [];
 
             const rawKey = await this.getActiveLibraryConfigurationKey();
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
             const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : null;
             const isDefaultConfig = activeConfigKey === null;
 
@@ -428,25 +472,32 @@
             try {
                 if (!isDefaultConfig) {
                     cachedData = await global.AppData.library.getIndex(activeConfigKey);
-                } else {
-                    await global.AppData.library.activate(null);
                 }
             } catch (error) {
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 console.warn('[LibraryManager] 读取题库缓存失败:', error);
             }
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
 
             if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
                 const updatedIndex = (await this.normalizeIndexForCustomConfigReady(cachedData))
                     .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
-                await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-                this.finishLibraryLoading(startTime, updatedIndex);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                const pathMap = await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: false });
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                this.setActivePathMap(pathMap);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                this.finishLibraryLoading(startTime, updatedIndex, intentGeneration);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 return updatedIndex;
             }
 
             if (!isDefaultConfig) {
                 const normalized = Array.isArray(cachedData) ? cachedData : [];
                 if (!normalized.length && typeof global.showMessage === 'function') {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                     global.showMessage('当前题库配置没有数据，已自动切换至默认题库。', 'warning');
                 }
                 // Continue through the built-in manifest path.  Returning the empty
@@ -459,19 +510,23 @@
                     try {
                         await global.ensureExamDataScripts();
                     } catch (loadError) {
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                         console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
                     }
                 }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 if (typeof global.reportBootStage === 'function') {
                     global.reportBootStage('解析题库数据', 55);
                 }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
 
                 const readingExams = this.getDefaultReadingIndex();
                 const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
                     console.warn('[LibraryManager] 未检测到默认题库脚本中的题源数据');
-                    this.finishLibraryLoading(startTime, []);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    this.finishLibraryLoading(startTime, [], intentGeneration);
                     return [];
                 }
 
@@ -480,6 +535,7 @@
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 const updatedIndex = combined;
 
                 const metadata = {
@@ -495,33 +551,35 @@
                         listening: this.resolveScriptPathRoot('listening')
                     }
                 };
-                try { global.examIndexMetadata = metadata; } catch (_) { }
-
                 const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
-
-                if (isDefaultConfig) {
-                    await this.setActiveLibraryConfiguration(null);
-                }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                try { global.examIndexMetadata = metadata; } catch (_) { }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 this.setActivePathMap(overrideMap);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
 
-                this.finishLibraryLoading(startTime, updatedIndex);
+                this.finishLibraryLoading(startTime, updatedIndex, intentGeneration);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 return updatedIndex;
             } catch (error) {
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
                 console.error('[LibraryManager] 加载默认题库失败:', error);
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
-                this.finishLibraryLoading(startTime, []);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                this.finishLibraryLoading(startTime, [], intentGeneration);
                 return [];
             }
         }
 
-        async updateLibraryConfigurationMetadata(key, examCount) {
+        async updateLibraryConfigurationMetadata(key, examCount, intentGeneration) {
             if (!key) {
-                return;
+                return true;
             }
             try {
                 let configs = await this.getLibraryConfigurations();
+                if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
@@ -554,10 +612,17 @@
                 });
                 if (mutated) {
                     const target = updated.find((entry) => entry && entry.key === key);
-                    if (target) await global.AppData.library.updateConfiguration(target);
+                    if (target) {
+                        if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
+                        await global.AppData.library.updateConfiguration(target);
+                        if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    }
                 }
+                return true;
             } catch (error) {
+                if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
                 console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
+                return false;
             }
         }
 
@@ -738,17 +803,12 @@
                 }
             };
 
-            const pathFallback = await this.loadPathMapForConfiguration(activeKey);
-            const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
-                ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
-                : (pathFallback || null);
             await global.AppData.library.import({
                 id: key,
                 configuration: Object.assign({}, metadata, { id: key, key, name, examCount: newIndex.length, timestamp: Date.now() }),
                 index: newIndex,
                 operationId: options.operationId
             });
-            if (options.activate !== false) this.setActivePathMap(pathMap);
 
             let applied = true;
             if (options.activate !== false) {
@@ -771,10 +831,24 @@
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
+            return this.applyLibraryConfigurationForIntent(
+                key,
+                dataset,
+                options,
+                this.beginLibraryIntent()
+            );
+        }
+
+        async applyLibraryConfigurationForIntent(key, dataset, options, intentGeneration) {
             const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
-            const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
+            let rawExams = dataset;
+            if (!Array.isArray(rawExams)) {
+                rawExams = await this.fetchLibraryDataset(key);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+            }
             const exams = (await this.normalizeIndexForCustomConfigReady(rawExams))
                 .map((exam) => ({ ...exam, libraryConfigurationId: configurationId }));
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');
@@ -782,54 +856,71 @@
                 return false;
             }
 
-            await this.setActiveLibraryConfiguration(key);
             const currentPathMap = await this.loadPathMapForConfiguration(key);
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
-            this.setActivePathMap(pathMap);
 
-            refreshListeningAvailabilityUI(exams);
-            if (typeof global.setBrowseFilterState === 'function') {
-                global.setBrowseFilterState('all', 'all');
-            }
-            if (typeof global.setFilteredExamsState === 'function') {
-                global.setFilteredExamsState([]);
-            }
+            return this.runLibraryCommitForIntent(intentGeneration, async () => {
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                await this.setActiveLibraryConfiguration(key);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                await this.updateLibraryConfigurationMetadata(key, exams.length, intentGeneration);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                const savedPathMap = await this.savePathMapForConfiguration(key, exams, {
+                    overrideMap: pathMap,
+                    setActive: false
+                });
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
 
-            await this.updateLibraryConfigurationMetadata(key, exams.length);
-            await this.savePathMapForConfiguration(key, exams, {
-                overrideMap: pathMap,
-                setActive: true
+                this.setActivePathMap(savedPathMap || pathMap);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                refreshListeningAvailabilityUI(exams);
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                if (typeof global.setBrowseFilterState === 'function') {
+                    global.setBrowseFilterState('all', 'all');
+                }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                if (typeof global.setFilteredExamsState === 'function') {
+                    global.setFilteredExamsState([]);
+                }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                try {
+                    global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
+                } catch (error) {
+                    console.warn('[LibraryManager] 题库切换事件派发失败', error);
+                }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                    global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+                }
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {
+                    setTimeout(() => {
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return;
+                        try {
+                            global.renderLibraryConfigList({
+                                allowDelete: true,
+                                activeKey: key
+                            });
+                        } catch (error) {
+                            console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
+                        }
+                    }, 0);
+                }
+
+                return true;
             });
-
-            try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
-            try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
-            try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
-
-            try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
-            } catch (error) {
-                console.warn('[LibraryManager] 题库切换事件派发失败', error);
-            }
-            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
-                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
-            }
-
-            if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {
-                setTimeout(() => {
-                    try {
-                        global.renderLibraryConfigList({
-                            allowDelete: true,
-                            activeKey: key
-                        });
-                    } catch (error) {
-                        console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
-                    }
-                }, 0);
-            }
-
-            return true;
         }
 
         async deleteLibraryConfiguration(key) {
@@ -890,14 +981,20 @@
         }
 
         async loadLibrary(keyOrForceReload) {
+            const intentGeneration = this.beginLibraryIntent();
             if (keyOrForceReload === 'default' || keyOrForceReload === null) {
-                await this.setActiveLibraryConfiguration(null);
-                return this.loadActiveLibrary(true);
+                const activated = await this.runLibraryCommitForIntent(intentGeneration, async () => {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    await this.setActiveLibraryConfiguration(null);
+                    return this.isLibraryIntentCurrent(intentGeneration);
+                });
+                if (!activated) return [];
+                return this.loadActiveLibraryForIntent(true, intentGeneration);
             }
             if (typeof keyOrForceReload === 'string' && keyOrForceReload) {
-                return this.applyLibraryConfiguration(keyOrForceReload);
+                return this.applyLibraryConfigurationForIntent(keyOrForceReload, undefined, {}, intentGeneration);
             }
-            return this.loadActiveLibrary(!!keyOrForceReload);
+            return this.loadActiveLibraryForIntent(!!keyOrForceReload, intentGeneration);
         }
     }
 
