@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:ef060bdedfd83a7b07e65301fa80955f6330ebbb6287c0023729d32f99bdc260",
+  "buildId": "sha256:6724932c5c05e394cf375dd9331113b9be074a6b64db2fb97ff9692df9c8d713",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -546,11 +546,11 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "58d95fde6692573b2250b34d9321d040e7889bad7b0a18f2c5b69de7db108923"
+      "sha256": "992dc44b8cb20a3c43ca6691e1614f12959579ab070fa552a75bc3b801102d6a"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "0634dc0c2893337ae47862f5a2e53c5ee7c689693d1b34052fe84cd9b3de8087"
+      "sha256": "ea2b0b54f2c5d1a81100135485f1b455e2a30d48945c2539eeb578d69a2d3777"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -562,7 +562,7 @@
     },
     {
       "path": "js/bundles/legacy-app.bundle.js",
-      "sha256": "7849297662a4521e6577f15b04c92fa0e5922f6802c6e1cfb7c1a8fa3e17fe47"
+      "sha256": "9104278dd755b0f2c0a9bb408cbc5fda178802fd4195f985979bb9b7e06ef0ec"
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
@@ -836,7 +836,7 @@
       {
         "source": "js/services/libraryManager.js",
         "startLine": 23959,
-        "endLine": 25038,
+        "endLine": 25421,
         "sourceStartLine": 1
       }
     ],
@@ -924,19 +924,19 @@
       {
         "source": "js/boot-fallbacks.js",
         "startLine": 4,
-        "endLine": 1927,
+        "endLine": 1930,
         "sourceStartLine": 1
       },
       {
         "source": "js/app.js",
-        "startLine": 1931,
-        "endLine": 3467,
+        "startLine": 1934,
+        "endLine": 3470,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/onboardingTour.js",
-        "startLine": 3471,
-        "endLine": 5130,
+        "startLine": 3474,
+        "endLine": 5133,
         "sourceStartLine": 1
       }
     ],
@@ -1052,7 +1052,7 @@
       {
         "source": "js/main.js",
         "startLine": 20859,
-        "endLine": 26515,
+        "endLine": 26524,
         "sourceStartLine": 1
       }
     ],

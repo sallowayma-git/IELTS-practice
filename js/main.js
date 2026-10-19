@@ -5404,27 +5404,48 @@ function resolveLibraryConfigContainer(options) {
 }
 
 async function renderLibraryConfigList(options = {}) {
+    const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : () => true;
+    const shouldRender = () => {
+        try {
+            return isCurrent() !== false;
+        } catch (_) {
+            return false;
+        }
+    };
+    if (!shouldRender()) {
+        return null;
+    }
     const container = resolveLibraryConfigContainer(options);
     if (!container) {
         return null;
     }
 
     let configs = Array.isArray(options.configs) ? options.configs : await resolveLibraryConfigurations();
+    if (!shouldRender()) {
+        return null;
+    }
     if (!configs.length) {
         if (options.silentEmpty) {
             const existingHost = container.querySelector('.library-config-list');
-            if (existingHost) {
+            if (existingHost && shouldRender()) {
                 existingHost.remove();
             }
-        } else if (typeof showMessage === 'function') {
+        } else if (shouldRender() && typeof showMessage === 'function') {
             showMessage('暂无题库配置记录', 'info');
         }
         return null;
     }
 
-    const activeKey = options.activeKey || await getActiveLibraryConfigurationKey();
+    const hasSuppliedActiveKey = Object.prototype.hasOwnProperty.call(options, 'activeKey');
+    const activeKey = hasSuppliedActiveKey ? options.activeKey : await getActiveLibraryConfigurationKey();
+    if (!shouldRender()) {
+        return null;
+    }
     const view = ensureLibraryConfigView();
     if (view) {
+        if (!shouldRender()) {
+            return null;
+        }
         return view.mount(container, configs, {
             activeKey,
             allowDelete: options.allowDelete !== false,
@@ -5436,6 +5457,9 @@ async function renderLibraryConfigList(options = {}) {
         });
     }
 
+    if (!shouldRender()) {
+        return null;
+    }
     return renderLibraryConfigFallback(container, configs, { activeKey, emptyMessage: options.emptyMessage });
 }
 
@@ -5450,25 +5474,10 @@ async function showLibraryConfigListV2(options) {
 // 切换题库配置
 async function switchLibraryConfig(configKey) {
     const key = typeof configKey === 'string' && configKey.trim() ? configKey.trim() : null;
-    try {
-        const activeKey = await getActiveLibraryConfigurationKey();
-        if (activeKey === key) {
-            showMessage('当前题库已激活', 'info');
-            return;
-        }
-    } catch (error) {
-        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+    if (window.LibraryManager && typeof window.LibraryManager.switchLibraryConfig === 'function') {
+        return window.LibraryManager.switchLibraryConfig(key);
     }
-    const dataset = await fetchLibraryDataset(key);
-    if (!Array.isArray(dataset) || dataset.length === 0) {
-        showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
-        return;
-    }
-    showMessage('正在切换题库配置...', 'info');
-    const applied = await applyLibraryConfiguration(key, dataset, { skipConfigRefresh: false });
-    if (applied) {
-        showMessage('题库配置已切换', 'success');
-    }
+    return false;
 }
 
 // 删除题库配置
