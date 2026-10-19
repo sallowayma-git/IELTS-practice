@@ -348,6 +348,115 @@ function createRealBlobHarness() {
     };
 }
 
+function createRandomPracticePdfHarness() {
+    const activeIndex = createDeferred();
+    const exam = pdfExam();
+    const popup = createPopup('random-practice');
+    const timers = [];
+    let gestureActive = true;
+    const state = {
+        activeIndexCalls: 0,
+        windowOpenCalls: [],
+        safeOpenCalls: [],
+        messages: [],
+        events: []
+    };
+    const documentStub = {
+        readyState: 'loading',
+        addEventListener() {},
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+        getElementById() { return null; }
+    };
+    const resourceCore = {
+        isListeningExam,
+        isPdfAvailable(candidate) {
+            return Boolean(candidate && candidate.hasPdf === true && String(candidate.pdfFilename || '').trim());
+        },
+        async resolveResource(candidate, kind) {
+            assert.strictEqual(candidate, exam);
+            assert.strictEqual(kind, 'pdf');
+            state.events.push('resolve-resource');
+            return { url: '/deployed/random-practice.pdf', attempts: [], source: 'map', kind: 'pdf' };
+        }
+    };
+    const windowStub = {
+        document: documentStub,
+        location: { protocol: 'https:', href: 'https://example.test/index.html' },
+        ResourceCore: resourceCore,
+        async resolveActiveLibraryIndex() {
+            state.activeIndexCalls += 1;
+            state.events.push('resolve-random-index');
+            return activeIndex.promise;
+        },
+        buildResourcePath() {
+            return './random-practice.pdf';
+        },
+        open(url, target, features) {
+            state.events.push(`window-open:${url}`);
+            state.windowOpenCalls.push({ url, target, features, gestureActive });
+            return gestureActive ? popup.popup : null;
+        },
+        showMessage(message, type) {
+            state.messages.push({ message, type });
+        }
+    };
+    const sandbox = {
+        window: windowStub,
+        globalThis: windowStub,
+        document: documentStub,
+        console: { log() {}, warn() {}, error() {} },
+        Date,
+        Math: Object.create(Math),
+        JSON,
+        Map,
+        WeakMap,
+        Set,
+        Promise,
+        Object,
+        Array,
+        String,
+        Number,
+        Boolean,
+        Error,
+        URL,
+        URLSearchParams,
+        setTimeout(callback) {
+            timers.push(callback);
+            return timers.length;
+        },
+        clearTimeout() {},
+        async resolveActiveExamIndex() {
+            state.events.push('resolve-view-index');
+            return [exam];
+        },
+        getResourceCore() {
+            return resourceCore;
+        },
+        showMessage(message, type) {
+            state.messages.push({ message, type });
+        },
+        openPDFSafely(url, title, options) {
+            state.safeOpenCalls.push({ url, title, options });
+            return options.reservedWindow;
+        }
+    };
+    sandbox.Math.random = () => 0;
+    const context = vm.createContext(sandbox);
+    vm.runInContext(extractViewPdfSource(), context, { filename: 'js/main.js#viewPDF' });
+    windowStub.viewPDF = context.viewPDF;
+    vm.runInContext(read('js/presentation/app-actions.js'), context, { filename: 'js/presentation/app-actions.js' });
+    return {
+        activeIndex,
+        exam,
+        popup,
+        timers,
+        state,
+        windowStub,
+        endGesture() { gestureActive = false; }
+    };
+}
+
 function pdfExam(overrides = {}) {
     return {
         id: 'custom-reading-pdf-only',
@@ -877,6 +986,45 @@ async function testPdfOnlyFallbackFileProtocolPreservesPathLaunch() {
     assert.deepStrictEqual(harness.state.navigationWrites, []);
 }
 
+async function testRandomPracticeReservesPdfWindowBeforeDelayedSelection() {
+    const harness = createRandomPracticePdfHarness();
+
+    const pending = harness.windowStub.AppActions.startRandomPractice('all', 'reading');
+    assert.strictEqual(harness.state.windowOpenCalls.length, 1,
+        'Random Practice must reserve a popup synchronously at the initiating gesture');
+    assert.deepStrictEqual(harness.state.windowOpenCalls[0], {
+        url: 'about:blank',
+        target: '_blank',
+        features: 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes',
+        gestureActive: true
+    });
+    assert.deepStrictEqual(harness.state.events.slice(0, 2), [
+        'window-open:about:blank',
+        'resolve-random-index'
+    ]);
+
+    harness.endGesture();
+    harness.activeIndex.resolve([harness.exam]);
+    await pending;
+    assert.strictEqual(harness.timers.length, 1, 'the selected exercise should retain the existing launch delay');
+    harness.timers.shift()();
+    for (let index = 0; index < 8; index += 1) {
+        await Promise.resolve();
+    }
+
+    assert.strictEqual(harness.state.windowOpenCalls.length, 1,
+        'the delayed PDF path must not attempt a popup after transient activation expires');
+    assert.strictEqual(harness.state.safeOpenCalls.length, 1);
+    const launch = harness.state.safeOpenCalls[0];
+    assert.strictEqual(launch.url, '/deployed/random-practice.pdf');
+    assert.strictEqual(launch.options.reservedWindow, harness.popup.popup);
+    assert.strictEqual(launch.options.reservationAttempted, true);
+    assert.strictEqual(launch.options.ownsReservedWindow, true);
+    assert.strictEqual(launch.options.preventCurrentWindowFallback, true);
+    assert.strictEqual(harness.popup.state.closeCalls, 0,
+        'ownership must transfer to viewPDF instead of closing the reserved popup early');
+}
+
 async function testRealResourceCoreAndPdfHandlerBlobProvenance() {
     const harness = createRealBlobHarness();
     const handler = new harness.PDFHandler();
@@ -978,6 +1126,7 @@ async function main() {
         testConcurrentFailedNamedRelaunchClosesTransferredBlankReservation,
         testFailedNamedRelaunchPreservesExternallyNavigatedPendingContext,
         testPdfOnlyFallbackFileProtocolPreservesPathLaunch,
+        testRandomPracticeReservesPdfWindowBeforeDelayedSelection,
         testRealResourceCoreAndPdfHandlerBlobProvenance
     ];
 

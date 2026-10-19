@@ -26445,12 +26445,40 @@ function startSuitePractice() {
 }
 
 // Phase 3: 打开题目 - 已迁移到 app-actions.js
-function openExamWithFallback(exam, delay = 600) {
+function closeOwnedReservedPdfWindow(options) {
+    if (!options || options.ownsReservedWindow !== true) return;
+    const reservedWindow = options.reservedWindow;
+    if (!reservedWindow || reservedWindow.closed || typeof reservedWindow.close !== 'function') return;
+    try { reservedWindow.close(); } catch (_) { }
+}
+
+function reserveRandomPracticePdfWindow() {
+    const launchOptions = {
+        reservedWindow: null,
+        reservationAttempted: true,
+        ownsReservedWindow: false,
+        preventCurrentWindowFallback: true
+    };
+    if (typeof window.open !== 'function') return launchOptions;
+    try {
+        launchOptions.reservedWindow = window.open(
+            'about:blank',
+            '_blank',
+            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+        );
+        launchOptions.ownsReservedWindow = Boolean(launchOptions.reservedWindow);
+    } catch (_) { }
+    return launchOptions;
+}
+
+function openExamWithFallback(exam, delay = 600, options = {}) {
     if (window.AppActions && typeof window.AppActions.openExamWithFallback === 'function') {
-        return window.AppActions.openExamWithFallback(exam, delay);
+        return window.AppActions.openExamWithFallback(exam, delay, options);
     }
+    const launchOptions = options && typeof options === 'object' ? options : {};
     // 降级：直接执行
     if (!exam) {
+        closeOwnedReservedPdfWindow(launchOptions);
         if (typeof showMessage === 'function') {
             showMessage('未找到可用题目', 'error');
         }
@@ -26459,11 +26487,13 @@ function openExamWithFallback(exam, delay = 600) {
     const launch = () => {
         try {
             if (exam.hasHtml) {
+                closeOwnedReservedPdfWindow(launchOptions);
                 openExam(exam.id);
             } else {
-                viewPDF(exam.id);
+                viewPDF(exam.id, launchOptions);
             }
         } catch (error) {
+            closeOwnedReservedPdfWindow(launchOptions);
             console.error('[main.js] 启动题目失败:', error);
             if (typeof showMessage === 'function') {
                 showMessage('无法打开题目，请检查题库路径', 'error');
@@ -26483,7 +26513,14 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
         return window.AppActions.startRandomPractice(category, type, filterMode, path);
     }
     // 降级：直接执行
-    const list = await resolveActiveExamIndex();
+    const launchOptions = reserveRandomPracticePdfWindow();
+    let list;
+    try {
+        list = await resolveActiveExamIndex();
+    } catch (error) {
+        closeOwnedReservedPdfWindow(launchOptions);
+        throw error;
+    }
     const normalizedType = (!type || type === 'all') ? null : type;
     const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
@@ -26506,6 +26543,7 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
         }
     }
     if (pool.length === 0) {
+        closeOwnedReservedPdfWindow(launchOptions);
         if (typeof showMessage === 'function') {
             const typeLabel = normalizedType === 'listening' ? '听力' : (normalizedType === 'reading' ? '阅读' : '题库');
             showMessage(`${category} ${typeLabel} 分类暂无可用题目`, 'error');
@@ -26516,7 +26554,7 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
     if (typeof showMessage === 'function') {
         showMessage(`随机选择: ${randomExam.title}`, 'info');
     }
-    openExamWithFallback(randomExam);
+    openExamWithFallback(randomExam, 600, launchOptions);
 }
 
 // Phase 4: 清理重复事件绑定

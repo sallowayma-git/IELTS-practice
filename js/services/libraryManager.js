@@ -97,6 +97,8 @@
             this._libraryCommitIntentGeneration = 0;
             this._libraryCommitTail = Promise.resolve();
             this._libraryCommitPendingCount = 0;
+            this._activeLibraryPreparationCounts = new Map();
+            this._exclusiveLibraryMutationGeneration = 0;
             this._lastDurablyActivatedLibraryState = null;
         }
 
@@ -114,6 +116,10 @@
 
         claimLibraryCommitIntent(generation) {
             if (!this.canPrepareLibraryIntent(generation)) return false;
+            if (
+                this._exclusiveLibraryMutationGeneration > 0
+                && this._exclusiveLibraryMutationGeneration !== generation
+            ) return false;
             this._libraryCommitIntentGeneration = generation;
             return true;
         }
@@ -141,7 +147,30 @@
             }
         }
 
-        async runLibraryCommitForIntent(generation, commit) {
+        beginActiveLibraryPreparation(generation) {
+            const pending = this._activeLibraryPreparationCounts.get(generation) || 0;
+            this._activeLibraryPreparationCounts.set(generation, pending + 1);
+        }
+
+        finishActiveLibraryPreparation(generation) {
+            const pending = this._activeLibraryPreparationCounts.get(generation) || 0;
+            if (pending <= 1) {
+                this._activeLibraryPreparationCounts.delete(generation);
+                return;
+            }
+            this._activeLibraryPreparationCounts.set(generation, pending - 1);
+        }
+
+        hasUncommittedActiveLibraryPreparation() {
+            for (const [generation, pending] of this._activeLibraryPreparationCounts.entries()) {
+                if (pending > 0 && generation !== this._libraryCommitIntentGeneration) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        async runSerializedLibraryMutation(mutation) {
             const previousCommit = this._libraryCommitTail;
             let releaseCommit;
             this._libraryCommitTail = new Promise((resolve) => {
@@ -150,12 +179,18 @@
             this._libraryCommitPendingCount += 1;
             await previousCommit;
             try {
-                if (!this.isLibraryIntentCurrent(generation)) return false;
-                return await commit();
+                return await mutation();
             } finally {
                 this._libraryCommitPendingCount = Math.max(0, this._libraryCommitPendingCount - 1);
                 releaseCommit();
             }
+        }
+
+        async runLibraryCommitForIntent(generation, commit) {
+            return this.runSerializedLibraryMutation(async () => {
+                if (!this.isLibraryIntentCurrent(generation)) return false;
+                return commit();
+            });
         }
 
         get resourceCore() {
@@ -491,6 +526,15 @@
         }
 
         async loadActiveLibraryForIntent(forceReload, intentGeneration) {
+            this.beginActiveLibraryPreparation(intentGeneration);
+            try {
+                return await this.prepareActiveLibraryForIntent(forceReload, intentGeneration);
+            } finally {
+                this.finishActiveLibraryPreparation(intentGeneration);
+            }
+        }
+
+        async prepareActiveLibraryForIntent(forceReload, intentGeneration) {
             const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('加载题库索引', 35);
@@ -1054,6 +1098,7 @@
         }
 
         async switchLibraryConfig(key) {
+            const shouldResumeActivePreparation = this.hasUncommittedActiveLibraryPreparation();
             const intentGeneration = this.beginLibraryIntent();
             const nextKey = typeof key === 'string' && key.trim() ? key.trim() : null;
             let activeKey = null;
@@ -1072,7 +1117,10 @@
                 && activeKey === nextKey
                 && this._libraryCommitPendingCount === 0
             ) {
-                if (typeof global.showMessage === 'function') {
+                if (shouldResumeActivePreparation) {
+                    await this.loadActiveLibraryForIntent(true, intentGeneration);
+                }
+                if (this.canPrepareLibraryIntent(intentGeneration) && typeof global.showMessage === 'function') {
                     global.showMessage('当前题库已激活', 'info');
                 }
                 return false;
@@ -1096,7 +1144,10 @@
             const dataset = await this.fetchLibraryDataset(nextKey);
             if (!this.canPrepareLibraryIntent(intentGeneration)) return false;
             if (!Array.isArray(dataset) || dataset.length === 0) {
-                if (typeof global.showMessage === 'function') {
+                if (shouldResumeActivePreparation) {
+                    await this.loadActiveLibraryForIntent(true, intentGeneration);
+                }
+                if (this.canPrepareLibraryIntent(intentGeneration) && typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
                 }
                 return false;
@@ -1108,7 +1159,7 @@
             const applied = await this.applyLibraryConfigurationForIntent(
                 nextKey,
                 dataset,
-                { skipConfigRefresh: false },
+                { skipConfigRefresh: false, requireStoredConfiguration: true },
                 intentGeneration
             );
             if (applied && this.isLibraryIntentCurrent(intentGeneration) && typeof global.showMessage === 'function') {
@@ -1240,6 +1291,32 @@
             try {
                 return await this.runLibraryCommitForIntent(intentGeneration, async () => {
                     if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    if (options.requireStoredConfiguration === true) {
+                        let configurations;
+                        let storedDataset;
+                        try {
+                            configurations = await this.getLibraryConfigurations();
+                            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                            storedDataset = await this.fetchLibraryDataset(configurationId);
+                        } catch (error) {
+                            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                            console.warn('[LibraryManager] 无法重新验证目标题库配置', error);
+                            return false;
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                        const configurationExists = (Array.isArray(configurations) ? configurations : []).some((config) => {
+                            if (typeof config === 'string') return config.trim() === configurationId;
+                            if (!config || typeof config !== 'object') return false;
+                            const storedKey = typeof config.key === 'string' && config.key.trim()
+                                ? config.key.trim()
+                                : (typeof config.id === 'string' ? config.id.trim() : '');
+                            return storedKey === configurationId;
+                        });
+                        if (!configurationExists || !Array.isArray(storedDataset) || storedDataset.length === 0) {
+                            return false;
+                        }
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
                     await this.setActiveLibraryConfiguration(key);
                     activationCompleted = true;
                     this.rememberDurablyActivatedLibraryState(configurationId, exams);
@@ -1313,57 +1390,88 @@
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
-            const activeKey = await this.getActiveLibraryConfigurationKey();
-            if (activeKey === configKey) {
-                return { deleted: false, reason: 'active-config' };
-            }
-
-            let configs = await this.getLibraryConfigurations();
-            configs = Array.isArray(configs) ? configs : [];
-            let found = false;
-            const nextConfigs = [];
-
-            configs.forEach((config) => {
-                if (!config) {
-                    return;
+            const intentGeneration = this.beginLibraryIntent();
+            const result = await this.runSerializedLibraryMutation(async () => {
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
                 }
-                if (typeof config === 'string') {
-                    const itemKey = config.trim();
-                    if (!itemKey) {
+
+                const activeKey = await this.getActiveLibraryConfigurationKey();
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
+                }
+                if (activeKey === configKey) {
+                    return { deleted: false, reason: 'active-config' };
+                }
+
+                let configs = await this.getLibraryConfigurations();
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
+                }
+                configs = Array.isArray(configs) ? configs : [];
+                let found = false;
+                const nextConfigs = [];
+
+                configs.forEach((config) => {
+                    if (!config) return;
+                    if (typeof config === 'string') {
+                        const itemKey = config.trim();
+                        if (!itemKey) return;
+                        if (itemKey === configKey) {
+                            found = true;
+                            return;
+                        }
+                        nextConfigs.push(config);
                         return;
                     }
+
+                    const itemKey = typeof config.key === 'string' && config.key.trim()
+                        ? config.key.trim()
+                        : (typeof config.id === 'string' ? config.id.trim() : '');
+                    if (!itemKey) return;
                     if (itemKey === configKey) {
                         found = true;
                         return;
                     }
                     nextConfigs.push(config);
-                    return;
+                });
+
+                if (!found) {
+                    return { deleted: false, reason: 'not-found' };
+                }
+                if (!this.claimLibraryCommitIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
                 }
 
-                const itemKey = typeof config.key === 'string' ? config.key.trim() : '';
-                if (!itemKey) {
-                    return;
+                this._exclusiveLibraryMutationGeneration = intentGeneration;
+                try {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    await global.AppData.library.remove(configKey);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    await this.deletePathMapForConfiguration(configKey);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    this.clearDurablyActivatedLibraryState(configKey);
+
+                    return {
+                        deleted: true,
+                        key: configKey,
+                        remaining: nextConfigs.length
+                    };
+                } finally {
+                    if (this._exclusiveLibraryMutationGeneration === intentGeneration) {
+                        this._exclusiveLibraryMutationGeneration = 0;
+                    }
                 }
-                if (itemKey === configKey) {
-                    found = true;
-                    return;
-                }
-                nextConfigs.push(config);
             });
-
-            if (!found) {
-                return { deleted: false, reason: 'not-found' };
-            }
-
-            await global.AppData.library.remove(configKey);
-            await this.deletePathMapForConfiguration(configKey);
-            this.clearDurablyActivatedLibraryState(configKey);
-
-            return {
-                deleted: true,
-                key: configKey,
-                remaining: nextConfigs.length
-            };
+            return result && typeof result === 'object'
+                ? result
+                : { deleted: false, reason: 'superseded' };
         }
 
         async loadLibrary(keyOrForceReload) {

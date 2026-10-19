@@ -1786,7 +1786,14 @@
             message: importMessage
           });
         } catch (managerError) {
-          console.warn('[Fallback] LibraryManager 导入配置创建失败，使用旧降级路径:', managerError);
+          console.warn('[Fallback] LibraryManager 导入配置创建失败:', managerError);
+          var managerMessage = '题库导入失败：' + (managerError && managerError.message ? managerError.message : '未知错误');
+          window.showMessage && window.showMessage(managerMessage, 'error');
+          return _fallbackBuildUploadReport(discoveryResult, {
+            status: 'error',
+            mode: mode,
+            message: managerMessage
+          });
         }
       }
 

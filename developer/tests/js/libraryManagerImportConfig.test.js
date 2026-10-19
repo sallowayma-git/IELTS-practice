@@ -23,10 +23,12 @@ function clone(value) {
 
 function createDeferred() {
     let resolve;
-    const promise = new Promise((done) => {
+    let reject;
+    const promise = new Promise((done, fail) => {
         resolve = done;
+        reject = fail;
     });
-    return { promise, resolve };
+    return { promise, resolve, reject };
 }
 
 const RENDEZVOUS_TIMEOUT_MS = 2000;
@@ -48,6 +50,14 @@ function loadMainBlock(context, startMarker, endMarker, label) {
     const end = source.indexOf(endMarker, start + startMarker.length);
     assert(start >= 0 && end > start, `unable to locate ${label} in js/main.js`);
     vm.runInContext(source.slice(start, end), context, { filename: `js/main.js#${label}` });
+}
+
+function loadSourceBlock(relativePath, context, startMarker, endMarker, label) {
+    const source = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+    const start = source.indexOf(startMarker);
+    const end = source.indexOf(endMarker, start + startMarker.length);
+    assert(start >= 0 && end > start, `unable to locate ${label} in ${relativePath}`);
+    vm.runInContext(source.slice(start, end), context, { filename: `${relativePath}#${label}` });
 }
 
 function createHarness(seed = {}) {
@@ -1016,6 +1026,68 @@ async function testSameActiveSwitchRemainsNoopWithoutPendingCommit() {
     });
 }
 
+function assertActivePreparationRecovered(harness) {
+    const { window, effects } = harness;
+    assert.strictEqual(harness.getActiveId(), 'race_a');
+    assert.deepStrictEqual(effects.publications, [{
+        key: null,
+        ids: ['race-a'],
+        provenance: ['race_a']
+    }], 'exactly one replacement active-library load must publish A');
+    assert.deepStrictEqual(effects.overviews, [['race-a']]);
+    assert.deepStrictEqual(effects.listeningAvailability, [['race-a']]);
+    assert.deepStrictEqual(effects.progressSyncs, ['library-loaded:true']);
+    assert.deepStrictEqual(effects.pathMapSaves, ['race_a']);
+    assert.deepStrictEqual(effects.activations, [], 'restarting preparation must not rewrite the durable active key');
+    assert.strictEqual(window.ResourceCore.getPathMap().reading.root, 'Race/A/');
+    assert.strictEqual(window.__activeLibraryPathMap.reading.root, 'Race/A/');
+    assert.strictEqual(window.pathMap.reading.root, 'Race/A/');
+}
+
+async function testSameActiveReselectionRestartsDelayedActiveLoad() {
+    const harness = createLatestIntentRaceHarness();
+    const delayedLoad = harness.manager.loadActiveLibrary(true);
+    await withTimeout(harness.waitForReadingManifestRequest(), 'same-active startup manifest request');
+
+    const repeatedSelection = harness.manager.switchLibraryConfig('race_a');
+    harness.releaseReadingManifest();
+
+    const originalResult = await withTimeout(delayedLoad, 'superseded same-active startup load');
+    const selectionResult = await withTimeout(repeatedSelection, 'same-active replacement load');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepStrictEqual(clone(originalResult), [], 'the original preparation must retire under the newer ticket');
+    assert.strictEqual(selectionResult, false, 'reselecting the durable key remains a no-op result');
+    assertActivePreparationRecovered(harness);
+    recordResult('同一活动配置重选会接管并重启尚未提交的 startup load', {
+        activeKey: harness.getActiveId(),
+        publications: harness.effects.publications.length
+    });
+}
+
+async function testMissingSelectionRestartsDelayedActiveLoad() {
+    const harness = createLatestIntentRaceHarness();
+    const delayedLoad = harness.manager.loadActiveLibrary(true);
+    await withTimeout(harness.waitForReadingManifestRequest(), 'missing-target startup manifest request');
+
+    const missingSelection = harness.manager.switchLibraryConfig('missing_config');
+    harness.releaseReadingManifest();
+
+    const originalResult = await withTimeout(delayedLoad, 'superseded missing-target startup load');
+    const selectionResult = await withTimeout(missingSelection, 'missing-target replacement load');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepStrictEqual(clone(originalResult), [], 'the invalid successor must not revive the old ticket');
+    assert.strictEqual(selectionResult, false, 'a missing configuration must remain rejected');
+    assertActivePreparationRecovered(harness);
+    assert(harness.effects.messages.some((entry) => entry.type === 'warning'),
+        'the missing selection must still report its validation warning');
+    recordResult('缺失后继配置会恢复被其淘汰的活动库准备', {
+        activeKey: harness.getActiveId(),
+        publications: harness.effects.publications.length
+    });
+}
+
 async function testFailedDefaultCommitRecoversCanonicalDefaultState() {
     const seed = baseSeed();
     const { window, getActiveId } = createHarness(seed);
@@ -1928,6 +2000,189 @@ async function testSupersededQueuedDefaultLoadReturnsEmptyArray() {
     });
 }
 
+async function establishDeletionRaceBaseline(harness) {
+    harness.releaseReadingManifest();
+    assert.strictEqual(
+        await harness.manager.applyLibraryConfiguration('race_a', [clone(harness.delayedA)]),
+        true
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(harness.getActiveId(), 'race_a');
+    assert.deepStrictEqual(harness.effects.publications.map((entry) => entry.key), ['race_a']);
+    assert.strictEqual(harness.window.ResourceCore.getPathMap().reading.root, 'Race/A/');
+}
+
+async function assertDeletionRaceWinner(harness, deletionResult, switchResult) {
+    assert.strictEqual(deletionResult.deleted, true, 'the serialized deletion must be the sole winner');
+    assert.strictEqual(switchResult, false, 'the conflicting switch must report that it did not commit');
+    assert.strictEqual(harness.getActiveId(), 'race_a', 'the original active library must remain durable');
+    assert.deepStrictEqual(
+        await harness.window.AppData.library.getIndex('race_b'),
+        [],
+        'the deleted dataset must not be recreated from a captured switch snapshot'
+    );
+    assert(!harness.getConfigurations().some((config) => config.id === 'race_b' || config.key === 'race_b'));
+    assert.deepStrictEqual(
+        harness.effects.publications.map((entry) => entry.key),
+        ['race_a'],
+        'the deleted configuration must never publish after the coherent A baseline'
+    );
+    assert.strictEqual(harness.window.ResourceCore.getPathMap().reading.root, 'Race/A/');
+    assert.strictEqual(harness.window.__activeLibraryPathMap.reading.root, 'Race/A/');
+    assert.strictEqual(harness.window.pathMap.reading.root, 'Race/A/');
+}
+
+async function testDeleteFirstExcludesSwitchDuringRemove() {
+    const harness = createLatestIntentRaceHarness();
+    await establishDeletionRaceBaseline(harness);
+
+    const removeStarted = createDeferred();
+    const removeRelease = createDeferred();
+    const remove = harness.window.AppData.library.remove.bind(harness.window.AppData.library);
+    harness.window.AppData.library.remove = async function removeWithGate(id) {
+        if (id === 'race_b') {
+            removeStarted.resolve();
+            await removeRelease.promise;
+        }
+        const result = await remove(id);
+        if (await harness.window.AppData.library.getActive() === id) {
+            await harness.window.AppData.library.activate(null);
+        }
+        return result;
+    };
+
+    const deletion = harness.manager.deleteLibraryConfiguration('race_b');
+    await withTimeout(removeStarted.promise, 'delete-first remove entry');
+    const switching = harness.manager.switchLibraryConfig('race_b');
+    const switchResult = await withTimeout(switching, 'switch blocked by exclusive deletion');
+    removeRelease.resolve();
+    const deletionResult = await withTimeout(deletion, 'delete-first completion');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await assertDeletionRaceWinner(harness, deletionResult, switchResult);
+    recordResult('delete-first 与 switch 并发时独占删除成为唯一提交者', {
+        deleted: deletionResult.deleted,
+        switched: switchResult
+    });
+}
+
+async function testCapturedSwitchCannotCommitAfterDelete() {
+    const harness = createLatestIntentRaceHarness();
+    await establishDeletionRaceBaseline(harness);
+
+    const pathReadStarted = createDeferred();
+    const pathReadRelease = createDeferred();
+    const loadPathMap = harness.manager.loadPathMapForConfiguration.bind(harness.manager);
+    harness.manager.loadPathMapForConfiguration = async function loadPathMapWithCapturedBGate(key) {
+        if (key === 'race_b') {
+            pathReadStarted.resolve();
+            await pathReadRelease.promise;
+        }
+        return loadPathMap(key);
+    };
+
+    const switching = harness.manager.switchLibraryConfig('race_b');
+    await withTimeout(pathReadStarted.promise, 'switch-first captured B path lookup');
+    const deletionResult = await withTimeout(
+        harness.manager.deleteLibraryConfiguration('race_b'),
+        'delete after switch captured B'
+    );
+    pathReadRelease.resolve();
+    const switchResult = await withTimeout(switching, 'captured switch retirement');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await assertDeletionRaceWinner(harness, deletionResult, switchResult);
+    recordResult('switch-first 已捕获快照不会在删除完成后复活配置', {
+        deleted: deletionResult.deleted,
+        switched: switchResult
+    });
+}
+
+async function testProductionUploadStopsAfterManagerRejection() {
+    const harness = createLatestIntentRaceHarness();
+    harness.releaseReadingManifest();
+    loadSourceBlock(
+        'js/boot-fallbacks.js',
+        harness.context,
+        "  if (typeof window.handleLibraryUpload !== 'function') {",
+        '\n  const VALID_INITIAL_VIEWS',
+        'handleLibraryUpload fallback'
+    );
+
+    const uploadExam = {
+        id: 'upload-a',
+        examId: 'upload-a',
+        type: 'reading',
+        sourceKind: 'file-picker',
+        title: 'Rejected upload A',
+        category: 'P1',
+        path: 'Upload/A/',
+        filename: 'a.html',
+        importKey: 'reading:upload/a.html'
+    };
+    harness.window.LibraryDiscovery.discover = async function discoverUpload() {
+        return {
+            entries: [clone(uploadExam)],
+            report: {
+                accepted: 1,
+                rejected: 0,
+                files: 1,
+                html: 1,
+                pdf: 0,
+                audio: 0,
+                runtime: { registered: 1, html: 1, pdf: 0, audio: 0 },
+                reasonCounts: {},
+                rejectedSamples: [],
+                warnings: []
+            }
+        };
+    };
+
+    const importStarted = createDeferred();
+    const rejectImport = createDeferred();
+    const importLibrary = harness.window.AppData.library.import.bind(harness.window.AppData.library);
+    let importedConfigurationAttempts = 0;
+    harness.window.AppData.library.import = async function importWithFirstAttemptRejection(payload) {
+        if (String(payload?.id || '').startsWith('library_import_')) {
+            importedConfigurationAttempts += 1;
+            if (importedConfigurationAttempts === 1) {
+                importStarted.resolve();
+                await rejectImport.promise;
+                throw new Error('simulated manager import rejection');
+            }
+        }
+        return importLibrary(payload);
+    };
+
+    const upload = harness.window.handleLibraryUpload(
+        { type: 'reading', mode: 'full' },
+        [{ name: 'a.html' }]
+    );
+    await withTimeout(importStarted.promise, 'production upload manager import');
+    assert.strictEqual(
+        await harness.manager.applyLibraryConfiguration('race_b', [clone(harness.immediateB)]),
+        true,
+        'the newer B selection must commit while upload A is paused'
+    );
+    rejectImport.resolve();
+
+    const report = await withTimeout(upload, 'production upload rejection report');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(report.status, 'error', 'the invoked manager rejection must terminate as an error');
+    assert.match(report.message, /simulated manager import rejection/);
+    assert.strictEqual(importedConfigurationAttempts, 1,
+        'the production wrapper must not enter the legacy writer for a second import');
+    assert.strictEqual(harness.getConfigurations().length, 2,
+        'a rejected manager import must not create a duplicate fallback configuration');
+    assertLatestIntentRaceOutcome(harness);
+    recordResult('生产上传在 manager rejection 后终止且不重入旧写路径', {
+        status: report.status,
+        importAttempts: importedConfigurationAttempts,
+        activeKey: harness.getActiveId()
+    });
+}
+
 async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const seed = baseSeed();
     seed.useAppStateService = true;
@@ -2362,6 +2617,8 @@ async function main() {
         await testProductionUiEntryCapturesIntentBeforeDatasetFetch();
         await testDefaultSwitchDoesNotNoopWhenActiveReadFails();
         await testSameActiveSwitchRemainsNoopWithoutPendingCommit();
+        await testSameActiveReselectionRestartsDelayedActiveLoad();
+        await testMissingSelectionRestartsDelayedActiveLoad();
         await testFailedDefaultCommitRecoversCanonicalDefaultState();
         await testNewerApplySupersedesManifestDelayedActivatingImport();
         await testRejectedNewerApplyDoesNotSplitDurableActivation();
@@ -2378,6 +2635,9 @@ async function main() {
         await testNewerActiveLoadWaitsForDelayedOlderActivation();
         await testFailingActiveLoadDoesNotInterruptDurableActivation();
         await testSupersededQueuedDefaultLoadReturnsEmptyArray();
+        await testDeleteFirstExcludesSwitchDuringRemove();
+        await testCapturedSwitchCannotCommitAfterDelete();
+        await testProductionUploadStopsAfterManagerRejection();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();

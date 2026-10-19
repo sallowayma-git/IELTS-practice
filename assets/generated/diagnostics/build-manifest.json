@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:6724932c5c05e394cf375dd9331113b9be074a6b64db2fb97ff9692df9c8d713",
+  "buildId": "sha256:ef19295eb90e86b8cfc7de4c3c68a34168d85a89d361898fcc52994bb9a54abd",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -546,11 +546,11 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "992dc44b8cb20a3c43ca6691e1614f12959579ab070fa552a75bc3b801102d6a"
+      "sha256": "819b8f0b0b6c686e48a141fb45a1ca9af1b4cd5ecfa7a7bb25f27cbde5882445"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "ea2b0b54f2c5d1a81100135485f1b455e2a30d48945c2539eeb578d69a2d3777"
+      "sha256": "fc8196b7499c2da226efcd5db99327c1962fdcc04b3523471a2a88f5ca861454"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -562,7 +562,7 @@
     },
     {
       "path": "js/bundles/legacy-app.bundle.js",
-      "sha256": "9104278dd755b0f2c0a9bb408cbc5fda178802fd4195f985979bb9b7e06ef0ec"
+      "sha256": "bd9bec4b2da933e15c83d53d425e859ea3c59eb12db28668e3f1eff494d1eadf"
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
@@ -598,7 +598,7 @@
     },
     {
       "path": "js/bundles/runtime-entry.bundle.js",
-      "sha256": "a25c4560c4e256fd2429c5e44b17b7a535c6df7acdd9ce1b808e519b5e140239"
+      "sha256": "1ac7156b269deca5d6e50c514e14bf8de3ae39849691ca0dfabb872f15ddd065"
     },
     {
       "path": "js/bundles/session.bundle.js",
@@ -672,7 +672,7 @@
       {
         "source": "js/presentation/app-actions.js",
         "startLine": 1577,
-        "endLine": 2733,
+        "endLine": 2772,
         "sourceStartLine": 1
       }
     ],
@@ -836,7 +836,7 @@
       {
         "source": "js/services/libraryManager.js",
         "startLine": 23959,
-        "endLine": 25421,
+        "endLine": 25529,
         "sourceStartLine": 1
       }
     ],
@@ -924,19 +924,19 @@
       {
         "source": "js/boot-fallbacks.js",
         "startLine": 4,
-        "endLine": 1930,
+        "endLine": 1937,
         "sourceStartLine": 1
       },
       {
         "source": "js/app.js",
-        "startLine": 1934,
-        "endLine": 3470,
+        "startLine": 1941,
+        "endLine": 3477,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/onboardingTour.js",
-        "startLine": 3474,
-        "endLine": 5133,
+        "startLine": 3481,
+        "endLine": 5140,
         "sourceStartLine": 1
       }
     ],
@@ -1052,7 +1052,7 @@
       {
         "source": "js/main.js",
         "startLine": 20859,
-        "endLine": 26524,
+        "endLine": 26562,
         "sourceStartLine": 1
       }
     ],

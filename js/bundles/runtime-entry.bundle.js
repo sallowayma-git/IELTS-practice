@@ -2039,11 +2039,38 @@
         });
     }
 
+    function closeOwnedReservedPdfWindow(options) {
+        if (!options || options.ownsReservedWindow !== true) return;
+        var reservedWindow = options.reservedWindow;
+        if (!reservedWindow || reservedWindow.closed || typeof reservedWindow.close !== 'function') return;
+        try { reservedWindow.close(); } catch (_) { }
+    }
+
+    function reserveRandomPracticePdfWindow() {
+        var launchOptions = {
+            reservedWindow: null,
+            reservationAttempted: true,
+            ownsReservedWindow: false,
+            preventCurrentWindowFallback: true
+        };
+        if (typeof global.open !== 'function') return launchOptions;
+        try {
+            launchOptions.reservedWindow = global.open(
+                'about:blank',
+                '_blank',
+                'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+            );
+            launchOptions.ownsReservedWindow = Boolean(launchOptions.reservedWindow);
+        } catch (_) { }
+        return launchOptions;
+    }
+
     function openExamWithFallback(exam, delay, options) {
         var actualDelay = typeof delay === 'number' ? delay : 600;
         var launchOptions = options && typeof options === 'object' ? options : {};
 
         if (!exam) {
+            closeOwnedReservedPdfWindow(launchOptions);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('未找到可用题目', 'error');
             }
@@ -2053,15 +2080,19 @@
         var launch = function () {
             try {
                 if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
+                    closeOwnedReservedPdfWindow(launchOptions);
                     global.app.openExam(exam.id, launchOptions);
                 } else if (exam.hasHtml && typeof global.openExam === 'function') {
+                    closeOwnedReservedPdfWindow(launchOptions);
                     global.openExam(exam.id, launchOptions);
                 } else if (typeof global.viewPDF === 'function') {
-                    global.viewPDF(exam.id);
+                    global.viewPDF(exam.id, launchOptions);
                 } else {
+                    closeOwnedReservedPdfWindow(launchOptions);
                     console.warn('[AppActions] openExam/viewPDF 未定义');
                 }
             } catch (error) {
+                closeOwnedReservedPdfWindow(launchOptions);
                 console.error('[AppActions] 启动题目失败:', error);
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('无法打开题目，请检查题库路径', 'error');
@@ -2270,7 +2301,14 @@
     }
 
     async function startRandomPractice(category, type, filterMode, path) {
-        var list = await global.resolveActiveLibraryIndex();
+        var launchOptions = reserveRandomPracticePdfWindow();
+        var list;
+        try {
+            list = await global.resolveActiveLibraryIndex();
+        } catch (error) {
+            closeOwnedReservedPdfWindow(launchOptions);
+            throw error;
+        }
         var normalizedType = (!type || type === 'all') ? null : type;
         var normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
@@ -2301,6 +2339,7 @@
         }
 
         if (pool.length === 0) {
+            closeOwnedReservedPdfWindow(launchOptions);
             if (typeof global.showMessage === 'function') {
                 var typeLabel = normalizedType === 'listening'
                     ? '听力'
@@ -2315,7 +2354,7 @@
             global.showMessage('随机选择: ' + randomExam.title, 'info');
         }
 
-        openExamWithFallback(randomExam);
+        openExamWithFallback(randomExam, undefined, launchOptions);
     }
 
     // ============================================================================
