@@ -327,6 +327,15 @@ function testMemoryMutationContract() {
   has(host, 'commands::memory::memory_archive,', 'archive registered in real command table')
 }
 
+function testDashboardReadsEveryHistoryPage() {
+  const dashboard = read('apps/writing-vue/src/modules/dashboard/useDashboard.js')
+  // Streak and this-week counts span the whole history; a single 100/200-record
+  // page silently truncates them.
+  has(dashboard, 'listHistoryAll({})', 'dashboard reads every history page')
+  lacks(dashboard, 'listHistory(', 'dashboard must not cap at one history page')
+  lacks(dashboard, 'LOAD_LIMIT', 'dashboard has no single-page record cap')
+}
+
 function testAgentConsoleCopy() {
   const quiet = summarizeJournal({
     journalDate: '2026-08-24',
@@ -397,4 +406,5 @@ testNoRetiredHostBoundary()
 testAgentWorkspaceFailureContract()
 testMemoryMutationContract()
 testAgentConsoleCopy()
+testDashboardReadsEveryHistoryPage()
 console.log('Tauri Vue shell contract: ok')

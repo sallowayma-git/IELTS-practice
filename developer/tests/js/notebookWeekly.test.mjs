@@ -329,6 +329,13 @@ test('narrative targets open the same routes the rest of the app uses', () => {
   assert.deepEqual(weeklyTarget({ type: 'kind', key: 'tfng' }), { path: '/', query: { view: 'browse', kind: 'judgement' } })
   assert.deepEqual(weeklyTarget({ type: 'kind', key: 'matching_information' }), { path: '/', query: { view: 'browse', kind: 'paragraph_match' } })
   assert.deepEqual(weeklyTarget({ type: 'kind', key: 'summary_completion' }), { path: '/', query: { view: 'browse', kind: 'completion' } })
+  // The host sends skill keys, not bare library tags: reading.tfng must still
+  // filter the library by the judgement card tag.
+  assert.deepEqual(weeklyTarget({ type: 'kind', key: 'reading.tfng' }), { path: '/', query: { view: 'browse', kind: 'judgement' } })
+  assert.deepEqual(weeklyTarget({ type: 'kind', key: 'reading.yng' }), { path: '/', query: { view: 'browse', kind: 'judgement' } })
+  assert.deepEqual(weeklyTarget({ type: 'kind', key: 'reading.matching_headings' }), { path: '/', query: { view: 'browse', kind: 'heading_match' } })
+  assert.deepEqual(weeklyTarget({ type: 'kind', key: 'reading.matching_sentence_endings' }), { path: '/', query: { view: 'browse', kind: 'matching' } })
+  assert.deepEqual(weeklyTarget({ type: 'kind', key: 'reading.short_answer' }), { path: '/', query: { view: 'browse', kind: 'completion' } })
   assert.deepEqual(weeklyTarget({ type: 'writing', key: 'task1' }), { path: '/writing', query: { taskType: 'task1' } })
   assert.equal(weeklyTarget({ type: 'writing', key: 'task3' }), null)
   assert.equal(weeklyTarget({ type: 'asset', key: 'a/b' }), null)

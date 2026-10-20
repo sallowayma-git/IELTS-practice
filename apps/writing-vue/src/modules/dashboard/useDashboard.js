@@ -1,11 +1,9 @@
 import { computed, onMounted, ref } from 'vue'
-import { listHistory } from '@/api/history-repository.js'
+import { listHistoryAll } from '@/api/history-repository.js'
 import { toRecord } from '@/modules/history/records.js'
 import { buildDashboard } from './dashboardCore.js'
 
-const LOAD_LIMIT = 100
-
-/** One load of the newest records; every overview number derives from it. */
+/** One full-history load; every overview number derives from it. */
 export function useDashboard() {
   const records = ref([])
   const loaded = ref(false)
@@ -18,7 +16,9 @@ export function useDashboard() {
     loading.value = true
     error.value = ''
     try {
-      const page = await listHistory({ limit: LOAD_LIMIT })
+      // The streak and this week's count span the whole history, not just the
+      // newest page: listHistory caps at 200, so walk every page first.
+      const page = await listHistoryAll({})
       records.value = (page.items || []).map(toRecord)
       loaded.value = true
     } catch (loadError) {

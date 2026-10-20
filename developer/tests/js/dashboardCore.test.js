@@ -2,6 +2,7 @@
 /** Pure overview-dashboard functions: run with `node developer/tests/js/dashboardCore.test.js`. */
 import assert from 'node:assert/strict'
 import {
+  buildDashboard,
   dayIndex,
   defaultTrendKey,
   formatDelta,
@@ -71,6 +72,20 @@ function testRecentRecordsNewestFirstAndLimited() {
   assert.equal(records.length, 3, 'input is not mutated')
 }
 
+function testDashboardCountsTheWholeHistoryBeyondOnePage() {
+  // 130 consecutive days: more than the retired 100-record single page. The
+  // streak and this-week tiles must come from every page, not the newest one.
+  const records = Array.from({ length: 130 }, (_, index) =>
+    reading(at(2026, 10, 19 - index), 0.5))
+  const dashboard = buildDashboard(records, NOW)
+  assert.equal(dashboard.streak, 130, 'streak reads the oldest page too')
+  assert.equal(dashboard.week.total, 7, 'this week counts the last seven local days')
+  assert.equal(dashboard.week.reading, 7)
+  assert.equal(dashboard.reading.count, 10, 'the average still uses only the newest ten')
+  assert.equal(dashboard.recent.length, 6, 'the recent list stays short')
+  assert.equal(records.length, 130, 'input is not mutated')
+}
+
 function testDeltaFormatting() {
   assert.deepEqual(formatDelta('reading', 0.03), { text: '+3%', tone: 'up' })
   assert.deepEqual(formatDelta('reading', -0.02), { text: '-2%', tone: 'down' })
@@ -93,6 +108,7 @@ const tests = [
   testRecentAverageHandlesEmptyAndUnpairedActivities,
   testStreakEndsTodayOrYesterday,
   testRecentRecordsNewestFirstAndLimited,
+  testDashboardCountsTheWholeHistoryBeyondOnePage,
   testDeltaFormatting,
   testDefaultTrendKeyFollowsNewestAttempt
 ]

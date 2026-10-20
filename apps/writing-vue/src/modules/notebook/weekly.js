@@ -148,10 +148,25 @@ export function weeklyTarget(target) {
   return null
 }
 
-// Weekly evidence uses domain kinds; library cards use seven display tags.
+// Weekly targets carry domain skill keys ("reading.tfng"); library cards use
+// the seven stable display tags. This mirrors `classify_question_kinds` in
+// crates/ielts-db/src/reading/question_kinds.rs so a link always filters.
 function libraryKind(key) {
-  const aliases = { tfng: 'judgement', ynng: 'judgement', true_false_not_given: 'judgement', yes_no_not_given: 'judgement', matching_headings: 'heading_match', matching_information: 'paragraph_match', matching_features: 'matching', classification: 'matching', short_answer: 'completion' }
-  return aliases[key] || (key.endsWith('_completion') ? 'completion' : key)
+  const skill = String(key || '').replace(/^reading\./, '')
+  const aliases = {
+    tfng: 'judgement',
+    yng: 'judgement',
+    ynng: 'judgement',
+    true_false_not_given: 'judgement',
+    yes_no_not_given: 'judgement',
+    matching_headings: 'heading_match',
+    matching_information: 'paragraph_match',
+    matching_features: 'matching',
+    matching_sentence_endings: 'matching',
+    classification: 'matching',
+    short_answer: 'completion'
+  }
+  return aliases[skill] || (skill.endsWith('_completion') ? 'completion' : skill)
 }
 
 /**
