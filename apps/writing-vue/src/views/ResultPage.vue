@@ -1,19 +1,21 @@
 <template>
   <div class="result-page atlas-result">
-    <header class="page-header result-header">
+    <header class="page-header result-header has-rule">
       <div class="page-header-top">
         <div class="result-header__copy">
           <p class="page-header-kicker">IELTS 写作 · {{ essayWordCount }} 词</p>
           <h1 class="display-heading">评测结果</h1>
         </div>
-        <div class="score-total-row">
-          <span class="score-label stat-label">总分 Band</span>
-          <span class="score-total t-display t-num">{{ scoreData?.total_score ?? '-' }}</span>
+        <div class="result-header__meta">
+          <div class="score-total-row">
+            <span class="score-label stat-label">总分 Band</span>
+            <span class="score-total t-display t-num">{{ scoreData?.total_score ?? '-' }}</span>
+          </div>
+          <div class="page-header-actions">
+            <router-link v-if="historyBack" :to="historyBack" class="btn btn-secondary" data-history-back>← 返回历史</router-link>
+            <button class="btn btn-primary" type="button" @click="writeNew">再写一篇</button>
+          </div>
         </div>
-      </div>
-      <div class="page-header-actions">
-        <router-link v-if="historyBack" :to="historyBack" class="btn btn-secondary" data-history-back>← 返回历史</router-link>
-        <button class="btn btn-primary" type="button" @click="writeNew">再写一篇</button>
       </div>
     </header>
 
@@ -62,7 +64,7 @@
                   <div class="error-word">
                     <span class="label">原文</span><span class="line-through">{{ err.word }}</span>
                   </div>
-                  <div class="error-reason">{{ err.reason }}</div>
+                  <div v-if="err.reason && err.reason !== err.type" class="error-reason">{{ err.reason }}</div>
                   <div class="error-correction">
                     <span class="label">建议</span><strong>{{ err.correction }}</strong>
                   </div>
@@ -78,10 +80,10 @@
         </div>
       </section>
 
-      <aside class="right-panel">
-        <section class="result-section section" aria-labelledby="score-heading">
-          <div class="section-head">
-            <h3 id="score-heading">评分表</h3>
+      <aside class="right-panel" aria-label="评测说明">
+        <section class="result-section card" aria-labelledby="score-heading">
+          <div class="panel-header">
+            <h2 id="score-heading">评分表</h2>
             <span class="section-meta">四项标准</span>
           </div>
           <table class="table criteria-table">
@@ -111,20 +113,20 @@
           <p>{{ sentenceEmptyHint }}</p>
         </div>
 
-        <section v-if="feedback" class="result-section section">
-          <div class="section-head"><h3>整体改进建议</h3></div>
-          <p class="prose-text quote">{{ feedback }}</p>
+        <section v-if="feedback" class="result-section card">
+          <div class="panel-header"><h2>整体改进建议</h2></div>
+          <p class="result-prose">{{ feedback }}</p>
         </section>
 
-        <section v-if="improvementPlan && improvementPlan.length > 0" class="result-section section">
-          <div class="section-head"><h3>核心提分计划</h3></div>
+        <section v-if="improvementPlan && improvementPlan.length > 0" class="result-section card">
+          <div class="panel-header"><h2>核心提分计划</h2></div>
           <ol class="plan-list">
-            <li v-for="(item, idx) in improvementPlan" :key="idx">{{ item }}</li>
+            <li v-for="(item, idx) in improvementPlan" :key="idx"><span>{{ item }}</span></li>
           </ol>
         </section>
 
-        <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section section">
-          <div class="section-head"><h3>段落详评</h3></div>
+        <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section card">
+          <div class="panel-header"><h2>段落详评</h2></div>
           <dl class="rationale-list">
             <div v-for="(item, idx) in reviewBlocks" :key="idx" class="rationale-item">
               <dt>第 {{ item.paragraph_index || (idx + 1) }} 段</dt>
@@ -133,8 +135,8 @@
           </dl>
         </section>
 
-        <section v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="result-section section">
-          <div class="section-head"><h3>任务诊断</h3></div>
+        <section v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="result-section card">
+          <div class="panel-header"><h2>任务诊断</h2></div>
           <dl class="rationale-list">
             <div v-for="item in taskAnalysisEntries" :key="item.label" class="rationale-item">
               <dt>{{ item.label }}</dt>
@@ -152,6 +154,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { essays as essaysApi } from '@/api/client.js'
 import { historyReturnPath } from '@/modules/history/return.js'
+import { errorKindLabel, isErrorKind } from '@/modules/writing/errorKinds.js'
 import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
@@ -297,6 +300,7 @@ function applyEvaluationView(view) {
 }
 
 function getErrorTypeLabel(type) {
+  if (isErrorKind(type)) return errorKindLabel(type)
   return ERROR_TYPE_LABELS[type] || type
 }
 
@@ -321,7 +325,8 @@ function highlightErrors(sentence) {
 
     const errorWord = text.substring(startPos, endPos)
     const colorClass = `highlight-${err.type}`
-    result += `<span class="${colorClass}" title="${escapeHtml(err.reason)}">${escapeHtml(errorWord)}</span>`
+    const title = err.reason && err.reason !== err.type ? err.reason : getErrorTypeLabel(err.type)
+    result += `<span class="${colorClass}" title="${escapeHtml(title)}">${escapeHtml(errorWord)}</span>`
 
     lastIndex = endPos
   }
@@ -374,6 +379,18 @@ function writeNew() {
   display: flex;
   align-items: baseline;
   gap: var(--anth-space-3);
+}
+
+/* Score and actions share the header's trailing column. */
+.result-header__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--anth-space-3);
+}
+
+.result-header__meta .page-header-actions {
+  margin: 0;
 }
 
 /* Quote: prose set off by a left rule. */
@@ -494,22 +511,22 @@ function writeNew() {
   font-size: var(--anth-text-body-lg-size);
 }
 
-/* Right column: sections on a 40px rhythm; the section's own margin is reset. */
+/* Right column: design-system cards, one idea per card. */
 .right-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--anth-space-8);
+  gap: var(--anth-space-4);
   min-width: 0;
-}
-
-.right-panel > .section + .section {
-  margin-top: 0;
 }
 
 .criteria-table td.num {
   color: var(--anth-ink);
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-h2-size);
+}
+
+.criteria-table + .rationale-list {
+  margin-top: var(--anth-space-3);
 }
 
 .criterion-code {
@@ -551,11 +568,48 @@ function writeNew() {
   font-weight: var(--anth-weight-semibold);
 }
 
+/* Feedback reads as a commentary column, not a second essay. */
+.result-prose {
+  max-width: var(--anth-measure);
+  margin: 0;
+  color: var(--anth-ink-soft);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-body-lg-size);
+  line-height: var(--anth-text-body-lg-line);
+}
+
 .plan-list {
   display: grid;
-  gap: var(--anth-space-3);
+  gap: 0;
   margin: 0;
-  padding-left: 1.4em;
+  padding: 0;
+  list-style: none;
+  counter-reset: plan;
+}
+
+.plan-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--anth-space-3);
+  padding: var(--anth-space-3) 0;
+  border-top: 1px solid var(--anth-rule);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+  counter-increment: plan;
+}
+
+.plan-list li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.plan-list li::before {
+  content: counter(plan, decimal-leading-zero);
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-small-size);
+  font-variant-numeric: tabular-nums;
 }
 
 .result-load-error {
@@ -585,6 +639,12 @@ function writeNew() {
   .essay-body {
     max-height: none;
     overflow: visible;
+  }
+}
+
+@media (max-width: 640px) {
+  .result-header__meta {
+    align-items: flex-start;
   }
 }
 </style>

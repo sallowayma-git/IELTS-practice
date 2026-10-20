@@ -1,11 +1,13 @@
-"""札记 (Notebook) route: daily prose entries and the v2 weekly reports.
+"""札记 (Notebook) route: daily cards with a detail sheet and the v3 weekly reports.
 
-Checks the learner-facing contract: dated entries read in reverse order,
-only finished journal days are read (never today's open day), evidence opens
-inline as footnotes, memories expose exactly 不准确 / 忘记, and none of the
-retired workbench machinery (prompt box, run buttons) leaks in. Weekly
-reports (notebook_weekly_mock.py): the live week first, then finished weeks;
-each state says what it is; blocks render with accessible charts and links.
+Checks the learner-facing contract: dated cards read in reverse order, only
+finished journal days are read (never today's open day), the detail sheet
+carries the observations, changes and next practice, evidence opens inline as
+a footnote inside the sheet, memories expose exactly 不准确 / 忘记, and none of
+the retired workbench machinery (prompt box, run buttons, the index rail)
+leaks in. Weekly reports (notebook_weekly_mock.py): the live week first, then
+finished weeks; each state says what it is; a final week carries its narrative
+and memory changes; the data blocks render with accessible charts and links.
 """
 import json
 import os
@@ -16,7 +18,7 @@ from notebook_weekly_mock import WEEKLY_MOCK
 from visual_test_support import capture_state, wait_for_route_layout
 
 
-BASE_URL = os.environ.get("NOTEBOOK_VISUAL_BASE_URL", "http://127.0.0.1:4175")
+BASE_URL = os.environ.get("NOTEBOOK_VISUAL_BASE_URL", "http://127.0.0.1:4175").rstrip("/")
 REPORT_DIR = Path(__file__).parent / "reports"
 CASES = (("desktop", 1440, 900), ("tablet", 768, 1024), ("mobile", 390, 844), ("small", 360, 640))
 
@@ -102,6 +104,13 @@ MOCK = r"""
       case 'journal_get_daily': return { ok: true, data: journals[args.query.journalDate] || journalShell(args.query.journalDate, {}) };
       case 'memory_catalog_list': return { ok: true, data: { userId: 'local',
         entries: window.__notebookEmpty ? [] : window.__catalog.filter(row => row.status === 'active'), truncated: false } };
+      case 'study_plan_get_latest': return { ok: true, data: { plan: { id: 'plan-1', userId: 'local', goal: '复习判断题边界',
+        availableMinutes: 45, targetDate: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }, items: [
+        { id: 'spi-1', planId: 'plan-1', skillProbe: { skillKey: 'reading.tfng', probeKind: 'contrastive_pair' },
+          whyText: '用两组“错误 / 未提及”对照题，练习定位原文证据。', estimatedMinutes: 15, done: false, createdAt: '2026-10-01T00:00:00Z' },
+        { id: 'spi-2', planId: 'plan-1', skillProbe: 'reading.matching_headings',
+          whyText: '已完成的项不再出现。', estimatedMinutes: 10, done: true, createdAt: '2026-10-01T00:00:00Z' }
+      ] } };
       case 'weekly_report_current': return { ok: true, data: window.__weeklyReports(window.__weeklyScenario || 'live_final').current };
       case 'weekly_report_list': return { ok: true, data: window.__weeklyReports(window.__weeklyScenario || 'live_final').list };
       case 'learning_observations_get_by_ids': return { ok: true, data: { schemaVersion: 1, projectorKey: 'learning_observations',
@@ -154,13 +163,14 @@ def read_page(page):
     return page.evaluate(
         """() => {
           const root = document.querySelector('[data-notebook]');
+          const cards = [...root.querySelectorAll('[data-notebook-entry]')];
           return {
             viewport: innerWidth,
             scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
-            entries: [...root.querySelectorAll('[data-notebook-entry]')].map(node => node.dataset.notebookEntry),
-            sections: [...root.querySelectorAll('.notebook-entry h3')].map(node => node.textContent.trim()),
+            entries: cards.map(node => node.dataset.notebookEntry),
+            titles: cards.map(node => node.querySelector('.notebook-day-card__title')?.textContent.trim() || ''),
             text: root.innerText,
-            dailyText: [...root.querySelectorAll('[data-notebook-entry]')].map(node => node.innerText).join('\\n'),
+            dailyText: cards.map(node => node.innerText).join('\\n'),
             weeks: [...root.querySelectorAll('[data-notebook-week]')].map(node => node.dataset.notebookWeek),
             memories: [...root.querySelectorAll('[data-memory-id]')].map(node => ({
               id: node.dataset.memoryId,
@@ -175,6 +185,22 @@ def read_page(page):
     )
 
 
+def read_day_sheet(page):
+    return page.evaluate(
+        """() => {
+          const sheet = document.querySelector('[data-notebook-sheet]');
+          if (!sheet) return null;
+          return {
+            title: sheet.querySelector('.notebook-sheet__title')?.textContent.trim() || '',
+            sections: [...sheet.querySelectorAll('h3')].map(node => node.textContent.trim()),
+            refs: sheet.querySelectorAll('.notebook-ref').length,
+            footnotes: sheet.querySelectorAll('.notebook-footnote').length,
+            text: sheet.innerText
+          };
+        }"""
+    )
+
+
 def assert_contract(name, data):
     if data["scrollWidth"] > data["viewport"] + 1:
         raise AssertionError(f"{name}: notebook overflows horizontally")
@@ -184,25 +210,63 @@ def assert_contract(name, data):
         raise AssertionError(f"{name}: entries are not reverse-chronological: {data['entries']}")
     if data["journalDays"] != ["2026-09-30", "2026-10-02"]:
         raise AssertionError(f"{name}: notebook read journals for unfinished days: {data['journalDays']}")
-    for section in ("§观察", "§变化", "§下一步练习"):
-        if section not in data["sections"]:
-            raise AssertionError(f"{name}: missing section {section}: {data['sections']}")
     if "%" in data["dailyText"]:
         raise AssertionError(f"{name}: daily entries show fake precision")
-    if data["weeks"] != ["2026-W42", "2026-W41", "2026-W40"]:
-        raise AssertionError(f"{name}: weekly reports are not live-first, newest-first: {data['weeks']}")
+    if data["weeks"] != ["2026-W40", "2026-W41", "2026-W42"]:
+        raise AssertionError(f"{name}: the weekly shelf is not in calendar order: {data['weeks']}")
     if data["machinery"]:
         raise AssertionError(f"{name}: workbench machinery leaked into the notebook")
     if [memory["actions"] for memory in data["memories"]] != [["不准确", "忘记"], ["不准确", "忘记"]]:
         raise AssertionError(f"{name}: memories must offer exactly 不准确/忘记: {data['memories']}")
 
 
-def exercise_actions(page, name):
-    page.locator(".notebook-ref").first.click()
+def assert_sheet(name, sheet):
+    if sheet is None:
+        raise AssertionError(f"{name}: opening the first daily card showed no sheet")
+    for section in ("§观察", "§变化", "§下一步练习"):
+        if section not in sheet["sections"]:
+            raise AssertionError(f"{name}: sheet missing {section}: {sheet['sections']}")
+    if sheet["refs"] == 0:
+        raise AssertionError(f"{name}: the daily sheet has no evidence marker")
+    if "%" in sheet["text"] or "已完成的项不再出现" in sheet["text"]:
+        raise AssertionError(f"{name}: sheet shows finished plan items or fake precision")
+
+
+def open_first_day(page):
+    card = page.locator("[data-notebook-entry]").first
+    key = card.get_attribute("data-notebook-entry")
+    card.click()
+    page.locator("[data-notebook-sheet]").wait_for()
+    return key
+
+
+def close_sheet(page):
+    page.locator("[data-notebook-sheet] .notebook-sheet__close").click()
+    page.locator("[data-notebook-sheet]").wait_for(state="detached")
+
+
+def exercise_actions(page, name, full=True):
+    """Open the newest day sheet: sections, evidence footnote, then page actions."""
+    open_first_day(page)
+    sheet = read_day_sheet(page)
+    assert_sheet(name, sheet)
+    page.locator("[data-notebook-sheet] .notebook-ref").first.click()
     page.get_by_text("第 9 题改答后仍错误", exact=False).wait_for()
-    link = page.locator(".notebook-footnote a")
+    footnote = page.locator("[data-notebook-sheet] .notebook-footnote")
+    footnote.wait_for()
+    if "第 9 题改答后仍错误" not in footnote.inner_text():
+        raise AssertionError(f"{name}: the footnote does not show the observation: {footnote.inner_text()!r}")
+    link = footnote.locator("a")
     if "p1-high-01" not in (link.get_attribute("href") or ""):
         raise AssertionError(f"{name}: footnote lost its link to the practice")
+    close_sheet(page)
+    if full:
+        exercise_memory_actions(page, name)
+        exercise_preferences(page, name)
+    return sheet
+
+
+def exercise_memory_actions(page, name):
     page.locator('[data-memory-id="mem-pace"] button', has_text="不准确").click()
     page.wait_for_function("() => window.__notebookCalls.some(call => call.command === 'memory_record_feedback')")
     page.locator('[data-memory-id="mem-tfng"] button', has_text="忘记").click()  # dialog dismissed by default
@@ -216,7 +280,6 @@ def exercise_actions(page, name):
         raise AssertionError(f"{name}: unexpected memory mutations {calls}")
     if calls[0]["args"]["feedbackKind"] != "inaccurate" or calls[1]["args"]["input"]["expectedVersion"] != 2:
         raise AssertionError(f"{name}: memory mutations do not match the Rust wire contract: {calls}")
-    exercise_preferences(page, name)
 
 
 def exercise_preferences(page, name):
@@ -253,6 +316,19 @@ def exercise_preferences(page, name):
 WEEK_DAYS = ["2026-10-04", "2026-10-03", "2026-10-02", "2026-10-01", "2026-09-30", "2026-09-29", "2026-09-28", "2026-09-20"]
 
 
+def read_day_sheet_text(page):
+    return page.evaluate(
+        """() => {
+          const sheet = document.querySelector('[data-notebook-sheet]');
+          const prose = sheet.querySelectorAll('.notebook-prose');
+          return {
+            prose: [...prose].map(node => node.textContent.trim()).join('\\n'),
+            text: sheet.innerText
+          };
+        }"""
+    )
+
+
 def check_week(browser):
     """Eight finished days: wording is composed per day, never templated or left half-filled."""
     page = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -261,16 +337,25 @@ def check_week(browser):
     page.add_init_script(MOCK)
     page.goto(f"{BASE_URL}/#/notebook", wait_until="networkidle")
     wait_for_route_layout(page, "[data-notebook-entry]")
-    entries = page.evaluate(
+    cards = page.evaluate(
         """() => [...document.querySelectorAll('[data-notebook-entry]')].map(node => ({
           day: node.dataset.notebookEntry,
-          title: node.querySelector('h2').textContent.trim(),
-          prose: node.querySelector('.notebook-prose')?.textContent.trim() || '',
+          title: node.querySelector('.notebook-day-card__title')?.textContent.trim() || '',
           text: node.innerText
         }))"""
     )
-    if [entry["day"] for entry in entries] != WEEK_DAYS:
-        raise AssertionError(f"week: unexpected entries {[entry['day'] for entry in entries]}")
+    if [card["day"] for card in cards] != WEEK_DAYS:
+        raise AssertionError(f"week: unexpected entries {[card['day'] for card in cards]}")
+    entries = []
+    for card in cards:
+        page.locator(f'[data-notebook-entry="{card["day"]}"]').click()
+        page.locator("[data-notebook-sheet]").wait_for()
+        sheet = read_day_sheet_text(page)
+        entry = {**card, **sheet}
+        entries.append(entry)
+        if card["day"] == "2026-10-02":
+            capture_state(page, "notebook-week-desktop")
+        close_sheet(page)
     for entry in entries:
         for token in ("{", "}", "undefined", "NaN", "null"):
             if token in entry["text"]:
@@ -281,7 +366,6 @@ def check_week(browser):
             raise AssertionError(f"week: consecutive days read alike: {newer['day']} / {older['day']}")
     if "8 天" not in entries[-2]["text"]:
         raise AssertionError(f"week: the long gap is not named: {entries[-2]['text']}")
-    capture_state(page, "notebook-week-desktop")
     page.close()
     return [{"day": entry["day"], "text": entry["text"]} for entry in entries]
 
@@ -293,6 +377,16 @@ STATE_LINES = {
 }
 ALL_BLOCKS = ["volume", "accuracy", "question_types", "repeated_misses", "redo_progress",
               "writing_bands", "coach_signals", "next_week_plan"]
+BLOCK_HEADINGS = {
+    "volume": "§练习量",
+    "accuracy": "§阅读正确率",
+    "question_types": "§题型",
+    "repeated_misses": "§反复出错",
+    "redo_progress": "§重做",
+    "writing_bands": "§写作分数",
+    "coach_signals": "§教练反馈",
+    "next_week_plan": "§下一步练习",
+}
 WEEKLY_EXPECTED = {
     "live_final": [("2026-W42", "live", ["volume", "accuracy"]), ("2026-W41", "final", ALL_BLOCKS),
                    ("2026-W40", "final", ["volume", "accuracy"])],
@@ -301,35 +395,61 @@ WEEKLY_EXPECTED = {
     "empty": [],
 }
 WEEKLY_CASES = (("live_final", 1440), ("live_final", 360), ("final_no_ai", 390), ("narrative_failed", 768), ("empty", 1440))
+W41_PLAN = ["判断题对比练习易混题约15分钟", "段落大意配对换一篇新文章练同类题约15分钟",
+            "写作·连贯与衔接改写一段作文约15分钟"]
 
 
 def read_weeks(page):
+    """The shelf cards: title, state and the two headline points, nothing else."""
     return page.evaluate(
         """() => ({
           viewport: innerWidth,
           scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
-          index: [...document.querySelectorAll('[data-notebook-index] .list-row-meta')].map(node => node.textContent.trim()),
           empty: Boolean(document.querySelector('.notebook-empty')),
-          weeks: [...document.querySelectorAll('[data-notebook-week]')].map(node => ({
+          weeks: [...document.querySelectorAll('[data-notebook] [data-notebook-week]')].map(node => ({
             window: node.dataset.notebookWeek,
             state: node.dataset.weekState,
-            title: node.querySelector('h2').textContent.trim(),
-            range: node.querySelector('time').textContent.trim(),
-            stateLine: node.querySelector('[data-week-state-line]')?.textContent.trim() || '',
-            settingsHref: node.querySelector('[data-week-state-line] a')?.getAttribute('href') || '',
-            blocks: [...node.querySelectorAll('[data-week-block]')].map(block => block.dataset.weekBlock),
-            headings: [...node.querySelectorAll('h3')].map(h => h.textContent.trim()),
-            leads: [...node.querySelectorAll('[data-week-block] .notebook-lead')].map(p => p.textContent.trim()),
-            charts: [...node.querySelectorAll('svg[role=img]')].map(svg => ({
+            title: node.querySelector('.notebook-week-card__title')?.textContent.trim() || '',
+            range: node.querySelector('.notebook-week-card__numeral .notebook-kicker')?.textContent.trim() || '',
+            excerpt: node.querySelector('.notebook-week-card__excerpt')?.textContent.trim() || '',
+            points: [...node.querySelectorAll('.notebook-week-card__points li')].map(li => li.textContent.trim()),
+          })),
+        })"""
+    )
+
+
+def read_week_sheet(page):
+    """The teleported report: state line, blocks, charts, links, plan and narrative."""
+    return page.evaluate(
+        """() => {
+          const sheet = document.querySelector('[data-notebook-sheet]');
+          if (!sheet) return null;
+          const detail = sheet.querySelector('[data-weekly-detail]');
+          const data = detail?.querySelector('[data-weekly-data]');
+          const memory = detail?.querySelector('[data-week-memory-changes]');
+          return {
+            sheetTitle: sheet.querySelector('.notebook-sheet__title')?.textContent.trim() || '',
+            state: detail?.dataset.weekState || '',
+            stateLine: detail?.querySelector('[data-week-state-line]')?.textContent.trim() || '',
+            settingsHref: detail?.querySelector('[data-week-state-line] a')?.getAttribute('href') || '',
+            blocks: data ? [...data.querySelectorAll('[data-week-block]')].map(block => block.dataset.weekBlock) : [],
+            headings: detail ? [...detail.querySelectorAll('h3')].map(node => node.textContent.trim()) : [],
+            leads: detail ? [...detail.querySelectorAll('.notebook-lead')].map(node => node.textContent.trim()) : [],
+            paragraphs: detail ? [...detail.querySelectorAll('.weekly-paragraph')].map(node => node.innerText.trim()) : [],
+            citations: detail ? detail.querySelectorAll('.weekly-citation').length : 0,
+            sources: detail ? [...detail.querySelectorAll('.weekly-source')].map(node => node.textContent.trim()) : [],
+            charts: detail ? [...detail.querySelectorAll('svg[role=img]')].map(svg => ({
               label: svg.getAttribute('aria-label') || '',
               width: Math.round(svg.getBoundingClientRect().width),
               right: Math.round(svg.getBoundingClientRect().right),
-            })),
-            links: [...node.querySelectorAll('[data-week-block] a')].map(a => a.getAttribute('href')),
-            plan: [...node.querySelectorAll('[data-week-block=next_week_plan] li')].map(li => li.innerText.replace(/\\s+/g, '')),
-            text: node.innerText,
-          })),
-        })"""
+            })) : [],
+            links: detail ? [...detail.querySelectorAll('a[href]')].map(node => node.getAttribute('href')) : [],
+            plan: data ? [...data.querySelectorAll('[data-week-block=next_week_plan] li')].map(li => li.innerText.replace(/\\s+/g, '')) : [],
+            memoryHeading: memory?.querySelector('h3')?.textContent.trim() || '',
+            memoryChanges: memory ? [...memory.querySelectorAll('li')].map(li => li.innerText.trim()) : [],
+            text: sheet.innerText,
+          };
+        }"""
     )
 
 
@@ -348,31 +468,75 @@ def check_weekly(browser, scenario, width):
     if data["scrollWidth"] > data["viewport"] + 1:
         raise AssertionError(f"{name}: weekly report overflows horizontally")
     expected = WEEKLY_EXPECTED[scenario]
-    got = [(week["window"], week["state"], week["blocks"]) for week in data["weeks"]]
+    card_order = [(week["window"], week["state"]) for week in data["weeks"]]
+    if card_order != [(window, state) for window, state, _ in reversed(expected)]:
+        raise AssertionError(f"{name}: unexpected shelf order {card_order}")
+    if scenario == "empty" and (not data["empty"] or data["weeks"]):
+        raise AssertionError(f"{name}: no daily entries and no reports must show the empty page: {data}")
+    weeks = []
+    for card in reversed(data["weeks"]):
+        page.locator(f'[data-notebook-week="{card["window"]}"]').click()
+        page.locator("[data-notebook-sheet]").wait_for()
+        sheet = read_week_sheet(page)
+        if sheet is None:
+            raise AssertionError(f"{name}: {card['window']} opened no sheet")
+        if sheet["sheetTitle"] != card["title"]:
+            raise AssertionError(f"{name}: {card['window']} sheet shows {sheet['sheetTitle']!r}, card is {card['title']!r}")
+        if sheet["citations"]:
+            page.locator("[data-notebook-sheet] .weekly-citation").first.click()
+            page.locator("[data-notebook-sheet] .weekly-source").first.wait_for()
+            sheet = read_week_sheet(page)
+        week = {**card, **sheet}
+        check_week_entry(name, scenario, week)
+        capture_state(page, f"notebook-{name}-{week['window']}")
+        if week["window"] == "2026-W41":
+            capture_state(page, f"notebook-{name}")
+        close_sheet(page)
+        weeks.append(week)
+    got = [(week["window"], week["state"], week["blocks"]) for week in weeks]
     if got != expected:
         raise AssertionError(f"{name}: unexpected weeks {got}")
-    if scenario == "empty" and not data["empty"]:
-        raise AssertionError(f"{name}: no daily entries and no reports must show the empty page")
-    for week in data["weeks"]:
-        check_week_entry(name, scenario, week)
-    if width >= 1024 and scenario != "empty" and data["index"][:len(data["weeks"])] != [week["title"] for week in data["weeks"]]:
-        raise AssertionError(f"{name}: the index does not list the weekly reports first: {data['index']}")
-    capture_state(page, f"notebook-{name}")
     page.close()
-    return [{key: week[key] for key in ("window", "state", "stateLine", "blocks", "plan")} for week in data["weeks"]]
+    return [{key: week[key] for key in ("window", "state", "stateLine", "blocks", "plan")} for week in weeks]
 
 
 def check_week_entry(name, scenario, week):
     where = f"{name} {week['window']}"
-    if week["stateLine"] != STATE_LINES.get(week["state"], "") and not week["stateLine"].startswith(STATE_LINES.get(week["state"], "-")):
-        raise AssertionError(f"{where}: state line {week['stateLine']!r}")
-    if week["state"] == "final_no_ai" and week["settingsHref"] != "#/settings":
+    state = week["state"]
+    if state == "final":
+        if week["stateLine"]:
+            raise AssertionError(f"{where}: a final report must not show a state line: {week['stateLine']!r}")
+        if not week["paragraphs"]:
+            raise AssertionError(f"{where}: a final report must show its narrative")
+        if week["citations"] == 0 or not week["sources"]:
+            raise AssertionError(f"{where}: the narrative lost its citations or source note")
+        if any("{{" in line or "}}" in line for line in week["paragraphs"]):
+            raise AssertionError(f"{where}: the narrative kept a raw fact placeholder: {week['paragraphs']}")
+    else:
+        expected_line = STATE_LINES.get(state, "")
+        if not week["stateLine"].startswith(expected_line):
+            raise AssertionError(f"{where}: state line {week['stateLine']!r}")
+        if week["paragraphs"]:
+            raise AssertionError(f"{where}: a non-final report must not show a narrative: {week['paragraphs']}")
+    if state == "final_no_ai" and week["settingsHref"] != "#/settings":
         raise AssertionError(f"{where}: the no-AI line must link to Settings, got {week['settingsHref']!r}")
-    if week["window"] == "2026-W41" and week["range"] != "2026年10月5日 – 10月11日":
+    if week["window"] == "2026-W41" and week["range"] != "10.5–10.11":
         raise AssertionError(f"{where}: date range {week['range']!r}")
     for token in ("{", "}", "undefined", "NaN", "null", "[object"):
         if token in week["text"]:
             raise AssertionError(f"{where}: leaks {token!r}")
+    if week["leads"]:
+        raise AssertionError(f"{where}: v3 data blocks must not carry a narrative lead: {week['leads']}")
+    if state == "final":
+        if "§本周数据" not in week["headings"]:
+            raise AssertionError(f"{where}: no 本周数据 section: {week['headings']}")
+    elif not week["blocks"]:
+        raise AssertionError(f"{where}: no weekly data blocks")
+    block_headings = [heading for heading in week["headings"] if heading in BLOCK_HEADINGS.values()]
+    if block_headings != [BLOCK_HEADINGS[block] for block in week["blocks"]]:
+        raise AssertionError(f"{where}: block headings {block_headings} do not match {week['blocks']}")
+    if week["memoryChanges"] and week["memoryHeading"] != "§这一周记忆的变化":
+        raise AssertionError(f"{where}: memory changes lost their heading: {week['memoryHeading']!r}")
     for chart in week["charts"]:
         if not any(char.isdigit() for char in chart["label"]):
             raise AssertionError(f"{where}: a chart's aria-label carries no numbers: {chart['label']!r}")
@@ -380,20 +544,15 @@ def check_week_entry(name, scenario, week):
             raise AssertionError(f"{where}: a chart is too narrow to read: {chart}")
     if week["window"] != "2026-W41":
         return
-    narrated = week["state"] == "final"
-    if narrated != bool(week["leads"]):
-        raise AssertionError(f"{where}: narrative sentences {week['leads']} do not match state {week['state']}")
     if len(week["charts"]) != 5:
         raise AssertionError(f"{where}: expected 5 charts (volume, accuracy, types, redo, bands), got {len(week['charts'])}")
     if "#/reading/p2-mid-07/review/attempt-41-2" not in week["links"] or "#/result/writing-41-2" not in week["links"]:
         raise AssertionError(f"{where}: example links lost their routes: {week['links']}")
-    if week["plan"] != ["判断题对比练习易混题约15分钟", "段落大意配对换一篇新文章练同类题约15分钟",
-                        "写作·连贯与衔接改写一段作文约15分钟"]:
+    if week["plan"] != W41_PLAN:
         raise AssertionError(f"{where}: plan list {week['plan']}")
-    if "§下一步练习" not in week["headings"]:
-        raise AssertionError(f"{where}: no 下一步练习 section: {week['headings']}")
-    if narrated and "§这一周记忆的变化" not in week["headings"]:
-        raise AssertionError(f"{where}: memory changes not shown: {week['headings']}")
+    if state == "final":
+        if week["memoryHeading"] != "§这一周记忆的变化" or len(week["memoryChanges"]) != 2:
+            raise AssertionError(f"{where}: memory changes not shown: {week['memoryChanges']}")
 
 
 def main():
@@ -411,8 +570,8 @@ def main():
                 data = read_page(page)
                 assert_contract(name, data)
                 capture_state(page, f"notebook-{name}")
+                sheet = exercise_actions(page, name, full=name == "desktop")
                 if name == "desktop":
-                    exercise_actions(page, name)
                     page.evaluate("() => { window.__notebookEmpty = true }")
                     page.goto(f"{BASE_URL}/#/history", wait_until="networkidle")
                     page.wait_for_selector(".history-page")
@@ -421,7 +580,7 @@ def main():
                     if "/notebook" not in page.url:
                         raise AssertionError("memory-center did not redirect to the notebook")
                     capture_state(page, "notebook-empty-desktop")
-                report.append({"name": name, "entries": data["entries"], "sections": data["sections"]})
+                report.append({"name": name, "entries": data["entries"], "sections": sheet["sections"]})
                 page.close()
             report.append({"name": "week", "entries": check_week(browser)})
             for scenario, width in WEEKLY_CASES:

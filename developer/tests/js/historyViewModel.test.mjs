@@ -6,10 +6,13 @@ import {
   formatDayHeading,
   formatDuration,
   groupByDay,
-  recordMetaLine,
+  recordDetail,
+  recordTimeLine,
+  scoreTone,
   sortNewestFirst,
   scoreToQuery,
   summarizeRecords,
+  summaryStats,
   toRecord,
   validateScoreRange
 } from '../../../apps/writing-vue/src/modules/history/records.js'
@@ -265,9 +268,32 @@ assert.deepEqual(
   [['w-new', 'r-new'], ['w-mid', 'r-mid'], ['w-old'], ['r-unknown']]
 )
 assert.equal(formatDayHeading(new Date(2025, 11, 3), now), '2025年12月3日 星期三')
-assert.equal(recordMetaLine({ ...dated[0], occurredAt: local(10, 5, 9), durationSec: 305, subtitle: '阅读 · 套题' }), '09:15 · 用时 5m 5s · 套题')
-assert.equal(recordMetaLine({ ...writingRecord, occurredAt: local(10, 5, 9), durationSec: 0 }), '09:15 · Task 1')
-assert.equal(recordMetaLine({ ...dated[0], occurredAt: local(10, 5, 9), durationSec: 60, subtitle: '阅读' }), '09:15 · 用时 1m 0s')
+assert.equal(recordTimeLine({ ...dated[0], occurredAt: local(10, 5, 9), durationSec: 305 }), '09:15 · 用时 5m 5s')
+assert.equal(recordTimeLine({ ...writingRecord, occurredAt: local(10, 5, 9), durationSec: 0 }), '09:15')
+assert.equal(recordTimeLine({ ...dated[0], occurredAt: local(10, 5, 9), durationSec: 60 }), '09:15 · 用时 1m 0s')
+assert.equal(recordDetail({ ...dated[0], subtitle: '阅读 · 套题', activity: 'reading' }), '套题')
+assert.equal(recordDetail({ ...dated[0], subtitle: '阅读', activity: 'reading' }), '')
+assert.equal(recordDetail(writingRecord), 'Task 1')
+assert.deepEqual(
+  summaryStats(mixed),
+  [
+    { activity: 'reading', label: '阅读 2 篇', detail: '平均正确率 76%' },
+    { activity: 'writing', label: '写作 2 篇', detail: '平均 Band 6.3' }
+  ]
+)
+assert.deepEqual(summaryStats([]), [], 'no records, no chips')
+assert.deepEqual(
+  summaryStats([listeningRecord]),
+  [{ activity: 'listening', label: '听力 1 套', detail: '' }],
+  'an activity without a metric has a count chip only'
+)
+assert.equal(scoreTone(readingRecord), 'success', 'reading 92% is a success tone')
+assert.equal(scoreTone({ ...readingRecord, score: { ...readingRecord.score, value: 0.6 } }), 'warning')
+assert.equal(scoreTone({ ...readingRecord, score: { ...readingRecord.score, value: 0.3 } }), 'danger')
+assert.equal(scoreTone({ ...readingRecord, score: { ...readingRecord.score, value: null } }), '', 'unscored has no tone')
+assert.equal(scoreTone({ ...writingRecord, score: { ...writingRecord.score, value: 6.5 } }), 'success')
+assert.equal(scoreTone({ ...writingRecord, score: { ...writingRecord.score, value: 5.5 } }), 'warning')
+assert.equal(scoreTone({ ...writingRecord, score: { ...writingRecord.score, value: 4 } }), 'danger')
 
 // ── View state lives in the URL query ──
 assert.deepEqual(serializeView(emptyView()), {}, 'the plain page has a plain URL')

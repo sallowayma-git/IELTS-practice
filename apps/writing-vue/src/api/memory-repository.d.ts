@@ -173,6 +173,7 @@ export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedb
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
 export function getDailyJournal(query: DailyJournalQuery): Promise<unknown>
 export function getBackgroundJobStatus(): Promise<unknown[]>
+export function getWeeklyHistory(limit?: number): Promise<Array<{runId: string; window: string; start: string; end: string; digest: Record<string, unknown>}>>
 export function archiveStaleMemories(): Promise<unknown>
 
 export const memoryRepository: {
@@ -190,6 +191,7 @@ export const memoryRepository: {
   triggerDailyDream: typeof triggerDailyDream
   getDailyJournal: typeof getDailyJournal
   getBackgroundJobStatus: typeof getBackgroundJobStatus
+  getWeeklyHistory: typeof getWeeklyHistory
   archiveStaleMemories: typeof archiveStaleMemories
 }
 

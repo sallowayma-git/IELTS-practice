@@ -103,6 +103,12 @@ function differenceClass(diff) {
 </script>
 
 <style scoped>
+/* A dashboard-style card: the header is the title row, each chart is a tile inside it. */
+.atlas-paper .history-trends {
+  display: grid;
+  gap: var(--anth-space-4);
+}
+
 .history-trends__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -110,9 +116,20 @@ function differenceClass(diff) {
   gap: var(--anth-space-6) var(--anth-space-8);
 }
 
-.history-trend {
+@media (max-width: 640px) {
+  .history-trends__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.history-trend,
+.history-criteria {
   min-width: 0;
   margin: 0;
+  padding: var(--anth-space-4);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
 }
 
 .history-trend__head {
@@ -131,10 +148,6 @@ function differenceClass(diff) {
 
 .history-trend__caption {
   color: var(--anth-ink-muted);
-}
-
-.history-criteria {
-  min-width: 0;
 }
 
 .history-criteria h3 {

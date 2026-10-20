@@ -1,27 +1,27 @@
-//! Weekly report v2: typed blocks instead of three lists of prose.
+//! Weekly report v3: the remote data layer (typed blocks) plus the local
+//! narrative layer (facts, prose written through fact placeholders, Soul edits).
 //!
-//! A weekly report is a list of [`ReportBlock`]s, each produced by one
-//! deterministic Rust skill from the week's practice records. The block's
-//! `data` carries every number the page shows (and the chart it draws); the
-//! model never computes a number. One model call at the end of the week may add
-//! a title and one sentence per block, and every number in those sentences must
-//! already be in that block's data ([`numbers_whitelisted`]), or the sentence is
-//! dropped.
+//! A report is a list of [`ReportBlock`]s, each produced by one deterministic
+//! Rust skill from the week's practice records. The block's `data` carries every
+//! number the page shows (and the chart it draws); the model never computes a
+//! number. The report also carries the projected [`WeeklyFact`] map the model
+//! writes against, and the model's validated [`WeeklyNarrative`].
 //!
-//! Midweek the same blocks are computed live, without any sentence
-//! ([`WeeklyReportState::Live`]).
+//! The v2 shape (a title plus one sentence per block, no facts) is still read
+//! for historical display, but never written: one current schema, one writer.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const WEEKLY_REPORT_SCHEMA_VERSION: u32 = 2;
+pub const WEEKLY_REPORT_SCHEMA_VERSION: u32 = 3;
+/// The remote typed-block shape written before the narrative layer merged.
+/// Read-only: parsed for display, never produced.
+pub const LEGACY_WEEKLY_REPORT_SCHEMA_VERSION: u32 = 2;
 
-/// At most this many characters in the title the model may write.
-pub const WEEKLY_TITLE_CHARS: usize = 40;
-/// At most this many characters in one block sentence.
-pub const WEEKLY_SENTENCE_CHARS: usize = 120;
+/// At most this many characters in the narrative's title.
+pub const WEEKLY_TITLE_CHARS: usize = 16;
 
 /// How far a report got.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,8 +94,8 @@ impl BlockKind {
 #[serde(rename_all = "camelCase")]
 pub struct PracticeLink {
     pub name: String,
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub params: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub params: BTreeMap<String, String>,
 }
 
 impl PracticeLink {
@@ -155,14 +155,22 @@ pub struct ReportBlock {
     /// Active memories this block's data speaks to.
     #[serde(default)]
     pub memory_ids: Vec<String>,
-    /// The model's one sentence for this block, after the number whitelist.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub narrative: Option<String>,
+    /// A v2 per-block sentence. Filled only when parsing a historical v2
+    /// report; v3 never writes it.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "narrative")]
+    pub legacy_narrative: Option<String>,
 }
 
 impl ReportBlock {
     pub fn new(kind: BlockKind, data: Value) -> Self {
-        Self { id: kind.id().to_owned(), kind, data, examples: Vec::new(), memory_ids: Vec::new(), narrative: None }
+        Self {
+            id: kind.id().to_owned(),
+            kind,
+            data,
+            examples: Vec::new(),
+            memory_ids: Vec::new(),
+            legacy_narrative: None,
+        }
     }
 
     pub fn with_examples(mut self, examples: Vec<BlockExample>) -> Self {
@@ -181,6 +189,129 @@ pub struct WeeklyMemoryChange {
     pub statement: String,
 }
 
+/// The display unit of one projected number. The page renders it; the model
+/// never decides it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FactFormat {
+    Number,
+    Percent,
+    Minutes,
+    Band,
+}
+
+/// Where a fact can be traced for Soul evidence: the passages behind it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FactProvenance {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub asset_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub memory_ids: Vec<String>,
+}
+
+/// One stable fact the narrative may cite as `{{f:ID}}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyFact {
+    /// A number, or (for quote facts) a string.
+    pub value: Value,
+    /// The Chinese name the model must match when it cites the fact.
+    pub label: String,
+    pub format: FactFormat,
+    /// The block id the fact was projected from (`soul` for the exam fact).
+    pub source: String,
+    #[serde(default)]
+    pub provenance: FactProvenance,
+}
+
+/// A route an actionable narrative line proposes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeTarget {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub key: String,
+}
+
+/// One actionable line of the narrative groups.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeItem {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<NarrativeTarget>,
+}
+
+/// A question the narrative asks because the profile lacks an answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyQuestion {
+    pub key: String,
+    pub question: String,
+}
+
+/// One refused sentence in the final validation pass.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeViolation {
+    pub path: String,
+    pub sentence: usize,
+    pub code: String,
+}
+
+/// The validator's final report. Preflight/repair reports live on the run
+/// record and in logs, never in the user's report.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeValidationReport {
+    pub dropped_sentences: usize,
+    pub needs_repair: bool,
+    pub violations: Vec<NarrativeViolation>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrativeValidation {
+    #[serde(rename = "final")]
+    pub final_report: NarrativeValidationReport,
+}
+
+/// The model's validated narrative for one week.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeeklyNarrative {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub body: Vec<String>,
+    #[serde(default)]
+    pub changes: Vec<NarrativeItem>,
+    #[serde(default)]
+    pub next_steps: Vec<NarrativeItem>,
+    #[serde(default)]
+    pub strengths: Vec<NarrativeItem>,
+    #[serde(default)]
+    pub weaknesses: Vec<NarrativeItem>,
+    #[serde(default)]
+    pub ask_user: Option<WeeklyQuestion>,
+    #[serde(default)]
+    pub validation: NarrativeValidation,
+}
+
+/// A Soul edit a weekly run applied, with its audit revision.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedProfileEdit {
+    pub key: String,
+    pub value: Value,
+    pub evidence_ids: Vec<String>,
+    pub reason: String,
+    pub revision_id: String,
+}
+
 /// One weekly report, live or persisted.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -193,9 +324,20 @@ pub struct WeeklyReport {
     pub window_end: String,
     pub state: WeeklyReportState,
     pub generated_at: String,
-    /// Deterministic default, replaced by the model's title when it passes.
-    pub title: String,
+    /// The one title the page shows: the narrative's, else derived from blocks.
+    /// Historical v2 rows carry it under `title`.
+    #[serde(default, alias = "title")]
+    pub display_title: String,
     pub blocks: Vec<ReportBlock>,
+    /// The facts projected from the blocks and the Soul profile. The model may
+    /// only cite these; a v3 write must equal a fresh projection exactly.
+    #[serde(default)]
+    pub facts: BTreeMap<String, WeeklyFact>,
+    #[serde(default)]
+    pub narrative: Option<WeeklyNarrative>,
+    /// Soul revisions this run applied (audit references, newest last).
+    #[serde(default)]
+    pub profile_edits: Vec<AppliedProfileEdit>,
     #[serde(default)]
     pub memory_changes: Vec<WeeklyMemoryChange>,
 }
@@ -206,165 +348,32 @@ impl WeeklyReport {
     }
 }
 
-/// The model's narrative for one week: a title and one sentence per block id.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WeeklyNarrative {
-    #[serde(default)]
-    pub title: String,
-    #[serde(default)]
-    pub sentences: std::collections::BTreeMap<String, String>,
-}
-
-/// Every number written in `text`: Arabic numerals (`12`, `0.5`, `6.5`), and
-/// Chinese numerals used as counts (`三次`, `两篇`, `十二道`). Percent signs and
-/// fractions are read number by number (`3/5` is 3 and 5).
-pub fn numbers_in_text(text: &str) -> Vec<f64> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut numbers = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i].is_ascii_digit() {
-            let start = i;
-            while i < chars.len() && chars[i].is_ascii_digit() {
-                i += 1;
-            }
-            if i + 1 < chars.len() && chars[i] == '.' && chars[i + 1].is_ascii_digit() {
-                i += 1;
-                while i < chars.len() && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-            }
-            let literal: String = chars[start..i].iter().collect();
-            if let Ok(value) = literal.parse::<f64>() {
-                numbers.push(value);
-            }
-            continue;
-        }
-        if chinese_digit(chars[i]).is_some() {
-            let start = i;
-            while i < chars.len() && chinese_digit(chars[i]).is_some() {
-                i += 1;
-            }
-            let run: String = chars[start..i].iter().collect();
-            let counted = chars.get(i).is_some_and(|next| CHINESE_MEASURE_WORDS.contains(*next));
-            if counted {
-                if let Some(value) = chinese_number(&run) {
-                    numbers.push(value);
-                }
-            }
-            continue;
-        }
-        i += 1;
-    }
-    numbers
-}
-
-/// A Chinese numeral is only a number when a measure word follows it: "一些",
-/// "一直", "一致" are words, "三次", "两篇" are counts.
-const CHINESE_MEASURE_WORDS: &str = "次道篇题天个周项处组分倍成段套";
-
-fn chinese_digit(ch: char) -> Option<u32> {
-    Some(match ch {
-        '零' => 0,
-        '一' => 1,
-        '二' | '两' => 2,
-        '三' => 3,
-        '四' => 4,
-        '五' => 5,
-        '六' => 6,
-        '七' => 7,
-        '八' => 8,
-        '九' => 9,
-        '十' => 10,
-        '百' => 100,
-        _ => return None,
-    })
-}
-
-/// Chinese numerals up to 999 (`十二`, `二十`, `一百零五`).
-fn chinese_number(run: &str) -> Option<f64> {
-    let mut total = 0u32;
-    let mut pending = 0u32;
-    for ch in run.chars() {
-        let digit = chinese_digit(ch)?;
-        match digit {
-            10 | 100 => {
-                total += pending.max(1) * digit;
-                pending = 0;
-            }
-            _ => pending = digit,
-        }
-    }
-    Some(f64::from(total + pending))
-}
-
-/// The numbers a JSON value states as numbers: every numeric field, plus the
-/// question references (`q5`, `P3`) inside strings. Dates, ids and titles carry
-/// digits that are not statistics, so `"2026-10-05"` or `"Cambridge 18"` allow
-/// nothing and a sentence cannot borrow them to state a count the host never
-/// computed.
-pub fn numbers_in_value(value: &Value, out: &mut BTreeSet<String>) {
-    match value {
-        Value::Number(number) => {
-            if let Some(float) = number.as_f64() {
-                out.insert(number_key(float));
-                // A ratio in data may be written as a percentage in prose.
-                if (0.0..=1.0).contains(&float) && float.fract() != 0.0 {
-                    out.insert(number_key((float * 100.0).round()));
-                }
-            }
-        }
-        Value::String(text) => {
-            for number in question_refs(text) {
-                out.insert(number_key(number));
-            }
-        }
-        Value::Array(items) => items.iter().for_each(|item| numbers_in_value(item, out)),
-        Value::Object(map) => map
-            .iter()
-            .filter(|(key, _)| !is_identity_key(key))
-            .for_each(|(_, item)| numbers_in_value(item, out)),
-        Value::Bool(_) | Value::Null => {}
+/// The title when the model wrote none: what the week was, in the counts the
+/// volume block shows. This is the only title derivation in the product.
+pub fn derive_title(blocks: &[ReportBlock]) -> String {
+    let volume = blocks.iter().find(|block| block.kind == BlockKind::Volume);
+    let count = |key: &str| {
+        volume
+            .and_then(|block| block.data.get(key))
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+    };
+    match (count("readingAttempts"), count("writingEssays")) {
+        (0, 0) => "这一周的练习".to_owned(),
+        (reading, 0) => format!("这一周读了 {reading} 篇"),
+        (0, writing) => format!("这一周写了 {writing} 篇"),
+        (reading, writing) => format!("这一周读了 {reading} 篇，写了 {writing} 篇"),
     }
 }
 
-/// Fields that name or locate something rather than count it.
-fn is_identity_key(key: &str) -> bool {
-    matches!(key, "id" | "day" | "title") || key.ends_with("Id") || key.starts_with("window")
-}
-
-/// `q5`, `P3`, `Q12`: one ASCII letter that starts a word, then 1-3 digits that
-/// end it. Anything else in a string (dates, ids, titles) is not a statistic.
-fn question_refs(text: &str) -> Vec<f64> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut found = Vec::new();
-    for (index, ch) in chars.iter().enumerate() {
-        let starts_word = index == 0 || !chars[index - 1].is_ascii_alphanumeric();
-        if !ch.is_ascii_alphabetic() || !starts_word {
-            continue;
-        }
-        let digits: String = chars[index + 1..].iter().take_while(|c| c.is_ascii_digit()).collect();
-        let end = index + 1 + digits.len();
-        let ends_word = chars.get(end).map_or(true, |next| !next.is_ascii_alphanumeric());
-        if (1..=3).contains(&digits.len()) && ends_word {
-            found.extend(digits.parse::<f64>().ok());
-        }
-    }
-    found
-}
-
-pub fn number_key(value: f64) -> String {
-    // 6.50 and 6.5 are the same number; 3.0 and 3 too.
-    let rounded = (value * 100.0).round() / 100.0;
-    format!("{rounded}")
-}
-
-/// Whether every number in `text` is one of `allowed` (built with
-/// [`numbers_in_value`]). A sentence that states a number the host never
-/// computed is the model inventing data.
-pub fn numbers_whitelisted(text: &str, allowed: &BTreeSet<String>) -> bool {
-    numbers_in_text(text).into_iter().all(|number| allowed.contains(&number_key(number)))
+/// The one title the page displays: the narrative's when it has one, otherwise
+/// the derived title. Both the live and the persisted report use this function.
+pub fn display_title(narrative: Option<&WeeklyNarrative>, blocks: &[ReportBlock]) -> String {
+    narrative
+        .map(|narrative| narrative.title.trim())
+        .filter(|title| !title.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| derive_title(blocks))
 }
 
 #[cfg(test)]
@@ -372,49 +381,80 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn allowed(value: Value) -> BTreeSet<String> {
-        let mut out = BTreeSet::new();
-        numbers_in_value(&value, &mut out);
-        out
-    }
-
-    #[test]
-    fn reads_arabic_and_counted_chinese_numbers() {
-        assert_eq!(numbers_in_text("本周练了 12 篇，正确率 0.75，写作 6.5 分"), vec![12.0, 0.75, 6.5]);
-        assert_eq!(numbers_in_text("错了三次，两篇文章，十二道题，二十天"), vec![3.0, 2.0, 12.0, 20.0]);
-        assert_eq!(numbers_in_text("一直在进步，一些题目一致"), Vec::<f64>::new());
-        assert_eq!(numbers_in_text("3/5 道"), vec![3.0, 5.0]);
-    }
-
-    #[test]
-    fn a_sentence_passes_only_with_numbers_from_the_block() {
-        let data = allowed(json!({"attempts": 4, "accuracy": 0.75, "labels": ["P8 q7"], "band": 6.5}));
-        assert!(numbers_whitelisted("这周做了 4 篇，正确率 75%。", &data));
-        assert!(numbers_whitelisted("P8 第7题又错了", &data));
-        assert!(numbers_whitelisted("写作 6.50 分", &data));
-        assert!(numbers_whitelisted("没有数字的句子", &data));
-        assert!(!numbers_whitelisted("这周做了 5 篇", &data));
-        assert!(!numbers_whitelisted("错了三次", &data));
-    }
-
-    #[test]
-    fn dates_ids_and_titles_do_not_widen_the_whitelist() {
-        let data = allowed(json!({
-            "readingAttempts": 2,
-            "perDay": [{"day": "2026-10-05", "reading": 2}],
-            "sameQuestion": [{"assetId": "cam18-t2-p1", "title": "Cambridge 18 Test 2", "question": "q5", "attempts": 2}],
-        }));
-        assert!(numbers_whitelisted("练了 2 篇，q5 又错了", &data));
-        assert!(!numbers_whitelisted("练了十篇", &data));
-        assert!(!numbers_whitelisted("练了 18 篇", &data));
-        assert!(!numbers_whitelisted("2026 年 10 月", &data));
-    }
-
     #[test]
     fn block_ids_are_stable_and_unique() {
-        let ids: BTreeSet<_> = BlockKind::ALL.iter().map(|kind| kind.id()).collect();
+        let ids: std::collections::BTreeSet<_> = BlockKind::ALL.iter().map(|kind| kind.id()).collect();
         assert_eq!(ids.len(), BlockKind::ALL.len());
         assert_eq!(serde_json::to_value(BlockKind::QuestionTypes).unwrap(), json!("question_types"));
         assert_eq!(serde_json::to_value(WeeklyReportState::FinalNoAi).unwrap(), json!("final_no_ai"));
+    }
+
+    #[test]
+    fn the_derived_title_reads_the_volume_block() {
+        let volume = ReportBlock::new(BlockKind::Volume, json!({"readingAttempts": 4, "writingEssays": 2}));
+        assert_eq!(derive_title(&[volume.clone()]), "这一周读了 4 篇，写了 2 篇");
+        let reading = ReportBlock::new(BlockKind::Volume, json!({"readingAttempts": 4, "writingEssays": 0}));
+        assert_eq!(derive_title(&[reading]), "这一周读了 4 篇");
+        let writing = ReportBlock::new(BlockKind::Volume, json!({"readingAttempts": 0, "writingEssays": 3}));
+        assert_eq!(derive_title(&[writing]), "这一周写了 3 篇");
+        assert_eq!(derive_title(&[]), "这一周的练习");
+    }
+
+    #[test]
+    fn the_narrative_title_wins_but_an_empty_one_falls_back() {
+        let volume = ReportBlock::new(BlockKind::Volume, json!({"readingAttempts": 4, "writingEssays": 2}));
+        let mut narrative = WeeklyNarrative { title: " 把错题读慢一点 ".to_owned(), ..WeeklyNarrative::default() };
+        assert_eq!(display_title(Some(&narrative), &[volume.clone()]), "把错题读慢一点");
+        narrative.title = "   ".to_owned();
+        assert_eq!(display_title(Some(&narrative), &[volume.clone()]), "这一周读了 4 篇，写了 2 篇");
+        assert_eq!(display_title(None, &[volume]), "这一周读了 4 篇，写了 2 篇");
+    }
+
+    #[test]
+    fn a_legacy_v2_report_reads_its_title_and_block_sentences() {
+        let raw = json!({
+            "schemaVersion": 2,
+            "window": "2026-W41",
+            "windowStart": "2026-10-04T16:00:00Z",
+            "windowEnd": "2026-10-11T16:00:00Z",
+            "state": "final",
+            "generatedAt": "2026-10-11T16:00:00Z",
+            "title": "本周练习",
+            "blocks": [{
+                "id": "accuracy", "kind": "accuracy",
+                "data": {"correct": 9, "answered": 12},
+                "examples": [], "memoryIds": [], "narrative": "正确率不错。"
+            }],
+            "memoryChanges": []
+        });
+        let report: WeeklyReport = serde_json::from_value(raw).unwrap();
+        assert_eq!(report.schema_version, LEGACY_WEEKLY_REPORT_SCHEMA_VERSION);
+        assert_eq!(report.display_title, "本周练习");
+        assert_eq!(report.blocks[0].legacy_narrative.as_deref(), Some("正确率不错。"));
+        assert!(report.narrative.is_none());
+        assert!(report.facts.is_empty());
+    }
+
+    #[test]
+    fn v3_serializes_one_title_and_never_a_legacy_sentence() {
+        let report = WeeklyReport {
+            schema_version: WEEKLY_REPORT_SCHEMA_VERSION,
+            window: "2026-W41".to_owned(),
+            window_start: "2026-10-04T16:00:00Z".to_owned(),
+            window_end: "2026-10-11T16:00:00Z".to_owned(),
+            state: WeeklyReportState::Final,
+            generated_at: "2026-10-11T16:00:00Z".to_owned(),
+            display_title: "这一周读了 4 篇".to_owned(),
+            blocks: vec![ReportBlock::new(BlockKind::Volume, json!({"readingAttempts": 4, "writingEssays": 0}))],
+            facts: BTreeMap::new(),
+            narrative: None,
+            profile_edits: Vec::new(),
+            memory_changes: Vec::new(),
+        };
+        let value = serde_json::to_value(&report).unwrap();
+        assert_eq!(value["schemaVersion"], json!(3));
+        assert_eq!(value["displayTitle"], json!("这一周读了 4 篇"));
+        assert!(value.get("title").is_none());
+        assert!(value["blocks"][0].get("narrative").is_none());
     }
 }

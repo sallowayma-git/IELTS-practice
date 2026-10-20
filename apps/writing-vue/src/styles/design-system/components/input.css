@@ -11,14 +11,14 @@
   [type="file"], [type="color"], [type="hidden"]), textarea, select) {
   height: 36px;
   padding: 0 12px;
-  border: 1px solid var(--anth-rule-strong);
-  border-radius: var(--anth-radius-sm);
-  background-color: var(--anth-surface-raised);
+  border: 1px solid var(--anth-field-border);
+  border-radius: var(--anth-radius-control);
+  background-color: var(--anth-field-bg);
   color: var(--anth-ink);
   font-family: var(--anth-font-sans);
   font-size: var(--anth-text-body-size);
   line-height: var(--anth-text-body-line);
-  box-shadow: none;
+  box-shadow: var(--anth-field-shadow);
   transition:
     border-color var(--anth-duration-fast) var(--anth-ease),
     box-shadow var(--anth-duration-fast) var(--anth-ease),
@@ -36,7 +36,7 @@
   appearance: none;
   -webkit-appearance: none;
   padding-right: 32px;
-  background-color: var(--anth-surface-raised);
+  background-color: var(--anth-field-bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236E685E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -78,7 +78,7 @@
   box-shadow: var(--anth-halo-danger);
 }
 
-/* Checkbox and radio: native shape, clay accent, 16px. */
+/* Checkbox and radio: native shape, accent colour, 16px. */
 .atlas-paper :is(input[type="checkbox"], input[type="radio"]) {
   width: 16px;
   height: 16px;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-weekly-history-list"
+description = "Enables the weekly_history_list command without any pre-configured scope."
+commands.allow = ["weekly_history_list"]
+
+[[permission]]
+identifier = "deny-weekly-history-list"
+description = "Denies the weekly_history_list command without any pre-configured scope."
+commands.deny = ["weekly_history_list"]

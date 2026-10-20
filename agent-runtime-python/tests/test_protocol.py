@@ -171,17 +171,37 @@ class DreamDispatchBridge:
             return {"planId": "plan-1", "accepted": 1, "rejected": 0}
         if method == "learning.weekly_pack":
             return {
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "observationCount": 12,
                 "header": {},
                 "lines": [{"ids": ["obs-a"], "date": "2026-10-05", "kind": "miss", "text": "P1 q14 [tfng] answered FALSE -> key TRUE"}],
                 "memories": [],
                 "preferences": [],
                 "blocks": [{"id": "accuracy", "kind": "accuracy", "data": {"correct": 9, "answered": 12}}],
+                "facts": {
+                    "accuracy.correct": {
+                        "value": 9,
+                        "label": "答对",
+                        "format": "number",
+                        "source": "accuracy",
+                        "provenance": {"assetIds": ["asset-1", "asset-2"]},
+                    }
+                },
+                "soul": {},
+                "persona": "长期陪练的老师",
+                "previousDigest": None,
             }
         if method == "model.invoke":
             return {"content": json.dumps({
-                "title": "判断题需要留意", "sentences": {"accuracy": "P1 第 14 题选错"},
+                "digest": {
+                    "title": "判断题需要留意",
+                    "body": ["判断题是这周最需要回头看的题型。"],
+                    "changes": [],
+                    "nextSteps": [],
+                    "strengths": [],
+                    "weaknesses": [],
+                },
+                "profileEdits": [],
                 "mutations": [{
                     "action": "ADD", "namespace": "strategy", "canonicalKey": "strategy.reading.tfng_boundary",
                     "scope": {"type": "activity", "key": "reading"}, "statement": "判断题容易混淆 False 与 Not Given。",
@@ -189,6 +209,8 @@ class DreamDispatchBridge:
                 }],
             })}
         if method == "dream.run_weekly":
+            if params.get("validateOnly"):
+                return {"usable": True, "needsRepair": False, "droppedSentences": 0, "violations": []}
             return {"runId": "weekly-run-1", "validated": 1, "rejected": 0, "accepted": 1}
         if method == "learning.learner_skill_state":
             return {
@@ -252,12 +274,26 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(result["accepted"], 1)
         self.assertIsNone(result["fallbackReason"])
         methods = [call[0] for call in bridge.calls]
-        self.assertEqual(methods, ["learning.weekly_pack", "model.invoke", "dream.run_weekly"])
+        self.assertEqual(
+            methods,
+            ["learning.weekly_pack", "model.invoke", "dream.run_weekly", "dream.run_weekly"],
+        )
         model_request = bridge.calls[1][1]["request"]
-        self.assertEqual(model_request["maxTokens"], 4000)
+        self.assertEqual(model_request["maxTokens"], 2500)
         self.assertEqual(bridge.calls[0][1], {"window": "2026-W40"})
-        submitted = bridge.calls[2][1]
-        self.assertEqual(submitted["narrative"], {"title": "判断题需要留意", "sentences": {"accuracy": "P1 第 14 题选错"}})
+        preflight = bridge.calls[2][1]
+        self.assertIs(preflight["validateOnly"], True)
+        self.assertNotIn("mutations", preflight)
+        submitted = bridge.calls[3][1]
+        self.assertNotIn("validateOnly", submitted)
+        self.assertEqual(submitted["digest"], {
+            "title": "判断题需要留意",
+            "body": ["判断题是这周最需要回头看的题型。"],
+            "changes": [],
+            "nextSteps": [],
+            "strengths": [],
+            "weaknesses": [],
+        })
         self.assertEqual((submitted["modelAvailable"], submitted["droppedMutations"]), (True, 0))
         self.assertEqual(submitted["mutations"][0]["action"], "ADD")
 

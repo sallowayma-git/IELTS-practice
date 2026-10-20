@@ -2,17 +2,39 @@
  * 札记 (Notebook) composition — journal facts and memories in plain prose.
  *
  * The notebook shows what the system concluded, never how: no counts of jobs
- * or candidates, no ids, no confidence numbers. Every export returns display
- * data; the view only lays it out.
+ * or candidates, no ids, no confidence numbers, no coach bookkeeping. Every
+ * export returns display data; the view only lays it out.
  *
- * Daily entries are rule-generated from the journal's structured facts and
- * worded by the seeded phrase bank in phrasing.js. No model is involved.
+ * Daily entries are rule-generated (insight.js compares the day with the
+ * student's own baseline) and worded by the seeded phrase bank in phrasing.js.
+ * No model is involved.
  */
 import { formatJournalDate, formatMemoryStatement, formatSkillKey } from '../agent-console/format.js'
-import { LONG_GAP_DAYS, daysBetween, keyFor, phrase } from './phrasing.js'
+import { LONG_GAP_DAYS, daysBetween, dayNumber, keyFor, phrase } from './phrasing.js'
+import {
+  changeRows,
+  changedNames,
+  headlineFacts,
+  kindOf,
+  lineRows,
+  modelView,
+  moodSignals,
+  readingRows,
+  shortSkill,
+  tomorrowView,
+  writingView
+} from './insight.js'
 
 const DAY_KEY = /^(?:daily_journal|daily_dream):local:(\d{4}-\d{2}-\d{2})$/
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+
+const PROBE_PHRASES = {
+  novel_item: '新题',
+  same_item_retention: '回看原题',
+  contrastive_pair: '对照练习',
+  coach_micro_drill: '教练小练习',
+  writing_rewrite: '改写练习'
+}
 
 function pick(record, camel, snake) {
   if (!record || typeof record !== 'object') return undefined
@@ -22,11 +44,6 @@ function pick(record, camel, snake) {
 function asNumber(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
-}
-
-function shortSkill(skillKey) {
-  const parts = formatSkillKey(skillKey).split('·').map((part) => part.trim()).filter(Boolean)
-  return (parts.length > 1 ? parts.slice(1) : parts).join('·')
 }
 
 /**
@@ -64,7 +81,7 @@ export function journalWindow(jobs) {
 /** A day counts as practiced when it has any practice fact (memory events alone do not; see factSheet). */
 export function isPracticed(journal) {
   const facts = journal?.facts && typeof journal.facts === 'object' ? journal.facts : null
-  return facts ? factSheet(facts, changes(facts), '').practiced : false
+  return facts ? factSheet(facts, '').practiced : false
 }
 
 /**
@@ -83,11 +100,30 @@ export function previousPracticedDay(days, index, practiced, cutOff = false) {
   return cutOff || windowFull ? undefined : null
 }
 
+/** "星期五" for a "YYYY-MM-DD" day; '' when it is not a date. */
+export function weekdayName(day) {
+  const number = dayNumber(day)
+  if (!Number.isFinite(number)) return ''
+  return `星期${WEEKDAYS[new Date(number * 86_400_000).getUTCDay()]}`
+}
+
+/**
+ * Consecutive practiced days ending at `days[index]` (itself included). A day
+ * that is unknown or unpracticed, or a calendar gap, ends the run.
+ */
+export function streakLength(days, index, practiced) {
+  let length = 0
+  for (let at = index; at < days.length && practiced.get(days[at]) === true; at += 1) {
+    if (at > index && daysBetween(days[at], days[at - 1]) !== 1) break
+    length += 1
+  }
+  return length
+}
+
 export function formatEntryDate(day) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''))
-  if (!match) return formatJournalDate(day)
-  const weekday = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay()
-  return `${formatJournalDate(day)} · 星期${WEEKDAYS[weekday]}`
+  const weekday = weekdayName(day)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ''))) return formatJournalDate(day)
+  return `${formatJournalDate(day)} · ${weekday}`
 }
 
 export function readMemory(row) {
@@ -140,30 +176,6 @@ function memoryNotes(facts, memoriesById, day) {
   return notes
 }
 
-/**
- * Skill labels the host classified as improving / recurring, strongest first.
- * The host owns the rule (ielts-db journal `skill_trend`); a delta without a
- * trend (journals written before it existed) is never read as a change.
- */
-export function changes(facts) {
-  const deltas = pick(facts, 'skillDeltas', 'skill_deltas')
-  const improved = []
-  const recurring = []
-  for (const item of Array.isArray(deltas) ? deltas : []) {
-    const delta = asNumber(pick(item, 'delta', 'delta'))
-    const label = shortSkill(pick(item, 'skillKey', 'skill_key'))
-    const trend = pick(item, 'trend', 'trend')
-    if (trend === 'improving') improved.push({ label, delta })
-    if (trend === 'recurring') recurring.push({ label, delta })
-  }
-  improved.sort((left, right) => right.delta - left.delta)
-  recurring.sort((left, right) => left.delta - right.delta)
-  return {
-    improved: improved.map((item) => item.label),
-    recurring: recurring.map((item) => item.label)
-  }
-}
-
 /** A name that is plain ASCII ("Task 2") is set off so it does not fuse with the Chinese around it. */
 function typeLabel(label) {
   return label && /^[\x20-\x7e]+$/.test(label) ? `「${label}」` : label
@@ -179,41 +191,42 @@ function formatNames(labels) {
   return items.map(typeLabel).join('、')
 }
 
-/** One decimal at most: an average of several bands is not worth more digits than that. */
-function roundBand(value) {
-  return Math.round(value * 10) / 10
-}
-
 /**
  * The flat fact sheet phrasing.js reads. `context.previousDay` is the finished
  * day before this one: a date, `null` (there is none: first page) or
- * `undefined` (not known).
+ * `undefined` (not known). v1 facts (writingEvalSummary, skillDeltas) and v2
+ * facts (writing, readingByKind) both feed it; the host owns every number.
  */
-export function factSheet(facts, change, day, context = {}) {
-  const writing = pick(facts, 'writingEvalSummary', 'writing_eval_summary') || {}
+export function factSheet(facts, day, context = {}) {
+  const legacyWriting = pick(facts, 'writingEvalSummary', 'writing_eval_summary') || {}
+  const writing = pick(facts, 'writing', 'writing') || {}
+  const rows = changeRows(facts, writingView(facts))
   const attempts = asNumber(pick(facts, 'attemptsCount', 'attempts_count'))
-  const written = asNumber(writing.completed)
+  // v2 hosts report the writing count in `writing`; v1 hosts in the summary.
+  const written = asNumber(legacyWriting.completed) || asNumber(writing.count)
   const feedback = asNumber(pick(facts, 'coachFeedbackCount', 'coach_feedback_count'))
   const reask = asNumber(pick(facts, 'coachReaskCount', 'coach_reask_count'))
   const gap = context.previousDay ? daysBetween(context.previousDay, day) : Number.NaN
   const events = pick(facts, 'memoryEvents', 'memory_events')
   const eventCount = Array.isArray(events) ? events.length : 0
-  const practiced = Boolean(attempts || written || feedback || reask || change.improved.length || change.recurring.length)
+  const improved = rows.filter((row) => row.trend === 'up').map((row) => row.zh)
+  const recurring = rows.filter((row) => row.trend === 'down').map((row) => row.zh)
+  const answered = rows.some((row) => row.total > 0) || written > 0
+  const practiced = Boolean(attempts || written || feedback || reask || answered || improved.length || recurring.length)
   return {
     day,
     attempts,
     minutes: Math.round(asNumber(pick(facts, 'timeSpentMs', 'time_spent_ms')) / 60000),
     written,
-    degraded: asNumber(writing.degraded),
-    band: roundBand(asNumber(pick(writing, 'averageBand', 'average_band'))),
     feedback,
     reask,
-    improved: change.improved,
-    recurring: change.recurring,
-    improvedNames: formatNames(change.improved),
-    recurringNames: formatNames(change.recurring),
-    type: typeLabel(change.improved[0] ?? change.recurring[0]),
+    improved,
+    recurring,
+    improvedNames: formatNames(improved),
+    recurringNames: formatNames(recurring),
+    type: typeLabel(improved[0] ?? recurring[0]),
     practiced,
+    reading: rows.some((row) => row.total > 0),
     events: eventCount,
     quiet: !practiced && eventCount === 0,
     notesOnly: !practiced && eventCount > 0,
@@ -223,27 +236,188 @@ export function factSheet(facts, change, day, context = {}) {
   }
 }
 
-// The 观察 paragraph, in reading order. Each type says nothing when its fact is absent.
-const OBSERVATION_FACTS = ['opening', 'attempts', 'writing', 'degraded', 'coach', 'reask']
+/**
+ * Plain-prose headline lines, one per part of the entry. The number of lines a
+ * part shows is capped here, not in the view.
+ */
+function readingSection(rows, topMiss, topMissKind, day) {
+  const lines = lineRows(rows).slice(0, 4).map((row) => {
+    const repeat = row.highError && row.missedAssets >= 2
+    return {
+      kind: row.kind,
+      text: phrase('readingLine', {
+        name: row.name,
+        total: row.total,
+        correct: row.correct,
+        pct: row.pct,
+        basePct: row.basePct ?? '',
+        hasBase: row.basePct !== null,
+        points: row.points === null ? '' : Math.abs(Math.round(row.points)),
+        assets: row.missedAssets,
+        repeat,
+        trend: row.trend,
+        highError: row.highError
+      }, day)
+    }
+  }).filter((line) => line.text)
+  const missKind = pick(topMiss, 'questionKind', 'question_kind')
+    || (typeof topMissKind === 'string' ? topMissKind : topMissKind?.kind)
+    || ''
+  const miss = topMiss && asNumber(topMiss.wrong) > 0
+    ? phrase('topMiss', {
+      title: pick(topMiss, 'assetTitle', 'asset_title') || '',
+      zh: kindOf(missKind).zh,
+      wrong: asNumber(topMiss.wrong),
+      total: asNumber(topMiss.total)
+    }, day)
+    : ''
+  return { lines, topMiss: miss }
+}
+
+function writingSection(writing, day) {
+  if (!writing) return null
+  if (writing.legacy) {
+    return { lines: [phrase('writingLine', { legacy: true, count: writing.count, band: writing.band ?? '' }, day)].filter(Boolean) }
+  }
+  const main = phrase('writingLine', {
+    legacy: false,
+    count: writing.count,
+    band: writing.band ?? '',
+    delta: writing.deltaText,
+    bandUp: writing.bandUp,
+    bandDown: writing.bandDown,
+    prevBand: writing.prevBand ?? ''
+  }, day)
+  const criteria = writing.criteria
+    .filter((item) => item.up || item.down)
+    .map((item) => phrase('criterionLine', { up: item.up, label: `${item.code}（${item.name}）`, delta: item.deltaText }, day))
+  return { lines: [main, ...criteria].filter(Boolean) }
+}
+
+function modelSection(model, day) {
+  return {
+    lines: [
+      phrase('dueLine', { due: model.due }, day),
+      phrase('weakLine', { label: model.weakest?.label ?? '', rate: model.weakest?.rate ?? '' }, day)
+    ].filter(Boolean)
+  }
+}
+
+/** The flat fact sheet for the headline's title (v1 fallback included). */
+function legacyTitleSheet(sheet, change) {
+  return {
+    ...sheet,
+    improved: change.improved,
+    recurring: change.recurring,
+    type: typeLabel(change.improved[0] ?? change.recurring[0]),
+    attempts: sheet.attempts
+  }
+}
 
 /**
- * One dated notebook entry from a persisted daily journal. `context` says
- * where the day sits among the finished days (`previousDay`, see factSheet);
- * without it the entry simply has no first-page / long-gap wording.
+ * The one-sentence headline, or '' when the day has no comparison to stand on.
+ * v1 facts carry no reading baseline (skillDeltas only name a host-classified
+ * trend), so a "steady" claim is never invented from them.
+ */
+function headlineFor(rows, writing, day) {
+  const facts = headlineFacts(rows, writing)
+  // "平稳" is a comparison too: only say it when the host actually compared
+  // this day with a baseline and found it flat, never when the baseline (or the
+  // trend field) is simply missing.
+  const flat = rows.some((row) => row.trend === 'flat' && row.basePct !== null)
+    || Boolean(writing && !writing.legacy && writing.prevBand !== null && !writing.bandUp && !writing.bandDown)
+  const moved = Boolean(facts.up || facts.down || facts.criterion || facts.rise)
+  if (!moved && !flat) return ''
+  return phrase('insightTitle', facts, day)
+}
+
+/**
+ * One dated notebook entry from a persisted daily journal. `context` says where
+ * the day sits among the finished days: `previousDay` (see previousPracticedDay),
+ * `streak` (see streakLength), `plan` (open study-plan items, see nextPractice).
  */
 export function buildNotebookEntry(journal, memoriesById = new Map(), context = {}) {
   const facts = journal?.facts && typeof journal.facts === 'object' ? journal.facts : null
   if (!facts) return null
-  const day = String(journal.journalDate || journal.journal_date || facts.journalDate || '')
-  const change = changes(facts)
-  const sheet = factSheet(facts, change, day, context)
+  const day = String(journal.journalDate || journal.journal_date || pick(facts, 'journalDate', 'journal_date') || '')
+  const readingRowsList = readingRows(facts)
+  const writing = writingView(facts)
+  const rows = changeRows(facts, writing)
+  const model = modelView(facts)
+  const sheet = factSheet(facts, day, context)
+  const topMiss = pick(facts, 'topMiss', 'top_miss')
+  const topMissKind = pick(facts, 'topMissKind', 'top_miss_kind')
+  const moved = rows.some((row) => row.trend === 'up' || row.trend === 'down')
+  const hasInsight = readingRowsList.some((row) => row.total > 0)
+    || moved
+    || Boolean(writing)
+    || model.due > 0
+    || Boolean(model.weakest)
+  const reading = readingSection(readingRowsList, topMiss, topMissKind, day)
+  const writingPart = writingSection(writing, day)
+  const modelPart = modelSection(model, day)
+  const tomorrow = hasInsight || Boolean(reading.topMiss)
+    ? tomorrowView({ topMissKind, rows: readingRowsList, writing, due: model.due, plan: context.plan ?? [] })
+    : null
+  const tomorrowLine = tomorrow ? phrase('tomorrow', tomorrow.facts, day) : ''
+  const tomorrowLink = tomorrow?.link ? phrase('planLink', tomorrow.link, day) : ''
+  const names = changedNames(rows, writing)
+  const headline = !sheet.quiet ? headlineFor(readingRowsList, writing, day) : ''
+  const title = headline || phrase('title', legacyTitleSheet(sheet, names), day)
+  const changeLead = phrase('changeLead', {
+    improved: names.improved,
+    recurring: names.recurring,
+    improvedNames: formatNames(names.improved),
+    recurringNames: formatNames(names.recurring)
+  }, day)
+  const observations = [phrase('opening', sheet, day), phrase('attempts', sheet, day)].filter(Boolean)
+  const summaryLines = [reading.lines[0]?.text, writingPart?.lines[0], tomorrowLine].filter(Boolean).slice(0, 3)
+  const assetKinds = pick(facts, 'assetQuestionKinds', 'asset_question_kinds')
   return {
     day,
     dateLabel: formatEntryDate(day),
-    title: phrase('title', sheet, day),
-    observations: OBSERVATION_FACTS.map((type) => phrase(type, sheet, day)).filter(Boolean),
+    weekday: weekdayName(day),
+    title,
+    observations,
     notes: memoryNotes(facts, memoriesById, day),
-    changeLead: phrase('changeLead', sheet, day),
-    changes: change
+    reading,
+    writing: writingPart,
+    model: modelPart,
+    tomorrow: { line: tomorrowLine, link: tomorrowLink },
+    summaryLines: summaryLines.length ? summaryLines : observations.slice(0, 2),
+    changes: names,
+    changeLead,
+    mood: { ...moodSignals(rows, writing), streak: context.streak ?? 0 },
+    // Reserved: the question-kind map per asset. Read here so the entry model has it;
+    // not displayed until the question-file schema upgrade (see developer/docs).
+    assetKinds: assetKinds && typeof assetKinds === 'object' && !Array.isArray(assetKinds) ? assetKinds : {}
   }
+}
+
+/**
+ * The closing line above the open plan items (`items` from nextPractice), or ''
+ * when there is nothing to suggest. Worded for `day` like any other fact.
+ */
+export function practiceLead(items, day) {
+  const list = Array.isArray(items) ? items : []
+  return phrase('practice', { count: list.length, label: list[0]?.label }, day)
+}
+
+/** Study-plan items still open, as practice suggestions. */
+export function nextPractice(snapshot) {
+  const items = Array.isArray(snapshot?.items) ? snapshot.items : []
+  return items
+    .filter((item) => item && !item.done)
+    .map((item) => {
+      const probe = item.skillProbe ?? item.skill_probe
+      const skillKey = typeof probe === 'string' ? probe : probe?.skillKey
+      const kind = typeof probe === 'object' ? PROBE_PHRASES[probe?.probeKind] : ''
+      return {
+        id: String(item.id),
+        skillKey: String(skillKey || ''),
+        label: [shortSkill(skillKey), kind].filter(Boolean).join(' · '),
+        why: String(item.whyText || item.why_text || ''),
+        minutes: asNumber(item.estimatedMinutes ?? item.estimated_minutes)
+      }
+    })
 }

@@ -77,66 +77,39 @@
             ></textarea>
           </div>
           <div v-else class="prompt-content">
-            <div class="inline-topic-selectors">
-              <select id="topic-category" v-model="selectedCategory" class="select inline-select inline-select--category">
-                <option value="">全部分类</option>
-                <option
-                  v-for="option in categoryOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-              <select
-                id="topic-select"
-                :value="selectedTopicId === null ? '' : String(selectedTopicId)"
-                class="select inline-select"
-                :disabled="topicLoading || topicsList.length === 0"
-                @change="handleTopicChange"
-              >
-                <option value="">选择具体考题</option>
-                <option
-                  v-for="topic in topicsList"
-                  :key="topic.id"
-                  :value="String(topic.id)"
-                >
-                  {{ getTopicOptionLabel(topic) }}
-                </option>
-              </select>
-            </div>
+            <button
+              id="topic-picker-trigger"
+              type="button"
+              class="topic-picker-field"
+              aria-haspopup="dialog"
+              :aria-expanded="showTopicPicker ? 'true' : 'false'"
+              @click="showTopicPicker = true"
+            >
+              <span v-if="selectedTopic" class="topic-picker-field__body">
+                <span class="topic-picker-field__tags">
+                  <span :class="['tag', taskType === 'task1' ? 'tag-accent' : 'tag-info']">
+                    {{ taskType === 'task1' ? 'Task 1' : 'Task 2' }}
+                  </span>
+                  <span class="tag tag-neutral">{{ currentTopicLabel }}</span>
+                </span>
+                <span class="topic-picker-field__title">{{ selectedTopicText }}</span>
+              </span>
+              <span v-else class="topic-picker-field__placeholder">选择一道题目…</span>
+              <span class="topic-picker-field__action">{{ selectedTopic ? '更换' : '选择题目' }}</span>
+            </button>
 
             <div v-if="topicLoading" class="topic-status">数据同步中...</div>
             <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
             <div v-else-if="selectedTopicText" class="prompt-selected">
-              <p class="page-header-kicker">{{ currentTopicLabel }}</p>
               <p class="prompt-text t-body-lg">{{ selectedTopicText }}</p>
               <figure v-if="selectedTopicImage" class="prompt-image">
                 <img :src="selectedTopicImage" :alt="`${currentTopicLabel} Task 1 图表`" />
               </figure>
             </div>
-            <div v-else class="topic-status">
-              {{ topicsList.length === 0 ? '当前分类下无记录' : '等待选择题目…' }}
-            </div>
+            <div v-else-if="topicsList.length === 0" class="topic-status">当前分类下无记录</div>
           </div>
         </section>
 
-        <section class="card task-brief" aria-label="任务要求">
-          <dl>
-            <div>
-              <dt>字数</dt>
-              <dd>至少 {{ minWordCount }} 词，建议 {{ targetWordCount }} 词</dd>
-            </div>
-            <div>
-              <dt>作答重点</dt>
-              <dd>{{ taskType === 'task1' ? '描述图表中的主要特征和趋势' : '介绍您的观点和论据' }}</dd>
-            </div>
-            <div>
-              <dt>提交</dt>
-              <dd>字数不足时会先提醒确认，草稿自动保存在本机。</dd>
-            </div>
-          </dl>
-        </section>
       </aside>
 
       <section class="compose-editor">
@@ -154,37 +127,54 @@
           </div>
         </div>
 
-        <textarea
-          v-model="content"
-          class="textarea essay-input t-body-lg"
-          :placeholder="placeholder"
-          rows="18"
-        ></textarea>
+        <div class="editor-card">
+          <textarea
+            v-model="content"
+            class="textarea essay-input t-body-lg"
+            :placeholder="placeholder"
+            rows="18"
+            spellcheck="false"
+          ></textarea>
 
-        <div class="editor-footer">
-          <p class="word-status">
-            <strong class="t-num" :class="{ 'is-warning': isWordCountLow }">{{ wordCount }}</strong>
-            <span>词 · </span>
-            <span :class="{ 'is-warning': isWordCountLow }">
-              {{ isWordCountLow ? `至少 ${minWordCount} 词` : '已达到字数要求' }}
-            </span>
-          </p>
+          <div class="editor-footer">
+            <p class="word-status">
+              <strong class="t-num" :class="{ 'is-warning': isWordCountLow }">{{ wordCount }}</strong>
+              <span>词 · </span>
+              <span :class="{ 'is-warning': isWordCountLow }">
+                {{ isWordCountLow ? `至少 ${minWordCount} 词` : '已达到字数要求' }}
+              </span>
+            </p>
 
-          <div class="editor-actions">
-            <button class="btn btn-ghost" @click="scheduleSave()">
-              保存草稿
-            </button>
-            <button
-              class="btn btn-primary btn-lg submit-btn"
-              :disabled="!canSubmit"
-              @click="handleSubmit"
-            >
-              {{ isSubmitting ? '提交中...' : '提交评分' }}
-            </button>
+            <div class="editor-actions">
+              <button class="btn btn-ghost" @click="scheduleSave()">
+                保存草稿
+              </button>
+              <button
+                class="btn btn-primary btn-lg submit-btn"
+                :disabled="!canSubmit"
+                @click="handleSubmit"
+              >
+                {{ isSubmitting ? '提交中...' : '提交评分' }}
+              </button>
+            </div>
           </div>
         </div>
       </section>
     </div>
+
+    <TopicPickerDialog
+      v-if="showTopicPicker"
+      :topics="topicsList"
+      :task-type="taskType"
+      :category="selectedCategory"
+      :category-options="categoryOptions"
+      :selected-topic-id="selectedTopicId"
+      :loading="topicLoading"
+      :error="topicError"
+      @select="handlePickTopic"
+      @close="showTopicPicker = false"
+      @update:category="selectedCategory = $event"
+    />
 
     <div v-if="showConfirmDialog" class="dialog-overlay">
       <div class="dialog">
@@ -214,7 +204,8 @@ import { evaluate, resolveApiErrorMessage, topics as topicsApi } from '@/api/cli
 import { useDraft } from '@/composables/useDraft.js'
 import { writingTopicModeToAttemptMode } from '@/api/writing-mode.js'
 import { createRequestGate } from '@/utils/request-gate.js'
-import { extractTextFromTiptap, getTopicTitlePreview } from '@/utils/tiptap-text.js'
+import TopicPickerDialog from '@/modules/writing/components/TopicPickerDialog.vue'
+import { extractTextFromTiptap } from '@/utils/tiptap-text.js'
 import {
   getWritingCategoryLabel,
   getWritingCategoryOptions,
@@ -224,7 +215,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 
-const taskType = ref('task2')
+const taskType = ref(route.query.taskType === 'task1' ? 'task1' : 'task2')
 const topicMode = ref('free')
 const selectedCategory = ref('')
 const selectedTopicId = ref(null)
@@ -237,6 +228,7 @@ const isSubmitting = ref(false)
 const error = ref('')
 const restoreNotice = ref('')
 const showConfirmDialog = ref(false)
+const showTopicPicker = ref(false)
 const showDraftNotification = ref(false)
 const isRestoringDraft = ref(false)
 const topicsRequestGate = createRequestGate()
@@ -606,14 +598,10 @@ async function handleDiscardDraft() {
   restoreNotice.value = ''
 }
 
-function handleTopicChange(event) {
-  const value = String(event.target.value || '').trim()
-  selectedTopicId.value = value || null
+function handlePickTopic(topic) {
+  selectedTopicId.value = String(topic.id)
   restoreNotice.value = ''
-}
-
-function getTopicOptionLabel(topic) {
-  return getTopicTitlePreview(topic.title_json, { fallback: '', maxLength: 90 })
+  showTopicPicker.value = false
 }
 
 async function handleSubmit() {
@@ -671,10 +659,6 @@ async function submitEssay() {
       word_count: payload.word_count
     })
 
-    // The essay is now durably submitted and evaluation has started. Clearing
-    // the scratch draft is housekeeping: its failure must never strand the
-    // user on the compose page, where a retry would start a second, billed
-    // evaluation of the same essay.
     stopAutoSave()
     if (!resumeAttemptId) {
       await discardDraft().catch((discardError) => {
@@ -742,18 +726,55 @@ async function submitEssay() {
 .prompt-content,
 .prompt-selected { display: grid; gap: var(--anth-space-3); }
 .prompt-selected { padding-top: var(--anth-space-3); border-top: 1px solid var(--anth-rule); }
-.inline-topic-selectors { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
-.inline-select { flex: 1 1 12rem; min-width: 0; }
+
+/* Topic field: a button that shows the chosen topic as a compact card and opens the picker. */
+.topic-picker-field {
+  display: flex;
+  align-items: center;
+  gap: var(--anth-space-3);
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: var(--anth-space-3) var(--anth-space-4);
+  border: 1px solid var(--anth-field-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-field-shadow);
+  color: var(--anth-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+.topic-picker-field:hover { border-color: var(--anth-rule-hover-strong); }
+.topic-picker-field:focus-visible { outline: none; border-color: var(--anth-accent); box-shadow: var(--anth-halo-accent); }
+.topic-picker-field__body { display: grid; flex: 1 1 auto; gap: var(--anth-space-2); min-width: 0; }
+.topic-picker-field__tags { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); min-width: 0; }
+.topic-picker-field__title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--anth-ink);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-body-size);
+  line-height: var(--anth-text-body-line);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.topic-picker-field__placeholder { flex: 1 1 auto; color: var(--anth-ink-faint); }
+.topic-picker-field__action {
+  flex: 0 0 auto;
+  color: var(--anth-accent);
+  font-size: var(--anth-text-small-size);
+  font-weight: var(--anth-weight-medium);
+}
+
 .prompt-text { margin: 0; max-width: var(--anth-measure); white-space: pre-wrap; }
 .prompt-image { margin: 0; padding-top: var(--anth-space-3); }
 .prompt-image img { display: block; max-width: 100%; max-height: 300px; margin: 0 auto; }
 .topic-status { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
 .topic-status--error { color: var(--anth-danger); }
 
-.task-brief dl { display: grid; gap: var(--anth-space-3); margin: 0; font-size: var(--anth-text-small-size); }
-.task-brief dl > div { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: var(--anth-space-3); }
-.task-brief dt { color: var(--anth-ink-muted); }
-.task-brief dd { margin: 0; color: var(--anth-ink-soft); }
 
 .editor-head {
   display: flex;
@@ -768,16 +789,32 @@ async function submitEssay() {
 .word-meta { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
 .editor-notices { display: grid; gap: 4px; }
 
-/* Essay: a raised, large serif surface. Focus ring and border come from the design system. */
-.essay-input {
+/* Editor card: essay and footer share one raised surface. No overflow clipping here, so the footer can stick. */
+.editor-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  transition: border-color var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+.editor-card:focus-within { border-color: var(--anth-accent); box-shadow: var(--anth-halo-accent); }
+
+/* Essay: large serif writing area inside the card, no field chrome of its own. */
+.editor-card .essay-input {
   min-height: 460px;
   padding: var(--anth-space-5) var(--anth-space-6);
+  border: 0;
+  border-radius: var(--anth-radius-card) var(--anth-radius-card) 0 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--anth-ink);
   font-family: var(--anth-font-serif);
   resize: vertical;
 }
 
-/* Footer bar: sticks under the essay, the one primary action sits on the right. */
+/* Footer: sticks to the viewport bottom inside the card, hairline above, rounded bottom corners. */
 .editor-footer {
   position: sticky;
   bottom: 0;
@@ -786,9 +823,10 @@ async function submitEssay() {
   align-items: center;
   justify-content: space-between;
   gap: var(--anth-space-4);
-  padding: var(--anth-space-3) 0;
+  padding: var(--anth-space-3) var(--anth-space-6);
   border-top: 1px solid var(--anth-rule);
-  background: var(--anth-surface);
+  border-radius: 0 0 var(--anth-radius-card) var(--anth-radius-card);
+  background: var(--anth-surface-raised);
 }
 
 .word-status {
@@ -814,6 +852,7 @@ async function submitEssay() {
   .editor-footer { flex-direction: column; align-items: stretch; }
   .draft-banner__actions,
   .editor-actions { justify-content: space-between; }
-  .essay-input { min-height: 360px; padding: var(--anth-space-4); }
+  .editor-card .essay-input { min-height: 360px; padding: var(--anth-space-4); }
+  .editor-footer { padding: var(--anth-space-3) var(--anth-space-4); }
 }
 </style>

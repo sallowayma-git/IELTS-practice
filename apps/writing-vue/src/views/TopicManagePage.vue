@@ -1,9 +1,9 @@
 <template>
-  <div class="topic-manage-page workspace has-rail">
+  <div class="topic-manage-page workspace">
     <header class="page-header topic-header">
       <div class="page-header-top">
         <div class="topic-header__copy">
-          <p class="page-header-kicker">WRITING · 写作题库</p>
+          <p class="page-header-kicker">题库 · 写作</p>
           <h1>写作题库</h1>
         </div>
         <div class="page-header-actions header-actions">
@@ -18,60 +18,62 @@
       <p class="page-header-desc">按任务类型、分类与难度整理写作题目。删除题目不会影响已有的历史记录。</p>
     </header>
 
-    <!-- 筛选栏 -->
-    <aside class="topic-rail" aria-label="题目筛选">
-      <div class="field">
-        <label class="field-label" for="topic-search">搜索</label>
-        <input
-          id="topic-search"
-          v-model.trim="searchKeyword"
-          type="text"
-          class="input"
-          placeholder="搜索题目或关键词…"
-          aria-label="搜索题目"
-        />
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="topic-filter-type">任务类型</label>
-        <select id="topic-filter-type" v-model="filters.type" class="select">
-          <option value="">全部类型</option>
-          <option value="task1">Task 1 (小作文)</option>
-          <option value="task2">Task 2 (大作文)</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="topic-filter-category">题目分类</label>
-        <select id="topic-filter-category" v-model="filters.category" class="select">
-          <option value="">全部分类</option>
-          <optgroup v-for="group in filterCategoryGroups" :key="group.type" :label="group.label">
-            <option v-for="option in group.options" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </optgroup>
-        </select>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="topic-filter-difficulty">难度</label>
-        <select id="topic-filter-difficulty" v-model.number="filters.difficulty" class="select">
-          <option :value="0">全部难度</option>
-          <option :value="1">1 · 入门</option>
-          <option :value="2">2 · 基础</option>
-          <option :value="3">3 · 进阶</option>
-          <option :value="4">4 · 挑战</option>
-          <option :value="5">5 · 专家</option>
-        </select>
-      </div>
-
-      <button v-if="hasActiveFilters" class="btn btn-ghost btn-sm topic-rail__reset" type="button" @click="resetFilters">
-        重置筛选
-      </button>
-    </aside>
-
     <section class="topic-main">
       <div class="toolbar is-sticky">
+        <!-- 筛选栏: one row on desktop, wraps on tablet, stacks on phone. -->
+        <div class="topic-filter-bar" role="search" aria-label="题目筛选">
+          <div class="topic-search">
+            <svg class="topic-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-4-4"></path>
+            </svg>
+            <input
+              id="topic-search"
+              v-model.trim="searchKeyword"
+              type="text"
+              class="input"
+              placeholder="搜索题目或关键词…"
+              aria-label="搜索题目"
+            />
+          </div>
+
+          <div id="topic-filter-type" class="segmented topic-type-filter" role="group" aria-label="任务类型">
+            <button
+              v-for="option in TYPE_FILTER_OPTIONS"
+              :key="option.value"
+              type="button"
+              class="segmented-item"
+              :class="{ active: filters.type === option.value }"
+              :aria-pressed="filters.type === option.value ? 'true' : 'false'"
+              @click="filters.type = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
+          <select id="topic-filter-category" v-model="filters.category" class="select topic-filter-select" aria-label="题目分类">
+            <option value="">全部分类</option>
+            <optgroup v-for="group in filterCategoryGroups" :key="group.type" :label="group.label">
+              <option v-for="option in group.options" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </optgroup>
+          </select>
+
+          <select id="topic-filter-difficulty" v-model.number="filters.difficulty" class="select topic-filter-select" aria-label="难度">
+            <option :value="0">全部难度</option>
+            <option :value="1">1 · 入门</option>
+            <option :value="2">2 · 基础</option>
+            <option :value="3">3 · 进阶</option>
+            <option :value="4">4 · 挑战</option>
+            <option :value="5">5 · 专家</option>
+          </select>
+
+          <button v-if="hasActiveFilters" class="btn btn-ghost btn-sm topic-filter-reset" type="button" @click="resetFilters">
+            重置
+          </button>
+        </div>
+
         <div class="topic-toolbar-row">
           <span class="section-meta">共 <span class="t-num">{{ displayCount }}</span> 道题目</span>
           <nav v-if="total > pagination.limit" class="topic-pager" aria-label="分页">
@@ -109,51 +111,64 @@
           <p class="empty-state-desc">正在加载题库...</p>
         </div>
 
-        <div v-else-if="filteredTopics.length === 0" class="empty-state">
-          <h3>暂无题目数据</h3>
-          <p class="empty-state-desc">当前筛选条件下没有找到题目，尝试调整筛选或新建题目。</p>
+        <MascotState
+          v-else-if="filteredTopics.length === 0"
+          :kind="hasActiveFilters || searchKeyword ? 'no-results' : 'empty'"
+          title="暂无题目数据"
+          desc="当前筛选条件下没有找到题目，尝试调整筛选或新建题目。"
+        >
           <button class="btn btn-primary btn-brand empty-state-action" type="button" @click="openEditor()">
             创建第一道题目
           </button>
-        </div>
+        </MascotState>
 
-        <div v-else class="list topic-grid">
-          <div
-            v-for="topic in filteredTopics"
-            :key="topic.id"
-            class="topic-card list-row"
-            :class="{ 'has-thumb': topic.image_url && topic.type === 'task1' }"
-          >
-            <div v-if="topic.image_url && topic.type === 'task1'" class="topic-thumb">
+        <div v-else class="topic-grid">
+          <article v-for="topic in filteredTopics" :key="topic.id" :class="['topic-card', { 'has-thumb': hasThumb(topic) }]">
+            <div class="topic-card__main">
+            <div v-if="hasThumb(topic)" class="topic-thumb">
               <img :src="topic.image_url" loading="lazy" :alt="topic.category" />
             </div>
 
-            <div class="list-row-main topic-body">
-              <div class="topic-tags">
-                <span :class="['tag', topic.type === 'task2' ? 'tag-info' : 'tag-accent']">
-                  {{ topic.type === 'task1' ? 'Task 1' : 'Task 2' }}
+            <div class="topic-card__body">
+              <div class="topic-card__top">
+                <div class="topic-tags">
+                  <span :class="['tag', topic.type === 'task2' ? 'tag-info' : 'tag-accent']">
+                    {{ topic.type === 'task1' ? 'Task 1' : 'Task 2' }}
+                  </span>
+                  <span class="tag tag-neutral">{{ getCategoryLabel(topic.category) }}</span>
+                </div>
+                <span class="topic-difficulty" role="img" :aria-label="`难度 ${topic.difficulty || 0}/5`">
+                  <span
+                    v-for="dot in 5"
+                    :key="dot"
+                    class="topic-difficulty__dot"
+                    :class="{ 'is-filled': dot <= (topic.difficulty || 0) }"
+                    aria-hidden="true"
+                  ></span>
                 </span>
-                <span class="tag tag-neutral">{{ getCategoryLabel(topic.category) }}</span>
-                <span class="tag tag-neutral t-num">难度 {{ topic.difficulty || 0 }}/5</span>
               </div>
               <div class="topic-title" v-html="renderTitle(topic.title_json)"></div>
-              <div class="list-row-meta">
-                <span>使用 {{ topic.usage_count || 0 }} 次</span>
-                <span v-if="topic.is_official">官方题目</span>
-              </div>
+            </div>
             </div>
 
-            <div class="list-row-trail">
-              <button class="btn btn-ghost btn-sm edit" type="button" title="编辑" @click="openEditor(topic)">编辑</button>
-              <button
-                class="btn btn-danger-ghost btn-sm delete"
-                type="button"
-                :title="topic.is_official ? '官方题目不可删除' : '删除'"
-                :disabled="topic.is_official"
-                @click="deleteTopic(topic)"
-              >删除</button>
-            </div>
-          </div>
+            <footer class="topic-card__footer">
+              <div class="topic-card__meta">
+                <span class="t-num">练过 {{ topic.usage_count || 0 }} 次</span>
+                <span v-if="topic.is_official" class="tag tag-neutral">官方</span>
+              </div>
+              <div class="topic-card__actions">
+                <button class="btn btn-primary btn-sm practice" type="button" @click="startWriting(topic)">开始写作</button>
+                <button class="btn btn-ghost btn-sm edit" type="button" title="编辑" @click="openEditor(topic)">编辑</button>
+                <button
+                  class="btn btn-danger-ghost btn-sm delete"
+                  type="button"
+                  :title="topic.is_official ? '官方题目不可删除' : '删除'"
+                  :disabled="topic.is_official"
+                  @click="deleteTopic(topic)"
+                >删除</button>
+              </div>
+            </footer>
+          </article>
         </div>
       </div>
     </section>
@@ -324,7 +339,9 @@
 </template>
 
 <script setup>
+import MascotState from '@/components/mascot/MascotState.vue'
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { topics as topicsApi } from '@/api/client.js'
 import { debounce } from '@/utils/debounce.js'
 import { createRequestGate } from '@/utils/request-gate.js'
@@ -337,8 +354,14 @@ const topicsList = ref([])
 const total = ref(0)
 const pageMessage = ref({ type: 'info', message: '' })
 const pagination = ref({ page: 1, limit: 12 })
+const route = useRoute()
+// Dashboard "浏览" links arrive as ?type=task1|task2; read it before the first load.
+function taskTypeFromRoute() {
+  const raw = Array.isArray(route.query.type) ? route.query.type[0] : route.query.type
+  return raw === 'task1' || raw === 'task2' ? raw : ''
+}
 const filters = ref({
-  type: '',
+  type: taskTypeFromRoute(),
   category: '',
   difficulty: 0
 })
@@ -369,8 +392,14 @@ const deleteDialog = ref({
   visible: false,
   topicId: null
 })
+const router = useRouter()
 const getCategoryLabel = getWritingCategoryLabel
 const renderTitle = renderTopicTitle
+const TYPE_FILTER_OPTIONS = Object.freeze([
+  { value: '', label: '全部' },
+  { value: 'task1', label: 'Task 1' },
+  { value: 'task2', label: 'Task 2' }
+])
 const FILTER_GROUP_LABELS = Object.freeze({
   task1: 'Task 1',
   task2: 'Task 2'
@@ -466,6 +495,15 @@ const debouncedLoadTopics = debounce(loadTopics, 300)
 function resetFilters() {
   filters.value = { type: '', category: '', difficulty: 0 }
   pagination.value.page = 1
+}
+
+function hasThumb(topic) {
+  return Boolean(topic.image_url) && topic.type === 'task1'
+}
+
+// 练习入口：题目 ID 与任务类型交给写作页读取，卡片本身不是链接。
+function startWriting(topic) {
+  router.push({ name: 'Compose', query: { topicId: topic.id, taskType: topic.type } })
 }
 
 // 打开编辑器
@@ -730,26 +768,49 @@ onBeforeUnmount(() => {
 .topic-header.page-header { grid-column: 1 / -1; padding-top: 0; margin-bottom: var(--anth-space-4); }
 .topic-header__copy { display: grid; gap: var(--anth-space-1); }
 
-.topic-rail {
-  display: flex;
-  flex-direction: column;
-  gap: var(--anth-space-4);
-  min-width: 0;
-  padding: var(--anth-space-3) var(--anth-space-5) var(--anth-space-5) 0;
-  border-right: 1px solid var(--anth-rule);
-}
-
-.topic-rail__reset { align-self: flex-start; }
-
 .topic-main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  padding-left: var(--anth-space-6);
 }
 
 .topic-main .scroll-region { padding: var(--anth-space-4) 0 var(--anth-space-6); }
+
+/* Filter bar: search takes the slack; type segmented and selects keep their own width. */
+.topic-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--anth-space-3);
+  min-width: 0;
+}
+
+.topic-search {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 220px;
+  max-width: 100%;
+}
+
+.topic-search .input { padding-left: 36px; }
+
+.topic-search__icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 15px;
+  height: 15px;
+  color: var(--anth-ink-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.topic-type-filter { flex: 0 0 auto; max-width: 100%; }
+
+.topic-filter-select { width: auto; min-width: 120px; max-width: 100%; }
+
+.topic-filter-reset { flex: 0 0 auto; }
 
 .topic-toolbar-row {
   display: flex;
@@ -763,29 +824,88 @@ onBeforeUnmount(() => {
 .topic-pager { display: inline-flex; align-items: center; gap: var(--anth-space-2); }
 .topic-pager__info { min-width: 4ch; text-align: center; }
 
-/* Row: [thumbnail, task 1 only] [body] [actions]. */
-.topic-card.list-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  padding: var(--anth-space-4);
+/* Practice cards: [thumbnail, task 1 only] [head + prompt] [footer: meta, actions]. */
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: var(--anth-space-4);
 }
 
-.topic-card.list-row.has-thumb { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+.topic-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  transition: transform var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .topic-card:hover { transform: translateY(-2px); box-shadow: var(--anth-shadow-2); }
+}
+
+/* Main row: [task 1 thumbnail] [body]. Min height matches the thumbnail so
+ * task 2 cards (no image) stay as tall as task 1 cards in the same row. */
+.topic-card__main {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 112px;
+  min-width: 0;
+}
+
+.topic-thumb {
+  flex: 0 0 112px;
+  width: 112px;
+  height: 112px;
+  margin: var(--anth-space-4) 0 0 var(--anth-space-4);
+  overflow: hidden;
+  border: 1px solid var(--anth-rule);
+  border-radius: 4px;
+  background: var(--anth-surface-sunken);
+}
 
 .topic-thumb img {
   display: block;
   width: 100%;
-  max-height: 96px;
-  object-fit: contain;
-  border: 1px solid var(--anth-rule);
-  border-radius: var(--anth-radius-xs);
-  background: var(--anth-surface-sunken);
+  height: 100%;
+  object-fit: cover;
 }
 
-.topic-body { display: grid; gap: var(--anth-space-2); min-width: 0; }
-.topic-tags { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); }
+.topic-card__body {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--anth-space-3);
+  min-width: 0;
+  padding: var(--anth-space-4) var(--anth-space-4) var(--anth-space-3);
+}
 
-/* Prompt text is prose: serif body-lg, two lines at most. */
+.topic-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--anth-space-2);
+  min-width: 0;
+}
+
+.topic-tags { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); min-width: 0; }
+
+/* Difficulty: five dots, filled up to the topic's level. */
+.topic-difficulty { display: inline-flex; flex-shrink: 0; gap: 3px; padding-top: 6px; }
+
+.topic-difficulty__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--anth-rule-strong);
+}
+
+.topic-difficulty__dot.is-filled { background: var(--anth-accent); }
+
+/* Prompt text is prose: serif body-lg, three lines at most. */
 .topic-title {
   display: -webkit-box;
   overflow: hidden;
@@ -795,7 +915,45 @@ onBeforeUnmount(() => {
   line-height: var(--anth-text-body-lg-line);
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
+}
+
+.topic-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-2) var(--anth-space-3);
+  padding: var(--anth-space-3) var(--anth-space-4);
+  border-top: 1px solid var(--anth-rule);
+}
+
+.topic-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--anth-space-2);
+  color: var(--anth-ink-soft);
+  font-size: var(--anth-text-small-size);
+}
+
+.topic-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--anth-space-1);
+  margin-left: auto;
+}
+
+/* Delete is quiet until the pointer or keyboard reaches it. */
+.topic-card__actions .delete {
+  color: var(--anth-ink-muted);
+  border-color: transparent;
+}
+
+.topic-card__actions .delete:not(:disabled):hover,
+.topic-card__actions .delete:not(:disabled):focus-visible {
+  border-color: var(--anth-danger);
+  color: var(--anth-danger);
 }
 
 .topic-title :deep(p) { margin: 0; }
@@ -805,7 +963,7 @@ onBeforeUnmount(() => {
 .topic-form__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--anth-space-4); }
 .topic-form__row > .field { min-width: 0; }
 
-/* Difficulty stars: token-only squares, clay when set. */
+/* Difficulty stars: token-only squares, accent when set. */
 .topic-stars { display: flex; gap: var(--anth-space-1); }
 
 .topic-star {
@@ -883,17 +1041,35 @@ onBeforeUnmount(() => {
 }
 
 @keyframes topic-spin { to { transform: rotate(1turn); } }
-@media (prefers-reduced-motion: reduce) { .topic-spinner { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .topic-spinner { animation: none; }
+  .topic-card { transition: none; }
+}
 
-/* Narrow: rail stacks above the list; the page scrolls as a whole. */
+/* Tablet: search gets the first row; type, category, difficulty share the second. */
 @media (max-width: 900px) {
-  .topic-manage-page.workspace { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
-  .topic-rail { padding: 0 0 var(--anth-space-5); border-right: 0; border-bottom: 1px solid var(--anth-rule); }
-  .topic-main { padding-left: 0; }
+  .topic-manage-page.workspace { height: auto; }
   .topic-main .scroll-region { overflow: visible; }
+  .topic-search { flex-basis: 100%; }
 }
 
 @media (max-width: 600px) {
   .topic-form__row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Phone: every filter takes a full row; the type segmented splits evenly. */
+@media (max-width: 520px) {
+  .topic-filter-bar > * { flex: 1 1 100%; width: 100%; }
+  .topic-type-filter { display: flex; }
+  .topic-type-filter .segmented-item { flex: 1 1 0; min-width: 0; padding: 0 var(--anth-space-2); }
+  .topic-filter-select { width: 100%; min-width: 0; }
+  .topic-filter-reset { width: auto; align-self: flex-start; }
+  .topic-card__main { flex-direction: column; }
+  .topic-card.has-thumb .topic-thumb {
+    flex: 0 0 auto;
+    width: auto;
+    height: 120px;
+    margin: var(--anth-space-4) var(--anth-space-4) 0;
+  }
 }
 </style>

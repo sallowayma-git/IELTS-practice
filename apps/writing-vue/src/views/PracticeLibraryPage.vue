@@ -4,10 +4,22 @@
     <header class="page-header library-workspace-header">
       <div class="page-header-top">
         <div class="library-workspace-header__copy">
-          <p class="page-header-kicker">READING · 阅读</p>
-          <h1 class="library-workspace-header__title">阅读练习</h1>
+          <p class="page-header-kicker">{{ headerKicker }}</p>
+          <div class="library-workspace-header__title-row">
+            <h1 class="library-workspace-header__title">{{ headerTitle }}</h1>
+            <MoodMascot
+              v-if="activeView === 'overview' && overviewMood"
+              class="overview-mood"
+              :mood="overviewMood"
+              :size="48"
+              :label="`最近状态：${moodLabel(overviewMood)}`"
+            />
+          </div>
         </div>
         <div v-if="activeView === 'overview'" class="page-header-actions">
+          <button class="btn btn-secondary" type="button" data-action="write-essay" @click="startCompose">
+            写一篇
+          </button>
           <button
             class="btn btn-secondary"
             type="button"
@@ -31,66 +43,28 @@
           </button>
         </div>
       </div>
-      <p v-if="activeView === 'overview'" class="page-header-desc">按篇章挑一篇开始，或用无尽与套题模式保持节奏。</p>
+      <p v-if="activeView === 'overview'" class="page-header-desc">最近的练习、成绩走势和下一步。</p>
     </header>
-
-    <nav class="library-view-tabs tabs" aria-label="阅读工作区">
-      <button
-        v-for="item in libraryViews"
-        :key="item.value"
-        type="button"
-        :class="['tab', 'library-view-tabs__button', { active: activeView === item.value }]"
-        :data-view="item.value"
-        :aria-current="activeView === item.value ? 'page' : undefined"
-        @click="showView(item.value)"
-      >
-        {{ item.label }}
-      </button>
-    </nav>
 
     </div>
 
     <div class="library-body">
-    <div class="library-home-grid">
-    <ReadingOverviewPanel
-      :active-view="activeView"
+    <DashboardOverview
+      v-if="activeView === 'overview'"
+      @mood="overviewMood = $event"
       :reading-category-entries="readingCategoryEntries"
-      :creating-suite="creatingSuite"
       :error="error"
       :suite-error="suiteError"
-      :icons="icons"
-      @start-endless-mode="startEndlessMode"
-      @open-suite-mode-selector="openSuiteModeSelector"
+      :library-loaded="libraryLoaded"
+      :total-assets="readingAssets.length"
+      :html-asset-count="htmlAssetCount"
+      :pdf-asset-count="pdfAssetCount"
+      :latest-asset-read-label="latestAssetReadLabel"
       @browse-category="browseCategory"
       @start-random-practice="startRandomPractice"
       @retry-load="loadAssets"
+      @open-reading-data-settings="openReadingDataSettings"
     />
-
-    <aside v-if="activeView === 'overview'" class="card library-facts" aria-label="本机题库">
-      <div class="panel-header">
-        <h3>本机题库</h3>
-        <button class="btn btn-ghost btn-sm" type="button" @click="showView('settings')">管理</button>
-      </div>
-      <dl class="library-facts__list">
-        <div>
-          <dt>题目总数</dt>
-          <dd>{{ libraryLoaded ? readingAssets.length : '—' }}</dd>
-        </div>
-        <div>
-          <dt>HTML 题目</dt>
-          <dd>{{ libraryLoaded ? htmlAssetCount : '—' }}</dd>
-        </div>
-        <div>
-          <dt>PDF 题目</dt>
-          <dd>{{ libraryLoaded ? pdfAssetCount : '—' }}</dd>
-        </div>
-        <div>
-          <dt>最近读取</dt>
-          <dd>{{ libraryLoaded ? latestAssetReadLabel : '—' }}</dd>
-        </div>
-      </dl>
-    </aside>
-    </div>
 
     <ReadingBrowsePanel
       :active-view="activeView"
@@ -114,7 +88,6 @@
       :custom-suite-ready="customSuiteReady"
       :creating-suite="creatingSuite"
       :icons="icons"
-      :format-exam-meta-text="formatExamMetaText"
       @toggle-browse-preference="toggleBrowsePreference"
       @persist-browse-preference="persistBrowsePreference"
       @filter-by-type="filterByType"
@@ -130,7 +103,6 @@
     <ReadingMoreToolsPanel
       :active-view="activeView"
       :icons="icons"
-      @open-writing-entry="openWritingEntry"
       @open-clock-tool="openClockTool"
       @open-reading-memorize="openReadingMemorize"
     />
@@ -168,25 +140,6 @@
       </div>
     </div>
 
-    <ReadingSettingsPanel
-      ref="readingSettingsPanel"
-      :active-view="activeView"
-      :history-busy="historyBusy"
-      :library-status-label="libraryStatusLabel"
-      :reading-assets="readingAssets"
-      :html-asset-count="htmlAssetCount"
-      :pdf-asset-count="pdfAssetCount"
-      :latest-asset-read-label="latestAssetReadLabel"
-      v-model:library-config-open="libraryConfigOpen"
-      :loading="loading"
-      @load-reading-data="reloadReadingLibrary"
-      @show-reading-library-config-list="showReadingLibraryConfigList"
-      @open-global-settings="openGlobalSettings"
-      @export-reading-archive="exportReadingArchive"
-      @trigger-reading-archive-import="triggerReadingArchiveImport"
-      @reading-archive-import-change="handleReadingArchiveImportChange"
-    />
-
     </div>
 
     <div v-if="pdfViewer.open" class="dialog-overlay pdf-viewer-overlay" @click.self="closePdfViewer">
@@ -204,12 +157,14 @@
 </template>
 
 <script setup>
+import MoodMascot from '@/components/mascot/MoodMascot.vue'
+import { moodLabel } from '@/components/mascot/moodFor.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ReadingBrowsePanel from '@/modules/practice-reading/components/ReadingBrowsePanel.vue'
 import ReadingMoreToolsPanel from '@/modules/practice-reading/components/ReadingMoreToolsPanel.vue'
-import ReadingOverviewPanel from '@/modules/practice-reading/components/ReadingOverviewPanel.vue'
-import ReadingSettingsPanel from '@/modules/practice-reading/components/ReadingSettingsPanel.vue'
+import DashboardOverview from '@/modules/dashboard/components/DashboardOverview.vue'
+import { formatTodayLabel } from '@/modules/dashboard/dashboardCore.js'
 import ReadingSuiteSelector from '@/modules/practice-reading/components/ReadingSuiteSelector.vue'
 import {
   buildBrowseTitle,
@@ -217,8 +172,8 @@ import {
   normalizeCategory,
   normalizeFrequency
 } from '@/modules/practice-reading/browseFilters'
+import { hasReadingPracticePayload } from '@/modules/practice-reading/readingAssetCore'
 import { LIBRARY_LOAD_FAILURE, libraryFailureMessage } from '@/modules/practice-reading/libraryFailure'
-import { useReadingHistory } from '@/modules/practice-reading/useReadingHistory'
 import { useReadingLibrary } from '@/modules/practice-reading/useReadingLibrary'
 import { useReadingSuite } from '@/modules/practice-reading/useReadingSuite'
 import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
@@ -229,7 +184,6 @@ const router = useRouter()
 const route = useRoute()
 const preferences = useTauriPreferences()
 const { loadReadingAssets } = useReadingLibrary()
-const { exportReadingHistoryArchive, importReadingHistoryArchive } = useReadingHistory()
 const { createReadingSuite } = useReadingSuite()
 const SUITE_FLOW_MODE_STORAGE_KEY = 'suite_flow_mode'
 const SUITE_FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope'
@@ -246,12 +200,8 @@ const icons = {
   clockLarge: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>'
 }
 
-const libraryViews = [
-  { value: 'overview', label: '总览', icon: icons.overview },
-  { value: 'browse', label: '题库浏览', icon: icons.book },
-  { value: 'more', label: '更多', icon: icons.more },
-  { value: 'settings', label: '数据工具', icon: icons.settings }
-]
+// Views are switched from the top nav through the `view` query.
+const LIBRARY_VIEWS = new Set(['overview', 'browse', 'more'])
 
 const typeFilters = [
   { value: 'all', label: '全部' },
@@ -261,7 +211,7 @@ const typeFilters = [
 
 const frequencyFilters = [
   { value: 'high', label: '高频' },
-  { value: 'medium', label: '中频' },
+  { value: 'medium', label: '次高频' },
   { value: 'low', label: '低频' }
 ]
 
@@ -298,7 +248,6 @@ const clockText = computed(() => clockNow.value.toLocaleTimeString([], {
   hour12: false
 }))
 const clockIso = computed(() => clockNow.value.toISOString())
-const libraryConfigOpen = ref(false)
 const suiteModeSelectorOpen = ref(false)
 const selectedSuiteFlowMode = ref(resolveSuitePreference().flowMode)
 const selectedSuiteFrequencyScope = ref(resolveSuitePreference().frequencyScope)
@@ -306,9 +255,7 @@ const customSuiteDraft = ref(null)
 const readingAssets = ref([])
 // Counts are only real once the index has been read; until then they are unknown, not zero.
 const libraryLoaded = ref(false)
-const readingSettingsPanel = ref(null)
 const loading = ref(false)
-const historyBusy = ref(false)
 const creatingSuite = ref(false)
 const error = ref('')
 const suiteError = ref('')
@@ -328,7 +275,9 @@ const browseTitle = computed(() => {
 })
 
 const filteredReadingAssets = computed(() => {
-  return filterReadingAssets(readingAssets.value, {
+  const kind = typeof route.query.kind === 'string' ? route.query.kind : ''
+  const assets = kind ? readingAssets.value.filter((asset) => (asset.questionKinds || []).includes(kind)) : readingAssets.value
+  return filterReadingAssets(assets, {
     keyword: keyword.value,
     selectedType: selectedType.value,
     selectedCategory: selectedCategory.value,
@@ -339,11 +288,20 @@ const filteredReadingAssets = computed(() => {
 
 const htmlAssetCount = computed(() => readingAssets.value.filter(hasReadingPracticePayload).length)
 const pdfAssetCount = computed(() => readingAssets.value.filter((asset) => Boolean(asset?.pdfOnly)).length)
-const libraryStatusLabel = computed(() => readingAssets.value.length ? '本地索引已读取' : '尚未读取')
 const latestAssetReadLabel = computed(() => latestAssetReadAt.value ? latestAssetReadAt.value.toLocaleString() : '尚未读取')
 const customSuitePickedByCategory = computed(() => customSuiteDraft.value?.pickedByCategory || {})
 const customSuiteCurrentCategory = computed(() => customSuiteCategories[customSuiteDraft.value?.stageIndex || 0] || 'P1')
 const customSuiteReady = computed(() => customSuiteCategories.every((category) => Boolean(customSuitePickedByCategory.value[category]?.id)))
+
+const todayLabel = formatTodayLabel()
+const LIBRARY_HEADERS = Object.freeze({
+  browse: Object.freeze({ kicker: '题库 · 阅读', title: '阅读题库' }),
+  more: Object.freeze({ kicker: 'READING · 阅读', title: '阅读练习' })
+})
+const libraryHeader = computed(() => LIBRARY_HEADERS[activeView.value] || LIBRARY_HEADERS.more)
+const headerKicker = computed(() => (activeView.value === 'overview' ? todayLabel : libraryHeader.value.kicker))
+const headerTitle = computed(() => (activeView.value === 'overview' ? '总览' : libraryHeader.value.title))
+const overviewMood = ref('')
 
 onMounted(async () => {
   await preferences.hydrate()
@@ -409,24 +367,22 @@ async function loadAssets() {
   }
 }
 
-async function reloadReadingLibrary(event) {
-  event?.preventDefault?.()
-  event?.stopImmediatePropagation?.()
-  if (await loadAssets()) {
-    showLocalMessage('已重新读取本机题库索引')
-  }
-}
-
 // Old deep links into the reading record tab land on the unified history page.
 const LEGACY_RECORD_VIEWS = new Set(['practice', 'records'])
 
 function syncViewFromRoute() {
-  const view = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
+  // No view query is the overview — the top nav's 总览 link drops the query.
+  const view = (Array.isArray(route.query.view) ? route.query.view[0] : route.query.view) || 'overview'
   if (LEGACY_RECORD_VIEWS.has(view)) {
     router.replace({ name: 'History', query: { activity: 'reading' } }).catch(() => {})
     return
   }
-  if (libraryViews.some((item) => item.value === view)) {
+  if (view === 'settings') {
+    // The reading data tools moved into the global settings page.
+    openReadingDataSettings()
+    return
+  }
+  if (LIBRARY_VIEWS.has(view)) {
     activeView.value = view
   }
 }
@@ -443,15 +399,12 @@ function updateRouteView(view) {
   }).catch(() => {})
 }
 
-function showView(view) {
-  if (!libraryViews.some((item) => item.value === view)) return
-  activeView.value = view
+function startCompose() {
+  router.push({ name: 'Compose' }).catch(() => {})
 }
 
-function openGlobalSettings(event) {
-  event?.preventDefault?.()
-  event?.stopImmediatePropagation?.()
-  router.push({ name: 'Settings' }).catch(() => {})
+function openReadingDataSettings() {
+  router.push({ name: 'Settings', hash: '#settings-reading' }).catch(() => {})
 }
 
 function readBrowseRememberPosition() {
@@ -682,12 +635,6 @@ async function openReadingMemorize() {
   }
 }
 
-function openWritingEntry(event) {
-  event?.preventDefault?.()
-  event?.stopImmediatePropagation?.()
-  router.push({ name: 'Compose' })
-}
-
 function normalizeSuiteFlowMode(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return suiteFlowOptions.some((option) => option.value === normalized) ? normalized : ''
@@ -914,110 +861,6 @@ async function startReadingSuite(event, options = {}) {
   }
 }
 
-function downloadJsonFile(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
-}
-
-async function exportReadingArchive() {
-  if (historyBusy.value) return
-  historyBusy.value = true
-  try {
-    const archive = requireReadingArchiveExport(await exportReadingHistoryArchive())
-    downloadJsonFile(`ielts-reading-practice-export-${new Date().toISOString().slice(0, 10)}.json`, archive)
-    showLocalMessage(`阅读记录已导出：${archive.count} 条`)
-  } catch (error) {
-    console.error('导出阅读记录失败:', error)
-    showLocalMessage(libraryFailureMessage('导出失败', error))
-  } finally {
-    historyBusy.value = false
-  }
-}
-
-function triggerReadingArchiveImport() {
-  if (historyBusy.value) return
-  readingSettingsPanel.value?.click()
-}
-
-async function handleReadingArchiveImportChange(event) {
-  const input = event?.target
-  const file = input?.files?.[0]
-  if (!file) return
-  try {
-    await importReadingArchiveFile(file)
-  } finally {
-    if (input) {
-      input.value = ''
-    }
-  }
-}
-
-async function importReadingArchiveFile(file) {
-  historyBusy.value = true
-  try {
-    const text = await file.text()
-    const payload = JSON.parse(text)
-    const result = requireCommittedReadingArchiveImport(
-      await importReadingHistoryArchive(payload)
-    )
-    showLocalMessage(`阅读记录导入完成：${result?.imported || result?.importedCount || 0} 条`)
-  } catch (error) {
-    console.error('导入阅读记录失败:', error)
-    showLocalMessage(libraryFailureMessage('导入失败', error, '请检查 JSON 文件'))
-  } finally {
-    historyBusy.value = false
-  }
-}
-
-function requireReadingArchiveExport(value) {
-  const archive = value && typeof value === 'object' ? value : null
-  const count = Number(archive?.count)
-  if (archive?.activity === 'reading' && Array.isArray(archive.submissions) && Number.isInteger(count) && count === archive.submissions.length) {
-    return archive
-  }
-  const error = new Error('阅读归档导出未返回完整的 Rust 快照')
-  error.code = 'reading.archive_export_failed'
-  throw error
-}
-
-function requireCommittedReadingArchiveImport(result) {
-  const failed = Number(result?.failed ?? result?.failedCount ?? 0)
-  if (result?.committed === true && failed === 0) return result
-  const report = Array.isArray(result?.report) ? result.report : []
-  const error = new Error(report[0]?.message || '阅读记录导入未提交，原有数据未修改')
-  error.code = 'reading.archive_import_failed'
-  error.importResult = result
-  throw error
-}
-
-function showReadingLibraryConfigList() {
-  libraryConfigOpen.value = true
-}
-
-function formatExamMetaText(asset) {
-  const category = normalizeCategory(asset.category)
-  const frequency = asset.metadata?.frequency || asset.difficulty || ''
-  const label = frequency ? ` | ${frequency}` : ''
-  return `${category} | reading${label}`
-}
-
-function hasReadingPracticePayload(asset) {
-  const metadata = asset?.metadata || {}
-  return !asset?.pdfOnly && Boolean(
-    asset?.payloadRef
-    || asset?.contentRef
-    || metadata.dataKey
-    || metadata.script
-  )
-}
-
 async function viewPdf(asset) {
   if (!asset?.pdfOnly || !asset?.id) {
     showLocalMessage('此题不是 PDF 阅读资源。')
@@ -1073,7 +916,7 @@ function updateSegmentedIndicators() {
 .atlas-paper [data-practice-reading-home] .view.active { display: block; }
 
 .atlas-paper [data-practice-reading-home] .library-workspace-header {
-  margin-bottom: var(--anth-space-4);
+  margin-bottom: var(--anth-space-6);
   padding-top: 0;
   padding-bottom: 0;
   border-bottom: 0;
@@ -1081,66 +924,26 @@ function updateSegmentedIndicators() {
 
 .atlas-paper [data-practice-reading-home] .library-workspace-header .page-header-top { align-items: flex-end; }
 .atlas-paper [data-practice-reading-home] .library-workspace-header__copy { display: grid; gap: var(--anth-space-1); }
+.atlas-paper [data-practice-reading-home] .library-workspace-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--anth-space-3);
+}
+
 .atlas-paper [data-practice-reading-home] .library-workspace-header__title {
   font-size: var(--anth-text-h1-size);
   line-height: var(--anth-text-h1-line);
 }
 
-.atlas-paper [data-practice-reading-home] .library-view-tabs {
-  margin-bottom: var(--anth-space-6);
-}
-
-/* Phone: the four view entries fill one row; no hidden horizontal scroll. */
-@media (max-width: 640px) {
-  .atlas-paper [data-practice-reading-home] .library-view-tabs {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+/* CJK glyphs sit high in their line box; lift the mascot onto the title's visual centre. */
+.atlas-paper [data-practice-reading-home] .library-workspace-header__title-row .overview-mood {
+  transform: translateY(-5px);
 }
 
 .atlas-paper [data-practice-reading-home] .library-body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-/* ── Overview: passage index beside the local-library card ───────────── */
-.atlas-paper [data-practice-reading-home] .library-home-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: var(--anth-space-6);
-  align-items: start;
-}
-
-.atlas-paper [data-practice-reading-home] .category-card { grid-template-columns: 40px minmax(0, 1fr) auto; min-height: 72px; }
-.atlas-paper [data-practice-reading-home] .category-icon {
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-h2-size);
-  font-weight: var(--anth-weight-semibold);
-  line-height: 1;
-}
-.atlas-paper [data-practice-reading-home] .category-actions { display: flex; align-items: center; gap: var(--anth-space-2); }
-.atlas-paper [data-practice-reading-home] .category-meta.is-pending { color: var(--anth-ink-faint); }
-
-.atlas-paper [data-practice-reading-home] .library-facts { display: grid; align-content: start; gap: var(--anth-space-3); }
-.atlas-paper [data-practice-reading-home] .library-facts__list { display: grid; margin: 0; }
-.atlas-paper [data-practice-reading-home] .library-facts__list > div {
-  display: grid;
-  gap: 2px;
-  padding: var(--anth-space-3) 0;
-  border-top: 1px solid var(--anth-rule);
-}
-.atlas-paper [data-practice-reading-home] .library-facts__list > div:first-child { border-top: 0; }
-.atlas-paper [data-practice-reading-home] .library-facts__list dt { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
-.atlas-paper [data-practice-reading-home] .library-facts__list dd {
-  margin: 0;
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-h3-size);
-  font-variant-numeric: tabular-nums;
-}
-.atlas-paper [data-practice-reading-home] .library-facts__list > div:last-child dd {
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-small-size);
 }
 
 /* ── Browse: workspace. Toolbar auto, list fills the rest and scrolls ── */
@@ -1208,18 +1011,6 @@ function updateSegmentedIndicators() {
   padding: var(--anth-space-3) 0 var(--anth-space-5);
 }
 .atlas-paper [data-practice-reading-home] .exam-list { flex: 0 0 auto; }
-.atlas-paper [data-practice-reading-home] .exam-item { grid-template-columns: minmax(0, 1fr) auto; min-height: 56px; }
-.atlas-paper [data-practice-reading-home] .exam-info { min-width: 0; }
-.atlas-paper [data-practice-reading-home] .exam-info h4 {
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--anth-text-body-size);
-  font-weight: var(--anth-weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.atlas-paper [data-practice-reading-home] .exam-meta { color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); }
-.atlas-paper [data-practice-reading-home] .exam-actions { display: flex; align-items: center; gap: var(--anth-space-2); }
 
 .atlas-paper [data-practice-reading-home] .loading {
   display: grid;
@@ -1401,9 +1192,6 @@ function updateSegmentedIndicators() {
 }
 
 @media (max-width: 580px) {
-  .atlas-paper [data-practice-reading-home] .category-card { grid-template-columns: minmax(0, 1fr); }
-  .atlas-paper [data-practice-reading-home] .category-actions,
-  .atlas-paper [data-practice-reading-home] .exam-actions { flex-wrap: wrap; }
   .atlas-paper [data-practice-reading-home] .tool-card-arrow { display: none; }
 }
 

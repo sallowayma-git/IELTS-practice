@@ -169,6 +169,11 @@ export async function getBackgroundJobStatus() {
 }
 
 /** Finished weekly reports (read-only), newest first. */
+export async function getWeeklyHistory(limit = 52) {
+  const response = await invokeCommand('weekly_history_list', { limit })
+  return unwrapCommandResponse(response, 'weekly_history_list')
+}
+
 export async function getWeeklyReports(limit = 8) {
   const response = await invokeCommand('weekly_report_list', { limit })
   return unwrapCommandResponse(response, 'weekly_report_list')
@@ -203,6 +208,7 @@ export const memoryRepository = {
   getDailyJournal,
   getBackgroundJobStatus,
   getWeeklyReports,
+  getWeeklyHistory,
   getCurrentWeeklyReport,
   archiveStaleMemories
 }

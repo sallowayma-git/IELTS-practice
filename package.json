@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "cargo tauri dev",
+    "dev:full": "node developer/tests/dev-mock/dev-full.mjs",
+    "dev:api": "node developer/tests/dev-mock/server.js",
     "build": "cargo tauri build",
     "prepare:writing": "npm --prefix apps/writing-vue install --no-fund --no-audit",
     "build:writing": "npm run prepare:writing && npm --prefix apps/writing-vue run build",

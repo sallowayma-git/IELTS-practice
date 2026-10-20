@@ -53,6 +53,76 @@ fn assert_fk_enabled(conn: &Connection) {
     );
 }
 
+fn remove_column(package: &mut BackupPackage, name: &str, column: &str) {
+    let table = package.database.iter_mut().find(|table| table.name == name).unwrap();
+    if let Some(index) = table.columns.iter().position(|name| name == column) {
+        table.columns.remove(index);
+        for row in &mut table.rows { row.remove(index); }
+    }
+}
+
+#[test]
+fn both_format19_families_restore_and_the_current_formats_preserve_soul_audit() {
+    let dir = tempdir().unwrap();
+    let source = open_db(dir.path().join("source-22.db"));
+    let facts = ielts_db::build_daily_facts(&source, "local", "2026-10-10").unwrap();
+    let journal = ielts_db::insert_journal(&source, "local", &facts, None).unwrap();
+    let run = ielts_db::insert_dream_run(&source, "local", &journal.id, Some("weekly:2026-W41")).unwrap();
+    source.execute("INSERT INTO soul_revisions VALUES ('z-original', 'local', 'soul.tone', 'null', '\"warm\"', 'model', '[]', 'keep', ?1, NULL, 'now')", [&run.id]).unwrap();
+    source.execute("INSERT INTO soul_revisions VALUES ('a-undo', 'local', 'soul.tone', '\"warm\"', 'null', 'undo', '[]', 'undo', ?1, 'z-original', 'later')", [&run.id]).unwrap();
+    let unified = create_backup_package(&source, "unified").unwrap();
+    assert_eq!(unified.manifest.schema_version, 22);
+    let target = open_db(dir.path().join("target-22.db"));
+    for (format, local) in [(19, true), (19, false), (20, false), (21, true), (22, true)] {
+        let mut package = unified.clone();
+        package.manifest.schema_version = format;
+        if format < 21 {
+            package.manifest.database_schema_version = 33;
+            if local {
+                package.database.retain(|table| !matches!(table.name.as_str(), "agent_context_snapshots" | "agent_context_items"));
+                remove_column(&mut package, "coach_threads", "learner_profile_json");
+            } else {
+                package.database.retain(|table| table.name != "soul_revisions");
+                remove_column(&mut package, "practice_assets", "question_kinds_json");
+            }
+        }
+        rechecksum(&mut package);
+        validate_backup(&package).unwrap();
+        for dry in [true, false] {
+            let report = import_backup(&target, &package, dry).unwrap();
+            assert!(report.ok, "format={format}, local={local}, dry={dry}: {:?}", report.errors);
+        }
+        let audits: i64 = target.query_row("SELECT COUNT(*) FROM soul_revisions", [], |r|r.get(0)).unwrap();
+        assert_eq!(audits, if local { 2 } else { 0 });
+        assert_fk_enabled(&target);
+    }
+    let mut broken = unified.clone();
+    broken.manifest.schema_version = 19;
+    broken.manifest.database_schema_version = 33;
+    // A format-19 package cannot combine the two incompatible families.
+    rechecksum(&mut broken);
+    assert!(validate_backup(&broken).is_err());
+}
+
+#[test]
+fn restoring_a_remote_backup_rebuilds_reading_tags_before_returning() {
+    let dir = tempdir().unwrap();
+    let source = open_db(dir.path().join("reading-source.db"));
+    let payload = dir.path().join("passage.json");
+    std::fs::write(&payload, r#"{"examId":"tags","questionGroups":[{"kind":"true_false_not_given","questionIds":["q1"]}]}"#).unwrap();
+    ielts_db::import_asset_payload_file(&source, &payload).unwrap();
+    let mut package = create_backup_package(&source, "remote20").unwrap();
+    package.manifest.schema_version = 20;
+    package.manifest.database_schema_version = 33;
+    package.database.retain(|table| table.name != "soul_revisions");
+    remove_column(&mut package, "practice_assets", "question_kinds_json");
+    rechecksum(&mut package);
+    let target = open_db(dir.path().join("reading-target.db"));
+    let result = import_backup(&target, &package, false).unwrap();
+    assert!(result.ok, "{:?}", result.errors);
+    assert_eq!(ielts_db::list_assets(&target, None).unwrap()[0].question_kinds, vec!["judgement"]);
+}
+
 #[test]
 fn every_snapshot_schema_before_release_history_remains_restorable() {
     let dir = tempdir().unwrap();
@@ -113,6 +183,7 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
                 "strategy_candidate_evaluations" => 16,
                 "prompt_skill_releases" | "prompt_skill_release_heads" => 17,
                 "weekly_digests" => 18,
+                "soul_revisions" => 21,
                 "agent_context_snapshots" | "agent_context_items" => 19,
                 _ => 2,
             };
@@ -139,12 +210,13 @@ fn format_19_package_with_tables_migration_0033_dropped_still_restores() {
     let dir = tempdir().unwrap();
     let source = open_db(dir.path().join("source.db"));
     let mut package = create_backup_package(&source, "dropped-tables").unwrap();
-    assert_eq!(package.manifest.schema_version, 20);
+    assert_eq!(package.manifest.schema_version, 22);
     assert!(package.database.iter().all(|table| table.name != "dream_candidates"));
 
     // A format 19 package still carries the evolution tables; their rows are
     // accepted and ignored, since the target no longer has those tables.
     package.manifest.schema_version = 19;
+    package.database.retain(|table| table.name != "soul_revisions");
     for name in ["dream_candidates", "teaching_strategy_catalog", "prompt_skill_releases"] {
         package.database.push(BackupTable {
             name: name.into(),

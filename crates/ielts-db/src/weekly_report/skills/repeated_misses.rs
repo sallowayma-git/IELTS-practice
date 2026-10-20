@@ -18,6 +18,8 @@ struct AcrossPassages<'a> {
     qtype: &'a str,
     passages: u32,
     wrong: u32,
+    /// The distinct passages these misses came from, sorted: fact provenance.
+    asset_ids: Vec<String>,
     /// The earliest miss of this type, for the example.
     first: &'a MissFact,
 }
@@ -59,7 +61,13 @@ fn across_passages<'a>(misses: &[&'a MissFact]) -> Vec<AcrossPassages<'a>> {
     let mut across: Vec<AcrossPassages<'a>> = by_type
         .into_iter()
         .filter(|(_, (_, assets, _))| assets.len() >= 2)
-        .map(|(qtype, (wrong, assets, first))| AcrossPassages { qtype, passages: assets.len() as u32, wrong, first })
+        .map(|(qtype, (wrong, assets, first))| AcrossPassages {
+            qtype,
+            passages: assets.len() as u32,
+            wrong,
+            asset_ids: assets.iter().map(|asset| (*asset).to_owned()).collect(),
+            first,
+        })
         .collect();
     across.sort_by(|a, b| b.passages.cmp(&a.passages).then(b.wrong.cmp(&a.wrong)).then(a.qtype.cmp(b.qtype)));
     across
@@ -96,6 +104,7 @@ fn data(across: &[AcrossPassages<'_>], same: &[SameQuestion<'_>]) -> Value {
                 "label": question_type_label(entry.qtype),
                 "passages": entry.passages,
                 "wrong": entry.wrong,
+                "assetIds": entry.asset_ids,
             })
         })
         .collect();
@@ -206,7 +215,7 @@ mod tests {
         assert_eq!(
             block.data,
             json!({
-                "acrossPassages": [{"qtype": "tfng", "label": "判断题", "passages": 2, "wrong": 3}],
+                "acrossPassages": [{"qtype": "tfng", "label": "判断题", "passages": 2, "wrong": 3, "assetIds": ["p1", "p2"]}],
                 "sameQuestion": [],
             })
         );

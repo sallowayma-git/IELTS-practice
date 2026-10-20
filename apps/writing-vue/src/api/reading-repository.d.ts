@@ -1,6 +1,28 @@
 import type { PracticeAssetV2, AttemptRecord } from '@/types/generated/domain'
 
-export interface ReadingListResult { source: 'tauri'; items: PracticeAssetV2[] }
+/**
+ * Wire shape of `reading_list_assets` (Rust `AssetIndexEntry`, not the full
+ * `PracticeAssetV2`): library-card metadata only, no payload.
+ */
+export interface ReadingAssetIndexEntry {
+  id: string
+  title: string
+  category?: string | null
+  difficulty?: string | null
+  frequency?: string | null
+  fingerprint: string
+  schemaVersion: number
+  contentRef?: string | null
+  payloadRef?: string | null
+  activity: string
+  pdfOnly: boolean
+  /** Stable tag keys (single_choice, multi_choice, judgement, completion,
+   * heading_match, paragraph_match, matching), canonically ordered and
+   * deduplicated. Empty for a pdf-only or not-yet-classified asset. */
+  questionKinds: string[]
+}
+
+export interface ReadingListResult { source: 'tauri'; items: ReadingAssetIndexEntry[] }
 export interface ReadingPayload { [key: string]: unknown }
 export interface ReadingAssetEnvelope { asset: PracticeAssetV2 | null; payload: ReadingPayload | null }
 export interface ReadingDraftInput {

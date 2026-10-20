@@ -52,7 +52,7 @@
   padding: var(--anth-space-6);
   overflow-y: auto;
   border: 1px solid var(--anth-rule);
-  border-radius: var(--anth-radius-lg);
+  border-radius: var(--anth-radius-dialog);
   background: var(--anth-surface-raised);
   box-shadow: var(--anth-shadow-2);
   color: var(--anth-ink);

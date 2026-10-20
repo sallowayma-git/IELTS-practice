@@ -1,5 +1,5 @@
 <template>
-  <div class="line-chart-container" ref="containerRef">
+  <div :class="['line-chart-container', { 'is-compact': compact }]" ref="containerRef">
     <svg
       v-if="historyData.length > 0"
       class="line-chart"
@@ -89,12 +89,18 @@ const props = defineProps({
   axisLabelDecimals: {
     type: Number,
     default: 1
+  },
+  // Dashboard card: no baseline rule, no reserved bottom gutter.
+  compact: {
+    type: Boolean,
+    default: false
   }
 })
 
 const width = 600
 const height = 240
 const padding = { top: 20, right: 20, bottom: 30, left: 40 }
+const bottomPadding = computed(() => (props.compact ? 10 : padding.bottom))
 const minScore = computed(() => Number.isFinite(props.minScore) ? props.minScore : 4.0)
 const maxScore = computed(() => Number.isFinite(props.maxScore) && props.maxScore > minScore.value ? props.maxScore : 9.0)
 
@@ -111,7 +117,7 @@ const getYPos = (val) => {
   const range = maxScore.value - minScore.value
   const clamped = Math.max(minScore.value, Math.min(maxScore.value, Number(val) || minScore.value))
   const ratio = (clamped - minScore.value) / range
-  return height - padding.bottom - ratio * (height - padding.top - padding.bottom)
+  return height - bottomPadding.value - ratio * (height - padding.top - bottomPadding.value)
 }
 
 const formatAxisLabel = (value) => Number(value || 0).toFixed(Math.max(0, Number(props.axisLabelDecimals || 0)))
@@ -148,7 +154,7 @@ const pathD = computed(() => {
 // Area outline under the line
 const areaD = computed(() => {
   if (!pathD.value) return ''
-  const bottomY = height - padding.bottom
+  const bottomY = height - bottomPadding.value
   if (points.value.length === 1) {
     return `${pathD.value} L ${width - padding.right} ${bottomY} L ${padding.left} ${bottomY} Z`
   }
@@ -166,6 +172,10 @@ const areaD = computed(() => {
   aspect-ratio: 600 / 240; /* the viewBox: text is never stretched */
   overflow: hidden;
   border-bottom: 1px solid var(--anth-ink);
+}
+
+.line-chart-container.is-compact {
+  border-bottom: 0;
 }
 
 .line-chart {

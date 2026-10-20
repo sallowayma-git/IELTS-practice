@@ -3,7 +3,6 @@
     <div
       class="history-page scroll-region"
       :data-history-activity="view.activity || 'all'"
-      :style="{ '--history-toolbar-h': `${toolbarHeight}px` }"
     >
       <header class="page-header">
         <div class="page-header-top">
@@ -12,11 +11,21 @@
             <h1>练习记录</h1>
           </div>
         </div>
-        <p class="page-header-desc history-summary" data-history-summary>{{ summary }}</p>
+        <div
+          class="history-stats"
+          data-history-summary
+          role="group"
+          :aria-label="summary || '练习记录统计'"
+        >
+          <span v-for="stat in statChips" :key="stat.key" class="history-stat" data-history-stat>
+            <span>{{ stat.label }}</span>
+            <span v-if="stat.detail" class="history-stat__detail"> · {{ stat.detail }}</span>
+          </span>
+        </div>
       </header>
 
-      <!-- Sticky: activity tabs, search, and the selection bar when selecting -->
-      <div ref="toolbarRef" class="toolbar is-sticky history-toolbar-bar">
+      <!-- Floating sticky bar: activity tabs, search, filters, selection -->
+      <div class="history-toolbar-bar">
         <div class="history-bar-row">
           <nav aria-label="练习类型">
             <div class="segmented toggle-group history-tabs" role="tablist">
@@ -99,39 +108,40 @@
         <p class="state-message">加载历史记录中...</p>
       </div>
 
-      <div
+      <MascotState
         v-else-if="error"
+        kind="error"
         class="error-state history-list-state history-list-state--error"
         role="alert"
         aria-live="assertive"
+        :title="error"
       >
-        <div class="inline-message inline-message-error">
-          <p>{{ error }}</p>
+        <div class="empty-state-action">
+          <button class="btn btn-secondary" type="button" @click="loadRecords()">重试</button>
         </div>
-        <button class="btn btn-secondary" type="button" @click="loadRecords()">重试</button>
-      </div>
+      </MascotState>
 
-      <div
+      <MascotState
         v-else-if="records.length === 0 && hasFilters(view)"
-        class="empty-state history-list-state history-list-state--filtered"
-        role="status"
+        kind="no-results"
+        class="history-list-state history-list-state--filtered"
         aria-live="polite"
+        title="没有匹配的记录"
+        desc="当前筛选条件下没有记录。"
       >
-        <h3>没有匹配的记录</h3>
-        <p class="empty-state-desc">当前筛选条件下没有记录。</p>
         <div class="empty-state-action">
           <button class="btn btn-secondary btn-sm" type="button" @click="clearAllFilters">清除筛选</button>
         </div>
-      </div>
+      </MascotState>
 
-      <div
+      <MascotState
         v-else-if="records.length === 0"
-        class="empty-state history-list-state history-list-state--empty"
-        role="status"
+        kind="empty"
+        class="history-list-state history-list-state--empty"
         aria-live="polite"
+        title="还没有练习记录"
+        :desc="emptyText"
       >
-        <h3>还没有练习记录</h3>
-        <p class="empty-state-desc">{{ emptyText }}</p>
         <div v-if="startLinks.length > 0" class="empty-state-action history-start-links">
           <router-link
             v-for="(link, index) in startLinks"
@@ -143,7 +153,7 @@
             {{ link.label }}
           </router-link>
         </div>
-      </div>
+      </MascotState>
 
       <HistoryRecordList
         v-else
@@ -196,9 +206,17 @@ import HistoryRecordList from '@/modules/history/components/HistoryRecordList.vu
 import HistorySelectionBar from '@/modules/history/components/HistorySelectionBar.vue'
 import HistoryToolbar from '@/modules/history/components/HistoryToolbar.vue'
 import HistoryTrends from '@/modules/history/components/HistoryTrends.vue'
+import MascotState from '@/components/mascot/MascotState.vue'
 import { csvFilename, downloadTextFile } from '@/modules/history/export.js'
 import { buildHistoryMarkdown, markdownFilename } from '@/modules/history/markdown.js'
-import { ACTIVITIES, activityLabel, buildTrendSeries, summarizeRecords, toRecord } from '@/modules/history/records.js'
+import {
+  ACTIVITIES,
+  activityLabel,
+  buildTrendSeries,
+  summarizeRecords,
+  summaryStats,
+  toRecord
+} from '@/modules/history/records.js'
 import {
   PAGE_SIZE,
   clearFilters,
@@ -404,11 +422,16 @@ async function loadPresentActivities() {
 
 // ── Header sentence and trends (from the whole scope) ────────────────
 const scopeReady = computed(() => scope.value.key === viewScopeKey(view.value))
+const summaryReady = computed(() => scopeReady.value && !loading.value && !error.value)
 const summary = computed(() => (
-  scopeReady.value && !loading.value && !error.value
-    ? summarizeRecords(scope.value.records, summaryScopeLabel(view.value))
-    : ''
+  summaryReady.value ? summarizeRecords(scope.value.records, summaryScopeLabel(view.value)) : ''
 ))
+// Header chips: the total, then one chip per activity in scope.
+const statChips = computed(() => {
+  if (!summaryReady.value || scope.value.records.length === 0) return []
+  const total = { key: 'total', label: `共 ${scope.value.records.length} 条`, detail: '' }
+  return [total, ...summaryStats(scope.value.records).map((stat) => ({ key: stat.activity, ...stat }))]
+})
 const trendSeries = computed(() => (
   scopeReady.value ? buildTrendSeries(scope.value.records).filter((series) => series.data.length >= 2) : []
 ))
@@ -514,25 +537,15 @@ async function exportAs(format) {
 // ── Lifecycle ────────────────────────────────────────────────────────
 watch(() => JSON.stringify(view.value), () => loadRecords())
 
-// The sticky toolbar's height: list-group titles stick just below it.
-const toolbarRef = ref(null)
-const toolbarHeight = ref(0)
-let toolbarObserver = null
-
 onMounted(() => {
   loadRecords()
   loadPresentActivities()
-  if (toolbarRef.value && typeof ResizeObserver !== 'undefined') {
-    toolbarObserver = new ResizeObserver(() => { toolbarHeight.value = toolbarRef.value?.offsetHeight ?? 0 })
-    toolbarObserver.observe(toolbarRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
   listGate.invalidate()
   scopeGate.invalidate()
   presentGate.invalidate()
-  toolbarObserver?.disconnect()
 })
 </script>
 
@@ -557,15 +570,48 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-/* Reserve the summary line so the list does not jump when it arrives. */
-.history-page .history-summary {
-  min-height: 1.6em;
+/* Stat chips: reserve their row so the list does not jump when they arrive. */
+.history-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--anth-space-2);
+  min-height: 28px;
 }
 
+.history-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--anth-space-1);
+  min-height: 26px;
+  padding: 0 var(--anth-space-3);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-pill);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-xs);
+  color: var(--anth-ink);
+  font-size: var(--anth-text-small-size);
+  white-space: nowrap;
+}
+
+.history-stat__detail {
+  color: var(--anth-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One floating rounded bar, not a full-width band: it sticks with a gap from the top. */
 .history-toolbar-bar {
+  position: sticky;
+  top: var(--anth-space-3);
+  z-index: var(--anth-z-sticky);
   display: flex;
   flex-direction: column;
   gap: var(--anth-space-2);
+  padding: var(--anth-space-3) var(--anth-space-4);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
 }
 
 .history-bar-row {

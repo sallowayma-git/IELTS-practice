@@ -7,7 +7,7 @@
           <h1 class="heading-serif">札记</h1>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-secondary" type="button" :disabled="tidying || loading" data-notebook-tidy @click="tidyToday">
+          <button class="btn notebook-btn-tidy" type="button" :disabled="tidying || loading" data-notebook-tidy @click="tidyToday">
             {{ tidying ? '正在整理…' : '整理今天' }}
           </button>
         </div>
@@ -15,222 +15,220 @@
       <p class="page-header-desc">练习之后，系统会把当天的情况整理成一篇短记：看到了什么，哪里在变，接下来练什么。</p>
     </header>
 
-    <div class="notebook-layout">
-      <div class="notebook-main">
-        <p v-if="notice" class="inline-message inline-message-success" role="status">{{ notice }}</p>
-        <p v-if="actionError" class="inline-message inline-message-error" role="alert">{{ actionError }}</p>
+    <p v-if="notice" class="inline-message inline-message-success" role="status">{{ notice }}</p>
+    <p v-if="actionError" class="inline-message inline-message-error" role="alert">{{ actionError }}</p>
+    <p v-if="loading" class="section-meta" role="status" aria-live="polite">正在翻开札记…</p>
 
-        <p v-if="loading" class="section-meta" role="status" aria-live="polite">正在翻开札记…</p>
-
-        <template v-else>
-          <div v-if="loadError" class="inline-message inline-message-error" role="alert">
-            <p>{{ loadError }}</p>
-            <button class="btn btn-text btn-sm" type="button" @click="load">再试一次</button>
-          </div>
-
-          <div v-else-if="!entries.length && !weeks.length" class="notebook-empty empty-state" role="status">
-            <h3>札记还是空白的一页。</h3>
-            <p class="empty-state-desc">练习过的日子，系统会在第二天把它整理成一篇札记放在这里；想提前看，可以点「整理今天」。先去读一篇文章或写一篇作文吧。</p>
-            <router-link class="btn btn-secondary btn-sm empty-state-action" to="/">去读一篇文章</router-link>
-          </div>
-
-          <article
-            v-for="(week, weekIndex) in weeks"
-            :id="`notebook-week-${weekIndex}`"
-            :key="week.key"
-            class="notebook-entry section has-rule"
-            :data-notebook-week="week.window"
-            :data-week-state="week.state"
-          >
-            <header class="section-head">
-              <h2 class="heading-serif">{{ week.title }}</h2>
-              <time class="section-meta" :datetime="week.startDay">{{ week.dateLabel }}</time>
-            </header>
-            <p v-if="week.stateLine" class="section-meta notebook-week__state" data-week-state-line>
-              {{ week.stateLine.text }}<template v-if="week.stateLine.settings">。<router-link class="text-link" :to="{ name: 'Settings' }">去设置</router-link></template>
-            </p>
-
-            <section
-              v-for="block in week.blocks"
-              :key="block.id"
-              class="notebook-section notebook-block"
-              :data-week-block="block.kind"
-              :data-notebook-next="block.kind === 'next_week_plan' ? '' : undefined"
-            >
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>{{ block.heading }}</h3>
-              <p v-if="block.lead" class="notebook-prose notebook-lead">{{ block.lead }}</p>
-
-              <div v-if="block.stats.length" class="notebook-stats notebook-block__stats">
-                <div v-for="item in block.stats" :key="item.label" class="stat">
-                  <span class="stat-label">{{ item.label }}</span>
-                  <span class="stat-value">{{ item.value }}</span>
-                  <span v-if="item.delta" class="stat-delta">{{ item.delta }}</span>
-                </div>
-              </div>
-
-              <component :is="CHARTS[block.chart.kind]" v-if="block.chart" :chart="block.chart" />
-
-              <ul v-if="block.rows.length" class="notebook-notes notebook-block__rows">
-                <li v-for="row in block.rows" :key="row.key"><span>{{ row.text }}</span></li>
-              </ul>
-
-              <p v-if="block.tags.length" class="notebook-block__tags">
-                <span v-for="tag in block.tags" :key="tag.key" class="tag">{{ tag.text }}</span>
-              </p>
-
-              <ol v-if="block.plan" class="notebook-practice">
-                <li v-for="item in block.plan.items" :key="item.key">
-                  <router-link v-if="item.link" class="text-link" :to="item.link"><strong>{{ item.label }}</strong></router-link>
-                  <strong v-else>{{ item.label }}</strong>
-                  <span>{{ item.probeLabel }}</span>
-                  <span class="notebook-practice__time">约 {{ item.minutes }} 分钟</span>
-                </li>
-              </ol>
-              <p v-if="block.plan && block.plan.items.length > 1" class="section-meta">一共约 {{ block.plan.totalMinutes }} 分钟</p>
-
-              <ul v-if="block.examples.length" class="notebook-block__examples" aria-label="对应的练习">
-                <li v-for="example in block.examples" :key="example.key">
-                  <router-link class="text-link" :to="example.link">{{ example.label }}</router-link>
-                  <span v-if="example.detail" class="section-meta">{{ example.detail }}</span>
-                </li>
-              </ul>
-            </section>
-
-            <section v-if="week.memoryChanges.length" class="notebook-section" data-week-memory-changes>
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>这一周记忆的变化</h3>
-              <ul class="notebook-notes">
-                <li v-for="change in week.memoryChanges" :key="change.key">
-                  <span><span class="tag">{{ change.action }}</span> {{ change.statement }}。</span>
-                </li>
-              </ul>
-            </section>
-          </article>
-
-          <article
-            v-for="(entry, entryIndex) in entries"
-            :id="`notebook-day-${entryIndex}`"
-            :key="entry.day"
-            class="notebook-entry section has-rule"
-            :data-notebook-entry="entry.day"
-          >
-            <header class="section-head">
-              <h2 class="heading-serif">{{ entry.title }}</h2>
-              <time class="section-meta" :datetime="entry.day">{{ entry.dateLabel }}</time>
-            </header>
-
-            <section v-if="entry.observations.length || entry.notes.length" class="notebook-section">
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>观察</h3>
-              <p v-if="entry.observations.length" class="notebook-prose">{{ entry.observations.join('') }}</p>
-              <ul v-if="entry.notes.length" class="notebook-notes">
-                <li v-for="(note, noteIndex) in entry.notes" :key="note.id">
-                  <span>{{ note.statement }}。{{ phraseHead(note.phrase) }}<span class="notebook-tail">{{ phraseLast(note.phrase) }}<button
-                    v-if="note.evidenceIds.length"
-                    class="notebook-ref"
-                    type="button"
-                    :aria-expanded="openNote === noteKey(entry, note)"
-                    :aria-controls="`note-${noteKey(entry, note)}`"
-                    :aria-label="`查看第 ${noteIndex + 1} 条依据`"
-                    @click="toggleNote(entry, note)"
-                  >{{ noteIndex + 1 }}</button></span></span>
-                  <span
-                    v-if="openNote === noteKey(entry, note)"
-                    :id="`note-${noteKey(entry, note)}`"
-                    class="notebook-footnote"
-                    role="note"
-                  >
-                    <template v-if="noteState.status === 'loading'">正在找出依据…</template>
-                    <template v-else-if="noteState.status === 'error'">{{ noteState.error }}</template>
-                    <template v-else-if="!noteState.items.length">这条判断暂时没有可展示的练习依据。</template>
-                    <template v-else>
-                      <span v-for="item in noteState.items" :key="item.id" class="notebook-footnote__item">
-                        {{ item.text }}
-                        <router-link v-if="item.route" :to="item.route" class="text-link">查看那次练习</router-link>
-                      </span>
-                    </template>
-                  </span>
-                </li>
-              </ul>
-            </section>
-
-            <section v-if="entry.changes.improved.length || entry.changes.recurring.length" class="notebook-section">
-              <h3><span class="notebook-mark" aria-hidden="true">§</span>变化</h3>
-              <p v-if="entry.changeLead" class="notebook-prose notebook-lead">{{ entry.changeLead }}</p>
-              <dl class="notebook-changes">
-                <div v-if="entry.changes.improved.length">
-                  <dt>在变好</dt>
-                  <dd>
-                    <span v-for="item in entry.changes.improved" :key="item" class="tag tag-success">{{ item }}</span>
-                  </dd>
-                </div>
-                <div v-if="entry.changes.recurring.length">
-                  <dt>反复出现</dt>
-                  <dd>
-                    <span v-for="item in entry.changes.recurring" :key="item" class="tag tag-warning">{{ item }}</span>
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-          </article>
-
-          <section class="section has-rule notebook-memory" aria-labelledby="notebook-memory-title" data-notebook-memory>
-            <header class="section-head">
-              <h2 id="notebook-memory-title" class="heading-serif">关于你，我们记住了</h2>
-            </header>
-            <LearnerPreferences />
-            <h3 class="notebook-memory__subtitle">系统观察到的</h3>
-            <p class="page-header-desc">这是系统从你的练习里学到的。哪一句不对，就告诉我们；不想被记住，就让它忘记。</p>
-            <p v-if="memoryError" class="inline-message inline-message-error" role="alert">{{ memoryError }}</p>
-            <p v-else-if="!memories.length" class="section-meta">还没有记住什么。多练几次，这里会出现系统对你的了解。</p>
-            <ol v-else class="list notebook-memory__list">
-              <li v-for="memory in memories" :key="memory.id" class="list-row notebook-memory__row" :data-memory-id="memory.id">
-                <p class="notebook-memory__text">{{ memory.statement }}</p>
-                <div class="notebook-memory__actions">
-                  <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(memory.id)" @click="markInaccurate(memory)">不准确</button>
-                  <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(memory.id)" @click="forget(memory)">忘记</button>
-                </div>
-              </li>
-            </ol>
-          </section>
-        </template>
+    <template v-else>
+      <div v-if="loadError" class="inline-message inline-message-error" role="alert">
+        <p>{{ loadError }}</p>
+        <button class="btn btn-text btn-sm" type="button" @click="load">再试一次</button>
       </div>
 
-      <aside v-if="indexItems.length" class="notebook-index" aria-label="札记目录" data-notebook-index>
-        <p class="page-header-kicker">目录</p>
-        <ul class="list notebook-index__list">
-          <li v-for="item in indexItems" :key="item.id">
-            <button
+      <MascotState
+        v-else-if="!entries.length && !weeks.length"
+        kind="empty"
+        class="notebook-empty"
+        title="札记还是空白的一页。"
+        desc="练习过的日子，系统会在第二天把它整理成一篇札记放在这里；想提前看，可以点「整理今天」。先去读一篇文章或写一篇作文吧。"
+      >
+        <router-link class="btn btn-secondary btn-sm empty-state-action" to="/">去读一篇文章</router-link>
+      </MascotState>
+
+      <template v-else>
+        <section v-if="weeks.length" class="notebook-section-block">
+          <div class="notebook-month-nav">
+            <h2 class="notebook-block-title heading-serif">每周整理</h2>
+            <nav aria-label="周记月份">
+              <button type="button" aria-label="上个月" @click="changeMonth(-1)">‹</button>
+              <span data-notebook-month>{{ monthLabel }}</span>
+              <button type="button" aria-label="下个月" @click="changeMonth(1)">›</button>
+            </nav>
+          </div>
+          <div class="notebook-shelf">
+            <template v-for="(slot, index) in monthlySlots" :key="slot.day">
+              <button
+                v-if="slot.week"
+                type="button"
+                class="notebook-week-card"
+                :class="[`notebook-fill--${weekFill(index)}`, { 'notebook-week-card--dense': slot.week.schemaVersion >= 2 }]"
+                :style="weekCardStyle(index)"
+                :data-notebook-week="slot.week.window"
+                :data-week-state="slot.week.state"
+                @click="openWeek(weeks.indexOf(slot.week))"
+              >
+                <Doodle class="notebook-week-card__doodle" :name="weekDoodle(slot.week)" :size="40" />
+                <div class="notebook-week-card__numeral">
+                  <span class="notebook-week-card__num">{{ weekNumeral(slot.week) }}</span>
+                  <span class="notebook-kicker">{{ weekRange(slot.week) }}</span>
+                </div>
+                <p v-if="slot.week.title" class="notebook-week-card__title">{{ slot.week.title }}</p>
+                <p v-if="slot.week.firstSentence" class="notebook-week-card__excerpt">{{ slot.week.firstSentence }}</p>
+                <ul v-if="slot.week.points.length" class="notebook-week-card__points">
+                  <li v-for="(point, pointIndex) in slot.week.points" :key="pointIndex">{{ point }}</li>
+                </ul>
+                <p v-if="weekFooter(slot.week)" class="notebook-kicker notebook-week-card__footer">{{ weekFooter(slot.week) }}</p>
+              </button>
+              <div v-else class="notebook-week-card notebook-week-card--placeholder" :style="weekCardStyle(index)" data-weekly-slot>这周的周记还在路上</div>
+            </template>
+            <div class="notebook-week-card notebook-week-card--monthly" :style="weekCardStyle(monthlySlots.length)" data-monthly-placeholder>月记 · 即将推出</div>
+          </div>
+        </section>
+
+        <section v-if="entries.length" class="notebook-section-block">
+          <h2 class="notebook-block-title heading-serif">每日札记</h2>
+          <div class="notebook-board-scroll">
+            <div class="notebook-board">
+              <article
+                v-for="(entry, index) in entries"
+                :key="entry.day"
+                class="notebook-day-card"
+                :class="`notebook-fill--${dayFill(index)}`"
+                :data-notebook-day="entry.day"
+                :data-notebook-entry="entry.day"
+                tabindex="0"
+                role="button"
+                @click="openDay(index)"
+                @keydown.enter="openDay(index)"
+              >
+                <Doodle class="notebook-day-card__doodle" :name="dayDoodle(entry)" :size="32" />
+                <div class="notebook-day-card__numeral">
+                  <span class="notebook-day-card__num">{{ dayNumeral(entry) }}</span>
+                  <span class="notebook-kicker">{{ dayKicker(entry) }}</span>
+                </div>
+                <p class="notebook-day-card__title">{{ entry.title }}</p>
+                <ul v-if="entry.summaryLines.length" class="notebook-day-card__obs">
+                  <li v-for="line in entry.summaryLines" :key="line">{{ line }}</li>
+                </ul>
+                <div v-if="entry.changes.improved.length || entry.changes.recurring.length" class="notebook-day-card__tags">
+                  <span v-for="item in entry.changes.improved" :key="item" class="notebook-pill notebook-pill--mint">{{ item }}</span>
+                  <span v-for="item in entry.changes.recurring" :key="item" class="notebook-pill notebook-pill--mustard">{{ item }}</span>
+                </div>
+                <div class="notebook-day-card__foot">
+                  <p v-if="entry.notes.length" class="notebook-kicker notebook-day-card__footer">{{ entry.notes.length }} 条依据</p>
+                  <MoodMascot
+                    class="notebook-day-card__mood"
+                    :mood="dayMood(entry)"
+                    :size="36"
+                    :label="dayMoodLabel(entry)"
+                  />
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <section class="section has-rule notebook-memory" aria-labelledby="notebook-memory-title" data-notebook-memory>
+        <header class="section-head">
+          <h2 id="notebook-memory-title" class="heading-serif">关于你，我们记住了</h2>
+        </header>
+        <LearnerPreferences />
+        <h3 class="notebook-memory__subtitle">系统观察到的</h3>
+        <p class="page-header-desc">这是系统从你的练习里学到的。哪一句不对，就告诉我们；不想被记住，就让它忘记。</p>
+        <p v-if="memoryError" class="inline-message inline-message-error" role="alert">{{ memoryError }}</p>
+        <p v-else-if="!memories.length" class="section-meta">还没有记住什么。多练几次，这里会出现系统对你的了解。</p>
+        <div v-else class="notebook-memory__grid">
+          <div v-for="memory in memories" :key="memory.id" class="notebook-memory__card" :data-memory-id="memory.id">
+            <p class="notebook-memory__text">{{ memory.statement }}</p>
+            <div class="notebook-memory__actions">
+              <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(memory.id)" @click="markInaccurate(memory)">不准确</button>
+              <button class="btn btn-text btn-sm" type="button" :disabled="busy.has(memory.id)" @click="forget(memory)">忘记</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <NotebookSheet
+      :open="sheetOpen"
+      :doodle-name="sheet.doodleName"
+      :mood="sheet.mood"
+      :mood-label="sheet.moodLabel"
+      :numeral="sheet.numeral"
+      :kicker="sheet.kicker"
+      :title="sheet.title"
+      :fill="sheet.fill"
+      :change-lead="sheet.changeLead"
+      :changes="sheet.changes"
+      :next-practice="sheet.nextPractice"
+      :practice-line="sheet.practiceLine"
+      :practice-items="sheet.practiceItems"
+      @close="closeSheet"
+    >
+      <template v-if="sheet.week" #weekly>
+        <WeeklyDetail :key="sheet.week.window" :entry="sheet.week" @navigate="closeSheet" />
+      </template>
+      <template v-if="showReading" #reading>
+        <ul class="notebook-notes">
+          <li v-for="line in sheet.entry.reading.lines" :key="line.kind"><span>{{ line.text }}</span></li>
+          <li v-if="sheet.entry.reading.topMiss"><span>{{ sheet.entry.reading.topMiss }}</span></li>
+        </ul>
+      </template>
+      <template v-if="sheet.entry?.writing?.lines.length" #writing>
+        <ul class="notebook-notes">
+          <li v-for="line in sheet.entry.writing.lines" :key="line"><span>{{ line }}</span></li>
+        </ul>
+      </template>
+      <template v-if="sheet.entry?.model?.lines.length" #model>
+        <ul class="notebook-notes">
+          <li v-for="line in sheet.entry.model.lines" :key="line"><span>{{ line }}</span></li>
+        </ul>
+      </template>
+      <template v-if="sheet.entry?.tomorrow?.line" #tomorrow>
+        <p class="notebook-prose notebook-lead">{{ sheet.entry.tomorrow.line }}</p>
+        <p v-if="sheet.entry.tomorrow.link" class="notebook-prose">{{ sheet.entry.tomorrow.link }}</p>
+      </template>
+      <template v-if="sheetKind === 'day'" #observations>
+        <p v-if="sheet.observations.length" class="notebook-prose">{{ sheet.observations.join('') }}</p>
+        <ul v-if="sheet.notes.length" class="notebook-notes">
+          <li v-for="(note, noteIndex) in sheet.notes" :key="note.id">
+            <span>{{ note.statement }}。{{ phraseHead(note.phrase) }}<span class="notebook-tail">{{ phraseLast(note.phrase) }}<button
+              v-if="note.evidenceIds.length"
+              class="notebook-ref"
               type="button"
-              class="list-row notebook-index__row"
-              :class="{ 'is-selected': item.id === currentId }"
-              :aria-current="item.id === currentId ? 'true' : undefined"
-              @click="jumpTo(item.id)"
+              :aria-expanded="openNote === noteKey(sheet.entry, note)"
+              :aria-controls="`note-${noteKey(sheet.entry, note)}`"
+              :aria-label="`查看第 ${noteIndex + 1} 条依据`"
+              @click="toggleNote(sheet.entry, note)"
+            >{{ noteIndex + 1 }}</button></span></span>
+            <span
+              v-if="openNote === noteKey(sheet.entry, note)"
+              :id="`note-${noteKey(sheet.entry, note)}`"
+              class="notebook-footnote"
+              role="note"
             >
-              <span class="list-row-main">
-                <span class="list-row-title">{{ item.label }}</span>
-                <span class="list-row-meta">{{ item.title }}</span>
-              </span>
-            </button>
+              <template v-if="noteState.status === 'loading'">正在找出依据…</template>
+              <template v-else-if="noteState.status === 'error'">{{ noteState.error }}</template>
+              <template v-else-if="!noteState.items.length">这条判断暂时没有可展示的练习依据。</template>
+              <template v-else>
+                <span v-for="item in noteState.items" :key="item.id" class="notebook-footnote__item">
+                  {{ item.text }}
+                  <router-link v-if="item.route" :to="item.route" class="text-link">查看那次练习</router-link>
+                </span>
+              </template>
+            </span>
           </li>
         </ul>
-      </aside>
-    </div>
+      </template>
+    </NotebookSheet>
   </section>
 </template>
 
 <script setup>
+import MascotState from '@/components/mascot/MascotState.vue'
+import MoodMascot from '@/components/mascot/MoodMascot.vue'
+import { dayMood, moodLabel } from '@/components/mascot/moodFor.js'
 import { computed, onMounted, ref } from 'vue'
-import WeeklyBandLine from '@/components/notebook/WeeklyBandLine.vue'
-import WeeklyDayBars from '@/components/notebook/WeeklyDayBars.vue'
-import WeeklyStackBar from '@/components/notebook/WeeklyStackBar.vue'
-import WeeklyTypeBars from '@/components/notebook/WeeklyTypeBars.vue'
+import agentRepository from '@/api/agent-repository.js'
 import { getMemoryEvidence } from '@/api/learning-repository.js'
 import {
   forgetMemory,
   getBackgroundJobStatus,
-  getDailyJournal,
   getCurrentWeeklyReport,
+  getDailyJournal,
   getMemoryCatalog,
+  getWeeklyHistory,
   getWeeklyReports,
   recordMemoryFeedback,
   triggerDailyDream
@@ -240,21 +238,38 @@ import {
   ENTRY_LIMIT,
   isPracticed,
   journalWindow,
+  nextPractice,
+  practiceLead,
   previousPracticedDay,
-  rememberedSentences
+  rememberedSentences,
+  streakLength
 } from '@/modules/notebook/compose.js'
 import { localDay } from '@/modules/agent-console/format.js'
 import LearnerPreferences from '@/modules/notebook/LearnerPreferences.vue'
-import { weeklyEntries } from '@/modules/notebook/weekly.js'
+import { weeklyEntries, weeklyMonth, weeklyMonthSlots, weeklySequence } from '@/modules/notebook/weekly.js'
+import { legacyWeeklyEntry } from '@/modules/notebook/legacy.js'
+import { pickIcon, pickObject } from '@/modules/notebook/doodles.js'
+import Doodle from '@/modules/notebook/components/Doodle.vue'
+import NotebookSheet from '@/modules/notebook/components/NotebookSheet.vue'
+import WeeklyDetail from '@/modules/notebook/components/WeeklyDetail.vue'
 
-const CHARTS = { dayBars: WeeklyDayBars, hBars: WeeklyTypeBars, bandLine: WeeklyBandLine, stackBar: WeeklyStackBar }
+const PALETTE = ['tomato', 'mustard', 'mint', 'pink', 'sky', 'cream']
+const ROTATIONS = [-9, -5, -1, 3, 7, 11]
+const WEEK_CARD_WIDTH = 220
+const WEEK_CARD_OVERLAP = 0.18
 
 const loading = ref(true)
 const loadError = ref('')
 const entries = ref([])
 const weeks = ref([])
+const selectedMonth = ref(localDay(new Date()).slice(0, 7))
+const monthLabel = computed(() => `${Number(selectedMonth.value.slice(0, 4))}年${Number(selectedMonth.value.slice(5))}月`)
+const monthlySlots = computed(() => weeklyMonthSlots(weeks.value, selectedMonth.value))
 const memories = ref([])
 const memoryError = ref('')
+const practice = ref([])
+// Worded for the newest entry's day, where the plan is shown.
+const practiceLine = computed(() => practiceLead(practice.value, entries.value[0]?.day))
 const notice = ref('')
 const actionError = ref('')
 const busy = ref(new Set())
@@ -262,6 +277,13 @@ const tidying = ref(false)
 const openNote = ref('')
 const noteState = ref({ status: 'idle', items: [], error: '' })
 let noteRequest = 0
+
+function changeMonth(delta) {
+  closeSheet()
+  const date = new Date(`${selectedMonth.value}-01T00:00:00Z`)
+  date.setUTCMonth(date.getUTCMonth() + delta)
+  selectedMonth.value = date.toISOString().slice(0, 7)
+}
 
 function settledValue(result) {
   return result.status === 'fulfilled' ? result.value : null
@@ -283,7 +305,7 @@ async function readMemories() {
 // An entry's gap runs back to the previous day with practice. The first
 // ENTRY_LIMIT days are read; older days are read only while an entry still has
 // no answer, so a notebook with recent practice never reads the whole window.
-async function readEntries(memoriesById) {
+async function readEntries(memoriesById, plan) {
   const { days, cutOff } = journalWindow(await getBackgroundJobStatus())
   const journals = new Map()
   const practiced = new Map()
@@ -306,26 +328,45 @@ async function readEntries(memoriesById) {
   }
   return shown()
     .map((day, index) => journals.get(day)
-      ? buildNotebookEntry(journals.get(day), memoriesById, { previousDay: previousPracticedDay(days, index, practiced, cutOff) })
+      ? buildNotebookEntry(journals.get(day), memoriesById, {
+        previousDay: previousPracticedDay(days, index, practiced, cutOff),
+        streak: streakLength(days, index, practiced),
+        plan
+      })
       : null)
     .filter(Boolean)
 }
 
 // Weekly reports are an addition: a host without them (or a failed read)
-// simply shows the daily pages. The live week and the finished weeks are read
-// apart, so one failing does not hide the other.
+// simply shows the daily pages. The live week, the finished v3 weeks and the
+// read-only legacy digests are read apart, so one failing does not hide the
+// others; a legacy week only fills a window no v3 report already covers.
 async function readWeeks() {
-  const [current, persisted] = await Promise.allSettled([getCurrentWeeklyReport(), getWeeklyReports()])
-  return weeklyEntries(settledValue(current), settledValue(persisted))
+  const [current, persisted, legacy] = await Promise.allSettled([
+    getCurrentWeeklyReport(),
+    getWeeklyReports(),
+    getWeeklyHistory()
+  ])
+  const older = listRows(settledValue(legacy)).map(legacyWeeklyEntry).filter(Boolean)
+  return weeklySequence(weeklyEntries(settledValue(current), settledValue(persisted), older))
+}
+
+function listRows(value) {
+  return Array.isArray(value) ? value : []
 }
 
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const memoriesById = await readMemories()
-    entries.value = await readEntries(memoriesById)
+    const [memoriesById, plan] = await Promise.all([
+      readMemories(),
+      agentRepository.getLatestStudyPlan('local').catch(() => null)
+    ])
+    practice.value = nextPractice(plan)
+    entries.value = await readEntries(memoriesById, practice.value)
     weeks.value = await readWeeks()
+    if (weeks.value.length) selectedMonth.value = weeklyMonth(weeks.value[0])
   } catch {
     entries.value = []
     weeks.value = []
@@ -427,252 +468,458 @@ async function toggleNote(entry, note) {
   }
 }
 
-const indexItems = computed(() => weeks.value.length
-  ? weeks.value.map((week, index) => ({ id: `notebook-week-${index}`, label: week.dateLabel, title: week.title }))
-  : entries.value.map((entry, index) => ({ id: `notebook-day-${index}`, label: entry.dateLabel, title: entry.title })))
-const activeId = ref('')
-const currentId = computed(() => activeId.value || indexItems.value[0]?.id)
+// ---------------------------------------------------------------- display ---
+// Pure presentation helpers: palette/doodle/numeral picks for the shelf and
+// board, and the shared sheet's view-model. No data loading happens here.
 
-function jumpTo(id) {
-  activeId.value = id
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-  document.getElementById(id)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+function weekDoodle(week) {
+  return pickObject(week.window)
+}
+
+function dayDoodle(entry) {
+  return pickIcon(entry.day)
+}
+
+function weekFill(index) {
+  return PALETTE[index % PALETTE.length]
+}
+
+function dayFill(index) {
+  return index % 4 === 3 ? PALETTE[Math.floor(index / 4) % PALETTE.length] : 'cream'
+}
+
+function weekNumeral(week) {
+  return String(week.sequence || '')
+}
+
+function weekRange(week) {
+  const start = new Date(`${week.startDay}T00:00:00Z`)
+  if (Number.isNaN(start.getTime())) return week.dateLabel
+  const end = new Date(`${week.endDay}T00:00:00Z`)
+  const fmt = (date) => `${date.getUTCMonth() + 1}.${date.getUTCDate()}`
+  if (Number.isNaN(end.getTime())) return `${fmt(start)}–${fmt(new Date(start.getTime() + 6 * 86400000))}`
+  return start.getTime() === end.getTime() ? fmt(start) : `${fmt(start)}–${fmt(end)}`
+}
+
+// The footer is data, not prose: the state's own word, plus the host's count.
+function weekFooter(week) {
+  const count = week.practiceCount === null || week.practiceCount === undefined ? '' : `依据 ${week.practiceCount} 次练习`
+  if (week.state === 'live') return count ? `本周进行中 · ${count}` : '本周进行中'
+  return count
+}
+
+function dayNumeral(entry) {
+  return String(Number(entry.day.slice(8, 10)))
+}
+
+function dayKicker(entry) {
+  return `${Number(entry.day.slice(5, 7))}月 · ${entry.weekday}`
+}
+
+function weekCardStyle(index) {
+  return {
+    marginLeft: index === 0 ? '0' : `${-(WEEK_CARD_WIDTH * WEEK_CARD_OVERLAP)}px`,
+    '--nb-rotate': `${ROTATIONS[index % ROTATIONS.length]}deg`,
+    // Later cards sit on top: each card covers the previous card's right edge, so
+    // every card keeps its own left-aligned numeral and title readable.
+    zIndex: index + 1
+  }
+}
+
+/** Accessible name for a daily entry's mood mascot. */
+function dayMoodLabel(entry) {
+  return `当天状态：${moodLabel(dayMood(entry))}`
+}
+
+// ----------------------------------------------------------------- sheet ---
+
+const showReading = computed(() => sheetKind.value === 'day' && Boolean(sheet.value.entry?.reading?.lines.length || sheet.value.entry?.reading?.topMiss))
+
+const sheetOpen = ref(false)
+const sheetKind = ref('week')
+const sheetIndex = ref(null)
+
+function openWeek(index) {
+  if (index < 0) return
+  sheetKind.value = 'week'
+  sheetIndex.value = index
+  sheetOpen.value = true
+}
+
+function openDay(index) {
+  sheetKind.value = 'day'
+  sheetIndex.value = index
+  sheetOpen.value = true
+}
+
+function closeSheet() {
+  sheetOpen.value = false
+}
+
+const sheet = computed(() => {
+  if (sheetKind.value === 'week') {
+    const week = weeks.value[sheetIndex.value] || null
+    if (!week) return emptySheet()
+    return {
+      doodleName: weekDoodle(week),
+      mood: '',
+      moodLabel: '',
+      numeral: weekNumeral(week),
+      kicker: weekRange(week),
+      title: week.title,
+      week,
+      fill: weekFill(sheetIndex.value),
+      observations: [],
+      notes: [],
+      entry: null,
+      changeLead: '',
+      changes: null,
+      nextPractice: [],
+      practiceLine: '',
+      practiceItems: []
+    }
+  }
+  const entry = entries.value[sheetIndex.value] || null
+  if (!entry) return emptySheet()
+  const isNewest = sheetIndex.value === 0
+  return {
+    doodleName: pickObject(entry.day),
+    mood: dayMood(entry),
+    moodLabel: dayMoodLabel(entry),
+    numeral: dayNumeral(entry),
+    kicker: dayKicker(entry),
+    title: entry.title,
+    fill: dayFill(sheetIndex.value),
+    observations: entry.observations,
+    notes: entry.notes,
+    entry,
+    changeLead: entry.changeLead,
+    changes: entry.changes,
+    nextPractice: [],
+    practiceLine: isNewest ? practiceLine.value : '',
+    practiceItems: isNewest ? practice.value : []
+  }
+})
+
+function emptySheet() {
+  return {
+    doodleName: 'open-book', mood: '', moodLabel: '', numeral: '', kicker: '', title: '', fill: 'cream',
+    observations: [], notes: [], entry: null, changeLead: '', changes: null,
+    nextPractice: [], practiceLine: '', practiceItems: []
+  }
 }
 
 onMounted(load)
 </script>
 
 <style scoped>
-/* Editorial journal: one prose column, a sticky week index on the right. */
-.notebook-layout {
+/* 1940s rubber-hose print flavour, scoped to the notebook page only. */
+.notebook-page {
+  --nb-ink: #1E1A16;
+  --nb-tomato: #E0643A;
+  --nb-mustard: #E8B33A;
+  --nb-mint: #A8D5BA;
+  --nb-pink: #E9B9C4;
+  --nb-sky: #9CC3DE;
+  --nb-cream: #FFF8EA;
+  /* Full-bleed paper: background spans the whole main area; the percentage
+     padding centres the content in the shell width (--anth-shell-max-width). */
+  flex: 1;
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 24px max(clamp(16px, 3vw, 48px), calc((100% - var(--anth-shell-max-width)) / 2)) 32px;
+  background-color: var(--nb-cream);
+  background-image:
+    radial-gradient(ellipse at center, transparent 55%, rgba(30, 26, 22, 0.1) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  color: var(--nb-ink);
+  overflow-x: hidden;
+}
+
+.notebook-btn-tidy {
+  border: 2.5px solid var(--nb-ink);
+  border-radius: 10px;
+  background: var(--nb-tomato);
+  box-shadow: 4px 4px 0 var(--nb-ink);
+  color: var(--nb-ink);
+  font-weight: 700;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.notebook-btn-tidy:not(:disabled):hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--nb-ink);
+}
+
+.notebook-btn-tidy:not(:disabled):active {
+  transform: translate(0, 0);
+  box-shadow: 2px 2px 0 var(--nb-ink);
+}
+
+.notebook-block-title {
+  margin: 28px 0 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.notebook-empty {
   display: grid;
-  grid-template-columns: minmax(0, var(--anth-prose-max)) 200px;
-  gap: 56px;
-  align-items: start;
-  justify-content: start;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
 }
 
 .notebook-empty h3 {
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-lg);
+  font-weight: 700;
 }
 
-.notebook-entry {
-  scroll-margin-top: var(--anth-space-5);
-  animation: atlas-fade-in var(--anth-duration-slow) var(--anth-ease) both;
-}
+/* ---------------------------------------------------------------- shelf --- */
+.notebook-month-nav { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 16px; }
+.notebook-month-nav nav { display: flex; align-items: center; gap: 18px; }
+.notebook-month-nav nav button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 28px; cursor: pointer; padding: 4px 12px; }
+/* Empty slots are dashed; the label sits in the strip the fan leaves visible
+   (a slot's left edge is covered by the card in front of it). */
+.notebook-week-card--placeholder, .notebook-week-card--monthly { display: flex; align-items: center; justify-content: center; padding: 14px 24px 14px 48px; text-align: center; background: #eeeae2; color: #77736b; border: 2px dashed #aaa59a; box-shadow: none; cursor: default; }
 
-.notebook-stats {
+.notebook-shelf {
   display: flex;
-  flex-wrap: wrap;
-  row-gap: var(--anth-space-3);
+  padding: 44px 60px 56px 28px;
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x proximate;
 }
 
-.notebook-week__state {
-  margin: 0 0 var(--anth-space-3);
-}
-
-/* One weekly block: lead sentence, numbers, a small chart, then the links. */
-.notebook-block + .notebook-block {
-  margin-top: var(--anth-space-5);
-}
-
-.notebook-block .notebook-lead {
-  margin-bottom: var(--anth-space-2);
-}
-
-.notebook-block__stats {
-  margin: var(--anth-space-2) 0;
-}
-
-.notebook-block__stats .stat-value {
-  font-size: var(--anth-text-lg);
-}
-
-.notebook-block__rows {
-  font-size: var(--anth-text-body-size);
-  line-height: var(--anth-text-body-line);
-}
-
-.notebook-block__tags {
+.notebook-week-card {
+  flex: none;
+  position: relative;
+  width: 220px;
+  height: 300px;
+  scroll-snap-align: start;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: var(--anth-space-2) 0 0;
-}
-
-.notebook-block__examples {
-  display: grid;
-  gap: 2px;
-  margin: var(--anth-space-2) 0 0;
-  padding: 0;
-  list-style: none;
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-}
-
-.notebook-block__examples .section-meta {
-  margin-left: 8px;
-}
-
-.notebook-section h3 {
-  display: flex;
-  align-items: baseline;
-  gap: var(--anth-space-2);
-  margin: 0 0 6px;
-  color: var(--anth-ink-strong);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-md);
-}
-
-.notebook-prose,
-.notebook-notes,
-.notebook-changes,
-.notebook-practice,
-.notebook-memory__text {
-  max-width: var(--anth-measure);
-  margin: 0;
-  color: var(--anth-ink);
-  font-family: var(--anth-font-serif);
-  font-size: var(--anth-text-body-lg-size);
-  line-height: var(--anth-text-body-lg-line);
-}
-
-.notebook-notes {
-  display: grid;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 0;
-  list-style: none;
-}
-
-/* The last glyph of a note and its footnote marker never break apart. */
-.notebook-tail {
-  white-space: nowrap;
-}
-
-/* Footnote marker: a small superscript numeral that opens inline. */
-.notebook-ref {
-  min-width: 1.4em;
-  padding: 0 2px;
-  border: 0;
-  background: transparent;
-  color: var(--anth-accent-strong);
-  font-size: 0.72em;
-  line-height: 1;
-  vertical-align: super;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 2.5px solid var(--nb-ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--nb-ink);
+  background: var(--nb-fill);
+  color: var(--nb-ink);
+  text-align: left;
   cursor: pointer;
+  transform: rotate(var(--nb-rotate, 0deg));
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
-.notebook-ref[aria-expanded="true"] {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.notebook-week-card:hover,
+.notebook-week-card:focus-visible {
+  transform: translate(-6px, -6px) rotate(0deg);
+  box-shadow: 6px 6px 0 var(--nb-ink);
+  z-index: 50 !important;
 }
 
-.notebook-footnote {
+.notebook-week-card:active {
+  box-shadow: 2px 2px 0 var(--nb-ink);
+}
+
+.notebook-week-card__numeral {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  align-self: flex-end;
+}
+
+.notebook-week-card__footer { margin-top: auto; }
+.notebook-week-card__doodle { position: absolute; top: 14px; left: 14px; }
+
+.notebook-week-card__num {
+  font-family: var(--anth-font-serif);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.notebook-week-card__title {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-md);
+  font-weight: 700;
+}
+
+.notebook-week-card--dense .notebook-week-card__num { font-size: 28px; }
+.notebook-week-card--dense .notebook-week-card__title { font-size: 15px; line-height: 1.4; -webkit-line-clamp: 2; }
+.notebook-week-card__excerpt { margin: 0; font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.notebook-week-card__points { margin: 0; padding-left: 14px; font-size: 11px; line-height: 1.4; }
+.notebook-week-card__points li { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* --------------------------------------------------------------- board --- */
+/* The scroll wrapper is the only element with a bounded height: a multicol
+   element whose own height is constrained spills extra columns sideways
+   instead of scrolling, so the columns live on an unconstrained inner div. */
+.notebook-board-scroll {
+  height: clamp(420px, calc(100vh - 360px), 760px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 4px 4px 0;
+  scrollbar-width: thin;
+}
+
+.notebook-board {
+  column-count: 1;
+  column-gap: 16px;
+}
+
+@media (min-width: 760px) {
+  .notebook-board { column-count: 2; }
+}
+
+@media (min-width: 1200px) {
+  .notebook-board { column-count: 3; }
+}
+
+.notebook-day-card {
+  break-inside: avoid;
+  margin: 0 0 16px;
   display: grid;
-  gap: 4px;
-  margin: 6px 0 8px;
-  padding-left: 14px;
-  border-left: 1px solid var(--anth-ink);
-  color: var(--anth-ink-soft);
-  font-family: var(--anth-font-sans);
+  gap: 8px;
+  padding: 14px;
+  border: 2.5px solid var(--nb-ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--nb-ink);
+  background: var(--nb-fill);
+  color: var(--nb-ink);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.notebook-day-card:hover,
+.notebook-day-card:focus-visible {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--nb-ink);
+}
+
+.notebook-day-card:active {
+  transform: translate(0, 0);
+  box-shadow: 2px 2px 0 var(--nb-ink);
+}
+
+.notebook-day-card__numeral {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.notebook-day-card__num {
+  font-family: var(--anth-font-serif);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.notebook-day-card__title {
+  margin: 0;
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-md);
+  font-weight: 700;
+}
+
+.notebook-day-card__obs {
+  margin: 0;
+  padding-left: 1.1em;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   font-size: var(--anth-text-sm);
-  line-height: var(--anth-leading-normal);
 }
 
-.notebook-changes > div {
-  display: grid;
-  grid-template-columns: 6em minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.notebook-changes dt {
-  color: var(--anth-ink-muted);
-  font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
-}
-
-.notebook-changes dd {
+.notebook-day-card__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 0;
 }
 
-.notebook-practice {
-  display: grid;
-  gap: 10px;
-  padding-left: 1.4em;
+.notebook-day-card__foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.notebook-practice strong {
-  display: block;
-  font-weight: var(--anth-weight-semibold);
+.notebook-day-card__mood {
+  margin-left: auto;
 }
 
-.notebook-practice .notebook-practice__time {
-  margin-left: 8px;
-  color: var(--anth-ink-muted);
+/* ----------------------------------------------------------- fill cycle --- */
+.notebook-fill--tomato { --nb-fill: var(--nb-tomato); }
+.notebook-fill--mustard { --nb-fill: var(--nb-mustard); }
+.notebook-fill--mint { --nb-fill: var(--nb-mint); }
+.notebook-fill--pink { --nb-fill: var(--nb-pink); }
+.notebook-fill--sky { --nb-fill: var(--nb-sky); }
+.notebook-fill--cream { --nb-fill: var(--nb-cream); }
+
+.notebook-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1.5px solid var(--nb-ink);
+  border-radius: 999px;
   font-family: var(--anth-font-sans);
-  font-size: var(--anth-text-sm);
+  font-size: var(--anth-text-xs);
 }
 
+.notebook-pill--mint { background: var(--nb-mint); }
+.notebook-pill--mustard { background: var(--nb-mustard); }
+
+/* -------------------------------------------------------------- memory --- */
 .notebook-memory__subtitle {
-  margin: 0;
-  color: var(--anth-ink-strong);
+  margin: 24px 0 0;
+  color: var(--nb-ink);
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-md);
 }
 
-.notebook-memory__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.notebook-memory__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
 }
 
-.notebook-memory__row {
-  grid-template-columns: minmax(0, 1fr) auto;
+.notebook-memory__card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 2px solid var(--nb-ink);
+  border-radius: 12px;
+  background: var(--nb-cream);
+}
+
+.notebook-memory__text {
+  margin: 0;
+  font-family: var(--anth-font-serif);
 }
 
 .notebook-memory__actions {
   display: flex;
   gap: var(--anth-space-3);
-  white-space: nowrap;
 }
 
-/* Index rail: plain anchors; the active row is the one last jumped to. */
-.notebook-index {
-  position: sticky;
-  top: var(--anth-space-5);
-  display: grid;
-  gap: var(--anth-space-2);
+@media (max-width: 760px) {
+  .notebook-week-card { width: 180px; height: 260px; }
 }
 
-.notebook-index__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.notebook-index__row {
-  grid-template-columns: minmax(0, 1fr);
-  width: 100%; min-height: 0;
-  border: 0;
-  border-bottom: 1px solid var(--anth-rule);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-@media (max-width: 960px) {
-  .notebook-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .notebook-index {
-    display: none;
+@media (prefers-reduced-motion: reduce) {
+  .notebook-week-card,
+  .notebook-day-card,
+  .notebook-btn-tidy {
+    transition: none;
   }
 }
 </style>

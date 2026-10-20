@@ -264,7 +264,7 @@
   --evaluate-rim: var(--anth-border-strong);
 }
 
-/* ── Paper v2 alias overrides ─────────────────────────────────────────
+/* ── Alias overrides on the .atlas-paper shell ─────────────────────────────────────────
  * Only aliases whose tier changes on the paper shell. Metadata text moves
  * from ink-faint to ink-muted; ink-faint is placeholder and disabled only.
  * The frozen exam reads --text-muted from the root block above, so these

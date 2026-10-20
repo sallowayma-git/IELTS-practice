@@ -9,8 +9,8 @@
 .atlas-paper .list {
   min-width: 0;
   overflow: clip;
-  border: 1px solid var(--anth-rule);
-  border-radius: var(--anth-radius-md);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
   background: var(--anth-surface);
   box-shadow: var(--anth-shadow-1);
 }
@@ -37,7 +37,7 @@
   background: var(--anth-surface-raised);
 }
 
-/* Selected row: accent-subtle wash with a 3px clay strip on the left.
+/* Selected row: accent-subtle wash with a 3px accent strip on the left.
  * The strip is a pseudo-element, not an inset box-shadow: the flat-surface
  * gate only approves the elevation tokens. */
 .atlas-paper .list-row:is(.is-selected, [aria-selected="true"]) {

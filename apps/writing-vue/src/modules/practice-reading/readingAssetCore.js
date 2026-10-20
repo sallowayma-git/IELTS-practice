@@ -66,3 +66,14 @@ export function normalizeReadingAssetViewModel(value) {
   }
   return value
 }
+
+/** A passage the unified reading page can render (not a PDF-only scan). */
+export function hasReadingPracticePayload(asset) {
+  const metadata = asset?.metadata || {}
+  return !asset?.pdfOnly && Boolean(
+    asset?.payloadRef
+    || asset?.contentRef
+    || metadata.dataKey
+    || metadata.script
+  )
+}

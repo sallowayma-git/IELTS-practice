@@ -23,7 +23,12 @@ use crate::sqlite::{DbError, DbResult};
 /// carried a duplicate `attempts` summary array; it still restores.
 /// Format 19 also carries the agent context snapshots that coach and teaching
 /// strategy assignments reference.
-pub const BACKUP_SCHEMA_VERSION: u32 = 20;
+// Format 21 unifies the published weekly snapshot's Soul audit with the
+// remote context snapshots. Its two different format-19 families are read
+// by structural signature, never by pretending they had the same schema.
+// Format 22 is the schema-35 weekly report v3 build; its payload shape is
+// format 21's, so both are read by the same table set.
+pub const BACKUP_SCHEMA_VERSION: u32 = 22;
 /// First format whose database payload carries `weekly_digests`.
 const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
 /// First format whose database payload carries the context snapshot tables.
@@ -103,6 +108,7 @@ const CANONICAL_TABLES: &[&str] = &[
     "background_jobs",
     "dream_runs",
     "weekly_digests",
+    "soul_revisions",
     "memory_relations",
     "memory_feedback",
     "memory_capacity_state",
@@ -769,7 +775,31 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
                 || schema_version >= CONTEXT_SNAPSHOTS_SCHEMA_VERSION
         })
         .filter(|table| !DROPPED_TABLES.contains(table))
+        .filter(|table| *table != "soul_revisions" || schema_version >= 21)
         .collect()
+}
+
+fn is_weekly_snapshot_package(package: &BackupPackage) -> bool {
+    let has = |name: &str| package.database.iter().any(|table| table.name == name);
+    package.manifest.schema_version == 19
+        && package.manifest.database_schema_version == 33
+        && has("soul_revisions")
+        && !CONTEXT_SNAPSHOT_TABLES.iter().any(|name| has(name))
+        && package.database.iter().any(|table| table.name == "practice_assets"
+            && table.columns.iter().any(|column| column == "question_kinds_json"))
+        && package.database.iter().any(|table| table.name == "coach_threads"
+            && !table.columns.iter().any(|column| column == "learner_profile_json"))
+}
+
+fn snapshot_tables_for_package(package: &BackupPackage) -> Vec<&'static str> {
+    let mut tables = snapshot_tables_for_schema(package.manifest.schema_version);
+    if is_weekly_snapshot_package(package) {
+        tables.retain(|table| !CONTEXT_SNAPSHOT_TABLES.contains(table));
+        // Must follow dream_runs, which the audit references.
+        let position = tables.iter().position(|table| *table == "weekly_digests").unwrap() + 1;
+        tables.insert(position, "soul_revisions");
+    }
+    tables
 }
 
 fn snapshot_tables_before_digests(schema_version: u32) -> &'static [&'static str] {
@@ -916,7 +946,7 @@ pub fn validate_backup(package: &BackupPackage) -> DbResult<Vec<String>> {
     validate_snapshot_counts(package)?;
     let tables = table_map(
         &package.database,
-        &snapshot_tables_for_schema(package.manifest.schema_version),
+        &snapshot_tables_for_package(package),
     )?;
     validate_json_cells(&tables)?;
     validate_logical_references(&tables)?;
@@ -1151,6 +1181,7 @@ fn sql_value(value: &BackupSqlValue) -> SqlValue {
 const NULLABLE_COLUMN_ADDITIONS: &[(&str, &str, i64)] = &[
     ("attempts", "submitted_asset_fingerprint", 26),
     ("coach_threads", "learner_profile_json", 31),
+    ("practice_assets", "question_kinds_json", 34),
 ];
 
 fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResult<()> {
@@ -1174,7 +1205,15 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
             .iter()
             .filter(|column| {
                 !NULLABLE_COLUMN_ADDITIONS.iter().any(|(added_table, added_column, version)| {
-                    *added_table == table.name && column.as_str() == *added_column && schema < *version
+                    let snapshot = is_weekly_snapshot_package(package);
+                    let missing = if *added_column == "learner_profile_json" && snapshot {
+                        true
+                    } else if *added_column == "question_kinds_json" && snapshot {
+                        false
+                    } else {
+                        schema < *version
+                    };
+                    *added_table == table.name && column.as_str() == *added_column && missing
                 })
             })
             .cloned()
@@ -1215,7 +1254,7 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     // this connection.
     tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
 
-    let source_tables = snapshot_tables_for_schema(package.manifest.schema_version);
+    let source_tables = snapshot_tables_for_package(package);
     let tables = table_map(&package.database, &source_tables)?;
     // A restore replaces the user's raw data: the only place these deletes run,
     // and it is an explicit user action (Settings -> restore).
@@ -1307,6 +1346,9 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     // the restored `learning_events` while this transaction is still open --
     // after commit would be too late for the deferred check below.
     crate::learning_observations::learning_observations_rebuild_in_transaction(tx)?;
+    if tables.get("practice_assets").is_some_and(|table| !table.columns.iter().any(|column| column == "question_kinds_json")) {
+        crate::reading::assets::backfill_question_kinds_in_transaction(tx)?;
+    }
     resolve_references_to_unrestored_tables(tx, &source_tables)?;
 
     assert_no_foreign_key_violations(tx)?;
@@ -1603,6 +1645,10 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
     let evaluations = text_set(tables["writing_evaluations"], "id")?;
     if let (Some(digests), Some(runs)) = (tables.get("weekly_digests"), tables.get("dream_runs")) {
         require_refs(digests, "run_id", &text_set(runs, "id")?)?;
+    }
+    if let (Some(revisions), Some(runs)) = (tables.get("soul_revisions"), tables.get("dream_runs")) {
+        require_optional_refs(revisions, "run_id", &text_set(runs, "id")?)?;
+        require_optional_refs(revisions, "reverts_id", &text_set(revisions, "id")?)?;
     }
     let threads = text_set(tables["coach_threads"], "id")?;
     let vocab = text_set(tables["vocabulary_items"], "id")?;

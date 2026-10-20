@@ -323,7 +323,7 @@ fn format_18_backup_writes_attempts_once_and_writes_atomically() {
     let (dir, source) = open_db();
     upsert_attempt(&source, &terminal_attempt("bk1", 1)).unwrap();
     let package = create_backup_package(&source, "test").unwrap();
-    assert_eq!(package.manifest.schema_version, 20);
+    assert_eq!(package.manifest.schema_version, 22);
     assert!(package.attempts.is_empty());
     assert_eq!(package.manifest.attempt_count, 1);
 
@@ -354,7 +354,7 @@ fn format_17_backup_with_a_summary_array_still_restores_and_carries_digests() {
     let mut legacy = create_backup_package(&source, "v17").unwrap();
     legacy.manifest.schema_version = 17;
     legacy.database.retain(|table| {
-        table.name != "weekly_digests" && !table.name.starts_with("agent_context_")
+        table.name != "weekly_digests" && table.name != "soul_revisions" && !table.name.starts_with("agent_context_")
     });
     legacy.manifest.table_count = legacy.database.len() as u32;
     legacy.manifest.row_count = legacy

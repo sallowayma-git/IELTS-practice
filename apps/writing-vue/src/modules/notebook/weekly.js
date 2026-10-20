@@ -1,10 +1,12 @@
 /**
- * 札记 weekly report (v2) — typed blocks into display data.
+ * 札记 weekly reports — schema v3 narrative + typed data blocks, with the
+ * schema v2 remote reports and local v2 digests read-only for history.
  *
  * The host computes every number (crates/ielts-domain/src/weekly_report.rs and
  * the block skills); this module only picks, labels and formats them, and
  * shapes each chart's series. Nothing here adds, averages or compares: a value
- * the page shows is a value the block's data carries.
+ * the page shows is a value the block's data or the report's fact map carries.
+ * The title is the report's `displayTitle`, never derived here.
  */
 import { formatJournalDate } from '../agent-console/format.js'
 
@@ -38,6 +40,19 @@ const MEMORY_ACTIONS = {
   ARCHIVE: '收起了'
 }
 
+// Legacy local v2 digests named facts by their source path; v3 facts carry a
+// Chinese label of their own, so this table is only a fallback.
+const FACT_LABELS = {
+  count: '记录数', attemptsCount: '练习次数', correctCount: '答对题数', questionCount: '题目数',
+  attemptOrdinal: '练习序次', todayCorrect: '本次答对', todayTotal: '本次题数',
+  baselineCorrect: '基线答对', baselineTotal: '基线题数', missedAssetCount: '失分题集数',
+  wrong: '错题数', total: '题目数', overall: '总分', taskResponse: '任务回应',
+  coherence: '连贯与衔接', lexical: '词汇', grammar: '语法', averageBand: '平均分',
+  previousAverageBand: '上一篇平均分', bandDelta: '分数变化', today: '本篇分数',
+  previous: '上一篇分数', delta: '分数变化', dueReviewCount: '到期复习数',
+  mastery: '掌握度', recentErrorRate: '近期错误率', essayCount: '涉及作文数', value: '练习结果'
+}
+
 function count(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
@@ -59,6 +74,121 @@ export function percent(rate) {
 /** A band as the host wrote it: 6.5 stays 6.5, 7 stays 7. */
 function band(value) {
   return String(count(value))
+}
+
+/**
+ * One v3 fact as the page writes it. The host decides the unit (`format`);
+ * this only writes it: percent is an integer percent, minutes carries 分钟,
+ * band and number keep the host's value (6.5 stays 6.5, integers stay integers).
+ */
+export function weeklyFactValue(fact) {
+  const value = fact?.value
+  if (value === null || value === undefined || value === '') return ''
+  const number = Number(value)
+  if (!Number.isFinite(number)) return String(value)
+  switch (String(fact?.format || '').toLowerCase()) {
+    case 'percent':
+      return `${Math.round(number * 100)}%`
+    case 'minutes':
+      return `${number} 分钟`
+    default:
+      return String(number)
+  }
+}
+
+/**
+ * No HTML is interpreted. The only generated elements are text, strong, em,
+ * code and citation buttons; raw HTML and Markdown links remain escaped text.
+ * A `{{f:ID}}` token keeps the fact's label and provenance for the source note.
+ */
+export function weeklyTokens(value, facts = {}) {
+  const chunks = String(value || '').split(/(\{\{[fq]:[^{}]+\}\}|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
+  return chunks.filter(Boolean).map((part) => {
+    const ref = /^\{\{([fq]):([^{}]+)\}\}$/.exec(part)
+    if (ref) {
+      const fact = facts[ref[2]]
+      return fact
+        ? {
+            tag: 'ref',
+            text: weeklyFactValue(fact),
+            id: ref[2],
+            source: fact.source,
+            label: fact.label || '',
+            provenance: fact.provenance || {}
+          }
+        : { tag: 'span', text: '' }
+    }
+    if (part.startsWith('**') && part.endsWith('**')) return styledToken('strong', part.slice(2, -2), facts)
+    if (part.startsWith('*') && part.endsWith('*')) return styledToken('em', part.slice(1, -1), facts)
+    if (part.startsWith('`') && part.endsWith('`')) return styledToken('code', part.slice(1, -1), facts)
+    return { tag: 'span', text: part }
+  })
+}
+
+function styledToken(tag, inner, facts) {
+  return { tag, inner, text: weeklyTokens(inner, facts).map((token) => token.text).join('') }
+}
+
+export const weeklyText = (value, facts) => weeklyTokens(value, facts).map((token) => token.text).join('')
+
+/** The Chinese name of a fact's source, for citation notes and legacy rows. */
+export function weeklyFactLabel(fact = {}) {
+  if (text(fact.label)) return text(fact.label)
+  if (text(fact.provenance?.label)) return text(fact.provenance.label)
+  const key = String(fact.source || '').split('/').at(-1)
+  return FACT_LABELS[key] || BLOCK_HEADINGS[key] || (key === 'soul' ? '个人情况' : '练习记录')
+}
+
+export function weeklyTarget(target) {
+  const key = String(target?.key || '')
+  if (!/^[\p{L}\p{N}_.-]{1,160}$/u.test(key)) return null
+  if (target.type === 'asset') return `/reading/${encodeURIComponent(key)}`
+  if (target.type === 'kind') return { path: '/', query: { view: 'browse', kind: libraryKind(key) } }
+  if (target.type === 'writing' && ['task1', 'task2'].includes(key)) return { path: '/writing', query: { taskType: key } }
+  return null
+}
+
+// Weekly evidence uses domain kinds; library cards use seven display tags.
+function libraryKind(key) {
+  const aliases = { tfng: 'judgement', ynng: 'judgement', true_false_not_given: 'judgement', yes_no_not_given: 'judgement', matching_headings: 'heading_match', matching_information: 'paragraph_match', matching_features: 'matching', classification: 'matching', short_answer: 'completion' }
+  return aliases[key] || (key.endsWith('_completion') ? 'completion' : key)
+}
+
+/**
+ * A legacy local v2 digest (title, body, one facts map) as display data.
+ * Read-only history: the integration never writes this shape again.
+ */
+export function weeklyV2(digest) {
+  const facts = digest?.facts || {}
+  const render = (value) => weeklyText(value, facts)
+  const body = (digest?.body || []).map(render)
+  const groups = ['changes', 'nextSteps', 'strengths', 'weaknesses'].map((key) => ({
+    key,
+    title: { changes: '变化', nextSteps: '下一步', strengths: '优势', weaknesses: '劣势' }[key],
+    items: (digest?.[key] || []).map((item) => ({
+      text: typeof item === 'string' ? item : item?.text,
+      route: weeklyTarget(item?.target)
+    }))
+  })).filter((group) => group.items.length)
+  const numeric = Object.entries(facts).filter(([, fact]) => typeof fact?.value === 'number')
+  const points = groups.flatMap((group) => group.items).filter((item) => /\{\{f:/.test(item.text)).map((item) => render(item.text)).slice(0, 2)
+  for (const [, fact] of numeric) {
+    if (points.length < 2) points.push(`${weeklyFactLabel(fact)}：${weeklyFactValue(fact)}`)
+  }
+  return {
+    schemaVersion: 2,
+    digest,
+    facts,
+    body,
+    groups,
+    observations: body,
+    changes: [],
+    nextPractice: [],
+    title: render(digest?.title),
+    firstSentence: body[0]?.split(/[。！？]/)[0] || '',
+    points,
+    practiceCount: digest?.practiceCount || 0
+  }
 }
 
 /** "10/5" and its weekday "一" for a "YYYY-MM-DD" day. */
@@ -298,8 +428,12 @@ function readExamples(value) {
     }))
 }
 
-/** One block as the page lays it out, or null for a kind this page does not know. */
-export function buildBlock(block) {
+/**
+ * One block as the page lays it out, or null for a kind this page does not
+ * know. `options.legacy` keeps the v2 per-block sentence; a v3 report never
+ * shows one (the narrative is the only prose).
+ */
+export function buildBlock(block, options = {}) {
   const build = BUILDERS[block?.kind]
   if (!build) return null
   const examples = readExamples(block.examples)
@@ -308,15 +442,13 @@ export function buildBlock(block) {
     id: String(block.id || block.kind),
     kind: block.kind,
     heading: BLOCK_HEADINGS[block.kind],
-    lead: text(block.narrative),
+    lead: options.legacy === false ? '' : text(block.narrative),
     stats: [],
     rows: [],
     tags: [],
     chart: null,
     plan: null,
-    ...view,
-    // The plan's links sit on its items; every other block lists its examples.
-    examples: block.kind === 'next_week_plan' ? [] : examples
+    ...view
   }
 }
 
@@ -330,38 +462,153 @@ function memoryChanges(value) {
     .filter((change) => change.action && change.statement)
 }
 
-/** One weekly report as a notebook entry, or null when it has nothing to show. */
+const GROUP_TITLES = { changes: '变化', nextSteps: '下一步', strengths: '优势', weaknesses: '劣势' }
+
+function narrativeGroups(narrative) {
+  return Object.entries(GROUP_TITLES)
+    .map(([key, title]) => ({
+      key,
+      title,
+      items: list(narrative?.[key])
+        .map((item) => typeof item === 'string'
+          ? { text: item, route: null }
+          : { text: text(item?.text), route: weeklyTarget(item?.target) })
+        .filter((item) => item.text)
+    }))
+    .filter((group) => group.items.length)
+}
+
+function plainFirstSentence(value) {
+  return value.split(/[。！？!?]/)[0] || ''
+}
+
+// The card's points are narrative sentences that cite facts, in group order.
+function narrativePoints(groups, facts) {
+  const points = []
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (!/\{\{[fq]:/.test(item.text)) continue
+      const point = weeklyText(item.text, facts)
+      if (point && !points.includes(point)) points.push(point)
+      if (points.length === 2) return points
+    }
+  }
+  return points
+}
+
+function reportPracticeCount(report, facts, legacy) {
+  const fact = facts['volume.total']
+  const countValue = Number(fact?.value)
+  if (Number.isFinite(countValue)) return countValue
+  if (!legacy) return null
+  const legacyValue = Number(report?.practiceCount)
+  return Number.isFinite(legacyValue) ? legacyValue : null
+}
+
+/**
+ * One weekly report as a notebook entry, or null when it has nothing to show.
+ *
+ * v3: `title` is `displayTitle` verbatim (Rust owns the one derivation);
+ * `paragraphs` are the narrative's raw fact-placeholder paragraphs (WeeklyText
+ * turns them into prose with clickable citations), `body` is the same text
+ * rendered plain for summaries, and `groups` are the actionable lines with
+ * their routes. `blocks` are the typed data appendix. A state other than a
+ * complete `final` (or a final without a body) carries no narrative at all.
+ *
+ * v1/v2: read-only blocks and the stored `title`.
+ */
 export function buildWeeklyReport(report) {
   const window = text(report?.window)
   const { startDay, endDay } = windowDays(report?.windowStart, report?.windowEnd)
-  const blocks = list(report?.blocks).map(buildBlock).filter(Boolean)
-  if (!window || !startDay || !endDay || !blocks.length) return null
-  const state = String(report.state || '')
+  if (!window || !startDay || !endDay) return null
+  const schemaVersion = Number(report?.schemaVersion) || 0
+  const legacy = schemaVersion < 3
+  const state = String(report?.state || '')
+  const blocks = list(report?.blocks).map((block) => buildBlock(block, { legacy })).filter(Boolean)
+  const narrative = !legacy && state === 'final' && report?.narrative && typeof report.narrative === 'object'
+    ? report.narrative
+    : null
+  const paragraphs = narrative ? list(narrative.body).map(text).filter(Boolean) : []
+  const facts = !legacy && report?.facts && typeof report.facts === 'object' ? report.facts : {}
+  const body = paragraphs.map((line) => weeklyText(line, facts))
+  const hasNarrative = body.length > 0
+  const groups = hasNarrative ? narrativeGroups(narrative) : []
+  if (!blocks.length && !hasNarrative) return null
   return {
     key: `${state === 'live' ? 'live' : 'week'}:${window}`,
     window,
     state,
+    schemaVersion,
     startDay,
     endDay,
     dateLabel: formatWindowRange(startDay, endDay),
-    title: text(report.title) || '这一周',
+    title: legacy ? text(report?.title) || '这一周' : String(report?.displayTitle ?? ''),
+    facts,
+    paragraphs,
+    body,
+    groups,
+    askUser: hasNarrative && narrative.askUser && typeof narrative.askUser === 'object' ? narrative.askUser : null,
+    firstSentence: hasNarrative ? plainFirstSentence(body[0]) : legacy ? text(blocks[0]?.lead) : '',
+    points: hasNarrative ? narrativePoints(groups, facts) : [],
+    practiceCount: reportPracticeCount(report, facts, legacy),
     stateLine: STATE_LINES[state] || null,
     blocks,
-    memoryChanges: memoryChanges(report.memoryChanges)
+    memoryChanges: memoryChanges(report?.memoryChanges)
   }
 }
 
 /**
  * The weekly entries in page order: this week's live report first, then the
- * finished weeks newest first. A live report for a week that is already
- * finished is dropped (the finished one is the final word).
+ * finished weeks newest first. A v3 report is the final word for its week, so a
+ * legacy v1/v2 digest of the same week is dropped; legacy weeks fill the older
+ * history the report list no longer covers.
  */
-export function weeklyEntries(current, persisted) {
-  const finished = list(persisted)
-    .map(buildWeeklyReport)
-    .filter(Boolean)
+export function weeklyEntries(current, persisted, legacy = []) {
+  const finished = list(persisted).map(buildWeeklyReport).filter(Boolean)
+  const weeks = new Set(finished.map((entry) => entry.window))
+  const older = []
+  for (const entry of list(legacy)) {
+    if (!entry?.window || weeks.has(entry.window)) continue
+    weeks.add(entry.window)
+    older.push(entry)
+  }
+  const ordered = [...finished, ...older]
     .sort((left, right) => right.endDay.localeCompare(left.endDay) || right.window.localeCompare(left.window))
   const live = current ? buildWeeklyReport(current) : null
-  const fresh = live && !finished.some((entry) => entry.window === live.window)
-  return fresh ? [live, ...finished] : finished
+  const fresh = live && !ordered.some((entry) => entry.window === live.window)
+  return fresh ? [live, ...ordered] : ordered
+}
+
+export function weekThursday(week) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(week?.window || '')
+  if (!match) return new Date(`${week?.startDay}T00:00:00Z`)
+  const jan4 = new Date(Date.UTC(Number(match[1]), 0, 4))
+  jan4.setUTCDate(jan4.getUTCDate() - (jan4.getUTCDay() + 6) % 7 + (Number(match[2]) - 1) * 7 + 3)
+  return jan4
+}
+
+export const weeklyMonth = (week) => weekThursday(week).toISOString().slice(0, 7)
+
+// Global numbering by window start: the first generated week is 1, and switching
+// months never renumbers a card. Newest first, like the report list.
+export function weeklySequence(weeks) {
+  return [...list(weeks)]
+    .sort((left, right) => String(left.startDay).localeCompare(right.startDay) || String(left.window).localeCompare(right.window))
+    .map((week, index) => ({ ...week, sequence: index + 1 }))
+    .reverse()
+}
+
+export function weeklyMonthSlots(weeks, month) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) return []
+  const date = new Date(`${month}-01T00:00:00Z`)
+  const slots = []
+  while (date.toISOString().startsWith(month)) {
+    if (date.getUTCDay() === 4) {
+      const day = date.toISOString().slice(0, 10)
+      const week = list(weeks).find((entry) => weekThursday(entry).toISOString().slice(0, 10) === day) || null
+      slots.push({ day, week })
+    }
+    date.setUTCDate(date.getUTCDate() + 1)
+  }
+  return slots
 }

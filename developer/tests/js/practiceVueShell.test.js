@@ -53,9 +53,15 @@ function testVueRoutesAndShell() {
   has(app, 'framelessRouteNames', 'immersive-only shell escape hatch')
   lacks(app, "'PracticeLibrary'", 'Library must remain inside the shared App shell')
   has(nav, '<router-link to="/" class="brand-block">', 'product brand route')
-  for (const label of ["label: '阅读'", "label: '写作'", "label: '札记'", "label: '历史'", "label: '设置'"]) {
+  for (const label of ["label: '总览'", "label: '题库'", "label: '写作'", "label: '札记'", "label: '历史'", "label: '更多'", "label: '设置'"]) {
     has(nav, label, 'global product navigation')
   }
+  // 题库 owns a secondary row (阅读 / 写作); 写作 no longer claims /topics.
+  has(nav, "label: '阅读', match: ['/'], view: 'browse'", 'reading sub-entry under 题库')
+  has(nav, "to: '/topics', label: '写作', match: ['/topics']", 'writing sub-entry under 题库')
+  has(nav, "match: ['/writing', '/evaluating/', '/result/'] }", 'writing top entry without /topics')
+  has(nav, 'aria-label="题库分类"', 'library sub-row landmark')
+  lacks(nav, "'/result/', '/topics'", 'top-level writing must not match /topics')
   lacks(nav, "label: '智能体'", 'agent workbench is not a learner nav entry')
   lacks(nav, 'featureFlags.agentWorkspaceV1', 'agent workbench stays off the learner nav')
   has(routes, 'featureFlags.agentWorkspaceV1', 'Agent route feature flag')
@@ -78,13 +84,17 @@ function testVueRoutesAndShell() {
 
 function testLibraryHasOneProductShell() {
   const library = read('apps/writing-vue/src/views/PracticeLibraryPage.vue')
-  const librarySettings = read('apps/writing-vue/src/modules/practice-reading/components/ReadingSettingsPanel.vue')
+  const librarySettings = read('apps/writing-vue/src/modules/practice-reading/useReadingDataTools.js')
+  const navBar = read('apps/writing-vue/src/components/NavBar.vue')
   const client = read('apps/writing-vue/src/api/client.js')
   const skin = read('apps/writing-vue/src/styles/opensource-skin.css')
 
   has(library, 'data-practice-reading-home data-library-ready', 'stable Library ready marker')
-  has(library, '<h1 class="library-workspace-header__title">阅读练习</h1>', 'local workspace title')
-  has(library, 'class="library-view-tabs tabs"', 'Library secondary navigation')
+  has(library, '<h1 class="library-workspace-header__title">{{ headerTitle }}</h1>', 'local workspace title is per view')
+  has(library, "browse: Object.freeze({ kicker: '题库 · 阅读', title: '阅读题库' })", 'browse header is the reading library')
+  has(library, "more: Object.freeze({ kicker: 'READING · 阅读', title: '阅读练习' })", 'more header is unchanged')
+  lacks(library, 'library-view-tabs', 'Library views are top-nav entries, not an in-page tab strip')
+  for (const view of ['browse', 'more']) has(navBar, `libraryView('${view}')`, `top nav entry for Library ${view}`)
   lacks(library, 'hero-brand-text', 'duplicate Library product brand')
   lacks(library, 'main-nav hero-nav', 'duplicate Library product navigation')
   lacks(library, 'practice-library-legacy', 'legacy Library shell ownership')
@@ -93,7 +103,7 @@ function testLibraryHasOneProductShell() {
   assert.ok(!/^\.btn\b/m.test(library), 'Library stylesheet leaks a naked .btn selector')
   has(skin, '.atlas-paper {', 'paper skin is scoped to non-exam routes')
   lacks(skin, '.atlas-source-ui .practice-library', 'Library owns its layout in PracticeLibraryPage.vue')
-  assert.ok(/^\.atlas-paper \[data-practice-reading-home\] \.library-view-tabs \{/m.test(library), 'Library styles are rooted at the home root')
+  assert.ok(/^\.atlas-paper \[data-practice-reading-home\] \.library-body \{/m.test(library), 'Library styles are rooted at the home root')
   for (const retired of [
     'clearPracticeCache',
     'clear-practice-cache',
@@ -111,6 +121,27 @@ function testLibraryHasOneProductShell() {
   ]) {
     lacks(client, retired, 'dead Tauri API facade')
   }
+}
+
+function testWritingTopicCards() {
+  const topics = read('apps/writing-vue/src/views/TopicManagePage.vue')
+
+  has(topics, '<p class="page-header-kicker">题库 · 写作</p>', 'writing library kicker')
+  has(topics, '<h1>写作题库</h1>', 'writing library title')
+  has(topics, 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', 'practice card grid')
+  has(topics, '<div class="topic-filter-bar" role="search"', 'filters live in one horizontal bar')
+  has(topics, 'id="topic-search"', 'search keeps its id')
+  has(topics, 'id="topic-filter-type" class="segmented', 'type filter is a segmented control')
+  has(topics, 'id="topic-filter-category"', 'category filter keeps its id')
+  has(topics, 'id="topic-filter-difficulty"', 'difficulty filter keeps its id')
+  lacks(topics, 'has-rail', 'topics page has no filter rail layout')
+  lacks(topics, 'topic-rail', 'topics page has no rail markup or CSS')
+  has(topics, "router.push({ name: 'Compose', query: { topicId: topic.id, taskType: topic.type } })", 'practice entry hands topic to Compose')
+  has(topics, ':aria-label="`难度 ${topic.difficulty || 0}/5`"', 'difficulty dots are labelled')
+  lacks(topics, 'list-row', 'topic cards are not list rows')
+  lacks(topics, '<router-link', 'topic cards are not links')
+  has(topics, 'class="btn btn-ghost btn-sm edit"', 'edit action keeps its hook')
+  has(topics, 'class="btn btn-danger-ghost btn-sm delete"', 'delete action keeps its hook')
 }
 
 function testReadingActionOwnership() {
@@ -194,10 +225,19 @@ function testSettingsNativeBackupOwnership() {
 
   has(settings, 'Tauri 2 原生桌面客户端', 'current Tauri product identity')
   has(settings, 'Rust + SQLite', 'current Rust data identity')
+  // Data operations live in the dedicated 数据管理 dialog, split by domain.
+  for (const dialogPart of ['dataDialogOpen', 'dataDialogTab', 'openDataDialog(', 'CLEAR_SCOPES', 'confirmClearHistory(\'all\')']) {
+    has(settings, dialogPart, 'data management dialog contract')
+  }
   for (const retired of [
     'ielts_writing_settings_backups_v1',
     'settingsSnapshotListOpen',
+    'settingsBackupListOpen',
     'settingsBackups',
+    "openSettingsDetail('data')",
+    "activeTab === 'data'",
+    '清空所有历史',
+    'backup-list-btn',
     'exportSettingsData',
     'handleSettingsImport',
     'clear-cache-btn',
@@ -349,6 +389,7 @@ function testAgentConsoleCopy() {
 
 testVueRoutesAndShell()
 testLibraryHasOneProductShell()
+testWritingTopicCards()
 testReadingActionOwnership()
 testTauriCommandBoundary()
 testSettingsNativeBackupOwnership()

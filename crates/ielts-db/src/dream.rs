@@ -209,7 +209,7 @@ fn iso_week_monday(key: &str) -> Option<NaiveDate> {
 }
 
 /// Window a run marker stands for; a pre-window marker covers its ISO week.
-fn window_of_marker(marker: &str) -> Option<WeeklyWindow> {
+pub(crate) fn window_of_marker(marker: &str) -> Option<WeeklyWindow> {
     let body = marker.strip_prefix(WEEKLY_MARKER_PREFIX)?;
     WeeklyWindow::parse(body).or_else(|| {
         let start = iso_week_monday(body)?.and_hms_opt(0, 0, 0)?.and_utc();

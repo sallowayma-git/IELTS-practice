@@ -188,7 +188,8 @@ async function testReadingPageLoadAssetSuccessAndFailure() {
 function testReadingLibraryUsesOnlyNativeArchiveAndIndexTruth() {
   const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8')
   const page = read('apps/writing-vue/src/views/PracticeLibraryPage.vue')
-  const settings = read('apps/writing-vue/src/modules/practice-reading/components/ReadingSettingsPanel.vue')
+  const settings = read('apps/writing-vue/src/views/SettingsPage.vue')
+  const dataTools = read('apps/writing-vue/src/modules/practice-reading/useReadingDataTools.js')
   const moreTools = read('apps/writing-vue/src/modules/practice-reading/components/ReadingMoreToolsPanel.vue')
   const client = read('apps/writing-vue/src/api/practice-client.js')
   const repository = read('apps/writing-vue/src/api/reading-repository.js')
@@ -197,13 +198,13 @@ function testReadingLibraryUsesOnlyNativeArchiveAndIndexTruth() {
   for (const required of [
     'requireReadingArchiveExport',
     'requireCommittedReadingArchiveImport',
-    "{ value: 'settings', label: '数据工具'",
+    'id="settings-reading"',
     "invokeCommand('reading_export_archive')",
     "invokeCommand('reading_import_archive'",
     "invokeCommand('reading_pick_practice_asset'",
     'Rust/SQLite 本地索引'
   ]) {
-    assert.ok([page, settings, client, repository].some((source) => source.includes(required)), `native Reading boundary missing: ${required}`)
+    assert.ok([page, settings, dataTools, client, repository].some((source) => source.includes(required)), `native Reading boundary missing: ${required}`)
   }
   for (const retired of [
     'READING_BACKUP_STORAGE_KEY',
@@ -220,9 +221,10 @@ function testReadingLibraryUsesOnlyNativeArchiveAndIndexTruth() {
     'refresh: Boolean(options.refresh)',
     'Math.random() * pool.length'
   ]) {
-    assert.ok(![page, settings, moreTools, api].some((source) => source.includes(retired)), `retired Reading UI truth remains: ${retired}`)
+    assert.ok(![page, settings, dataTools, moreTools, api].some((source) => source.includes(retired)), `retired Reading UI truth remains: ${retired}`)
   }
-  assert.ok(!page.includes("if (view === 'settings')"), 'Reading archive controls must remain reachable from Library data tools')
+  // Old ?view=settings links must still reach the archive controls, now in 设置 → 阅读题库.
+  assert.ok(page.includes("hash: '#settings-reading'"), 'Library data tools deep link must land on the settings section')
 }
 
 async function main() {

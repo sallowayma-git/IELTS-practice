@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-soul-get"
+description = "Enables the soul_get command without any pre-configured scope."
+commands.allow = ["soul_get"]
+
+[[permission]]
+identifier = "deny-soul-get"
+description = "Denies the soul_get command without any pre-configured scope."
+commands.deny = ["soul_get"]

@@ -485,7 +485,7 @@ def verify_annotated_view(page, name, width):
         }
         """
     )
-    if "grammar" not in annotated["bodyText"]:
+    if "语法错误" not in annotated["bodyText"]:
         raise AssertionError(f"{name}: persisted annotation detail is not visible")
     if annotated["detailLeft"] < annotated["bodyLeft"] - 1 or annotated["detailRight"] > annotated["bodyRight"] + 1:
         raise AssertionError(f"{name}: annotation detail escapes the essay surface")

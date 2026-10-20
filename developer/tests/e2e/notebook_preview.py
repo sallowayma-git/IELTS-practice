@@ -16,8 +16,12 @@ a memory catalog and a learner review queue of twelve items.
     reports/notebook-failed-dev.png   a finished week whose narrative failed, 1024x768
     reports/learner-dev.png           learner model, 1440x900, full page
 
-Prints the computed heights of the notebook index rows so the sticky rail
-shows up as numbers, not guesses.
+The shelf cards only carry the headline layer. Every report is read by clicking
+its card and reading the teleported [data-notebook-sheet]: the sheet title and
+state, the [data-weekly-data] blocks, charts, the state line for non-final weeks
+and the narrative (.weekly-paragraph with .weekly-citation/.weekly-source) for
+final weeks. The click flow also runs at 1024; the empty scenario only has to
+show .notebook-empty and no week card.
 """
 from __future__ import annotations
 
@@ -181,6 +185,78 @@ def settle(page, selector: str) -> None:
     page.wait_for_timeout(400)
 
 
+def read_cards(page) -> list[dict]:
+    """The shelf layer only: window, state, title, excerpt and the card points."""
+    return page.evaluate(
+        """() => [...document.querySelectorAll('[data-notebook] [data-notebook-week]')].map((node) => ({
+          window: node.dataset.notebookWeek,
+          state: node.dataset.weekState,
+          title: node.querySelector('.notebook-week-card__title')?.textContent.trim() || '',
+          excerpt: node.querySelector('.notebook-week-card__excerpt')?.textContent.trim() || '',
+          points: [...node.querySelectorAll('.notebook-week-card__points li')].map((li) => li.textContent.trim()),
+        }))"""
+    )
+
+
+def read_sheet(page) -> dict | None:
+    """The teleported report: state line, blocks, charts and the final narrative."""
+    return page.evaluate(
+        """() => {
+          const sheet = document.querySelector('[data-notebook-sheet]');
+          if (!sheet) return null;
+          const detail = sheet.querySelector('[data-weekly-detail]');
+          const data = detail?.querySelector('[data-weekly-data]');
+          return {
+            title: sheet.querySelector('.notebook-sheet__title')?.textContent.trim() || '',
+            state: detail?.dataset.weekState || '',
+            stateLine: detail?.querySelector('[data-week-state-line]')?.textContent.trim() || '',
+            blocks: data ? [...data.querySelectorAll('[data-week-block]')].map((block) => block.dataset.weekBlock) : [],
+            charts: detail ? detail.querySelectorAll('svg[role=img]').length : 0,
+            paragraphs: detail ? [...detail.querySelectorAll('.weekly-paragraph')].map((node) => node.innerText.trim()) : [],
+            citations: detail ? detail.querySelectorAll('.weekly-citation').length : 0,
+            sources: detail ? [...detail.querySelectorAll('.weekly-source')].map((node) => node.textContent.trim()) : [],
+            placeholders: /\\{\\{|\\}\\}/.test(sheet.innerText),
+          };
+        }"""
+    )
+
+
+def capture_weeks(page) -> tuple[list[dict], list[str]]:
+    """Click every shelf card, read its teleported sheet, then close it again.
+
+    The shelf lays its month slots out oldest first; the report contract is this
+    week first, then finished weeks newest first. Read the cards newest first and
+    keep the physical order under "<file>:shelf" so both stay checked.
+    """
+    cards = read_cards(page)
+    shelf = [card["window"] for card in cards]
+    weeks = []
+    for card in reversed(cards):
+        page.locator(f'[data-notebook-week="{card["window"]}"]').click()
+        sheet_locator = page.locator("[data-notebook-sheet]")
+        sheet_locator.wait_for(timeout=60_000)
+        sheet = read_sheet(page) or {}
+        if sheet.get("citations"):
+            page.locator("[data-notebook-sheet] .weekly-citation").first.click()
+            page.locator("[data-notebook-sheet] .weekly-source").first.wait_for(timeout=30_000)
+            sheet = read_sheet(page) or sheet
+        weeks.append({
+            **card,
+            "sheet_title": sheet.get("title", ""),
+            "sheet_state": sheet.get("state", ""),
+            "stateLine": sheet.get("stateLine", ""),
+            "blocks": sheet.get("blocks", []),
+            "charts": sheet.get("charts", 0),
+            "paragraphs": sheet.get("paragraphs", []),
+            "citations": sheet.get("citations", 0),
+            "sources": sheet.get("sources", []),
+            "placeholders": sheet.get("placeholders", True),
+        })
+        page.locator("[data-notebook-sheet] .notebook-sheet__close").click()
+        sheet_locator.wait_for(state="detached", timeout=30_000)
+    return weeks, shelf
+
+
 def capture(browser, scenario: str, filename: str, width: int, height: int, route: str, ready: str,
             metrics: dict, errors: list[str]) -> None:
     page = browser.new_page(viewport={"width": width, "height": height}, reduced_motion="reduce",
@@ -190,23 +266,9 @@ def capture(browser, scenario: str, filename: str, width: int, height: int, rout
     page.goto(f"{BASE_URL}/#{route}", wait_until="domcontentloaded", timeout=60_000)
     settle(page, ready)
     if route == "/notebook":
-        metrics[f"{filename}:weeks"] = page.evaluate(
-            """() => [...document.querySelectorAll('[data-notebook-week]')].map((node) => ({
-              window: node.dataset.notebookWeek,
-              state: node.dataset.weekState,
-              stateLine: node.querySelector('[data-week-state-line]')?.textContent.trim() || '',
-              blocks: [...node.querySelectorAll('[data-week-block]')].map((block) => block.dataset.weekBlock),
-              charts: node.querySelectorAll('svg[role=img][aria-label]').length,
-            }))"""
-        )
-    if route == "/notebook" and scenario == "full":
-        metrics[filename] = page.evaluate(
-            """() => [...document.querySelectorAll('[data-notebook-index] .notebook-index__row')].map((node) => ({
-              label: node.querySelector('.list-row-title')?.textContent.trim(),
-              selected: node.classList.contains('is-selected'),
-              height: Math.round(node.getBoundingClientRect().height),
-            }))"""
-        )
+        weeks, shelf = capture_weeks(page)
+        metrics[f"{filename}:weeks"] = weeks
+        metrics[f"{filename}:shelf"] = shelf
     page.screenshot(path=str(REPORTS / filename), full_page=True)
     page.close()
 
@@ -218,19 +280,52 @@ EXPECTED_WEEKS = {
     "notebook-failed-dev.png:weeks": [("2026-W41", "narrative_failed")],
 }
 
+STATE_LINE_PREFIX = {
+    "live": "本周进行中",
+    "final_no_ai": "没有配置 AI",
+    "narrative_failed": "AI 总结这次没写成",
+}
+
 
 def weekly_problems(metrics: dict) -> list[str]:
-    """The weekly entries each scenario must render: order, state, and the full W41 block set."""
+    """Order, state, sheet contents and the full W41 block set per scenario."""
     problems = []
     for key, expected in EXPECTED_WEEKS.items():
         weeks = metrics.get(key, [])
+        shelf = metrics.get(key.replace(":weeks", ":shelf"), [])
+        expected_shelf = [window for window, _ in reversed(expected)]
+        if shelf != expected_shelf:
+            problems.append(f"{key}: shelf order {shelf}, expected {expected_shelf}")
         if [(week["window"], week["state"]) for week in weeks] != expected:
             problems.append(f"{key}: unexpected weeks {weeks}")
         for week in weeks:
+            where = f"{key} {week['window']}"
+            if week["sheet_title"] != week["title"]:
+                problems.append(f"{where}: sheet title {week['sheet_title']!r}, card title {week['title']!r}")
+            if week["sheet_state"] != week["state"]:
+                problems.append(f"{where}: sheet state {week['sheet_state']!r}, card state {week['state']!r}")
+            if week["placeholders"]:
+                problems.append(f"{where}: unclosed placeholder in the sheet")
             if week["window"] == "2026-W41" and len(week["blocks"]) != 8:
-                problems.append(f"{key}: W41 should show all eight blocks, got {week['blocks']}")
-            if week["charts"] == 0:
-                problems.append(f"{key}: {week['window']} drew no chart")
+                problems.append(f"{where}: W41 should show all eight blocks, got {week['blocks']}")
+            if week["blocks"] and week["charts"] == 0:
+                problems.append(f"{where}: {week['window']} drew no chart")
+            if week["state"] == "final":
+                if week["stateLine"]:
+                    problems.append(f"{where}: a final report must not show a state line: {week['stateLine']!r}")
+                if not week["paragraphs"]:
+                    problems.append(f"{where}: a final report must show its narrative")
+                if len(week["paragraphs"]) and any("{{f:" in line for line in week["paragraphs"]):
+                    problems.append(f"{where}: narrative kept a raw fact placeholder")
+                if week["citations"] == 0:
+                    problems.append(f"{where}: final narrative has no citation")
+                if not week["sources"]:
+                    problems.append(f"{where}: clicking a citation did not open its source")
+            else:
+                if not week["stateLine"].startswith(STATE_LINE_PREFIX[week["state"]]):
+                    problems.append(f"{where}: state line {week['stateLine']!r}")
+                if week["paragraphs"]:
+                    problems.append(f"{where}: a non-final report must not show a narrative")
     return problems
 
 
@@ -245,15 +340,15 @@ def main() -> int:
             browser = playwright.chromium.launch(headless=True)
             try:
                 capture(browser, "full", "notebook-dev.png", 1440, 900, "/notebook",
-                        "[data-notebook][data-notebook-index], [data-notebook] .notebook-entry", metrics, errors)
+                        "[data-notebook] [data-notebook-week]", metrics, errors)
                 capture(browser, "full", "notebook-dev-1024.png", 1024, 768, "/notebook",
-                        "[data-notebook] .notebook-entry", metrics, errors)
+                        "[data-notebook] [data-notebook-week]", metrics, errors)
                 capture(browser, "empty", "notebook-empty-dev.png", 1440, 900, "/notebook",
                         "[data-notebook] .notebook-empty", metrics, errors)
                 capture(browser, "final_no_ai", "notebook-no-ai-dev.png", 390, 844, "/notebook",
-                        "[data-notebook-week]", metrics, errors)
+                        "[data-notebook] [data-notebook-week]", metrics, errors)
                 capture(browser, "narrative_failed", "notebook-failed-dev.png", 1024, 768, "/notebook",
-                        "[data-notebook-week]", metrics, errors)
+                        "[data-notebook] [data-notebook-week]", metrics, errors)
                 capture(browser, "full", "learner-dev.png", 1440, 900, "/reading/learner",
                         ".learner-model-page .list-row", metrics, errors)
             finally:
@@ -263,10 +358,10 @@ def main() -> int:
         return 1
     finally:
         stop_process(process)
+    errors.extend(weekly_problems(metrics))
     print(json.dumps(metrics, ensure_ascii=False, indent=1))
     for line in errors:
         print(line, file=sys.stderr)
-    errors.extend(weekly_problems(metrics))
     for name in ("notebook-dev.png", "notebook-dev-1024.png", "notebook-empty-dev.png", "notebook-no-ai-dev.png",
                  "notebook-failed-dev.png", "learner-dev.png"):
         print(f"wrote {REPORTS / name}")

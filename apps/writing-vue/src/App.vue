@@ -3,10 +3,11 @@
     <a class="a11y-skip-link" href="#app-main-content">跳到主要内容</a>
     <div id="a11y-status-live" class="a11y-status-live" role="status" aria-live="polite" aria-atomic="true"></div>
     <ShuiBackground />
+    <CrayonDefs v-if="showShellNav" />
     <NavBar v-if="showShellNav" />
     <main
       id="app-main-content"
-      :class="['app-main', { 'app-main--frameless': !showShellNav }]"
+      :class="['app-main', { 'app-main--frameless': !showShellNav, 'app-main--bleed': showShellNav && route.name === 'Notebook' }]"
       tabindex="-1"
     >
       <router-view v-slot="{ Component }">
@@ -24,6 +25,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import ShuiBackground from './components/ShuiBackground.vue'
+import CrayonDefs from './modules/notebook/components/CrayonDefs.vue'
 
 const route = useRoute()
 const framelessRouteNames = new Set([
@@ -55,9 +57,18 @@ const routeViewKey = computed(() => route.path || String(route.name || route.ful
   flex: 1;
   width: min(var(--shui-shell-max-width), 100%);
   margin: 0 auto;
-  padding: clamp(28px, 5vw, 48px) clamp(16px, 4vw, 40px) 72px;
+  padding: clamp(28px, 5vw, 48px) clamp(16px, 3vw, 48px) 32px;
   position: relative;
   z-index: 1;
+}
+
+/* Notebook: the paper itself is the whole main area, so drop the gutter and
+   let the route's page own its edge-to-edge background and inner centring. */
+.app-main--bleed {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
 }
 
 .app-main--frameless {

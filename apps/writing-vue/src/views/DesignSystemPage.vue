@@ -6,10 +6,39 @@
       </div>
       <h1>设计系统 · Design system</h1>
       <p class="page-header-desc">
-        Every token and component on the paper shell, in each variant and state.
+        Every token and component on the design system, in each variant and state.
         Dev builds only. Source of truth: developer/docs/design-system.md.
       </p>
     </header>
+
+    <section class="section" id="ds-notebook-art">
+      <div class="section-head">
+        <h2>札记手绘 · Notebook art</h2>
+        <span class="section-meta">notebook/art/icons.js · objects.js, crayon</span>
+      </div>
+      <div v-for="set in notebookArtSets" :key="set.key" class="ds-art-set">
+        <h3>{{ set.label }} <span class="t-num">{{ set.names.length }}</span></h3>
+        <div class="ds-art-grid">
+          <figure v-for="name in set.names" :key="name" class="ds-art-cell">
+            <Doodle :name="name" :size="56" />
+            <figcaption>{{ name }}</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="ds-mood-mascots">
+      <div class="section-head">
+        <h2>情绪角色 · Mood mascots</h2>
+        <span class="section-meta">components/mascot/moods.js, MoodMascot.vue</span>
+      </div>
+      <div class="ds-art-grid">
+        <figure v-for="name in MOOD_NAMES" :key="name" class="ds-art-cell">
+          <MoodMascot :mood="name" :size="64" />
+          <figcaption>{{ name }}</figcaption>
+        </figure>
+      </div>
+    </section>
 
     <section class="section">
       <div class="section-head">
@@ -112,6 +141,10 @@
           <textarea class="textarea" rows="3" placeholder="Essay draft"></textarea>
         </label>
       </div>
+      <div class="ds-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="input" type="search" placeholder="搜索题目 Search topics" aria-label="Search sample" />
+      </div>
       <div class="ds-row">
         <label class="ds-check"><input type="checkbox" checked /> Checkbox</label>
         <label class="ds-check"><input type="radio" name="ds-radio" checked /> Radio</label>
@@ -126,6 +159,13 @@
           <button type="button" class="segmented-item" aria-pressed="false">Academic</button>
           <button type="button" class="segmented-item" aria-pressed="true">General</button>
           <button type="button" class="segmented-item" aria-pressed="false" disabled>Locked</button>
+        </div>
+      </div>
+      <div class="ds-row">
+        <div class="segmented segmented--dark" role="group" aria-label="Dark segmented sample">
+          <button type="button" class="segmented-item" aria-pressed="false">全部 All</button>
+          <button type="button" class="segmented-item" aria-pressed="true">Task 1</button>
+          <button type="button" class="segmented-item" aria-pressed="false">Task 2</button>
         </div>
       </div>
       <div class="tabs" role="tablist">
@@ -179,6 +219,50 @@
     </section>
 
     <section class="section has-rule">
+      <div class="section-head"><h2>内容卡片 · Topic and reading cards</h2><span class="section-meta">Static replicas: the real cards are scoped to their views</span></div>
+      <div class="ds-card-demo">
+        <article class="ds-topic-card">
+          <div class="ds-card-body">
+            <div class="ds-card-top">
+              <div class="ds-row">
+                <span class="tag tag-accent">Task 2</span>
+                <span class="tag tag-neutral">Education</span>
+              </div>
+              <span class="ds-dots" role="img" aria-label="难度 3/5">
+                <i class="is-filled"></i><i class="is-filled"></i><i class="is-filled"></i><i></i><i></i>
+              </span>
+            </div>
+            <p class="ds-card-title">Some people think children should learn a foreign language at school. Do you agree?</p>
+          </div>
+          <footer class="ds-card-footer">
+            <span>练过 12 次</span>
+            <div class="ds-row">
+              <button type="button" class="btn btn-primary btn-sm">开始写作</button>
+              <button type="button" class="btn btn-ghost btn-sm">编辑</button>
+            </div>
+          </footer>
+        </article>
+        <article class="ds-reading-card">
+          <div class="ds-card-body">
+            <div class="ds-row">
+              <span class="tag tag-neutral">Academic</span>
+              <span class="tag tag-info">PDF</span>
+            </div>
+            <h4 class="ds-card-title">The science of long-distance memory</h4>
+            <div class="ds-kinds">
+              <span class="tag tag-outline">T / F / NG</span>
+              <span class="tag tag-outline">Matching</span>
+            </div>
+          </div>
+          <footer class="ds-card-footer">
+            <span>Band 7.5 · 8 min</span>
+            <button type="button" class="btn btn-primary btn-sm">查看 PDF</button>
+          </footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="section has-rule">
       <div class="section-head"><h2>统计与表格 · Stat and table</h2></div>
       <div class="ds-row ds-stats">
         <div class="stat">
@@ -216,12 +300,15 @@
         <span class="tag tag-warning">Warning</span>
         <span class="tag tag-danger">Danger</span>
         <span class="tag tag-info">Info</span>
+        <span class="tag tag-primary">Primary chip</span>
+        <span class="tag tag-neutral">Default chip</span>
+        <span class="tag tag-outline">Outline chip</span>
       </div>
       <div class="ds-grid">
-        <div class="inline-message inline-message-info">Info: a note about the current view.</div>
-        <div class="inline-message inline-message-success">Success: the change was saved.</div>
-        <div class="inline-message inline-message-warning">Warning: this action cannot be undone.</div>
-        <div class="inline-message inline-message-error">Error: the request failed.</div>
+        <div class="inline-message inline-message-info"><span class="inline-message__icon" aria-hidden="true">i</span>Info: a note about the current view.</div>
+        <div class="inline-message inline-message-success"><span class="inline-message__icon" aria-hidden="true">✓</span>Success: the change was saved.</div>
+        <div class="inline-message inline-message-warning"><span class="inline-message__icon" aria-hidden="true">!</span>Warning: this action cannot be undone.</div>
+        <div class="inline-message inline-message-error"><span class="inline-message__icon" aria-hidden="true">×</span>Error: the request failed.</div>
       </div>
     </section>
 
@@ -276,6 +363,15 @@
 </template>
 
 <script setup>
+import Doodle from '@/modules/notebook/components/Doodle.vue'
+import MoodMascot from '@/components/mascot/MoodMascot.vue'
+import { MOOD_NAMES } from '@/components/mascot/moods.js'
+import { ICON_NAMES, OBJECT_NAMES } from '@/modules/notebook/doodles.js'
+
+const notebookArtSets = [
+  { key: 'icons', label: 'Icons', names: ICON_NAMES },
+  { key: 'objects', label: 'Objects', names: OBJECT_NAMES }
+]
 const swatches = [
   'canvas', 'surface', 'surface-raised', 'surface-sunken',
   'ink', 'ink-soft', 'ink-muted', 'ink-faint',
@@ -307,6 +403,37 @@ const shadows = ['1', '2']
   flex-direction: column;
   gap: var(--anth-space-6);
   padding-bottom: var(--anth-space-9);
+}
+
+.ds-art-set {
+  display: grid;
+  gap: var(--anth-space-3);
+  margin-bottom: var(--anth-space-5);
+}
+
+.ds-art-set h3 {
+  margin: 0;
+}
+
+.ds-art-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--anth-space-3);
+}
+
+.ds-art-cell {
+  margin: 0;
+  padding: var(--anth-space-3);
+  display: grid;
+  justify-items: center;
+  gap: var(--anth-space-2);
+  border: 1px solid var(--anth-rule);
+  border-radius: var(--anth-radius-sm);
+}
+
+.ds-art-cell figcaption {
+  font-size: var(--anth-text-small-size);
+  color: var(--anth-ink-muted);
 }
 
 .ds-swatches {
@@ -421,5 +548,107 @@ const shadows = ['1', '2']
 
 .ds-scroll-demo__body {
   flex: 1 1 auto;
+}
+
+.ds-search {
+  position: relative;
+  max-width: 360px;
+}
+
+.ds-search svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--anth-ink-faint);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.ds-search .input {
+  padding-left: 36px;
+}
+
+.ds-card-demo {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--anth-space-4);
+}
+
+.ds-topic-card,
+.ds-reading-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  transition: transform var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+.ds-topic-card:hover,
+.ds-reading-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--anth-shadow-lift);
+}
+
+.ds-card-body {
+  display: grid;
+  gap: var(--anth-space-3);
+  padding: var(--anth-space-4);
+}
+
+.ds-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-2);
+}
+
+.ds-card-title {
+  margin: 0;
+  color: var(--anth-ink);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-body-lg-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: var(--anth-text-body-lg-line);
+}
+
+.ds-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-2) var(--anth-space-3);
+  margin-top: auto;
+  padding: var(--anth-space-3) var(--anth-space-4);
+  border-top: 1px solid var(--anth-rule);
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+}
+
+.ds-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
+}
+
+.ds-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ds-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--anth-surface-sunken);
+}
+
+.ds-dots i.is-filled {
+  background: var(--anth-accent);
 }
 </style>

@@ -23,9 +23,15 @@ MIGRATIONS = ROOT / "crates/ielts-db/migrations"
 # Deliberate negatives: fixtures that exercise raw-identifier fallbacks, not
 # backend mocks. Each entry must say why it is allowed.
 SKILL_KEY_ALLOWLIST = {
+    ("packaged_tauri_flow.py", "reading.question.outcome"): "observation_type in scored-evidence SQL, not a skill key",
+    ("test_packaged_weekly.py", "reading.question.outcome"): "observation_type fixture for scored-evidence SQL",
+    ("test_packaged_weekly.py", "reading.attempt.score"): "negative observation_type fixture: attempt totals are not scored question outcomes",
     ("notebookPhrasing.test.mjs", "writing.new_criterion"): "deliberate ASCII-label fallback: a real label would not exercise bracketing",
     ("notebookPhrasing.test.mjs", "writing.task1"): "deliberate all-ASCII list fixture for bracketing",
     ("notebookPhrasing.test.mjs", "writing.band_single"): "notebook phrasing variant id, not a skill key",
+    ("notebookCompose.test.mjs", "writing.new_criterion"): "deliberate ASCII-label fallback: a real label would not exercise bracketing",
+    ("notebookCompose.test.mjs", "writing.task1"): "deliberate all-ASCII list fixture for bracketing",
+    ("notebookWeekly.test.mjs", "writing.average"): "v3 weekly fact id emitted by weekly_report/project.rs, not a skill key",
     ("learnerSkillLabels.test.mjs", "reading.tfng.new_probe_kind"): "deliberate unknown sub-skill fallback (label humanising)",
     ("learnerSkillLabels.test.mjs", "writing.new_criterion"): "deliberate unknown writing criterion fallback (label humanising)",
 }
